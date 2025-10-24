@@ -1517,6 +1517,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					/>
 				)
 			}
+			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
 
 			// regular message
 			return (
@@ -1551,6 +1552,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							return tool.tool === "updateTodoList" && enableButtons && !!primaryButtonText
 						})()
 					}
+					hasCheckpoint={hasCheckpoint}
 				/>
 			)
 		},
