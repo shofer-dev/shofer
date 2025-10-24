@@ -769,6 +769,7 @@ export const webviewMessageHandler = async (
 				glama: {},
 				ollama: {},
 				lmstudio: {},
+				roo: {},
 			}
 
 			const safeGetModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
@@ -803,6 +804,16 @@ export const webviewMessageHandler = async (
 						provider: "deepinfra",
 						apiKey: apiConfiguration.deepInfraApiKey,
 						baseUrl: apiConfiguration.deepInfraBaseUrl,
+					},
+				},
+				{
+					key: "roo",
+					options: {
+						provider: "roo",
+						baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
+						apiKey: CloudService.hasInstance()
+							? CloudService.instance.authService?.getSessionToken()
+							: undefined,
 					},
 				},
 			]
@@ -916,6 +927,38 @@ export const webviewMessageHandler = async (
 			} catch (error) {
 				// Silently fail - user hasn't configured LM Studio yet.
 				console.debug("LM Studio models fetch failed:", error)
+			}
+			break
+		}
+		case "requestRooModels": {
+			// Specific handler for Roo models only - flushes cache to ensure fresh auth token is used
+			try {
+				// Flush cache first to ensure fresh models with current auth state
+				await flushModels("roo")
+
+				const rooModels = await getModels({
+					provider: "roo",
+					baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
+					apiKey: CloudService.hasInstance()
+						? CloudService.instance.authService?.getSessionToken()
+						: undefined,
+				})
+
+				// Always send a response, even if no models are returned
+				provider.postMessageToWebview({
+					type: "singleRouterModelFetchResponse",
+					success: true,
+					values: { provider: "roo", models: rooModels },
+				})
+			} catch (error) {
+				// Send error response
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				provider.postMessageToWebview({
+					type: "singleRouterModelFetchResponse",
+					success: false,
+					error: errorMessage,
+					values: { provider: "roo" },
+				})
 			}
 			break
 		}
