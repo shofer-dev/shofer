@@ -776,6 +776,7 @@ export const webviewMessageHandler = async (
 						ollama: {},
 						lmstudio: {},
 						roo: {},
+						chutes: {},
 					}
 
 			const safeGetModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
@@ -822,6 +823,10 @@ export const webviewMessageHandler = async (
 							? CloudService.instance.authService?.getSessionToken()
 							: undefined,
 					},
+				},
+				{
+					key: "chutes",
+					options: { provider: "chutes", apiKey: apiConfiguration.chutesApiKey },
 				},
 			]
 
