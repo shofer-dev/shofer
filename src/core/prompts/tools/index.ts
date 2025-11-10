@@ -180,3 +180,6 @@ export {
 	getRunSlashCommandDescription,
 	getGenerateImageDescription,
 }
+
+// Export native tool definitions (JSON schema format for OpenAI-compatible APIs)
+export { nativeTools } from "./native-tools"
