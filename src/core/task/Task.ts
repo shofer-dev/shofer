@@ -5,6 +5,7 @@ import crypto from "crypto"
 import EventEmitter from "events"
 
 import { Anthropic } from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 import delay from "delay"
 import pWaitFor from "p-wait-for"
 import { serializeError } from "serialize-error"
@@ -38,6 +39,8 @@ import {
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	MAX_CHECKPOINT_TIMEOUT_SECONDS,
 	MIN_CHECKPOINT_TIMEOUT_SECONDS,
+	TOOL_PROTOCOL,
+	ToolProtocol,
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { CloudService, BridgeOrchestrator } from "@roo-code/cloud"
@@ -80,16 +83,17 @@ import { getWorkspacePath } from "../../utils/path"
 // prompts
 import { formatResponse } from "../prompts/responses"
 import { SYSTEM_PROMPT } from "../prompts/system"
-import { resolveToolProtocol } from "../prompts/toolProtocolResolver"
+import { nativeTools, getMcpServerTools } from "../prompts/tools/native-tools"
 
 // core modules
 import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector"
-import { restoreTodoListForTask } from "../tools/updateTodoListTool"
+import { restoreTodoListForTask } from "../tools/UpdateTodoListTool"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 import { RooIgnoreController } from "../ignore/RooIgnoreController"
 import { RooProtectedController } from "../protect/RooProtectedController"
 import { type AssistantMessageContent, presentAssistantMessage } from "../assistant-message"
 import { AssistantMessageParser } from "../assistant-message/AssistantMessageParser"
+import { NativeToolCallParser } from "../assistant-message/NativeToolCallParser"
 import { manageContext } from "../context-management"
 import { ClineProvider } from "../webview/ClineProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
@@ -289,7 +293,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	assistantMessageContent: AssistantMessageContent[] = []
 	presentAssistantMessageLocked = false
 	presentAssistantMessageHasPendingUpdates = false
-	userMessageContent: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
+	userMessageContent: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.ToolResultBlockParam)[] = []
 	userMessageContentReady = false
 	didRejectTool = false
 	didAlreadyUseTool = false
@@ -933,7 +937,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 
-		// Wait for askResponse to be set.
+		// Wait for askResponse to be set
 		await pWaitFor(() => this.askResponse !== undefined || this.lastMessageTs !== askTs, { interval: 100 })
 
 		if (this.lastMessageTs !== askTs) {
@@ -2024,6 +2028,33 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									pendingGroundingSources.push(...chunk.sources)
 								}
 								break
+							case "tool_call": {
+								// Convert native tool call to ToolUse format
+								const toolUse = NativeToolCallParser.parseToolCall({
+									id: chunk.id,
+									name: chunk.name as ToolName,
+									arguments: chunk.arguments,
+								})
+
+								if (!toolUse) {
+									console.error(`Failed to parse tool call for task ${this.taskId}:`, chunk)
+									break
+								}
+
+								// Store the tool call ID on the ToolUse object for later reference
+								// This is needed to create tool_result blocks that reference the correct tool_use_id
+								toolUse.id = chunk.id
+
+								// Add the tool use to assistant message content
+								this.assistantMessageContent.push(toolUse)
+
+								// Mark that we have new content to process
+								this.userMessageContentReady = false
+
+								// Present the tool call to user
+								presentAssistantMessage(this)
+								break
+							}
 							case "text": {
 								assistantMessage += chunk.text
 
@@ -2331,7 +2362,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				// Now that the stream is complete, finalize any remaining partial content blocks
 				this.assistantMessageParser.finalizeContentBlocks()
-				this.assistantMessageContent = this.assistantMessageParser.getContentBlocks()
+
+				// Preserve tool_use blocks that were added via native protocol (not parsed from text)
+				// These come from tool_call chunks and are added directly to assistantMessageContent
+				const nativeToolBlocks = this.assistantMessageContent.filter((block) => block.type === "tool_use")
+				const parsedBlocks = this.assistantMessageParser.getContentBlocks()
+
+				// Merge: parser blocks + native tool blocks that aren't in parser
+				this.assistantMessageContent = [...parsedBlocks, ...nativeToolBlocks]
 
 				if (partialBlocks.length > 0) {
 					// If there is content to update then it will complete and
@@ -2373,7 +2411,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// able to save the assistant's response.
 				let didEndLoop = false
 
-				if (assistantMessage.length > 0) {
+				// Check if we have any content to process (text or tool uses)
+				const hasTextContent = assistantMessage.length > 0
+				const hasToolUses = this.assistantMessageContent.some((block) => block.type === "tool_use")
+
+				if (hasTextContent || hasToolUses) {
 					// Display grounding sources to the user if they exist
 					if (pendingGroundingSources.length > 0) {
 						const citationLinks = pendingGroundingSources.map((source, i) => `[${i + 1}](${source.url})`)
@@ -2391,9 +2433,35 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						finalAssistantMessage = `<think>${reasoningMessage}</think>\n${assistantMessage}`
 					}
 
+					// Build the assistant message content array
+					const assistantContent: Array<Anthropic.TextBlockParam | Anthropic.ToolUseBlockParam> = []
+
+					// Add text content if present
+					if (finalAssistantMessage) {
+						assistantContent.push({
+							type: "text" as const,
+							text: finalAssistantMessage,
+						})
+					}
+
+					// Add tool_use blocks with their IDs for native protocol
+					const toolUseBlocks = this.assistantMessageContent.filter((block) => block.type === "tool_use")
+					for (const toolUse of toolUseBlocks) {
+						// Get the tool call ID that was stored during parsing
+						const toolCallId = (toolUse as any).id
+						if (toolCallId) {
+							assistantContent.push({
+								type: "tool_use" as const,
+								id: toolCallId,
+								name: toolUse.name,
+								input: toolUse.nativeArgs || toolUse.params,
+							})
+						}
+					}
+
 					await this.addToApiConversationHistory({
 						role: "assistant",
-						content: [{ type: "text", text: finalAssistantMessage }],
+						content: assistantContent,
 					})
 
 					TelemetryService.instance.captureConversationMessage(this.taskId, "assistant")
@@ -2440,6 +2508,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// If there's no assistant_responses, that means we got no text
 					// or tool_use content blocks from API which we should assume is
 					// an error.
+
+					// IMPORTANT: For native tool protocol, we already added the user message to
+					// apiConversationHistory at line 1876. Since the assistant failed to respond,
+					// we need to remove that message before retrying to avoid having two consecutive
+					// user messages (which would cause tool_result validation errors).
+					const toolProtocol = vscode.workspace
+						.getConfiguration("roo-cline")
+						.get<ToolProtocol>("toolProtocol", "xml")
+					const isNativeProtocol = toolProtocol === TOOL_PROTOCOL.NATIVE
+
+					if (isNativeProtocol && this.apiConversationHistory.length > 0) {
+						const lastMessage = this.apiConversationHistory[this.apiConversationHistory.length - 1]
+						if (lastMessage.role === "user") {
+							// Remove the last user message that we added earlier
+							this.apiConversationHistory.pop()
+						}
+					}
 
 					// Check if we should auto-retry or prompt the user
 					const state = await this.providerRef.deref()?.getState()
@@ -2491,7 +2576,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							// Continue to retry the request
 							continue
 						} else {
-							// User declined to retry - persist error and failure message
+							// User declined to retry
+							// For native protocol, re-add the user message we removed
+							if (isNativeProtocol) {
+								await this.addToApiConversationHistory({
+									role: "user",
+									content: currentUserContent,
+								})
+							}
+
 							await this.say(
 								"error",
 								"Unexpected API Response: The language model did not provide any assistant messages. This may indicate an issue with the API or the model's output.",
@@ -2606,7 +2699,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					newTaskRequireTodos: vscode.workspace
 						.getConfiguration("roo-cline")
 						.get<boolean>("newTaskRequireTodos", false),
-					toolProtocol: resolveToolProtocol(),
+					toolProtocol: vscode.workspace
+						.getConfiguration("roo-cline")
+						.get<ToolProtocol>("toolProtocol", "xml"),
 				},
 				undefined, // todoList
 				this.api.getModel().id,
@@ -2837,9 +2932,27 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			throw new Error("Auto-approval limit reached and user did not approve continuation")
 		}
 
+		// Determine if we should include native tools based on:
+		// 1. Tool protocol is set to NATIVE
+		// 2. Model supports native tools
+		const toolProtocol = vscode.workspace.getConfiguration("roo-cline").get<ToolProtocol>("toolProtocol", "xml")
+		const modelInfo = this.api.getModel().info
+		const shouldIncludeTools = toolProtocol === TOOL_PROTOCOL.NATIVE && (modelInfo.supportsNativeTools ?? false)
+
+		// Build complete tools array: native tools + dynamic MCP tools
+		let allTools: OpenAI.Chat.ChatCompletionTool[] = nativeTools
+		if (shouldIncludeTools) {
+			const provider = this.providerRef.deref()
+			const mcpHub = provider?.getMcpHub()
+			const mcpTools = getMcpServerTools(mcpHub)
+			allTools = [...nativeTools, ...mcpTools]
+		}
+
 		const metadata: ApiHandlerCreateMessageMetadata = {
 			mode: mode,
 			taskId: this.taskId,
+			// Include tools and tool protocol when using native protocol and model supports it
+			...(shouldIncludeTools ? { tools: allTools, tool_choice: "required", toolProtocol } : {}),
 		}
 
 		// The provider accepts reasoning items alongside standard messages; cast to the expected parameter type.
