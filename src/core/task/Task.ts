@@ -85,6 +85,7 @@ import { getWorkspacePath } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 import { SYSTEM_PROMPT } from "../prompts/system"
 import { nativeTools, getMcpServerTools } from "../prompts/tools/native-tools"
+import { filterNativeToolsForMode, filterMcpToolsForMode } from "../prompts/tools/filter-tools-for-mode"
 
 // core modules
 import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector"
@@ -2699,6 +2700,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				{
 					maxConcurrentFileReads: maxConcurrentFileReads ?? 5,
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
+					browserToolEnabled: browserToolEnabled ?? true,
 					useAgentRules:
 						vscode.workspace.getConfiguration(Package.name).get<boolean>("useAgentRules") ?? true,
 					newTaskRequireTodos: vscode.workspace
@@ -2944,13 +2946,38 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const modelInfo = this.api.getModel().info
 		const shouldIncludeTools = toolProtocol === TOOL_PROTOCOL.NATIVE && (modelInfo.supportsNativeTools ?? false)
 
-		// Build complete tools array: native tools + dynamic MCP tools
-		let allTools: OpenAI.Chat.ChatCompletionTool[] = nativeTools
+		// Build complete tools array: native tools + dynamic MCP tools, filtered by mode restrictions
+		let allTools: OpenAI.Chat.ChatCompletionTool[] = []
 		if (shouldIncludeTools) {
 			const provider = this.providerRef.deref()
 			const mcpHub = provider?.getMcpHub()
+
+			// Get CodeIndexManager for feature checking
+			const { CodeIndexManager } = await import("../../services/code-index/manager")
+			const codeIndexManager = CodeIndexManager.getInstance(provider!.context, this.cwd)
+
+			// Build settings object for tool filtering
+			// Include browserToolEnabled to filter browser_action when disabled by user
+			const filterSettings = {
+				todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
+				browserToolEnabled: state?.browserToolEnabled ?? true,
+			}
+
+			// Filter native tools based on mode restrictions (similar to XML tool filtering)
+			const filteredNativeTools = filterNativeToolsForMode(
+				nativeTools,
+				mode,
+				state?.customModes,
+				state?.experiments,
+				codeIndexManager,
+				filterSettings,
+			)
+
+			// Filter MCP tools based on mode restrictions
 			const mcpTools = getMcpServerTools(mcpHub)
-			allTools = [...nativeTools, ...mcpTools]
+			const filteredMcpTools = filterMcpToolsForMode(mcpTools, mode, state?.customModes, state?.experiments)
+
+			allTools = [...filteredNativeTools, ...filteredMcpTools]
 		}
 
 		const metadata: ApiHandlerCreateMessageMetadata = {
