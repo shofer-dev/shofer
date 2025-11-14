@@ -2,19 +2,19 @@ import { BetaThinkingConfigParam } from "@anthropic-ai/sdk/resources/beta"
 import OpenAI from "openai"
 import type { GenerateContentConfig } from "@google/genai"
 
-import type { ModelInfo, ProviderSettings, ReasoningEffortWithMinimal } from "@roo-code/types"
+import type { ModelInfo, ProviderSettings, ReasoningEffortExtended } from "@roo-code/types"
 
 import { shouldUseReasoningBudget, shouldUseReasoningEffort } from "../../shared/api"
 
 export type OpenRouterReasoningParams = {
-	effort?: ReasoningEffortWithMinimal
+	effort?: ReasoningEffortExtended
 	max_tokens?: number
 	exclude?: boolean
 }
 
 export type RooReasoningParams = {
 	enabled?: boolean
-	effort?: ReasoningEffortWithMinimal
+	effort?: ReasoningEffortExtended
 }
 
 export type AnthropicReasoningParams = BetaThinkingConfigParam
@@ -26,7 +26,7 @@ export type GeminiReasoningParams = GenerateContentConfig["thinkingConfig"]
 export type GetModelReasoningOptions = {
 	model: ModelInfo
 	reasoningBudget: number | undefined
-	reasoningEffort: ReasoningEffortWithMinimal | undefined
+	reasoningEffort: ReasoningEffortExtended | "disable" | undefined
 	settings: ProviderSettings
 }
 
@@ -39,8 +39,8 @@ export const getOpenRouterReasoning = ({
 	shouldUseReasoningBudget({ model, settings })
 		? { max_tokens: reasoningBudget }
 		: shouldUseReasoningEffort({ model, settings })
-			? reasoningEffort
-				? { effort: reasoningEffort }
+			? reasoningEffort && reasoningEffort !== "disable"
+				? { effort: reasoningEffort as ReasoningEffortExtended }
 				: undefined
 			: undefined
 
@@ -50,27 +50,24 @@ export const getRooReasoning = ({
 	settings,
 }: GetModelReasoningOptions): RooReasoningParams | undefined => {
 	// Check if model supports reasoning effort
-	if (!model.supportsReasoningEffort) {
-		return undefined
-	}
+	if (!model.supportsReasoningEffort) return undefined
 
-	// If enableReasoningEffort is explicitly false, return enabled: false
+	// If disabled via toggle, send explicit disabled flag for back-compat
 	if (settings.enableReasoningEffort === false) {
 		return { enabled: false }
 	}
 
-	// If reasoning effort is provided, return it with enabled: true
-	if (reasoningEffort && reasoningEffort !== "minimal") {
-		return { enabled: true, effort: reasoningEffort }
+	// If the selection is "disable", omit the field entirely (no reasoning param)
+	if (reasoningEffort === "disable") {
+		return undefined
 	}
 
-	// If reasoningEffort is explicitly undefined (None selected), disable reasoning
-	// This ensures we explicitly tell the backend not to use reasoning
-	if (reasoningEffort === undefined) {
-		return { enabled: false }
+	// When an effort is provided (including "none" and "minimal"), enable with effort
+	if (reasoningEffort) {
+		return { enabled: true, effort: reasoningEffort as ReasoningEffortExtended }
 	}
 
-	// Default: no reasoning parameter (reasoning not enabled)
+	// No explicit selection -> omit field
 	return undefined
 }
 
@@ -86,17 +83,11 @@ export const getOpenAiReasoning = ({
 	reasoningEffort,
 	settings,
 }: GetModelReasoningOptions): OpenAiReasoningParams | undefined => {
-	if (!shouldUseReasoningEffort({ model, settings })) {
-		return undefined
-	}
+	if (!shouldUseReasoningEffort({ model, settings })) return undefined
+	if (reasoningEffort === "disable" || !reasoningEffort) return undefined
 
-	// If model has reasoning effort capability, return object even if effort is undefined
-	// This preserves the reasoning_effort field in the API call
-	if (reasoningEffort === "minimal") {
-		return undefined
-	}
-
-	return { reasoning_effort: reasoningEffort }
+	// Include "none" | "minimal" | "low" | "medium" | "high" literally
+	return { reasoning_effort: reasoningEffort as any }
 }
 
 export const getGeminiReasoning = ({
