@@ -277,6 +277,9 @@ export async function presentAssistantMessage(cline: Task) {
 				break
 			}
 
+			// Track if we've already pushed a tool result for this tool call (native protocol only)
+			let hasToolResult = false
+
 			const pushToolResult = (content: ToolResponse) => {
 				// Check if we're using native tool protocol
 				const isNative = isNativeProtocol(getToolProtocolFromSettings())
@@ -285,6 +288,14 @@ export async function presentAssistantMessage(cline: Task) {
 				const toolCallId = (block as any).id
 
 				if (isNative && toolCallId) {
+					// For native protocol, only allow ONE tool_result per tool call
+					if (hasToolResult) {
+						console.warn(
+							`[presentAssistantMessage] Skipping duplicate tool_result for tool_use_id: ${toolCallId}`,
+						)
+						return
+					}
+
 					// For native protocol, add as tool_result block
 					let resultContent: string
 					if (typeof content === "string") {
@@ -309,6 +320,8 @@ export async function presentAssistantMessage(cline: Task) {
 						tool_use_id: toolCallId,
 						content: resultContent,
 					} as Anthropic.ToolResultBlockParam)
+
+					hasToolResult = true
 				} else {
 					// For XML protocol, add as text blocks (legacy behavior)
 					cline.userMessageContent.push({ type: "text", text: `${toolDescription()} Result:` })
