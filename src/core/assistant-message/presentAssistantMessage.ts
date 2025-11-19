@@ -13,7 +13,7 @@ import { fetchInstructionsTool } from "../tools/FetchInstructionsTool"
 import { listFilesTool } from "../tools/ListFilesTool"
 import { readFileTool } from "../tools/ReadFileTool"
 import { getSimpleReadFileToolDescription, simpleReadFileTool } from "../tools/simpleReadFileTool"
-import { shouldUseSingleFileRead } from "@roo-code/types"
+import { shouldUseSingleFileRead, TOOL_PROTOCOL } from "@roo-code/types"
 import { writeToFileTool } from "../tools/WriteToFileTool"
 import { applyDiffTool } from "../tools/MultiApplyDiffTool"
 import { insertContentTool } from "../tools/InsertContentTool"
@@ -284,10 +284,10 @@ export async function presentAssistantMessage(cline: Task) {
 			// Native protocol tool calls ALWAYS have an ID (set when parsed from tool_call chunks).
 			// XML protocol tool calls NEVER have an ID (parsed from XML text).
 			const toolCallId = (block as any).id
-			const isNative = !!toolCallId
+			const toolProtocol = toolCallId ? TOOL_PROTOCOL.NATIVE : TOOL_PROTOCOL.XML
 
 			const pushToolResult = (content: ToolResponse) => {
-				if (isNative && toolCallId) {
+				if (toolProtocol === TOOL_PROTOCOL.NATIVE) {
 					// For native protocol, only allow ONE tool_result per tool call
 					if (hasToolResult) {
 						console.warn(
@@ -360,9 +360,14 @@ export async function presentAssistantMessage(cline: Task) {
 					// Handle both messageResponse and noButtonClicked with text.
 					if (text) {
 						await cline.say("user_feedback", text, images)
-						pushToolResult(formatResponse.toolResult(formatResponse.toolDeniedWithFeedback(text), images))
+						pushToolResult(
+							formatResponse.toolResult(
+								formatResponse.toolDeniedWithFeedback(text, toolProtocol),
+								images,
+							),
+						)
 					} else {
-						pushToolResult(formatResponse.toolDenied())
+						pushToolResult(formatResponse.toolDenied(toolProtocol))
 					}
 					cline.didRejectTool = true
 					return false
@@ -371,7 +376,9 @@ export async function presentAssistantMessage(cline: Task) {
 				// Handle yesButtonClicked with text.
 				if (text) {
 					await cline.say("user_feedback", text, images)
-					pushToolResult(formatResponse.toolResult(formatResponse.toolApprovedWithFeedback(text), images))
+					pushToolResult(
+						formatResponse.toolResult(formatResponse.toolApprovedWithFeedback(text, toolProtocol), images),
+					)
 				}
 
 				return true
@@ -394,7 +401,7 @@ export async function presentAssistantMessage(cline: Task) {
 					`Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`,
 				)
 
-				pushToolResult(formatResponse.toolError(errorString))
+				pushToolResult(formatResponse.toolError(errorString, toolProtocol))
 			}
 
 			// If block is partial, remove partial closing tag so its not
@@ -446,7 +453,7 @@ export async function presentAssistantMessage(cline: Task) {
 				)
 			} catch (error) {
 				cline.consecutiveMistakeCount++
-				pushToolResult(formatResponse.toolError(error.message))
+				pushToolResult(formatResponse.toolError(error.message, toolProtocol))
 				break
 			}
 
@@ -485,6 +492,7 @@ export async function presentAssistantMessage(cline: Task) {
 					pushToolResult(
 						formatResponse.toolError(
 							`Tool call repetition limit reached for ${block.name}. Please try a different approach.`,
+							toolProtocol,
 						),
 					)
 					break
@@ -499,6 +507,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "update_todo_list":
@@ -507,6 +516,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "apply_diff": {
@@ -514,12 +524,13 @@ export async function presentAssistantMessage(cline: Task) {
 
 					// Check if this tool call came from native protocol by checking for ID
 					// Native calls always have IDs, XML calls never do
-					if (isNative) {
+					if (toolProtocol === TOOL_PROTOCOL.NATIVE) {
 						await applyDiffToolClass.handle(cline, block as ToolUse<"apply_diff">, {
 							askApproval,
 							handleError,
 							pushToolResult,
 							removeClosingTag,
+							toolProtocol,
 						})
 						break
 					}
@@ -544,6 +555,7 @@ export async function presentAssistantMessage(cline: Task) {
 							handleError,
 							pushToolResult,
 							removeClosingTag,
+							toolProtocol,
 						})
 					}
 					break
@@ -555,6 +567,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "read_file":
@@ -568,6 +581,7 @@ export async function presentAssistantMessage(cline: Task) {
 							handleError,
 							pushToolResult,
 							removeClosingTag,
+							toolProtocol,
 						)
 					} else {
 						// Type assertion is safe here because we're in the "read_file" case
@@ -576,6 +590,7 @@ export async function presentAssistantMessage(cline: Task) {
 							handleError,
 							pushToolResult,
 							removeClosingTag,
+							toolProtocol,
 						})
 					}
 					break
@@ -585,6 +600,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "list_files":
@@ -593,6 +609,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "codebase_search":
@@ -601,6 +618,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "list_code_definition_names":
@@ -609,6 +627,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "search_files":
@@ -617,6 +636,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "browser_action":
@@ -625,6 +645,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "execute_command":
@@ -633,6 +654,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "use_mcp_tool":
@@ -641,6 +663,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "access_mcp_resource":
@@ -659,6 +682,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "switch_mode":
@@ -667,6 +691,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "new_task":
@@ -675,6 +700,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "attempt_completion": {
@@ -685,6 +711,7 @@ export async function presentAssistantMessage(cline: Task) {
 						removeClosingTag,
 						askFinishSubTaskApproval,
 						toolDescription,
+						toolProtocol,
 					}
 					await attemptCompletionTool.handle(
 						cline,
@@ -699,6 +726,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 				case "generate_image":
@@ -708,6 +736,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 						removeClosingTag,
+						toolProtocol,
 					})
 					break
 			}
