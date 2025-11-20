@@ -1,5 +1,13 @@
 # Roo Code Changelog
 
+## [3.33.2] - 2025-11-19
+
+- Enable native tool calling for Gemini provider (PR #9343 by @hannesrudolph)
+- Add RCC credit balance display (PR #9386 by @jr)
+- Fix: Preserve user images in native tool call results (PR #9401 by @daniel-lxs)
+- Perf: Reduce excessive getModel() calls and implement disk cache fallback (PR #9410 by @daniel-lxs)
+- Show zero price for free models (PR #9419 by @mrubens)
+
 ## [3.33.1] - 2025-11-18
 
 ![3.33.1 Release - Native Tool Protocol Fixes](/releases/3.33.1-release.png)
