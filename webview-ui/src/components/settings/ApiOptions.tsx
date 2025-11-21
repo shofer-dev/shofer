@@ -26,6 +26,7 @@ import {
 	groqDefaultModelId,
 	cerebrasDefaultModelId,
 	chutesDefaultModelId,
+	basetenDefaultModelId,
 	bedrockDefaultModelId,
 	vertexDefaultModelId,
 	sambaNovaDefaultModelId,
@@ -67,6 +68,7 @@ import {
 
 import {
 	Anthropic,
+	Baseten,
 	Bedrock,
 	Cerebras,
 	Chutes,
@@ -274,6 +276,7 @@ const ApiOptions = ({
 
 	const selectedProviderModels = useMemo(() => {
 		const models = MODELS_BY_PROVIDER[selectedProvider]
+
 		if (!models) return []
 
 		const filteredModels = filterModels(models, selectedProvider, organizationAllowList)
@@ -355,6 +358,7 @@ const ApiOptions = ({
 				xai: { field: "apiModelId", default: xaiDefaultModelId },
 				groq: { field: "apiModelId", default: groqDefaultModelId },
 				chutes: { field: "apiModelId", default: chutesDefaultModelId },
+				baseten: { field: "apiModelId", default: basetenDefaultModelId },
 				bedrock: { field: "apiModelId", default: bedrockDefaultModelId },
 				vertex: { field: "apiModelId", default: vertexDefaultModelId },
 				sambanova: { field: "apiModelId", default: sambaNovaDefaultModelId },
@@ -562,6 +566,10 @@ const ApiOptions = ({
 
 			{selectedProvider === "mistral" && (
 				<Mistral apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
+			)}
+
+			{selectedProvider === "baseten" && (
+				<Baseten apiConfiguration={apiConfiguration} setApiConfigurationField={setApiConfigurationField} />
 			)}
 
 			{selectedProvider === "bedrock" && (
