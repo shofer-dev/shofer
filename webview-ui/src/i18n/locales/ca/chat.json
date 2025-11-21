@@ -306,6 +306,7 @@
 		"socialLinks": "Uneix-te a nosaltres a <xLink>X</xLink>, <discordLink>Discord</discordLink>, o <redditLink>r/RooCode</redditLink> 🚀"
 	},
 	"browser": {
+		"session": "Sessió del navegador",
 		"rooWantsToUse": "Roo vol utilitzar el navegador",
 		"consoleLogs": "Registres de consola",
 		"noNewLogs": "(Cap registre nou)",
@@ -318,12 +319,14 @@
 		},
 		"sessionStarted": "Sessió de navegador iniciada",
 		"actions": {
-			"title": "Acció de navegació: ",
+			"title": "Acció del navegador: ",
 			"launch": "Iniciar navegador a {{url}}",
 			"click": "Clic ({{coordinate}})",
 			"type": "Escriure \"{{text}}\"",
+			"press": "Prem {{key}}",
 			"scrollDown": "Desplaçar avall",
 			"scrollUp": "Desplaçar amunt",
+			"hover": "Plana sobre ({{coordinate}})",
 			"close": "Tancar navegador"
 		}
 	},
