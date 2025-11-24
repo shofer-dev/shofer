@@ -1,5 +1,18 @@
 # Roo Code Changelog
 
+## [3.34.2] - 2025-11-24
+
+![3.34.2 Release - Opus Conductor](/releases/3.34.2-release.png)
+
+- Add support for Claude Opus 4.5 in Anthropic and Vertex providers (PR #9541 by @daniel-lxs)
+- Add support for Claude Opus 4.5 in OpenRouter with prompt caching and reasoning budget (PR #9540 by @daniel-lxs)
+- Add Roo Code Cloud as an image generation provider (PR #9528 by @mrubens)
+- Fix: Gracefully skip unsupported content blocks in Gemini transformer (PR #9537 by @daniel-lxs)
+- Fix: Flush LiteLLM cache when credentials change on refresh (PR #9536 by @daniel-lxs)
+- Fix: Ensure XML parser state matches tool protocol on config update (PR #9535 by @daniel-lxs)
+- Update Cerebras models (PR #9527 by @sebastiand-cerebras)
+- Fix: Support reasoning_details format for Gemini 3 models (PR #9506 by @daniel-lxs)
+
 ## [3.34.1] - 2025-11-23
 
 - Show the prompt for image generation in the UI (PR #9505 by @mrubens)
