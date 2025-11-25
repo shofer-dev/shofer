@@ -636,7 +636,7 @@ describe("RooHandler", () => {
 			handler = new RooHandler(mockOptions)
 		})
 
-		it("should yield tool calls when finish_reason is tool_calls", async () => {
+		it("should yield raw tool call chunks when tool_calls present", async () => {
 			mockCreate.mockResolvedValueOnce({
 				[Symbol.asyncIterator]: async function* () {
 					yield {
@@ -689,14 +689,27 @@ describe("RooHandler", () => {
 				chunks.push(chunk)
 			}
 
-			const toolCallChunks = chunks.filter((chunk) => chunk.type === "tool_call")
-			expect(toolCallChunks).toHaveLength(1)
-			expect(toolCallChunks[0].id).toBe("call_123")
-			expect(toolCallChunks[0].name).toBe("read_file")
-			expect(toolCallChunks[0].arguments).toBe('{"path":"test.ts"}')
+			// Verify we get raw tool call chunks
+			const rawChunks = chunks.filter((chunk) => chunk.type === "tool_call_partial")
+
+			expect(rawChunks).toHaveLength(2)
+			expect(rawChunks[0]).toEqual({
+				type: "tool_call_partial",
+				index: 0,
+				id: "call_123",
+				name: "read_file",
+				arguments: '{"path":"',
+			})
+			expect(rawChunks[1]).toEqual({
+				type: "tool_call_partial",
+				index: 0,
+				id: undefined,
+				name: undefined,
+				arguments: 'test.ts"}',
+			})
 		})
 
-		it("should yield tool calls even when finish_reason is not set (fallback behavior)", async () => {
+		it("should yield raw tool call chunks even when finish_reason is not tool_calls", async () => {
 			mockCreate.mockResolvedValueOnce({
 				[Symbol.asyncIterator]: async function* () {
 					yield {
@@ -718,12 +731,11 @@ describe("RooHandler", () => {
 							},
 						],
 					}
-					// Stream ends without finish_reason being set to "tool_calls"
 					yield {
 						choices: [
 							{
 								delta: {},
-								finish_reason: "stop", // Different finish reason
+								finish_reason: "stop",
 								index: 0,
 							},
 						],
@@ -738,15 +750,19 @@ describe("RooHandler", () => {
 				chunks.push(chunk)
 			}
 
-			// Tool calls should still be yielded via the fallback mechanism
-			const toolCallChunks = chunks.filter((chunk) => chunk.type === "tool_call")
-			expect(toolCallChunks).toHaveLength(1)
-			expect(toolCallChunks[0].id).toBe("call_456")
-			expect(toolCallChunks[0].name).toBe("write_to_file")
-			expect(toolCallChunks[0].arguments).toBe('{"path":"test.ts","content":"hello"}')
+			const rawChunks = chunks.filter((chunk) => chunk.type === "tool_call_partial")
+
+			expect(rawChunks).toHaveLength(1)
+			expect(rawChunks[0]).toEqual({
+				type: "tool_call_partial",
+				index: 0,
+				id: "call_456",
+				name: "write_to_file",
+				arguments: '{"path":"test.ts","content":"hello"}',
+			})
 		})
 
-		it("should handle multiple tool calls", async () => {
+		it("should handle multiple tool calls with different indices", async () => {
 			mockCreate.mockResolvedValueOnce({
 				[Symbol.asyncIterator]: async function* () {
 					yield {
@@ -800,15 +816,16 @@ describe("RooHandler", () => {
 				chunks.push(chunk)
 			}
 
-			const toolCallChunks = chunks.filter((chunk) => chunk.type === "tool_call")
-			expect(toolCallChunks).toHaveLength(2)
-			expect(toolCallChunks[0].id).toBe("call_1")
-			expect(toolCallChunks[0].name).toBe("read_file")
-			expect(toolCallChunks[1].id).toBe("call_2")
-			expect(toolCallChunks[1].name).toBe("read_file")
+			const rawChunks = chunks.filter((chunk) => chunk.type === "tool_call_partial")
+
+			expect(rawChunks).toHaveLength(2)
+			expect(rawChunks[0].index).toBe(0)
+			expect(rawChunks[0].id).toBe("call_1")
+			expect(rawChunks[1].index).toBe(1)
+			expect(rawChunks[1].id).toBe("call_2")
 		})
 
-		it("should accumulate tool call arguments across multiple chunks", async () => {
+		it("should emit raw chunks for streaming arguments", async () => {
 			mockCreate.mockResolvedValueOnce({
 				[Symbol.asyncIterator]: async function* () {
 					yield {
@@ -876,14 +893,15 @@ describe("RooHandler", () => {
 				chunks.push(chunk)
 			}
 
-			const toolCallChunks = chunks.filter((chunk) => chunk.type === "tool_call")
-			expect(toolCallChunks).toHaveLength(1)
-			expect(toolCallChunks[0].id).toBe("call_789")
-			expect(toolCallChunks[0].name).toBe("execute_command")
-			expect(toolCallChunks[0].arguments).toBe('{"command":"npm install"}')
+			const rawChunks = chunks.filter((chunk) => chunk.type === "tool_call_partial")
+
+			expect(rawChunks).toHaveLength(3)
+			expect(rawChunks[0].arguments).toBe('{"command":"')
+			expect(rawChunks[1].arguments).toBe("npm install")
+			expect(rawChunks[2].arguments).toBe('"}')
 		})
 
-		it("should not yield empty tool calls when no tool calls present", async () => {
+		it("should not yield tool call chunks when no tool calls present", async () => {
 			mockCreate.mockResolvedValueOnce({
 				[Symbol.asyncIterator]: async function* () {
 					yield {
@@ -902,8 +920,8 @@ describe("RooHandler", () => {
 				chunks.push(chunk)
 			}
 
-			const toolCallChunks = chunks.filter((chunk) => chunk.type === "tool_call")
-			expect(toolCallChunks).toHaveLength(0)
+			const rawChunks = chunks.filter((chunk) => chunk.type === "tool_call_partial")
+			expect(rawChunks).toHaveLength(0)
 		})
 	})
 })
