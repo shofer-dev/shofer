@@ -1,5 +1,13 @@
 # Roo Code Changelog
 
+## [3.34.4] - 2025-11-25
+
+![3.34.4 Release - BFL Image Generation](/releases/3.34.4-release.png)
+
+- Add new Black Forest Labs image generation models, free on Roo Code Cloud and also available on OpenRouter (PR #9587 and #9589 by @mrubens)
+- Fix: Preserve dynamic MCP tool names in native mode API history to prevent tool name mismatches (PR #9559 by @daniel-lxs)
+- Fix: Preserve tool_use blocks in summary message during condensing with native tools to maintain conversation context (PR #9582 by @daniel-lxs)
+
 ## [3.34.3] - 2025-11-25
 
 ![3.34.3 Release - Streaming and Opus 4.5](/releases/3.34.3-release.png)
