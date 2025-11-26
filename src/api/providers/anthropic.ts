@@ -14,6 +14,7 @@ import type { ApiHandlerOptions } from "../../shared/api"
 
 import { ApiStream } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
+import { filterNonAnthropicBlocks } from "../transform/anthropic-filter"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
@@ -45,6 +46,9 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 		const cacheControl: CacheControlEphemeral = { type: "ephemeral" }
 		let { id: modelId, betas = [], maxTokens, temperature, reasoning: thinking } = this.getModel()
 
+		// Filter out non-Anthropic blocks (reasoning, thoughtSignature, etc.) before sending to the API
+		const sanitizedMessages = filterNonAnthropicBlocks(messages)
+
 		// Add 1M context beta flag if enabled for Claude Sonnet 4 and 4.5
 		if (
 			(modelId === "claude-sonnet-4-20250514" || modelId === "claude-sonnet-4-5") &&
@@ -75,7 +79,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 				 * know the last message to retrieve from the cache for the
 				 * current request.
 				 */
-				const userMsgIndices = messages.reduce(
+				const userMsgIndices = sanitizedMessages.reduce(
 					(acc, msg, index) => (msg.role === "user" ? [...acc, index] : acc),
 					[] as number[],
 				)
@@ -91,7 +95,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 						thinking,
 						// Setting cache breakpoint for system prompt so new tasks can reuse it.
 						system: [{ text: systemPrompt, type: "text", cache_control: cacheControl }],
-						messages: messages.map((message, index) => {
+						messages: sanitizedMessages.map((message, index) => {
 							if (index === lastUserMsgIndex || index === secondLastMsgUserIndex) {
 								return {
 									...message,
@@ -142,7 +146,7 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 					max_tokens: maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
 					temperature,
 					system: [{ text: systemPrompt, type: "text" }],
-					messages,
+					messages: sanitizedMessages,
 					stream: true,
 				})) as any
 				break
@@ -227,6 +231,9 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 
 					break
 				case "content_block_stop":
+					// Block complete - no action needed for now.
+					// Note: Signature for multi-turn thinking would require using stream.finalMessage()
+					// after iteration completes, which requires restructuring the streaming approach.
 					break
 			}
 		}
