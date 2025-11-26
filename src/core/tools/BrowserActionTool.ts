@@ -109,12 +109,12 @@ export async function browserActionTool(
 						// Do not close the browser on parameter validation errors
 						return // can't be within an inner switch
 					}
-	
+
 					// Get viewport dimensions from the browser session
 					const viewportSize = cline.browserSession.getViewportSize()
 					const viewportWidth = viewportSize.width || 900 // default to 900 if not available
 					const viewportHeight = viewportSize.height || 600 // default to 600 if not available
-	
+
 					// Scale coordinate from image dimensions to viewport dimensions
 					try {
 						processedCoordinate = scaleCoordinate(coordinate, viewportWidth, viewportHeight)
@@ -143,7 +143,7 @@ export async function browserActionTool(
 						return
 					}
 				}
-	
+
 				if (action === "resize") {
 					if (!size) {
 						cline.consecutiveMistakeCount++
