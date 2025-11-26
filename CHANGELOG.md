@@ -1,5 +1,17 @@
 # Roo Code Changelog
 
+## [3.34.5] - 2025-11-25
+
+![3.34.5 Release - Experimental Parallel Tool Calling](/releases/3.34.5-release.png)
+
+- Experimental feature to enable multiple native tool calls per turn (PR #9273 by @daniel-lxs)
+- Add Bedrock Opus 4.5 to global inference model list (PR #9595 by @roomote)
+- Fix: Update API handler when toolProtocol changes (PR #9599 by @mrubens)
+- Set native tools as default for minimax-m2 and claude-haiku-4.5 (PR #9586 by @daniel-lxs)
+- Make single file read only apply to XML tools (PR #9600 by @mrubens)
+- Enhance web-evals dashboard with dynamic tool columns and UX improvements (PR #9592 by @hannesrudolph)
+- Revert "Add support for Roo Code Cloud as an embeddings provider" while we fix some issues (PR #9602 by @mrubens)
+
 ## [3.34.4] - 2025-11-25
 
 ![3.34.4 Release - BFL Image Generation](/releases/3.34.4-release.png)
