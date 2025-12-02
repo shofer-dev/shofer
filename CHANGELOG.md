@@ -1,5 +1,11 @@
 # Roo Code Changelog
 
+## [3.35.3] - 2025-12-02
+
+- Switch to new welcome view for improved onboarding experience (PR #9741 by @mrubens)
+- Update homepage with latest changes (PR #9675 by @brunobergher)
+- Improve privacy for stealth models by adding vendor confidentiality section to system prompt (PR #9742 by @mrubens)
+
 ## [3.35.2] - 2025-12-01
 
 ![3.35.2 Release - Model Default Temperatures](/releases/3.35.2-release.png)
