@@ -1,5 +1,13 @@
 # Roo Code Changelog
 
+## [3.36.2] - 2025-12-04
+
+![3.36.2 Release - Dynamic API Settings](/releases/3.36.2-release.png)
+
+- Restrict GPT-5 tool set to apply_patch for improved compatibility (PR #9853 by @hannesrudolph)
+- Add dynamic settings support for Roo models from API, allowing model-specific configurations to be fetched dynamically (PR #9852 by @hannesrudolph)
+- Fix: Resolve Chutes provider model fetching issue (PR #9854 by @cte)
+
 ## [3.36.1] - 2025-12-04
 
 ![3.36.1 Release - Message Management & Stability Improvements](/releases/3.36.1-release.png)
