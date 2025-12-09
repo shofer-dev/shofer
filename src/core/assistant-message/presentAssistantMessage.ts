@@ -9,6 +9,7 @@ import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
 import type { ToolParamName, ToolResponse, ToolUse, McpToolUse } from "../../shared/tools"
 import { Package } from "../../shared/package"
 import { t } from "../../i18n"
+import { AskIgnoredError } from "../task/AskIgnoredError"
 
 import { fetchInstructionsTool } from "../tools/FetchInstructionsTool"
 import { listFilesTool } from "../tools/ListFilesTool"
@@ -225,6 +226,11 @@ export async function presentAssistantMessage(cline: Task) {
 			}
 
 			const handleError = async (action: string, error: Error) => {
+				// Silently ignore AskIgnoredError - this is an internal control flow
+				// signal, not an actual error. It occurs when a newer ask supersedes an older one.
+				if (error instanceof AskIgnoredError) {
+					return
+				}
 				const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
 				await cline.say(
 					"error",
@@ -613,6 +619,11 @@ export async function presentAssistantMessage(cline: Task) {
 			}
 
 			const handleError = async (action: string, error: Error) => {
+				// Silently ignore AskIgnoredError - this is an internal control flow
+				// signal, not an actual error. It occurs when a newer ask supersedes an older one.
+				if (error instanceof AskIgnoredError) {
+					return
+				}
 				const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
 
 				await cline.say(
