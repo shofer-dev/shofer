@@ -8,6 +8,7 @@ import { AskIgnoredError } from "./AskIgnoredError"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
+import debounce from "lodash.debounce"
 import delay from "delay"
 import pWaitFor from "p-wait-for"
 import { serializeError } from "serialize-error"
@@ -63,7 +64,7 @@ import { combineApiRequests } from "../../shared/combineApiRequests"
 import { combineCommandSequences } from "../../shared/combineCommandSequences"
 import { t } from "../../i18n"
 import { ClineApiReqCancelReason, ClineApiReqInfo } from "../../shared/ExtensionMessage"
-import { getApiMetrics, hasTokenUsageChanged } from "../../shared/getApiMetrics"
+import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "../../shared/getApiMetrics"
 import { ClineAskResponse } from "../../shared/WebviewMessage"
 import { defaultModeSlug, getModeBySlug, getGroupName } from "../../shared/modes"
 import { DiffStrategy, type ToolUse, type ToolParamName, toolParamNames } from "../../shared/tools"
@@ -324,6 +325,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private tokenUsageSnapshot?: TokenUsage
 	private tokenUsageSnapshotAt?: number
 
+	// Tool Usage Cache
+	private toolUsageSnapshot?: ToolUsage
+
+	// Token Usage Throttling - Debounced emit function
+	private readonly TOKEN_USAGE_EMIT_INTERVAL_MS = 2000 // 2 seconds
+	private debouncedEmitTokenUsage: ReturnType<typeof debounce>
+
 	// Cloud Sync Tracking
 	private cloudSyncedMessageTimestamps: Set<number> = new Set()
 
@@ -499,6 +507,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (initialTodos && initialTodos.length > 0) {
 			this.todoList = initialTodos
 		}
+
+		// Initialize debounced token usage emit function
+		// Uses debounce with maxWait to achieve throttle-like behavior:
+		// - leading: true  - Emit immediately on first call
+		// - trailing: true - Emit final state when updates stop
+		// - maxWait        - Ensures at most one emit per interval during rapid updates (throttle behavior)
+		this.debouncedEmitTokenUsage = debounce(
+			(tokenUsage: TokenUsage, toolUsage: ToolUsage) => {
+				const tokenChanged = hasTokenUsageChanged(tokenUsage, this.tokenUsageSnapshot)
+				const toolChanged = hasToolUsageChanged(toolUsage, this.toolUsageSnapshot)
+
+				if (tokenChanged || toolChanged) {
+					this.emit(RooCodeEventName.TaskTokenUsageUpdated, this.taskId, tokenUsage, toolUsage)
+					this.tokenUsageSnapshot = tokenUsage
+					this.tokenUsageSnapshotAt = this.clineMessages.at(-1)?.ts
+					// Deep copy tool usage for snapshot
+					this.toolUsageSnapshot = JSON.parse(JSON.stringify(toolUsage))
+				}
+			},
+			this.TOKEN_USAGE_EMIT_INTERVAL_MS,
+			{ leading: true, trailing: true, maxWait: this.TOKEN_USAGE_EMIT_INTERVAL_MS },
+		)
 
 		onCreated?.(this)
 
@@ -920,11 +950,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				initialStatus: this.initialStatus,
 			})
 
-			if (hasTokenUsageChanged(tokenUsage, this.tokenUsageSnapshot)) {
-				this.emit(RooCodeEventName.TaskTokenUsageUpdated, this.taskId, tokenUsage)
-				this.tokenUsageSnapshot = undefined
-				this.tokenUsageSnapshotAt = undefined
-			}
+			// Emit token/tool usage updates using debounced function
+			// The debounce with maxWait ensures:
+			// - Immediate first emit (leading: true)
+			// - At most one emit per interval during rapid updates (maxWait)
+			// - Final state is emitted when updates stop (trailing: true)
+			this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 
 			await this.providerRef.deref()?.updateTaskHistory(historyItem)
 		} catch (error) {
@@ -1842,6 +1873,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * Force emit a final token usage update, ignoring throttle.
+	 * Called before task completion or abort to ensure final stats are captured.
+	 * Triggers the debounce with current values and immediately flushes to ensure emit.
+	 */
+	public emitFinalTokenUsageUpdate(): void {
+		const tokenUsage = this.getTokenUsage()
+		this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
+		this.debouncedEmitTokenUsage.flush()
+	}
+
 	public async abortTask(isAbandoned = false) {
 		// Aborting task
 
@@ -1851,6 +1893,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		this.abort = true
+
+		// Force final token usage update before abort event
+		this.emitFinalTokenUsageUpdate()
+
 		this.emit(RooCodeEventName.TaskAborted)
 
 		try {
