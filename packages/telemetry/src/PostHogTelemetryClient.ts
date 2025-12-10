@@ -2,8 +2,9 @@ import { PostHog } from "posthog-node"
 import * as vscode from "vscode"
 
 import {
-	TelemetryEventName,
+	type TelemetryProperties,
 	type TelemetryEvent,
+	TelemetryEventName,
 	getErrorStatusCode,
 	getErrorMessage,
 	shouldReportApiErrorToTelemetry,
@@ -69,7 +70,10 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 		})
 	}
 
-	public override captureException(error: Error, additionalProperties?: Record<string, unknown>): void {
+	public override async captureException(
+		error: Error,
+		additionalProperties?: Record<string, unknown>,
+	): Promise<void> {
 		if (!this.isTelemetryEnabled()) {
 			if (this.debug) {
 				console.info(`[PostHogTelemetryClient#captureException] Skipping exception: ${error.message}`)
@@ -82,7 +86,7 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 		const errorCode = getErrorStatusCode(error)
 		const errorMessage = getErrorMessage(error) ?? error.message
 
-		// Filter out expected errors (e.g., 429 rate limits)
+		// Filter out expected errors (e.g., 402 billing, 429 rate limits)
 		if (!shouldReportApiErrorToTelemetry(errorCode, errorMessage)) {
 			if (this.debug) {
 				console.info(
@@ -108,7 +112,21 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 		// Override the error message with the extracted error message.
 		error.message = errorMessage
 
-		this.client.captureException(error, this.distinctId, mergedProperties)
+		const provider = this.providerRef?.deref()
+		let telemetryProperties: TelemetryProperties | undefined = undefined
+
+		if (provider) {
+			try {
+				telemetryProperties = await provider.getTelemetryProperties()
+			} catch (_error) {
+				// Ignore.
+			}
+		}
+
+		this.client.captureException(error, this.distinctId, {
+			...mergedProperties,
+			$app_version: telemetryProperties?.appVersion,
+		})
 	}
 
 	/**

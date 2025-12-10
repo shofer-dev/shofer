@@ -109,6 +109,11 @@ describe("telemetry error utilities", () => {
 			}
 		})
 
+		it("should return false for 402 billing errors", () => {
+			expect(shouldReportApiErrorToTelemetry(402)).toBe(false)
+			expect(shouldReportApiErrorToTelemetry(402, "Payment required")).toBe(false)
+		})
+
 		it("should return false for 429 rate limit errors", () => {
 			expect(shouldReportApiErrorToTelemetry(429)).toBe(false)
 			expect(shouldReportApiErrorToTelemetry(429, "Rate limit exceeded")).toBe(false)
@@ -139,6 +144,16 @@ describe("telemetry error utilities", () => {
 		it("should return true for regular error messages without rate limit keywords", () => {
 			expect(shouldReportApiErrorToTelemetry(undefined, "Internal server error")).toBe(true)
 			expect(shouldReportApiErrorToTelemetry(undefined, "Connection timeout")).toBe(true)
+		})
+	})
+
+	describe("EXPECTED_API_ERROR_CODES", () => {
+		it("should contain 402 (payment required)", () => {
+			expect(EXPECTED_API_ERROR_CODES.has(402)).toBe(true)
+		})
+
+		it("should contain 429 (rate limit)", () => {
+			expect(EXPECTED_API_ERROR_CODES.has(429)).toBe(true)
 		})
 	})
 
