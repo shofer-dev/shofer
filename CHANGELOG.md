@@ -1,5 +1,20 @@
 # Roo Code Changelog
 
+## [3.36.5] - 2025-12-11
+
+![3.36.5 Release - GPT-5.2](/releases/3.36.5-release.png)
+
+- Add: GPT-5.2 model to openai-native provider (PR #10024 by @hannesrudolph)
+- Add: Toggle for Enter key behavior in chat input allowing users to configure whether Enter sends or creates new line (#8555 by @lmtr0, PR #10002 by @hannesrudolph)
+- Add: App version to telemetry exception captures and filter 402 errors (PR #9996 by @daniel-lxs)
+- Fix: Handle empty Gemini responses and reasoning loops to prevent infinite retries (PR #10007 by @hannesrudolph)
+- Fix: Add missing tool_result blocks to prevent API errors when tool results are expected (PR #10015 by @daniel-lxs)
+- Fix: Filter orphaned tool_results when more results than tool_uses to prevent message validation errors (PR #10027 by @daniel-lxs)
+- Fix: Add general API endpoints for Z.ai provider (#9879 by @richtong, PR #9894 by @roomote)
+- Fix: Apply versioned settings on nightly builds (PR #9997 by @hannesrudolph)
+- Remove: Glama provider (PR #9801 by @hannesrudolph)
+- Remove: Deprecated list_code_definition_names tool (PR #10005 by @hannesrudolph)
+
 ## [3.36.4] - 2025-12-10
 
 ![3.36.4 Release - Error Details Modal](/releases/3.36.4-release.png)
