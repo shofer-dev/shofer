@@ -1,5 +1,17 @@
 # Roo Code Changelog
 
+## [3.36.6] - 2025-12-12
+
+![3.36.6 Release - Tool Alias Support](/releases/3.36.6-release.png)
+
+- Add tool alias support for model-specific tool customization, allowing users to configure how tools are presented to different AI models (PR #9989 by @daniel-lxs)
+- Sanitize MCP server and tool names for API compatibility, ensuring special characters don't cause issues with API calls (PR #10054 by @daniel-lxs)
+- Improve auto-approve timer visibility in follow-up suggestions for better user awareness of pending actions (PR #10048 by @brunobergher)
+- Fix: Cancel auto-approval timeout when user starts typing, preventing accidental auto-approvals during user interaction (PR #9937 by @roomote)
+- Add WorkspaceTaskVisibility type for organization cloud settings to support team visibility controls (PR #10020 by @roomote)
+- Fix: Extract raw error message from OpenRouter metadata for clearer error reporting (PR #10039 by @daniel-lxs)
+- Fix: Show tool protocol dropdown for LiteLLM provider, restoring missing configuration option (PR #10053 by @daniel-lxs)
+
 ## [3.36.5] - 2025-12-11
 
 ![3.36.5 Release - GPT-5.2](/releases/3.36.5-release.png)
