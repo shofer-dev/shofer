@@ -189,6 +189,20 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		inputValueRef.current = inputValue
 	}, [inputValue])
 
+	// Compute whether auto-approval is paused (user is typing in a followup)
+	const isFollowUpAutoApprovalPaused = useMemo(() => {
+		return !!(inputValue && inputValue.trim().length > 0 && clineAsk === "followup")
+	}, [inputValue, clineAsk])
+
+	// Cancel auto-approval timeout when user starts typing
+	useEffect(() => {
+		// Only send cancel if there's actual input (user is typing)
+		// and we have a pending follow-up question
+		if (isFollowUpAutoApprovalPaused) {
+			vscode.postMessage({ type: "cancelAutoApproval" })
+		}
+	}, [isFollowUpAutoApprovalPaused])
+
 	useEffect(() => {
 		isMountedRef.current = true
 		return () => {
@@ -1272,6 +1286,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
 					onBatchFileResponse={handleBatchFileResponse}
 					isFollowUpAnswered={messageOrGroup.isAnswered === true || messageOrGroup.ts === currentFollowUpTs}
+					isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
 					editable={
 						messageOrGroup.type === "ask" &&
 						messageOrGroup.ask === "tool" &&
@@ -1304,6 +1319,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			handleSuggestionClickInRow,
 			handleBatchFileResponse,
 			currentFollowUpTs,
+			isFollowUpAutoApprovalPaused,
 			alwaysAllowUpdateTodoList,
 			enableButtons,
 			primaryButtonText,
