@@ -1,5 +1,15 @@
 # Roo Code Changelog
 
+## [3.36.7] - 2025-12-15
+
+- Improve tool configuration for OpenAI models in OpenRouter (PR #10082 by @hannesrudolph)
+- Capture more detailed provider-specific error information from OpenRouter for better debugging (PR #10073 by @jr)
+- Add Amazon Nova 2 Lite model to Bedrock provider (#9802 by @Smartsheet-JB-Brown, PR #9830 by @roomote)
+- Add AWS Bedrock service tier support (#9874 by @Smartsheet-JB-Brown, PR #9955 by @roomote)
+- Remove auto-approve toggles for to-do and retry actions to simplify the approval workflow (PR #10062 by @hannesrudolph)
+- Move isToolAllowedForMode out of shared directory for better code organization (PR #10089 by @cte)
+- Improve run logs and formatters in web-evals for better evaluation tracking (PR #10081 by @hannesrudolph)
+
 ## [3.36.6] - 2025-12-12
 
 ![3.36.6 Release - Tool Alias Support](/releases/3.36.6-release.png)
