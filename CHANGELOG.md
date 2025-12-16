@@ -1,10 +1,29 @@
 # Roo Code Changelog
 
-## 3.36.8
+## [3.36.9] - 2025-12-15
 
-### Patch Changes
+![3.36.9 Release - Cross-Provider Compatibility](/releases/3.36.9-release.png)
 
-- ![3.36.8 Release - Native Tools Enabled by Default](/releases/3.36.8-release.png)
+- Fix: Normalize tool call IDs for cross-provider compatibility via OpenRouter, ensuring consistent handling across different AI providers (PR #10102 by @daniel-lxs)
+- Fix: Add additionalProperties: false to nested MCP tool schemas, improving schema validation and preventing unexpected properties (PR #10109 by @daniel-lxs)
+- Fix: Validate tool_result IDs in delegation resume flow, preventing errors when resuming delegated tasks (PR #10135 by @daniel-lxs)
+- Feat: Add full error details to streaming failure dialog, providing more comprehensive information for debugging streaming issues (PR #10131 by @roomote)
+- Feat: Improve evals UI with tool groups and duration fix, enhancing the evaluation interface organization and timing accuracy (PR #10133 by @hannesrudolph)
+
+## [3.36.8] - 2025-12-16
+
+![3.36.8 Release - Native Tools Enabled by Default](/releases/3.36.8-release.png)
+
+- Implement incremental token-budgeted file reading for smarter, more efficient file content retrieval (PR #10052 by @jr)
+- Enable native tools by default for multiple providers including OpenAI, Azure, Google, Vertex, and more (PR #10059 by @daniel-lxs)
+- Enable native tools by default for Anthropic and add telemetry tracking for tool format usage (PR #10021 by @daniel-lxs)
+- Fix: Prevent race condition from deleting wrong API messages during streaming (PR #10113 by @hannesrudolph)
+- Fix: Prevent duplicate MCP tools error by deduplicating servers at source (PR #10096 by @daniel-lxs)
+- Remove strict ARN validation for Bedrock custom ARN users allowing more flexibility (#10108 by @wisestmumbler, PR #10110 by @roomote)
+- Add metadata to error details dialog for improved debugging (PR #10050 by @roomote)
+- Add configuration to control public sharing feature (PR #10105 by @mrubens)
+- Remove description from Bedrock service tiers for cleaner UI (PR #10118 by @mrubens)
+- Fix: Correct link to provider pricing page on web (PR #10107 by @brunobergher)
 
 ## [3.36.7] - 2025-12-15
 
