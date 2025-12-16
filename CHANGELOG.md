@@ -1,5 +1,11 @@
 # Roo Code Changelog
 
+## 3.36.8
+
+### Patch Changes
+
+- ![3.36.8 Release - Native Tools Enabled by Default](/releases/3.36.8-release.png)
+
 ## [3.36.7] - 2025-12-15
 
 - Improve tool configuration for OpenAI models in OpenRouter (PR #10082 by @hannesrudolph)
