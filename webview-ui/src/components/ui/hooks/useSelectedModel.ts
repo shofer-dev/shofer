@@ -18,6 +18,7 @@ import {
 	vscodeLlmModels,
 	vscodeLlmDefaultModelId,
 	claudeCodeModels,
+	normalizeClaudeCodeModelId,
 	sambaNovaModels,
 	doubaoModels,
 	internationalZAiModels,
@@ -314,9 +315,11 @@ function getSelectedModel({
 		}
 		case "claude-code": {
 			// Claude Code models extend anthropic models but with images and prompt caching disabled
-			const id = apiConfiguration.apiModelId ?? defaultModelId
-			const info = claudeCodeModels[id as keyof typeof claudeCodeModels]
-			return { id, info: { ...openAiModelInfoSaneDefaults, ...info } }
+			// Normalize legacy model IDs to current canonical model IDs for backward compatibility
+			const rawId = apiConfiguration.apiModelId ?? defaultModelId
+			const normalizedId = normalizeClaudeCodeModelId(rawId)
+			const info = claudeCodeModels[normalizedId]
+			return { id: normalizedId, info: { ...openAiModelInfoSaneDefaults, ...info } }
 		}
 		case "cerebras": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
