@@ -40,7 +40,7 @@ import {
 	CodeActionProvider,
 } from "./activate"
 import { initializeI18n } from "./i18n"
-import { flushModels, getModels, initializeModelCacheRefresh } from "./api/providers/fetchers/modelCache"
+import { flushModels, initializeModelCacheRefresh, refreshModels } from "./api/providers/fetchers/modelCache"
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -142,16 +142,22 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		}
 
-		// Handle Roo models cache based on auth state
+		// Handle Roo models cache based on auth state (ROO-202)
 		const handleRooModelsCache = async () => {
 			try {
-				// Flush and refresh cache on auth state changes
-				await flushModels("roo", true)
-
 				if (data.state === "active-session") {
-					cloudLogger(`[authStateChangedHandler] Refreshed Roo models cache for active session`)
+					// Refresh with auth token to get authenticated models
+					const sessionToken = CloudService.hasInstance()
+						? CloudService.instance.authService?.getSessionToken()
+						: undefined
+					await refreshModels({
+						provider: "roo",
+						baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
+						apiKey: sessionToken,
+					})
 				} else {
-					cloudLogger(`[authStateChangedHandler] Flushed Roo models cache on logout`)
+					// Flush without refresh on logout
+					await flushModels("roo", false)
 				}
 			} catch (error) {
 				cloudLogger(
