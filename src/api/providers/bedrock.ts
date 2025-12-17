@@ -43,6 +43,7 @@ import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"
 import { convertToBedrockConverseMessages as sharedConverter } from "../transform/bedrock-converse-format"
 import { getModelParams } from "../transform/model-params"
 import { shouldUseReasoningBudget } from "../../shared/api"
+import { normalizeToolSchema } from "../../utils/json-schema"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
 /************************************************************************************
@@ -1212,6 +1213,7 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 
 	/**
 	 * Convert OpenAI tool definitions to Bedrock Converse format
+	 * Transforms JSON Schema to draft 2020-12 compliant format required by Claude models.
 	 * @param tools Array of OpenAI ChatCompletionTool definitions
 	 * @returns Array of Bedrock Tool definitions
 	 */
@@ -1225,7 +1227,9 @@ export class AwsBedrockHandler extends BaseProvider implements SingleCompletionH
 							name: tool.function.name,
 							description: tool.function.description,
 							inputSchema: {
-								json: tool.function.parameters as Record<string, unknown>,
+								// Normalize schema to JSON Schema draft 2020-12 compliant format
+								// This converts type: ["T", "null"] to anyOf: [{type: "T"}, {type: "null"}]
+								json: normalizeToolSchema(tool.function.parameters as Record<string, unknown>),
 							},
 						},
 					}) as Tool,
