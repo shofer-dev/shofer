@@ -1,5 +1,15 @@
 # Roo Code Changelog
 
+## [3.36.10] - 2025-12-17
+
+![3.36.10 Release - Gemini 3 Flash Preview](/releases/3.36.10-release.png)
+
+- Add support for Gemini 3 Flash Preview model in the Gemini provider (PR #10151 by @hannesrudolph)
+- Implement interleaved thinking mode for DeepSeek Reasoner, enabling streaming reasoning output (PR #9969 by @hannesrudolph)
+- Fix: Preserve reasoning_content during tool call sequences in DeepSeek (PR #10141 by @hannesrudolph)
+- Fix: Correct token counting for context truncation display (PR #9961 by @hannesrudolph)
+- Update Next.js dependency to ~15.2.8 (PR #10140 by @jr)
+
 ## [3.36.9] - 2025-12-15
 
 ![3.36.9 Release - Cross-Provider Compatibility](/releases/3.36.9-release.png)
