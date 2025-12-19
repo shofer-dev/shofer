@@ -267,7 +267,8 @@
 		"link": "詳細",
 		"title": "エラー詳細",
 		"copyToClipboard": "クリップボードにコピー",
-		"copied": "コピーしました！"
+		"copied": "コピーしました！",
+		"diagnostics": "詳細なエラー情報を取得"
 	},
 	"powershell": {
 		"issues": "Windows PowerShellに問題があるようです。こちらを参照してください"

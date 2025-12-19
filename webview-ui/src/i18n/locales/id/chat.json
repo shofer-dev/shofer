@@ -303,7 +303,8 @@
 		"link": "Details",
 		"title": "Detail Kesalahan",
 		"copyToClipboard": "Salin ke Clipboard",
-		"copied": "Disalin!"
+		"copied": "Disalin!",
+		"diagnostics": "Dapatkan informasi kesalahan terperinci"
 	},
 	"powershell": {
 		"issues": "Sepertinya kamu mengalami masalah Windows PowerShell, silakan lihat ini"

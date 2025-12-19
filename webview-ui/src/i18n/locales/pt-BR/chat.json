@@ -267,7 +267,8 @@
 		"link": "Details",
 		"title": "Detalhes do erro",
 		"copyToClipboard": "Copiar para área de transferência",
-		"copied": "Copiado!"
+		"copied": "Copiado!",
+		"diagnostics": "Obter informações detalhadas do erro"
 	},
 	"powershell": {
 		"issues": "Parece que você está tendo problemas com o Windows PowerShell, por favor veja este"

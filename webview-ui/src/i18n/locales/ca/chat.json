@@ -267,7 +267,8 @@
 		"link": "Details",
 		"title": "Detalls de l'error",
 		"copyToClipboard": "Copiar al porta-retalls",
-		"copied": "Copiat!"
+		"copied": "Copiat!",
+		"diagnostics": "Obtenir informació d'error detallada"
 	},
 	"powershell": {
 		"issues": "Sembla que estàs tenint problemes amb Windows PowerShell, si us plau consulta aquesta documentació per a més informació."

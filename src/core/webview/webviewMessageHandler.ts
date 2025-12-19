@@ -25,6 +25,7 @@ import { saveTaskMessages } from "../task-persistence"
 import { ClineProvider } from "./ClineProvider"
 import { BrowserSessionPanelManager } from "./BrowserSessionPanelManager"
 import { handleCheckpointRestoreOperation } from "./checkpointRestoreHandler"
+import { generateErrorDiagnostics } from "./diagnosticsHandler"
 import { changeLanguage, t } from "../../i18n"
 import { Package } from "../../shared/package"
 import { type RouterName, type ModelRecord, toRouterName } from "../../shared/api"
@@ -3170,6 +3171,22 @@ export const webviewMessageHandler = async (
 				provider.log(`Error opening debug history: ${errorMessage}`)
 				vscode.window.showErrorMessage(`Failed to open debug history: ${errorMessage}`)
 			}
+			break
+		}
+
+		case "downloadErrorDiagnostics": {
+			const currentTask = provider.getCurrentTask()
+			if (!currentTask) {
+				vscode.window.showErrorMessage("No active task to generate diagnostics for")
+				break
+			}
+
+			await generateErrorDiagnostics({
+				taskId: currentTask.taskId,
+				globalStoragePath: provider.contextProxy.globalStorageUri.fsPath,
+				values: message.values,
+				log: (msg) => provider.log(msg),
+			})
 			break
 		}
 

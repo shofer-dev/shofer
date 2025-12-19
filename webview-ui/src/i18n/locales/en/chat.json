@@ -293,8 +293,9 @@
 	"errorDetails": {
 		"link": "Details",
 		"title": "Error Details",
-		"copyToClipboard": "Copy to Clipboard",
-		"copied": "Copied!"
+		"copyToClipboard": "Copy basic error info",
+		"copied": "Copied!",
+		"diagnostics": "Get detailed error info"
 	},
 	"diffError": {
 		"title": "Edit Unsuccessful"

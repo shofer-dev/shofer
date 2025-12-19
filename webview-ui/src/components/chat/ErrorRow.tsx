@@ -1,7 +1,8 @@
 import React, { useState, useCallback, memo, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
-import { BookOpenText, MessageCircleWarning, Copy, Check } from "lucide-react"
+import { BookOpenText, MessageCircleWarning, Copy, Check, Microscope } from "lucide-react"
+
 import { useCopyToClipboard } from "@src/utils/clipboard"
 import { vscode } from "@src/utils/vscode"
 import CodeBlock from "../common/CodeBlock"
@@ -111,6 +112,23 @@ export const ErrorRow = memo(
 
 			return metadata + errorDetails
 		}, [errorDetails, version, provider, modelId])
+
+		const handleDownloadDiagnostics = useCallback(
+			(e: React.MouseEvent) => {
+				e.stopPropagation()
+				vscode.postMessage({
+					type: "downloadErrorDiagnostics",
+					values: {
+						timestamp: new Date().toISOString(),
+						version,
+						provider,
+						model: modelId,
+						details: errorDetails || "",
+					},
+				})
+			},
+			[version, provider, modelId, errorDetails],
+		)
 
 		// Default titles for different error types
 		const getDefaultTitle = () => {
@@ -278,7 +296,7 @@ export const ErrorRow = memo(
 								</pre>
 							</div>
 							<DialogFooter>
-								<Button variant="secondary" onClick={handleCopyDetails}>
+								<Button variant="secondary" className="w-full" onClick={handleCopyDetails}>
 									{showDetailsCopySuccess ? (
 										<>
 											<Check className="size-3" />
@@ -290,6 +308,10 @@ export const ErrorRow = memo(
 											{t("chat:errorDetails.copyToClipboard")}
 										</>
 									)}
+								</Button>
+								<Button variant="secondary" className="w-full" onClick={handleDownloadDiagnostics}>
+									<Microscope className="size-3" />
+									{t("chat:errorDetails.diagnostics")}
 								</Button>
 							</DialogFooter>
 						</DialogContent>
