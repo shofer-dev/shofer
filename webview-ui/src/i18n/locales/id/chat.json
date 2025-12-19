@@ -147,7 +147,7 @@
 		"streaming": "Permintaan API...",
 		"cancelled": "Permintaan API Dibatalkan",
 		"streamingFailed": "Streaming API Gagal",
-		"errorTitle": "Kesalahan API {{code}}",
+		"errorTitle": "Kesalahan Penyedia {{code}}",
 		"errorMessage": {
 			"docs": "Dokumentasi",
 			"goToSettings": "Pengaturan",
@@ -300,6 +300,7 @@
 	},
 	"troubleMessage": "Roo mengalami masalah...",
 	"errorDetails": {
+		"link": "Details",
 		"title": "Detail Kesalahan",
 		"copyToClipboard": "Salin ke Clipboard",
 		"copied": "Disalin!"
