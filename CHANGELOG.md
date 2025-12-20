@@ -1,5 +1,9 @@
 # Roo Code Changelog
 
+## [3.36.16] - 2025-12-19
+
+- Fix: Normalize tool schemas for VS Code LM API to resolve error 400 when using VS Code Language Model API providers (PR #10221 by @hannesrudolph)
+
 ## [3.36.15] - 2025-12-19
 
 ![3.36.15 Release - 1M Context Window Support](/releases/3.36.15-release.png)
