@@ -1,5 +1,16 @@
 # Roo Code Changelog
 
+## [3.38.0] - 2025-12-27
+
+![3.38.0 Release - Skills](/releases/3.38.0-release.png)
+
+- Add support for [Agent Skills](https://agentskills.io/), enabling reusable packages of prompts, tools, and resources to extend Roo's capabilities (PR #10335 by @mrubens)
+- Add optional mode field to slash command front matter, allowing commands to automatically switch to a specific mode when triggered (PR #10344 by @app/roomote)
+- Add support for npm packages and .env files to custom tools, allowing custom tools to import dependencies and access environment variables (PR #10336 by @cte)
+- Remove simpleReadFileTool feature, streamlining the file reading experience (PR #10254 by @app/roomote)
+- Remove OpenRouter Transforms feature (PR #10341 by @app/roomote)
+- Fix mergeToolResultText handling in Roo provider (PR #10359 by @mrubens)
+
 ## [3.37.1] - 2025-12-23
 
 ![3.37.1 Release - Tool Fixes and Provider Improvements](/releases/3.37.1-release.png)
