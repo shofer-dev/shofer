@@ -1,5 +1,4 @@
 import * as fs from "fs"
-import * as fsp from "fs/promises"
 import * as path from "path"
 import * as os from "node:os"
 
@@ -7,218 +6,23 @@ import pWaitFor from "p-wait-for"
 import { execa } from "execa"
 
 import {
-	type TaskEvent,
 	type ClineSay,
+	type ToolUsage,
 	TaskCommandName,
 	RooCodeEventName,
 	IpcMessageType,
 	EVALS_SETTINGS,
-	type ToolUsage,
 } from "@roo-code/types"
 import { IpcClient } from "@roo-code/ipc"
 
-import {
-	type Run,
-	type Task,
-	findRun,
-	findTask,
-	updateTask,
-	createTaskMetrics,
-	updateTaskMetrics,
-	createToolError,
-} from "../db/index.js"
+import { updateTask, createTaskMetrics, updateTaskMetrics, createToolError } from "../db/index.js"
 import { EVALS_REPO_PATH } from "../exercises/index.js"
 
-import { Logger, getTag, isDockerContainer } from "./utils.js"
-import { redisClient, getPubSubKey, registerRunner, deregisterRunner } from "./redis.js"
-import { runUnitTest } from "./runUnitTest.js"
+import { type RunTaskOptions } from "./types.js"
+import { isDockerContainer, copyConversationHistory, mergeToolUsage, waitForSubprocessWithTimeout } from "./utils.js"
 import { MessageLogDeduper } from "./messageLogDeduper.js"
 
-class SubprocessTimeoutError extends Error {
-	constructor(timeout: number) {
-		super(`Subprocess timeout after ${timeout}ms`)
-		this.name = "SubprocessTimeoutError"
-	}
-}
-
-/**
- * Copy conversation history files from VS Code extension storage to the log directory.
- * This allows us to preserve the api_conversation_history.json and ui_messages.json
- * files for post-mortem analysis alongside the log files.
- */
-async function copyConversationHistory({
-	rooTaskId,
-	logDir,
-	language,
-	exercise,
-	iteration,
-	logger,
-}: {
-	rooTaskId: string
-	logDir: string
-	language: string
-	exercise: string
-	iteration: number
-	logger: Logger
-}): Promise<void> {
-	// VS Code extension global storage path within the container
-	const extensionStoragePath = "/roo/.vscode/User/globalStorage/rooveterinaryinc.roo-cline"
-	const taskStoragePath = path.join(extensionStoragePath, "tasks", rooTaskId)
-
-	const filesToCopy = ["api_conversation_history.json", "ui_messages.json"]
-
-	for (const filename of filesToCopy) {
-		const sourcePath = path.join(taskStoragePath, filename)
-		// Use sanitized exercise name (replace slashes with dashes) for the destination filename
-		// Include iteration number to handle multiple attempts at the same exercise
-		const sanitizedExercise = exercise.replace(/\//g, "-")
-		const destFilename = `${language}-${sanitizedExercise}.${iteration}_${filename}`
-		const destPath = path.join(logDir, destFilename)
-
-		try {
-			// Check if source file exists
-			await fsp.access(sourcePath)
-
-			// Copy the file
-			await fsp.copyFile(sourcePath, destPath)
-			logger.info(`copied ${filename} to ${destPath}`)
-		} catch (error) {
-			// File may not exist if task didn't complete properly - this is not fatal
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-				logger.info(`${filename} not found at ${sourcePath} - skipping`)
-			} else {
-				logger.error(`failed to copy ${filename}:`, error)
-			}
-		}
-	}
-}
-
-export const processTask = async ({
-	taskId,
-	jobToken,
-	logger,
-}: {
-	taskId: number
-	jobToken: string | null
-	logger?: Logger
-}) => {
-	const task = await findTask(taskId)
-	const { language, exercise } = task
-	const run = await findRun(task.runId)
-	await registerRunner({ runId: run.id, taskId, timeoutSeconds: (run.timeout || 5) * 60 })
-
-	const containerized = isDockerContainer()
-
-	logger =
-		logger ||
-		new Logger({
-			logDir: containerized ? `/var/log/evals/runs/${run.id}` : `/tmp/evals/runs/${run.id}`,
-			filename: `${language}-${exercise}.log`,
-			tag: getTag("runTask", { run, task }),
-		})
-
-	try {
-		const publish = async (e: TaskEvent) => {
-			const redis = await redisClient()
-			await redis.publish(getPubSubKey(run.id), JSON.stringify(e))
-		}
-
-		logger.info(`running task ${task.id} (${language}/${exercise})...`)
-		await runTask({ run, task, jobToken, publish, logger })
-
-		logger.info(`testing task ${task.id} (${language}/${exercise})...`)
-		const passed = await runUnitTest({ task, logger })
-
-		logger.info(`task ${task.id} (${language}/${exercise}) -> ${passed}`)
-		await updateTask(task.id, { passed })
-
-		await publish({
-			eventName: passed ? RooCodeEventName.EvalPass : RooCodeEventName.EvalFail,
-			taskId: task.id,
-		})
-	} finally {
-		await deregisterRunner({ runId: run.id, taskId })
-	}
-}
-
-export const processTaskInContainer = async ({
-	taskId,
-	jobToken,
-	logger,
-	maxRetries = 10,
-}: {
-	taskId: number
-	jobToken: string | null
-	logger: Logger
-	maxRetries?: number
-}) => {
-	const baseArgs = [
-		"--rm",
-		"--network evals_default",
-		"-v /var/run/docker.sock:/var/run/docker.sock",
-		"-v /tmp/evals:/var/log/evals",
-		"-e HOST_EXECUTION_METHOD=docker",
-	]
-
-	if (jobToken) {
-		baseArgs.push(`-e ROO_CODE_CLOUD_TOKEN=${jobToken}`)
-	}
-
-	const command = `pnpm --filter @roo-code/evals cli --taskId ${taskId}`
-	logger.info(command)
-
-	for (let attempt = 0; attempt <= maxRetries; attempt++) {
-		const containerName = `evals-task-${taskId}.${attempt}`
-		const args = [`--name ${containerName}`, `-e EVALS_ATTEMPT=${attempt}`, ...baseArgs]
-		const isRetry = attempt > 0
-
-		if (isRetry) {
-			const delayMs = Math.pow(2, attempt - 1) * 1000 * (0.5 + Math.random())
-			logger.info(`retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries + 1})`)
-			await new Promise((resolve) => setTimeout(resolve, delayMs))
-		}
-
-		logger.info(
-			`${isRetry ? "retrying" : "executing"} container command (attempt ${attempt + 1}/${maxRetries + 1})`,
-		)
-
-		const subprocess = execa(`docker run ${args.join(" ")} evals-runner sh -c "${command}"`, { shell: true })
-		// subprocess.stdout?.on("data", (data) => console.log(data.toString()))
-		// subprocess.stderr?.on("data", (data) => console.error(data.toString()))
-
-		try {
-			const result = await subprocess
-			logger.info(`container process completed with exit code: ${result.exitCode}`)
-			return
-		} catch (error) {
-			if (error && typeof error === "object" && "exitCode" in error) {
-				logger.error(
-					`container process failed with exit code: ${error.exitCode} (attempt ${attempt + 1}/${maxRetries + 1})`,
-				)
-			} else {
-				logger.error(`container process failed with error: ${error} (attempt ${attempt + 1}/${maxRetries + 1})`)
-			}
-
-			if (attempt === maxRetries) {
-				break
-			}
-		}
-	}
-
-	logger.error(`all ${maxRetries + 1} attempts failed, giving up`)
-
-	// TODO: Mark task as failed.
-}
-
-type RunTaskOptions = {
-	run: Run
-	task: Task
-	jobToken: string | null
-	publish: (taskEvent: TaskEvent) => Promise<void>
-	logger: Logger
-}
-
-export const runTask = async ({ run, task, publish, logger, jobToken }: RunTaskOptions) => {
+export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: RunTaskOptions) => {
 	const { language, exercise } = task
 	const prompt = fs.readFileSync(path.resolve(EVALS_REPO_PATH, `prompts/${language}.md`), "utf-8")
 	const workspacePath = path.resolve(EVALS_REPO_PATH, language, exercise)
@@ -410,24 +214,7 @@ export const runTask = async ({ run, task, publish, logger, jobToken }: RunTaskO
 
 			// For both TaskTokenUsageUpdated and TaskCompleted: toolUsage is payload[2]
 			const incomingToolUsage: ToolUsage = payload[2] ?? {}
-
-			// Merge incoming tool usage with accumulated data using MAX strategy.
-			// This handles the case where a task is rehydrated after abort:
-			// - Empty rehydrated data won't overwrite existing: max(5, 0) = 5
-			// - Legitimate restart with additional work is captured: max(5, 8) = 8
-			// Each task instance tracks its own cumulative values, so we take the max
-			// to preserve the highest values seen across all instances.
-			for (const [toolName, usage] of Object.entries(incomingToolUsage)) {
-				const existing = accumulatedToolUsage[toolName as keyof ToolUsage]
-				if (existing) {
-					accumulatedToolUsage[toolName as keyof ToolUsage] = {
-						attempts: Math.max(existing.attempts, usage.attempts),
-						failures: Math.max(existing.failures, usage.failures),
-					}
-				} else {
-					accumulatedToolUsage[toolName as keyof ToolUsage] = { ...usage }
-				}
-			}
+			mergeToolUsage(accumulatedToolUsage, incomingToolUsage)
 
 			await updateTaskMetrics(taskMetricsId, {
 				cost: totalCost,
@@ -514,35 +301,7 @@ export const runTask = async ({ run, task, publish, logger, jobToken }: RunTaskO
 	logger.info("waiting for subprocess to finish")
 	controller.abort()
 
-	// Wait for subprocess to finish gracefully, with a timeout.
-	const SUBPROCESS_TIMEOUT = 10_000
-
-	try {
-		await Promise.race([
-			subprocess,
-			new Promise((_, reject) =>
-				setTimeout(() => reject(new SubprocessTimeoutError(SUBPROCESS_TIMEOUT)), SUBPROCESS_TIMEOUT),
-			),
-		])
-
-		logger.info("subprocess finished gracefully")
-	} catch (error) {
-		if (error instanceof SubprocessTimeoutError) {
-			logger.error("subprocess did not finish within timeout, force killing")
-
-			try {
-				if (subprocess.kill("SIGKILL")) {
-					logger.info("SIGKILL sent to subprocess")
-				} else {
-					logger.error("failed to send SIGKILL to subprocess")
-				}
-			} catch (killError) {
-				logger.error("subprocess.kill(SIGKILL) failed:", killError)
-			}
-		} else {
-			throw error
-		}
-	}
+	await waitForSubprocessWithTimeout({ subprocess, logger })
 
 	// Copy conversation history files from VS Code extension storage to the log directory
 	// for post-mortem analysis. Only do this in containerized mode where we have a known path.
