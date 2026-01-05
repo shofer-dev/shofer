@@ -64,10 +64,14 @@ export async function buildNativeToolsArray(options: BuildToolsOptions): Promise
 	// Determine if partial reads are enabled based on maxReadFileLine setting.
 	const partialReadsEnabled = maxReadFileLine !== -1
 
+	// Check if the model supports images for read_file tool description.
+	const supportsImages = modelInfo?.supportsImages ?? false
+
 	// Build native tools with dynamic read_file tool based on settings.
 	const nativeTools = getNativeTools({
 		partialReadsEnabled,
 		maxConcurrentFileReads,
+		supportsImages,
 	})
 
 	// Filter native tools based on mode restrictions.
