@@ -8,6 +8,49 @@ This CLI uses the `@roo-code/vscode-shim` package to provide a VSCode API compat
 
 ## Installation
 
+### Quick Install (Recommended)
+
+Install the Roo Code CLI with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/apps/cli/install.sh | sh
+```
+
+**Requirements:**
+
+- Node.js 20 or higher
+- macOS (Intel or Apple Silicon) or Linux (x64 or ARM64)
+
+**Custom installation directory:**
+
+```bash
+ROO_INSTALL_DIR=/opt/roo-code ROO_BIN_DIR=/usr/local/bin curl -fsSL ... | sh
+```
+
+**Install a specific version:**
+
+```bash
+ROO_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/apps/cli/install.sh | sh
+```
+
+### Updating
+
+Re-run the install script to update to the latest version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/apps/cli/install.sh | sh
+```
+
+### Uninstalling
+
+```bash
+rm -rf ~/.roo/cli ~/.local/bin/roo
+```
+
+### Development Installation
+
+For contributing or development:
+
 ```bash
 # From the monorepo root.
 pnpm install
@@ -28,13 +71,7 @@ By default, the CLI prompts for approval before executing actions:
 ```bash
 export OPENROUTER_API_KEY=sk-or-v1-...
 
-pnpm --filter @roo-code/cli start \
-  -x \
-  -p openrouter \
-  -k $OPENROUTER_API_KEY \
-  -m anthropic/claude-sonnet-4.5 \
-  --workspace ~/Documents/my-project \
-  "What is this project?"
+roo "What is this project?" --workspace ~/Documents/my-project
 ```
 
 In interactive mode:
@@ -49,14 +86,7 @@ In interactive mode:
 For automation and scripts, use `-y` to auto-approve all actions:
 
 ```bash
-pnpm --filter @roo-code/cli start \
-  -y \
-  -x \
-  -p openrouter \
-  -k $OPENROUTER_API_KEY \
-  -m anthropic/claude-sonnet-4.5 \
-  --workspace ~/Documents/my-project \
-  "Refactor the utils.ts file"
+roo -y "Refactor the utils.ts file" --workspace ~/Documents/my-project
 ```
 
 In non-interactive mode:
@@ -157,6 +187,29 @@ pnpm check-types
 # Linting
 pnpm lint
 ```
+
+## Releasing
+
+To create a new release, run the release script from the monorepo root:
+
+```bash
+# Release using version from package.json
+./apps/cli/scripts/release.sh
+
+# Release with a specific version
+./apps/cli/scripts/release.sh 0.1.0
+```
+
+The script will:
+
+1. Build the extension and CLI
+2. Create a platform-specific tarball (for your current OS/architecture)
+3. Create a GitHub release with the tarball attached
+
+**Prerequisites:**
+
+- GitHub CLI (`gh`) installed and authenticated (`gh auth login`)
+- pnpm installed
 
 ## Troubleshooting
 

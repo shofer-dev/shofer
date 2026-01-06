@@ -38,6 +38,14 @@ export function getApiKeyFromEnv(provider: string): string | undefined {
  * @param dirname - The __dirname equivalent for the calling module
  */
 export function getDefaultExtensionPath(dirname: string): string {
+	// Check for environment variable first (set by install script)
+	if (process.env.ROO_EXTENSION_PATH) {
+		const envPath = process.env.ROO_EXTENSION_PATH
+		if (fs.existsSync(path.join(envPath, "extension.js"))) {
+			return envPath
+		}
+	}
+
 	// __dirname is apps/cli/dist when bundled
 	// The extension is at src/dist (relative to monorepo root)
 	// So from apps/cli/dist, we need to go ../../../src/dist
@@ -48,7 +56,7 @@ export function getDefaultExtensionPath(dirname: string): string {
 		return monorepoPath
 	}
 
-	// Fallback: when installed as npm package, extension might be at ../extension
+	// Fallback: when installed via curl script, extension is at ../extension
 	const packagePath = path.resolve(dirname, "../extension")
 	return packagePath
 }
