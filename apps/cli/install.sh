@@ -3,9 +3,10 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/apps/cli/install.sh | sh
 #
 # Environment variables:
-#   ROO_INSTALL_DIR - Installation directory (default: ~/.roo/cli)
-#   ROO_BIN_DIR     - Binary symlink directory (default: ~/.local/bin)
-#   ROO_VERSION     - Specific version to install (default: latest)
+#   ROO_INSTALL_DIR   - Installation directory (default: ~/.roo/cli)
+#   ROO_BIN_DIR       - Binary symlink directory (default: ~/.local/bin)
+#   ROO_VERSION       - Specific version to install (default: latest)
+#   ROO_LOCAL_TARBALL - Path to local tarball to install (skips download)
 
 set -e
 
@@ -83,6 +84,13 @@ detect_platform() {
 
 # Get latest release version or use specified version
 get_version() {
+    # Skip version fetch if using local tarball
+    if [ -n "$ROO_LOCAL_TARBALL" ]; then
+        VERSION="${ROO_VERSION:-local}"
+        info "Using local tarball (version: $VERSION)"
+        return
+    fi
+    
     if [ -n "$ROO_VERSION" ]; then
         VERSION="$ROO_VERSION"
         info "Using specified version: $VERSION"
@@ -97,10 +105,10 @@ get_version() {
     }
     
     # Extract the latest cli-v* tag
-    VERSION=$(echo "$RELEASES_JSON" | 
-              grep -o '"tag_name": "cli-v[^"]*"' | 
-              head -1 | 
-              sed 's/"tag_name": "cli-v//' | 
+    VERSION=$(echo "$RELEASES_JSON" |
+              grep -o '"tag_name": "cli-v[^"]*"' |
+              head -1 |
+              sed 's/"tag_name": "cli-v//' |
               sed 's/"//')
     
     if [ -z "$VERSION" ]; then
@@ -113,27 +121,37 @@ get_version() {
 # Download and extract
 download_and_install() {
     TARBALL="roo-cli-${PLATFORM}.tar.gz"
-    URL="https://github.com/$REPO/releases/download/cli-v${VERSION}/${TARBALL}"
-    
-    info "Downloading from $URL..."
     
     # Create temp directory
     TMP_DIR=$(mktemp -d)
     trap "rm -rf $TMP_DIR" EXIT
     
-    # Download with progress indicator
-    HTTP_CODE=$(curl -fsSL -w "%{http_code}" "$URL" -o "$TMP_DIR/$TARBALL" 2>/dev/null) || {
-        if [ "$HTTP_CODE" = "404" ]; then
-            error "Release not found for platform $PLATFORM version $VERSION.
+    # Use local tarball if provided, otherwise download
+    if [ -n "$ROO_LOCAL_TARBALL" ]; then
+        if [ ! -f "$ROO_LOCAL_TARBALL" ]; then
+            error "Local tarball not found: $ROO_LOCAL_TARBALL"
+        fi
+        info "Using local tarball: $ROO_LOCAL_TARBALL"
+        cp "$ROO_LOCAL_TARBALL" "$TMP_DIR/$TARBALL"
+    else
+        URL="https://github.com/$REPO/releases/download/cli-v${VERSION}/${TARBALL}"
+        
+        info "Downloading from $URL..."
+        
+        # Download with progress indicator
+        HTTP_CODE=$(curl -fsSL -w "%{http_code}" "$URL" -o "$TMP_DIR/$TARBALL" 2>/dev/null) || {
+            if [ "$HTTP_CODE" = "404" ]; then
+                error "Release not found for platform $PLATFORM version $VERSION.
 
 Available at: https://github.com/$REPO/releases"
-        fi
-        error "Download failed. HTTP code: $HTTP_CODE"
-    }
+            fi
+            error "Download failed. HTTP code: $HTTP_CODE"
+        }
 
-    # Verify we got something
-    if [ ! -s "$TMP_DIR/$TARBALL" ]; then
-        error "Downloaded file is empty. Please try again."
+        # Verify we got something
+        if [ ! -s "$TMP_DIR/$TARBALL" ]; then
+            error "Downloaded file is empty. Please try again."
+        fi
     fi
 
     # Remove old installation if exists
@@ -260,7 +278,7 @@ print_success() {
     echo ""
     echo "  ${BOLD}Example:${NC}"
     echo "    export OPENROUTER_API_KEY=sk-or-v1-..."
-    echo "    roo \"What is this project?\" --workspace ~/my-project"
+    echo "    roo ~/my-project -P \"What is this project?\""
     echo ""
 }
 

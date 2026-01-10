@@ -2,7 +2,9 @@
 	"extends": "@roo-code/config-typescript/base.json",
 	"compilerOptions": {
 		"types": ["vitest/globals"],
-		"outDir": "dist"
+		"outDir": "dist",
+		"jsx": "react-jsx",
+		"jsxImportSource": "react"
 	},
 	"include": ["src", "*.config.ts"],
 	"exclude": ["node_modules"]

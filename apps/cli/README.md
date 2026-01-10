@@ -71,7 +71,13 @@ By default, the CLI prompts for approval before executing actions:
 ```bash
 export OPENROUTER_API_KEY=sk-or-v1-...
 
-roo "What is this project?" --workspace ~/Documents/my-project
+roo ~/Documents/my-project -P "What is this project?"
+```
+
+You can also run without a prompt and enter it interactively in TUI mode:
+
+```bash
+roo ~/Documents/my-project
 ```
 
 In interactive mode:
@@ -86,32 +92,84 @@ In interactive mode:
 For automation and scripts, use `-y` to auto-approve all actions:
 
 ```bash
-roo -y "Refactor the utils.ts file" --workspace ~/Documents/my-project
+roo ~/Documents/my-project -y -P "Refactor the utils.ts file"
 ```
 
 In non-interactive mode:
 
 - Tool, command, browser, and MCP actions are auto-approved
-- Followup questions show a 10-second timeout, then auto-select the first suggestion
+- Followup questions show a 60-second timeout, then auto-select the first suggestion
 - Typing any key cancels the timeout and allows manual input
+
+### Roo Code Cloud Authentication
+
+To use Roo Code Cloud features (like the provider proxy), you need to authenticate:
+
+```bash
+# Log in to Roo Code Cloud (opens browser)
+roo auth login
+
+# Check authentication status
+roo auth status
+
+# Log out
+roo auth logout
+```
+
+The `auth login` command:
+
+1. Opens your browser to authenticate with Roo Code Cloud
+2. Receives a secure token via localhost callback
+3. Stores the token in `~/.config/roo/credentials.json`
+
+Tokens are valid for 90 days. The CLI will prompt you to re-authenticate when your token expires.
+
+**Authentication Flow:**
+
+```
+┌──────┐         ┌─────────┐         ┌───────────────┐
+│  CLI │         │ Browser │         │ Roo Code Cloud│
+└──┬───┘         └────┬────┘         └───────┬───────┘
+   │                  │                      │
+   │ Open auth URL    │                      │
+   │─────────────────>│                      │
+   │                  │                      │
+   │                  │ Authenticate         │
+   │                  │─────────────────────>│
+   │                  │                      │
+   │                  │<─────────────────────│
+   │                  │ Token via callback   │
+   │<─────────────────│                      │
+   │                  │                      │
+   │ Store token      │                      │
+   │                  │                      │
+```
 
 ## Options
 
-| Option                            | Description                                                                    | Default           |
-| --------------------------------- | ------------------------------------------------------------------------------ | ----------------- |
-| `-w, --workspace <path>`          | Workspace path to operate in                                                   | Current directory |
-| `-e, --extension <path>`          | Path to the extension bundle directory                                         | Auto-detected     |
-| `-v, --verbose`                   | Enable verbose output (show VSCode and extension logs)                         | `false`           |
-| `-d, --debug`                     | Enable debug output (includes detailed debug information, prompts, paths, etc) | `false`           |
-| `-x, --exit-on-complete`          | Exit the process when task completes (useful for testing)                      | `false`           |
-| `-y, --yes`                       | Non-interactive mode: auto-approve all actions                                 | `false`           |
-| `-k, --api-key <key>`             | API key for the LLM provider                                                   | From env var      |
-| `-p, --provider <provider>`       | API provider (anthropic, openai, openrouter, etc.)                             | `openrouter`      |
-| `-m, --model <model>`             | Model to use                                                                   | Provider default  |
-| `-M, --mode <mode>`               | Mode to start in (code, architect, ask, debug, etc.)                           | `code`            |
-| `-r, --reasoning-effort <effort>` | Reasoning effort level (none, minimal, low, medium, high, xhigh)               | `medium`          |
+| Option                            | Description                                                                             | Default                       |
+| --------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------- |
+| `[workspace]`                     | Workspace path to operate in (positional argument)                                      | Current directory             |
+| `-P, --prompt <prompt>`           | The prompt/task to execute (optional in TUI mode)                                       | None                          |
+| `-e, --extension <path>`          | Path to the extension bundle directory                                                  | Auto-detected                 |
+| `-d, --debug`                     | Enable debug output (includes detailed debug information, prompts, paths, etc)          | `false`                       |
+| `-x, --exit-on-complete`          | Exit the process when task completes (useful for testing)                               | `false`                       |
+| `-y, --yes`                       | Non-interactive mode: auto-approve all actions                                          | `false`                       |
+| `-k, --api-key <key>`             | API key for the LLM provider                                                            | From env var                  |
+| `-p, --provider <provider>`       | API provider (anthropic, openai, openrouter, etc.)                                      | `openrouter`                  |
+| `-m, --model <model>`             | Model to use                                                                            | `anthropic/claude-sonnet-4.5` |
+| `-M, --mode <mode>`               | Mode to start in (code, architect, ask, debug, etc.)                                    | `code`                        |
+| `-r, --reasoning-effort <effort>` | Reasoning effort level (unspecified, disabled, none, minimal, low, medium, high, xhigh) | `medium`                      |
+| `--ephemeral`                     | Run without persisting state (uses temporary storage)                                   | `false`                       |
+| `--no-tui`                        | Disable TUI, use plain text output                                                      | `false`                       |
 
-By default, the CLI runs in quiet mode (suppressing VSCode/extension logs) and only shows assistant output. Use `-v` to see all logs, or `-d` for detailed debug information.
+## Auth Commands
+
+| Command           | Description                        |
+| ----------------- | ---------------------------------- |
+| `roo auth login`  | Authenticate with Roo Code Cloud   |
+| `roo auth logout` | Clear stored authentication token  |
+| `roo auth status` | Show current authentication status |
 
 ## Environment Variables
 
@@ -123,9 +181,13 @@ The CLI will look for API keys in environment variables if not provided via `--a
 | openai        | `OPENAI_API_KEY`     |
 | openrouter    | `OPENROUTER_API_KEY` |
 | google/gemini | `GOOGLE_API_KEY`     |
-| mistral       | `MISTRAL_API_KEY`    |
-| deepseek      | `DEEPSEEK_API_KEY`   |
-| bedrock       | `AWS_ACCESS_KEY_ID`  |
+| ...           | ...                  |
+
+**Authentication Environment Variables:**
+
+| Variable          | Description                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| `ROO_WEB_APP_URL` | Override the Roo Code Cloud URL (default: `https://app.roocode.com`) |
 
 ## Architecture
 
@@ -166,12 +228,6 @@ The CLI will look for API keys in environment variables if not provided via `--a
     - CLI → Extension: `emit("webviewMessage", {...})`
     - Extension → CLI: `emit("extensionWebviewMessage", {...})`
 
-## Current Limitations
-
-- **No TUI**: Output is plain text (no React/Ink UI yet)
-- **No configuration file**: Settings are passed via command line flags
-- **No persistence**: Each run is a fresh session
-
 ## Development
 
 ```bash
@@ -190,42 +246,17 @@ pnpm lint
 
 ## Releasing
 
-To create a new release, run the release script from the monorepo root:
+To create a new release, execute the /cli-release slash command:
 
 ```bash
-# Release using version from package.json
-./apps/cli/scripts/release.sh
-
-# Release with a specific version
-./apps/cli/scripts/release.sh 0.1.0
+roo ~/Documents/Roo-Code -P "/cli-release" -y
 ```
 
-The script will:
+The workflow will:
 
-1. Build the extension and CLI
-2. Create a platform-specific tarball (for your current OS/architecture)
-3. Create a GitHub release with the tarball attached
-
-**Prerequisites:**
-
-- GitHub CLI (`gh`) installed and authenticated (`gh auth login`)
-- pnpm installed
-
-## Troubleshooting
-
-### Extension bundle not found
-
-Make sure you've built the main extension first:
-
-```bash
-cd src
-pnpm bundle
-```
-
-### Module resolution errors
-
-The CLI expects the extension to be a CommonJS bundle. Make sure the extension's esbuild config outputs CommonJS.
-
-### "vscode" module not found
-
-The CLI intercepts `require('vscode')` calls. If you see this error, the module resolution interception may have failed.
+1. Bump the version
+2. Update the CHANGELOG
+3. Build the extension and CLI
+4. Create a platform-specific tarball (for your current OS/architecture)
+5. Test the install script
+6. Create a GitHub release with the tarball attached
