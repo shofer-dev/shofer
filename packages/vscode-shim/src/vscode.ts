@@ -129,6 +129,9 @@ export type {
 	UriHandler,
 } from "./interfaces/webview.js"
 
+// Extension host interface
+export type { IExtensionHost, ExtensionHostEventMap, ExtensionHostEventName } from "./interfaces/extension-host.js"
+
 // Workspace interfaces
 export type {
 	WorkspaceConfiguration,

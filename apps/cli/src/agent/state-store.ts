@@ -49,6 +49,12 @@ export interface StoreState {
 	lastUpdatedAt: number
 
 	/**
+	 * The current mode (e.g., "code", "architect", "ask").
+	 * Tracked from state messages received from the extension.
+	 */
+	currentMode: string | undefined
+
+	/**
 	 * Optional: Cache of extension state fields we might need.
 	 * This is a subset of the full ExtensionState.
 	 */
@@ -64,6 +70,7 @@ function createInitialState(): StoreState {
 		agentState: detectAgentState([]),
 		isInitialized: false,
 		lastUpdatedAt: Date.now(),
+		currentMode: undefined,
 	}
 }
 
@@ -183,6 +190,13 @@ export class StateStore {
 		return this.state.agentState.state
 	}
 
+	/**
+	 * Get the current mode (e.g., "code", "architect", "ask").
+	 */
+	getCurrentMode(): string | undefined {
+		return this.state.currentMode
+	}
+
 	// ===========================================================================
 	// State Updates
 	// ===========================================================================
@@ -203,6 +217,7 @@ export class StateStore {
 			agentState: newAgentState,
 			isInitialized: true,
 			lastUpdatedAt: Date.now(),
+			currentMode: this.state.currentMode, // Preserve mode across message updates
 		})
 
 		return previousAgentState
@@ -249,8 +264,25 @@ export class StateStore {
 			agentState: detectAgentState([]),
 			isInitialized: true, // Still initialized, just empty
 			lastUpdatedAt: Date.now(),
+			currentMode: this.state.currentMode, // Preserve mode when clearing task
 			extensionState: undefined,
 		})
+	}
+
+	/**
+	 * Set the current mode.
+	 * Called when mode changes are detected from extension state messages.
+	 *
+	 * @param mode - The new mode value
+	 */
+	setCurrentMode(mode: string | undefined): void {
+		if (this.state.currentMode !== mode) {
+			this.updateState({
+				...this.state,
+				currentMode: mode,
+				lastUpdatedAt: Date.now(),
+			})
+		}
 	}
 
 	/**
@@ -366,6 +398,7 @@ export function getDefaultStore(): StateStore {
 	if (!defaultStore) {
 		defaultStore = new StateStore()
 	}
+
 	return defaultStore
 }
 
@@ -377,5 +410,6 @@ export function resetDefaultStore(): void {
 	if (defaultStore) {
 		defaultStore.reset()
 	}
+
 	defaultStore = null
 }

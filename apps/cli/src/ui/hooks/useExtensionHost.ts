@@ -3,18 +3,9 @@ import { useApp } from "ink"
 import { randomUUID } from "crypto"
 import type { ExtensionMessage, WebviewMessage } from "@roo-code/types"
 
-import { ExtensionHostOptions } from "@/agent/index.js"
+import { ExtensionHostInterface, ExtensionHostOptions } from "@/agent/index.js"
 
 import { useCLIStore } from "../store.js"
-
-interface ExtensionHostInterface {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	on(event: string, handler: (...args: any[]) => void): void
-	activate(): Promise<void>
-	runTask(prompt: string): Promise<void>
-	sendToExtension(message: WebviewMessage): void
-	dispose(): Promise<void>
-}
 
 export interface UseExtensionHostOptions extends ExtensionHostOptions {
 	initialPrompt?: string
@@ -89,9 +80,9 @@ export function useExtensionHost({
 				hostRef.current = host
 				isReadyRef.current = true
 
-				host.on("extensionWebviewMessage", onExtensionMessage)
+				host.on("extensionWebviewMessage", (msg) => onExtensionMessage(msg as ExtensionMessage))
 
-				host.on("taskComplete", async () => {
+				host.client.on("taskCompleted", async () => {
 					setComplete(true)
 					setLoading(false)
 
@@ -102,8 +93,8 @@ export function useExtensionHost({
 					}
 				})
 
-				host.on("taskError", (err: string) => {
-					setError(err)
+				host.client.on("error", (err: Error) => {
+					setError(err.message)
 					setLoading(false)
 				})
 
@@ -111,7 +102,6 @@ export function useExtensionHost({
 
 				// Request initial state from extension (triggers
 				// postStateToWebview which includes taskHistory).
-				host.sendToExtension({ type: "webviewDidLaunch" })
 				host.sendToExtension({ type: "requestCommands" })
 				host.sendToExtension({ type: "requestModes" })
 
@@ -136,28 +126,25 @@ export function useExtensionHost({
 		}
 	}, []) // Run once on mount
 
-	// Stable sendToExtension - uses ref to always access current host
-	// This function reference never changes, preventing downstream useCallback/useMemo invalidations
+	// Stable sendToExtension - uses ref to always access current host.
+	// This function reference never changes, preventing downstream
+	// useCallback/useMemo invalidations.
 	const sendToExtension = useCallback((msg: WebviewMessage) => {
 		hostRef.current?.sendToExtension(msg)
 	}, [])
 
-	// Stable runTask - uses ref to always access current host
+	// Stable runTask - uses ref to always access current host.
 	const runTask = useCallback((prompt: string): Promise<void> => {
 		if (!hostRef.current) {
 			return Promise.reject(new Error("Extension host not ready"))
 		}
+
 		return hostRef.current.runTask(prompt)
 	}, [])
 
-	// Memoized return object to prevent unnecessary re-renders in consumers
+	// Memoized return object to prevent unnecessary re-renders in consumers.
 	return useMemo(
-		() => ({
-			isReady: isReadyRef.current,
-			sendToExtension,
-			runTask,
-			cleanup,
-		}),
+		() => ({ isReady: isReadyRef.current, sendToExtension, runTask, cleanup }),
 		[sendToExtension, runTask, cleanup],
 	)
 }

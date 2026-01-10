@@ -6,20 +6,15 @@
  * 2. Loading the extension bundle via require()
  * 3. Activating the extension
  * 4. Wiring up managers for output, prompting, and ask handling
- *
- * Managers handle all the heavy lifting:
- * - ExtensionClient: Agent state detection (single source of truth)
- * - OutputManager: CLI output and streaming
- * - PromptManager: User input collection
- * - AskDispatcher: Ask routing and handling
  */
 
-import { EventEmitter } from "events"
 import { createRequire } from "module"
 import path from "path"
 import { fileURLToPath } from "url"
 import fs from "fs"
-import os from "os"
+import { EventEmitter } from "events"
+
+import pWaitFor from "p-wait-for"
 
 import type {
 	ClineMessage,
@@ -28,15 +23,16 @@ import type {
 	RooCodeSettings,
 	WebviewMessage,
 } from "@roo-code/types"
-import { createVSCodeAPI, setRuntimeConfigValues } from "@roo-code/vscode-shim"
+import { createVSCodeAPI, IExtensionHost, ExtensionHostEventMap, setRuntimeConfigValues } from "@roo-code/vscode-shim"
 import { DebugLogger } from "@roo-code/core/cli"
 
 import type { SupportedProvider } from "@/types/index.js"
 import type { User } from "@/lib/sdk/index.js"
 import { getProviderSettings } from "@/lib/utils/provider.js"
+import { createEphemeralStorageDir } from "@/lib/storage/index.js"
 
-import type { AgentStateChangeEvent, WaitingForInputEvent, TaskCompletedEvent } from "./events.js"
-import { type AgentStateInfo, AgentLoopState } from "./agent-state.js"
+import type { WaitingForInputEvent, TaskCompletedEvent } from "./events.js"
+import type { AgentStateInfo } from "./agent-state.js"
 import { ExtensionClient } from "./extension-client.js"
 import { OutputManager } from "./output-manager.js"
 import { PromptManager } from "./prompt-manager.js"
@@ -51,10 +47,6 @@ const cliLogger = new DebugLogger("CLI")
 // After bundling with tsup, the code is in dist/index.js (flat), so we go up one level.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CLI_PACKAGE_ROOT = process.env.ROO_CLI_ROOT || path.resolve(__dirname, "..")
-
-// =============================================================================
-// Types
-// =============================================================================
 
 export interface ExtensionHostOptions {
 	mode: string
@@ -92,22 +84,25 @@ interface WebviewViewProvider {
 	resolveWebviewView?(webviewView: unknown, context: unknown, token: unknown): void | Promise<void>
 }
 
-// =============================================================================
-// ExtensionHost Class
-// =============================================================================
+export interface ExtensionHostInterface extends IExtensionHost<ExtensionHostEventMap> {
+	client: ExtensionClient
+	activate(): Promise<void>
+	runTask(prompt: string): Promise<void>
+	sendToExtension(message: WebviewMessage): void
+	dispose(): Promise<void>
+}
 
-export class ExtensionHost extends EventEmitter {
-	// Extension lifecycle
+export class ExtensionHost extends EventEmitter implements ExtensionHostInterface {
+	// Extension lifecycle.
 	private vscode: ReturnType<typeof createVSCodeAPI> | null = null
 	private extensionModule: ExtensionModule | null = null
 	private extensionAPI: unknown = null
-	private webviewProviders: Map<string, WebviewViewProvider> = new Map()
 	private options: ExtensionHostOptions
-	private isWebviewReady = false
-	private pendingMessages: unknown[] = []
+	private isReady = false
 	private messageListener: ((message: ExtensionMessage) => void) | null = null
+	private initialSettings: RooCodeSettings
 
-	// Console suppression
+	// Console suppression.
 	private originalConsole: {
 		log: typeof console.log
 		warn: typeof console.warn
@@ -115,12 +110,10 @@ export class ExtensionHost extends EventEmitter {
 		debug: typeof console.debug
 		info: typeof console.info
 	} | null = null
+
 	private originalProcessEmitWarning: typeof process.emitWarning | null = null
 
-	// Mode tracking
-	private currentMode: string | null = null
-
-	// Ephemeral storage
+	// Ephemeral storage.
 	private ephemeralStorageDir: string | null = null
 
 	// ==========================================================================
@@ -131,7 +124,7 @@ export class ExtensionHost extends EventEmitter {
 	 * ExtensionClient: Single source of truth for agent loop state.
 	 * Handles message processing and state detection.
 	 */
-	private client: ExtensionClient
+	public readonly client: ExtensionClient
 
 	/**
 	 * OutputManager: Handles all CLI output and streaming.
@@ -159,9 +152,9 @@ export class ExtensionHost extends EventEmitter {
 		super()
 
 		this.options = options
-		this.currentMode = options.mode || null
+		this.options.integrationTest = true
 
-		// Initialize client - single source of truth for agent state.
+		// Initialize client - single source of truth for agent state (including mode).
 		this.client = new ExtensionClient({
 			sendMessage: (msg) => this.sendToExtension(msg),
 			debug: options.debug, // Enable debug logging in the client.
@@ -189,6 +182,47 @@ export class ExtensionHost extends EventEmitter {
 
 		// Wire up client events.
 		this.setupClientEventHandlers()
+
+		// Populate initial settings.
+		const baseSettings: RooCodeSettings = {
+			mode: this.options.mode,
+			commandExecutionTimeout: 30,
+			browserToolEnabled: false,
+			enableCheckpoints: false,
+			...getProviderSettings(this.options.provider, this.options.apiKey, this.options.model),
+		}
+
+		this.initialSettings = this.options.nonInteractive
+			? {
+					autoApprovalEnabled: true,
+					alwaysAllowReadOnly: true,
+					alwaysAllowReadOnlyOutsideWorkspace: true,
+					alwaysAllowWrite: true,
+					alwaysAllowWriteOutsideWorkspace: true,
+					alwaysAllowWriteProtected: true,
+					alwaysAllowBrowser: true,
+					alwaysAllowMcp: true,
+					alwaysAllowModeSwitch: true,
+					alwaysAllowSubtasks: true,
+					alwaysAllowExecute: true,
+					allowedCommands: ["*"],
+					...baseSettings,
+				}
+			: {
+					autoApprovalEnabled: false,
+					...baseSettings,
+				}
+
+		if (this.options.reasoningEffort && this.options.reasoningEffort !== "unspecified") {
+			if (this.options.reasoningEffort === "disabled") {
+				this.initialSettings.enableReasoningEffort = false
+			} else {
+				this.initialSettings.enableReasoningEffort = true
+				this.initialSettings.reasoningEffort = this.options.reasoningEffort
+			}
+		}
+
+		this.setupQuietMode()
 	}
 
 	// ==========================================================================
@@ -200,11 +234,6 @@ export class ExtensionHost extends EventEmitter {
 	 * The client emits events, managers handle them.
 	 */
 	private setupClientEventHandlers(): void {
-		// Forward state changes for external consumers.
-		this.client.on("stateChange", (event: AgentStateChangeEvent) => {
-			this.emit("agentStateChange", event)
-		})
-
 		// Handle new messages - delegate to OutputManager.
 		this.client.on("message", (msg: ClineMessage) => {
 			this.logMessageDebug(msg, "new")
@@ -219,61 +248,34 @@ export class ExtensionHost extends EventEmitter {
 
 		// Handle waiting for input - delegate to AskDispatcher.
 		this.client.on("waitingForInput", (event: WaitingForInputEvent) => {
-			this.emit("agentWaitingForInput", event)
 			this.askDispatcher.handleAsk(event.message)
 		})
 
 		// Handle task completion.
 		this.client.on("taskCompleted", (event: TaskCompletedEvent) => {
-			this.emit("agentTaskCompleted", event)
-			this.handleTaskCompleted(event)
+			// Output completion message via OutputManager.
+			// Note: completion_result is an "ask" type, not a "say" type.
+			if (event.message && event.message.type === "ask" && event.message.ask === "completion_result") {
+				this.outputManager.outputCompletionResult(event.message.ts, event.message.text || "")
+			}
 		})
 	}
 
-	/**
-	 * Debug logging for messages (first/last pattern).
-	 */
-	private logMessageDebug(msg: ClineMessage, type: "new" | "updated"): void {
-		if (msg.partial) {
-			if (!this.outputManager.hasLoggedFirstPartial(msg.ts)) {
-				this.outputManager.setLoggedFirstPartial(msg.ts)
-				cliLogger.debug("message:start", { ts: msg.ts, type: msg.say || msg.ask })
-			}
-		} else {
-			cliLogger.debug(`message:${type === "new" ? "new" : "complete"}`, { ts: msg.ts, type: msg.say || msg.ask })
-			this.outputManager.clearLoggedFirstPartial(msg.ts)
-		}
-	}
-
-	/**
-	 * Handle task completion.
-	 */
-	private handleTaskCompleted(event: TaskCompletedEvent): void {
-		// Output completion message via OutputManager.
-		// Note: completion_result is an "ask" type, not a "say" type.
-		if (event.message && event.message.type === "ask" && event.message.ask === "completion_result") {
-			this.outputManager.outputCompletionResult(event.message.ts, event.message.text || "")
-		}
-
-		// Emit taskComplete for waitForCompletion.
-		this.emit("taskComplete")
-	}
-
 	// ==========================================================================
-	// Console Suppression
+	// Logging + Console Suppression
 	// ==========================================================================
-
-	private suppressNodeWarnings(): void {
-		this.originalProcessEmitWarning = process.emitWarning
-		process.emitWarning = () => {}
-		process.on("warning", () => {})
-	}
 
 	private setupQuietMode(): void {
 		if (this.options.integrationTest) {
 			return
 		}
 
+		// Suppress node warnings.
+		this.originalProcessEmitWarning = process.emitWarning
+		process.emitWarning = () => {}
+		process.on("warning", () => {})
+
+		// Suppress console output.
 		this.originalConsole = {
 			log: console.log,
 			warn: console.warn,
@@ -308,21 +310,23 @@ export class ExtensionHost extends EventEmitter {
 		}
 	}
 
+	private logMessageDebug(msg: ClineMessage, type: "new" | "updated"): void {
+		if (msg.partial) {
+			if (!this.outputManager.hasLoggedFirstPartial(msg.ts)) {
+				this.outputManager.setLoggedFirstPartial(msg.ts)
+				cliLogger.debug("message:start", { ts: msg.ts, type: msg.say || msg.ask })
+			}
+		} else {
+			cliLogger.debug(`message:${type === "new" ? "new" : "complete"}`, { ts: msg.ts, type: msg.say || msg.ask })
+			this.outputManager.clearLoggedFirstPartial(msg.ts)
+		}
+	}
+
 	// ==========================================================================
 	// Extension Lifecycle
 	// ==========================================================================
 
-	private async createEphemeralStorageDir(): Promise<string> {
-		const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
-		const tmpDir = path.join(os.tmpdir(), `roo-cli-${uniqueId}`)
-		await fs.promises.mkdir(tmpDir, { recursive: true })
-		return tmpDir
-	}
-
-	async activate(): Promise<void> {
-		this.suppressNodeWarnings()
-		this.setupQuietMode()
-
+	public async activate(): Promise<void> {
 		const bundlePath = path.join(this.options.extensionPath, "extension.js")
 
 		if (!fs.existsSync(bundlePath)) {
@@ -333,8 +337,8 @@ export class ExtensionHost extends EventEmitter {
 		let storageDir: string | undefined
 
 		if (this.options.ephemeral) {
-			storageDir = await this.createEphemeralStorageDir()
-			this.ephemeralStorageDir = storageDir
+			this.ephemeralStorageDir = await createEphemeralStorageDir()
+			storageDir = this.ephemeralStorageDir
 		}
 
 		// Create VSCode API mock.
@@ -372,6 +376,7 @@ export class ExtensionHost extends EventEmitter {
 			this.extensionModule = require(bundlePath) as ExtensionModule
 		} catch (error) {
 			Module._resolveFilename = originalResolve
+
 			throw new Error(
 				`Failed to load extension bundle: ${error instanceof Error ? error.message : String(error)}`,
 			)
@@ -385,232 +390,104 @@ export class ExtensionHost extends EventEmitter {
 			throw new Error(`Failed to activate extension: ${error instanceof Error ? error.message : String(error)}`)
 		}
 
-		// Set up message listener - forward all messages to client
-		this.messageListener = (message: ExtensionMessage) => this.handleExtensionMessage(message)
+		// Set up message listener - forward all messages to client.
+		this.messageListener = (message: ExtensionMessage) => this.client.handleMessage(message)
 		this.on("extensionWebviewMessage", this.messageListener)
+
+		await pWaitFor(() => this.isReady, { interval: 100, timeout: 10_000 })
 	}
 
-	// ==========================================================================
-	// Webview Provider Registration
-	// ==========================================================================
+	public registerWebviewProvider(_viewId: string, _provider: WebviewViewProvider): void {}
 
-	registerWebviewProvider(viewId: string, provider: WebviewViewProvider): void {
-		this.webviewProviders.set(viewId, provider)
+	public unregisterWebviewProvider(_viewId: string): void {}
+
+	public markWebviewReady(): void {
+		this.isReady = true
+
+		// Send initial webview messages to trigger proper extension initialization.
+		// This is critical for the extension to start sending state updates properly.
+		this.sendToExtension({ type: "webviewDidLaunch" })
+
+		setRuntimeConfigValues("roo-cline", this.initialSettings as Record<string, unknown>)
+		this.sendToExtension({ type: "updateSettings", updatedSettings: this.initialSettings })
 	}
 
-	unregisterWebviewProvider(viewId: string): void {
-		this.webviewProviders.delete(viewId)
-	}
-
-	isInInitialSetup(): boolean {
-		return !this.isWebviewReady
-	}
-
-	markWebviewReady(): void {
-		this.isWebviewReady = true
-		this.emit("webviewReady")
-		this.flushPendingMessages()
-	}
-
-	private flushPendingMessages(): void {
-		if (this.pendingMessages.length > 0) {
-			for (const message of this.pendingMessages) {
-				this.emit("webviewMessage", message)
-			}
-			this.pendingMessages = []
-		}
+	public isInInitialSetup(): boolean {
+		return !this.isReady
 	}
 
 	// ==========================================================================
 	// Message Handling
 	// ==========================================================================
 
-	sendToExtension(message: WebviewMessage): void {
-		if (!this.isWebviewReady) {
-			this.pendingMessages.push(message)
-			return
+	public sendToExtension(message: WebviewMessage): void {
+		if (!this.isReady) {
+			throw new Error("You cannot send messages to the extension before it is ready")
 		}
+
 		this.emit("webviewMessage", message)
-	}
-
-	/**
-	 * Handle incoming messages from extension.
-	 * Forward to client (single source of truth).
-	 */
-	private handleExtensionMessage(msg: ExtensionMessage): void {
-		// Track mode changes
-		if (msg.type === "state" && msg.state?.mode && typeof msg.state.mode === "string") {
-			this.currentMode = msg.state.mode
-		}
-
-		// Forward to client - it's the single source of truth
-		this.client.handleMessage(msg)
-
-		// Handle modes separately
-		if (msg.type === "modes") {
-			this.emit("modesUpdated", msg)
-		}
 	}
 
 	// ==========================================================================
 	// Task Management
 	// ==========================================================================
 
-	private applyRuntimeSettings(settings: RooCodeSettings): void {
-		const activeMode = this.currentMode || this.options.mode
-		if (activeMode) {
-			settings.mode = activeMode
-		}
-
-		if (this.options.reasoningEffort && this.options.reasoningEffort !== "unspecified") {
-			if (this.options.reasoningEffort === "disabled") {
-				settings.enableReasoningEffort = false
-			} else {
-				settings.enableReasoningEffort = true
-				settings.reasoningEffort = this.options.reasoningEffort
-			}
-		}
-
-		setRuntimeConfigValues("roo-cline", settings as Record<string, unknown>)
-	}
-
-	async runTask(prompt: string): Promise<void> {
-		if (!this.isWebviewReady) {
-			await new Promise<void>((resolve) => this.once("webviewReady", resolve))
-		}
-
-		// Send initial webview messages to trigger proper extension initialization
-		// This is critical for the extension to start sending state updates properly
-		this.sendToExtension({ type: "webviewDidLaunch" })
-
-		const baseSettings: RooCodeSettings = {
-			commandExecutionTimeout: 30,
-			browserToolEnabled: false,
-			enableCheckpoints: false,
-			...getProviderSettings(this.options.provider, this.options.apiKey, this.options.model),
-		}
-
-		const settings: RooCodeSettings = this.options.nonInteractive
-			? {
-					autoApprovalEnabled: true,
-					alwaysAllowReadOnly: true,
-					alwaysAllowReadOnlyOutsideWorkspace: true,
-					alwaysAllowWrite: true,
-					alwaysAllowWriteOutsideWorkspace: true,
-					alwaysAllowWriteProtected: true,
-					alwaysAllowBrowser: true,
-					alwaysAllowMcp: true,
-					alwaysAllowModeSwitch: true,
-					alwaysAllowSubtasks: true,
-					alwaysAllowExecute: true,
-					allowedCommands: ["*"],
-					...baseSettings,
-				}
-			: {
-					autoApprovalEnabled: false,
-					...baseSettings,
-				}
-
-		this.applyRuntimeSettings(settings)
-		this.sendToExtension({ type: "updateSettings", updatedSettings: settings })
-		await new Promise<void>((resolve) => setTimeout(resolve, 100))
+	public async runTask(prompt: string): Promise<void> {
 		this.sendToExtension({ type: "newTask", text: prompt })
-		await this.waitForCompletion()
-	}
 
-	private waitForCompletion(timeoutMs: number = 110000): Promise<void> {
 		return new Promise((resolve, reject) => {
 			let timeoutId: NodeJS.Timeout | null = null
+			const timeoutMs: number = 110_000
 
 			const completeHandler = () => {
 				cleanup()
 				resolve()
 			}
-			const errorHandler = (error: string) => {
+
+			const errorHandler = (error: Error) => {
 				cleanup()
-				reject(new Error(error))
+				reject(error)
 			}
-			const timeoutHandler = () => {
-				cleanup()
-				reject(
-					new Error(`Task completion timeout after ${timeoutMs}ms - no completion or error event received`),
-				)
-			}
+
 			const cleanup = () => {
 				if (timeoutId) {
 					clearTimeout(timeoutId)
 					timeoutId = null
 				}
-				this.off("taskComplete", completeHandler)
-				this.off("taskError", errorHandler)
+
+				this.client.off("taskCompleted", completeHandler)
+				this.client.off("error", errorHandler)
 			}
 
-			// Set timeout to prevent indefinite hanging
-			timeoutId = setTimeout(timeoutHandler, timeoutMs)
+			// Set timeout to prevent indefinite hanging.
+			timeoutId = setTimeout(() => {
+				cleanup()
+				reject(
+					new Error(`Task completion timeout after ${timeoutMs}ms - no completion or error event received`),
+				)
+			}, timeoutMs)
 
-			this.once("taskComplete", completeHandler)
-			this.once("taskError", errorHandler)
+			this.client.once("taskCompleted", completeHandler)
+			this.client.once("error", errorHandler)
 		})
 	}
 
 	// ==========================================================================
-	// Public Agent State API (delegated to ExtensionClient)
+	// Public Agent State API
 	// ==========================================================================
 
 	/**
 	 * Get the current agent loop state.
 	 */
-	getAgentState(): AgentStateInfo {
+	public getAgentState(): AgentStateInfo {
 		return this.client.getAgentState()
 	}
 
 	/**
 	 * Check if the agent is currently waiting for user input.
 	 */
-	isWaitingForInput(): boolean {
+	public isWaitingForInput(): boolean {
 		return this.client.getAgentState().isWaitingForInput
-	}
-
-	/**
-	 * Check if the agent is currently running.
-	 */
-	isAgentRunning(): boolean {
-		return this.client.getAgentState().isRunning
-	}
-
-	/**
-	 * Get the current agent loop state enum value.
-	 */
-	getAgentLoopState(): AgentLoopState {
-		return this.client.getAgentState().state
-	}
-
-	/**
-	 * Get the underlying ExtensionClient for advanced use cases.
-	 */
-	getExtensionClient(): ExtensionClient {
-		return this.client
-	}
-
-	/**
-	 * Get the OutputManager for advanced output control.
-	 */
-	getOutputManager(): OutputManager {
-		return this.outputManager
-	}
-
-	/**
-	 * Get the PromptManager for advanced prompting.
-	 */
-	getPromptManager(): PromptManager {
-		return this.promptManager
-	}
-
-	/**
-	 * Get the AskDispatcher for advanced ask handling.
-	 */
-	getAskDispatcher(): AskDispatcher {
-		return this.askDispatcher
 	}
 
 	// ==========================================================================
@@ -644,7 +521,6 @@ export class ExtensionHost extends EventEmitter {
 		this.vscode = null
 		this.extensionModule = null
 		this.extensionAPI = null
-		this.webviewProviders.clear()
 
 		// Clear globals.
 		delete (global as Record<string, unknown>).vscode

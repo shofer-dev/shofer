@@ -36,6 +36,7 @@ import {
 	type ClientEventMap,
 	type AgentStateChangeEvent,
 	type WaitingForInputEvent,
+	type ModeChangedEvent,
 } from "./events.js"
 import { AgentLoopState, type AgentStateInfo } from "./agent-state.js"
 
@@ -154,10 +155,12 @@ export class ExtensionClient {
 
 		if (typeof message === "string") {
 			parsed = parseExtensionMessage(message)
+
 			if (!parsed) {
 				if (this.debug) {
 					console.log("[ExtensionClient] Failed to parse message:", message)
 				}
+
 				return
 			}
 		} else {
@@ -257,6 +260,14 @@ export class ExtensionClient {
 		return this.store.isInitialized()
 	}
 
+	/**
+	 * Get the current mode (e.g., "code", "architect", "ask").
+	 * Returns undefined if no mode has been received yet.
+	 */
+	getCurrentMode(): string | undefined {
+		return this.store.getCurrentMode()
+	}
+
 	// ===========================================================================
 	// Event Subscriptions - Realtime notifications
 	// ===========================================================================
@@ -317,6 +328,13 @@ export class ExtensionClient {
 	 */
 	onWaitingForInput(listener: (event: WaitingForInputEvent) => void): () => void {
 		return this.on("waitingForInput", listener)
+	}
+
+	/**
+	 * Convenience method: Subscribe only to mode changes.
+	 */
+	onModeChanged(listener: (event: ModeChangedEvent) => void): () => void {
+		return this.on("modeChanged", listener)
 	}
 
 	// ===========================================================================

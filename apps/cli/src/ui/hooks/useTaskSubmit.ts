@@ -73,14 +73,15 @@ export function useTaskSubmit({
 					const globalCommand = getGlobalCommand(commandMatch[1])
 
 					if (globalCommand?.action === "clearTask") {
-						// Reset CLI state and send clearTask to extension
+						// Reset CLI state and send clearTask to extension.
 						useCLIStore.getState().reset()
-						// Reset component-level refs to avoid stale message tracking
+
+						// Reset component-level refs to avoid stale message tracking.
 						seenMessageIds.current.clear()
 						firstTextMessageSkipped.current = false
 						sendToExtension({ type: "clearTask" })
-						// Re-request state, commands and modes since reset() cleared them
-						sendToExtension({ type: "webviewDidLaunch" })
+
+						// Re-request state, commands and modes since reset() cleared them.
 						sendToExtension({ type: "requestCommands" })
 						sendToExtension({ type: "requestModes" })
 						return

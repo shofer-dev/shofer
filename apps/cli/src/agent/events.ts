@@ -72,6 +72,11 @@ export interface ClientEventMap {
 	taskCleared: void
 
 	/**
+	 * Emitted when the current mode changes.
+	 */
+	modeChanged: ModeChangedEvent
+
+	/**
 	 * Emitted on any error during message processing.
 	 */
 	error: Error
@@ -111,6 +116,16 @@ export interface TaskCompletedEvent {
 	stateInfo: AgentStateInfo
 	/** The completion message if available */
 	message?: ClineMessage
+}
+
+/**
+ * Event payload when mode changes.
+ */
+export interface ModeChangedEvent {
+	/** The previous mode (undefined if first mode set) */
+	previousMode: string | undefined
+	/** The new/current mode */
+	currentMode: string
 }
 
 // =============================================================================

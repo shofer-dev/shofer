@@ -14,8 +14,8 @@ function createMessage(overrides: Partial<ClineMessage>): ClineMessage {
 	return { ts: Date.now() + Math.random() * 1000, type: "say", ...overrides }
 }
 
-function createStateMessage(messages: ClineMessage[]): ExtensionMessage {
-	return { type: "state", state: { clineMessages: messages } } as ExtensionMessage
+function createStateMessage(messages: ClineMessage[], mode?: string): ExtensionMessage {
+	return { type: "state", state: { clineMessages: messages, mode } } as ExtensionMessage
 }
 
 describe("detectAgentState", () => {
@@ -300,6 +300,44 @@ describe("ExtensionClient", () => {
 			client.handleMessage(createStateMessage([createMessage({ say: "text", ts: Date.now() + 1 })]))
 			expect(callCount).toBe(1) // Should not increase.
 		})
+
+		it("should emit modeChanged events", () => {
+			const { client } = createMockClient()
+			const modeChanges: { previousMode: string | undefined; currentMode: string }[] = []
+
+			client.onModeChanged((event) => {
+				modeChanges.push(event)
+			})
+
+			// Set initial mode
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "code"))
+
+			expect(modeChanges).toHaveLength(1)
+			expect(modeChanges[0]).toEqual({ previousMode: undefined, currentMode: "code" })
+
+			// Change mode
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "architect"))
+
+			expect(modeChanges).toHaveLength(2)
+			expect(modeChanges[1]).toEqual({ previousMode: "code", currentMode: "architect" })
+		})
+
+		it("should not emit modeChanged when mode stays the same", () => {
+			const { client } = createMockClient()
+			let modeChangeCount = 0
+
+			client.onModeChanged(() => {
+				modeChangeCount++
+			})
+
+			// Set initial mode
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "code"))
+			expect(modeChangeCount).toBe(1)
+
+			// Same mode - should not emit
+			client.handleMessage(createStateMessage([createMessage({ say: "text", ts: Date.now() + 1 })], "code"))
+			expect(modeChangeCount).toBe(1)
+		})
 	})
 
 	describe("Response methods", () => {
@@ -457,6 +495,65 @@ describe("ExtensionClient", () => {
 
 			expect(client.isInitialized()).toBe(false)
 			expect(client.getCurrentState()).toBe(AgentLoopState.NO_TASK)
+		})
+
+		it("should reset mode on reset", () => {
+			const { client } = createMockClient()
+
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "code"))
+			expect(client.getCurrentMode()).toBe("code")
+
+			client.reset()
+
+			expect(client.getCurrentMode()).toBeUndefined()
+		})
+	})
+
+	describe("Mode tracking", () => {
+		it("should return undefined mode when not initialized", () => {
+			const { client } = createMockClient()
+			expect(client.getCurrentMode()).toBeUndefined()
+		})
+
+		it("should track mode from state messages", () => {
+			const { client } = createMockClient()
+
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "code"))
+
+			expect(client.getCurrentMode()).toBe("code")
+		})
+
+		it("should update mode when it changes", () => {
+			const { client } = createMockClient()
+
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "code"))
+			expect(client.getCurrentMode()).toBe("code")
+
+			client.handleMessage(createStateMessage([createMessage({ say: "text", ts: Date.now() + 1 })], "architect"))
+			expect(client.getCurrentMode()).toBe("architect")
+		})
+
+		it("should preserve mode when state message has no mode", () => {
+			const { client } = createMockClient()
+
+			// Set initial mode
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "code"))
+			expect(client.getCurrentMode()).toBe("code")
+
+			// State update without mode - should preserve existing mode
+			client.handleMessage(createStateMessage([createMessage({ say: "text", ts: Date.now() + 1 })]))
+			expect(client.getCurrentMode()).toBe("code")
+		})
+
+		it("should preserve mode when task is cleared", () => {
+			const { client } = createMockClient()
+
+			client.handleMessage(createStateMessage([createMessage({ say: "text" })], "architect"))
+			expect(client.getCurrentMode()).toBe("architect")
+
+			client.clearTask()
+			// Mode should be preserved after clear
+			expect(client.getCurrentMode()).toBe("architect")
 		})
 	})
 })

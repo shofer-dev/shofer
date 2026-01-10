@@ -1,9 +1,8 @@
 import { Box, Text, useApp, useInput } from "ink"
 import { Select } from "@inkjs/ui"
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
-import type { WebviewMessage } from "@roo-code/types"
 
-import { ExtensionHostOptions } from "@/agent/index.js"
+import { ExtensionHostInterface, ExtensionHostOptions } from "@/agent/index.js"
 
 import { getGlobalCommandsForAutocomplete } from "@/lib/utils/commands.js"
 import { arePathsEqual } from "@/lib/utils/path.js"
@@ -58,15 +57,6 @@ import { ScrollArea, useScrollToBottom } from "./components/ScrollArea.js"
 import ScrollIndicator from "./components/ScrollIndicator.js"
 
 const PICKER_HEIGHT = 10
-
-interface ExtensionHostInterface {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	on(event: string, handler: (...args: any[]) => void): void
-	activate(): Promise<void>
-	runTask(prompt: string): Promise<void>
-	sendToExtension(message: WebviewMessage): void
-	dispose(): Promise<void>
-}
 
 export interface TUIAppProps extends ExtensionHostOptions {
 	initialPrompt: string

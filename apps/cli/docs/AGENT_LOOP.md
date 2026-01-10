@@ -180,12 +180,13 @@ function isStreaming(messages) {
 
 ### ExtensionClient
 
-The **single source of truth** for agent state. It:
+The **single source of truth** for agent state, including the current mode. It:
 
 - Receives all messages from the extension
 - Stores them in the `StateStore`
+- Tracks the current mode from state messages
 - Computes the current state via `detectAgentState()`
-- Emits events when state changes
+- Emits events when state changes (including mode changes)
 
 ```typescript
 const client = new ExtensionClient({
@@ -199,21 +200,31 @@ if (state.isWaitingForInput) {
 	console.log(`Agent needs: ${state.currentAsk}`)
 }
 
+// Query current mode
+const mode = client.getCurrentMode()
+console.log(`Current mode: ${mode}`) // e.g., "code", "architect", "ask"
+
 // Subscribe to events
 client.on("waitingForInput", (event) => {
 	console.log(`Waiting for: ${event.ask}`)
+})
+
+// Subscribe to mode changes
+client.on("modeChanged", (event) => {
+	console.log(`Mode changed: ${event.previousMode} -> ${event.currentMode}`)
 })
 ```
 
 ### StateStore
 
-Holds the `clineMessages` array and computed state:
+Holds the `clineMessages` array, computed state, and current mode:
 
 ```typescript
 interface StoreState {
 	messages: ClineMessage[] // The raw message array
 	agentState: AgentStateInfo // Computed state
 	isInitialized: boolean // Have we received any state?
+	currentMode: string | undefined // Current mode (e.g., "code", "architect")
 }
 ```
 
@@ -221,9 +232,9 @@ interface StoreState {
 
 Handles incoming messages from the extension:
 
-- `"state"` messages → Update `clineMessages` array
+- `"state"` messages → Update `clineMessages` array and track mode
 - `"messageUpdated"` messages → Update single message in array
-- Emits events for state transitions
+- Emits events for state transitions and mode changes
 
 ### AskDispatcher
 

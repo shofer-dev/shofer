@@ -161,7 +161,21 @@ export class MessageProcessor {
 			return
 		}
 
-		const { clineMessages } = message.state
+		const { clineMessages, mode } = message.state
+
+		// Track mode changes.
+		if (mode && typeof mode === "string") {
+			const previousMode = this.store.getCurrentMode()
+
+			if (previousMode !== mode) {
+				if (this.options.debug) {
+					debugLog("[MessageProcessor] Mode changed", { from: previousMode, to: mode })
+				}
+
+				this.store.setCurrentMode(mode)
+				this.emitter.emit("modeChanged", { previousMode, currentMode: mode })
+			}
+		}
 
 		if (!clineMessages) {
 			if (this.options.debug) {
@@ -170,7 +184,7 @@ export class MessageProcessor {
 			return
 		}
 
-		// Get previous state for comparison
+		// Get previous state for comparison.
 		const previousState = this.store.getAgentState()
 
 		// Update the store with new messages

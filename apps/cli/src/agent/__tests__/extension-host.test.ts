@@ -2,18 +2,22 @@
 
 import { EventEmitter } from "events"
 import fs from "fs"
-import os from "os"
-import path from "path"
 
-import type { WebviewMessage } from "@roo-code/types"
+import type { ExtensionMessage, WebviewMessage } from "@roo-code/types"
 
 import { type ExtensionHostOptions, ExtensionHost } from "../extension-host.js"
+import { ExtensionClient } from "../extension-client.js"
+import { AgentLoopState } from "../agent-state.js"
 
 vi.mock("@roo-code/vscode-shim", () => ({
 	createVSCodeAPI: vi.fn(() => ({
 		context: { extensionPath: "/test/extension" },
 	})),
 	setRuntimeConfigValues: vi.fn(),
+}))
+
+vi.mock("@/lib/storage/index.js", () => ({
+	createEphemeralStorageDir: vi.fn(() => Promise.resolve("/tmp/roo-cli-test-ephemeral")),
 }))
 
 /**
@@ -47,7 +51,15 @@ function getPrivate<T>(host: ExtensionHost, key: string): T {
 }
 
 /**
+ * Helper to set private members for testing
+ */
+function setPrivate(host: ExtensionHost, key: string, value: unknown): void {
+	;(host as unknown as PrivateHost)[key] = value
+}
+
+/**
  * Helper to call private methods for testing
+ * This uses a more permissive type to avoid TypeScript errors with private methods
  */
 function callPrivate<T>(host: ExtensionHost, method: string, ...args: unknown[]): T {
 	const fn = (host as unknown as PrivateHost)[method] as ((...a: unknown[]) => T) | undefined
@@ -86,7 +98,12 @@ describe("ExtensionHost", () => {
 
 			const host = new ExtensionHost(options)
 
-			expect(getPrivate(host, "options")).toEqual(options)
+			// Options are stored but integrationTest is set to true
+			const storedOptions = getPrivate<ExtensionHostOptions>(host, "options")
+			expect(storedOptions.mode).toBe(options.mode)
+			expect(storedOptions.workspacePath).toBe(options.workspacePath)
+			expect(storedOptions.extensionPath).toBe(options.extensionPath)
+			expect(storedOptions.integrationTest).toBe(true) // Always set to true in constructor
 		})
 
 		it("should be an EventEmitter instance", () => {
@@ -97,8 +114,7 @@ describe("ExtensionHost", () => {
 		it("should initialize with default state values", () => {
 			const host = createTestHost()
 
-			expect(getPrivate(host, "isWebviewReady")).toBe(false)
-			expect(getPrivate<unknown[]>(host, "pendingMessages")).toEqual([])
+			expect(getPrivate(host, "isReady")).toBe(false)
 			expect(getPrivate(host, "vscode")).toBeNull()
 			expect(getPrivate(host, "extensionModule")).toBeNull()
 		})
@@ -115,25 +131,26 @@ describe("ExtensionHost", () => {
 	})
 
 	describe("webview provider registration", () => {
-		it("should register webview provider", () => {
+		it("should register webview provider without throwing", () => {
 			const host = createTestHost()
 			const mockProvider = { resolveWebviewView: vi.fn() }
 
-			host.registerWebviewProvider("test-view", mockProvider)
-
-			const providers = getPrivate<Map<string, unknown>>(host, "webviewProviders")
-			expect(providers.get("test-view")).toBe(mockProvider)
+			// registerWebviewProvider is now a no-op, just ensure it doesn't throw
+			expect(() => {
+				host.registerWebviewProvider("test-view", mockProvider)
+			}).not.toThrow()
 		})
 
-		it("should unregister webview provider", () => {
+		it("should unregister webview provider without throwing", () => {
 			const host = createTestHost()
 			const mockProvider = { resolveWebviewView: vi.fn() }
 
 			host.registerWebviewProvider("test-view", mockProvider)
-			host.unregisterWebviewProvider("test-view")
 
-			const providers = getPrivate<Map<string, unknown>>(host, "webviewProviders")
-			expect(providers.has("test-view")).toBe(false)
+			// unregisterWebviewProvider is now a no-op, just ensure it doesn't throw
+			expect(() => {
+				host.unregisterWebviewProvider("test-view")
+			}).not.toThrow()
 		})
 
 		it("should handle unregistering non-existent provider gracefully", () => {
@@ -160,49 +177,48 @@ describe("ExtensionHost", () => {
 		})
 
 		describe("markWebviewReady", () => {
-			it("should set isWebviewReady to true", () => {
+			it("should set isReady to true", () => {
 				const host = createTestHost()
 				host.markWebviewReady()
-				expect(getPrivate(host, "isWebviewReady")).toBe(true)
+				expect(getPrivate(host, "isReady")).toBe(true)
 			})
 
-			it("should emit webviewReady event", () => {
-				const host = createTestHost()
-				const listener = vi.fn()
-
-				host.on("webviewReady", listener)
-				host.markWebviewReady()
-
-				expect(listener).toHaveBeenCalled()
-			})
-
-			it("should flush pending messages", () => {
+			it("should send webviewDidLaunch message", () => {
 				const host = createTestHost()
 				const emitSpy = vi.spyOn(host, "emit")
 
-				// Queue messages before ready
-				host.sendToExtension({ type: "requestModes" })
-				host.sendToExtension({ type: "requestCommands" })
-
-				// Mark ready (should flush)
 				host.markWebviewReady()
 
-				// Check that webviewMessage events were emitted for pending messages
-				expect(emitSpy).toHaveBeenCalledWith("webviewMessage", { type: "requestModes" })
-				expect(emitSpy).toHaveBeenCalledWith("webviewMessage", { type: "requestCommands" })
+				expect(emitSpy).toHaveBeenCalledWith("webviewMessage", { type: "webviewDidLaunch" })
+			})
+
+			it("should send updateSettings message", () => {
+				const host = createTestHost()
+				const emitSpy = vi.spyOn(host, "emit")
+
+				host.markWebviewReady()
+
+				// Check that updateSettings was called
+				const updateSettingsCall = emitSpy.mock.calls.find(
+					(call) =>
+						call[0] === "webviewMessage" &&
+						typeof call[1] === "object" &&
+						call[1] !== null &&
+						(call[1] as WebviewMessage).type === "updateSettings",
+				)
+				expect(updateSettingsCall).toBeDefined()
 			})
 		})
 	})
 
 	describe("sendToExtension", () => {
-		it("should queue message when webview not ready", () => {
+		it("should throw error when extension not ready", () => {
 			const host = createTestHost()
 			const message: WebviewMessage = { type: "requestModes" }
 
-			host.sendToExtension(message)
-
-			const pending = getPrivate<unknown[]>(host, "pendingMessages")
-			expect(pending).toContain(message)
+			expect(() => {
+				host.sendToExtension(message)
+			}).toThrow("You cannot send messages to the extension before it is ready")
 		})
 
 		it("should emit webviewMessage event when webview is ready", () => {
@@ -211,51 +227,37 @@ describe("ExtensionHost", () => {
 			const message: WebviewMessage = { type: "requestModes" }
 
 			host.markWebviewReady()
+			emitSpy.mockClear() // Clear the markWebviewReady calls
 			host.sendToExtension(message)
 
 			expect(emitSpy).toHaveBeenCalledWith("webviewMessage", message)
 		})
 
-		it("should not queue message when webview is ready", () => {
+		it("should not throw when webview is ready", () => {
 			const host = createTestHost()
 
 			host.markWebviewReady()
-			host.sendToExtension({ type: "requestModes" })
 
-			const pending = getPrivate<unknown[]>(host, "pendingMessages")
-			expect(pending).toHaveLength(0)
+			expect(() => {
+				host.sendToExtension({ type: "requestModes" })
+			}).not.toThrow()
 		})
 	})
 
-	describe("handleExtensionMessage", () => {
-		it("should forward messages to the client", () => {
+	describe("message handling via client", () => {
+		it("should forward extension messages to the client", () => {
 			const host = createTestHost()
-			const client = host.getExtensionClient()
-			const handleMessageSpy = vi.spyOn(client, "handleMessage")
+			const client = getPrivate(host, "client") as ExtensionClient
 
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { clineMessages: [] } })
-
-			expect(handleMessageSpy).toHaveBeenCalled()
-		})
-
-		it("should track mode from state messages", () => {
-			const host = createTestHost()
-
-			callPrivate(host, "handleExtensionMessage", {
+			// Simulate extension message.
+			host.emit("extensionWebviewMessage", {
 				type: "state",
-				state: { mode: "architect", clineMessages: [] },
-			})
+				state: { clineMessages: [] },
+			} as unknown as ExtensionMessage)
 
-			expect(getPrivate(host, "currentMode")).toBe("architect")
-		})
-
-		it("should emit modesUpdated for modes messages", () => {
-			const host = createTestHost()
-			const emitSpy = vi.spyOn(host, "emit")
-
-			callPrivate(host, "handleExtensionMessage", { type: "modes", modes: [] })
-
-			expect(emitSpy).toHaveBeenCalledWith("modesUpdated", { type: "modes", modes: [] })
+			// Message listener is set up in activate(), which we can't easily call in unit tests.
+			// But we can verify the client exists and has the handleMessage method.
+			expect(typeof client.handleMessage).toBe("function")
 		})
 	})
 
@@ -274,68 +276,45 @@ describe("ExtensionHost", () => {
 			const host = createTestHost()
 			expect(typeof host.isWaitingForInput()).toBe("boolean")
 		})
-
-		it("should return isAgentRunning() status", () => {
-			const host = createTestHost()
-			expect(typeof host.isAgentRunning()).toBe("boolean")
-		})
-
-		it("should return the client from getExtensionClient()", () => {
-			const host = createTestHost()
-			const client = host.getExtensionClient()
-
-			expect(client).toBeDefined()
-			expect(typeof client.handleMessage).toBe("function")
-		})
-
-		it("should return the output manager from getOutputManager()", () => {
-			const host = createTestHost()
-			const outputManager = host.getOutputManager()
-
-			expect(outputManager).toBeDefined()
-			expect(typeof outputManager.output).toBe("function")
-		})
-
-		it("should return the prompt manager from getPromptManager()", () => {
-			const host = createTestHost()
-			const promptManager = host.getPromptManager()
-
-			expect(promptManager).toBeDefined()
-		})
-
-		it("should return the ask dispatcher from getAskDispatcher()", () => {
-			const host = createTestHost()
-			const askDispatcher = host.getAskDispatcher()
-
-			expect(askDispatcher).toBeDefined()
-			expect(typeof askDispatcher.handleAsk).toBe("function")
-		})
 	})
 
 	describe("quiet mode", () => {
 		describe("setupQuietMode", () => {
-			it("should suppress console.log, warn, debug, info when enabled", () => {
+			it("should not modify console when integrationTest is true", () => {
+				// By default, constructor sets integrationTest = true
 				const host = createTestHost()
 				const originalLog = console.log
 
 				callPrivate(host, "setupQuietMode")
 
-				// These should be no-ops now (different from original)
-				expect(console.log).not.toBe(originalLog)
+				// Console should not be modified since integrationTest is true
+				expect(console.log).toBe(originalLog)
+			})
 
-				// Verify they are actually no-ops by calling them (should not throw)
-				expect(() => console.log("test")).not.toThrow()
-				expect(() => console.warn("test")).not.toThrow()
-				expect(() => console.debug("test")).not.toThrow()
-				expect(() => console.info("test")).not.toThrow()
+			it("should suppress console when integrationTest is false", () => {
+				const host = createTestHost()
+				const originalLog = console.log
+
+				// Override integrationTest to false
+				const options = getPrivate<ExtensionHostOptions>(host, "options")
+				options.integrationTest = false
+
+				callPrivate(host, "setupQuietMode")
+
+				// Console should be modified
+				expect(console.log).not.toBe(originalLog)
 
 				// Restore for other tests
 				callPrivate(host, "restoreConsole")
 			})
 
-			it("should preserve console.error", () => {
+			it("should preserve console.error even when suppressing", () => {
 				const host = createTestHost()
 				const originalError = console.error
+
+				// Override integrationTest to false
+				const options = getPrivate<ExtensionHostOptions>(host, "options")
+				options.integrationTest = false
 
 				callPrivate(host, "setupQuietMode")
 
@@ -343,24 +322,16 @@ describe("ExtensionHost", () => {
 
 				callPrivate(host, "restoreConsole")
 			})
-
-			it("should store original console methods", () => {
-				const host = createTestHost()
-				const originalLog = console.log
-
-				callPrivate(host, "setupQuietMode")
-
-				const stored = getPrivate<{ log: typeof console.log }>(host, "originalConsole")
-				expect(stored.log).toBe(originalLog)
-
-				callPrivate(host, "restoreConsole")
-			})
 		})
 
 		describe("restoreConsole", () => {
-			it("should restore original console methods", () => {
+			it("should restore original console methods when suppressed", () => {
 				const host = createTestHost()
 				const originalLog = console.log
+
+				// Override integrationTest to false to actually suppress
+				const options = getPrivate<ExtensionHostOptions>(host, "options")
+				options.integrationTest = false
 
 				callPrivate(host, "setupQuietMode")
 				callPrivate(host, "restoreConsole")
@@ -376,20 +347,6 @@ describe("ExtensionHost", () => {
 				}).not.toThrow()
 			})
 		})
-
-		describe("suppressNodeWarnings", () => {
-			it("should suppress process.emitWarning", () => {
-				const host = createTestHost()
-				const originalEmitWarning = process.emitWarning
-
-				callPrivate(host, "suppressNodeWarnings")
-
-				expect(process.emitWarning).not.toBe(originalEmitWarning)
-
-				// Restore
-				callPrivate(host, "restoreConsole")
-			})
-		})
 	})
 
 	describe("dispose", () => {
@@ -401,7 +358,7 @@ describe("ExtensionHost", () => {
 
 		it("should remove message listener", async () => {
 			const listener = vi.fn()
-			;(host as unknown as Record<string, unknown>).messageListener = listener
+			setPrivate(host, "messageListener", listener)
 			host.on("extensionWebviewMessage", listener)
 
 			await host.dispose()
@@ -411,9 +368,9 @@ describe("ExtensionHost", () => {
 
 		it("should call extension deactivate if available", async () => {
 			const deactivateMock = vi.fn()
-			;(host as unknown as Record<string, unknown>).extensionModule = {
+			setPrivate(host, "extensionModule", {
 				deactivate: deactivateMock,
-			}
+			})
 
 			await host.dispose()
 
@@ -421,7 +378,7 @@ describe("ExtensionHost", () => {
 		})
 
 		it("should clear vscode reference", async () => {
-			;(host as unknown as Record<string, unknown>).vscode = { context: {} }
+			setPrivate(host, "vscode", { context: {} })
 
 			await host.dispose()
 
@@ -429,20 +386,11 @@ describe("ExtensionHost", () => {
 		})
 
 		it("should clear extensionModule reference", async () => {
-			;(host as unknown as Record<string, unknown>).extensionModule = {}
+			setPrivate(host, "extensionModule", {})
 
 			await host.dispose()
 
 			expect(getPrivate(host, "extensionModule")).toBeNull()
-		})
-
-		it("should clear webviewProviders", async () => {
-			host.registerWebviewProvider("test", {})
-
-			await host.dispose()
-
-			const providers = getPrivate<Map<string, unknown>>(host, "webviewProviders")
-			expect(providers.size).toBe(0)
 		})
 
 		it("should delete global vscode", async () => {
@@ -461,422 +409,188 @@ describe("ExtensionHost", () => {
 			expect((global as Record<string, unknown>).__extensionHost).toBeUndefined()
 		})
 
-		it("should restore console if it was suppressed", async () => {
+		it("should call restoreConsole", async () => {
 			const restoreConsoleSpy = spyOnPrivate(host, "restoreConsole")
 
 			await host.dispose()
 
 			expect(restoreConsoleSpy).toHaveBeenCalled()
 		})
-
-		it("should clear managers", async () => {
-			const outputManager = host.getOutputManager()
-			const askDispatcher = host.getAskDispatcher()
-			const outputClearSpy = vi.spyOn(outputManager, "clear")
-			const askClearSpy = vi.spyOn(askDispatcher, "clear")
-
-			await host.dispose()
-
-			expect(outputClearSpy).toHaveBeenCalled()
-			expect(askClearSpy).toHaveBeenCalled()
-		})
-
-		it("should reset client", async () => {
-			const client = host.getExtensionClient()
-			const resetSpy = vi.spyOn(client, "reset")
-
-			await host.dispose()
-
-			expect(resetSpy).toHaveBeenCalled()
-		})
 	})
 
-	describe("waitForCompletion", () => {
-		it("should resolve when taskComplete is emitted", async () => {
+	describe("runTask", () => {
+		it("should send newTask message when called", async () => {
 			const host = createTestHost()
+			host.markWebviewReady()
 
-			const promise = callPrivate<Promise<void>>(host, "waitForCompletion")
+			const emitSpy = vi.spyOn(host, "emit")
+			const client = getPrivate(host, "client") as ExtensionClient
 
-			// Emit completion after a short delay
-			setTimeout(() => host.emit("taskComplete"), 10)
+			// Start the task (will hang waiting for completion)
+			const taskPromise = host.runTask("test prompt")
 
-			await expect(promise).resolves.toBeUndefined()
+			// Emit completion to resolve the promise via the client's emitter
+			const taskCompletedEvent = {
+				success: true,
+				stateInfo: {
+					state: AgentLoopState.IDLE,
+					isWaitingForInput: false,
+					isRunning: false,
+					isStreaming: false,
+					requiredAction: "start_task" as const,
+					description: "Task completed",
+				},
+			}
+			setTimeout(() => client.getEmitter().emit("taskCompleted", taskCompletedEvent), 10)
+
+			await taskPromise
+
+			expect(emitSpy).toHaveBeenCalledWith("webviewMessage", { type: "newTask", text: "test prompt" })
 		})
 
-		it("should reject when taskError is emitted", async () => {
+		it("should resolve when taskCompleted is emitted on client", async () => {
 			const host = createTestHost()
+			host.markWebviewReady()
 
-			const promise = callPrivate<Promise<void>>(host, "waitForCompletion")
+			const client = getPrivate(host, "client") as ExtensionClient
+			const taskPromise = host.runTask("test prompt")
 
-			setTimeout(() => host.emit("taskError", "Test error"), 10)
+			// Emit completion after a short delay via the client's emitter
+			const taskCompletedEvent = {
+				success: true,
+				stateInfo: {
+					state: AgentLoopState.IDLE,
+					isWaitingForInput: false,
+					isRunning: false,
+					isStreaming: false,
+					requiredAction: "start_task" as const,
+					description: "Task completed",
+				},
+			}
+			setTimeout(() => client.getEmitter().emit("taskCompleted", taskCompletedEvent), 10)
 
-			await expect(promise).rejects.toThrow("Test error")
+			await expect(taskPromise).resolves.toBeUndefined()
 		})
 	})
 
-	describe("mode tracking via handleExtensionMessage", () => {
-		let host: ExtensionHost
+	describe("initial settings", () => {
+		it("should set mode from options", () => {
+			const host = createTestHost({ mode: "architect" })
 
-		beforeEach(() => {
-			host = createTestHost({
-				mode: "code",
-				provider: "anthropic",
-				apiKey: "test-key",
-				model: "test-model",
-			})
-			// Mock process.stdout.write which is used by output()
-			vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
+			expect(initialSettings.mode).toBe("architect")
 		})
 
-		afterEach(() => {
-			vi.restoreAllMocks()
+		it("should enable auto-approval in non-interactive mode", () => {
+			const host = createTestHost({ nonInteractive: true })
+
+			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
+			expect(initialSettings.autoApprovalEnabled).toBe(true)
+			expect(initialSettings.alwaysAllowReadOnly).toBe(true)
+			expect(initialSettings.alwaysAllowWrite).toBe(true)
+			expect(initialSettings.alwaysAllowExecute).toBe(true)
 		})
 
-		it("should track current mode when state updates with a mode", () => {
-			// Initial state update establishes current mode
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { mode: "code", clineMessages: [] } })
-			expect(getPrivate(host, "currentMode")).toBe("code")
+		it("should disable auto-approval in interactive mode", () => {
+			const host = createTestHost({ nonInteractive: false })
 
-			// Second state update should update tracked mode
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "architect", clineMessages: [] },
-			})
-			expect(getPrivate(host, "currentMode")).toBe("architect")
+			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
+			expect(initialSettings.autoApprovalEnabled).toBe(false)
 		})
 
-		it("should not change current mode when state has no mode", () => {
-			// Initial state update establishes current mode
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { mode: "code", clineMessages: [] } })
-			expect(getPrivate(host, "currentMode")).toBe("code")
+		it("should set reasoning effort when specified", () => {
+			const host = createTestHost({ reasoningEffort: "high" })
 
-			// State without mode should not change tracked mode
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { clineMessages: [] } })
-			expect(getPrivate(host, "currentMode")).toBe("code")
+			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
+			expect(initialSettings.enableReasoningEffort).toBe(true)
+			expect(initialSettings.reasoningEffort).toBe("high")
 		})
 
-		it("should track current mode across multiple changes", () => {
-			// Start with code mode
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { mode: "code", clineMessages: [] } })
-			expect(getPrivate(host, "currentMode")).toBe("code")
+		it("should disable reasoning effort when set to disabled", () => {
+			const host = createTestHost({ reasoningEffort: "disabled" })
 
-			// Change to architect
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "architect", clineMessages: [] },
-			})
-			expect(getPrivate(host, "currentMode")).toBe("architect")
-
-			// Change to debug
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { mode: "debug", clineMessages: [] } })
-			expect(getPrivate(host, "currentMode")).toBe("debug")
-
-			// Another state update with debug
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { mode: "debug", clineMessages: [] } })
-			expect(getPrivate(host, "currentMode")).toBe("debug")
+			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
+			expect(initialSettings.enableReasoningEffort).toBe(false)
 		})
 
-		it("should not send updateSettings on mode change (CLI settings are applied once during runTask)", () => {
-			// This test ensures mode changes don't trigger automatic re-application of API settings.
-			// CLI settings are applied once during runTask() via updateSettings.
-			// Mode-specific provider profiles are handled by the extension's handleModeSwitch.
-			const sendToExtensionSpy = vi.spyOn(host, "sendToExtension")
+		it("should not set reasoning effort when unspecified", () => {
+			const host = createTestHost({ reasoningEffort: "unspecified" })
 
-			// Initial state
-			callPrivate(host, "handleExtensionMessage", { type: "state", state: { mode: "code", clineMessages: [] } })
-			sendToExtensionSpy.mockClear()
-
-			// Mode change should NOT trigger sendToExtension
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "architect", clineMessages: [] },
-			})
-			expect(sendToExtensionSpy).not.toHaveBeenCalled()
-		})
-	})
-
-	describe("applyRuntimeSettings - mode switching", () => {
-		it("should use currentMode when set (from user mode switches)", () => {
-			const host = createTestHost({
-				mode: "code", // Initial mode from CLI options
-				provider: "anthropic",
-				apiKey: "test-key",
-				model: "test-model",
-			})
-
-			// Simulate user switching mode via Ctrl+M - this updates currentMode
-			;(host as unknown as Record<string, unknown>).currentMode = "architect"
-
-			// Create settings object to be modified
-			const settings: Record<string, unknown> = {}
-			callPrivate(host, "applyRuntimeSettings", settings)
-
-			// Should use currentMode (architect), not options.mode (code)
-			expect(settings.mode).toBe("architect")
-		})
-
-		it("should fall back to options.mode when currentMode is not set", () => {
-			const host = createTestHost({
-				mode: "code",
-				provider: "anthropic",
-				apiKey: "test-key",
-				model: "test-model",
-			})
-
-			// currentMode is not set (still null from constructor)
-			expect(getPrivate(host, "currentMode")).toBe("code") // Set from options.mode in constructor
-
-			const settings: Record<string, unknown> = {}
-			callPrivate(host, "applyRuntimeSettings", settings)
-
-			// Should use options.mode as fallback
-			expect(settings.mode).toBe("code")
-		})
-
-		it("should use currentMode even when it differs from initial options.mode", () => {
-			const host = createTestHost({
-				mode: "code",
-				provider: "anthropic",
-				apiKey: "test-key",
-				model: "test-model",
-			})
-
-			// Simulate multiple mode switches: code -> architect -> debug
-			;(host as unknown as Record<string, unknown>).currentMode = "debug"
-
-			const settings: Record<string, unknown> = {}
-			callPrivate(host, "applyRuntimeSettings", settings)
-
-			// Should use the latest currentMode
-			expect(settings.mode).toBe("debug")
-		})
-
-		it("should not set mode if neither currentMode nor options.mode is set", () => {
-			const host = createTestHost({
-				// No mode specified - mode defaults to "code" in createTestHost
-				provider: "anthropic",
-				apiKey: "test-key",
-				model: "test-model",
-			})
-
-			// Explicitly set currentMode to null (edge case)
-			;(host as unknown as Record<string, unknown>).currentMode = null
-			// Also clear options.mode
-			const options = getPrivate<ExtensionHostOptions>(host, "options")
-			options.mode = ""
-
-			const settings: Record<string, unknown> = {}
-			callPrivate(host, "applyRuntimeSettings", settings)
-
-			// Mode should not be set
-			expect(settings.mode).toBeUndefined()
-		})
-	})
-
-	describe("mode switching - end to end simulation", () => {
-		let host: ExtensionHost
-
-		beforeEach(() => {
-			host = createTestHost({
-				mode: "code",
-				provider: "anthropic",
-				apiKey: "test-key",
-				model: "test-model",
-			})
-			vi.spyOn(process.stdout, "write").mockImplementation(() => true)
-		})
-
-		afterEach(() => {
-			vi.restoreAllMocks()
-		})
-
-		it("should preserve mode switch when starting a new task", () => {
-			// Step 1: Initial state from extension (like webviewDidLaunch response)
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "code", clineMessages: [] },
-			})
-			expect(getPrivate(host, "currentMode")).toBe("code")
-
-			// Step 2: User presses Ctrl+M to switch mode, extension sends new state
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "architect", clineMessages: [] },
-			})
-			expect(getPrivate(host, "currentMode")).toBe("architect")
-
-			// Step 3: When runTask is called, applyRuntimeSettings should use architect
-			const settings: Record<string, unknown> = {}
-			callPrivate(host, "applyRuntimeSettings", settings)
-			expect(settings.mode).toBe("architect")
-		})
-
-		it("should handle mode switch before any state messages", () => {
-			// currentMode is initialized to options.mode in constructor
-			expect(getPrivate(host, "currentMode")).toBe("code")
-
-			// Without any state messages, should still use options.mode
-			const settings: Record<string, unknown> = {}
-			callPrivate(host, "applyRuntimeSettings", settings)
-			expect(settings.mode).toBe("code")
-		})
-
-		it("should track multiple mode switches correctly", () => {
-			// Switch through multiple modes
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "code", clineMessages: [] },
-			})
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "architect", clineMessages: [] },
-			})
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "debug", clineMessages: [] },
-			})
-			callPrivate(host, "handleExtensionMessage", {
-				type: "state",
-				state: { mode: "ask", clineMessages: [] },
-			})
-
-			// Should use the most recent mode
-			expect(getPrivate(host, "currentMode")).toBe("ask")
-
-			const settings: Record<string, unknown> = {}
-			callPrivate(host, "applyRuntimeSettings", settings)
-			expect(settings.mode).toBe("ask")
+			const initialSettings = getPrivate<Record<string, unknown>>(host, "initialSettings")
+			expect(initialSettings.enableReasoningEffort).toBeUndefined()
+			expect(initialSettings.reasoningEffort).toBeUndefined()
 		})
 	})
 
 	describe("ephemeral mode", () => {
-		describe("constructor", () => {
-			it("should store ephemeral option", () => {
-				const host = createTestHost({ ephemeral: true })
-				const options = getPrivate<ExtensionHostOptions>(host, "options")
-				expect(options.ephemeral).toBe(true)
-			})
+		it("should store ephemeral option correctly", () => {
+			const host = createTestHost({ ephemeral: true })
 
-			it("should default ephemeral to undefined", () => {
-				const host = createTestHost()
-				const options = getPrivate<ExtensionHostOptions>(host, "options")
-				expect(options.ephemeral).toBeUndefined()
-			})
-
-			it("should initialize ephemeralStorageDir to null", () => {
-				const host = createTestHost({ ephemeral: true })
-				expect(getPrivate(host, "ephemeralStorageDir")).toBeNull()
-			})
+			const options = getPrivate<ExtensionHostOptions>(host, "options")
+			expect(options.ephemeral).toBe(true)
 		})
 
-		describe("createEphemeralStorageDir", () => {
-			let createdDirs: string[] = []
+		it("should default ephemeralStorageDir to null", () => {
+			const host = createTestHost()
 
-			afterEach(async () => {
-				// Clean up any directories created during tests
-				for (const dir of createdDirs) {
-					try {
-						await fs.promises.rm(dir, { recursive: true, force: true })
-					} catch {
-						// Ignore cleanup errors
-					}
-				}
-				createdDirs = []
-			})
-
-			it("should create a directory in the system temp folder", async () => {
-				const host = createTestHost({ ephemeral: true })
-				const tmpDir = await callPrivate<Promise<string>>(host, "createEphemeralStorageDir")
-				createdDirs.push(tmpDir)
-
-				expect(tmpDir).toContain(os.tmpdir())
-				expect(tmpDir).toContain("roo-cli-")
-				expect(fs.existsSync(tmpDir)).toBe(true)
-			})
-
-			it("should create a unique directory each time", async () => {
-				const host = createTestHost({ ephemeral: true })
-				const dir1 = await callPrivate<Promise<string>>(host, "createEphemeralStorageDir")
-				const dir2 = await callPrivate<Promise<string>>(host, "createEphemeralStorageDir")
-				createdDirs.push(dir1, dir2)
-
-				expect(dir1).not.toBe(dir2)
-				expect(fs.existsSync(dir1)).toBe(true)
-				expect(fs.existsSync(dir2)).toBe(true)
-			})
-
-			it("should include timestamp and random id in directory name", async () => {
-				const host = createTestHost({ ephemeral: true })
-				const tmpDir = await callPrivate<Promise<string>>(host, "createEphemeralStorageDir")
-				createdDirs.push(tmpDir)
-
-				const dirName = path.basename(tmpDir)
-				// Format: roo-cli-{timestamp}-{randomId}
-				expect(dirName).toMatch(/^roo-cli-\d+-[a-z0-9]+$/)
-			})
+			expect(getPrivate(host, "ephemeralStorageDir")).toBeNull()
 		})
 
-		describe("dispose - ephemeral cleanup", () => {
-			it("should clean up ephemeral storage directory on dispose", async () => {
-				const host = createTestHost({ ephemeral: true })
+		it("should clean up ephemeral storage directory on dispose", async () => {
+			const host = createTestHost({ ephemeral: true })
 
-				// Create the ephemeral directory
-				const tmpDir = await callPrivate<Promise<string>>(host, "createEphemeralStorageDir")
-				;(host as unknown as Record<string, unknown>).ephemeralStorageDir = tmpDir
+			// Set up a mock ephemeral storage directory
+			const mockEphemeralDir = "/tmp/roo-cli-test-ephemeral-cleanup"
+			setPrivate(host, "ephemeralStorageDir", mockEphemeralDir)
 
-				// Verify directory exists
-				expect(fs.existsSync(tmpDir)).toBe(true)
+			// Mock fs.promises.rm
+			const rmMock = vi.spyOn(fs.promises, "rm").mockResolvedValue(undefined)
 
-				// Dispose the host
-				await host.dispose()
+			await host.dispose()
 
-				// Directory should be removed
-				expect(fs.existsSync(tmpDir)).toBe(false)
-				expect(getPrivate(host, "ephemeralStorageDir")).toBeNull()
-			})
+			expect(rmMock).toHaveBeenCalledWith(mockEphemeralDir, { recursive: true, force: true })
+			expect(getPrivate(host, "ephemeralStorageDir")).toBeNull()
 
-			it("should not fail dispose if ephemeral directory doesn't exist", async () => {
-				const host = createTestHost({ ephemeral: true })
+			rmMock.mockRestore()
+		})
 
-				// Set a non-existent directory
-				;(host as unknown as Record<string, unknown>).ephemeralStorageDir = "/non/existent/path/roo-cli-test"
+		it("should not clean up when ephemeralStorageDir is null", async () => {
+			const host = createTestHost()
 
-				// Dispose should not throw
-				await expect(host.dispose()).resolves.toBeUndefined()
-			})
+			// ephemeralStorageDir is null by default
+			expect(getPrivate(host, "ephemeralStorageDir")).toBeNull()
 
-			it("should clean up ephemeral directory with contents", async () => {
-				const host = createTestHost({ ephemeral: true })
+			const rmMock = vi.spyOn(fs.promises, "rm").mockResolvedValue(undefined)
 
-				// Create the ephemeral directory with some content
-				const tmpDir = await callPrivate<Promise<string>>(host, "createEphemeralStorageDir")
-				;(host as unknown as Record<string, unknown>).ephemeralStorageDir = tmpDir
+			await host.dispose()
 
-				// Add some files and subdirectories
-				await fs.promises.writeFile(path.join(tmpDir, "test.txt"), "test content")
-				await fs.promises.mkdir(path.join(tmpDir, "subdir"))
-				await fs.promises.writeFile(path.join(tmpDir, "subdir", "nested.txt"), "nested content")
+			// rm should not be called when there's no ephemeral storage
+			expect(rmMock).not.toHaveBeenCalled()
 
-				// Verify content exists
-				expect(fs.existsSync(path.join(tmpDir, "test.txt"))).toBe(true)
-				expect(fs.existsSync(path.join(tmpDir, "subdir", "nested.txt"))).toBe(true)
+			rmMock.mockRestore()
+		})
 
-				// Dispose the host
-				await host.dispose()
+		it("should handle ephemeral storage cleanup errors gracefully", async () => {
+			const host = createTestHost({ ephemeral: true })
 
-				// Directory and all contents should be removed
-				expect(fs.existsSync(tmpDir)).toBe(false)
-			})
+			// Set up a mock ephemeral storage directory
+			setPrivate(host, "ephemeralStorageDir", "/tmp/roo-cli-test-ephemeral-error")
 
-			it("should not clean up anything if not in ephemeral mode", async () => {
-				const host = createTestHost({ ephemeral: false })
+			// Mock fs.promises.rm to throw an error
+			const rmMock = vi.spyOn(fs.promises, "rm").mockRejectedValue(new Error("Cleanup failed"))
 
-				// ephemeralStorageDir should be null
-				expect(getPrivate(host, "ephemeralStorageDir")).toBeNull()
+			// dispose should not throw even if cleanup fails
+			await expect(host.dispose()).resolves.toBeUndefined()
 
-				// Dispose should complete normally
-				await expect(host.dispose()).resolves.toBeUndefined()
-			})
+			rmMock.mockRestore()
+		})
+
+		it("should not affect normal mode when ephemeral is false", () => {
+			const host = createTestHost({ ephemeral: false })
+
+			const options = getPrivate<ExtensionHostOptions>(host, "options")
+			expect(options.ephemeral).toBe(false)
+			expect(getPrivate(host, "ephemeralStorageDir")).toBeNull()
 		})
 	})
 })

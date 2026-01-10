@@ -184,47 +184,47 @@ describe("useCLIStore", () => {
 		it("should support the full task resumption workflow", () => {
 			const store = useCLIStore.getState
 
-			// Step 1: Initial state with task history and modes from webviewDidLaunch
+			// Step 1: Initial state with task history and modes from webviewDidLaunch.
 			store().setTaskHistory([{ id: "task1", task: "Previous task", workspace: "/test", ts: Date.now() }])
 			store().setAvailableModes([{ key: "code", slug: "code", name: "Code" }])
 			store().setAllSlashCommands([{ key: "new", name: "new", source: "global" as const }])
 
-			// Step 2: User starts a new task
+			// Step 2: User starts a new task.
 			store().setHasStartedTask(true)
 			store().addMessage({ id: "1", role: "user", content: "New task" })
 			store().addMessage({ id: "2", role: "assistant", content: "Working on it..." })
 			store().setLoading(true)
 
-			// Verify current state
+			// Verify current state.
 			expect(store().messages.length).toBe(2)
 			expect(store().hasStartedTask).toBe(true)
 
-			// Step 3: User selects a task from history to resume
-			// This triggers resetForTaskSwitch + setIsResumingTask(true)
+			// Step 3: User selects a task from history to resume.
+			// This triggers resetForTaskSwitch + setIsResumingTask(true).
 			store().resetForTaskSwitch()
 			store().setIsResumingTask(true)
 
-			// Verify task-specific state is cleared but global state preserved
+			// Verify task-specific state is cleared but global state preserved.
 			expect(store().messages).toEqual([])
 			expect(store().isLoading).toBe(false)
 			expect(store().hasStartedTask).toBe(false)
-			expect(store().isResumingTask).toBe(true) // Flag is set
-			expect(store().taskHistory.length).toBe(1) // Preserved
-			expect(store().availableModes.length).toBe(1) // Preserved
-			expect(store().allSlashCommands.length).toBe(1) // Preserved
+			expect(store().isResumingTask).toBe(true) // Flag is set.
+			expect(store().taskHistory.length).toBe(1) // Preserved.
+			expect(store().availableModes.length).toBe(1) // Preserved.
+			expect(store().allSlashCommands.length).toBe(1) // Preserved.
 
 			// Step 4: Extension sends state message with clineMessages
-			// (simulated by adding messages)
+			// (simulated by adding messages).
 			store().addMessage({ id: "old1", role: "user", content: "Previous task prompt" })
 			store().addMessage({ id: "old2", role: "assistant", content: "Previous response" })
 
-			// Step 5: After processing state, isResumingTask should be cleared
+			// Step 5: After processing state, isResumingTask should be cleared.
 			store().setIsResumingTask(false)
 
-			// Final verification
+			// Final verification.
 			expect(store().isResumingTask).toBe(false)
 			expect(store().messages.length).toBe(2)
-			expect(store().taskHistory.length).toBe(1) // Still preserved
+			expect(store().taskHistory.length).toBe(1) // Still preserved.
 		})
 
 		it("should allow reading isResumingTask synchronously during message processing", () => {
