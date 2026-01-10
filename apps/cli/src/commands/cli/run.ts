@@ -7,16 +7,25 @@ import { createElement } from "react"
 import { isProviderName } from "@roo-code/types"
 import { setLogger } from "@roo-code/vscode-shim"
 
-import { FlagOptions, isSupportedProvider, OnboardingProviderChoice, supportedProviders } from "../../types/types.js"
-import { ASCII_ROO, DEFAULT_FLAGS, REASONING_EFFORTS, SDK_BASE_URL } from "../../types/constants.js"
+import {
+	FlagOptions,
+	isSupportedProvider,
+	OnboardingProviderChoice,
+	supportedProviders,
+	ASCII_ROO,
+	DEFAULT_FLAGS,
+	REASONING_EFFORTS,
+	SDK_BASE_URL,
+} from "@/types/index.js"
 
-import { ExtensionHost, ExtensionHostOptions } from "../../extension-host/index.js"
+import { type User, createClient } from "@/lib/sdk/index.js"
+import { loadToken, hasToken, loadSettings } from "@/lib/storage/index.js"
+import { getEnvVarName, getApiKeyFromEnv } from "@/lib/utils/provider.js"
+import { runOnboarding } from "@/lib/utils/onboarding.js"
+import { getDefaultExtensionPath } from "@/lib/utils/extension.js"
+import { VERSION } from "@/lib/utils/version.js"
 
-import { type User, createClient } from "../../lib/sdk/index.js"
-import { loadToken, hasToken, loadSettings } from "../../lib/storage/index.js"
-import { getEnvVarName, getApiKeyFromEnv, getDefaultExtensionPath } from "../../extension-host/utils.js"
-import { runOnboarding } from "../../lib/utils/onboarding.js"
-import { VERSION } from "../../lib/utils/version.js"
+import { ExtensionHost, ExtensionHostOptions } from "@/agent/index.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -29,6 +38,7 @@ export async function run(workspaceArg: string, options: FlagOptions) {
 	})
 
 	const isTuiSupported = process.stdin.isTTY && process.stdout.isTTY
+	const isTuiEnabled = options.tui && isTuiSupported
 	const extensionPath = options.extension || getDefaultExtensionPath(__dirname)
 	const workspacePath = path.resolve(workspaceArg)
 
@@ -45,7 +55,7 @@ export async function run(workspaceArg: string, options: FlagOptions) {
 	let user: User | null = null
 	let useCloudProvider = false
 
-	if (isTuiSupported) {
+	if (isTuiEnabled) {
 		let { onboardingProviderChoice } = await loadSettings()
 
 		if (!onboardingProviderChoice) {
@@ -68,7 +78,7 @@ export async function run(workspaceArg: string, options: FlagOptions) {
 						apiKey = token
 						user = me?.type === "user" ? me.user : null
 					} catch {
-						// Token may be expired or invalid - user will need to re-authenticate
+						// Token may be expired or invalid - user will need to re-authenticate.
 					}
 				}
 			}
@@ -86,6 +96,7 @@ export async function run(workspaceArg: string, options: FlagOptions) {
 			)
 			console.error(`[CLI] For ${provider}, set ${getEnvVarName(provider)}`)
 		}
+
 		process.exit(1)
 	}
 
@@ -106,20 +117,18 @@ export async function run(workspaceArg: string, options: FlagOptions) {
 		process.exit(1)
 	}
 
-	const useTui = options.tui && isTuiSupported
-
 	if (options.tui && !isTuiSupported) {
 		console.log("[CLI] TUI disabled (no TTY support), falling back to plain text mode")
 	}
 
-	if (!useTui && !options.prompt) {
+	if (!isTuiEnabled && !options.prompt) {
 		console.error("[CLI] Error: prompt is required in plain text mode")
 		console.error("[CLI] Usage: roo [workspace] -P <prompt> [options]")
 		console.error("[CLI] Use TUI mode (without --no-tui) for interactive input")
 		process.exit(1)
 	}
 
-	if (useTui) {
+	if (isTuiEnabled) {
 		try {
 			const { render } = await import("ink")
 			const { App } = await import("../../ui/App.js")
