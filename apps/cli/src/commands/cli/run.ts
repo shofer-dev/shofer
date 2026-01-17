@@ -28,7 +28,7 @@ import { ExtensionHost, ExtensionHostOptions } from "@/agent/index.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export async function run(workspaceArg: string, flagOptions: FlagOptions) {
+export async function run(promptArg: string | undefined, flagOptions: FlagOptions) {
 	setLogger({
 		info: () => {},
 		warn: () => {},
@@ -36,34 +36,60 @@ export async function run(workspaceArg: string, flagOptions: FlagOptions) {
 		debug: () => {},
 	})
 
+	let prompt = promptArg
+
+	if (flagOptions.promptFile) {
+		if (!fs.existsSync(flagOptions.promptFile)) {
+			console.error(`[CLI] Error: Prompt file does not exist: ${flagOptions.promptFile}`)
+			process.exit(1)
+		}
+
+		prompt = fs.readFileSync(flagOptions.promptFile, "utf-8")
+	}
+
 	// Options
 
+	let rooToken = await loadToken()
+	const settings = await loadSettings()
+
 	const isTuiSupported = process.stdin.isTTY && process.stdout.isTTY
-	const isTuiEnabled = flagOptions.tui && isTuiSupported
-	const rooToken = await loadToken()
+	const isTuiEnabled = !flagOptions.print && isTuiSupported
+	const isOnboardingEnabled = isTuiEnabled && !rooToken && !flagOptions.provider && !settings.provider
+
+	// Determine effective values: CLI flags > settings file > DEFAULT_FLAGS.
+	const effectiveMode = flagOptions.mode || settings.mode || DEFAULT_FLAGS.mode
+	const effectiveModel = flagOptions.model || settings.model || DEFAULT_FLAGS.model
+	const effectiveReasoningEffort =
+		flagOptions.reasoningEffort || settings.reasoningEffort || DEFAULT_FLAGS.reasoningEffort
+	const effectiveProvider = flagOptions.provider ?? settings.provider ?? (rooToken ? "roo" : "openrouter")
+	const effectiveWorkspacePath = flagOptions.workspace ? path.resolve(flagOptions.workspace) : process.cwd()
+	const effectiveDangerouslySkipPermissions =
+		flagOptions.yes || flagOptions.dangerouslySkipPermissions || settings.dangerouslySkipPermissions || false
+	const effectiveExitOnComplete = flagOptions.print || flagOptions.oneshot || settings.oneshot || false
 
 	const extensionHostOptions: ExtensionHostOptions = {
-		mode: flagOptions.mode || DEFAULT_FLAGS.mode,
-		reasoningEffort: flagOptions.reasoningEffort === "unspecified" ? undefined : flagOptions.reasoningEffort,
+		mode: effectiveMode,
+		reasoningEffort: effectiveReasoningEffort === "unspecified" ? undefined : effectiveReasoningEffort,
 		user: null,
-		provider: flagOptions.provider ?? (rooToken ? "roo" : "openrouter"),
-		model: flagOptions.model || DEFAULT_FLAGS.model,
-		workspacePath: path.resolve(workspaceArg),
+		provider: effectiveProvider,
+		model: effectiveModel,
+		workspacePath: effectiveWorkspacePath,
 		extensionPath: path.resolve(flagOptions.extension || getDefaultExtensionPath(__dirname)),
-		nonInteractive: flagOptions.yes,
+		nonInteractive: effectiveDangerouslySkipPermissions,
 		ephemeral: flagOptions.ephemeral,
 		debug: flagOptions.debug,
-		exitOnComplete: flagOptions.exitOnComplete,
+		exitOnComplete: effectiveExitOnComplete,
 	}
 
 	// Roo Code Cloud Authentication
 
-	if (isTuiEnabled) {
-		let { onboardingProviderChoice } = await loadSettings()
+	if (isOnboardingEnabled) {
+		let { onboardingProviderChoice } = settings
 
 		if (!onboardingProviderChoice) {
-			const result = await runOnboarding()
-			onboardingProviderChoice = result.choice
+			const { choice, token } = await runOnboarding()
+			onboardingProviderChoice = choice
+			rooToken = token ?? null
 		}
 
 		if (onboardingProviderChoice === OnboardingProviderChoice.Roo) {
@@ -139,15 +165,15 @@ export async function run(workspaceArg: string, flagOptions: FlagOptions) {
 	}
 
 	if (!isTuiEnabled) {
-		if (!flagOptions.prompt) {
-			console.error("[CLI] Error: prompt is required in plain text mode")
-			console.error("[CLI] Usage: roo [workspace] -P <prompt> [options]")
-			console.error("[CLI] Use TUI mode (without --no-tui) for interactive input")
+		if (!prompt) {
+			console.error("[CLI] Error: prompt is required in print mode")
+			console.error("[CLI] Usage: roo <prompt> --print [options]")
+			console.error("[CLI] Run without -p for interactive mode")
 			process.exit(1)
 		}
 
-		if (flagOptions.tui) {
-			console.warn("[CLI] TUI disabled (no TTY support), falling back to plain text mode")
+		if (!flagOptions.print) {
+			console.warn("[CLI] TUI disabled (no TTY support), falling back to print mode")
 		}
 	}
 
@@ -161,7 +187,7 @@ export async function run(workspaceArg: string, flagOptions: FlagOptions) {
 			render(
 				createElement(App, {
 					...extensionHostOptions,
-					initialPrompt: flagOptions.prompt,
+					initialPrompt: prompt,
 					version: VERSION,
 					createExtensionHost: (opts: ExtensionHostOptions) => new ExtensionHost(opts),
 				}),
@@ -200,12 +226,9 @@ export async function run(workspaceArg: string, flagOptions: FlagOptions) {
 
 		try {
 			await host.activate()
-			await host.runTask(flagOptions.prompt!)
+			await host.runTask(prompt!)
 			await host.dispose()
-
-			if (!flagOptions.waitOnComplete) {
-				process.exit(0)
-			}
+			process.exit(0)
 		} catch (error) {
 			console.error("[CLI] Error:", error instanceof Error ? error.message : String(error))
 

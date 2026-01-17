@@ -437,9 +437,6 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		this.sendToExtension({ type: "newTask", text: prompt })
 
 		return new Promise((resolve, reject) => {
-			let timeoutId: NodeJS.Timeout | null = null
-			const timeoutMs: number = 110_000
-
 			const completeHandler = () => {
 				cleanup()
 				resolve()
@@ -451,22 +448,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			}
 
 			const cleanup = () => {
-				if (timeoutId) {
-					clearTimeout(timeoutId)
-					timeoutId = null
-				}
-
 				this.client.off("taskCompleted", completeHandler)
 				this.client.off("error", errorHandler)
 			}
-
-			// Set timeout to prevent indefinite hanging.
-			timeoutId = setTimeout(() => {
-				cleanup()
-				reject(
-					new Error(`Task completion timeout after ${timeoutMs}ms - no completion or error event received`),
-				)
-			}, timeoutMs)
 
 			this.client.once("taskCompleted", completeHandler)
 			this.client.once("error", errorHandler)
