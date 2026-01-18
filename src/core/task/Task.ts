@@ -53,6 +53,8 @@ import {
 	MIN_CHECKPOINT_TIMEOUT_SECONDS,
 	TOOL_PROTOCOL,
 	ConsecutiveMistakeError,
+	MAX_MCP_TOOLS_THRESHOLD,
+	countEnabledMcpTools,
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { CloudService, BridgeOrchestrator } from "@roo-code/cloud"
@@ -1832,6 +1834,37 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Lifecycle
 	// Start / Resume / Abort / Dispose
 
+	/**
+	 * Get enabled MCP tools count for this task.
+	 * Returns the count along with the number of servers contributing.
+	 *
+	 * @returns Object with enabledToolCount and enabledServerCount
+	 */
+	private async getEnabledMcpToolsCount(): Promise<{ enabledToolCount: number; enabledServerCount: number }> {
+		try {
+			const provider = this.providerRef.deref()
+			if (!provider) {
+				return { enabledToolCount: 0, enabledServerCount: 0 }
+			}
+
+			const { mcpEnabled } = (await provider.getState()) ?? {}
+			if (!(mcpEnabled ?? true)) {
+				return { enabledToolCount: 0, enabledServerCount: 0 }
+			}
+
+			const mcpHub = await McpServerManager.getInstance(provider.context, provider)
+			if (!mcpHub) {
+				return { enabledToolCount: 0, enabledServerCount: 0 }
+			}
+
+			const servers = mcpHub.getServers()
+			return countEnabledMcpTools(servers)
+		} catch (error) {
+			console.error("[Task#getEnabledMcpToolsCount] Error counting MCP tools:", error)
+			return { enabledToolCount: 0, enabledServerCount: 0 }
+		}
+	}
+
 	private async startTask(task?: string, images?: string[]): Promise<void> {
 		if (this.enableBridge) {
 			try {
@@ -1858,6 +1891,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		await this.providerRef.deref()?.postStateToWebview()
 
 		await this.say("text", task, images)
+
+		// Check for too many MCP tools and warn the user
+		const { enabledToolCount, enabledServerCount } = await this.getEnabledMcpToolsCount()
+		if (enabledToolCount > MAX_MCP_TOOLS_THRESHOLD) {
+			await this.say(
+				"too_many_tools_warning",
+				JSON.stringify({
+					toolCount: enabledToolCount,
+					serverCount: enabledServerCount,
+					threshold: MAX_MCP_TOOLS_THRESHOLD,
+				}),
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				{ isNonInteractive: true },
+			)
+		}
 		this.isInitialized = true
 
 		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
