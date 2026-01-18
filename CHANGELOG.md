@@ -1,5 +1,15 @@
 # Roo Code Changelog
 
+## [3.41.3] - 2026-01-18
+
+- Fix: Thinking block word-breaking to prevent horizontal scroll in the chat UI (PR #10806 by @roomote)
+- Add Claude-like CLI flags and authentication fixes for the Roo Code CLI (PR #10797 by @cte)
+- Improve CLI authentication by using a redirect instead of a fetch (PR #10799 by @cte)
+- Fix: Roo Code Router fixes for the CLI (PR #10789 by @cte)
+- Release CLI v0.0.48 with latest improvements (PR #10800 by @cte)
+- Release CLI v0.0.47 (PR #10798 by @cte)
+- Revert E2E tests enablement to address stability issues (PR #10794 by @cte)
+
 ## [3.41.2] - 2026-01-16
 
 - Add button to open markdown in VSCode preview for easier reading of formatted content (PR #10773 by @brunobergher)
