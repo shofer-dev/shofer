@@ -590,7 +590,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		this.messageQueueStateChangedHandler = () => {
 			this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
-			this.providerRef.deref()?.postStateToWebview()
+			this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 		}
 
 		this.messageQueueService.on("stateChanged", this.messageQueueStateChangedHandler)
@@ -1137,7 +1137,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private async addToClineMessages(message: ClineMessage) {
 		this.clineMessages.push(message)
 		const provider = this.providerRef.deref()
-		await provider?.postStateToWebview()
+		// Avoid resending large, mostly-static fields (notably taskHistory) on every chat message update.
+		// taskHistory is maintained in-memory in the webview and updated via taskHistoryItemUpdated.
+		await provider?.postStateToWebviewWithoutTaskHistory()
 		this.emit(RooCodeEventName.Message, { action: "created", message })
 		await this.saveClineMessages()
 
@@ -1866,69 +1868,77 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async startTask(task?: string, images?: string[]): Promise<void> {
-		if (this.enableBridge) {
-			try {
-				await BridgeOrchestrator.subscribeToTask(this)
-			} catch (error) {
-				console.error(
-					`[Task#startTask] BridgeOrchestrator.subscribeToTask() failed: ${error instanceof Error ? error.message : String(error)}`,
+		try {
+			if (this.enableBridge) {
+				try {
+					await BridgeOrchestrator.subscribeToTask(this)
+				} catch (error) {
+					console.error(
+						`[Task#startTask] BridgeOrchestrator.subscribeToTask() failed: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				}
+			}
+
+			// `conversationHistory` (for API) and `clineMessages` (for webview)
+			// need to be in sync.
+			// If the extension process were killed, then on restart the
+			// `clineMessages` might not be empty, so we need to set it to [] when
+			// we create a new Cline client (otherwise webview would show stale
+			// messages from previous session).
+			this.clineMessages = []
+			this.apiConversationHistory = []
+
+			// The todo list is already set in the constructor if initialTodos were provided
+			// No need to add any messages - the todoList property is already set
+
+			await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+
+			await this.say("text", task, images)
+
+			// Check for too many MCP tools and warn the user
+			const { enabledToolCount, enabledServerCount } = await this.getEnabledMcpToolsCount()
+			if (enabledToolCount > MAX_MCP_TOOLS_THRESHOLD) {
+				await this.say(
+					"too_many_tools_warning",
+					JSON.stringify({
+						toolCount: enabledToolCount,
+						serverCount: enabledServerCount,
+						threshold: MAX_MCP_TOOLS_THRESHOLD,
+					}),
+					undefined,
+					undefined,
+					undefined,
+					undefined,
+					{ isNonInteractive: true },
 				)
 			}
-		}
+			this.isInitialized = true
 
-		// `conversationHistory` (for API) and `clineMessages` (for webview)
-		// need to be in sync.
-		// If the extension process were killed, then on restart the
-		// `clineMessages` might not be empty, so we need to set it to [] when
-		// we create a new Cline client (otherwise webview would show stale
-		// messages from previous session).
-		this.clineMessages = []
-		this.apiConversationHistory = []
+			const imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
 
-		// The todo list is already set in the constructor if initialTodos were provided
-		// No need to add any messages - the todoList property is already set
-
-		await this.providerRef.deref()?.postStateToWebview()
-
-		await this.say("text", task, images)
-
-		// Check for too many MCP tools and warn the user
-		const { enabledToolCount, enabledServerCount } = await this.getEnabledMcpToolsCount()
-		if (enabledToolCount > MAX_MCP_TOOLS_THRESHOLD) {
-			await this.say(
-				"too_many_tools_warning",
-				JSON.stringify({
-					toolCount: enabledToolCount,
-					serverCount: enabledServerCount,
-					threshold: MAX_MCP_TOOLS_THRESHOLD,
-				}),
-				undefined,
-				undefined,
-				undefined,
-				undefined,
-				{ isNonInteractive: true },
-			)
-		}
-		this.isInitialized = true
-
-		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
-
-		// Task starting
-
-		await this.initiateTaskLoop([
-			{
-				type: "text",
-				text: `<user_message>\n${task}\n</user_message>`,
-			},
-			...imageBlocks,
-		]).catch((error) => {
-			// Swallow loop rejection when the task was intentionally abandoned/aborted
-			// during delegation or user cancellation to prevent unhandled rejections.
-			if (this.abandoned === true || this.abortReason === "user_cancelled") {
+			// Task starting
+			await this.initiateTaskLoop([
+				{
+					type: "text",
+					text: `<user_message>\n${task}\n</user_message>`,
+				},
+				...imageBlocks,
+			]).catch((error) => {
+				// Swallow loop rejection when the task was intentionally abandoned/aborted
+				// during delegation or user cancellation to prevent unhandled rejections.
+				if (this.abandoned === true || this.abortReason === "user_cancelled") {
+					return
+				}
+				throw error
+			})
+		} catch (error) {
+			// In tests and some UX flows, tasks can be aborted while `startTask` is still
+			// initializing. Treat abort/abandon as expected and avoid unhandled rejections.
+			if (this.abandoned === true || this.abort === true || this.abortReason === "user_cancelled") {
 				return
 			}
 			throw error
-		})
+		}
 	}
 
 	private async resumeTaskFromHistory() {
@@ -2678,7 +2688,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			} satisfies ClineApiReqInfo)
 
 			await this.saveClineMessages()
-			await this.providerRef.deref()?.postStateToWebview()
+			await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 
 			try {
 				let cacheWriteTokens = 0
@@ -3446,7 +3456,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 
 				await this.saveClineMessages()
-				await this.providerRef.deref()?.postStateToWebview()
+				await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 
 				// Reset parser after each complete conversation round (XML protocol only)
 				this.assistantMessageParser?.reset()
