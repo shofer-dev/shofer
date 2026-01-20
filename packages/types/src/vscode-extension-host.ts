@@ -20,6 +20,7 @@ import type { GitCommit } from "./git.js"
 import type { McpServer } from "./mcp.js"
 import type { ModelRecord, RouterModels } from "./model.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
+import type { WorktreeIncludeStatus } from "./worktree.js"
 
 /**
  * ExtensionMessage
@@ -99,6 +100,14 @@ export interface ExtensionMessage {
 		| "modes"
 		| "taskWithAggregatedCosts"
 		| "openAiCodexRateLimits"
+		// Worktree response types
+		| "worktreeList"
+		| "worktreeResult"
+		| "branchList"
+		| "worktreeDefaults"
+		| "worktreeIncludeStatus"
+		| "branchWorktreeIncludeResult"
+		| "mergeWorktreeResult"
 	text?: string
 	payload?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	checkpointWarning?: {
@@ -111,6 +120,7 @@ export interface ExtensionMessage {
 		| "historyButtonClicked"
 		| "marketplaceButtonClicked"
 		| "cloudButtonClicked"
+		| "worktreesButtonClicked"
 		| "didBecomeVisible"
 		| "focusInput"
 		| "switchTab"
@@ -203,6 +213,51 @@ export interface ExtensionMessage {
 	taskHistory?: HistoryItem[] // For taskHistoryUpdated: full sorted task history
 	/** For taskHistoryItemUpdated: single updated/added history item */
 	taskHistoryItem?: HistoryItem
+	// Worktree response properties
+	worktrees?: Array<{
+		path: string
+		branch: string
+		commitHash: string
+		isCurrent: boolean
+		isBare: boolean
+		isDetached: boolean
+		isLocked: boolean
+		lockReason?: string
+	}>
+	isGitRepo?: boolean
+	isMultiRoot?: boolean
+	isSubfolder?: boolean
+	gitRootPath?: string
+	worktreeResult?: {
+		success: boolean
+		message: string
+		worktree?: {
+			path: string
+			branch: string
+			commitHash: string
+			isCurrent: boolean
+			isBare: boolean
+			isDetached: boolean
+			isLocked: boolean
+			lockReason?: string
+		}
+	}
+	localBranches?: string[]
+	remoteBranches?: string[]
+	currentBranch?: string
+	suggestedBranch?: string
+	suggestedPath?: string
+	worktreeIncludeExists?: boolean
+	worktreeIncludeStatus?: WorktreeIncludeStatus
+	hasGitignore?: boolean
+	gitignoreContent?: string
+	hasConflicts?: boolean
+	conflictingFiles?: string[]
+	sourceBranch?: string
+	targetBranch?: string
+	// branchWorktreeIncludeResult
+	branch?: string
+	hasWorktreeInclude?: boolean
 }
 
 export interface OpenAiCodexRateLimitsMessage {
@@ -542,6 +597,18 @@ export interface WebviewMessage {
 		| "requestModes"
 		| "switchMode"
 		| "debugSetting"
+		// Worktree messages
+		| "listWorktrees"
+		| "createWorktree"
+		| "deleteWorktree"
+		| "switchWorktree"
+		| "getAvailableBranches"
+		| "getWorktreeDefaults"
+		| "getWorktreeIncludeStatus"
+		| "checkBranchWorktreeInclude"
+		| "createWorktreeInclude"
+		| "checkoutBranch"
+		| "mergeWorktree"
 	text?: string
 	editedMessageContent?: string
 	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"
@@ -631,6 +698,16 @@ export interface WebviewMessage {
 		codebaseIndexOpenRouterApiKey?: string
 	}
 	updatedSettings?: RooCodeSettings
+	// Worktree properties
+	worktreePath?: string
+	worktreeBranch?: string
+	worktreeBaseBranch?: string
+	worktreeCreateNewBranch?: boolean
+	worktreeForce?: boolean
+	worktreeNewWindow?: boolean
+	worktreeTargetBranch?: string
+	worktreeDeleteAfterMerge?: boolean
+	worktreeIncludeContent?: string
 }
 
 export interface RequestOpenAiCodexRateLimitsMessage {
