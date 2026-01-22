@@ -102,6 +102,7 @@ export interface ExtensionMessage {
 		// Worktree response types
 		| "worktreeList"
 		| "worktreeResult"
+		| "worktreeCopyProgress"
 		| "branchList"
 		| "worktreeDefaults"
 		| "worktreeIncludeStatus"
@@ -257,6 +258,10 @@ export interface ExtensionMessage {
 	// branchWorktreeIncludeResult
 	branch?: string
 	hasWorktreeInclude?: boolean
+	// worktreeCopyProgress (size-based)
+	copyProgressBytesCopied?: number
+	copyProgressTotalBytes?: number
+	copyProgressItemName?: string
 }
 
 export interface OpenAiCodexRateLimitsMessage {
