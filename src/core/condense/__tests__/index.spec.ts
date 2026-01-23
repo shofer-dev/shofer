@@ -30,7 +30,6 @@ vi.mock("@roo-code/telemetry", () => ({
 }))
 
 const taskId = "test-task-id"
-const DEFAULT_PREV_CONTEXT_TOKENS = 1000
 
 describe("extractCommandBlocks", () => {
 	it("should extract command blocks from string content", () => {
@@ -713,13 +712,7 @@ describe("summarizeConversation", () => {
 	it("should not summarize when there are not enough messages", async () => {
 		const messages: ApiMessage[] = [{ role: "user", content: "Hello", ts: 1 }]
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 		expect(result.messages).toEqual(messages)
 		expect(result.cost).toBe(0)
 		expect(result.summary).toBe("")
@@ -739,13 +732,7 @@ describe("summarizeConversation", () => {
 			{ role: "user", content: "Tell me more", ts: 7 },
 		]
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		// Check that the API was called correctly
 		expect(mockApiHandler.createMessage).toHaveBeenCalled()
@@ -781,7 +768,8 @@ describe("summarizeConversation", () => {
 		// Check the cost and token counts
 		expect(result.cost).toBe(0.05)
 		expect(result.summary).toBe("This is a summary")
-		expect(result.newContextTokens).toBe(250) // outputTokens(150) + countTokens(100)
+		// newContextTokens = countTokens(systemPrompt + summaryMessage) - counts actual content, not outputTokens
+		expect(result.newContextTokens).toBe(100) // countTokens mock returns 100
 		expect(result.error).toBeUndefined()
 	})
 
@@ -798,13 +786,7 @@ describe("summarizeConversation", () => {
 			{ role: "user", content: "What's new?", ts: 5 },
 		]
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		const summaryMessage = result.messages.find((m) => m.isSummary)
 		expect(summaryMessage).toBeDefined()
@@ -827,13 +809,7 @@ describe("summarizeConversation", () => {
 			{ role: "user", content: "What's new?", ts: 5 },
 		]
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		const summaryMessage = result.messages.find((m) => m.isSummary)
 		expect(summaryMessage).toBeDefined()
@@ -870,13 +846,7 @@ describe("summarizeConversation", () => {
 			return messages.map(({ role, content }: { role: string; content: any }) => ({ role, content }))
 		})
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		// Should return original messages when summary is empty
 		expect(result.messages).toEqual(messages)
@@ -897,7 +867,7 @@ describe("summarizeConversation", () => {
 			{ role: "user", content: "Tell me more", ts: 7 },
 		]
 
-		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId, DEFAULT_PREV_CONTEXT_TOKENS)
+		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		// Verify that createMessage was called with the SUMMARY_PROMPT (which contains CRITICAL instructions), messages array, and optional metadata
 		expect(mockApiHandler.createMessage).toHaveBeenCalledWith(
@@ -929,7 +899,7 @@ describe("summarizeConversation", () => {
 			{ role: "user", content: "Newest", ts: 7 },
 		]
 
-		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId, DEFAULT_PREV_CONTEXT_TOKENS)
+		await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		const mockCallArgs = (maybeRemoveImageBlocks as Mock).mock.calls[0][0] as any[]
 
@@ -967,65 +937,19 @@ describe("summarizeConversation", () => {
 		// Override the mock for this test
 		mockApiHandler.createMessage = vi.fn().mockReturnValue(streamWithUsage) as any
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			systemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, systemPrompt, taskId)
 
-		// Verify that countTokens was called with system prompt
+		// Verify that countTokens was called with system prompt + summary message
 		expect(mockApiHandler.countTokens).toHaveBeenCalled()
 
-		// newContextTokens includes the summary output tokens plus countTokens(systemPrompt)
-		expect(result.newContextTokens).toBe(300) // outputTokens(200) + countTokens(100)
+		// newContextTokens = countTokens(systemPrompt + summaryMessage) - counts actual content
+		expect(result.newContextTokens).toBe(100) // countTokens mock returns 100
 		expect(result.cost).toBe(0.06)
 		expect(result.summary).toBe("This is a summary with system prompt")
 		expect(result.error).toBeUndefined()
 	})
 
-	it("should return error when new context tokens >= previous context tokens", async () => {
-		const messages: ApiMessage[] = [
-			{ role: "user", content: "Hello", ts: 1 },
-			{ role: "assistant", content: "Hi there", ts: 2 },
-			{ role: "user", content: "How are you?", ts: 3 },
-			{ role: "assistant", content: "I'm good", ts: 4 },
-			{ role: "user", content: "What's new?", ts: 5 },
-			{ role: "assistant", content: "Not much", ts: 6 },
-			{ role: "user", content: "Tell me more", ts: 7 },
-		]
-
-		// Create a stream that produces a summary
-		const streamWithLargeTokens = (async function* () {
-			yield { type: "text" as const, text: "This is a very long summary that uses many tokens" }
-			yield { type: "usage" as const, totalCost: 0.08, outputTokens: 500 }
-		})()
-
-		// Override the mock for this test
-		mockApiHandler.createMessage = vi.fn().mockReturnValue(streamWithLargeTokens) as any
-
-		// Mock countTokens to return a value >= prevContextTokens
-		mockApiHandler.countTokens = vi.fn().mockImplementation(() => Promise.resolve(600)) as any
-
-		const prevContextTokens = 600
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			prevContextTokens,
-		)
-
-		// Should return original messages when context would not shrink
-		expect(result.messages).toEqual(messages)
-		expect(result.cost).toBe(0.08)
-		expect(result.summary).toBe("")
-		expect(result.error).toBeTruthy() // Error should be set
-		expect(result.newContextTokens).toBeUndefined()
-	})
-
-	it("should successfully summarize when new context tokens < previous context tokens", async () => {
+	it("should successfully summarize conversation", async () => {
 		const messages: ApiMessage[] = [
 			{ role: "user", content: "Hello", ts: 1 },
 			{ role: "assistant", content: "Hi there", ts: 2 },
@@ -1045,17 +969,10 @@ describe("summarizeConversation", () => {
 		// Override the mock for this test
 		mockApiHandler.createMessage = vi.fn().mockReturnValue(streamWithSmallTokens) as any
 
-		// Mock countTokens to return a small value so total is < prevContextTokens
+		// Mock countTokens to return a small value
 		mockApiHandler.countTokens = vi.fn().mockImplementation(() => Promise.resolve(30)) as any
 
-		const prevContextTokens = 200
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			prevContextTokens,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		// Result contains all messages plus summary
 		expect(result.messages.length).toBe(messages.length + 1)
@@ -1068,8 +985,8 @@ describe("summarizeConversation", () => {
 		expect(result.cost).toBe(0.03)
 		expect(result.summary).toBe("Concise summary")
 		expect(result.error).toBeUndefined()
-		expect(result.newContextTokens).toBe(80) // outputTokens(50) + countTokens(30)
-		expect(result.newContextTokens).toBeLessThan(prevContextTokens)
+		// newContextTokens = countTokens(systemPrompt + summaryMessage) - counts actual content
+		expect(result.newContextTokens).toBe(30) // countTokens mock returns 30
 	})
 
 	it("should return error when API handler is invalid", async () => {
@@ -1095,13 +1012,7 @@ describe("summarizeConversation", () => {
 		const mockError = vi.fn()
 		console.error = mockError
 
-		const result = await summarizeConversation(
-			messages,
-			invalidHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, invalidHandler, defaultSystemPrompt, taskId)
 
 		// Should return original messages when handler is invalid
 		expect(result.messages).toEqual(messages)
@@ -1126,13 +1037,7 @@ describe("summarizeConversation", () => {
 			{ role: "user", content: "Thanks", ts: 5 },
 		]
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		const summaryMessage = result.messages.find((m) => m.isSummary)
 		expect(summaryMessage).toBeDefined()
@@ -1153,13 +1058,7 @@ describe("summarizeConversation", () => {
 			{ role: "user", content: "Thanks", ts: 5 },
 		]
 
-		const result = await summarizeConversation(
-			messages,
-			mockApiHandler,
-			defaultSystemPrompt,
-			taskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-		)
+		const result = await summarizeConversation(messages, mockApiHandler, defaultSystemPrompt, taskId)
 
 		// Summary should be the last message
 		const lastMessage = result.messages[result.messages.length - 1]
@@ -1228,7 +1127,6 @@ describe("summarizeConversation with custom settings", () => {
 			mockMainApiHandler,
 			defaultSystemPrompt,
 			localTaskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
 			false,
 			customPrompt,
 		)
@@ -1248,15 +1146,7 @@ describe("summarizeConversation with custom settings", () => {
 	 */
 	it("should use default systemPrompt when custom prompt is empty or not provided", async () => {
 		// Test with empty string
-		await summarizeConversation(
-			sampleMessages,
-			mockMainApiHandler,
-			defaultSystemPrompt,
-			localTaskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
-			false,
-			"  ", // Empty custom prompt
-		)
+		await summarizeConversation(sampleMessages, mockMainApiHandler, defaultSystemPrompt, localTaskId, false, "  ")
 
 		// Verify the default SUMMARY_PROMPT was used (contains CRITICAL instructions)
 		let createMessageCalls = (mockMainApiHandler.createMessage as Mock).mock.calls
@@ -1273,9 +1163,8 @@ describe("summarizeConversation with custom settings", () => {
 			mockMainApiHandler,
 			defaultSystemPrompt,
 			localTaskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
 			false,
-			undefined, // No custom prompt
+			undefined,
 		)
 
 		// Verify the default SUMMARY_PROMPT was used again (contains CRITICAL instructions)
@@ -1296,7 +1185,6 @@ describe("summarizeConversation with custom settings", () => {
 			mockMainApiHandler,
 			defaultSystemPrompt,
 			localTaskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
 			false,
 			"Custom prompt",
 		)
@@ -1318,7 +1206,6 @@ describe("summarizeConversation with custom settings", () => {
 			mockMainApiHandler,
 			defaultSystemPrompt,
 			localTaskId,
-			DEFAULT_PREV_CONTEXT_TOKENS,
 			true, // isAutomaticTrigger
 			"Custom prompt",
 		)
