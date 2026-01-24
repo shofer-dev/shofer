@@ -611,6 +611,11 @@ describe("useMcpToolTool", () => {
 					tool_name: "get_user_profile", // Model mangled hyphens to underscores
 					arguments: "{}",
 				},
+				nativeArgs: {
+					server_name: "test-server",
+					tool_name: "get_user_profile", // Model mangled hyphens to underscores
+					arguments: {},
+				},
 				partial: false,
 			}
 
@@ -620,8 +625,6 @@ describe("useMcpToolTool", () => {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
-				removeClosingTag: mockRemoveClosingTag,
-				toolProtocol: "xml",
 			})
 
 			// Tool should be found and executed

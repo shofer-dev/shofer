@@ -20,7 +20,6 @@ import {
 	getSystemInfoSection,
 	getObjectiveSection,
 	getSharedToolUseSection,
-	getMcpServersSection,
 	getToolUseGuidelinesSection,
 	getCapabilitiesSection,
 	getModesSection,
@@ -78,11 +77,11 @@ async function generatePrompt(
 
 	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
 
-	const [modesSection, mcpServersSection, skillsSection] = await Promise.all([
+	// Tool calling is native-only.
+	const effectiveProtocol = "native"
+
+	const [modesSection, skillsSection] = await Promise.all([
 		getModesSection(context),
-		shouldIncludeMcp
-			? getMcpServersSection(mcpHub, diffStrategy, enableMcpServerCreation, false)
-			: Promise.resolve(""),
 		getSkillsSection(skillsManager, mode as string),
 	])
 
@@ -96,8 +95,6 @@ ${markdownFormattingSection()}
 ${getSharedToolUseSection(experiments)}${toolsCatalog}
 
  ${getToolUseGuidelinesSection(experiments)}
-
-${mcpServersSection}
 
 ${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 

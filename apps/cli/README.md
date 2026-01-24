@@ -149,8 +149,8 @@ Tokens are valid for 90 days. The CLI will prompt you to re-authenticate when yo
 
 | Option                            | Description                                                                             | Default                       |
 | --------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------- |
-| `[prompt]` | Your prompt (positional argument, optional) | None |
-| `-w, --workspace <path>` | Workspace path to operate in | Current directory |
+| `[prompt]`                        | Your prompt (positional argument, optional)                                             | None                          |
+| `-w, --workspace <path>`          | Workspace path to operate in                                                            | Current directory             |
 | `-e, --extension <path>`          | Path to the extension bundle directory                                                  | Auto-detected                 |
 | `-d, --debug`                     | Enable debug output (includes detailed debug information, prompts, paths, etc)          | `false`                       |
 | `-x, --exit-on-complete`          | Exit the process when task completes (useful for testing)                               | `false`                       |
