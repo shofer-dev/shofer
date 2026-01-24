@@ -6,12 +6,11 @@ import DismissibleUpsell from "@src/components/common/DismissibleUpsell"
 import {
 	ChevronUp,
 	ChevronDown,
-	SquarePen,
-	Coins,
 	HardDriveDownload,
 	HardDriveUpload,
 	FoldVertical,
 	Globe,
+	ArrowLeft,
 } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
@@ -22,7 +21,7 @@ import { findLastIndex } from "@roo/array"
 
 import { formatLargeNumber } from "@src/utils/format"
 import { cn } from "@src/lib/utils"
-import { StandardTooltip, Button } from "@src/components/ui"
+import { StandardTooltip, Button, Table, TableBody, TableRow, TableCell, CircularProgress } from "@src/components/ui"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useSelectedModel } from "@/components/ui/hooks/useSelectedModel"
 import { vscode } from "@src/utils/vscode"
@@ -44,6 +43,7 @@ export interface TaskHeaderProps {
 	totalCost: number
 	aggregatedCost?: number
 	hasSubtasks?: boolean
+	parentTaskId?: string
 	costBreakdown?: string
 	contextTokens: number
 	buttonsDisabled: boolean
@@ -60,6 +60,7 @@ const TaskHeader = ({
 	totalCost,
 	aggregatedCost,
 	hasSubtasks,
+	parentTaskId,
 	costBreakdown,
 	contextTokens,
 	buttonsDisabled,
@@ -126,8 +127,29 @@ const TaskHeader = ({
 
 	const hasTodos = todos && Array.isArray(todos) && todos.length > 0
 
+	// Determine if this is a subtask (has a parent)
+	const isSubtask = !!parentTaskId
+
+	const handleBackToParent = () => {
+		if (parentTaskId) {
+			vscode.postMessage({ type: "showTaskWithId", text: parentTaskId })
+		}
+	}
+
 	return (
 		<div className="group pt-2 pb-0 px-3">
+			{isSubtask && (
+				<div className="mb-2" onClick={(e) => e.stopPropagation()}>
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={handleBackToParent}
+						className="flex items-center gap-1.5 text-xs text-vscode-descriptionForeground hover:text-vscode-foreground">
+						<ArrowLeft className="size-3" />
+						{t("chat:task.backToParentTask")}
+					</Button>
+				</div>
+			)}
 			{showLongRunningTaskMessage && !isTaskComplete && (
 				<DismissibleUpsell
 					upsellId="longRunningTask"
@@ -177,11 +199,8 @@ const TaskHeader = ({
 						<div className="grow min-w-0">
 							{isTaskExpanded && <span className="font-bold">{t("chat:task.title")}</span>}
 							{!isTaskExpanded && (
-								<div className="flex items-center gap-2">
-									<SquarePen className="size-3 shrink-0" />
-									<span className="whitespace-nowrap overflow-hidden text-ellipsis">
-										<Mention text={task.text} />
-									</span>
+								<div className="flex items-center gap-2 whitespace-nowrap overflow-hidden text-ellipsis">
+									<Mention text={task.text} />
 								</div>
 							)}
 						</div>
@@ -205,82 +224,104 @@ const TaskHeader = ({
 						className="flex items-center justify-between text-sm text-muted-foreground/70"
 						onClick={(e) => e.stopPropagation()}>
 						<div className="flex items-center gap-2">
-							<Coins className="size-3 shrink-0" />
 							<StandardTooltip
-								content={
-									<div className="space-y-1">
-										<div>
-											{t("chat:tokenProgress.tokensUsed", {
-												used: formatLargeNumber(contextTokens || 0),
-												total: formatLargeNumber(contextWindow),
-											})}
-										</div>
-										{(() => {
-											const maxTokens = model
-												? getModelMaxOutputTokens({
-														modelId,
-														model,
-														settings: apiConfiguration,
-													})
-												: 0
-											const reservedForOutput = maxTokens || 0
-											const availableSpace =
-												contextWindow - (contextTokens || 0) - reservedForOutput
+								content={(() => {
+									const maxTokens = model
+										? getModelMaxOutputTokens({
+												modelId,
+												model,
+												settings: apiConfiguration,
+											})
+										: 0
+									const reservedForOutput = maxTokens || 0
+									const availableSpace = contextWindow - (contextTokens || 0) - reservedForOutput
 
-											return (
-												<>
-													{reservedForOutput > 0 && (
-														<div>
-															{t("chat:tokenProgress.reservedForResponse", {
-																amount: formatLargeNumber(reservedForOutput),
-															})}
-														</div>
-													)}
-													{availableSpace > 0 && (
-														<div>
-															{t("chat:tokenProgress.availableSpace", {
-																amount: formatLargeNumber(availableSpace),
-															})}
-														</div>
-													)}
-												</>
-											)
-										})()}
-									</div>
-								}
+									return (
+										<Table className="text-base ml-1.5">
+											<TableBody>
+												<TableRow>
+													<TableCell className="font-medium whitespace-nowrap">
+														{t("chat:tokenProgress.tokensUsedLabel")}
+													</TableCell>
+													<TableCell className="text-right text-[0.9em] font-mono">
+														{formatLargeNumber(contextTokens || 0)} /{" "}
+														{formatLargeNumber(contextWindow)}
+													</TableCell>
+												</TableRow>
+												{reservedForOutput > 0 && (
+													<TableRow>
+														<TableCell className="font-medium whitespace-nowrap">
+															{t("chat:tokenProgress.reservedForResponseLabel")}
+														</TableCell>
+														<TableCell className="text-right text-[0.9em] font-mono">
+															{formatLargeNumber(reservedForOutput)}
+														</TableCell>
+													</TableRow>
+												)}
+												{availableSpace > 0 && (
+													<TableRow>
+														<TableCell className="font-medium whitespace-nowrap">
+															{t("chat:tokenProgress.availableSpaceLabel")}
+														</TableCell>
+														<TableCell className="text-right text-[0.9em] font-mono">
+															{formatLargeNumber(availableSpace)}
+														</TableCell>
+													</TableRow>
+												)}
+											</TableBody>
+										</Table>
+									)
+								})()}
 								side="top"
 								sideOffset={8}>
-								<span className="mr-1">
-									{formatLargeNumber(contextTokens || 0)} / {formatLargeNumber(contextWindow)}
+								<span className="flex items-center gap-1.5">
+									{(() => {
+										const percentage = Math.round(((contextTokens || 0) / contextWindow) * 100)
+										return (
+											<>
+												<CircularProgress percentage={percentage} />
+												<span>{percentage}%</span>
+											</>
+										)
+									})()}
 								</span>
 							</StandardTooltip>
 							{!!totalCost && (
-								<StandardTooltip
-									content={
-										hasSubtasks ? (
-											<div>
+								<>
+									<span>·</span>
+									<StandardTooltip
+										content={
+											hasSubtasks ? (
 												<div>
-													{t("chat:costs.totalWithSubtasks", {
-														cost: (aggregatedCost ?? totalCost).toFixed(2),
-													})}
+													<div>
+														{t("chat:costs.totalWithSubtasks", {
+															cost: (aggregatedCost ?? totalCost).toFixed(2),
+														})}
+													</div>
+													{costBreakdown && (
+														<div className="text-xs mt-1">{costBreakdown}</div>
+													)}
 												</div>
-												{costBreakdown && <div className="text-xs mt-1">{costBreakdown}</div>}
-											</div>
-										) : (
-											<div>{t("chat:costs.total", { cost: totalCost.toFixed(2) })}</div>
-										)
-									}
-									side="top"
-									sideOffset={8}>
-									<span>
-										${(aggregatedCost ?? totalCost).toFixed(2)}
-										{hasSubtasks && (
-											<span className="text-xs ml-1" title={t("chat:costs.includesSubtasks")}>
-												*
+											) : (
+												<div>{t("chat:costs.total", { cost: totalCost.toFixed(2) })}</div>
+											)
+										}
+										side="top"
+										sideOffset={8}>
+										<>
+											<span>
+												${(aggregatedCost ?? totalCost).toFixed(2)}
+												{hasSubtasks && (
+													<span
+														className="text-xs ml-1"
+														title={t("chat:costs.includesSubtasks")}>
+														*
+													</span>
+												)}
 											</span>
-										)}
-									</span>
-								</StandardTooltip>
+										</>
+									</StandardTooltip>
+								</>
 							)}
 						</div>
 						{showBrowserGlobe && (

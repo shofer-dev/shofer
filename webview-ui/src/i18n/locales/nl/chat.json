@@ -28,7 +28,8 @@
 		"openInCloud": "Taak openen in Roo Code Cloud",
 		"openInCloudIntro": "Blijf Roo vanaf elke locatie monitoren of ermee interacteren. Scan, klik of kopieer om te openen.",
 		"openApiHistory": "API-geschiedenis openen",
-		"openUiHistory": "UI-geschiedenis openen"
+		"openUiHistory": "UI-geschiedenis openen",
+		"backToParentTask": "Bovenliggende taak"
 	},
 	"unpin": "Losmaken",
 	"pin": "Vastmaken",
@@ -51,7 +52,10 @@
 	"tokenProgress": {
 		"availableSpace": "Beschikbare ruimte: {{amount}} tokens",
 		"tokensUsed": "Gebruikte tokens: {{used}} van {{total}}",
-		"reservedForResponse": "Gereserveerd voor modelantwoord: {{amount}} tokens"
+		"reservedForResponse": "Gereserveerd voor modelantwoord: {{amount}} tokens",
+		"tokensUsedLabel": "Gebruikte tokens",
+		"reservedForResponseLabel": "Gereserveerd voor antwoord",
+		"availableSpaceLabel": "Beschikbare ruimte"
 	},
 	"reject": {
 		"title": "Weigeren",
@@ -253,7 +257,8 @@
 		"completionContent": "Subtaak voltooid",
 		"resultContent": "Subtaakresultaten",
 		"defaultResult": "Ga verder met de volgende taak.",
-		"completionInstructions": "Subtaak voltooid! Je kunt de resultaten bekijken en eventuele correcties of volgende stappen voorstellen. Als alles goed is, bevestig dan om het resultaat terug te sturen naar de hoofdtaak."
+		"completionInstructions": "Subtaak voltooid! Je kunt de resultaten bekijken en eventuele correcties of volgende stappen voorstellen. Als alles goed is, bevestig dan om het resultaat terug te sturen naar de hoofdtaak.",
+		"goToSubtask": "Taak weergeven"
 	},
 	"questions": {
 		"hasQuestion": "Roo heeft een vraag"
