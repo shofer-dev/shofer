@@ -1,5 +1,12 @@
 # Roo Code Changelog
 
+## [3.44.2] - 2026-01-27
+
+- Re-enable parallel tool calling with new_task isolation safeguards (PR #11006 by @mrubens)
+- Fix worktree indexing by using relative paths in isPathInIgnoredDirectory (PR #11009 by @daniel-lxs)
+- Fix local model validation error for Ollama models (PR #10893 by @roomote)
+- Fix duplicate tool_call emission from Responses API providers (PR #11008 by @daniel-lxs)
+
 ## [3.44.1] - 2026-01-27
 
 - Fix LiteLLM tool ID validation errors for Bedrock proxy (PR #10990 by @daniel-lxs)
