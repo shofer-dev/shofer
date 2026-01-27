@@ -1,5 +1,11 @@
 # Roo Code Changelog
 
+## [3.44.1] - 2026-01-27
+
+- Fix LiteLLM tool ID validation errors for Bedrock proxy (PR #10990 by @daniel-lxs)
+- Add temperature=0.9 and top_p=0.95 to zai-glm-4.7 model for better generation quality (PR #10945 by @sebastiand-cerebras)
+- Add quality checks to marketing site deployment workflows (PR #10959 by @mp-roocode)
+
 ## [3.44.0] - 2026-01-26
 
 ![3.44.0 Release - Worktrees](/releases/3.44.0-release.png)
