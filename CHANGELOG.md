@@ -1,5 +1,11 @@
 # Roo Code Changelog
 
+## [3.45.0] - 2026-01-27
+
+![3.45.0 Release - Smart Code Folding](/releases/3.45.0-release.png)
+
+- Smart Code Folding: Context condensation now intelligently preserves a lightweight map of files you worked on—function signatures, class declarations, and type definitions—so Roo can continue referencing them accurately after condensing. Files are prioritized by most recent access, with a ~50k character budget ensuring your latest work is always preserved. (Idea by @shariqriazz, PR #10942 by @hannesrudolph)
+
 ## [3.44.2] - 2026-01-27
 
 - Re-enable parallel tool calling with new_task isolation safeguards (PR #11006 by @mrubens)
