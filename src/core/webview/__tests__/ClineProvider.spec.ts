@@ -315,6 +315,7 @@ vi.mock("../../../api/providers/fetchers/modelCache", () => ({
 
 vi.mock("../diff/strategies/multi-search-replace", () => ({
 	MultiSearchReplaceDiffStrategy: vi.fn().mockImplementation(() => ({
+		getToolDescription: () => "test",
 		getName: () => "test-strategy",
 		applyDiff: vi.fn(),
 	})),
@@ -557,7 +558,6 @@ describe("ClineProvider", () => {
 			writeDelayMs: 1000,
 			browserViewportSize: "900x600",
 			mcpEnabled: true,
-			enableMcpServerCreation: false,
 			mode: defaultModeSlug,
 			customModes: [],
 			experiments: experimentDefault,
@@ -1349,7 +1349,6 @@ describe("ClineProvider", () => {
 					apiProvider: "openrouter" as const,
 				},
 				mcpEnabled: true,
-				enableMcpServerCreation: false,
 				mode: "code" as const,
 				experiments: experimentDefault,
 			} as any)
@@ -1374,7 +1373,6 @@ describe("ClineProvider", () => {
 					apiProvider: "openrouter" as const,
 				},
 				mcpEnabled: false,
-				enableMcpServerCreation: false,
 				mode: "code" as const,
 				experiments: experimentDefault,
 			} as any)
@@ -1431,38 +1429,6 @@ describe("ClineProvider", () => {
 			)
 		})
 
-		test("generates system prompt with various configurations", async () => {
-			await provider.resolveWebviewView(mockWebviewView)
-
-			// Mock getState with typical configuration
-			vi.spyOn(provider, "getState").mockResolvedValue({
-				apiConfiguration: {
-					apiProvider: "openrouter",
-					apiModelId: "test-model",
-				},
-				customModePrompts: {},
-				mode: "code",
-				enableMcpServerCreation: true,
-				mcpEnabled: false,
-				browserViewportSize: "900x600",
-				experiments: experimentDefault,
-				browserToolEnabled: true,
-			} as any)
-
-			// Trigger getSystemPrompt
-			const handler = getMessageHandler()
-			await handler({ type: "getSystemPrompt", mode: "code" })
-
-			// Verify system prompt was generated and sent
-			expect(mockPostMessage).toHaveBeenCalledWith(
-				expect.objectContaining({
-					type: "systemPrompt",
-					text: expect.any(String),
-					mode: "code",
-				}),
-			)
-		})
-
 		test("uses correct mode-specific instructions when mode is specified", async () => {
 			await provider.resolveWebviewView(mockWebviewView)
 
@@ -1475,7 +1441,6 @@ describe("ClineProvider", () => {
 					architect: { customInstructions: "Architect mode instructions" },
 				},
 				mode: "architect",
-				enableMcpServerCreation: false,
 				mcpEnabled: false,
 				browserViewportSize: "900x600",
 				experiments: experimentDefault,

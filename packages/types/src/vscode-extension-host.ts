@@ -18,7 +18,6 @@ import type { CloudUserInfo, CloudOrganizationMembership, OrganizationAllowList,
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { GitCommit } from "./git.js"
 import type { McpServer } from "./mcp.js"
-import type { SkillMetadata } from "./skills.js"
 import type { ModelRecord, RouterModels } from "./model.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
 import type { WorktreeIncludeStatus } from "./worktree.js"
@@ -109,7 +108,6 @@ export interface ExtensionMessage {
 		| "worktreeIncludeStatus"
 		| "branchWorktreeIncludeResult"
 		| "folderSelected"
-		| "skills"
 	text?: string
 	payload?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	checkpointWarning?: {
@@ -204,7 +202,6 @@ export interface ExtensionMessage {
 	stepIndex?: number // For browserSessionNavigate: the target step index to display
 	tools?: SerializedCustomToolDefinition[] // For customToolsResult
 	modes?: { slug: string; name: string }[] // For modes response
-	skills?: SkillMetadata[] // For skills response
 	aggregatedCosts?: {
 		// For taskWithAggregatedCosts response
 		totalCost: number
@@ -362,7 +359,6 @@ export type ExtensionState = Pick<
 	experiments: Experiments // Map of experiment IDs to their enabled state
 
 	mcpEnabled: boolean
-	enableMcpServerCreation: boolean
 
 	mode: string
 	customModes: ModeConfig[]
@@ -502,7 +498,6 @@ export interface WebviewMessage {
 		| "deleteMessageConfirm"
 		| "submitEditedMessage"
 		| "editMessageConfirm"
-		| "enableMcpServerCreation"
 		| "remoteControlEnabled"
 		| "taskSyncEnabled"
 		| "searchCommits"
@@ -605,11 +600,6 @@ export interface WebviewMessage {
 		| "createWorktreeInclude"
 		| "checkoutBranch"
 		| "browseForWorktreePath"
-		// Skills messages
-		| "requestSkills"
-		| "createSkill"
-		| "deleteSkill"
-		| "openSkillFile"
 	text?: string
 	editedMessageContent?: string
 	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"
@@ -644,9 +634,6 @@ export interface WebviewMessage {
 	timeout?: number
 	payload?: WebViewMessagePayload
 	source?: "global" | "project"
-	skillName?: string // For skill operations (createSkill, deleteSkill, openSkillFile)
-	skillMode?: string // For skill operations (mode restriction)
-	skillDescription?: string // For createSkill (skill description)
 	requestId?: string
 	ids?: string[]
 	hasSystemPromptOverride?: boolean
@@ -790,7 +777,6 @@ export interface ClineSayTool {
 		| "codebaseSearch"
 		| "readFile"
 		| "readCommandOutput"
-		| "fetchInstructions"
 		| "listFilesTopLevel"
 		| "listFilesRecursive"
 		| "searchFiles"
@@ -801,6 +787,7 @@ export interface ClineSayTool {
 		| "imageGenerated"
 		| "runSlashCommand"
 		| "updateTodoList"
+		| "skill"
 	path?: string
 	// For readCommandOutput
 	readStart?: number
@@ -847,6 +834,8 @@ export interface ClineSayTool {
 	args?: string
 	source?: string
 	description?: string
+	// Properties for skill tool
+	skill?: string
 }
 
 // Must keep in sync with system prompt.
