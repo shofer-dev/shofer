@@ -1,6 +1,13 @@
 # Roo Code Changelog
 
-## [3.46.0] - 2026-01-27
+## [3.46.1] - 2026-01-30
+
+- Fix: Sanitize tool_use_id in tool_result blocks to match API history, preventing message format errors (PR #11131 by @daniel-lxs)
+- Add: Mode dropdown to change skill mode dynamically, allowing more flexible skill configuration (PR #11102 by @SannidhyaSah)
+- Add: Import settings option in the initial welcome screen for easier onboarding (#10992 by @emeraldcheshire, PR #10994 by @roomote)
+- Chore: Treat extension .env as optional to simplify development setup (PR #11116 by @hannesrudolph)
+
+## [3.46.0] - 2026-01-30
 
 ![3.46.0 Release - Parallel Processing Power](/releases/3.46.0-release.png)
 
