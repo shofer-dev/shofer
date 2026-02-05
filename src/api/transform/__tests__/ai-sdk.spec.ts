@@ -308,6 +308,97 @@ describe("AI SDK conversion utilities", () => {
 				content: [{ type: "text", text: "" }],
 			})
 		})
+
+		it("converts assistant reasoning blocks", () => {
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "reasoning" as any, text: "Thinking..." },
+						{ type: "text", text: "Answer" },
+					],
+				},
+			]
+
+			const result = convertToAiSdkMessages(messages)
+
+			expect(result).toHaveLength(1)
+			expect(result[0]).toEqual({
+				role: "assistant",
+				content: [
+					{ type: "reasoning", text: "Thinking..." },
+					{ type: "text", text: "Answer" },
+				],
+			})
+		})
+
+		it("converts assistant thinking blocks to reasoning", () => {
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "thinking" as any, thinking: "Deep thought", signature: "sig" },
+						{ type: "text", text: "OK" },
+					],
+				},
+			]
+
+			const result = convertToAiSdkMessages(messages)
+
+			expect(result).toHaveLength(1)
+			expect(result[0]).toEqual({
+				role: "assistant",
+				content: [
+					{ type: "reasoning", text: "Deep thought" },
+					{ type: "text", text: "OK" },
+				],
+			})
+		})
+
+		it("converts assistant message-level reasoning_content to reasoning part", () => {
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{
+					role: "assistant",
+					content: [{ type: "text", text: "Answer" }],
+					reasoning_content: "Thinking...",
+				} as any,
+			]
+
+			const result = convertToAiSdkMessages(messages)
+
+			expect(result).toHaveLength(1)
+			expect(result[0]).toEqual({
+				role: "assistant",
+				content: [
+					{ type: "reasoning", text: "Thinking..." },
+					{ type: "text", text: "Answer" },
+				],
+			})
+		})
+
+		it("prefers message-level reasoning_content over reasoning blocks", () => {
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "reasoning" as any, text: "BLOCK" },
+						{ type: "text", text: "Answer" },
+					],
+					reasoning_content: "MSG",
+				} as any,
+			]
+
+			const result = convertToAiSdkMessages(messages)
+
+			expect(result).toHaveLength(1)
+			expect(result[0]).toEqual({
+				role: "assistant",
+				content: [
+					{ type: "reasoning", text: "MSG" },
+					{ type: "text", text: "Answer" },
+				],
+			})
+		})
 	})
 
 	describe("convertToolsForAiSdk", () => {
@@ -816,6 +907,55 @@ describe("AI SDK conversion utilities", () => {
 			const result = flattenAiSdkMessagesToStringContent(messages)
 
 			expect(result[0].content).toBe("\nHello")
+		})
+
+		it("should strip reasoning parts and flatten text for string-only models", () => {
+			const messages = [
+				{
+					role: "assistant" as const,
+					content: [
+						{ type: "reasoning" as const, text: "I am thinking about this..." },
+						{ type: "text" as const, text: "Here is my answer" },
+					],
+				},
+			]
+
+			const result = flattenAiSdkMessagesToStringContent(messages)
+
+			// Reasoning should be stripped, only text should remain
+			expect(result[0].content).toBe("Here is my answer")
+		})
+
+		it("should handle messages with only reasoning parts", () => {
+			const messages = [
+				{
+					role: "assistant" as const,
+					content: [{ type: "reasoning" as const, text: "Only reasoning, no text" }],
+				},
+			]
+
+			const result = flattenAiSdkMessagesToStringContent(messages)
+
+			// Should flatten to empty string when only reasoning is present
+			expect(result[0].content).toBe("")
+		})
+
+		it("should not flatten if tool calls are present with reasoning", () => {
+			const messages = [
+				{
+					role: "assistant" as const,
+					content: [
+						{ type: "reasoning" as const, text: "Thinking..." },
+						{ type: "text" as const, text: "Using tool" },
+						{ type: "tool-call" as const, toolCallId: "abc", toolName: "test", input: {} },
+					],
+				},
+			]
+
+			const result = flattenAiSdkMessagesToStringContent(messages)
+
+			// Should not flatten because there's a tool call
+			expect(result[0]).toEqual(messages[0])
 		})
 	})
 })
