@@ -4,7 +4,7 @@
 
 ![3.47.0 Release - Claude Opus 4.6 & GPT-5.3-Codex](/releases/3.47.0-release.png)
 
-- Add Claude Opus 4.6 support across all providers (#11223 by @hannesrudolph, PR #11224 by @hannesrudolph)
+- Add Claude Opus 4.6 support across all providers (#11223 by @hannesrudolph, PR #11224 by @hannesrudolph and @PeterDaveHello)
 - Add GPT-5.3-Codex model to OpenAI - ChatGPT provider (PR #11225 by @roomote)
 - Migrate Gemini and Vertex providers to AI SDK for improved reliability and consistency (PR #11180 by @daniel-lxs)
 - Improve Skills and Slash Commands settings UI with multi-mode support (PR #11157 by @brunobergher)
