@@ -1,5 +1,11 @@
 # Roo Code Changelog
 
+## 3.47.1 - 2026-02-05
+
+- Fix: Correct Bedrock model ID for Claude Opus 4.6, resolving model selection issues for Bedrock users (#11231 by @cogwirrel, PR #11232 by @roomote)
+- Fix: Guard against empty-string baseURL in provider constructors, preventing connection errors when baseURL is accidentally set to empty string (PR #11233 by @hannesrudolph)
+- Chore: Remove unused stripAppendedEnvironmentDetails and helpers to clean up codebase (#11228 by @hannesrudolph, PR #11226 by @hannesrudolph)
+
 ## [3.47.0] - 2026-02-05
 
 ![3.47.0 Release - Claude Opus 4.6 & GPT-5.3-Codex](/releases/3.47.0-release.png)
