@@ -8,6 +8,7 @@ import { ApiStream } from "./transform/stream"
 import {
 	AnthropicHandler,
 	AwsBedrockHandler,
+	AzureHandler,
 	OpenRouterHandler,
 	VertexHandler,
 	AnthropicVertexHandler,
@@ -128,6 +129,8 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 	switch (apiProvider) {
 		case "anthropic":
 			return new AnthropicHandler(options)
+		case "azure":
+			return new AzureHandler(options)
 		case "openrouter":
 			return new OpenRouterHandler(options)
 		case "bedrock":
