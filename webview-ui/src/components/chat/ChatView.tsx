@@ -14,6 +14,7 @@ import { getCostBreakdownIfNeeded } from "@src/utils/costFormatting"
 import { batchConsecutive } from "@src/utils/batchConsecutive"
 
 import type { ClineAsk, ClineSayTool, ClineMessage, ExtensionMessage, AudioType } from "@roo-code/types"
+import { isRetiredProvider } from "@roo-code/types"
 
 import { findLast } from "@roo/array"
 import { SuggestionItem } from "@roo-code/types"
@@ -40,6 +41,7 @@ import Announcement from "./Announcement"
 import BrowserActionRow from "./BrowserActionRow"
 import BrowserSessionStatusRow from "./BrowserSessionStatusRow"
 import ChatRow from "./ChatRow"
+import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
 import SystemPromptWarning from "./SystemPromptWarning"
@@ -98,6 +100,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		isBrowserSessionActive,
 		showWorktreesInHomeScreen,
 	} = useExtensionState()
+
+	// Show a WarningRow when the user sends a message with a retired provider.
+	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
+
+	// When the provider changes, clear the retired-provider warning.
+	const providerName = apiConfiguration?.apiProvider
+	useEffect(() => {
+		setShowRetiredProviderWarning(false)
+	}, [providerName])
 
 	const messagesRef = useRef(messages)
 
@@ -626,6 +637,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			text = text.trim()
 
 			if (text || images.length > 0) {
+				// Intercept when the active provider is retired — show a
+				// WarningRow instead of sending anything to the backend.
+				if (apiConfiguration?.apiProvider && isRetiredProvider(apiConfiguration.apiProvider)) {
+					setShowRetiredProviderWarning(true)
+					return
+				}
+
 				// Queue message if:
 				// - Task is busy (sendingDisabled)
 				// - API request in progress (isStreaming)
@@ -691,7 +709,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				handleChatReset()
 			}
 		},
-		[handleChatReset, markFollowUpAsAnswered, sendingDisabled, isStreaming, messageQueue.length], // messagesRef and clineAskRef are stable
+		[
+			handleChatReset,
+			markFollowUpAsAnswered,
+			sendingDisabled,
+			isStreaming,
+			messageQueue.length,
+			apiConfiguration?.apiProvider,
+		], // messagesRef and clineAskRef are stable
 	)
 
 	const handleSetChatBoxMessage = useCallback(
@@ -709,7 +734,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[inputValue, selectedImages],
 	)
 
-	const startNewTask = useCallback(() => vscode.postMessage({ type: "clearTask" }), [])
+	const startNewTask = useCallback(() => {
+		setShowRetiredProviderWarning(false)
+		vscode.postMessage({ type: "clearTask" })
+	}, [])
 
 	// Handle stop button click from textarea
 	const handleStopTask = useCallback(() => {
@@ -1834,6 +1862,16 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					}
 				}}
 			/>
+			{showRetiredProviderWarning && (
+				<div className="px-[15px] py-1">
+					<WarningRow
+						title={t("chat:retiredProvider.title")}
+						message={t("chat:retiredProvider.message")}
+						actionText={t("chat:retiredProvider.openSettings")}
+						onAction={() => vscode.postMessage({ type: "switchTab", tab: "settings" })}
+					/>
+				</div>
+			)}
 			<ChatTextArea
 				ref={textAreaRef}
 				inputValue={inputValue}

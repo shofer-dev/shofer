@@ -45,6 +45,7 @@ import {
 	DEFAULT_MODES,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	getModelId,
+	isRetiredProvider,
 } from "@roo-code/types"
 import { aggregateTaskCostsRecursive, type AggregatedCosts } from "./aggregateTaskCosts"
 import { TelemetryService } from "@roo-code/telemetry"
@@ -2283,8 +2284,11 @@ export class ClineProvider
 		const stateValues = this.contextProxy.getValues()
 		const customModes = await this.customModesManager.getCustomModes()
 
-		// Determine apiProvider with the same logic as before.
-		const apiProvider: ProviderName = stateValues.apiProvider ? stateValues.apiProvider : "anthropic"
+		// Determine apiProvider with the same logic as before, while filtering retired providers.
+		const apiProvider: ProviderName =
+			stateValues.apiProvider && !isRetiredProvider(stateValues.apiProvider)
+				? stateValues.apiProvider
+				: "anthropic"
 
 		// Build the apiConfiguration object combining state values and secrets.
 		const providerSettings = this.contextProxy.getProviderSettings()
@@ -3124,12 +3128,14 @@ export class ClineProvider
 			}
 		}
 
+		const apiProvider = apiConfiguration?.apiProvider
+
 		return {
 			language,
 			mode,
 			taskId: task?.taskId,
 			parentTaskId: task?.parentTaskId,
-			apiProvider: apiConfiguration?.apiProvider,
+			apiProvider: apiProvider && !isRetiredProvider(apiProvider) ? apiProvider : undefined,
 			modelId: task?.api?.getModel().id,
 			diffStrategy: task?.diffStrategy?.getName(),
 			isSubtask: task ? !!task.parentTaskId : undefined,
