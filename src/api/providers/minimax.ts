@@ -128,6 +128,8 @@ export class MiniMaxHandler extends BaseProvider implements SingleCompletionHand
 
 		try {
 			const result = streamText(requestOptions as Parameters<typeof streamText>[0])
+	
+			let lastStreamError: string | undefined
 
 			for await (const part of result.fullStream) {
 				const anthropicMetadata = (
@@ -153,14 +155,24 @@ export class MiniMaxHandler extends BaseProvider implements SingleCompletionHand
 				}
 
 				for (const chunk of processAiSdkStreamPart(part)) {
+					if (chunk.type === "error") {
+						lastStreamError = chunk.message
+					}
 					yield chunk
 				}
 			}
 
-			const usage = await result.usage
-			const providerMetadata = await result.providerMetadata
-			if (usage) {
-				yield this.processUsageMetrics(usage, modelConfig.info, providerMetadata)
+			try {
+				const usage = await result.usage
+				const providerMetadata = await result.providerMetadata
+				if (usage) {
+					yield this.processUsageMetrics(usage, modelConfig.info, providerMetadata)
+				}
+			} catch (usageError) {
+				if (lastStreamError) {
+					throw new Error(lastStreamError)
+				}
+				throw usageError
 			}
 		} catch (error) {
 			throw handleAiSdkError(error, this.providerName)
