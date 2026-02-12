@@ -63,6 +63,7 @@ import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "..
 import type { AssistantModelMessage } from "ai"
 import { ApiStream, GroundingSource } from "../../api/transform/stream"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
+import { applyCacheBreakpoints, UNIVERSAL_CACHE_OPTIONS } from "../../api/transform/cache-breakpoints"
 
 // shared
 import { findLastIndex } from "../../shared/array"
@@ -4347,6 +4348,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const messagesWithoutImages = maybeRemoveImageBlocks(mergedForApi, this.api)
 		const cleanConversationHistory = this.buildCleanConversationHistory(messagesWithoutImages)
 
+		// Breakpoints 3-4: Apply cache breakpoints to the last 2 non-assistant messages
+		applyCacheBreakpoints(cleanConversationHistory.filter(isRooRoleMessage))
+
 		// Check auto-approval limits
 		const approvalResult = await this.autoApprovalHandler.checkAutoApprovalLimits(
 			state,
@@ -4403,6 +4407,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			mode: mode,
 			taskId: this.taskId,
 			suppressPreviousResponseId: this.skipPrevResponseIdOnce,
+			toolProviderOptions: UNIVERSAL_CACHE_OPTIONS,
+			// Breakpoint 1: System prompt caching — cache-aware providers use this
+			// to inject the system prompt as a cached system message via
+			// applySystemPromptCaching(), since AI SDK v6 does not support
+			// providerOptions on the `system` string parameter.
+			systemProviderOptions: UNIVERSAL_CACHE_OPTIONS,
 			// Include tools whenever they are present.
 			...(shouldIncludeTools
 				? {

@@ -14,6 +14,7 @@ import {
 	mapToolChoice,
 	handleAiSdkError,
 } from "../transform/ai-sdk"
+import { applyToolCacheOptions, applySystemPromptCaching } from "../transform/cache-breakpoints"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
 
@@ -183,12 +184,21 @@ export class RequestyHandler extends BaseProvider implements SingleCompletionHan
 
 		const openAiTools = this.convertToolsForOpenAI(metadata?.tools)
 		const aiSdkTools = convertToolsForAiSdk(openAiTools) as ToolSet | undefined
+		applyToolCacheOptions(aiSdkTools as Parameters<typeof applyToolCacheOptions>[0], metadata?.toolProviderOptions)
 
 		const requestyOptions = this.getRequestyProviderOptions(metadata)
 
+		// Breakpoint 1: System prompt caching — inject as cached system message
+		// Requesty routes to Anthropic models that benefit from cache annotations
+		const effectiveSystemPrompt = applySystemPromptCaching(
+			systemPrompt,
+			aiSdkMessages,
+			metadata?.systemProviderOptions,
+		)
+
 		const requestOptions: Parameters<typeof streamText>[0] = {
 			model: languageModel,
-			system: systemPrompt,
+			system: effectiveSystemPrompt,
 			messages: aiSdkMessages,
 			temperature: this.options.modelTemperature ?? temperature ?? 0,
 			maxOutputTokens: this.getMaxOutputTokens(),
