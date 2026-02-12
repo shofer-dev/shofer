@@ -89,7 +89,6 @@ import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
 
 // utils
-import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/cost"
 import { getWorkspacePath } from "../../utils/path"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { getTaskDirectoryPath } from "../../utils/storage"
@@ -2894,6 +2893,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				let inputTokens = 0
 				let outputTokens = 0
 				let totalCost: number | undefined
+				let totalInputTokensAccum = 0
+				let totalOutputTokensAccum = 0
 
 				// We can't use `api_req_finished` anymore since it's a unique case
 				// where it could come after a streaming message (i.e. in the middle
@@ -2909,38 +2910,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 					const existingData = JSON.parse(this.clineMessages[lastApiReqIndex].text || "{}")
 
-					// Calculate total tokens and cost using provider-aware function
-					const modelId = getModelId(this.apiConfiguration)
-					const apiProvider = this.apiConfiguration.apiProvider
-					const apiProtocol = getApiProtocol(
-						apiProvider && !isRetiredProvider(apiProvider) ? apiProvider : undefined,
-						modelId,
-					)
-
-					const costResult =
-						apiProtocol === "anthropic"
-							? calculateApiCostAnthropic(
-									streamModelInfo,
-									inputTokens,
-									outputTokens,
-									cacheWriteTokens,
-									cacheReadTokens,
-								)
-							: calculateApiCostOpenAI(
-									streamModelInfo,
-									inputTokens,
-									outputTokens,
-									cacheWriteTokens,
-									cacheReadTokens,
-								)
-
+					// Use provider-computed totals when available, falling back to raw token counts
 					this.clineMessages[lastApiReqIndex].text = JSON.stringify({
 						...existingData,
-						tokensIn: costResult.totalInputTokens,
-						tokensOut: costResult.totalOutputTokens,
+						tokensIn: totalInputTokensAccum || inputTokens,
+						tokensOut: totalOutputTokensAccum || outputTokens,
 						cacheWrites: cacheWriteTokens,
 						cacheReads: cacheReadTokens,
-						cost: totalCost ?? costResult.totalCost,
+						cost: totalCost ?? existingData.cost,
 						cancelReason,
 						streamingFailedMessage,
 					} satisfies ClineApiReqInfo)
@@ -3069,7 +3046,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								outputTokens += chunk.outputTokens
 								cacheWriteTokens += chunk.cacheWriteTokens ?? 0
 								cacheReadTokens += chunk.cacheReadTokens ?? 0
-								totalCost = chunk.totalCost
+								totalCost = chunk.totalCost ?? totalCost
+								totalInputTokensAccum += chunk.totalInputTokens ?? 0
+								totalOutputTokensAccum += chunk.totalOutputTokens ?? 0
 								break
 							case "grounding":
 								// Handle grounding sources separately from regular content
@@ -3202,6 +3181,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						cacheWrite: cacheWriteTokens,
 						cacheRead: cacheReadTokens,
 						total: totalCost,
+						totalIn: totalInputTokensAccum,
+						totalOut: totalOutputTokensAccum,
 					}
 
 					const drainStreamInBackgroundToFindAllUsage = async (apiReqIndex: number) => {
@@ -3215,6 +3196,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						let bgCacheWriteTokens = currentTokens.cacheWrite
 						let bgCacheReadTokens = currentTokens.cacheRead
 						let bgTotalCost = currentTokens.total
+						let bgTotalInputTokens = currentTokens.totalIn
+						let bgTotalOutputTokens = currentTokens.totalOut
 
 						// Helper function to capture telemetry and update messages
 						const captureUsageData = async (
@@ -3224,6 +3207,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								cacheWrite: number
 								cacheRead: number
 								total?: number
+								totalIn: number
+								totalOut: number
 							},
 							messageIndex: number = apiReqIndex,
 						) => {
@@ -3238,7 +3223,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								outputTokens = tokens.output
 								cacheWriteTokens = tokens.cacheWrite
 								cacheReadTokens = tokens.cacheRead
-								totalCost = tokens.total
+								totalCost = tokens.total ?? totalCost
+								totalInputTokensAccum = tokens.totalIn
+								totalOutputTokensAccum = tokens.totalOut
 
 								// Update the API request message with the latest usage data
 								updateApiReqMsg()
@@ -3250,38 +3237,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									await this.updateClineMessage(apiReqMessage)
 								}
 
-								// Capture telemetry with provider-aware cost calculation
-								const modelId = getModelId(this.apiConfiguration)
-								const apiProvider = this.apiConfiguration.apiProvider
-								const apiProtocol = getApiProtocol(
-									apiProvider && !isRetiredProvider(apiProvider) ? apiProvider : undefined,
-									modelId,
-								)
+								const messageData = JSON.parse(
+									this.clineMessages[messageIndex]?.text || "{}",
+								) as ClineApiReqInfo
+								const telemetryCost =
+									tokens.total ??
+									(typeof messageData.cost === "number" ? messageData.cost : undefined)
 
-								// Use the appropriate cost function based on the API protocol
-								const costResult =
-									apiProtocol === "anthropic"
-										? calculateApiCostAnthropic(
-												streamModelInfo,
-												tokens.input,
-												tokens.output,
-												tokens.cacheWrite,
-												tokens.cacheRead,
-											)
-										: calculateApiCostOpenAI(
-												streamModelInfo,
-												tokens.input,
-												tokens.output,
-												tokens.cacheWrite,
-												tokens.cacheRead,
-											)
-
+								// Use provider-computed totals for telemetry, falling back to raw counts
 								TelemetryService.instance.captureLlmCompletion(this.taskId, {
-									inputTokens: costResult.totalInputTokens,
-									outputTokens: costResult.totalOutputTokens,
+									inputTokens: tokens.totalIn || tokens.input,
+									outputTokens: tokens.totalOut || tokens.output,
 									cacheWriteTokens: tokens.cacheWrite,
 									cacheReadTokens: tokens.cacheRead,
-									cost: tokens.total ?? costResult.totalCost,
+									cost: telemetryCost,
 								})
 							}
 						}
@@ -3315,7 +3284,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									bgOutputTokens += chunk.outputTokens
 									bgCacheWriteTokens += chunk.cacheWriteTokens ?? 0
 									bgCacheReadTokens += chunk.cacheReadTokens ?? 0
-									bgTotalCost = chunk.totalCost
+									bgTotalCost = chunk.totalCost ?? bgTotalCost
+									bgTotalInputTokens += chunk.totalInputTokens ?? 0
+									bgTotalOutputTokens += chunk.totalOutputTokens ?? 0
 								}
 							}
 
@@ -3334,6 +3305,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 										cacheWrite: bgCacheWriteTokens,
 										cacheRead: bgCacheReadTokens,
 										total: bgTotalCost,
+										totalIn: bgTotalInputTokens,
+										totalOut: bgTotalOutputTokens,
 									},
 									lastApiReqIndex,
 								)
@@ -3358,6 +3331,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 										cacheWrite: bgCacheWriteTokens,
 										cacheRead: bgCacheReadTokens,
 										total: bgTotalCost,
+										totalIn: bgTotalInputTokens,
+										totalOut: bgTotalOutputTokens,
 									},
 									lastApiReqIndex,
 								)
