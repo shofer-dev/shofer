@@ -41,7 +41,6 @@ import BrowserSessionStatusRow from "./BrowserSessionStatusRow"
 import ChatRow from "./ChatRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
-import SystemPromptWarning from "./SystemPromptWarning"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -90,7 +89,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		alwaysAllowModeSwitch,
 		customModes,
 		telemetrySetting,
-		hasSystemPromptOverride,
 		soundEnabled,
 		soundVolume,
 		cloudIsAuthenticated,
@@ -152,7 +150,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const stickyFollowRef = useRef<boolean>(false)
 	const [showScrollToBottom, setShowScrollToBottom] = useState(false)
-	const [isAtBottom, setIsAtBottom] = useState(false)
+	const isAtBottomRef = useRef(false)
 	const lastTtsRef = useRef<string>("")
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
 	const [checkpointWarning, setCheckpointWarning] = useState<
@@ -233,15 +231,24 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const secondLastMessage = useMemo(() => messages.at(-2), [messages])
 
 	const volume = typeof soundVolume === "number" ? soundVolume : 0.5
-	const [playNotification] = useSound(`${audioBaseUri}/notification.wav`, { volume, soundEnabled })
-	const [playCelebration] = useSound(`${audioBaseUri}/celebration.wav`, { volume, soundEnabled })
-	const [playProgressLoop] = useSound(`${audioBaseUri}/progress_loop.wav`, { volume, soundEnabled })
+	const [playNotification] = useSound(`${audioBaseUri}/notification.wav`, { volume, soundEnabled, interrupt: true })
+	const [playCelebration] = useSound(`${audioBaseUri}/celebration.wav`, { volume, soundEnabled, interrupt: true })
+	const [playProgressLoop] = useSound(`${audioBaseUri}/progress_loop.wav`, { volume, soundEnabled, interrupt: true })
+
+	const lastPlayedRef = useRef<Record<string, number>>({})
 
 	const playSound = useCallback(
 		(audioType: AudioType) => {
 			if (!soundEnabled) {
 				return
 			}
+
+			const now = Date.now()
+			const lastPlayed = lastPlayedRef.current[audioType] ?? 0
+			if (now - lastPlayed < 100) {
+				return
+			} // debounce: skip if played within 100ms
+			lastPlayedRef.current[audioType] = now
 
 			switch (audioType) {
 				case "notification":
@@ -418,7 +425,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							// Clear button state when a new API request starts
 							// This fixes buttons persisting when the task continues
 							setSendingDisabled(true)
-							setSelectedImages([])
+							// Note: Do NOT clear selectedImages here. This handler fires
+							// every time the backend starts an API call, which would wipe
+							// images the user has pasted while the chat is in progress.
+							// Images are already cleared in the appropriate user-action
+							// handlers (handleSendMessage, handlePrimaryButtonClick, etc.).
 							setClineAsk(undefined)
 							setEnableButtons(false)
 							setPrimaryButtonText(undefined)
@@ -478,6 +489,23 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 		// Reset user response flag for new task
 		userRespondedRef.current = false
+
+		// Ensure new task starts anchored to the bottom. Virtuoso's
+		// initialTopMostItemIndex fires at mount but the message data may
+		// arrive asynchronously, so we also engage sticky follow and
+		// explicitly scroll after a frame to handle the race.
+		let rafId: number | undefined
+		if (task?.ts) {
+			stickyFollowRef.current = true
+			rafId = requestAnimationFrame(() => {
+				virtuosoRef.current?.scrollTo({ top: Number.MAX_SAFE_INTEGER, behavior: "auto" })
+			})
+		}
+		return () => {
+			if (rafId !== undefined) {
+				cancelAnimationFrame(rafId)
+			}
+		}
 	}, [task?.ts])
 
 	const taskTs = task?.ts
@@ -1196,7 +1224,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const handleRowHeightChange = useCallback(
 		(isTaller: boolean) => {
-			if (isAtBottom) {
+			if (isAtBottomRef.current) {
 				if (isTaller) {
 					scrollToBottomSmooth()
 				} else {
@@ -1204,7 +1232,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				}
 			}
 		},
-		[scrollToBottomSmooth, scrollToBottomAuto, isAtBottom],
+		[scrollToBottomSmooth, scrollToBottomAuto],
 	)
 
 	// Disable sticky follow when user scrolls up inside the chat container
@@ -1215,23 +1243,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 	}, [])
 	useEvent("wheel", handleWheel, window, { passive: true })
-
-	// Also disable sticky follow when the chat container is scrolled away from bottom
-	useEffect(() => {
-		const el = scrollContainerRef.current
-		if (!el) return
-		const onScroll = () => {
-			// Consider near-bottom within a small threshold consistent with Virtuoso settings
-			const nearBottom = Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight) < 10
-			if (!nearBottom) {
-				stickyFollowRef.current = false
-			}
-			// Keep UI button state in sync with scroll position
-			setShowScrollToBottom(!nearBottom)
-		}
-		el.addEventListener("scroll", onScroll, { passive: true })
-		return () => el.removeEventListener("scroll", onScroll)
-	}, [])
 
 	// Effect to clear checkpoint warning when messages appear or task changes
 	useEffect(() => {
@@ -1297,6 +1308,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		vscode.postMessage({ type: "askResponse", askResponse: "objectResponse", text: JSON.stringify(response) })
 	}, [])
 
+	// Cancel backend auto-approval timeout when FollowUpSuggest's countdown effect cleans up.
+	// This is called when auto-approve is toggled off, a suggestion is clicked, or the component unmounts.
+	const handleFollowUpUnmount = useCallback(() => {
+		vscode.postMessage({ type: "cancelAutoApproval" })
+	}, [])
+
 	const itemContent = useCallback(
 		(index: number, messageOrGroup: ClineMessage) => {
 			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
@@ -1342,6 +1359,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					isStreaming={isStreaming}
 					onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
 					onBatchFileResponse={handleBatchFileResponse}
+					onFollowUpUnmount={handleFollowUpUnmount}
 					isFollowUpAnswered={messageOrGroup.isAnswered === true || messageOrGroup.ts === currentFollowUpTs}
 					isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
 					editable={
@@ -1372,6 +1390,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			isStreaming,
 			handleSuggestionClickInRow,
 			handleBatchFileResponse,
+			handleFollowUpUnmount,
 			currentFollowUpTs,
 			isFollowUpAutoApprovalPaused,
 			enableButtons,
@@ -1499,12 +1518,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						todos={latestTodos}
 					/>
 
-					{hasSystemPromptOverride && (
-						<div className="px-3">
-							<SystemPromptWarning />
-						</div>
-					)}
-
 					{checkpointWarning && (
 						<div className="px-3">
 							<CheckpointWarning warning={checkpointWarning} />
@@ -1559,9 +1572,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							itemContent={itemContent}
 							followOutput={(isAtBottom: boolean) => isAtBottom || stickyFollowRef.current}
 							atBottomStateChange={(isAtBottom: boolean) => {
-								setIsAtBottom(isAtBottom)
-								// Only show the scroll-to-bottom button if not at bottom
+								isAtBottomRef.current = isAtBottom
 								setShowScrollToBottom(!isAtBottom)
+								// Clear sticky follow when user scrolls away from bottom
+								if (!isAtBottom) {
+									stickyFollowRef.current = false
+								}
 							}}
 							atBottomThreshold={10}
 							initialTopMostItemIndex={groupedMessages.length - 1}
@@ -1680,7 +1696,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				onSelectImages={selectImages}
 				shouldDisableImages={shouldDisableImages}
 				onHeightChange={() => {
-					if (isAtBottom) {
+					if (isAtBottomRef.current) {
 						scrollToBottomAuto()
 					}
 				}}

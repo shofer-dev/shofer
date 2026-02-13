@@ -296,6 +296,16 @@ export function filterNativeToolsForMode(
 		allowedToolNames.delete("browser_action")
 	}
 
+	// Remove tools that are explicitly disabled via the disabledTools setting
+	if (settings?.disabledTools?.length) {
+		for (const toolName of settings.disabledTools) {
+			// Normalize aliases so disabling a legacy alias (e.g. "search_and_replace")
+			// also disables the canonical tool (e.g. "edit").
+			const resolvedToolName = resolveToolAlias(toolName)
+			allowedToolNames.delete(resolvedToolName)
+		}
+	}
+
 	// Conditionally exclude access_mcp_resource if MCP is not enabled or there are no resources
 	if (!mcpHub || !hasAnyMcpResources(mcpHub)) {
 		allowedToolNames.delete("access_mcp_resource")

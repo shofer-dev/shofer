@@ -93,7 +93,6 @@ import { ContextProxy } from "../config/ContextProxy"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
-import { getSystemPromptFilePath } from "../prompts/sections/custom-system-prompt"
 
 import { webviewMessageHandler } from "./webviewMessageHandler"
 import type { ClineMessage, TodoItem } from "@roo-code/types"
@@ -156,6 +155,12 @@ export class ClineProvider
 	private cloudOrganizationsCacheTimestamp: number | null = null
 	private static readonly CLOUD_ORGANIZATIONS_CACHE_DURATION_MS = 5 * 1000 // 5 seconds
 
+	/**
+	 * Monotonically increasing sequence number for clineMessages state pushes.
+	 * Used by the frontend to reject stale state that arrives out-of-order.
+	 */
+	private clineMessagesSeq = 0
+
 	public isViewLaunched = false
 	public settingsImportedAt?: number
 	public readonly latestAnnouncementId = "jan-2026-v3.45.0-smart-code-folding" // v3.45.0 Smart Code Folding
@@ -189,7 +194,7 @@ export class ClineProvider
 		this.providerSettingsManager = new ProviderSettingsManager(this.context)
 
 		this.customModesManager = new CustomModesManager(this.context, async () => {
-			await this.postStateToWebview()
+			await this.postStateToWebviewWithoutClineMessages()
 		})
 
 		// Initialize MCP Hub through the singleton manager
@@ -386,7 +391,7 @@ export class ClineProvider
 					await this.activateProviderProfile({ name: profile.name })
 				}
 
-				await this.postStateToWebview()
+				await this.postStateToWebviewWithoutClineMessages()
 			}
 		} catch (error) {
 			this.log(`Error syncing cloud profiles: ${error}`)
@@ -757,6 +762,8 @@ export class ClineProvider
 				terminalZshP10k = false,
 				terminalPowershellCounter = false,
 				terminalZdotdir = false,
+				ttsEnabled,
+				ttsSpeed,
 			}) => {
 				Terminal.setShellIntegrationTimeout(terminalShellIntegrationTimeout)
 				Terminal.setShellIntegrationDisabled(terminalShellIntegrationDisabled)
@@ -766,16 +773,10 @@ export class ClineProvider
 				Terminal.setTerminalZshP10k(terminalZshP10k)
 				Terminal.setPowershellCounter(terminalPowershellCounter)
 				Terminal.setTerminalZdotdir(terminalZdotdir)
+				setTtsEnabled(ttsEnabled ?? false)
+				setTtsSpeed(ttsSpeed ?? 1)
 			},
 		)
-
-		this.getState().then(({ ttsEnabled }) => {
-			setTtsEnabled(ttsEnabled ?? false)
-		})
-
-		this.getState().then(({ ttsSpeed }) => {
-			setTtsSpeed(ttsSpeed ?? 1)
-		})
 
 		// Set up webview options with proper resource roots
 		const resourceRoots = [this.contextProxy.extensionUri]
@@ -1844,6 +1845,8 @@ export class ClineProvider
 
 	async postStateToWebview() {
 		const state = await this.getStateToPostToWebview()
+		this.clineMessagesSeq++
+		state.clineMessagesSeq = this.clineMessagesSeq
 		this.postMessageToWebview({ type: "state", state })
 
 		// Check MDM compliance and send user to account tab if not compliant
@@ -1863,7 +1866,31 @@ export class ClineProvider
 	 */
 	async postStateToWebviewWithoutTaskHistory(): Promise<void> {
 		const state = await this.getStateToPostToWebview()
+		this.clineMessagesSeq++
+		state.clineMessagesSeq = this.clineMessagesSeq
 		const { taskHistory: _omit, ...rest } = state
+		this.postMessageToWebview({ type: "state", state: rest })
+
+		// Preserve existing MDM redirect behavior
+		if (this.mdmService?.requiresCloudAuth() && !this.checkMdmCompliance()) {
+			await this.postMessageToWebview({ type: "action", action: "cloudButtonClicked" })
+		}
+	}
+
+	/**
+	 * Like postStateToWebview but intentionally omits both clineMessages and taskHistory.
+	 *
+	 * Rationale:
+	 * - Cloud event handlers (auth, settings, user-info) and mode changes trigger state pushes
+	 *   that have nothing to do with chat messages. Including clineMessages in these pushes
+	 *   creates race conditions where a stale snapshot of clineMessages (captured during async
+	 *   getStateToPostToWebview) overwrites newer messages the task has streamed in the meantime.
+	 * - This method ensures cloud/mode events only push the state fields they actually affect
+	 *   (cloud auth, org settings, profiles, etc.) without interfering with task message streaming.
+	 */
+	async postStateToWebviewWithoutClineMessages(): Promise<void> {
+		const state = await this.getStateToPostToWebview()
+		const { clineMessages: _omitMessages, taskHistory: _omitHistory, ...rest } = state
 		this.postMessageToWebview({ type: "state", state: rest })
 
 		// Preserve existing MDM redirect behavior
@@ -1915,14 +1942,6 @@ export class ClineProvider
 				)
 			}
 		}
-	}
-
-	/**
-	 * Checks if there is a file-based system prompt override for the given mode
-	 */
-	async hasFileBasedSystemPromptOverride(mode: Mode): Promise<boolean> {
-		const promptFilePath = getSystemPromptFilePath(this.cwd, mode)
-		return await fileExistsAtPath(promptFilePath)
 	}
 
 	/**
@@ -2037,6 +2056,7 @@ export class ClineProvider
 			maxOpenTabsContext,
 			maxWorkspaceFiles,
 			browserToolEnabled,
+			disabledTools,
 			telemetrySetting,
 			showRooIgnoredFiles,
 			enableSubfolderRules,
@@ -2102,10 +2122,6 @@ export class ClineProvider
 		const mergedAllowedCommands = this.mergeAllowedCommands(allowedCommands)
 		const mergedDeniedCommands = this.mergeDeniedCommands(deniedCommands)
 		const cwd = this.cwd
-
-		// Check if there's a system prompt override for the current mode
-		const currentMode = mode ?? defaultModeSlug
-		const hasSystemPromptOverride = await this.hasFileBasedSystemPromptOverride(currentMode)
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
@@ -2176,6 +2192,7 @@ export class ClineProvider
 			maxWorkspaceFiles: maxWorkspaceFiles ?? 200,
 			cwd,
 			browserToolEnabled: browserToolEnabled ?? true,
+			disabledTools,
 			telemetrySetting,
 			telemetryKey,
 			machineId,
@@ -2188,7 +2205,6 @@ export class ClineProvider
 			maxTotalImageSize: maxTotalImageSize ?? 20,
 			maxConcurrentFileReads: maxConcurrentFileReads ?? 5,
 			settingsImportedAt: this.settingsImportedAt,
-			hasSystemPromptOverride,
 			historyPreviewCollapsed: historyPreviewCollapsed ?? false,
 			reasoningBlockCollapsed: reasoningBlockCollapsed ?? true,
 			enterBehavior: enterBehavior ?? "send",
@@ -2257,12 +2273,7 @@ export class ClineProvider
 	async getState(): Promise<
 		Omit<
 			ExtensionState,
-			| "clineMessages"
-			| "renderContext"
-			| "hasOpenedModeSelector"
-			| "version"
-			| "shouldShowAnnouncement"
-			| "hasSystemPromptOverride"
+			"clineMessages" | "renderContext" | "hasOpenedModeSelector" | "version" | "shouldShowAnnouncement"
 		>
 	> {
 		const stateValues = this.contextProxy.getValues()
@@ -2420,6 +2431,7 @@ export class ClineProvider
 			maxOpenTabsContext: stateValues.maxOpenTabsContext ?? 20,
 			maxWorkspaceFiles: stateValues.maxWorkspaceFiles ?? 200,
 			browserToolEnabled: stateValues.browserToolEnabled ?? true,
+			disabledTools: stateValues.disabledTools,
 			telemetrySetting: stateValues.telemetrySetting || "unset",
 			showRooIgnoredFiles: stateValues.showRooIgnoredFiles ?? false,
 			enableSubfolderRules: stateValues.enableSubfolderRules ?? false,

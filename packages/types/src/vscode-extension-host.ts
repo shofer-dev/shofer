@@ -333,6 +333,7 @@ export type ExtensionState = Pick<
 	| "maxGitStatusFiles"
 	| "requestDelaySeconds"
 	| "showWorktreesInHomeScreen"
+	| "disabledTools"
 > & {
 	version: string
 	clineMessages: ClineMessage[]
@@ -397,13 +398,20 @@ export type ExtensionState = Pick<
 	lastShownAnnouncementId?: string
 	apiModelId?: string
 	mcpServers?: McpServer[]
-	hasSystemPromptOverride?: boolean
 	mdmCompliant?: boolean
 	remoteControlEnabled: boolean
 	taskSyncEnabled: boolean
 	featureRoomoteControlEnabled: boolean
 	openAiCodexIsAuthenticated?: boolean
 	debug?: boolean
+
+	/**
+	 * Monotonically increasing sequence number for clineMessages state pushes.
+	 * When present, the frontend should only apply clineMessages from a state push
+	 * if its seq is greater than the last applied seq. This prevents stale state
+	 * (captured during async getStateToPostToWebview) from overwriting newer messages.
+	 */
+	clineMessagesSeq?: number
 }
 
 export interface Command {
@@ -636,7 +644,6 @@ export interface WebviewMessage {
 	source?: "global" | "project"
 	requestId?: string
 	ids?: string[]
-	hasSystemPromptOverride?: boolean
 	terminalOperation?: "continue" | "abort"
 	messageTs?: number
 	restoreCheckpoint?: boolean
