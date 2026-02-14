@@ -2,7 +2,7 @@ import { serializeError } from "serialize-error"
 import { Anthropic } from "@anthropic-ai/sdk"
 
 import type { ToolName, ClineAsk, ToolProgressStatus } from "@roo-code/types"
-import { ConsecutiveMistakeError } from "@roo-code/types"
+import { ConsecutiveMistakeError, TelemetryEventName } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { customToolRegistry } from "@roo-code/core"
 
@@ -40,6 +40,7 @@ import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
 
 import { formatResponse } from "../prompts/responses"
+import { sanitizeToolUseId } from "../../utils/tool-id"
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -118,7 +119,7 @@ export async function presentAssistantMessage(cline: Task) {
 				if (toolCallId) {
 					cline.pushToolResultToUserContent({
 						type: "tool_result",
-						tool_use_id: toolCallId,
+						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: errorMessage,
 						is_error: true,
 					})
@@ -169,7 +170,7 @@ export async function presentAssistantMessage(cline: Task) {
 				if (toolCallId) {
 					cline.pushToolResultToUserContent({
 						type: "tool_result",
-						tool_use_id: toolCallId,
+						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: resultContent,
 					})
 
@@ -399,7 +400,7 @@ export async function presentAssistantMessage(cline: Task) {
 
 				cline.pushToolResultToUserContent({
 					type: "tool_result",
-					tool_use_id: toolCallId,
+					tool_use_id: sanitizeToolUseId(toolCallId),
 					content: errorMessage,
 					is_error: true,
 				})
@@ -436,7 +437,7 @@ export async function presentAssistantMessage(cline: Task) {
 					// continue gracefully.
 					cline.pushToolResultToUserContent({
 						type: "tool_result",
-						tool_use_id: toolCallId,
+						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: formatResponse.toolError(errorMessage),
 						is_error: true,
 					})
@@ -482,7 +483,7 @@ export async function presentAssistantMessage(cline: Task) {
 
 				cline.pushToolResultToUserContent({
 					type: "tool_result",
-					tool_use_id: toolCallId,
+					tool_use_id: sanitizeToolUseId(toolCallId),
 					content: resultContent,
 				})
 
@@ -589,6 +590,15 @@ export async function presentAssistantMessage(cline: Task) {
 				const recordName = isCustomTool ? "custom_tool" : block.name
 				cline.recordToolUsage(recordName)
 				TelemetryService.instance.captureToolUsage(cline.taskId, recordName)
+
+				// Track legacy format usage for read_file tool (for migration monitoring)
+				if (block.name === "read_file" && block.usedLegacyFormat) {
+					const modelInfo = cline.api.getModel()
+					TelemetryService.instance.captureEvent(TelemetryEventName.READ_FILE_LEGACY_FORMAT_USED, {
+						taskId: cline.taskId,
+						model: modelInfo?.id,
+					})
+				}
 			}
 
 			// Validate tool use before execution - ONLY for complete (non-partial) blocks.
@@ -635,7 +645,7 @@ export async function presentAssistantMessage(cline: Task) {
 					// Push tool_result directly without setting didAlreadyUseTool
 					cline.pushToolResultToUserContent({
 						type: "tool_result",
-						tool_use_id: toolCallId,
+						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: typeof errorContent === "string" ? errorContent : "(validation error)",
 						is_error: true,
 					})
@@ -939,7 +949,7 @@ export async function presentAssistantMessage(cline: Task) {
 					// This prevents the stream from being interrupted with "Response interrupted by tool use result"
 					cline.pushToolResultToUserContent({
 						type: "tool_result",
-						tool_use_id: toolCallId,
+						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: formatResponse.toolError(errorMessage),
 						is_error: true,
 					})

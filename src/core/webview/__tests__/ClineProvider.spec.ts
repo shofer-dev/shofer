@@ -327,6 +327,7 @@ vi.mock("@roo-code/cloud", () => ({
 		get instance() {
 			return {
 				isAuthenticated: vi.fn().mockReturnValue(false),
+				off: vi.fn(),
 			}
 		},
 	},
@@ -568,7 +569,6 @@ describe("ClineProvider", () => {
 			showRooIgnoredFiles: false,
 			enableSubfolderRules: false,
 			renderContext: "sidebar",
-			maxReadFileLine: 500,
 			maxImageFileSize: 5,
 			maxTotalImageSize: 20,
 			cloudUserInfo: null,
@@ -596,6 +596,43 @@ describe("ClineProvider", () => {
 		await provider.postMessageToWebview(message)
 
 		expect(mockPostMessage).toHaveBeenCalledWith(message)
+	})
+
+	test("postMessageToWebview does not throw when webview is disposed", async () => {
+		await provider.resolveWebviewView(mockWebviewView)
+
+		// Simulate postMessage throwing after webview disposal
+		mockPostMessage.mockRejectedValueOnce(new Error("Webview is disposed"))
+
+		const message: ExtensionMessage = { type: "action", action: "chatButtonClicked" }
+
+		// Should not throw
+		await expect(provider.postMessageToWebview(message)).resolves.toBeUndefined()
+	})
+
+	test("postMessageToWebview skips postMessage after dispose", async () => {
+		await provider.resolveWebviewView(mockWebviewView)
+
+		await provider.dispose()
+		mockPostMessage.mockClear()
+
+		const message: ExtensionMessage = { type: "action", action: "chatButtonClicked" }
+		await provider.postMessageToWebview(message)
+
+		expect(mockPostMessage).not.toHaveBeenCalled()
+	})
+
+	test("dispose is idempotent — second call is a no-op", async () => {
+		await provider.resolveWebviewView(mockWebviewView)
+
+		await provider.dispose()
+		await provider.dispose()
+
+		// dispose body runs only once: log "Disposing ClineProvider..." appears once
+		const disposeCalls = (mockOutputChannel.appendLine as ReturnType<typeof vi.fn>).mock.calls.filter(
+			([msg]) => typeof msg === "string" && msg.includes("Disposing ClineProvider..."),
+		)
+		expect(disposeCalls).toHaveLength(1)
 	})
 
 	test("handles webviewDidLaunch message", async () => {
@@ -3769,6 +3806,55 @@ describe("ClineProvider - Comprehensive Edit/Delete Edge Cases", () => {
 				expect(mockCline.overwriteClineMessages).toHaveBeenCalled()
 				expect(mockCline.submitUserMessage).toHaveBeenCalled()
 			})
+		})
+	})
+
+	describe("getTaskWithId", () => {
+		it("returns empty apiConversationHistory when file is missing", async () => {
+			const historyItem = { id: "missing-api-file-task", task: "test task", ts: Date.now() }
+			vi.mocked(mockContext.globalState.get).mockImplementation((key: string) => {
+				if (key === "taskHistory") {
+					return [historyItem]
+				}
+				return undefined
+			})
+
+			const deleteTaskSpy = vi.spyOn(provider, "deleteTaskFromState")
+
+			const result = await (provider as any).getTaskWithId("missing-api-file-task")
+
+			expect(result.historyItem).toEqual(historyItem)
+			expect(result.apiConversationHistory).toEqual([])
+			expect(deleteTaskSpy).not.toHaveBeenCalled()
+		})
+
+		it("returns empty apiConversationHistory when file contains invalid JSON", async () => {
+			const historyItem = { id: "corrupt-api-task", task: "test task", ts: Date.now() }
+			vi.mocked(mockContext.globalState.get).mockImplementation((key: string) => {
+				if (key === "taskHistory") {
+					return [historyItem]
+				}
+				return undefined
+			})
+
+			// Make fileExistsAtPath return true so the read path is exercised
+			const fsUtils = await import("../../../utils/fs")
+			vi.spyOn(fsUtils, "fileExistsAtPath").mockResolvedValue(true)
+
+			// Make readFile return corrupted JSON
+			const fsp = await import("fs/promises")
+			vi.mocked(fsp.readFile).mockResolvedValueOnce("{not valid json!!!" as never)
+
+			const deleteTaskSpy = vi.spyOn(provider, "deleteTaskFromState")
+
+			const result = await (provider as any).getTaskWithId("corrupt-api-task")
+
+			expect(result.historyItem).toEqual(historyItem)
+			expect(result.apiConversationHistory).toEqual([])
+			expect(deleteTaskSpy).not.toHaveBeenCalled()
+
+			// Restore the spy
+			vi.mocked(fsUtils.fileExistsAtPath).mockRestore()
 		})
 	})
 })

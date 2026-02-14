@@ -146,8 +146,10 @@ export class ClineProvider
 	private taskCreationCallback: (task: Task) => void
 	private taskEventListeners: WeakMap<Task, Array<() => void>> = new WeakMap()
 	private currentWorkspacePath: string | undefined
+	private _disposed = false
 
 	private recentTasksCache?: string[]
+	private taskHistoryWriteLock: Promise<void> = Promise.resolve()
 	private pendingOperations: Map<string, PendingEditOperation> = new Map()
 	private static readonly PENDING_OPERATION_TIMEOUT_MS = 30000 // 30 seconds
 
@@ -458,7 +460,7 @@ export class ClineProvider
 
 	// Removes and destroys the top Cline instance (the current finished task),
 	// activating the previous one (resuming the parent task).
-	async removeClineFromStack() {
+	async removeClineFromStack(options?: { skipDelegationRepair?: boolean }) {
 		if (this.clineStack.length === 0) {
 			return
 		}
@@ -467,6 +469,11 @@ export class ClineProvider
 		let task = this.clineStack.pop()
 
 		if (task) {
+			// Capture delegation metadata before abort/dispose, since abortTask(true)
+			// is async and the task reference is cleared afterwards.
+			const childTaskId = task.taskId
+			const parentTaskId = task.parentTaskId
+
 			task.emit(RooCodeEventName.TaskUnfocused)
 
 			try {
@@ -490,6 +497,37 @@ export class ClineProvider
 			// Make sure no reference kept, once promises end it will be
 			// garbage collected.
 			task = undefined
+
+			// Delegation-aware parent metadata repair:
+			// If the popped task was a delegated child, repair the parent's metadata
+			// so it transitions from "delegated" back to "active" and becomes resumable
+			// from the task history list.
+			// Skip when called from delegateParentAndOpenChild() during nested delegation
+			// transitions (A→B→C), where the caller intentionally replaces the active
+			// child and will update the parent to point at the new child.
+			if (parentTaskId && childTaskId && !options?.skipDelegationRepair) {
+				try {
+					const { historyItem: parentHistory } = await this.getTaskWithId(parentTaskId)
+
+					if (parentHistory.status === "delegated" && parentHistory.awaitingChildId === childTaskId) {
+						await this.updateTaskHistory({
+							...parentHistory,
+							status: "active",
+							awaitingChildId: undefined,
+						})
+						this.log(
+							`[ClineProvider#removeClineFromStack] Repaired parent ${parentTaskId} metadata: delegated → active (child ${childTaskId} removed)`,
+						)
+					}
+				} catch (err) {
+					// Non-fatal: log but do not block the pop operation.
+					this.log(
+						`[ClineProvider#removeClineFromStack] Failed to repair parent metadata for ${parentTaskId} (non-fatal): ${
+							err instanceof Error ? err.message : String(err)
+						}`,
+					)
+				}
+			}
 		}
 	}
 
@@ -582,6 +620,11 @@ export class ClineProvider
 	}
 
 	async dispose() {
+		if (this._disposed) {
+			return
+		}
+
+		this._disposed = true
 		this.log("Disposing ClineProvider...")
 
 		// Clear all tasks from the stack.
@@ -1080,7 +1123,15 @@ export class ClineProvider
 	}
 
 	public async postMessageToWebview(message: ExtensionMessage) {
-		await this.view?.webview.postMessage(message)
+		if (this._disposed) {
+			return
+		}
+
+		try {
+			await this.view?.webview.postMessage(message)
+		} catch {
+			// View disposed, drop message silently
+		}
 	}
 
 	private async getHMRHtmlContent(webview: vscode.Webview): Promise<string> {
@@ -1666,31 +1717,40 @@ export class ClineProvider
 		const history = this.getGlobalState("taskHistory") ?? []
 		const historyItem = history.find((item) => item.id === id)
 
-		if (historyItem) {
-			const { getTaskDirectoryPath } = await import("../../utils/storage")
-			const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
-			const taskDirPath = await getTaskDirectoryPath(globalStoragePath, id)
-			const apiConversationHistoryFilePath = path.join(taskDirPath, GlobalFileNames.apiConversationHistory)
-			const uiMessagesFilePath = path.join(taskDirPath, GlobalFileNames.uiMessages)
-			const fileExists = await fileExistsAtPath(apiConversationHistoryFilePath)
-
-			if (fileExists) {
-				const apiConversationHistory = JSON.parse(await fs.readFile(apiConversationHistoryFilePath, "utf8"))
-
-				return {
-					historyItem,
-					taskDirPath,
-					apiConversationHistoryFilePath,
-					uiMessagesFilePath,
-					apiConversationHistory,
-				}
-			}
+		if (!historyItem) {
+			throw new Error("Task not found")
 		}
 
-		// if we tried to get a task that doesn't exist, remove it from state
-		// FIXME: this seems to happen sometimes when the json file doesnt save to disk for some reason
-		await this.deleteTaskFromState(id)
-		throw new Error("Task not found")
+		const { getTaskDirectoryPath } = await import("../../utils/storage")
+		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
+		const taskDirPath = await getTaskDirectoryPath(globalStoragePath, id)
+		const apiConversationHistoryFilePath = path.join(taskDirPath, GlobalFileNames.apiConversationHistory)
+		const uiMessagesFilePath = path.join(taskDirPath, GlobalFileNames.uiMessages)
+		const fileExists = await fileExistsAtPath(apiConversationHistoryFilePath)
+
+		let apiConversationHistory: Anthropic.MessageParam[] = []
+
+		if (fileExists) {
+			try {
+				apiConversationHistory = JSON.parse(await fs.readFile(apiConversationHistoryFilePath, "utf8"))
+			} catch (error) {
+				console.warn(
+					`[getTaskWithId] api_conversation_history.json corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		} else {
+			console.warn(
+				`[getTaskWithId] api_conversation_history.json missing for task ${id}, returning empty history`,
+			)
+		}
+
+		return {
+			historyItem,
+			taskDirPath,
+			apiConversationHistoryFilePath,
+			uiMessagesFilePath,
+			apiConversationHistory,
+		}
 	}
 
 	async getTaskWithAggregatedCosts(taskId: string): Promise<{
@@ -1787,10 +1847,12 @@ export class ClineProvider
 			}
 
 			// Delete all tasks from state in one batch
-			const taskHistory = this.getGlobalState("taskHistory") ?? []
-			const updatedTaskHistory = taskHistory.filter((task) => !allIdsToDelete.includes(task.id))
-			await this.updateGlobalState("taskHistory", updatedTaskHistory)
-			this.recentTasksCache = undefined
+			await this.withTaskHistoryLock(async () => {
+				const taskHistory = this.getGlobalState("taskHistory") ?? []
+				const updatedTaskHistory = taskHistory.filter((task) => !allIdsToDelete.includes(task.id))
+				await this.updateGlobalState("taskHistory", updatedTaskHistory)
+				this.recentTasksCache = undefined
+			})
 
 			// Delete associated shadow repositories or branches and task directories
 			const globalStorageDir = this.contextProxy.globalStorageUri.fsPath
@@ -1831,10 +1893,12 @@ export class ClineProvider
 	}
 
 	async deleteTaskFromState(id: string) {
-		const taskHistory = this.getGlobalState("taskHistory") ?? []
-		const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
-		await this.updateGlobalState("taskHistory", updatedTaskHistory)
-		this.recentTasksCache = undefined
+		await this.withTaskHistoryLock(async () => {
+			const taskHistory = this.getGlobalState("taskHistory") ?? []
+			const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
+			await this.updateGlobalState("taskHistory", updatedTaskHistory)
+			this.recentTasksCache = undefined
+		})
 		await this.postStateToWebview()
 	}
 
@@ -2061,7 +2125,6 @@ export class ClineProvider
 			showRooIgnoredFiles,
 			enableSubfolderRules,
 			language,
-			maxReadFileLine,
 			maxImageFileSize,
 			maxTotalImageSize,
 			historyPreviewCollapsed,
@@ -2073,7 +2136,6 @@ export class ClineProvider
 			publicSharingEnabled,
 			organizationAllowList,
 			organizationSettingsVersion,
-			maxConcurrentFileReads,
 			customCondensingPrompt,
 			codebaseIndexConfig,
 			codebaseIndexModels,
@@ -2200,10 +2262,8 @@ export class ClineProvider
 			enableSubfolderRules: enableSubfolderRules ?? false,
 			language: language ?? formatLanguage(vscode.env.language),
 			renderContext: this.renderContext,
-			maxReadFileLine: maxReadFileLine ?? -1,
 			maxImageFileSize: maxImageFileSize ?? 5,
 			maxTotalImageSize: maxTotalImageSize ?? 20,
-			maxConcurrentFileReads: maxConcurrentFileReads ?? 5,
 			settingsImportedAt: this.settingsImportedAt,
 			historyPreviewCollapsed: historyPreviewCollapsed ?? false,
 			reasoningBlockCollapsed: reasoningBlockCollapsed ?? true,
@@ -2435,10 +2495,8 @@ export class ClineProvider
 			telemetrySetting: stateValues.telemetrySetting || "unset",
 			showRooIgnoredFiles: stateValues.showRooIgnoredFiles ?? false,
 			enableSubfolderRules: stateValues.enableSubfolderRules ?? false,
-			maxReadFileLine: stateValues.maxReadFileLine ?? -1,
 			maxImageFileSize: stateValues.maxImageFileSize ?? 5,
 			maxTotalImageSize: stateValues.maxTotalImageSize ?? 20,
-			maxConcurrentFileReads: stateValues.maxConcurrentFileReads ?? 5,
 			historyPreviewCollapsed: stateValues.historyPreviewCollapsed ?? false,
 			reasoningBlockCollapsed: stateValues.reasoningBlockCollapsed ?? true,
 			enterBehavior: stateValues.enterBehavior ?? "send",
@@ -2507,40 +2565,55 @@ export class ClineProvider
 	}
 
 	/**
+	 * Serializes all read-modify-write operations on taskHistory to prevent
+	 * concurrent interleaving that can cause entries to vanish.
+	 */
+	private withTaskHistoryLock<T>(fn: () => Promise<T>): Promise<T> {
+		const result = this.taskHistoryWriteLock.then(fn, fn) // run even if previous write errored
+		this.taskHistoryWriteLock = result.then(
+			() => {},
+			() => {},
+		) // swallow for chain continuity
+		return result
+	}
+
+	/**
 	 * Updates a task in the task history and optionally broadcasts the updated history to the webview.
 	 * @param item The history item to update or add
 	 * @param options.broadcast Whether to broadcast the updated history to the webview (default: true)
 	 * @returns The updated task history array
 	 */
 	async updateTaskHistory(item: HistoryItem, options: { broadcast?: boolean } = {}): Promise<HistoryItem[]> {
-		const { broadcast = true } = options
-		const history = (this.getGlobalState("taskHistory") as HistoryItem[] | undefined) || []
-		const existingItemIndex = history.findIndex((h) => h.id === item.id)
-		const wasExisting = existingItemIndex !== -1
+		return this.withTaskHistoryLock(async () => {
+			const { broadcast = true } = options
+			const history = (this.getGlobalState("taskHistory") as HistoryItem[] | undefined) || []
+			const existingItemIndex = history.findIndex((h) => h.id === item.id)
+			const wasExisting = existingItemIndex !== -1
 
-		if (wasExisting) {
-			// Preserve existing metadata (e.g., delegation fields) unless explicitly overwritten.
-			// This prevents loss of status/awaitingChildId/delegatedToId when tasks are reopened,
-			// terminated, or when routine message persistence occurs.
-			history[existingItemIndex] = {
-				...history[existingItemIndex],
-				...item,
+			if (wasExisting) {
+				// Preserve existing metadata (e.g., delegation fields) unless explicitly overwritten.
+				// This prevents loss of status/awaitingChildId/delegatedToId when tasks are reopened,
+				// terminated, or when routine message persistence occurs.
+				history[existingItemIndex] = {
+					...history[existingItemIndex],
+					...item,
+				}
+			} else {
+				history.push(item)
 			}
-		} else {
-			history.push(item)
-		}
 
-		await this.updateGlobalState("taskHistory", history)
-		this.recentTasksCache = undefined
+			await this.updateGlobalState("taskHistory", history)
+			this.recentTasksCache = undefined
 
-		// Broadcast the updated history to the webview if requested.
-		// Prefer per-item updates to avoid repeatedly cloning/sending the full history.
-		if (broadcast && this.isViewLaunched) {
-			const updatedItem = wasExisting ? history[existingItemIndex] : item
-			await this.postMessageToWebview({ type: "taskHistoryItemUpdated", taskHistoryItem: updatedItem })
-		}
+			// Broadcast the updated history to the webview if requested.
+			// Prefer per-item updates to avoid repeatedly cloning/sending the full history.
+			if (broadcast && this.isViewLaunched) {
+				const updatedItem = wasExisting ? history[existingItemIndex] : item
+				await this.postMessageToWebview({ type: "taskHistoryItemUpdated", taskHistoryItem: updatedItem })
+			}
 
-		return history
+			return history
+		})
 	}
 
 	/**
@@ -3197,7 +3270,21 @@ export class ClineProvider
 		//    recursivelyMakeClineRequests BEFORE tools start executing. We only need to
 		//    flush the pending user message with tool_results.
 		try {
-			await parent.flushPendingToolResultsToHistory()
+			const flushSuccess = await parent.flushPendingToolResultsToHistory()
+
+			if (!flushSuccess) {
+				console.warn(`[delegateParentAndOpenChild] Flush failed for parent ${parentTaskId}, retrying...`)
+				const retrySuccess = await parent.retrySaveApiConversationHistory()
+
+				if (!retrySuccess) {
+					console.error(
+						`[delegateParentAndOpenChild] CRITICAL: Parent ${parentTaskId} API history not persisted to disk. Child return may produce stale state.`,
+					)
+					vscode.window.showWarningMessage(
+						"Warning: Parent task state could not be saved. The parent task may lose recent context when resumed.",
+					)
+				}
+			}
 		} catch (error) {
 			this.log(
 				`[delegateParentAndOpenChild] Error flushing pending tool results (non-fatal): ${
@@ -3210,7 +3297,7 @@ export class ClineProvider
 		//    This ensures we never have >1 tasks open at any time during delegation.
 		//    Await abort completion to ensure clean disposal and prevent unhandled rejections.
 		try {
-			await this.removeClineFromStack()
+			await this.removeClineFromStack({ skipDelegationRepair: true })
 		} catch (error) {
 			this.log(
 				`[delegateParentAndOpenChild] Error during parent disposal (non-fatal): ${
@@ -3238,12 +3325,20 @@ export class ClineProvider
 		// Pass initialStatus: "active" to ensure the child task's historyItem is created
 		// with status from the start, avoiding race conditions where the task might
 		// call attempt_completion before status is persisted separately.
+		//
+		// Pass startTask: false to prevent the child from beginning its task loop
+		// (and writing to globalState via saveClineMessages → updateTaskHistory)
+		// before we persist the parent's delegation metadata in step 5.
+		// Without this, the child's fire-and-forget startTask() races with step 5,
+		// and the last writer to globalState overwrites the other's changes—
+		// causing the parent's delegation fields to be lost.
 		const child = await this.createTask(message, undefined, parent as any, {
 			initialTodos,
 			initialStatus: "active",
+			startTask: false,
 		})
 
-		// 5) Persist parent delegation metadata
+		// 5) Persist parent delegation metadata BEFORE the child starts writing.
 		try {
 			const { historyItem } = await this.getTaskWithId(parentTaskId)
 			const childIds = Array.from(new Set([...(historyItem.childIds ?? []), child.taskId]))
@@ -3263,7 +3358,10 @@ export class ClineProvider
 			)
 		}
 
-		// 6) Emit TaskDelegated (provider-level)
+		// 6) Start the child task now that parent metadata is safely persisted.
+		child.start()
+
+		// 7) Emit TaskDelegated (provider-level)
 		try {
 			this.emit(RooCodeEventName.TaskDelegated, parentTaskId, child.taskId)
 		} catch {
@@ -3397,7 +3495,19 @@ export class ClineProvider
 
 		await saveApiMessages({ messages: parentApiMessages as any, taskId: parentTaskId, globalStoragePath })
 
-		// 3) Update child metadata to "completed" status
+		// 3) Close child instance if still open (single-open-task invariant).
+		//    This MUST happen BEFORE updating the child's status to "completed" because
+		//    removeClineFromStack() → abortTask(true) → saveClineMessages() writes
+		//    the historyItem with initialStatus (typically "active"), which would
+		//    overwrite a "completed" status set earlier.
+		const current = this.getCurrentTask()
+		if (current?.taskId === childTaskId) {
+			await this.removeClineFromStack()
+		}
+
+		// 4) Update child metadata to "completed" status.
+		//    This runs after the abort so it overwrites the stale "active" status
+		//    that saveClineMessages() may have written during step 3.
 		try {
 			const { historyItem: childHistory } = await this.getTaskWithId(childTaskId)
 			await this.updateTaskHistory({
@@ -3412,7 +3522,7 @@ export class ClineProvider
 			)
 		}
 
-		// 4) Update parent metadata and persist BEFORE emitting completion event
+		// 5) Update parent metadata and persist BEFORE emitting completion event
 		const childIds = Array.from(new Set([...(historyItem.childIds ?? []), childTaskId]))
 		const updatedHistory: typeof historyItem = {
 			...historyItem,
@@ -3424,17 +3534,11 @@ export class ClineProvider
 		}
 		await this.updateTaskHistory(updatedHistory)
 
-		// 5) Emit TaskDelegationCompleted (provider-level)
+		// 6) Emit TaskDelegationCompleted (provider-level)
 		try {
 			this.emit(RooCodeEventName.TaskDelegationCompleted, parentTaskId, childTaskId, completionResultSummary)
 		} catch {
 			// non-fatal
-		}
-
-		// 6) Close child instance if still open (single-open-task invariant)
-		const current = this.getCurrentTask()
-		if (current?.taskId === childTaskId) {
-			await this.removeClineFromStack()
 		}
 
 		// 7) Reopen the parent from history as the sole active task (restores saved mode)

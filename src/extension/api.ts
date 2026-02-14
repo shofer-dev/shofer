@@ -4,6 +4,7 @@ import * as path from "path"
 import * as os from "os"
 
 import * as vscode from "vscode"
+import pWaitFor from "p-wait-for"
 
 import {
 	type RooCodeAPI,
@@ -30,7 +31,6 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 	private readonly sidebarProvider: ClineProvider
 	private readonly context: vscode.ExtensionContext
 	private readonly ipc?: IpcServer
-	private readonly taskMap = new Map<string, ClineProvider>()
 	private readonly log: (...args: unknown[]) => void
 	private logfile?: string
 
@@ -65,35 +65,37 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 			ipc.listen()
 			this.log(`[API] ipc server started: socketPath=${socketPath}, pid=${process.pid}, ppid=${process.ppid}`)
 
-			ipc.on(IpcMessageType.TaskCommand, async (_clientId, { commandName, data }) => {
-				switch (commandName) {
+			ipc.on(IpcMessageType.TaskCommand, async (_clientId, command) => {
+				switch (command.commandName) {
 					case TaskCommandName.StartNewTask:
-						this.log(`[API] StartNewTask -> ${data.text}, ${JSON.stringify(data.configuration)}`)
-						await this.startNewTask(data)
+						this.log(
+							`[API] StartNewTask -> ${command.data.text}, ${JSON.stringify(command.data.configuration)}`,
+						)
+						await this.startNewTask(command.data)
 						break
 					case TaskCommandName.CancelTask:
-						this.log(`[API] CancelTask -> ${data}`)
-						await this.cancelTask(data)
+						this.log(`[API] CancelTask`)
+						await this.cancelCurrentTask()
 						break
 					case TaskCommandName.CloseTask:
-						this.log(`[API] CloseTask -> ${data}`)
+						this.log(`[API] CloseTask`)
 						await vscode.commands.executeCommand("workbench.action.files.saveFiles")
 						await vscode.commands.executeCommand("workbench.action.closeWindow")
 						break
 					case TaskCommandName.ResumeTask:
-						this.log(`[API] ResumeTask -> ${data}`)
+						this.log(`[API] ResumeTask -> ${command.data}`)
 						try {
-							await this.resumeTask(data)
+							await this.resumeTask(command.data)
 						} catch (error) {
 							const errorMessage = error instanceof Error ? error.message : String(error)
-							this.log(`[API] ResumeTask failed for taskId ${data}: ${errorMessage}`)
+							this.log(`[API] ResumeTask failed for taskId ${command.data}: ${errorMessage}`)
 							// Don't rethrow - we want to prevent IPC server crashes
 							// The error is logged for debugging purposes
 						}
 						break
 					case TaskCommandName.SendMessage:
-						this.log(`[API] SendMessage -> ${data.text}`)
-						await this.sendMessage(data.text, data.images)
+						this.log(`[API] SendMessage -> ${command.data.text}`)
+						await this.sendMessage(command.data.text, command.data.images)
 						break
 				}
 			})
@@ -153,9 +155,19 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 	}
 
 	public async resumeTask(taskId: string): Promise<void> {
+		await vscode.commands.executeCommand(`${Package.name}.SidebarProvider.focus`)
+		await this.waitForWebviewLaunch(5_000)
+
 		const { historyItem } = await this.sidebarProvider.getTaskWithId(taskId)
 		await this.sidebarProvider.createTaskWithHistoryItem(historyItem)
-		await this.sidebarProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+
+		if (this.sidebarProvider.viewLaunched) {
+			await this.sidebarProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+		} else {
+			this.log(
+				`[API#resumeTask] webview not launched after resume for task ${taskId}; continuing in headless mode`,
+			)
+		}
 	}
 
 	public async isTaskInHistory(taskId: string): Promise<boolean> {
@@ -181,16 +193,22 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 		await this.sidebarProvider.cancelTask()
 	}
 
-	public async cancelTask(taskId: string) {
-		const provider = this.taskMap.get(taskId)
-
-		if (provider) {
-			await provider.cancelTask()
-			this.taskMap.delete(taskId)
-		}
-	}
-
 	public async sendMessage(text?: string, images?: string[]) {
+		const currentTask = this.sidebarProvider.getCurrentTask()
+
+		// In headless/sandbox flows the webview may not be launched, so routing
+		// through invoke=sendMessage drops the message. Deliver directly to the
+		// task ask-response channel instead.
+		if (!this.sidebarProvider.viewLaunched) {
+			if (!currentTask) {
+				this.log("[API#sendMessage] no current task in headless mode; message dropped")
+				return
+			}
+
+			await currentTask.submitUserMessage(text ?? "", images)
+			return
+		}
+
 		await this.sidebarProvider.postMessageToWebview({ type: "invoke", invoke: "sendMessage", text, images })
 	}
 
@@ -206,13 +224,26 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 		return this.sidebarProvider.viewLaunched
 	}
 
+	private async waitForWebviewLaunch(timeoutMs: number): Promise<boolean> {
+		try {
+			await pWaitFor(() => this.sidebarProvider.viewLaunched, {
+				timeout: timeoutMs,
+				interval: 50,
+			})
+
+			return true
+		} catch {
+			this.log(`[API#waitForWebviewLaunch] webview did not launch within ${timeoutMs}ms`)
+			return false
+		}
+	}
+
 	private registerListeners(provider: ClineProvider) {
 		provider.on(RooCodeEventName.TaskCreated, (task) => {
 			// Task Lifecycle
 
 			task.on(RooCodeEventName.TaskStarted, async () => {
 				this.emit(RooCodeEventName.TaskStarted, task.taskId)
-				this.taskMap.set(task.taskId, provider)
 				await this.fileLog(`[${new Date().toISOString()}] taskStarted -> ${task.taskId}\n`)
 			})
 
@@ -221,8 +252,6 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 					isSubtask: !!task.parentTaskId,
 				})
 
-				this.taskMap.delete(task.taskId)
-
 				await this.fileLog(
 					`[${new Date().toISOString()}] taskCompleted -> ${task.taskId} | ${JSON.stringify(tokenUsage, null, 2)} | ${JSON.stringify(toolUsage, null, 2)}\n`,
 				)
@@ -230,7 +259,6 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 
 			task.on(RooCodeEventName.TaskAborted, () => {
 				this.emit(RooCodeEventName.TaskAborted, task.taskId)
-				this.taskMap.delete(task.taskId)
 			})
 
 			task.on(RooCodeEventName.TaskFocused, () => {
@@ -299,6 +327,10 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 
 			task.on(RooCodeEventName.TaskAskResponded, () => {
 				this.emit(RooCodeEventName.TaskAskResponded, task.taskId)
+			})
+
+			task.on(RooCodeEventName.QueuedMessagesUpdated, (taskId, messages) => {
+				this.emit(RooCodeEventName.QueuedMessagesUpdated, taskId, messages)
 			})
 
 			// Task Analytics

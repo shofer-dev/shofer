@@ -394,6 +394,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	didAlreadyUseTool = false
 	didToolFailInCurrentTurn = false
 	didCompleteReadingStream = false
+	private _started = false
 	// No streaming parser is required.
 	assistantMessageParser?: undefined
 	private providerProfileChangeListener?: (config: { name: string; provider?: string }) => void
@@ -554,6 +555,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		this.messageQueueStateChangedHandler = () => {
 			this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
+			this.emit(RooCodeEventName.QueuedMessagesUpdated, this.taskId, this.messageQueueService.messages)
 			this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 		}
 
@@ -597,6 +599,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		onCreated?.(this)
 
 		if (startTask) {
+			this._started = true
 			if (task || images) {
 				this.startTask(task, images)
 			} else if (historyItem) {
@@ -1071,10 +1074,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * tools execute (added in recursivelyMakeClineRequests after streaming completes).
 	 * So we usually only need to flush the pending user message with tool_results.
 	 */
-	public async flushPendingToolResultsToHistory(): Promise<void> {
+	public async flushPendingToolResultsToHistory(): Promise<boolean> {
 		// Only flush if there's actually pending content to save
 		if (this.userMessageContent.length === 0) {
-			return
+			return true
 		}
 
 		// CRITICAL: Wait for the assistant message to be saved to API history first.
@@ -1104,7 +1107,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// If task was aborted while waiting, don't flush
 		if (this.abort) {
-			return
+			return false
 		}
 
 		// Save the user message with tool_result blocks
@@ -1121,23 +1124,56 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const userMessageWithTs = { ...validatedMessage, ts: Date.now() }
 		this.apiConversationHistory.push(userMessageWithTs as ApiMessage)
 
-		await this.saveApiConversationHistory()
+		const saved = await this.saveApiConversationHistory()
 
-		// Clear the pending content since it's now saved
-		this.userMessageContent = []
+		if (saved) {
+			// Clear the pending content since it's now saved
+			this.userMessageContent = []
+		} else {
+			console.warn(
+				`[Task#${this.taskId}] flushPendingToolResultsToHistory: save failed, retaining pending tool results in memory`,
+			)
+		}
+
+		return saved
 	}
 
-	private async saveApiConversationHistory() {
+	private async saveApiConversationHistory(): Promise<boolean> {
 		try {
 			await saveApiMessages({
-				messages: this.apiConversationHistory,
+				messages: structuredClone(this.apiConversationHistory),
 				taskId: this.taskId,
 				globalStoragePath: this.globalStoragePath,
 			})
+			return true
 		} catch (error) {
-			// In the off chance this fails, we don't want to stop the task.
 			console.error("Failed to save API conversation history:", error)
+			return false
 		}
+	}
+
+	/**
+	 * Public wrapper to retry saving the API conversation history.
+	 * Uses exponential backoff: up to 3 attempts with delays of 100 ms, 500 ms, 1500 ms.
+	 * Used by delegation flow when flushPendingToolResultsToHistory reports failure.
+	 */
+	public async retrySaveApiConversationHistory(): Promise<boolean> {
+		const delays = [100, 500, 1500]
+
+		for (let attempt = 0; attempt < delays.length; attempt++) {
+			await new Promise<void>((resolve) => setTimeout(resolve, delays[attempt]))
+			console.warn(
+				`[Task#${this.taskId}] retrySaveApiConversationHistory: retry attempt ${attempt + 1}/${delays.length}`,
+			)
+
+			const success = await this.saveApiConversationHistory()
+
+			if (success) {
+				return true
+			}
+		}
+
+		return false
 	}
 
 	// Cline Messages
@@ -1201,10 +1237,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
-	private async saveClineMessages() {
+	private async saveClineMessages(): Promise<boolean> {
 		try {
 			await saveTaskMessages({
-				messages: this.clineMessages,
+				messages: structuredClone(this.clineMessages),
 				taskId: this.taskId,
 				globalStoragePath: this.globalStoragePath,
 			})
@@ -1234,8 +1270,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 
 			await this.providerRef.deref()?.updateTaskHistory(historyItem)
+			return true
 		} catch (error) {
 			console.error("Failed to save Roo messages:", error)
+			return false
 		}
 	}
 
@@ -1654,8 +1692,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				customModes: state?.customModes,
 				experiments: state?.experiments,
 				apiConfiguration,
-				maxReadFileLine: state?.maxReadFileLine ?? -1,
-				maxConcurrentFileReads: state?.maxConcurrentFileReads ?? 5,
 				browserToolEnabled: state?.browserToolEnabled ?? true,
 				disabledTools: state?.disabledTools,
 				modelInfo,
@@ -1898,6 +1934,30 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} catch (error) {
 			console.error("[Task#getEnabledMcpToolsCount] Error counting MCP tools:", error)
 			return { enabledToolCount: 0, enabledServerCount: 0 }
+		}
+	}
+
+	/**
+	 * Manually start a **new** task when it was created with `startTask: false`.
+	 *
+	 * This fires `startTask` as a background async operation for the
+	 * `task/images` code-path only.  It does **not** handle the
+	 * `historyItem` resume path (use the constructor with `startTask: true`
+	 * for that).  The primary use-case is in the delegation flow where the
+	 * parent's metadata must be persisted to globalState **before** the
+	 * child task begins writing its own history (avoiding a read-modify-write
+	 * race on globalState).
+	 */
+	public start(): void {
+		if (this._started) {
+			return
+		}
+		this._started = true
+
+		const { task, images } = this.metadata
+
+		if (task || images) {
+			this.startTask(task ?? undefined, images ?? undefined)
 		}
 	}
 
@@ -2589,7 +2649,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				showRooIgnoredFiles = false,
 				includeDiagnosticMessages = true,
 				maxDiagnosticMessages = 50,
-				maxReadFileLine = -1,
 			} = (await this.providerRef.deref()?.getState()) ?? {}
 
 			const { content: parsedUserContent, mode: slashCommandMode } = await processUserContentMentions({
@@ -2601,7 +2660,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				showRooIgnoredFiles,
 				includeDiagnosticMessages,
 				maxDiagnosticMessages,
-				maxReadFileLine,
 			})
 
 			// Switch mode if specified in a slash command's frontmatter
@@ -3761,8 +3819,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			experiments,
 			browserToolEnabled,
 			language,
-			maxConcurrentFileReads,
-			maxReadFileLine,
 			apiConfiguration,
 			enableSubfolderRules,
 		} = state ?? {}
@@ -3799,9 +3855,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				experiments,
 				language,
 				rooIgnoreInstructions,
-				maxReadFileLine !== -1,
 				{
-					maxConcurrentFileReads: maxConcurrentFileReads ?? 5,
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 					browserToolEnabled: browserToolEnabled ?? true,
 					useAgentRules:
@@ -3864,8 +3918,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				customModes: state?.customModes,
 				experiments: state?.experiments,
 				apiConfiguration,
-				maxReadFileLine: state?.maxReadFileLine ?? -1,
-				maxConcurrentFileReads: state?.maxConcurrentFileReads ?? 5,
 				browserToolEnabled: state?.browserToolEnabled ?? true,
 				disabledTools: state?.disabledTools,
 				modelInfo,
@@ -4081,8 +4133,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						customModes: state?.customModes,
 						experiments: state?.experiments,
 						apiConfiguration,
-						maxReadFileLine: state?.maxReadFileLine ?? -1,
-						maxConcurrentFileReads: state?.maxConcurrentFileReads ?? 5,
 						browserToolEnabled: state?.browserToolEnabled ?? true,
 						disabledTools: state?.disabledTools,
 						modelInfo,
@@ -4248,8 +4298,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				customModes: state?.customModes,
 				experiments: state?.experiments,
 				apiConfiguration,
-				maxReadFileLine: state?.maxReadFileLine ?? -1,
-				maxConcurrentFileReads: state?.maxConcurrentFileReads ?? 5,
 				browserToolEnabled: state?.browserToolEnabled ?? true,
 				disabledTools: state?.disabledTools,
 				modelInfo,

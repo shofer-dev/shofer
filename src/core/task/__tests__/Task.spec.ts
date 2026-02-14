@@ -140,7 +140,7 @@ vi.mock("vscode", () => {
 
 vi.mock("../../mentions", () => ({
 	parseMentions: vi.fn().mockImplementation((text) => {
-		return Promise.resolve({ text: `processed: ${text}`, mode: undefined })
+		return Promise.resolve({ text: `processed: ${text}`, mode: undefined, contentBlocks: [] })
 	}),
 	openMention: vi.fn(),
 	getLatestTerminalOutput: vi.fn(),
@@ -1818,6 +1818,49 @@ describe("Cline", () => {
 				// Verify cancelCurrentRequest was called
 				expect(cancelSpy).toHaveBeenCalled()
 			})
+		})
+	})
+
+	describe("start()", () => {
+		it("should be a no-op if the task was already started in the constructor", () => {
+			const task = new Task({
+				provider: mockProvider,
+				apiConfiguration: mockApiConfig,
+				task: "test task",
+				startTask: false,
+			})
+
+			// Manually trigger start
+			const startTaskSpy = vi.spyOn(task as any, "startTask").mockImplementation(async () => {})
+			task.start()
+
+			expect(startTaskSpy).toHaveBeenCalledTimes(1)
+
+			// Calling start() again should be a no-op
+			task.start()
+			expect(startTaskSpy).toHaveBeenCalledTimes(1)
+		})
+
+		it("should not call startTask if already started via constructor", () => {
+			// Create a task that starts immediately (startTask defaults to true)
+			// but mock startTask to prevent actual execution
+			const startTaskSpy = vi.spyOn(Task.prototype as any, "startTask").mockImplementation(async () => {})
+
+			const task = new Task({
+				provider: mockProvider,
+				apiConfiguration: mockApiConfig,
+				task: "test task",
+				startTask: true,
+			})
+
+			// startTask was called by the constructor
+			expect(startTaskSpy).toHaveBeenCalledTimes(1)
+
+			// Calling start() should be a no-op since _started is already true
+			task.start()
+			expect(startTaskSpy).toHaveBeenCalledTimes(1)
+
+			startTaskSpy.mockRestore()
 		})
 	})
 })
