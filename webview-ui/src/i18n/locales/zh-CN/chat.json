@@ -111,6 +111,8 @@
 	},
 	"selectMode": "选择交互模式",
 	"selectApiConfig": "选择 API 配置",
+	"lockApiConfigAcrossModes": "锁定此工作区所有模式的 API 配置",
+	"unlockApiConfigAcrossModes": "此工作区所有模式的 API 配置已锁定（点击解锁）",
 	"enhancePrompt": "增强提示词",
 	"addImages": "添加图片到消息",
 	"sendMessage": "发送消息",
@@ -218,7 +220,8 @@
 		"wantsToViewTopLevelOutsideWorkspace": "需要查看目录文件列表（工作区外）",
 		"didViewTopLevelOutsideWorkspace": "已查看目录文件列表（工作区外）",
 		"wantsToViewRecursiveOutsideWorkspace": "需要查看目录所有文件（工作区外）",
-		"didViewRecursiveOutsideWorkspace": "已查看目录所有文件（工作区外）"
+		"didViewRecursiveOutsideWorkspace": "已查看目录所有文件（工作区外）",
+		"wantsToViewMultipleDirectories": "Roo 想要查看多个目录"
 	},
 	"commandOutput": "命令输出",
 	"commandExecution": {
@@ -433,6 +436,22 @@
 	"read-batch": {
 		"approve": {
 			"title": "全部批准"
+		},
+		"deny": {
+			"title": "全部拒绝"
+		}
+	},
+	"list-batch": {
+		"approve": {
+			"title": "全部批准"
+		},
+		"deny": {
+			"title": "全部拒绝"
+		}
+	},
+	"edit-batch": {
+		"approve": {
+			"title": "全部保存"
 		},
 		"deny": {
 			"title": "全部拒绝"

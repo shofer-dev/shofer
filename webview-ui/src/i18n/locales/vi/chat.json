@@ -111,6 +111,8 @@
 	},
 	"selectMode": "Chọn chế độ tương tác",
 	"selectApiConfig": "Chọn cấu hình API",
+	"lockApiConfigAcrossModes": "Khóa cấu hình API cho tất cả chế độ trong workspace này",
+	"unlockApiConfigAcrossModes": "Cấu hình API đã bị khóa cho tất cả chế độ trong workspace này (nhấn để mở khóa)",
 	"enhancePrompt": "Nâng cao yêu cầu với ngữ cảnh bổ sung",
 	"addImages": "Thêm hình ảnh vào tin nhắn",
 	"sendMessage": "Gửi tin nhắn",
@@ -218,7 +220,8 @@
 		"wantsToViewTopLevelOutsideWorkspace": "Roo muốn xem các tệp cấp cao nhất trong thư mục này (ngoài không gian làm việc)",
 		"didViewTopLevelOutsideWorkspace": "Roo đã xem các tệp cấp cao nhất trong thư mục này (ngoài không gian làm việc)",
 		"wantsToViewRecursiveOutsideWorkspace": "Roo muốn xem đệ quy tất cả các tệp trong thư mục này (ngoài không gian làm việc)",
-		"didViewRecursiveOutsideWorkspace": "Roo đã xem đệ quy tất cả các tệp trong thư mục này (ngoài không gian làm việc)"
+		"didViewRecursiveOutsideWorkspace": "Roo đã xem đệ quy tất cả các tệp trong thư mục này (ngoài không gian làm việc)",
+		"wantsToViewMultipleDirectories": "Roo muốn xem nhiều thư mục"
 	},
 	"commandOutput": "Kết quả lệnh",
 	"commandExecution": {
@@ -433,6 +436,22 @@
 	"read-batch": {
 		"approve": {
 			"title": "Chấp nhận tất cả"
+		},
+		"deny": {
+			"title": "Từ chối tất cả"
+		}
+	},
+	"list-batch": {
+		"approve": {
+			"title": "Chấp nhận tất cả"
+		},
+		"deny": {
+			"title": "Từ chối tất cả"
+		}
+	},
+	"edit-batch": {
+		"approve": {
+			"title": "Lưu tất cả"
 		},
 		"deny": {
 			"title": "Từ chối tất cả"

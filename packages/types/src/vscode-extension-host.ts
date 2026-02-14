@@ -333,6 +333,7 @@ export type ExtensionState = Pick<
 	| "showWorktreesInHomeScreen"
 	| "disabledTools"
 > & {
+	lockApiConfigAcrossModes?: boolean
 	version: string
 	clineMessages: ClineMessage[]
 	currentTaskItem?: HistoryItem
@@ -529,6 +530,7 @@ export interface WebviewMessage {
 		| "searchFiles"
 		| "toggleApiConfigPin"
 		| "hasOpenedModeSelector"
+		| "lockApiConfigAcrossModes"
 		| "clearCloudAuthSkipModel"
 		| "cloudButtonClicked"
 		| "rooCloudSignIn"
@@ -832,6 +834,12 @@ export interface ClineSayTool {
 			content: string
 			startLine?: number
 		}>
+	}>
+	batchDirs?: Array<{
+		path: string
+		recursive: boolean
+		isOutsideWorkspace?: boolean
+		key: string
 	}>
 	question?: string
 	imageData?: string // Base64 encoded image data for generated images

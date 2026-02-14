@@ -80,6 +80,22 @@
 			"title": "Tolak Semua"
 		}
 	},
+	"list-batch": {
+		"approve": {
+			"title": "Setujui Semua"
+		},
+		"deny": {
+			"title": "Tolak Semua"
+		}
+	},
+	"edit-batch": {
+		"approve": {
+			"title": "Simpan Semua"
+		},
+		"deny": {
+			"title": "Tolak Semua"
+		}
+	},
 	"runCommand": {
 		"title": "Perintah",
 		"tooltip": "Jalankan perintah ini"
@@ -125,6 +141,8 @@
 	},
 	"selectMode": "Pilih mode untuk interaksi",
 	"selectApiConfig": "Pilih konfigurasi API",
+	"lockApiConfigAcrossModes": "Kunci konfigurasi API di semua mode dalam workspace ini",
+	"unlockApiConfigAcrossModes": "Konfigurasi API terkunci di semua mode dalam workspace ini (klik untuk membuka kunci)",
 	"enhancePrompt": "Tingkatkan prompt dengan konteks tambahan",
 	"enhancePromptDescription": "Tombol 'Tingkatkan Prompt' membantu memperbaiki prompt kamu dengan memberikan konteks tambahan, klarifikasi, atau penyusunan ulang. Coba ketik prompt di sini dan klik tombol lagi untuk melihat cara kerjanya.",
 	"modeSelector": {
@@ -246,7 +264,8 @@
 		"wantsToViewTopLevelOutsideWorkspace": "Roo ingin melihat file tingkat atas di direktori ini (di luar workspace)",
 		"didViewTopLevelOutsideWorkspace": "Roo melihat file tingkat atas di direktori ini (di luar workspace)",
 		"wantsToViewRecursiveOutsideWorkspace": "Roo ingin melihat semua file secara rekursif di direktori ini (di luar workspace)",
-		"didViewRecursiveOutsideWorkspace": "Roo melihat semua file secara rekursif di direktori ini (di luar workspace)"
+		"didViewRecursiveOutsideWorkspace": "Roo melihat semua file secara rekursif di direktori ini (di luar workspace)",
+		"wantsToViewMultipleDirectories": "Roo ingin melihat beberapa direktori"
 	},
 	"codebaseSearch": {
 		"wantsToSearch": "Roo ingin mencari codebase untuk <code>{{query}}</code>",
