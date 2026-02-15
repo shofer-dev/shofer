@@ -363,44 +363,6 @@
 		"total": "Toplam Maliyet: ${{cost}}",
 		"includesSubtasks": "Alt görev maliyetlerini içerir"
 	},
-	"browser": {
-		"session": "Tarayıcı Oturumu",
-		"active": "Aktif",
-		"rooWantsToUse": "Roo tarayıcıyı kullanmak istiyor",
-		"consoleLogs": "Konsol Kayıtları",
-		"noNewLogs": "(Yeni kayıt yok)",
-		"screenshot": "Tarayıcı ekran görüntüsü",
-		"cursor": "imleç",
-		"navigation": {
-			"step": "Adım {{current}} / {{total}}",
-			"previous": "Önceki",
-			"next": "Sonraki"
-		},
-		"sessionStarted": "Tarayıcı Oturumu Başlatıldı",
-		"actions": {
-			"title": "Tarayıcı Eylemi: ",
-			"launched": "Tarayıcı başlatıldı",
-			"launch": "{{url}} adresinde tarayıcı başlat",
-			"clicked": "Tıklandı ({{coordinate}})",
-			"click": "Tıkla ({{coordinate}})",
-			"typed": "Yazıldı: {{text}}",
-			"type": "Yaz \"{{text}}\"",
-			"pressed": "Basıldı: {{key}}",
-			"press": "{{key}} tuşuna bas",
-			"scrolledDown": "Aşağı kaydırıldı",
-			"scrollDown": "Aşağı kaydır",
-			"scrolledUp": "Yukarı kaydırıldı",
-			"scrollUp": "Yukarı kaydır",
-			"hovered": "Üzerine gelinildi ({{coordinate}})",
-			"hover": "Üzerine gel ({{coordinate}})",
-			"resized": "Boyut değiştirildi: {{size}}",
-			"resize": "Boyutu değiştir {{size}}",
-			"screenshotSaved": "Ekran görüntüsü kaydedildi",
-			"screenshot": "Ekran görüntüsünü {{path}} yoluna kaydet",
-			"closed": "Tarayıcı kapatıldı",
-			"close": "Tarayıcıyı kapat"
-		}
-	},
 	"codeblock": {
 		"tooltips": {
 			"expand": "Kod bloğunu genişlet",
@@ -530,5 +492,10 @@
 	},
 	"readCommandOutput": {
 		"title": "Roo read command output"
+	},
+	"retiredProvider": {
+		"title": "Sağlayıcı artık desteklenmiyor",
+		"message": "Üzgünüz, bu sağlayıcı artık desteklenmiyor. Çok az Roo kullanıcısının bunu gerçekten kullandığını gördük ve hızlı gelişmeye devam edip topluluğumuza iyi hizmet verebilmek için kod tabanımızın kapsamını daraltmamız gerekiyor. Gerçekten zor bir karardı ama senin için en önemli olana odaklanmamızı sağlıyor. Bunun can sıkıcı olduğunu biliyoruz.",
+		"openSettings": "Ayarları aç"
 	}
 }

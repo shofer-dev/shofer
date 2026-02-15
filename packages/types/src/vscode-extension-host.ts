@@ -20,6 +20,7 @@ import type { GitCommit } from "./git.js"
 import type { McpServer } from "./mcp.js"
 import type { ModelRecord, RouterModels } from "./model.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
+import type { SkillMetadata } from "./skills.js"
 import type { WorktreeIncludeStatus } from "./worktree.js"
 
 /**
@@ -46,7 +47,6 @@ export interface ExtensionMessage {
 		| "ollamaModels"
 		| "lmStudioModels"
 		| "vsCodeLmModels"
-		| "huggingFaceModels"
 		| "vsCodeLmApiAvailable"
 		| "updatePrompt"
 		| "systemPrompt"
@@ -59,9 +59,6 @@ export interface ExtensionMessage {
 		| "deleteCustomModeCheck"
 		| "currentCheckpointUpdated"
 		| "checkpointInitWarning"
-		| "browserToolEnabled"
-		| "browserConnectionResult"
-		| "remoteBrowserEnabled"
 		| "ttsStart"
 		| "ttsStop"
 		| "fileSearchResults"
@@ -92,8 +89,6 @@ export interface ExtensionMessage {
 		| "dismissedUpsells"
 		| "organizationSwitchResult"
 		| "interactionRequired"
-		| "browserSessionUpdate"
-		| "browserSessionNavigate"
 		| "customToolsResult"
 		| "modes"
 		| "taskWithAggregatedCosts"
@@ -107,6 +102,7 @@ export interface ExtensionMessage {
 		| "worktreeIncludeStatus"
 		| "branchWorktreeIncludeResult"
 		| "folderSelected"
+		| "skills"
 	text?: string
 	payload?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	checkpointWarning?: {
@@ -142,23 +138,6 @@ export interface ExtensionMessage {
 	ollamaModels?: ModelRecord
 	lmStudioModels?: ModelRecord
 	vsCodeLmModels?: { vendor?: string; family?: string; version?: string; id?: string }[]
-	huggingFaceModels?: Array<{
-		id: string
-		object: string
-		created: number
-		owned_by: string
-		providers: Array<{
-			provider: string
-			status: "live" | "staging" | "error"
-			supports_tools?: boolean
-			supports_structured_output?: boolean
-			context_length?: number
-			pricing?: {
-				input: number
-				output: number
-			}
-		}>
-	}>
 	mcpServers?: McpServer[]
 	commits?: GitCommit[]
 	listApiConfig?: ProviderSettingsEntry[]
@@ -196,10 +175,8 @@ export interface ExtensionMessage {
 	queuedMessages?: QueuedMessage[]
 	list?: string[] // For dismissedUpsells
 	organizationId?: string | null // For organizationSwitchResult
-	browserSessionMessages?: ClineMessage[] // For browser session panel updates
-	isBrowserSessionActive?: boolean // For browser session panel updates
-	stepIndex?: number // For browserSessionNavigate: the target step index to display
 	tools?: SerializedCustomToolDefinition[] // For customToolsResult
+	skills?: SkillMetadata[] // For skills response
 	modes?: { slug: string; name: string }[] // For modes response
 	aggregatedCosts?: {
 		// For taskWithAggregatedCosts response
@@ -279,7 +256,6 @@ export type ExtensionState = Pick<
 	| "alwaysAllowWrite"
 	| "alwaysAllowWriteOutsideWorkspace"
 	| "alwaysAllowWriteProtected"
-	| "alwaysAllowBrowser"
 	| "alwaysAllowMcp"
 	| "alwaysAllowModeSwitch"
 	| "alwaysAllowSubtasks"
@@ -290,12 +266,6 @@ export type ExtensionState = Pick<
 	| "deniedCommands"
 	| "allowedMaxRequests"
 	| "allowedMaxCost"
-	| "browserToolEnabled"
-	| "browserViewportSize"
-	| "screenshotQuality"
-	| "remoteBrowserEnabled"
-	| "cachedChromeHostUrl"
-	| "remoteBrowserHost"
 	| "ttsEnabled"
 	| "ttsSpeed"
 	| "soundEnabled"
@@ -382,8 +352,6 @@ export type ExtensionState = Pick<
 	publicSharingEnabled: boolean
 	organizationAllowList: OrganizationAllowList
 	organizationSettingsVersion?: number
-
-	isBrowserSessionActive: boolean // Actual browser session state
 
 	autoCondenseContext: boolean
 	autoCondenseContextPercent: number
@@ -473,7 +441,6 @@ export interface WebviewMessage {
 		| "requestRooModels"
 		| "requestRooCreditBalance"
 		| "requestVsCodeLmModels"
-		| "requestHuggingFaceModels"
 		| "openImage"
 		| "saveImage"
 		| "openFile"
@@ -525,8 +492,6 @@ export interface WebviewMessage {
 		| "deleteMcpServer"
 		| "codebaseIndexEnabled"
 		| "telemetrySetting"
-		| "testBrowserConnection"
-		| "browserConnectionResult"
 		| "searchFiles"
 		| "toggleApiConfigPin"
 		| "hasOpenedModeSelector"
@@ -583,11 +548,6 @@ export interface WebviewMessage {
 		| "allowedCommands"
 		| "getTaskWithAggregatedCosts"
 		| "deniedCommands"
-		| "killBrowserSession"
-		| "openBrowserSessionPanel"
-		| "showBrowserSessionPanelAtStep"
-		| "refreshBrowserSessionPanel"
-		| "browserPanelDidLaunch"
 		| "openDebugApiHistory"
 		| "openDebugUiHistory"
 		| "downloadErrorDiagnostics"
@@ -608,6 +568,13 @@ export interface WebviewMessage {
 		| "createWorktreeInclude"
 		| "checkoutBranch"
 		| "browseForWorktreePath"
+		// Skills messages
+		| "requestSkills"
+		| "createSkill"
+		| "deleteSkill"
+		| "moveSkill"
+		| "updateSkillModes"
+		| "openSkillFile"
 	text?: string
 	editedMessageContent?: string
 	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"
@@ -642,6 +609,16 @@ export interface WebviewMessage {
 	timeout?: number
 	payload?: WebViewMessagePayload
 	source?: "global" | "project"
+	skillName?: string // For skill operations (createSkill, deleteSkill, moveSkill, openSkillFile)
+	/** @deprecated Use skillModeSlugs instead */
+	skillMode?: string // For skill operations (current mode restriction)
+	/** @deprecated Use newSkillModeSlugs instead */
+	newSkillMode?: string // For moveSkill (target mode)
+	skillDescription?: string // For createSkill (skill description)
+	/** Mode slugs for skill operations. undefined/empty = any mode */
+	skillModeSlugs?: string[] // For skill operations (mode restrictions)
+	/** Target mode slugs for updateSkillModes */
+	newSkillModeSlugs?: string[] // For updateSkillModes (new mode restrictions)
 	requestId?: string
 	ids?: string[]
 	terminalOperation?: "continue" | "abort"
@@ -850,39 +827,6 @@ export interface ClineSayTool {
 	description?: string
 	// Properties for skill tool
 	skill?: string
-}
-
-// Must keep in sync with system prompt.
-export const browserActions = [
-	"launch",
-	"click",
-	"hover",
-	"type",
-	"press",
-	"scroll_down",
-	"scroll_up",
-	"resize",
-	"close",
-	"screenshot",
-] as const
-
-export type BrowserAction = (typeof browserActions)[number]
-
-export interface ClineSayBrowserAction {
-	action: BrowserAction
-	coordinate?: string
-	size?: string
-	text?: string
-	executedCoordinate?: string
-}
-
-export type BrowserActionResult = {
-	screenshot?: string
-	logs?: string
-	currentUrl?: string
-	currentMousePosition?: string
-	viewportWidth?: number
-	viewportHeight?: number
 }
 
 export interface ClineAskUseMcpServer {

@@ -14,6 +14,7 @@ import { getCostBreakdownIfNeeded } from "@src/utils/costFormatting"
 import { batchConsecutive } from "@src/utils/batchConsecutive"
 
 import type { ClineAsk, ClineSayTool, ClineMessage, ExtensionMessage, AudioType } from "@roo-code/types"
+import { isRetiredProvider } from "@roo-code/types"
 
 import { findLast } from "@roo/array"
 import { SuggestionItem } from "@roo-code/types"
@@ -37,9 +38,8 @@ import TelemetryBanner from "../common/TelemetryBanner"
 import VersionIndicator from "../common/VersionIndicator"
 import HistoryPreview from "../history/HistoryPreview"
 import Announcement from "./Announcement"
-import BrowserActionRow from "./BrowserActionRow"
-import BrowserSessionStatusRow from "./BrowserSessionStatusRow"
 import ChatRow from "./ChatRow"
+import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
 import ProfileViolationWarning from "./ProfileViolationWarning"
@@ -93,9 +93,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		soundVolume,
 		cloudIsAuthenticated,
 		messageQueue = [],
-		isBrowserSessionActive,
 		showWorktreesInHomeScreen,
 	} = useExtensionState()
+
+	// Show a WarningRow when the user sends a message with a retired provider.
+	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
+
+	// When the provider changes, clear the retired-provider warning.
+	const providerName = apiConfiguration?.apiProvider
+	useEffect(() => {
+		setShowRetiredProviderWarning(false)
+	}, [providerName])
 
 	const messagesRef = useRef(messages)
 
@@ -359,13 +367,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									break
 							}
 							break
-						case "browser_action_launch":
-							setSendingDisabled(isPartial)
-							setClineAsk("browser_action_launch")
-							setEnableButtons(!isPartial)
-							setPrimaryButtonText(t("chat:approve.title"))
-							setSecondaryButtonText(t("chat:reject.title"))
-							break
 						case "command":
 							setSendingDisabled(isPartial)
 							setClineAsk("command")
@@ -456,8 +457,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "api_req_finished":
 						case "error":
 						case "text":
-						case "browser_action":
-						case "browser_action_result":
 						case "command_output":
 						case "mcp_server_request_started":
 						case "mcp_server_response":
@@ -654,6 +653,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			text = text.trim()
 
 			if (text || images.length > 0) {
+				// Intercept when the active provider is retired — show a
+				// WarningRow instead of sending anything to the backend.
+				if (apiConfiguration?.apiProvider && isRetiredProvider(apiConfiguration.apiProvider)) {
+					setShowRetiredProviderWarning(true)
+					return
+				}
+
 				// Queue message if:
 				// - Task is busy (sendingDisabled)
 				// - API request in progress (isStreaming)
@@ -695,7 +701,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					) {
 						case "followup":
 						case "tool":
-						case "browser_action_launch":
 						case "command": // User can provide feedback to a tool or command use.
 						case "use_mcp_server":
 						case "completion_result": // If this happens then the user has feedback for the completion result.
@@ -719,7 +724,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				handleChatReset()
 			}
 		},
-		[handleChatReset, markFollowUpAsAnswered, sendingDisabled, isStreaming, messageQueue.length], // messagesRef and clineAskRef are stable
+		[
+			handleChatReset,
+			markFollowUpAsAnswered,
+			sendingDisabled,
+			isStreaming,
+			messageQueue.length,
+			apiConfiguration?.apiProvider,
+		], // messagesRef and clineAskRef are stable
 	)
 
 	const handleSetChatBoxMessage = useCallback(
@@ -737,7 +749,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[inputValue, selectedImages],
 	)
 
-	const startNewTask = useCallback(() => vscode.postMessage({ type: "clearTask" }), [])
+	const startNewTask = useCallback(() => {
+		setShowRetiredProviderWarning(false)
+		vscode.postMessage({ type: "clearTask" })
+	}, [])
 
 	// Handle stop button click from textarea
 	const handleStopTask = useCallback(() => {
@@ -773,7 +788,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "api_req_failed":
 				case "command":
 				case "tool":
-				case "browser_action_launch":
 				case "use_mcp_server":
 				case "mistake_limit_reached":
 					// Only send text/images if they exist
@@ -858,7 +872,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					break
 				case "command":
 				case "tool":
-				case "browser_action_launch":
 				case "use_mcp_server":
 					// Only send text/images if they exist
 					if (trimmedInput || (images && images.length > 0)) {
@@ -1151,43 +1164,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setWasStreaming(isStreaming)
 	}, [isStreaming, lastMessage, wasStreaming, messages.length])
 
-	// Compute current browser session messages for the top banner (not grouped into chat stream)
-	// Find the FIRST browser session from the beginning to show ALL sessions
-	const browserSessionStartIndex = useMemo(() => {
-		for (let i = 0; i < messages.length; i++) {
-			if (messages[i].ask === "browser_action_launch") {
-				return i
-			}
-		}
-		return -1
-	}, [messages])
-
-	const _browserSessionMessages = useMemo<ClineMessage[]>(() => {
-		if (browserSessionStartIndex === -1) return []
-		return messages.slice(browserSessionStartIndex)
-	}, [browserSessionStartIndex, messages])
-
-	// Show globe toggle only when in a task that has a browser session (active or inactive)
-	const showBrowserDockToggle = useMemo(
-		() => Boolean(task && (browserSessionStartIndex !== -1 || isBrowserSessionActive)),
-		[task, browserSessionStartIndex, isBrowserSessionActive],
-	)
-
-	const isBrowserSessionMessage = useCallback((message: ClineMessage): boolean => {
-		// Only the launch ask should be hidden from chat (it's shown in the drawer header)
-		if (message.type === "ask" && message.ask === "browser_action_launch") {
-			return true
-		}
-		// browser_action_result messages are paired with browser_action and should not appear independently
-		if (message.type === "say" && message.say === "browser_action_result") {
-			return true
-		}
-		return false
-	}, [])
-
 	const groupedMessages = useMemo(() => {
-		// Only filter out the launch ask and result messages - browser actions appear in chat
-		const filtered: ClineMessage[] = visibleMessages.filter((msg) => !isBrowserSessionMessage(msg))
+		const filtered: ClineMessage[] = visibleMessages
 
 		// Helper to check if a message is a read_file ask that should be batched
 		const isReadFileAsk = (msg: ClineMessage): boolean => {
@@ -1333,7 +1311,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			} as ClineMessage)
 		}
 		return result
-	}, [isCondensing, visibleMessages, isBrowserSessionMessage])
+	}, [isCondensing, visibleMessages])
 
 	// scrolling
 
@@ -1473,34 +1451,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const itemContent = useCallback(
 		(index: number, messageOrGroup: ClineMessage) => {
 			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
-
-			// Check if this is a browser action message
-			if (messageOrGroup.type === "say" && messageOrGroup.say === "browser_action") {
-				// Find the corresponding result message by looking for the next browser_action_result after this action's timestamp
-				const nextMessage = modifiedMessages.find(
-					(m) => m.ts > messageOrGroup.ts && m.say === "browser_action_result",
-				)
-
-				// Calculate action index and total count
-				const browserActions = modifiedMessages.filter((m) => m.say === "browser_action")
-				const actionIndex = browserActions.findIndex((m) => m.ts === messageOrGroup.ts) + 1
-				const totalActions = browserActions.length
-
-				return (
-					<BrowserActionRow
-						key={messageOrGroup.ts}
-						message={messageOrGroup}
-						nextMessage={nextMessage}
-						actionIndex={actionIndex}
-						totalActions={totalActions}
-					/>
-				)
-			}
-
-			// Check if this is a browser session status message
-			if (messageOrGroup.type === "say" && messageOrGroup.say === "browser_session_status") {
-				return <BrowserSessionStatusRow key={messageOrGroup.ts} message={messageOrGroup} />
-			}
 
 			// regular message
 			return (
@@ -1850,6 +1800,16 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					}
 				}}
 			/>
+			{showRetiredProviderWarning && (
+				<div className="px-[15px] py-1">
+					<WarningRow
+						title={t("chat:retiredProvider.title")}
+						message={t("chat:retiredProvider.message")}
+						actionText={t("chat:retiredProvider.openSettings")}
+						onAction={() => vscode.postMessage({ type: "switchTab", tab: "settings" })}
+					/>
+				</div>
+			)}
 			<ChatTextArea
 				ref={textAreaRef}
 				inputValue={inputValue}
@@ -1870,8 +1830,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				mode={mode}
 				setMode={setMode}
 				modeShortcutText={modeShortcutText}
-				isBrowserSessionActive={!!isBrowserSessionActive}
-				showBrowserDockToggle={showBrowserDockToggle}
 				isStreaming={isStreaming}
 				onStop={handleStopTask}
 				onEnqueueMessage={handleEnqueueCurrentMessage}
