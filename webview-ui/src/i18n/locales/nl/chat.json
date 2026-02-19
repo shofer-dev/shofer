@@ -428,7 +428,8 @@
 		"indexing": "Indexeren {{percentage}}%",
 		"indexed": "Geïndexeerd",
 		"error": "Index fout",
-		"status": "Index status"
+		"status": "Index status",
+		"stopping": "Indexering wordt gestopt..."
 	},
 	"versionIndicator": {
 		"ariaLabel": "Versie {{version}} - Klik om release notes te bekijken"

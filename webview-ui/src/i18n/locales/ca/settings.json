@@ -211,7 +211,12 @@
 		"searchMinScoreResetTooltip": "Restablir al valor per defecte (0.4)",
 		"searchMaxResultsLabel": "Màxim de resultats de cerca",
 		"searchMaxResultsDescription": "Nombre màxim de resultats de cerca a retornar quan es consulta l'índex de la base de codi. Els valors més alts proporcionen més context però poden incloure resultats menys rellevants.",
-		"resetToDefault": "Restablir al valor per defecte"
+		"resetToDefault": "Restablir al valor per defecte",
+		"stopIndexingButton": "Aturar indexació",
+		"stoppingButton": "Aturant...",
+		"workspaceToggleLabel": "Activar la indexació per a aquest espai de treball",
+		"workspaceDisabledMessage": "La indexació està configurada però no habilitada per a aquest espai de treball.",
+		"autoEnableDefaultLabel": "Habilitar automàticament la indexació per a nous espais de treball"
 	},
 	"autoApprove": {
 		"toggleShortcut": "Pots configurar una drecera global per a aquesta configuració <SettingsLink>a les preferències del teu IDE</SettingsLink>.",
