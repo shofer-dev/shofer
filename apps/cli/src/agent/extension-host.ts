@@ -108,7 +108,7 @@ interface WebviewViewProvider {
 export interface ExtensionHostInterface extends IExtensionHost<ExtensionHostEventMap> {
 	client: ExtensionClient
 	activate(): Promise<void>
-	runTask(prompt: string, taskId?: string): Promise<void>
+	runTask(prompt: string, taskId?: string, configuration?: RooCodeSettings): Promise<void>
 	resumeTask(taskId: string): Promise<void>
 	sendToExtension(message: WebviewMessage): void
 	dispose(): Promise<void>
@@ -510,8 +510,8 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		})
 	}
 
-	public async runTask(prompt: string, taskId?: string): Promise<void> {
-		this.sendToExtension({ type: "newTask", text: prompt, taskId })
+	public async runTask(prompt: string, taskId?: string, configuration?: RooCodeSettings): Promise<void> {
+		this.sendToExtension({ type: "newTask", text: prompt, taskId, taskConfiguration: configuration })
 		return this.waitForTaskCompletion()
 	}
 
