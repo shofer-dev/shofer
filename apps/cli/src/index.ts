@@ -20,6 +20,8 @@ program
 	.name("roo")
 	.description("Roo Code CLI - starts an interactive session by default, use -p/--print for non-interactive output")
 	.version(VERSION)
+	.enablePositionalOptions()
+	.passThroughOptions()
 
 program
 	.argument("[prompt]", "Your prompt")
@@ -65,7 +67,11 @@ program
 	)
 	.action(run)
 
-const listCommand = program.command("list").description("List commands, modes, models, or sessions")
+const listCommand = program
+	.command("list")
+	.description("List commands, modes, models, or sessions")
+	.enablePositionalOptions()
+	.passThroughOptions()
 
 const applyListOptions = (command: Command) =>
 	command
