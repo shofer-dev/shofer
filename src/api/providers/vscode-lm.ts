@@ -1,6 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import * as vscode from "vscode"
 import OpenAI from "openai"
+import { v7 as uuidv7 } from "uuid"
 
 import { type ModelInfo, openAiModelInfoSaneDefaults } from "@roo-code/types"
 
@@ -65,6 +66,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	private client: vscode.LanguageModelChat | null
 	private disposable: vscode.Disposable | null
 	private currentRequestCancellation: vscode.CancellationTokenSource | null
+	private conversationId: string
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -72,6 +74,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		this.client = null
 		this.disposable = null
 		this.currentRequestCancellation = null
+		// Use taskId from options if provided, otherwise generate a fallback UUID
+		this.conversationId = options.taskId ?? uuidv7()
 
 		try {
 			// Listen for model changes and reset client
@@ -397,6 +401,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			const requestOptions: vscode.LanguageModelChatRequestOptions = {
 				justification: `Roo Code would like to use '${client.name}' from '${client.vendor}', Click 'Allow' to proceed.`,
 				tools: convertToVsCodeLmTools(metadata?.tools ?? []),
+				modelOptions: { conversationId: this.conversationId },
 			}
 
 			const response: vscode.LanguageModelChatResponse = await client.sendRequest(
@@ -567,7 +572,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			const client = await this.getClient()
 			const response = await client.sendRequest(
 				[vscode.LanguageModelChatMessage.User(prompt)],
-				{},
+				{ modelOptions: { conversationId: this.conversationId } },
 				new vscode.CancellationTokenSource().token,
 			)
 			let result = ""
