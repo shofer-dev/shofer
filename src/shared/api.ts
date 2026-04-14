@@ -23,6 +23,11 @@ export type ApiHandlerOptions = Omit<ProviderSettings, "apiProvider"> & {
 	 * When undefined, Ollama will use the model's default num_ctx from the Modelfile.
 	 */
 	ollamaNumCtx?: number
+	/**
+	 * Task/conversation ID passed to providers that need session tracking.
+	 * Used by vscode-lm provider to pass conversationId in modelOptions.
+	 */
+	taskId?: string
 }
 
 // RouterName

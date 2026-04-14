@@ -109,8 +109,9 @@ export interface ApiHandler {
 	countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number>
 }
 
-export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
+export function buildApiHandler(configuration: ProviderSettings, extraOptions?: { taskId?: string }): ApiHandler {
 	const { apiProvider, ...options } = configuration
+	const handlerOptions = { ...options, ...extraOptions }
 
 	if (apiProvider && isRetiredProvider(apiProvider)) {
 		throw new Error(
@@ -148,7 +149,7 @@ export function buildApiHandler(configuration: ProviderSettings): ApiHandler {
 		case "moonshot":
 			return new MoonshotHandler(options)
 		case "vscode-lm":
-			return new VsCodeLmHandler(options)
+			return new VsCodeLmHandler(handlerOptions)
 		case "mistral":
 			return new MistralHandler(options)
 		case "requesty":

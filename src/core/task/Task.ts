@@ -484,7 +484,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		})
 
 		this.apiConfiguration = apiConfiguration
-		this.api = buildApiHandler(this.apiConfiguration)
+		this.api = buildApiHandler(this.apiConfiguration, { taskId: this.taskId })
 		this.autoApprovalHandler = new AutoApprovalHandler()
 
 		this.consecutiveMistakeLimit = consecutiveMistakeLimit ?? DEFAULT_CONSECUTIVE_MISTAKE_LIMIT
@@ -1579,7 +1579,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public updateApiConfiguration(newApiConfiguration: ProviderSettings): void {
 		// Update the configuration and rebuild the API handler
 		this.apiConfiguration = newApiConfiguration
-		this.api = buildApiHandler(this.apiConfiguration)
+		this.api = buildApiHandler(this.apiConfiguration, { taskId: this.taskId })
 	}
 
 	public async submitUserMessage(
