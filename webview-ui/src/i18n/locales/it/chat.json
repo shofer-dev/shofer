@@ -122,8 +122,8 @@
 	"typeMessage": "Scrivi un messaggio...",
 	"typeTask": "Scrivi la tua attività qui...",
 	"addContext": "@ per aggiungere contesto, / per i comandi",
-	"dragFiles": "tieni premuto shift per trascinare file",
-	"dragFilesImages": "tieni premuto shift per trascinare file/immagini",
+	"dragFiles": "trascina i file per aggiungere al contesto",
+	"dragFilesImages": "trascina file/immagini per aggiungere al contesto",
 	"enhancePromptDescription": "Il pulsante 'Migliora prompt' aiuta a migliorare la tua richiesta fornendo contesto aggiuntivo, chiarimenti o riformulazioni. Prova a digitare una richiesta qui e fai di nuovo clic sul pulsante per vedere come funziona.",
 	"modeSelector": {
 		"title": "Modalità",

@@ -122,8 +122,8 @@
 	"typeMessage": "Nhập tin nhắn...",
 	"typeTask": "Nhập nhiệm vụ của bạn tại đây...",
 	"addContext": "@ để thêm ngữ cảnh, / cho lệnh",
-	"dragFiles": "giữ shift để kéo tệp",
-	"dragFilesImages": "giữ shift để kéo tệp/hình ảnh",
+	"dragFiles": "kéo tệp để thêm vào ngữ cảnh",
+	"dragFilesImages": "kéo tệp/hình ảnh để thêm vào ngữ cảnh",
 	"enhancePromptDescription": "Nút 'Nâng cao yêu cầu' giúp cải thiện yêu cầu của bạn bằng cách cung cấp ngữ cảnh bổ sung, làm rõ hoặc diễn đạt lại. Hãy thử nhập yêu cầu tại đây và nhấp vào nút một lần nữa để xem cách thức hoạt động.",
 	"modeSelector": {
 		"title": "Chế độ",
