@@ -99,6 +99,11 @@ export interface CreateTaskOptions {
 	/** Whether to start the task loop immediately (default: true).
 	 *  When false, the caller must invoke `task.start()` manually. */
 	startTask?: boolean
+	/**
+	 * When true, skip the single-open-task invariant (don't remove/abort the current task).
+	 * Used for parallel task creation where multiple tasks run simultaneously.
+	 */
+	keepCurrentTask?: boolean
 }
 
 export enum TaskStatus {

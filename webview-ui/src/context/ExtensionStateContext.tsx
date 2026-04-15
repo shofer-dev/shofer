@@ -31,6 +31,23 @@ import { experimentDefault } from "@roo/experiments"
 import { vscode } from "@src/utils/vscode"
 import { convertTextMateToHljs } from "@src/utils/textMateToHljs"
 
+export interface ManagedTask {
+	id: string
+	name: string
+	taskId: string
+	workspace: string
+	createdAt: number
+	lastActiveAt: number
+	state: string
+}
+
+export interface TaskNotification {
+	taskId: string
+	type: "needs_input" | "completed" | "error" | "file_conflict"
+	message: string
+	timestamp: number
+}
+
 export interface ExtensionStateContextType extends ExtensionState {
 	historyPreviewCollapsed?: boolean // Add the new state property
 	didHydrateState: boolean
@@ -50,6 +67,10 @@ export interface ExtensionStateContextType extends ExtensionState {
 	publicSharingEnabled: boolean
 	mdmCompliant?: boolean
 	hasOpenedModeSelector: boolean // New property to track if user has opened mode selector
+	// Parallel task management
+	parallelTasks: ManagedTask[]
+	focusedTaskId: string | null
+	taskNotifications: TaskNotification[]
 	setHasOpenedModeSelector: (value: boolean) => void // Setter for the new property
 	alwaysAllowFollowupQuestions: boolean // New property for follow-up questions auto-approve
 	setAlwaysAllowFollowupQuestions: (value: boolean) => void // Setter for the new property
@@ -263,6 +284,10 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		includeCurrentTime: true,
 		includeCurrentCost: true,
 		lockApiConfigAcrossModes: false,
+		// Parallel task management
+		parallelTasks: [],
+		focusedTaskId: null,
+		taskNotifications: [],
 	})
 
 	const [didHydrateState, setDidHydrateState] = useState(false)
@@ -458,6 +483,49 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					})
 					break
 				}
+				case "parallelTasksUpdated": {
+					if (message.parallelTasks) {
+						setState((prevState) => ({
+							...prevState,
+							parallelTasks: message.parallelTasks!,
+							// Use focusedTaskId from backend if provided, otherwise keep current
+							focusedTaskId:
+								message.focusedTaskId !== undefined
+									? message.focusedTaskId
+									: message.parallelTasks!.length > 0
+										? prevState.focusedTaskId
+										: null,
+						}))
+					}
+					break
+				}
+				case "taskNotification": {
+					if (message.notification) {
+						setState((prevState) => ({
+							...prevState,
+							taskNotifications: [
+								...(prevState.taskNotifications ?? []).filter(
+									(n) =>
+										!(
+											n.taskId === message.notification!.taskId &&
+											n.type === message.notification!.type
+										),
+								),
+								message.notification!,
+							],
+						}))
+					}
+					break
+				}
+				case "taskNotificationCleared": {
+					if (message.parallelTasks) {
+						setState((prevState) => ({
+							...prevState,
+							parallelTasks: message.parallelTasks!,
+						}))
+					}
+					break
+				}
 			}
 		},
 		[setListApiConfigMeta],
@@ -609,6 +677,10 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		showWorktreesInHomeScreen: state.showWorktreesInHomeScreen ?? true,
 		setShowWorktreesInHomeScreen: (value) =>
 			setState((prevState) => ({ ...prevState, showWorktreesInHomeScreen: value })),
+		// Parallel task management
+		parallelTasks: state.parallelTasks ?? [],
+		focusedTaskId: state.focusedTaskId ?? null,
+		taskNotifications: (state.taskNotifications ?? []) as TaskNotification[],
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>

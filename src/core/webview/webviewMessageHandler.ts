@@ -543,6 +543,26 @@ export const webviewMessageHandler = async (
 			provider.postStateToWebview()
 			provider.workspaceTracker?.initializeFilePaths() // Don't await.
 
+			// Always push the current parallel task state so the TaskSelector has
+			// up-to-date data regardless of whether restoreManagedTasks has already
+			// fired its tasks:updated event before the webview loaded.
+			{
+				const managedTasks = provider.getManagedTasks()
+				provider.postMessageToWebview({
+					type: "parallelTasksUpdated",
+					parallelTasks: managedTasks.map((s) => ({
+						id: s.id,
+						name: s.name,
+						taskId: s.taskId,
+						workspace: s.workspace,
+						createdAt: s.createdAt,
+						lastActiveAt: s.lastActiveAt,
+						state: s.state,
+					})),
+					focusedTaskId: provider.taskManager.getFocusedTaskId(),
+				})
+			}
+
 			getTheme().then((theme) => provider.postMessageToWebview({ type: "theme", text: JSON.stringify(theme) }))
 
 			// If MCP Hub is already initialized, update the webview with
@@ -758,7 +778,7 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "clearTask":
-			// Clear task resets the current session. Delegation flows are
+			// Clear task resets the current task. Delegation flows are
 			// handled via metadata; parent resumption occurs through
 			// reopenParentFromDelegation, not via finishSubTask.
 			await provider.clearTask()
@@ -3667,6 +3687,135 @@ export const webviewMessageHandler = async (
 				provider.log(`Error opening folder picker: ${errorMessage}`)
 			}
 
+			break
+		}
+
+		// Parallel task management messages
+		case "createParallelTask": {
+			try {
+				await provider.createManagedTask(message.taskName, message.text, message.images)
+			} catch (error) {
+				provider.log(`Error creating managed task: ${error}`)
+			}
+			break
+		}
+
+		case "focusParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.focusTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error focusing task: ${error}`)
+			}
+			break
+		}
+
+		case "startParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.startManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error starting managed task: ${error}`)
+			}
+			break
+		}
+
+		case "pauseParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.pauseManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error pausing managed task: ${error}`)
+			}
+			break
+		}
+
+		case "stopParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.stopManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error stopping managed task: ${error}`)
+			}
+			break
+		}
+
+		case "renameParallelTask": {
+			try {
+				if (message.taskId && message.text) {
+					provider.renameManagedTask(message.taskId, message.text)
+				}
+			} catch (error) {
+				provider.log(`Error renaming managed task: ${error}`)
+			}
+			break
+		}
+
+		case "deleteParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.deleteManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error deleting managed task: ${error}`)
+			}
+			break
+		}
+
+		case "clearTaskNotification": {
+			try {
+				if (message.taskId) {
+					provider.clearTaskNotification(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error clearing task notification: ${error}`)
+			}
+			break
+		}
+
+		case "requestParallelTasks": {
+			try {
+				const managedTasks = provider.getManagedTasks()
+				await provider.postMessageToWebview({
+					type: "parallelTasksUpdated",
+					parallelTasks: managedTasks.map((s) => ({
+						id: s.id,
+						name: s.name,
+						taskId: s.taskId,
+						workspace: s.workspace,
+						createdAt: s.createdAt,
+						lastActiveAt: s.lastActiveAt,
+						state: s.state,
+					})),
+				})
+			} catch (error) {
+				provider.log(`Error requesting managed tasks: ${error}`)
+			}
+			break
+		}
+
+		case "approveBackgroundTask": {
+			try {
+				if (message.taskId) {
+					// Get the task instance and handle the approval
+					const task = provider.taskManager.getManagedTaskInstance(message.taskId)
+					if (task) {
+						// Resume the task with the approval response
+						task.handleWebviewAskResponse(
+							message.askResponse || "yesButtonClicked",
+							message.text,
+							message.images,
+						)
+						provider.clearTaskNotification(message.taskId)
+					}
+				}
+			} catch (error) {
+				provider.log(`Error approving background task: ${error}`)
+			}
 			break
 		}
 

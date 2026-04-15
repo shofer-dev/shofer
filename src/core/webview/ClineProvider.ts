@@ -76,6 +76,7 @@ import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
 import { SkillsManager } from "../../services/skills/SkillsManager"
+import { TaskManager } from "../../services/task-manager/TaskManager"
 
 import { fileExistsAtPath } from "../../utils/fs"
 import { setTtsEnabled, setTtsSpeed } from "../../utils/tts"
@@ -151,6 +152,7 @@ export class ClineProvider
 
 	private recentTasksCache?: string[]
 	public readonly taskHistoryStore: TaskHistoryStore
+	public readonly taskManager: TaskManager
 	private taskHistoryStoreInitialized = false
 	private globalStateWriteThroughTimer: ReturnType<typeof setTimeout> | null = null
 	private static readonly GLOBAL_STATE_WRITE_THROUGH_DEBOUNCE_MS = 5000 // 5 seconds
@@ -198,6 +200,49 @@ export class ClineProvider
 		})
 		this.initializeTaskHistoryStore().catch((error) => {
 			this.log(`Failed to initialize TaskHistoryStore: ${error}`)
+		})
+
+		// Initialize the TaskManager for parallel task management.
+		this.taskManager = new TaskManager(this)
+
+		// Restore managed tasks from persisted history items after TaskHistoryStore is ready.
+		this.taskHistoryStore.initialized.then(async () => {
+			try {
+				const historyItems = this.taskHistoryStore.getAll()
+				await this.taskManager.restoreManagedTasks(historyItems)
+				this.log(`Restored ${this.taskManager.getManagedTasks().length} tasks from history`)
+			} catch (error) {
+				this.log(`Failed to restore managed tasks: ${error}`)
+			}
+		})
+
+		// Set up task event forwarding to webview.
+		this.taskManager.on("tasks:updated", (managedTasks) => {
+			this.postMessageToWebview({
+				type: "parallelTasksUpdated",
+				parallelTasks: managedTasks.map((s) => ({
+					id: s.id,
+					name: s.name,
+					taskId: s.taskId,
+					workspace: s.workspace,
+					createdAt: s.createdAt,
+					lastActiveAt: s.lastActiveAt,
+					state: s.state,
+				})),
+				focusedTaskId: this.taskManager.getFocusedTaskId(),
+			})
+		})
+
+		this.taskManager.on("managedTask:needs-input", (notification) => {
+			this.postMessageToWebview({
+				type: "taskNotification",
+				notification: {
+					taskId: notification.targetTaskId,
+					type: notification.type,
+					message: notification.message,
+					timestamp: notification.timestamp,
+				},
+			})
 		})
 
 		// Start configuration loading (which might trigger indexing) in the background.
@@ -576,6 +621,30 @@ export class ClineProvider
 		}
 	}
 
+	/**
+	 * Pops the top task from the stack WITHOUT aborting it.
+	 * Used for parallel task switching — the task continues running in the background.
+	 * Unlike removeClineFromStack(), this does NOT call abortTask() or remove event listeners.
+	 *
+	 * @returns The popped task, or undefined if stack was empty
+	 */
+	popFromStackWithoutAborting(): Task | undefined {
+		if (this.clineStack.length === 0) {
+			return undefined
+		}
+
+		const task = this.clineStack.pop()
+
+		if (task) {
+			task.emit(RooCodeEventName.TaskUnfocused)
+			this.log(
+				`[ClineProvider#popFromStackWithoutAborting] Task ${task.taskId}.${task.instanceId} removed from stack (still running in background)`,
+			)
+		}
+
+		return task
+	}
+
 	getTaskStackSize(): number {
 		return this.clineStack.length
 	}
@@ -951,7 +1020,7 @@ export class ClineProvider
 		})
 		this.webviewDisposables.push(configDisposable)
 
-		// If the extension is starting a new session, clear previous task state.
+		// If the extension is starting fresh, clear previous task state.
 		// But don't clear if there's already an active task (e.g., resumed via IPC/bridge).
 		const currentTask = this.getCurrentTask()
 		if (!currentTask || currentTask.abandoned || currentTask.abort) {
@@ -961,7 +1030,7 @@ export class ClineProvider
 
 	public async createTaskWithHistoryItem(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
-		options?: { startTask?: boolean },
+		options?: { startTask?: boolean; keepCurrentTask?: boolean },
 	) {
 		const isCliRuntime = process.env.ROO_CLI_RUNTIME === "1"
 		// CLI injects runtime provider settings from command flags/env at startup.
@@ -974,7 +1043,13 @@ export class ClineProvider
 		const isRehydratingCurrentTask = currentTask && currentTask.taskId === historyItem.id
 
 		if (!isRehydratingCurrentTask) {
-			await this.removeClineFromStack()
+			// If keepCurrentTask is true (parallel task switching), pop without aborting
+			// Otherwise, use removeClineFromStack which aborts the current task
+			if (options?.keepCurrentTask) {
+				this.popFromStackWithoutAborting()
+			} else {
+				await this.removeClineFromStack()
+			}
 		}
 
 		// If the history item has a saved mode, restore it and its associated API configuration.
@@ -1833,11 +1908,11 @@ export class ClineProvider
 		return { historyItem, aggregatedCosts }
 	}
 
-	async showTaskWithId(id: string) {
+	async showTaskWithId(id: string, options?: { keepCurrentTask?: boolean }) {
 		if (id !== this.getCurrentTask()?.taskId) {
 			// Non-current task.
 			const { historyItem } = await this.getTaskWithId(id)
-			await this.createTaskWithHistoryItem(historyItem) // Clears existing task.
+			await this.createTaskWithHistoryItem(historyItem, { keepCurrentTask: options?.keepCurrentTask }) // Clears existing task unless keepCurrentTask is true.
 		}
 
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -2937,8 +3012,9 @@ export class ClineProvider
 		const { apiConfiguration, organizationAllowList, enableCheckpoints, checkpointTimeout, experiments } =
 			await this.getState()
 
-		// Single-open-task invariant: always enforce for user-initiated top-level tasks
-		if (!parentTask) {
+		// Single-open-task invariant: enforce for user-initiated top-level tasks
+		// unless keepCurrentTask is specified (for parallel task creation)
+		if (!parentTask && !options.keepCurrentTask) {
 			try {
 				await this.removeClineFromStack()
 			} catch {
@@ -3624,5 +3700,247 @@ export class ClineProvider
 			// Return file URI as fallback
 			return vscode.Uri.file(filePath).toString()
 		}
+	}
+
+	// ────────────────────────────── Parallel Task Management ──────────────────────────────
+
+	/**
+	 * Create a new managed task with the given name.
+	 * The new task is pushed to the stack and focused; any existing task is removed from the
+	 * stack WITHOUT aborting it, so it continues processing in the background.
+	 *
+	 * @param name Optional task name (auto-generated from text if not provided)
+	 * @param text Initial task text
+	 * @param images Optional images
+	 */
+	public async createManagedTask(name?: string, text?: string, images?: string[]): Promise<void> {
+		try {
+			// Auto-generate task name from first message if provided, otherwise use timestamp
+			const taskName = name || (text ? this.generateTaskNameFromText(text) : `Task ${Date.now()}`)
+
+			// Pop the current task from the stack WITHOUT aborting it — it continues in background
+			this.popFromStackWithoutAborting()
+
+			// Create a new task with keepCurrentTask=true so createTask won't abort any remaining tasks
+			const task = await this.createTask(text, images, undefined, { keepCurrentTask: true }, {})
+
+			if (!task) {
+				throw new Error("Failed to create task")
+			}
+
+			// Register the task with the TaskManager
+			const managedTask = await this.taskManager.createManagedTask(taskName, task)
+
+			// Create initial history item for the task
+			// The task may not have history yet if no text was provided
+			const historyItem: HistoryItem = {
+				id: task.taskId,
+				number: this.taskHistoryStore.getAll().length + 1,
+				ts: Date.now(),
+				task: text || "",
+				tokensIn: 0,
+				tokensOut: 0,
+				totalCost: 0,
+				workspace: task.cwd || "",
+				name: managedTask.name,
+
+				lastActiveTs: managedTask.lastActiveAt,
+				taskExecutionState: managedTask.state,
+			}
+
+			await this.updateTaskHistory(historyItem)
+
+			this.log(`Created managed task: ${managedTask.id} (${managedTask.name})`)
+		} catch (error) {
+			this.log(`Failed to create managed task: ${error}`)
+			vscode.window.showErrorMessage(
+				`Failed to create managed task: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	/**
+	 * Focus on a managed task (switch UI to it without stopping background processing).
+	 * The currently focused task is removed from the UI stack but continues running in background.
+	 */
+	public async focusTask(taskId: string): Promise<void> {
+		try {
+			await this.taskManager.focusTask(taskId)
+
+			// Switch the UI to show this task
+			const task = this.taskManager.getManagedTaskInstance(taskId)
+
+			// Check if the task instance is actually alive (not abandoned/aborted)
+			const isTaskAlive = task && !task.abandoned && !task.abort
+
+			if (isTaskAlive) {
+				// Task has a live instance — swap it into the stack without stopping it
+				const stackIndex = this.clineStack.length - 1
+				if (stackIndex >= 0) {
+					const oldTask = this.clineStack[stackIndex]
+					if (oldTask.taskId !== taskId) {
+						// Emit unfocused event for old task (it continues running in background)
+						oldTask.emit(RooCodeEventName.TaskUnfocused)
+						// Replace in stack
+						this.clineStack[stackIndex] = task
+						task.emit(RooCodeEventName.TaskFocused)
+						// Post state update
+						await this.postStateToWebview()
+					}
+				} else {
+					// Stack is empty — just push the task
+					await this.addClineToStack(task)
+					await this.postStateToWebview()
+				}
+			} else {
+				// No live instance or instance is dead/aborted — remove stale entry from activeTasks
+				// and load the task from history (without killing the currently running task)
+				if (task) {
+					// Clean up the dead instance from activeTasks
+					this.taskManager.removeManagedTaskInstance(taskId)
+					this.log(`[focusTask] Removed stale task instance ${taskId} from activeTasks`)
+				}
+				await this.showTaskWithId(taskId, { keepCurrentTask: true })
+			}
+		} catch (error) {
+			this.log(`Failed to focus task: ${error}`)
+		}
+	}
+
+	/**
+	 * Start/resume a managed task.
+	 */
+	public async startManagedTask(taskId: string): Promise<void> {
+		try {
+			await this.taskManager.startManagedTask(taskId)
+		} catch (error) {
+			this.log(`Failed to start managed task: ${error}`)
+			vscode.window.showErrorMessage(
+				`Failed to start managed task: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	/**
+	 * Pause a managed task.
+	 */
+	public async pauseManagedTask(taskId: string): Promise<void> {
+		try {
+			await this.taskManager.pauseManagedTask(taskId)
+		} catch (error) {
+			this.log(`Failed to pause managed task: ${error}`)
+		}
+	}
+
+	/**
+	 * Stop a managed task.
+	 */
+	public async stopManagedTask(taskId: string): Promise<void> {
+		try {
+			await this.taskManager.stopManagedTask(taskId)
+		} catch (error) {
+			this.log(`Failed to stop managed task: ${error}`)
+		}
+	}
+
+	/**
+	 * Rename a managed task.
+	 */
+	public renameManagedTask(taskId: string, name: string): void {
+		this.taskManager.renameManagedTask(taskId, name)
+
+		// Persist the rename
+		this.getTaskWithId(taskId)
+			.then(({ historyItem }) => {
+				this.updateTaskHistory({ ...historyItem, name })
+			})
+			.catch((error) => {
+				this.log(`Failed to persist task rename: ${error}`)
+			})
+	}
+
+	/**
+	 * Delete a managed task.
+	 */
+	public async deleteManagedTask(taskId: string): Promise<void> {
+		try {
+			await this.taskManager.deleteManagedTask(taskId)
+			// Also delete from task history (files + index), same as clicking delete in HistoryView.
+			await this.deleteTaskWithId(taskId)
+		} catch (error) {
+			this.log(`Failed to delete managed task: ${error}`)
+		}
+	}
+
+	/**
+	 * Get all managed tasks.
+	 */
+	public getManagedTasks() {
+		return this.taskManager.getManagedTasks()
+	}
+
+	/**
+	 * Get the currently focused managed task.
+	 */
+	public getFocusedTask() {
+		return this.taskManager.getFocusedTask()
+	}
+
+	/**
+	 * Get task notifications.
+	 */
+	public getTaskNotifications() {
+		return this.taskManager.getNotifications()
+	}
+
+	/**
+	 * Clear a task notification.
+	 */
+	public clearTaskNotification(taskId: string): void {
+		this.taskManager.clearTaskNotification(taskId)
+		this.postMessageToWebview({
+			type: "taskNotificationCleared",
+			parallelTasks: this.taskManager.getManagedTasks().map((s) => ({
+				id: s.id,
+				name: s.name,
+				taskId: s.taskId,
+				workspace: s.workspace,
+				createdAt: s.createdAt,
+				lastActiveAt: s.lastActiveAt,
+				state: s.state,
+			})),
+		})
+	}
+
+	/**
+	 * Generate a task name from the first message text.
+	 * Extracts the first meaningful sentence/phrase (up to 50 chars).
+	 */
+	private generateTaskNameFromText(text: string): string {
+		// Remove markdown formatting
+		let cleaned = text
+			.replace(/^#+\s*/gm, "") // Remove headers
+			.replace(/\*\*?|__?/g, "") // Remove bold/italic
+			.replace(/`{1,3}[^`]*`{1,3}/g, "") // Remove inline/block code
+			.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Extract link text
+			.replace(/^\s*[-*+]\s*/gm, "") // Remove list markers
+			.replace(/\n+/g, " ") // Replace newlines with spaces
+			.trim()
+
+		// Get first sentence or phrase
+		const firstSentence = cleaned.split(/[.!?]\s/)[0] || cleaned
+
+		// Truncate to reasonable length
+		if (firstSentence.length <= 50) {
+			return firstSentence || "New Task"
+		}
+
+		// Find a good break point (word boundary)
+		const truncated = firstSentence.substring(0, 50)
+		const lastSpace = truncated.lastIndexOf(" ")
+		if (lastSpace > 30) {
+			return truncated.substring(0, lastSpace) + "..."
+		}
+		return truncated + "..."
 	}
 }
