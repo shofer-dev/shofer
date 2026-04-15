@@ -854,6 +854,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return [instance, promise]
 	}
 
+	/** Route diagnostic logs through the provider's OutputChannel so they appear in the OUTPUT panel. */
+	private diagLog(message: string) {
+		const provider = this.providerRef.deref()
+		if (provider) {
+			provider.log(message)
+		} else {
+			console.log(message)
+		}
+	}
+
 	// API Messages
 
 	private async getSavedApiConversationHistory(): Promise<ApiMessage[]> {
@@ -1430,6 +1440,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const message = this.messageQueueService.dequeueMessage()
 
 			if (message) {
+				this.diagLog(
+					`[DIAG ask] draining queued message for ask type=${type}: text=${message.text?.substring(0, 100)}`,
+				)
 				// Check if this is a tool approval ask that needs to be handled.
 				if (type === "tool" || type === "command" || type === "use_mcp_server") {
 					// For tool approvals, we need to approve first, then send
@@ -1456,6 +1469,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				if (shouldDrainQueuedMessageForAsk && !this.messageQueueService.isEmpty()) {
 					const message = this.messageQueueService.dequeueMessage()
 					if (message) {
+						this.diagLog(
+							`[DIAG ask/pWaitFor] draining queued message during wait for ask type=${type}: text=${message.text?.substring(0, 100)}`,
+						)
 						// If this is a tool approval ask, we need to approve first (yesButtonClicked)
 						// and include any queued text/images.
 						if (type === "tool" || type === "command" || type === "use_mcp_server") {
@@ -1499,6 +1515,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
+		this.diagLog(
+			`[DIAG handleWebviewAskResponse] taskId=${this.taskId}.${this.instanceId}, askResponse=${askResponse}, text=${text?.substring(0, 100)}, abort=${this.abort}, abandoned=${this.abandoned}`,
+		)
 		// Clear any pending auto-approval timeout when user responds
 		this.cancelAutoApprovalTimeout()
 
@@ -2065,12 +2084,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			this.isInitialized = true
 
+			this.diagLog(
+				`[DIAG resumeTaskFromHistory] about to ask(${askType}), taskId=${this.taskId}.${this.instanceId}, queueSize=${this.messageQueueService.messages.length}`,
+			)
 			const { response, text, images } = await this.ask(askType) // Calls `postStateToWebview`.
+			this.diagLog(
+				`[DIAG resumeTaskFromHistory] ask returned: response=${response}, text=${text?.substring(0, 100)}, hasImages=${!!(images && images.length > 0)}`,
+			)
 
 			let responseText: string | undefined
 			let responseImages: string[] | undefined
 
-			if (response === "messageResponse") {
+			// Handle user feedback for both messageResponse and yesButtonClicked with text.
+			// When user types a message and clicks "Resume", the response is yesButtonClicked
+			// but the text should still be captured as user feedback.
+			if (
+				response === "messageResponse" ||
+				(response === "yesButtonClicked" && (text || (images && images.length > 0)))
+			) {
 				await this.say("user_feedback", text, images)
 				responseText = text
 				responseImages = images
@@ -2175,52 +2206,77 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				throw new Error("Unexpected: No existing API conversation history")
 			}
 
-			let newUserContent: Anthropic.Messages.ContentBlockParam[] = [...modifiedOldUserContent]
-
-			const agoText = ((): string => {
-				const timestamp = lastClineMessage?.ts ?? Date.now()
-				const now = Date.now()
-				const diff = now - timestamp
-				const minutes = Math.floor(diff / 60000)
-				const hours = Math.floor(minutes / 60)
-				const days = Math.floor(hours / 24)
-
-				if (days > 0) {
-					return `${days} day${days > 1 ? "s" : ""} ago`
-				}
-				if (hours > 0) {
-					return `${hours} hour${hours > 1 ? "s" : ""} ago`
-				}
-				if (minutes > 0) {
-					return `${minutes} minute${minutes > 1 ? "s" : ""} ago`
-				}
-				return "just now"
-			})()
-
 			if (responseText) {
-				newUserContent.push({
-					type: "text",
-					text: `<user_message>\n${responseText}\n</user_message>`,
-				})
+				// When the user provides a new message after stopping, send the
+				// interrupted tool_results and the user's new text as SEPARATE
+				// role=user messages. This ensures the model sees the user's
+				// redirect as a distinct instruction rather than a footnote
+				// buried in the same message as tool_result blocks.
+
+				// 1. Close out the interrupted tool calls in the API history
+				if (modifiedOldUserContent.length > 0) {
+					modifiedApiConversationHistory.push({
+						role: "user",
+						content: modifiedOldUserContent,
+					})
+					// The API requires alternating user/assistant messages,
+					// so insert a brief assistant acknowledgment.
+					modifiedApiConversationHistory.push({
+						role: "assistant",
+						content: [
+							{
+								type: "text",
+								text: "[The user interrupted the previous action. Awaiting new instructions.]",
+							},
+						],
+					})
+				}
+
+				// 2. The user's actual text will be sent as its own role=user
+				//    message by initiateTaskLoop → recursivelyMakeClineRequests.
+				let userContent: Anthropic.Messages.ContentBlockParam[] = [
+					{
+						type: "text",
+						text: `<user_message>\n${responseText}\n</user_message>`,
+					},
+				]
+
+				if (responseImages && responseImages.length > 0) {
+					userContent.push(...formatResponse.imageBlocks(responseImages))
+				}
+
+				this.diagLog(
+					`[DIAG resumeTaskFromHistory] split messages: toolResults=${modifiedOldUserContent.length} blocks in history, userContent=${userContent.length} blocks for initiateTaskLoop`,
+				)
+
+				await this.overwriteApiConversationHistory(modifiedApiConversationHistory)
+				await this.initiateTaskLoop(userContent)
+			} else {
+				// No user redirect — just resume with tool_results + environment
+				let newUserContent: Anthropic.Messages.ContentBlockParam[] = [...modifiedOldUserContent]
+
+				if (responseImages && responseImages.length > 0) {
+					newUserContent.push(...formatResponse.imageBlocks(responseImages))
+				}
+
+				// Ensure we have at least some content to send to the API.
+				if (newUserContent.length === 0) {
+					newUserContent.push({
+						type: "text",
+						text: "[TASK RESUMPTION] Resuming task...",
+					})
+				}
+
+				this.diagLog(
+					`[DIAG resumeTaskFromHistory] newUserContent blocks=${newUserContent.length}, types=${newUserContent.map((b) => b.type).join(",")}, texts=${newUserContent
+						.filter((b) => b.type === "text")
+						.map((b) => (b as any).text?.substring(0, 80))
+						.join(" | ")}`,
+				)
+
+				await this.overwriteApiConversationHistory(modifiedApiConversationHistory)
+				await this.initiateTaskLoop(newUserContent)
 			}
-
-			if (responseImages && responseImages.length > 0) {
-				newUserContent.push(...formatResponse.imageBlocks(responseImages))
-			}
-
-			// Ensure we have at least some content to send to the API.
-			// If newUserContent is empty, add a minimal resumption message.
-			if (newUserContent.length === 0) {
-				newUserContent.push({
-					type: "text",
-					text: "[TASK RESUMPTION] Resuming task...",
-				})
-			}
-
-			await this.overwriteApiConversationHistory(modifiedApiConversationHistory)
-
-			// Task resuming from history item.
-			await this.initiateTaskLoop(newUserContent)
 		} catch (error) {
 			// Resume and cancellation can race when users issue repeated cancels.
 			// Treat intentional abort/abandon flows as expected and avoid process-level crashes.
@@ -2470,6 +2526,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Task Loop
 
 	private async initiateTaskLoop(userContent: Anthropic.Messages.ContentBlockParam[]): Promise<void> {
+		this.diagLog(
+			`[DIAG initiateTaskLoop] taskId=${this.taskId}.${this.instanceId}, userContent blocks=${userContent.length}, texts=${userContent
+				.filter((b) => b.type === "text")
+				.map((b) => (b as any).text?.substring(0, 80))
+				.join(" | ")}`,
+		)
 		// Kicks off the checkpoints initialization process in the background.
 		getCheckpointService(this)
 
@@ -2655,7 +2717,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const isEmptyUserContent = currentUserContent.length === 0
 			const shouldAddUserMessage =
 				((currentItem.retryAttempt ?? 0) === 0 && !isEmptyUserContent) || currentItem.userMessageWasRemoved
+			this.diagLog(
+				`[DIAG recursivelyMakeClineRequests] shouldAddUserMessage=${shouldAddUserMessage}, retryAttempt=${currentItem.retryAttempt}, isEmptyUserContent=${isEmptyUserContent}, userMessageWasRemoved=${currentItem.userMessageWasRemoved}, totalApiHistory=${this.apiConversationHistory.length}, finalUserContentBlocks=${finalUserContent.length}`,
+			)
 			if (shouldAddUserMessage) {
+				this.diagLog(
+					`[DIAG recursivelyMakeClineRequests] ADDING user message to API history, texts=${finalUserContent
+						.filter((b: any) => b.type === "text")
+						.map((b: any) => b.text?.substring(0, 80))
+						.join(" | ")}`,
+				)
 				await this.addToApiConversationHistory({ role: "user", content: finalUserContent })
 				TelemetryService.instance.captureConversationMessage(this.taskId, "user")
 			}
