@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.52.1",
+	"version": "3.52.2",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -13,6 +13,9 @@
 		"vscode": "^1.84.0",
 		"node": "20.19.2"
 	},
+	"enabledApiProposals": [
+		"languageModelThinkingPart"
+	],
 	"author": {
 		"name": "Roo Code"
 	},

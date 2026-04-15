@@ -410,7 +410,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				this.currentRequestCancellation.token,
 			)
 
-			// Consume the stream and handle both text and tool call chunks
+			// Consume the stream and handle text, thinking, and tool call chunks
 			for await (const chunk of response.stream) {
 				if (chunk instanceof vscode.LanguageModelTextPart) {
 					// Validate text part value
@@ -423,6 +423,14 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 					yield {
 						type: "text",
 						text: chunk.value,
+					}
+				} else if (chunk instanceof vscode.LanguageModelThinkingPart) {
+					// Handle thinking/reasoning content from models like mimo-v2-pro
+					if (typeof chunk.value === "string" && chunk.value.trim()) {
+						yield {
+							type: "reasoning",
+							text: chunk.value,
+						}
 					}
 				} else if (chunk instanceof vscode.LanguageModelToolCallPart) {
 					try {
