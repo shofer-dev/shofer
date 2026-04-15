@@ -93,6 +93,10 @@ export interface ExtensionMessage {
 		| "modes"
 		| "taskWithAggregatedCosts"
 		| "openAiCodexRateLimits"
+		// Parallel task response types
+		| "parallelTasksUpdated"
+		| "taskNotification"
+		| "taskNotificationCleared"
 		// Worktree response types
 		| "worktreeList"
 		| "worktreeResult"
@@ -186,6 +190,23 @@ export interface ExtensionMessage {
 		totalCost: number
 		ownCost: number
 		childrenCost: number
+	}
+	// Parallel task response properties
+	parallelTasks?: Array<{
+		id: string
+		name: string
+		taskId: string
+		workspace: string
+		createdAt: number
+		lastActiveAt: number
+		state: string
+	}>
+	focusedTaskId?: string | null
+	notification?: {
+		taskId: string
+		type: string
+		message: string
+		timestamp: number
 	}
 	historyItem?: HistoryItem
 	taskHistory?: HistoryItem[] // For taskHistoryUpdated: full sorted task history
@@ -345,6 +366,24 @@ export type ExtensionState = Pick<
 	machineId?: string
 
 	renderContext: "sidebar" | "editor"
+
+	// Parallel task management
+	parallelTasks?: Array<{
+		id: string
+		name: string
+		taskId: string
+		workspace: string
+		createdAt: number
+		lastActiveAt: number
+		state: string
+	}>
+	focusedTaskId?: string | null
+	taskNotifications?: Array<{
+		taskId: string
+		type: string
+		message: string
+		timestamp: number
+	}>
 	settingsImportedAt?: number
 	historyPreviewCollapsed?: boolean
 
@@ -581,6 +620,17 @@ export interface WebviewMessage {
 		| "moveSkill"
 		| "updateSkillModes"
 		| "openSkillFile"
+		// Parallel task messages
+		| "createParallelTask"
+		| "focusParallelTask"
+		| "startParallelTask"
+		| "pauseParallelTask"
+		| "stopParallelTask"
+		| "renameParallelTask"
+		| "deleteParallelTask"
+		| "clearTaskNotification"
+		| "approveBackgroundTask"
+		| "requestParallelTasks"
 	text?: string
 	taskId?: string
 	editedMessageContent?: string
@@ -682,6 +732,8 @@ export interface WebviewMessage {
 	updatedSettings?: RooCodeSettings
 	/** Task configuration applied via `createTask()` when starting a cloud task. */
 	taskConfiguration?: RooCodeSettings
+	// Parallel task properties
+	taskName?: string
 	// Worktree properties
 	worktreePath?: string
 	worktreeBranch?: string

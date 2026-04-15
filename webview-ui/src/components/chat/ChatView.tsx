@@ -50,6 +50,7 @@ import DismissibleUpsell from "../common/DismissibleUpsell"
 import { useCloudUpsell } from "@src/hooks/useCloudUpsell"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { Cloud } from "lucide-react"
+import { TaskNotificationContainer } from "../tasks/TaskNotification"
 
 export interface ChatViewProps {
 	isHidden: boolean
@@ -93,6 +94,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		cloudIsAuthenticated,
 		messageQueue = [],
 		showWorktreesInHomeScreen,
+		parallelTasks,
+		taskNotifications,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -1771,6 +1774,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 			<div id="roo-portal" />
 			<CloudUpsellDialog open={isUpsellOpen} onOpenChange={closeUpsell} onConnect={handleConnect} />
+			{/* Task notifications for background tasks */}
+			<TaskNotificationContainer
+				notifications={taskNotifications || []}
+				managedTasks={(parallelTasks || []).map((s) => ({ id: s.id, name: s.name }))}
+				onDismiss={(taskId) => vscode.postMessage({ type: "clearTaskNotification", taskId })}
+				onFocus={(taskId) => vscode.postMessage({ type: "focusParallelTask", taskId })}
+			/>
 		</div>
 	)
 }

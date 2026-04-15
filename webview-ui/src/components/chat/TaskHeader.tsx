@@ -25,6 +25,7 @@ import { ContextWindowProgress } from "./ContextWindowProgress"
 import { Mention } from "./Mention"
 import { TodoListDisplay } from "./TodoListDisplay"
 import { LucideIconButton } from "./LucideIconButton"
+import { TaskSelector } from "./TaskSelector"
 
 export interface TaskHeaderProps {
 	task: ClineMessage
@@ -60,13 +61,17 @@ const TaskHeader = ({
 	todos,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
-	const { apiConfiguration, currentTaskItem, clineMessages } = useExtensionState()
+	const { apiConfiguration, currentTaskItem, clineMessages, taskHistory, parallelTasks, taskNotifications } =
+		useExtensionState()
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 	const [showLongRunningTaskMessage, setShowLongRunningTaskMessage] = useState(false)
 	const { isOpen, openUpsell, closeUpsell, handleConnect } = useCloudUpsell({
 		autoOpenOnAuth: false,
 	})
+
+	// Task notification count for badge
+	const notificationCount = taskNotifications?.length || 0
 
 	// Check if the task is complete by looking at the last relevant message (skipping resume messages)
 	const isTaskComplete =
@@ -132,8 +137,15 @@ const TaskHeader = ({
 
 	return (
 		<div className="group pt-2 pb-0 px-3">
-			{isSubtask && (
-				<div className="mb-2" onClick={(e) => e.stopPropagation()}>
+			{/* Task Selector - always visible */}
+			<div className="mb-2 flex items-center justify-between">
+				<TaskSelector
+					taskHistory={taskHistory || []}
+					parallelTasks={parallelTasks || []}
+					currentTaskId={currentTaskItem?.id}
+					notificationCount={notificationCount}
+				/>
+				{isSubtask && (
 					<Button
 						variant="ghost"
 						size="sm"
@@ -142,8 +154,8 @@ const TaskHeader = ({
 						<ArrowLeft className="size-3" />
 						{t("chat:task.backToParentTask")}
 					</Button>
-				</div>
-			)}
+				)}
+			</div>
 			{showLongRunningTaskMessage && !isTaskComplete && (
 				<DismissibleUpsell
 					upsellId="longRunningTask"
