@@ -20,7 +20,7 @@
 		"useDefineForClassFields": true,
 		"useUnknownInCatchVariables": false
 	},
-	"include": ["."],
+	"include": [".", "../../../code-server/lib/vscode/src/vscode-dts/vscode.proposed.languageModelThinkingPart.d.ts"],
 	"exclude": ["node_modules"],
 	"watchOptions": {
 		"watchFile": "useFsEvents",
