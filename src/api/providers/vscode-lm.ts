@@ -382,10 +382,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		}))
 
 		// Convert Anthropic messages to VS Code LM messages
-		const vsCodeLmMessages: vscode.LanguageModelChatMessage[] = [
-			vscode.LanguageModelChatMessage.Assistant(systemPrompt),
-			...convertToVsCodeLmMessages(cleanedMessages),
-		]
+		// Note: systemPrompt is passed via modelOptions since VS Code LM API lacks System role
+		const vsCodeLmMessages: vscode.LanguageModelChatMessage[] = convertToVsCodeLmMessages(cleanedMessages)
 
 		// Initialize cancellation token for the request
 		this.currentRequestCancellation = new vscode.CancellationTokenSource()
@@ -398,10 +396,12 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		try {
 			// Create the response stream with required options
+			// systemPrompt is passed in modelOptions for llm-provider to extract and forward
+			// as a proper System role message to llm-router
 			const requestOptions: vscode.LanguageModelChatRequestOptions = {
 				justification: `Roo Code would like to use '${client.name}' from '${client.vendor}', Click 'Allow' to proceed.`,
 				tools: convertToVsCodeLmTools(metadata?.tools ?? []),
-				modelOptions: { conversationId: this.conversationId },
+				modelOptions: { conversationId: this.conversationId, systemPrompt },
 			}
 
 			const response: vscode.LanguageModelChatResponse = await client.sendRequest(
