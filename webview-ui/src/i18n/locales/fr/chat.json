@@ -122,8 +122,8 @@
 	"typeMessage": "Écrivez un message...",
 	"typeTask": "Écrivez votre tâche ici...",
 	"addContext": "@ pour ajouter du contexte, / pour les commandes",
-	"dragFiles": "maintenir Maj pour glisser des fichiers",
-	"dragFilesImages": "maintenir Maj pour glisser des fichiers/images",
+	"dragFiles": "glisser des fichiers pour ajouter au contexte",
+	"dragFilesImages": "glisser des fichiers/images pour ajouter au contexte",
 	"enhancePromptDescription": "Le bouton 'Améliorer la requête' aide à améliorer votre demande en fournissant un contexte supplémentaire, des clarifications ou des reformulations. Essayez de taper une demande ici et cliquez à nouveau sur le bouton pour voir comment cela fonctionne.",
 	"modeSelector": {
 		"title": "Modes",

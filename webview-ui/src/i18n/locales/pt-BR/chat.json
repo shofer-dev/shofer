@@ -122,8 +122,8 @@
 	"typeMessage": "Digite uma mensagem...",
 	"typeTask": "Digite sua tarefa aqui...",
 	"addContext": "@ para adicionar contexto, / para comandos",
-	"dragFiles": "segure shift para arrastar arquivos",
-	"dragFilesImages": "segure shift para arrastar arquivos/imagens",
+	"dragFiles": "arraste arquivos para adicionar ao contexto",
+	"dragFilesImages": "arraste arquivos/imagens para adicionar ao contexto",
 	"enhancePromptDescription": "O botão 'Aprimorar prompt' ajuda a melhorar seu pedido fornecendo contexto adicional, esclarecimentos ou reformulações. Tente digitar um pedido aqui e clique no botão novamente para ver como funciona.",
 	"modeSelector": {
 		"title": "Modos",
