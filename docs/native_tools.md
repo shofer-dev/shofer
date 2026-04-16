@@ -24,19 +24,26 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | 🔒     | Feature-gated (requires experiment flag or external service) |
 | 🔧     | Legacy/custom tool (alias-based, model-dependent)            |
 
+### Origin
+
+| Tag   | Meaning                                                 |
+| ----- | ------------------------------------------------------- |
+| 🆕 WS | Ported from `workspace-tools` extension in this session |
+| 🔵 RC | Pre-existing RooCode tool                               |
+
 ---
 
 ## File Operations
 
-| Tool                   | Group | Always Available | Status | Description                                    |
-| ---------------------- | ----- | :--------------: | :----: | ---------------------------------------------- |
-| `read_file`            | read  |        –         |   ✅   | Read file contents with line range             |
-| `write_to_file`        | edit  |        –         |   ✅   | Create or overwrite a file                     |
-| `apply_diff`           | edit  |        –         |   ✅   | Apply precise targeted modifications           |
-| `create_directory`     | edit  |        –         |   ✅   | Create directory (mkdir -p)                    |
-| `insert_edit`          | edit  |        –         |   ✅   | Insert text at a specific line:column position |
-| `list_files`           | read  |        –         |   ✅   | List files and directories at a path           |
-| `create_new_workspace` | modes |        ✅        |   ✅   | Create new workspace directory structure       |
+| Tool                   | Origin | Group | Always Available | Status | Description                                    |
+| ---------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
+| `read_file`            | 🔵 RC  | read  |        –         |   ✅   | Read file contents with line range             |
+| `write_to_file`        | 🔵 RC  | edit  |        –         |   ✅   | Create or overwrite a file                     |
+| `apply_diff`           | 🔵 RC  | edit  |        –         |   ✅   | Apply precise targeted modifications           |
+| `create_directory`     | 🆕 WS  | edit  |        –         |   ✅   | Create directory (mkdir -p)                    |
+| `insert_edit`          | 🆕 WS  | edit  |        –         |   ✅   | Insert text at a specific line:column position |
+| `list_files`           | 🔵 RC  | read  |        –         |   ✅   | List files and directories at a path           |
+| `create_new_workspace` | 🆕 WS  | modes |        ✅        |   ✅   | Create new workspace directory structure       |
 
 ### `read_file`
 
@@ -100,13 +107,13 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 ## Search & Discovery
 
-| Tool                 | Group | Always Available | Status | Description                                       |
-| -------------------- | ----- | :--------------: | :----: | ------------------------------------------------- |
-| `search_files`       | read  |        –         |   ✅   | Regex search across files                         |
-| `find_files`         | read  |        –         |   ✅   | Find files by glob pattern                        |
-| `get_search_results` | read  |        –         |   ✅   | Text search with VS Code Search panel integration |
-| `list_code_usages`   | read  |        –         |   ✅   | Find all symbol references (LSP)                  |
-| `codebase_search`    | read  |        –         |   🔒   | Semantic code search (requires code index)        |
+| Tool                 | Origin | Group | Always Available | Status | Description                                       |
+| -------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------- |
+| `search_files`       | 🔵 RC  | read  |        –         |   ✅   | Regex search across files                         |
+| `find_files`         | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                        |
+| `get_search_results` | 🆕 WS  | read  |        –         |   ✅   | Text search with VS Code Search panel integration |
+| `list_code_usages`   | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                  |
+| `codebase_search`    | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)        |
 
 ### `search_files`
 
@@ -161,13 +168,13 @@ Finds all references of a symbol using VS Code's LSP reference provider.
 
 ## Code Analysis & Refactoring
 
-| Tool                     | Group | Always Available | Status | Description                                        |
-| ------------------------ | ----- | :--------------: | :----: | -------------------------------------------------- |
-| `get_errors`             | read  |        –         |   ✅   | Get compile/lint diagnostics                       |
-| `get_project_setup_info` | read  |        –         |   ✅   | Detect project languages, frameworks, build system |
-| `read_project_structure` | read  |        –         |   ✅   | ASCII tree of workspace structure                  |
-| `rename_symbol`          | edit  |        –         |   ✅   | Rename symbol across codebase (LSP)                |
-| `view_image`             | read  |        –         |   ✅   | View image file for visual analysis                |
+| Tool                     | Origin | Group | Always Available | Status | Description                                        |
+| ------------------------ | :----: | ----- | :--------------: | :----: | -------------------------------------------------- |
+| `get_errors`             | 🆕 WS  | read  |        –         |   ✅   | Get compile/lint diagnostics                       |
+| `get_project_setup_info` | 🆕 WS  | read  |        –         |   ✅   | Detect project languages, frameworks, build system |
+| `read_project_structure` | 🆕 WS  | read  |        –         |   ✅   | ASCII tree of workspace structure                  |
+| `rename_symbol`          | 🆕 WS  | edit  |        –         |   ✅   | Rename symbol across codebase (LSP)                |
+| `view_image`             | 🆕 WS  | read  |        –         |   ✅   | View image file for visual analysis                |
 
 ### `get_errors`
 
@@ -217,11 +224,11 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 
 ## Execution & System
 
-| Tool                  | Group   | Always Available | Status | Description                            |
-| --------------------- | ------- | :--------------: | :----: | -------------------------------------- |
-| `execute_command`     | command |        –         |   ✅   | Execute a CLI command                  |
-| `read_command_output` | command |        –         |   ✅   | Get full output of a truncated command |
-| `fetch_web_page`      | modes   |        ✅        |   ✅   | Fetch and extract web page content     |
+| Tool                  | Origin | Group   | Always Available | Status | Description                            |
+| --------------------- | :----: | ------- | :--------------: | :----: | -------------------------------------- |
+| `execute_command`     | 🔵 RC  | command |        –         |   ✅   | Execute a CLI command                  |
+| `read_command_output` | 🔵 RC  | command |        –         |   ✅   | Get full output of a truncated command |
+| `fetch_web_page`      | 🆕 WS  | modes   |        ✅        |   ✅   | Fetch and extract web page content     |
 
 ### `execute_command`
 
@@ -253,46 +260,46 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 
 ## Task & Workflow Management
 
-| Tool                    | Group | Always Available | Status | Description                |
-| ----------------------- | ----- | :--------------: | :----: | -------------------------- |
-| `ask_followup_question` | –     |        ✅        |   ✅   | Ask the user a question    |
-| `attempt_completion`    | –     |        ✅        |   ✅   | Signal task completion     |
-| `switch_mode`           | modes |        ✅        |   ✅   | Switch to a different mode |
-| `new_task`              | modes |        ✅        |   ✅   | Spawn a new sub-task       |
-| `update_todo_list`      | –     |        ✅        |   ✅   | Update the TODO list       |
-| `skill`                 | –     |        ✅        |   ✅   | Load and execute a skill   |
+| Tool                    | Origin | Group | Always Available | Status | Description                |
+| ----------------------- | :----: | ----- | :--------------: | :----: | -------------------------- |
+| `ask_followup_question` | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question    |
+| `attempt_completion`    | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion     |
+| `switch_mode`           | 🔵 RC  | modes |        ✅        |   ✅   | Switch to a different mode |
+| `new_task`              | 🔵 RC  | modes |        ✅        |   ✅   | Spawn a new sub-task       |
+| `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list       |
+| `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill   |
 
 ---
 
 ## MCP (Model Context Protocol)
 
-| Tool                  | Group | Always Available | Status | Description                                     |
-| --------------------- | ----- | :--------------: | :----: | ----------------------------------------------- |
-| `use_mcp_tool`        | mcp   |        –         |   ✅   | Call an MCP server tool                         |
-| `access_mcp_resource` | mcp   |        –         |   🔒   | Access an MCP resource (requires MCP resources) |
+| Tool                  | Origin | Group | Always Available | Status | Description                                     |
+| --------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------- |
+| `use_mcp_tool`        | 🔵 RC  | mcp   |        –         |   ✅   | Call an MCP server tool                         |
+| `access_mcp_resource` | 🔵 RC  | mcp   |        –         |   🔒   | Access an MCP resource (requires MCP resources) |
 
 ---
 
 ## Feature-Gated Tools
 
-| Tool                | Group | Always Available | Gate                          | Description         |
-| ------------------- | ----- | :--------------: | ----------------------------- | ------------------- |
-| `generate_image`    | edit  |        –         | `experiments.imageGeneration` | Generate images     |
-| `run_slash_command` | –     |        ✅        | `experiments.runSlashCommand` | Run a slash command |
+| Tool                | Origin | Group | Always Available | Gate                          | Description         |
+| ------------------- | :----: | ----- | :--------------: | ----------------------------- | ------------------- |
+| `generate_image`    | 🔵 RC  | edit  |        –         | `experiments.imageGeneration` | Generate images     |
+| `run_slash_command` | 🔵 RC  | –     |        ✅        | `experiments.runSlashCommand` | Run a slash command |
 
 ---
 
 ## Legacy/Alias Tools
 
-These are alternative edit tool implementations selectable per-model. They map to canonical tools via `TOOL_ALIASES` or `customTools` in the edit group.
+These are alternative edit tool implementations selectable per-model. They map to canonical tools via `TOOL_ALIASES` or `customTools` in the edit group. All are pre-existing RooCode tools (🔵 RC).
 
-| Tool                 | Canonical    | Status | Description                 |
-| -------------------- | ------------ | :----: | --------------------------- |
-| `edit`               | (standalone) |   🔧   | Edit files (model-specific) |
-| `search_replace`     | (standalone) |   🔧   | Single search-and-replace   |
-| `edit_file`          | (standalone) |   🔧   | Edit via search-and-replace |
-| `apply_patch`        | (standalone) |   🔧   | Apply unified diff patch    |
-| `search_and_replace` | → `edit`     |   🔧   | Alias for `edit`            |
+| Tool                 | Origin | Canonical    | Status | Description                 |
+| -------------------- | :----: | ------------ | :----: | --------------------------- |
+| `edit`               | 🔵 RC  | (standalone) |   🔧   | Edit files (model-specific) |
+| `search_replace`     | 🔵 RC  | (standalone) |   🔧   | Single search-and-replace   |
+| `edit_file`          | 🔵 RC  | (standalone) |   🔧   | Edit via search-and-replace |
+| `apply_patch`        | 🔵 RC  | (standalone) |   🔧   | Apply unified diff patch    |
+| `search_and_replace` | 🔵 RC  | → `edit`     |   🔧   | Alias for `edit`            |
 
 ---
 
