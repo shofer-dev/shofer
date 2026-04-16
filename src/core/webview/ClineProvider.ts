@@ -203,18 +203,10 @@ export class ClineProvider
 		})
 
 		// Initialize the TaskManager for parallel task management.
+		// Note: We do NOT restore managedTasks from history. The task list for the dropdown
+		// comes from taskHistory (same as HistoryView). parallelTasks only tracks tasks with
+		// live Task instances (currently running in this session).
 		this.taskManager = new TaskManager(this)
-
-		// Restore managed tasks from persisted history items after TaskHistoryStore is ready.
-		this.taskHistoryStore.initialized.then(async () => {
-			try {
-				const historyItems = this.taskHistoryStore.getAll()
-				await this.taskManager.restoreManagedTasks(historyItems)
-				this.log(`Restored ${this.taskManager.getManagedTasks().length} tasks from history`)
-			} catch (error) {
-				this.log(`Failed to restore managed tasks: ${error}`)
-			}
-		})
 
 		// Set up task event forwarding to webview.
 		this.taskManager.on("tasks:updated", (managedTasks) => {
@@ -3714,12 +3706,19 @@ export class ClineProvider
 	 * @param images Optional images
 	 */
 	public async createManagedTask(name?: string, text?: string, images?: string[]): Promise<void> {
+		// Pop the current task from the stack WITHOUT aborting it — it continues in background
+		// Save reference so we can restore it if task creation fails
+		const poppedTask = this.popFromStackWithoutAborting()
+
 		try {
+			// Register the popped task as a background task (if it's not already registered)
+			// so it shows correct state indicators in the dropdown
+			if (poppedTask) {
+				this.taskManager.registerBackgroundTask(poppedTask)
+			}
+
 			// Auto-generate task name from first message if provided, otherwise use timestamp
 			const taskName = name || (text ? this.generateTaskNameFromText(text) : `Task ${Date.now()}`)
-
-			// Pop the current task from the stack WITHOUT aborting it — it continues in background
-			this.popFromStackWithoutAborting()
 
 			// Create a new task with keepCurrentTask=true so createTask won't abort any remaining tasks
 			const task = await this.createTask(text, images, undefined, { keepCurrentTask: true }, {})
@@ -3752,6 +3751,11 @@ export class ClineProvider
 
 			this.log(`Created managed task: ${managedTask.id} (${managedTask.name})`)
 		} catch (error) {
+			// Restore the old task to the stack if creation failed
+			if (poppedTask) {
+				await this.addClineToStack(poppedTask)
+				this.log(`[createManagedTask] Restored previous task ${poppedTask.taskId} after creation failure`)
+			}
 			this.log(`Failed to create managed task: ${error}`)
 			vscode.window.showErrorMessage(
 				`Failed to create managed task: ${error instanceof Error ? error.message : String(error)}`,
@@ -3760,46 +3764,55 @@ export class ClineProvider
 	}
 
 	/**
-	 * Focus on a managed task (switch UI to it without stopping background processing).
+	 * Focus on a task (switch UI to it without stopping background processing).
+	 * Works for both managed tasks (with live instances) and history-only tasks.
 	 * The currently focused task is removed from the UI stack but continues running in background.
 	 */
 	public async focusTask(taskId: string): Promise<void> {
 		try {
-			await this.taskManager.focusTask(taskId)
+			// Check if we already have this task focused
+			const currentTask = this.getCurrentTask()
+			if (currentTask?.taskId === taskId) {
+				this.log(`[focusTask] Task ${taskId} is already focused`)
+				return
+			}
 
-			// Switch the UI to show this task
-			const task = this.taskManager.getManagedTaskInstance(taskId)
-
-			// Check if the task instance is actually alive (not abandoned/aborted)
-			const isTaskAlive = task && !task.abandoned && !task.abort
+			// Check if we have a live Task instance for this task
+			const liveTask = this.taskManager.getManagedTaskInstance(taskId)
+			const isTaskAlive = liveTask && !liveTask.abandoned && !liveTask.abort
 
 			if (isTaskAlive) {
 				// Task has a live instance — swap it into the stack without stopping it
+				// Update TaskManager focus state
+				try {
+					await this.taskManager.focusTask(taskId)
+				} catch {
+					// Task might not be in managedTasks map, that's OK
+				}
+
 				const stackIndex = this.clineStack.length - 1
 				if (stackIndex >= 0) {
 					const oldTask = this.clineStack[stackIndex]
-					if (oldTask.taskId !== taskId) {
-						// Emit unfocused event for old task (it continues running in background)
-						oldTask.emit(RooCodeEventName.TaskUnfocused)
-						// Replace in stack
-						this.clineStack[stackIndex] = task
-						task.emit(RooCodeEventName.TaskFocused)
-						// Post state update
-						await this.postStateToWebview()
-					}
+					// Emit unfocused event for old task (it continues running in background)
+					oldTask.emit(RooCodeEventName.TaskUnfocused)
+					// Replace in stack
+					this.clineStack[stackIndex] = liveTask
+					liveTask.emit(RooCodeEventName.TaskFocused)
+					// Post state update
+					await this.postStateToWebview()
 				} else {
 					// Stack is empty — just push the task
-					await this.addClineToStack(task)
+					await this.addClineToStack(liveTask)
 					await this.postStateToWebview()
 				}
 			} else {
-				// No live instance or instance is dead/aborted — remove stale entry from activeTasks
-				// and load the task from history (without killing the currently running task)
-				if (task) {
+				// No live instance or instance is dead/aborted — load from history
+				if (liveTask) {
 					// Clean up the dead instance from activeTasks
 					this.taskManager.removeManagedTaskInstance(taskId)
 					this.log(`[focusTask] Removed stale task instance ${taskId} from activeTasks`)
 				}
+				// Load task from history (without killing the currently running task)
 				await this.showTaskWithId(taskId, { keepCurrentTask: true })
 			}
 		} catch (error) {
