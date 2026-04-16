@@ -134,6 +134,7 @@ export type NativeToolArgs = {
 	read_project_structure: { maxDepth?: number | null; includeHidden?: boolean | null }
 	rename_symbol: { filePath: string; line: number; column: number; newName: string }
 	view_image: { filePath: string }
+	codebase_search_with_lsp: { query: string; maxResults?: number | null }
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -321,6 +322,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	read_project_structure: "read project structure",
 	rename_symbol: "rename symbols",
 	view_image: "view images",
+	codebase_search_with_lsp: "search codebase via LSP",
 } as const
 
 // Define available tool groups.
@@ -339,6 +341,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"list_code_usages",
 			"get_errors",
 			"get_project_setup_info",
+			"codebase_search_with_lsp",
 		],
 	},
 	edit: {

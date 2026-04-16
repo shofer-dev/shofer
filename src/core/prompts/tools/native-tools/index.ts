@@ -5,6 +5,7 @@ import applyPatch from "./apply_patch"
 import askFollowupQuestion from "./ask_followup_question"
 import attemptCompletion from "./attempt_completion"
 import codebaseSearch from "./codebase_search"
+import codebaseSearchWithLsp from "./codebase_search_with_lsp"
 import createDirectory from "./create_directory"
 import createNewWorkspace from "./create_new_workspace"
 import editTool from "./edit"
@@ -65,6 +66,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		askFollowupQuestion,
 		attemptCompletion,
 		codebaseSearch,
+		codebaseSearchWithLsp,
 		createDirectory,
 		createNewWorkspace,
 		executeCommand,
