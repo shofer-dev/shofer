@@ -5,13 +5,24 @@ import applyPatch from "./apply_patch"
 import askFollowupQuestion from "./ask_followup_question"
 import attemptCompletion from "./attempt_completion"
 import codebaseSearch from "./codebase_search"
+import createDirectory from "./create_directory"
+import createNewWorkspace from "./create_new_workspace"
 import editTool from "./edit"
 import executeCommand from "./execute_command"
+import fetchWebPage from "./fetch_web_page"
+import findFiles from "./find_files"
 import generateImage from "./generate_image"
+import getErrors from "./get_errors"
+import getProjectSetupInfo from "./get_project_setup_info"
+import getSearchResults from "./get_search_results"
+import insertEdit from "./insert_edit"
+import listCodeUsages from "./list_code_usages"
 import listFiles from "./list_files"
 import newTask from "./new_task"
 import readCommandOutput from "./read_command_output"
 import { createReadFileTool, type ReadFileToolOptions } from "./read_file"
+import readProjectStructure from "./read_project_structure"
+import renameSymbol from "./rename_symbol"
 import runSlashCommand from "./run_slash_command"
 import skill from "./skill"
 import searchReplace from "./search_replace"
@@ -19,6 +30,7 @@ import edit_file from "./edit_file"
 import searchFiles from "./search_files"
 import switchMode from "./switch_mode"
 import updateTodoList from "./update_todo_list"
+import viewImage from "./view_image"
 import writeToFile from "./write_to_file"
 
 export { getMcpServerTools } from "./mcp_server"
@@ -53,12 +65,23 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		askFollowupQuestion,
 		attemptCompletion,
 		codebaseSearch,
+		createDirectory,
+		createNewWorkspace,
 		executeCommand,
+		fetchWebPage,
+		findFiles,
 		generateImage,
+		getErrors,
+		getProjectSetupInfo,
+		getSearchResults,
+		insertEdit,
+		listCodeUsages,
 		listFiles,
 		newTask,
 		readCommandOutput,
 		createReadFileTool(readFileOptions),
+		readProjectStructure,
+		renameSymbol,
 		runSlashCommand,
 		skill,
 		searchReplace,
@@ -67,6 +90,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		searchFiles,
 		switchMode,
 		updateTodoList,
+		viewImage,
 		writeToFile,
 	] satisfies OpenAI.Chat.ChatCompletionTool[]
 }
