@@ -398,10 +398,18 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			// Create the response stream with required options
 			// systemPrompt is passed in modelOptions for llm-provider to extract and forward
 			// as a proper System role message to llm-router
+			const { info: modelInfo } = this.getModel()
+			const maxTokens =
+				this.options.modelMaxTokens ||
+				(modelInfo.maxTokens && modelInfo.maxTokens > 0 ? modelInfo.maxTokens : undefined)
 			const requestOptions: vscode.LanguageModelChatRequestOptions = {
 				justification: `Roo Code would like to use '${client.name}' from '${client.vendor}', Click 'Allow' to proceed.`,
 				tools: convertToVsCodeLmTools(metadata?.tools ?? []),
-				modelOptions: { conversationId: this.conversationId, systemPrompt },
+				modelOptions: {
+					conversationId: this.conversationId,
+					systemPrompt,
+					...(maxTokens && { maxTokens }),
+				},
 			}
 
 			const response: vscode.LanguageModelChatResponse = await client.sendRequest(
