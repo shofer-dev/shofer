@@ -37,6 +37,18 @@ import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
+import { createDirectoryTool } from "../tools/CreateDirectoryTool"
+import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool"
+import { fetchWebPageTool } from "../tools/FetchWebPageTool"
+import { findFilesTool } from "../tools/FindFilesTool"
+import { getErrorsTool } from "../tools/GetErrorsTool"
+import { getProjectSetupInfoTool } from "../tools/GetProjectSetupInfoTool"
+import { getSearchResultsTool } from "../tools/GetSearchResultsTool"
+import { insertEditTool } from "../tools/InsertEditTool"
+import { listCodeUsagesTool } from "../tools/ListCodeUsagesTool"
+import { readProjectStructureTool } from "../tools/ReadProjectStructureTool"
+import { renameSymbolTool } from "../tools/RenameSymbolTool"
+import { viewImageTool } from "../tools/ViewImageTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -844,6 +856,93 @@ export async function presentAssistantMessage(cline: Task) {
 				case "generate_image":
 					await checkpointSaveAndMark(cline)
 					await generateImageTool.handle(cline, block as ToolUse<"generate_image">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "create_directory":
+					await checkpointSaveAndMark(cline)
+					await createDirectoryTool.handle(cline, block as ToolUse<"create_directory">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "create_new_workspace":
+					await createNewWorkspaceTool.handle(cline, block as ToolUse<"create_new_workspace">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "fetch_web_page":
+					await fetchWebPageTool.handle(cline, block as ToolUse<"fetch_web_page">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "find_files":
+					await findFilesTool.handle(cline, block as ToolUse<"find_files">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "get_errors":
+					await getErrorsTool.handle(cline, block as ToolUse<"get_errors">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "get_project_setup_info":
+					await getProjectSetupInfoTool.handle(cline, block as ToolUse<"get_project_setup_info">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "get_search_results":
+					await getSearchResultsTool.handle(cline, block as ToolUse<"get_search_results">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "insert_edit":
+					await checkpointSaveAndMark(cline)
+					await insertEditTool.handle(cline, block as ToolUse<"insert_edit">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "list_code_usages":
+					await listCodeUsagesTool.handle(cline, block as ToolUse<"list_code_usages">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "read_project_structure":
+					await readProjectStructureTool.handle(cline, block as ToolUse<"read_project_structure">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "rename_symbol":
+					await checkpointSaveAndMark(cline)
+					await renameSymbolTool.handle(cline, block as ToolUse<"rename_symbol">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "view_image":
+					await viewImageTool.handle(cline, block as ToolUse<"view_image">, {
 						askApproval,
 						handleError,
 						pushToolResult,

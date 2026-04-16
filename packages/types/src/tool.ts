@@ -46,6 +46,19 @@ export const toolNames = [
 	"skill",
 	"generate_image",
 	"custom_tool",
+	// New native tools (ported from workspace-tools)
+	"create_directory",
+	"create_new_workspace",
+	"fetch_web_page",
+	"find_files",
+	"get_errors",
+	"get_project_setup_info",
+	"get_search_results",
+	"insert_edit",
+	"list_code_usages",
+	"read_project_structure",
+	"rename_symbol",
+	"view_image",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
