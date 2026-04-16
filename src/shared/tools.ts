@@ -116,6 +116,24 @@ export type NativeToolArgs = {
 	update_todo_list: { todos: string }
 	use_mcp_tool: { server_name: string; tool_name: string; arguments?: Record<string, unknown> }
 	write_to_file: { path: string; content: string }
+	// New native tools (ported from workspace-tools)
+	create_directory: { path: string }
+	create_new_workspace: { path: string; name: string; folders?: string[] | null; openInNewWindow?: boolean | null }
+	fetch_web_page: { urls: string[]; query?: string | null }
+	find_files: { pattern: string; maxResults?: number }
+	get_errors: { filePaths?: string[] | null }
+	get_project_setup_info: Record<string, never>
+	get_search_results: {
+		query: string
+		isRegex?: boolean | null
+		includePattern?: string | null
+		maxResults?: number | null
+	}
+	insert_edit: { filePath: string; line: number; column?: number | null; text: string }
+	list_code_usages: { filePath: string; line: number; column: number }
+	read_project_structure: { maxDepth?: number | null; includeHidden?: boolean | null }
+	rename_symbol: { filePath: string; line: number; column: number; newName: string }
+	view_image: { filePath: string }
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -290,15 +308,49 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	skill: "load skill",
 	generate_image: "generate images",
 	custom_tool: "use custom tools",
+	// New native tools (ported from workspace-tools)
+	create_directory: "create directories",
+	create_new_workspace: "create workspaces",
+	fetch_web_page: "fetch web pages",
+	find_files: "find files by pattern",
+	get_errors: "get diagnostics",
+	get_project_setup_info: "get project info",
+	get_search_results: "search text in files",
+	insert_edit: "insert text at position",
+	list_code_usages: "find code references",
+	read_project_structure: "read project structure",
+	rename_symbol: "rename symbols",
+	view_image: "view images",
 } as const
 
 // Define available tool groups.
 export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	read: {
-		tools: ["read_file", "search_files", "list_files", "codebase_search"],
+		tools: [
+			"read_file",
+			"search_files",
+			"list_files",
+			"codebase_search",
+			// New native tools
+			"find_files",
+			"read_project_structure",
+			"view_image",
+			"get_search_results",
+			"list_code_usages",
+			"get_errors",
+			"get_project_setup_info",
+		],
 	},
 	edit: {
-		tools: ["apply_diff", "write_to_file", "generate_image"],
+		tools: [
+			"apply_diff",
+			"write_to_file",
+			"generate_image",
+			// New native tools
+			"insert_edit",
+			"rename_symbol",
+			"create_directory",
+		],
 		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
 	},
 	command: {
@@ -308,7 +360,13 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["use_mcp_tool", "access_mcp_resource"],
 	},
 	modes: {
-		tools: ["switch_mode", "new_task"],
+		tools: [
+			"switch_mode",
+			"new_task",
+			// New native tools
+			"create_new_workspace",
+			"fetch_web_page",
+		],
 		alwaysAvailable: true,
 	},
 }
@@ -322,6 +380,9 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
+	// New native tools that should always be available
+	"create_new_workspace",
+	"fetch_web_page",
 ] as const
 
 /**
