@@ -43,7 +43,7 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | `create_directory`     | 🆕 WS  | edit  |        –         |   ✅   | Create directory (mkdir -p)                    |
 | `insert_edit`          | 🆕 WS  | edit  |        –         |   ✅   | Insert text at a specific line:column position |
 | `list_files`           | 🔵 RC  | read  |        –         |   ✅   | List files and directories at a path           |
-| `create_new_workspace` | 🆕 WS  | modes |        ✅        |   ✅   | Create new workspace directory structure       |
+| `create_new_workspace` | 🆕 WS  | edit  |        –         |   ✅   | Create new workspace directory structure       |
 
 ### `read_file`
 
@@ -107,13 +107,14 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 ## Search & Discovery
 
-| Tool                 | Origin | Group | Always Available | Status | Description                                       |
-| -------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------- |
-| `search_files`       | 🔵 RC  | read  |        –         |   ✅   | Regex search across files                         |
-| `find_files`         | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                        |
-| `get_search_results` | 🆕 WS  | read  |        –         |   ✅   | Text search with VS Code Search panel integration |
-| `list_code_usages`   | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                  |
-| `codebase_search`    | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)        |
+| Tool                       | Origin | Group | Always Available | Status | Description                                       |
+| -------------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------- |
+| `search_files`             | 🔵 RC  | read  |        –         |   ✅   | Regex search across files                         |
+| `find_files`               | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                        |
+| `get_search_results`       | 🆕 WS  | read  |        –         |   ✅   | Text search with VS Code Search panel integration |
+| `list_code_usages`         | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                  |
+| `codebase_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)        |
+| `codebase_search_with_lsp` | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback             |
 
 ### `search_files`
 
@@ -154,6 +155,15 @@ Finds all references of a symbol using VS Code's LSP reference provider.
 | `filePath` | string |    ✅    | File containing the symbol |
 | `line`     | number |    ✅    | 1-based line number        |
 | `column`   | number |    ✅    | 1-based column number      |
+
+### `codebase_search_with_lsp`
+
+Searches the codebase using the LSP workspace symbol provider. Falls back to word-level text search when no language server is available. Requires no external infrastructure.
+
+| Param        | Type           | Required | Description                         |
+| ------------ | -------------- | :------: | ----------------------------------- |
+| `query`      | string         |    ✅    | Symbol name or text to search for   |
+| `maxResults` | number \| null |    ✅    | Max results to return (default: 20) |
 
 ### `codebase_search`
 
@@ -228,7 +238,7 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 | --------------------- | :----: | ------- | :--------------: | :----: | -------------------------------------- |
 | `execute_command`     | 🔵 RC  | command |        –         |   ✅   | Execute a CLI command                  |
 | `read_command_output` | 🔵 RC  | command |        –         |   ✅   | Get full output of a truncated command |
-| `fetch_web_page`      | 🆕 WS  | modes   |        ✅        |   ✅   | Fetch and extract web page content     |
+| `fetch_web_page`      | 🆕 WS  | read    |        –         |   ✅   | Fetch and extract web page content     |
 
 ### `execute_command`
 
@@ -307,43 +317,44 @@ These are alternative edit tool implementations selectable per-model. They map t
 
 Checkmark (✓) means the tool is available in that mode by default.
 
-| Tool                     | 🏗️ Architect | 💻 Code | ❓ Ask | 🪲 Debug | Always |
-| ------------------------ | :----------: | :-----: | :----: | :------: | :----: |
-| **Read group**           |
-| `read_file`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `search_files`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `find_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `read_project_structure` |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `view_image`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_search_results`     |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_code_usages`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_errors`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_project_setup_info` |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `codebase_search`        |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| **Edit group**           |
-| `apply_diff`             |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `write_to_file`          |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `insert_edit`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `rename_symbol`          |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `create_directory`       |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `generate_image`         |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
-| **Command group**        |
-| `execute_command`        |              |    ✓    |        |    ✓     |        |
-| `read_command_output`    |              |    ✓    |        |    ✓     |        |
-| **MCP group**            |
-| `use_mcp_tool`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `access_mcp_resource`    |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| **Always available**     |
-| `ask_followup_question`  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `attempt_completion`     |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `switch_mode`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `new_task`               |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `update_todo_list`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `skill`                  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `run_slash_command`      |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
-| `create_new_workspace`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `fetch_web_page`         |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| Tool                       | 🏗️ Architect | 💻 Code | ❓ Ask | 🪲 Debug | Always |
+| -------------------------- | :----------: | :-----: | :----: | :------: | :----: |
+| **Read group**             |
+| `read_file`                |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `search_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `list_files`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `find_files`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `read_project_structure`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `view_image`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_search_results`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `list_code_usages`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_errors`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_project_setup_info`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `codebase_search`          |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
+| `codebase_search_with_lsp` |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `fetch_web_page`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| **Edit group**             |
+| `apply_diff`               |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `write_to_file`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `insert_edit`              |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `rename_symbol`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `create_directory`         |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `create_new_workspace`     |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `generate_image`           |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
+| **Command group**          |
+| `execute_command`          |              |    ✓    |        |    ✓     |        |
+| `read_command_output`      |              |    ✓    |        |    ✓     |        |
+| **MCP group**              |
+| `use_mcp_tool`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `access_mcp_resource`      |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
+| **Always available**       |
+| `ask_followup_question`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `attempt_completion`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `switch_mode`              |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `new_task`                 |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `update_todo_list`         |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `skill`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `run_slash_command`        |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
 
 **Notes:**
 
