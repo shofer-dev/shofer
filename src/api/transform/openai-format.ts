@@ -433,19 +433,23 @@ export function convertToOpenAiMessages(
 					}
 				}
 			} else if (anthropicMessage.role === "assistant") {
-				const { nonToolMessages, toolMessages } = anthropicMessage.content.reduce<{
+				const { nonToolMessages, toolMessages, reasoningBlocks } = anthropicMessage.content.reduce<{
 					nonToolMessages: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[]
 					toolMessages: Anthropic.ToolUseBlockParam[]
+					reasoningBlocks: Array<{ type: string; text?: string; summary?: any[] }>
 				}>(
 					(acc, part) => {
 						if (part.type === "tool_use") {
 							acc.toolMessages.push(part)
 						} else if (part.type === "text" || part.type === "image") {
 							acc.nonToolMessages.push(part)
-						} // assistant cannot send tool_result messages
+						} else if ((part as any).type === "reasoning") {
+							// Capture reasoning blocks stored by providers without native reasoning_details
+							acc.reasoningBlocks.push(part as any)
+						}
 						return acc
 					},
-					{ nonToolMessages: [], toolMessages: [] },
+					{ nonToolMessages: [], toolMessages: [], reasoningBlocks: [] },
 				)
 
 				// Process non-tool messages
@@ -492,6 +496,17 @@ export function convertToOpenAiMessages(
 				const mapped = mapReasoningDetails(messageWithDetails.reasoning_details)
 				if (mapped) {
 					baseMessage.reasoning_details = mapped
+				} else if (reasoningBlocks.length > 0) {
+					// Convert reasoning content blocks to reasoning_details format
+					// This handles providers (like vscode-lm) that store reasoning as content blocks
+					// rather than native reasoning_details
+					baseMessage.reasoning_details = reasoningBlocks.map((block, index) => ({
+						type: "reasoning.text",
+						id: `reasoning-text-${index + 1}`,
+						format: "roo-code-v1",
+						index: index,
+						text: block.text ?? "",
+					}))
 				}
 
 				// Add tool_calls after reasoning_details

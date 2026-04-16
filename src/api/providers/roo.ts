@@ -163,6 +163,11 @@ export class RooHandler extends BaseOpenAiCompatibleProvider<string> {
 			// we skip yielding the top-level reasoning field to avoid duplicate display.
 			let hasYieldedReasoningFromDetails = false
 
+			// Accumulator for reasoning_content (used by Xiaomi MiMo, DeepSeek, etc.)
+			// When provider sends reasoning_content instead of reasoning_details, we capture it
+			// here and convert to reasoning_details format after streaming completes.
+			let accumulatedReasoningContent = ""
+
 			for await (const chunk of stream) {
 				const delta = chunk.choices[0]?.delta
 				const finishReason = chunk.choices[0]?.finish_reason
@@ -245,11 +250,13 @@ export class RooHandler extends BaseOpenAiCompatibleProvider<string> {
 					// Skip if we've already yielded from reasoning_details to avoid duplicate display.
 					if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
 						if (!hasYieldedReasoningFromDetails) {
+							accumulatedReasoningContent += delta.reasoning
 							yield { type: "reasoning", text: delta.reasoning }
 						}
 					} else if ("reasoning_content" in delta && typeof delta.reasoning_content === "string") {
-						// Also check for reasoning_content for backward compatibility
+						// Also check for reasoning_content for backward compatibility (Xiaomi MiMo, DeepSeek, etc.)
 						if (!hasYieldedReasoningFromDetails) {
+							accumulatedReasoningContent += delta.reasoning_content
 							yield { type: "reasoning", text: delta.reasoning_content }
 						}
 					}
@@ -290,6 +297,18 @@ export class RooHandler extends BaseOpenAiCompatibleProvider<string> {
 			// After streaming completes, store ONLY the reasoning_details we received from the API.
 			if (reasoningDetailsAccumulator.size > 0) {
 				this.currentReasoningDetails = Array.from(reasoningDetailsAccumulator.values())
+			} else if (accumulatedReasoningContent) {
+				// If provider sent reasoning_content instead of reasoning_details (e.g., Xiaomi MiMo),
+				// convert to reasoning_details format for preservation in multi-turn conversations.
+				this.currentReasoningDetails = [
+					{
+						type: "reasoning.text",
+						text: accumulatedReasoningContent,
+						id: "reasoning-text-0",
+						format: "roo-code-v1",
+						index: 0,
+					},
+				]
 			}
 
 			if (lastUsage) {
