@@ -702,7 +702,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const startNewTask = useCallback(() => {
 		setShowRetiredProviderWarning(false)
-		vscode.postMessage({ type: "clearTask" })
+		// Use createParallelTask to preserve the current task in the background
+		// instead of clearTask which aborts the current task
+		vscode.postMessage({ type: "createParallelTask" })
 	}, [])
 
 	// Handle stop button click from textarea

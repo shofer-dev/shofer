@@ -104,6 +104,8 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 * @returns The created ManagedTask
 	 */
 	async createManagedTask(name: string | undefined, task: Task): Promise<ManagedTask> {
+		// Initial state is "running" since the task starts processing immediately
+		// after creation. The TaskStarted event will confirm this once the API call begins.
 		const managedTask: ManagedTask = {
 			id: task.taskId,
 			name: name || `Task ${this.managedTasks.size + 1}`,
@@ -111,7 +113,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			workspace: task.cwd || "",
 			createdAt: Date.now(),
 			lastActiveAt: Date.now(),
-			state: "idle",
+			state: "running",
 		}
 
 		this.managedTasks.set(managedTask.id, managedTask)
@@ -438,6 +440,11 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	private setupManagedTaskEventListeners(task: Task): void {
 		const targetTaskId = task.taskId
 
+		// Handle task starting (first API call begins)
+		const onStarted = () => {
+			this.updateTaskExecutionState(targetTaskId, "running")
+		}
+
 		// Handle task needing user input (approval required)
 		const onInteractive = (taskId: string) => {
 			if (taskId !== targetTaskId) return
@@ -475,6 +482,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		}
 
 		// Register listeners
+		task.on(RooCodeEventName.TaskStarted, onStarted)
 		task.on(RooCodeEventName.TaskInteractive, onInteractive)
 		task.on(RooCodeEventName.TaskActive, onActive)
 		task.on(RooCodeEventName.TaskCompleted, onComplete)
@@ -482,6 +490,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		// Store cleanup function for later removal
 		const cleanup = () => {
+			task.off(RooCodeEventName.TaskStarted, onStarted)
 			task.off(RooCodeEventName.TaskInteractive, onInteractive)
 			task.off(RooCodeEventName.TaskActive, onActive)
 			task.off(RooCodeEventName.TaskCompleted, onComplete)
