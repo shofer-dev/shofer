@@ -342,6 +342,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"get_errors",
 			"get_project_setup_info",
 			"codebase_search_with_lsp",
+			"fetch_web_page",
 		],
 	},
 	edit: {
@@ -353,6 +354,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"insert_edit",
 			"rename_symbol",
 			"create_directory",
+			"create_new_workspace",
 		],
 		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
 	},
@@ -363,13 +365,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["use_mcp_tool", "access_mcp_resource"],
 	},
 	modes: {
-		tools: [
-			"switch_mode",
-			"new_task",
-			// New native tools
-			"create_new_workspace",
-			"fetch_web_page",
-		],
+		tools: ["switch_mode", "new_task"],
 		alwaysAvailable: true,
 	},
 }
@@ -383,9 +379,6 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
-	// New native tools that should always be available
-	"create_new_workspace",
-	"fetch_web_page",
 ] as const
 
 /**
