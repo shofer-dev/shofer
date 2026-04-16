@@ -128,11 +128,63 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	}
 
 	/**
+	 * Register an existing Task as a background managed task.
+	 * Used when a previously focused task is moved to the background.
+	 * If the task is already registered, this is a no-op.
+	 *
+	 * @param task The Task instance to register
+	 * @param name Optional name (falls back to task text or generic name)
+	 */
+	registerBackgroundTask(task: Task, name?: string): void {
+		if (this.activeTasks.has(task.taskId)) {
+			// Already registered
+			return
+		}
+
+		const taskText = task.clineMessages.find((m) => m.type === "say" && m.say === "text")?.text || ""
+		const autoName =
+			name ||
+			(taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : `Task ${Date.now()}`)
+
+		const managedTask: ManagedTask = {
+			id: task.taskId,
+			name: autoName,
+			taskId: task.taskId,
+			workspace: task.cwd || "",
+			createdAt: Date.now(),
+			lastActiveAt: Date.now(),
+			state: task.abandoned || task.abort ? "idle" : "running",
+		}
+
+		this.managedTasks.set(managedTask.id, managedTask)
+		this.activeTasks.set(managedTask.id, task)
+
+		// Set up task event listeners for background task handling
+		this.setupManagedTaskEventListeners(task)
+
+		this.emit("tasks:updated", this.getManagedTasks())
+	}
+
+	/**
+	 * Clean up event listeners for a task.
+	 */
+	private cleanupTaskEventListeners(task: Task): void {
+		const cleanupSymbol = Symbol.for("taskManager.cleanup")
+		const cleanup = (task as any)[cleanupSymbol]
+		if (typeof cleanup === "function") {
+			cleanup()
+			delete (task as any)[cleanupSymbol]
+		}
+	}
+
+	/**
 	 * Delete a task and clean up its resources.
 	 */
 	async deleteManagedTask(targetTaskId: string): Promise<void> {
 		const task = this.activeTasks.get(targetTaskId)
 		if (task) {
+			// Clean up event listeners
+			this.cleanupTaskEventListeners(task)
 			// Stop the task if running
 			await task.abortTask(true).catch(() => {})
 			this.activeTasks.delete(targetTaskId)
@@ -302,9 +354,13 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	/**
 	 * Remove a Task instance from activeTasks (e.g., when it's stale/aborted).
-	 * Does NOT delete the managedTask metadata — only the live instance reference.
+	 * Cleans up event listeners but does NOT delete the managedTask metadata.
 	 */
 	removeManagedTaskInstance(targetTaskId: string): void {
+		const task = this.activeTasks.get(targetTaskId)
+		if (task) {
+			this.cleanupTaskEventListeners(task)
+		}
 		this.activeTasks.delete(targetTaskId)
 	}
 
@@ -520,6 +576,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 */
 	async dispose(): Promise<void> {
 		for (const [_targetTaskId, task] of this.activeTasks) {
+			this.cleanupTaskEventListeners(task)
 			await task.abortTask(true).catch(() => {})
 		}
 		this.activeTasks.clear()
