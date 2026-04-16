@@ -59,6 +59,7 @@ export const toolNames = [
 	"read_project_structure",
 	"rename_symbol",
 	"view_image",
+	"codebase_search_with_lsp",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

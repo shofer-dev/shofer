@@ -37,6 +37,7 @@ import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
+import { codebaseSearchWithLspTool } from "../tools/CodebaseSearchWithLspTool"
 import { createDirectoryTool } from "../tools/CreateDirectoryTool"
 import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool"
 import { fetchWebPageTool } from "../tools/FetchWebPageTool"
@@ -378,6 +379,8 @@ export async function presentAssistantMessage(cline: Task) {
 					case "switch_mode":
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "codebase_search":
+						return `[${block.name} for '${block.params.query}']`
+					case "codebase_search_with_lsp":
 						return `[${block.name} for '${block.params.query}']`
 					case "read_command_output":
 						return `[${block.name} for '${block.params.artifact_id}']`
@@ -761,6 +764,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "codebase_search":
 					await codebaseSearchTool.handle(cline, block as ToolUse<"codebase_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "codebase_search_with_lsp":
+					await codebaseSearchWithLspTool.handle(cline, block as ToolUse<"codebase_search_with_lsp">, {
 						askApproval,
 						handleError,
 						pushToolResult,
