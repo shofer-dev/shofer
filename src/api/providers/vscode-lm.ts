@@ -412,6 +412,28 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				},
 			}
 
+			// Check if this is a Xiaomi model for enhanced logging
+			const isXiaomiModel =
+				client.name.toLowerCase().includes("mimo") || client.name.toLowerCase().includes("xiaomi")
+			if (isXiaomiModel) {
+				console.log(
+					`[XIAOMI] RooCode sending request via vscode-lm:`,
+					JSON.stringify(
+						{
+							model: client.name,
+							vendor: client.vendor,
+							maxTokens,
+							messages_count: vsCodeLmMessages.length,
+							tools_count: metadata?.tools?.length ?? 0,
+							systemPrompt_length: systemPrompt?.length ?? 0,
+							conversationId: this.conversationId,
+						},
+						null,
+						2,
+					),
+				)
+			}
+
 			const response: vscode.LanguageModelChatResponse = await client.sendRequest(
 				vsCodeLmMessages,
 				requestOptions,
@@ -489,6 +511,24 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 			// Count tokens in the accumulated text after stream completion
 			const totalOutputTokens: number = await this.internalCountTokens(accumulatedText)
+
+			// Log complete stream summary for Xiaomi models
+			if (isXiaomiModel) {
+				console.log(
+					`[XIAOMI] RooCode stream complete:`,
+					JSON.stringify(
+						{
+							model: client.name,
+							total_input_tokens: totalInputTokens,
+							total_output_tokens: totalOutputTokens,
+							accumulated_text_length: accumulatedText.length,
+							accumulated_text_preview: accumulatedText.slice(0, 500),
+						},
+						null,
+						2,
+					),
+				)
+			}
 
 			// Report final usage after stream completion
 			yield {
