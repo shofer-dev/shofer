@@ -1194,6 +1194,9 @@ export class ClineProvider
 			this.clineStack[stackIndex] = task
 			task.emit(RooCodeEventName.TaskFocused)
 
+			// Update TaskManager's task instance so event listeners work on the new instance
+			this.taskManager.updateTaskInstance(task.taskId, task)
+
 			// Perform preparation tasks and set up event listeners
 			await this.performPreparationTasks(task)
 

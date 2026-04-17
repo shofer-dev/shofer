@@ -180,6 +180,33 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	}
 
 	/**
+	 * Update the Task instance for a managed task (e.g., after rehydration).
+	 * This removes event listeners from the old instance and sets up listeners
+	 * on the new instance, then updates the activeTasks map.
+	 *
+	 * @param targetTaskId The task ID
+	 * @param newTask The new Task instance
+	 */
+	updateTaskInstance(targetTaskId: string, newTask: Task): void {
+		const managedTask = this.managedTasks.get(targetTaskId)
+		if (!managedTask) {
+			// Task not tracked by TaskManager, nothing to update
+			return
+		}
+
+		const oldTask = this.activeTasks.get(targetTaskId)
+		if (oldTask) {
+			this.cleanupTaskEventListeners(oldTask)
+		}
+
+		this.activeTasks.set(targetTaskId, newTask)
+		this.setupManagedTaskEventListeners(newTask)
+
+		// Reset state to running since the task is being resumed
+		this.updateTaskExecutionState(targetTaskId, "running")
+	}
+
+	/**
 	 * Delete a task and clean up its resources.
 	 */
 	async deleteManagedTask(targetTaskId: string): Promise<void> {
