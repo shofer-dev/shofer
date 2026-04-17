@@ -89,39 +89,22 @@ export class ContextDropZoneProvider
 	}
 
 	/**
-	 * Remove a file from the dropped files list and notify webview.
+	 * Remove a file from the dropped files list.
 	 */
-	private async removeFile(filePath: string): Promise<void> {
+	private removeFile(filePath: string): void {
 		const index = this.droppedFiles.findIndex((f) => f.path === filePath)
 		if (index !== -1) {
 			this.droppedFiles.splice(index, 1)
 			this.refresh()
-
-			// Notify webview to remove the mention
-			if (this.clineProvider) {
-				await this.clineProvider.postMessageToWebview({
-					type: "removeContextFileMention",
-					path: filePath,
-				})
-			}
 		}
 	}
 
 	/**
-	 * Clear all dropped files and notify webview.
+	 * Clear all dropped files.
 	 */
-	private async clearAll(): Promise<void> {
-		const pathsToRemove = this.droppedFiles.map((f) => f.path)
+	private clearAll(): void {
 		this.droppedFiles = []
 		this.refresh()
-
-		// Notify webview to remove all mentions
-		if (this.clineProvider && pathsToRemove.length > 0) {
-			await this.clineProvider.postMessageToWebview({
-				type: "removeContextFileMention",
-				paths: pathsToRemove,
-			})
-		}
 	}
 
 	/**
@@ -130,6 +113,30 @@ export class ContextDropZoneProvider
 	clearDroppedFiles(): void {
 		this.droppedFiles = []
 		this.refresh()
+	}
+
+	/**
+	 * Get the dropped files as @mentions string and clear the list.
+	 * Called when the user sends a chat message.
+	 * @returns The @mentions string to prepend to the message, or empty string if no files
+	 */
+	getAndClearMentions(): string {
+		if (this.droppedFiles.length === 0) {
+			return ""
+		}
+
+		const mentions = this.droppedFiles
+			.map((f) => {
+				// Escape spaces in the path and prefix with @
+				const escapedPath = f.path.replace(/ /g, "\\ ")
+				return `@${escapedPath}`
+			})
+			.join(" ")
+
+		this.droppedFiles = []
+		this.refresh()
+
+		return mentions
 	}
 
 	/**
@@ -209,21 +216,13 @@ export class ContextDropZoneProvider
 		this.droppedFiles.push(...newFiles)
 		this.refresh()
 
-		// Send to webview
-		if (this.clineProvider) {
-			const paths = newFiles.map((f) => f.path)
-			await this.clineProvider.postMessageToWebview({
-				type: "droppedContextFiles",
-				paths,
-			})
-
-			// Show a brief notification
-			const fileCount = paths.length
-			const message = fileCount === 1 ? `Added 1 file to context` : `Added ${fileCount} files to context`
-			vscode.window.setStatusBarMessage(message, 2000)
-		} else {
-			vscode.window.showWarningMessage("Roo Code is not ready. Please try again.")
-		}
+		// Show a brief notification
+		const fileCount = newFiles.length
+		const message =
+			fileCount === 1
+				? `Added 1 file to context (will be included when you send)`
+				: `Added ${fileCount} files to context (will be included when you send)`
+		vscode.window.setStatusBarMessage(message, 2000)
 	}
 
 	/**
@@ -235,8 +234,14 @@ export class ContextDropZoneProvider
 
 	/**
 	 * TreeDataProvider: Get children (hint message + dropped files).
+	 * Only returns items for root level (element undefined) - no tree hierarchy.
 	 */
-	getChildren(_element?: DropZoneItem): DropZoneItem[] {
+	getChildren(element?: DropZoneItem): DropZoneItem[] {
+		// Only return items at root level - flat list, no children
+		if (element) {
+			return []
+		}
+
 		const items: DropZoneItem[] = []
 
 		// Show dropped files first

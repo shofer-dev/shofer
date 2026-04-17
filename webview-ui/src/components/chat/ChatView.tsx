@@ -885,48 +885,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						)
 					}
 					break
-				case "droppedContextFiles":
-					// Handle files dropped via native TreeView drop zone
-					// Paths are workspace-relative from the extension
-					if (message.paths && message.paths.length > 0) {
-						const mentions = message.paths
-							.map((path: string) => {
-								// Escape spaces in the path and prefix with @
-								const escapedPath = path.replace(/ /g, "\\ ")
-								return `@${escapedPath}`
-							})
-							.join(" ")
-						// Append to input value with space before mentions
-						setInputValue((prev: string) => {
-							const prefix = prev.trim() ? prev.trim() + " " : ""
-							return prefix + mentions + " "
-						})
-						// Focus the text area after inserting
-						setTimeout(() => textAreaRef.current?.focus(), 0)
-					}
-					break
-				case "removeContextFileMention":
-					// Handle removal of file mentions from input (via drop zone remove button)
-					{
-						const pathsToRemove: string[] = message.paths ?? (message.path ? [message.path] : [])
-						if (pathsToRemove.length > 0) {
-							setInputValue((prev: string) => {
-								let result = prev
-								for (const path of pathsToRemove) {
-									// Build regex to match @path with or without escaped spaces
-									const escapedPath = path.replace(/ /g, "\\ ")
-									// Match the mention with optional trailing space
-									const mentionPattern = new RegExp(
-										`@${escapedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s?`,
-										"g",
-									)
-									result = result.replace(mentionPattern, "")
-								}
-								return result.trim()
-							})
-						}
-					}
-					break
+				// Note: droppedContextFiles is no longer sent - mentions are added server-side when task is created
 				case "invoke":
 					switch (message.invoke!) {
 						case "newChat":
