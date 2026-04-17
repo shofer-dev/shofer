@@ -561,6 +561,22 @@ export const webviewMessageHandler = async (
 					})),
 					focusedTaskId: provider.taskManager.getFocusedTaskId(),
 				})
+
+				// Send existing task notifications so the badge count is correct
+				// when the webview loads (notifications may have accumulated before
+				// the webview was ready to receive events).
+				const notifications = provider.getTaskNotifications()
+				for (const notification of notifications) {
+					provider.postMessageToWebview({
+						type: "taskNotification",
+						notification: {
+							taskId: notification.targetTaskId,
+							type: notification.type,
+							message: notification.message,
+							timestamp: notification.timestamp,
+						},
+					})
+				}
 			}
 
 			getTheme().then((theme) => provider.postMessageToWebview({ type: "theme", text: JSON.stringify(theme) }))
