@@ -8,6 +8,7 @@ import { type ModelInfo, openAiModelInfoSaneDefaults } from "@roo-code/types"
 import type { ApiHandlerOptions } from "../../shared/api"
 import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
 import { normalizeToolSchema } from "../../utils/json-schema"
+import { getOutputChannel } from "../../extension"
 
 import { ApiStream } from "../transform/stream"
 import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../transform/vscode-lm-format"
@@ -416,22 +417,20 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			const isXiaomiModel =
 				client.name.toLowerCase().includes("mimo") || client.name.toLowerCase().includes("xiaomi")
 			if (isXiaomiModel) {
-				console.log(
-					`[XIAOMI] RooCode sending request via vscode-lm:`,
-					JSON.stringify(
-						{
-							model: client.name,
-							vendor: client.vendor,
-							maxTokens,
-							messages_count: vsCodeLmMessages.length,
-							tools_count: metadata?.tools?.length ?? 0,
-							systemPrompt_length: systemPrompt?.length ?? 0,
-							conversationId: this.conversationId,
-						},
-						null,
-						2,
-					),
-				)
+				const logMsg = `[XIAOMI] RooCode sending request via vscode-lm: ${JSON.stringify(
+					{
+						model: client.name,
+						vendor: client.vendor,
+						maxTokens,
+						messages_count: vsCodeLmMessages.length,
+						tools_count: metadata?.tools?.length ?? 0,
+						systemPrompt_length: systemPrompt?.length ?? 0,
+						conversationId: this.conversationId,
+					},
+					null,
+					2,
+				)}`
+				getOutputChannel()?.appendLine(logMsg)
 			}
 
 			const response: vscode.LanguageModelChatResponse = await client.sendRequest(
@@ -442,6 +441,18 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 			// Consume the stream and handle text, thinking, and tool call chunks
 			for await (const chunk of response.stream) {
+				// Log chunk type for debugging
+				if (isXiaomiModel) {
+					const chunkType =
+						chunk instanceof vscode.LanguageModelTextPart
+							? "LanguageModelTextPart"
+							: chunk instanceof vscode.LanguageModelThinkingPart
+								? "LanguageModelThinkingPart"
+								: chunk instanceof vscode.LanguageModelToolCallPart
+									? "LanguageModelToolCallPart"
+									: "Unknown"
+					getOutputChannel()?.appendLine(`[XIAOMI] [vscode-lm] Received chunk type: ${chunkType}`)
+				}
 				if (chunk instanceof vscode.LanguageModelTextPart) {
 					// Validate text part value
 					if (typeof chunk.value !== "string") {
@@ -464,6 +475,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 					}
 				} else if (chunk instanceof vscode.LanguageModelToolCallPart) {
 					try {
+						// Log tool call details for Xiaomi
+						if (isXiaomiModel) {
+							getOutputChannel()?.appendLine(
+								`[XIAOMI] [vscode-lm] Received LanguageModelToolCallPart: name=${chunk.name}, callId=${chunk.callId}, input=${JSON.stringify(chunk.input)}`,
+							)
+						}
+
 						// Validate tool call parameters
 						if (!chunk.name || typeof chunk.name !== "string") {
 							console.warn("Roo Code <Language Model API>: Invalid tool name received:", chunk.name)
@@ -492,11 +510,22 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						if (metadata?.tools?.length) {
 							const argumentsString = JSON.stringify(chunk.input)
 							accumulatedText += argumentsString
+							if (isXiaomiModel) {
+								getOutputChannel()?.appendLine(
+									`[XIAOMI] [vscode-lm] Yielding tool_call: id=${chunk.callId}, name=${chunk.name}, args=${argumentsString}`,
+								)
+							}
 							yield {
 								type: "tool_call",
 								id: chunk.callId,
 								name: chunk.name,
 								arguments: argumentsString,
+							}
+						} else {
+							if (isXiaomiModel) {
+								getOutputChannel()?.appendLine(
+									`[XIAOMI] [vscode-lm] NOT yielding tool_call - no tools in metadata`,
+								)
 							}
 						}
 					} catch (error) {
@@ -514,20 +543,18 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 			// Log complete stream summary for Xiaomi models
 			if (isXiaomiModel) {
-				console.log(
-					`[XIAOMI] RooCode stream complete:`,
-					JSON.stringify(
-						{
-							model: client.name,
-							total_input_tokens: totalInputTokens,
-							total_output_tokens: totalOutputTokens,
-							accumulated_text_length: accumulatedText.length,
-							accumulated_text_preview: accumulatedText.slice(0, 500),
-						},
-						null,
-						2,
-					),
-				)
+				const logMsg = `[XIAOMI] RooCode stream complete: ${JSON.stringify(
+					{
+						model: client.name,
+						total_input_tokens: totalInputTokens,
+						total_output_tokens: totalOutputTokens,
+						accumulated_text_length: accumulatedText.length,
+						accumulated_text_preview: accumulatedText.slice(0, 500),
+					},
+					null,
+					2,
+				)}`
+				getOutputChannel()?.appendLine(logMsg)
 			}
 
 			// Report final usage after stream completion
