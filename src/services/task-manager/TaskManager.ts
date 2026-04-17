@@ -481,11 +481,24 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			this.emit("managedTask:completed", targetTaskId)
 		}
 
-		// Handle task error
-		const onError = (taskId: string, _tool: ToolName, error: string) => {
+		// Handle task error (tool failures - for analytics, doesn't change state
+		// since the task may continue after tool errors)
+		const onToolError = (taskId: string, _tool: ToolName, error: string) => {
 			if (taskId !== targetTaskId) return
-			this.updateTaskExecutionState(targetTaskId, "idle")
-			this.emit("managedTask:error", targetTaskId, error)
+			// Don't change state - tool errors are often recoverable
+			// The task may continue processing after a tool failure
+			this.emit("managedTask:tool-error", targetTaskId, error)
+		}
+
+		// Handle task abort (user cancelled or abandoned)
+		const onAborted = () => {
+			this.updateTaskExecutionState(targetTaskId, "paused")
+		}
+
+		// Handle task error (api_req_failed, mistake_limit_reached, etc.)
+		const onTaskError = (taskId: string, _errorType: string) => {
+			if (taskId !== targetTaskId) return
+			this.updateTaskExecutionState(targetTaskId, "error")
 		}
 
 		// Register listeners
@@ -494,7 +507,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		task.on(RooCodeEventName.TaskActive, onActive)
 		task.on(RooCodeEventName.TaskIdle, onIdle)
 		task.on(RooCodeEventName.TaskCompleted, onComplete)
-		task.on(RooCodeEventName.TaskToolFailed, onError)
+		task.on(RooCodeEventName.TaskToolFailed, onToolError)
+		task.on(RooCodeEventName.TaskAborted, onAborted)
+		task.on(RooCodeEventName.TaskError, onTaskError)
 
 		// Store cleanup function for later removal
 		const cleanup = () => {
@@ -503,7 +518,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			task.off(RooCodeEventName.TaskActive, onActive)
 			task.off(RooCodeEventName.TaskIdle, onIdle)
 			task.off(RooCodeEventName.TaskCompleted, onComplete)
-			task.off(RooCodeEventName.TaskToolFailed, onError)
+			task.off(RooCodeEventName.TaskToolFailed, onToolError)
+			task.off(RooCodeEventName.TaskAborted, onAborted)
+			task.off(RooCodeEventName.TaskError, onTaskError)
 		}
 
 		// Use a symbol to store cleanup function on the task

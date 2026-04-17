@@ -146,6 +146,7 @@ export type TaskEvents = {
 	[RooCodeEventName.TaskStarted]: []
 	[RooCodeEventName.TaskCompleted]: [taskId: string, tokenUsage: TokenUsage, toolUsage: ToolUsage]
 	[RooCodeEventName.TaskAborted]: []
+	[RooCodeEventName.TaskError]: [taskId: string, errorType: string]
 	[RooCodeEventName.TaskFocused]: []
 	[RooCodeEventName.TaskUnfocused]: []
 	[RooCodeEventName.TaskActive]: [taskId: string]

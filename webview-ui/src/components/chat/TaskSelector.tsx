@@ -16,6 +16,7 @@ const TASK_STATE_CONFIG: Record<string, { color: string; label: string; pulse: b
 	running: { color: "bg-green-500", label: "Running", pulse: true },
 	waiting_input: { color: "bg-yellow-500", label: "Needs Input", pulse: true },
 	paused: { color: "bg-orange-500", label: "Paused", pulse: false },
+	error: { color: "bg-red-500", label: "Error", pulse: false },
 }
 
 /**
