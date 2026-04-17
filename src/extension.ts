@@ -311,6 +311,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	})
 	context.subscriptions.push(dropZoneTreeView)
 
+	// Get and clear dropped file mentions when a new task is created
+	provider.getDroppedFileMentions = () => {
+		return contextDropZoneProvider.getAndClearMentions()
+	}
+
 	// Check for worktree auto-open path (set when switching to a worktree)
 	await checkWorktreeAutoOpen(context, outputChannel)
 

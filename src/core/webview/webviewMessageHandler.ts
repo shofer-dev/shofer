@@ -636,18 +636,16 @@ export const webviewMessageHandler = async (
 			provider.isViewLaunched = true
 			break
 		case "newTask":
-			// Initializing new instance of Cline will make sure that any
-			// agentically running promises in old instance don't affect our new
-			// task. This essentially creates a fresh slate for the new task.
+			// Use createManagedTask to preserve current task in background (parallel execution).
+			// The old task continues running while the new task is focused in the UI.
 			try {
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
-				await provider.createTask(
-					resolved.text,
-					resolved.images,
-					undefined,
-					{ taskId: message.taskId },
-					message.taskConfiguration,
-				)
+
+				// Get dropped file mentions and prepend to message text
+				const droppedMentions = provider.getDroppedFileMentions?.() ?? ""
+				const messageText = droppedMentions ? `${droppedMentions} ${resolved.text ?? ""}`.trim() : resolved.text
+
+				await provider.createManagedTask(undefined, messageText, resolved.images)
 				// Task created successfully - notify the UI to reset
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 			} catch (error) {
