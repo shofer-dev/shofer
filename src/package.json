@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.52.19",
+	"version": "3.52.23",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -69,6 +69,11 @@
 					"type": "webview",
 					"id": "roo-cline.SidebarProvider",
 					"name": "%views.sidebar.name%"
+				},
+				{
+					"type": "tree",
+					"id": "roo-cline.contextDropZone",
+					"name": "%views.dropZone.name%"
 				}
 			]
 		},
@@ -172,9 +177,63 @@
 				"command": "roo-cline.toggleAutoApprove",
 				"title": "%command.toggleAutoApprove.title%",
 				"category": "%configuration.title%"
+			},
+			{
+				"command": "roo-cline.removeContextFile",
+				"title": "Remove from Context",
+				"icon": "$(close)"
+			},
+			{
+				"command": "roo-cline.clearAllContextFiles",
+				"title": "Clear All Context Files",
+				"icon": "$(clear-all)"
 			}
 		],
 		"menus": {
+			"view/item/context": [
+				{
+					"command": "roo-cline.removeContextFile",
+					"when": "view == roo-cline.contextDropZone && viewItem == droppedFile",
+					"group": "inline"
+				}
+			],
+			"view/title": [
+				{
+					"command": "roo-cline.clearAllContextFiles",
+					"when": "view == roo-cline.contextDropZone",
+					"group": "navigation"
+				},
+				{
+					"command": "roo-cline.plusButtonClicked",
+					"group": "navigation@1",
+					"when": "view == roo-cline.SidebarProvider"
+				},
+				{
+					"command": "roo-cline.settingsButtonClicked",
+					"group": "navigation@2",
+					"when": "view == roo-cline.SidebarProvider"
+				},
+				{
+					"command": "roo-cline.cloudButtonClicked",
+					"group": "navigation@3",
+					"when": "view == roo-cline.SidebarProvider"
+				},
+				{
+					"command": "roo-cline.marketplaceButtonClicked",
+					"group": "navigation@4",
+					"when": "view == roo-cline.SidebarProvider"
+				},
+				{
+					"command": "roo-cline.historyButtonClicked",
+					"group": "overflow@1",
+					"when": "view == roo-cline.SidebarProvider"
+				},
+				{
+					"command": "roo-cline.popoutButtonClicked",
+					"group": "overflow@2",
+					"when": "view == roo-cline.SidebarProvider"
+				}
+			],
 			"editor/context": [
 				{
 					"submenu": "roo-cline.contextMenu",
@@ -213,38 +272,6 @@
 				{
 					"command": "roo-cline.terminalExplainCommand",
 					"group": "1_actions@3"
-				}
-			],
-			"view/title": [
-				{
-					"command": "roo-cline.plusButtonClicked",
-					"group": "navigation@1",
-					"when": "view == roo-cline.SidebarProvider"
-				},
-				{
-					"command": "roo-cline.settingsButtonClicked",
-					"group": "navigation@2",
-					"when": "view == roo-cline.SidebarProvider"
-				},
-				{
-					"command": "roo-cline.cloudButtonClicked",
-					"group": "navigation@3",
-					"when": "view == roo-cline.SidebarProvider"
-				},
-				{
-					"command": "roo-cline.marketplaceButtonClicked",
-					"group": "navigation@4",
-					"when": "view == roo-cline.SidebarProvider"
-				},
-				{
-					"command": "roo-cline.historyButtonClicked",
-					"group": "overflow@1",
-					"when": "view == roo-cline.SidebarProvider"
-				},
-				{
-					"command": "roo-cline.popoutButtonClicked",
-					"group": "overflow@2",
-					"when": "view == roo-cline.SidebarProvider"
 				}
 			],
 			"editor/title": [

@@ -30,6 +30,7 @@ import { Package } from "./shared/package"
 import { formatLanguage } from "./shared/language"
 import { ContextProxy } from "./core/config/ContextProxy"
 import { ClineProvider } from "./core/webview/ClineProvider"
+import { ContextDropZoneProvider } from "./core/webview/ContextDropZoneProvider"
 import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
@@ -298,6 +299,17 @@ export async function activate(context: vscode.ExtensionContext) {
 			webviewOptions: { retainContextWhenHidden: true },
 		}),
 	)
+
+	// Register the context drop zone TreeView for drag & drop file selection
+	// This bypasses VSCode Desktop's webview drag overlay limitation
+	const contextDropZoneProvider = new ContextDropZoneProvider()
+	contextDropZoneProvider.setClineProvider(provider)
+	contextDropZoneProvider.registerCommands(context)
+	const dropZoneTreeView = vscode.window.createTreeView(ContextDropZoneProvider.viewId, {
+		treeDataProvider: contextDropZoneProvider,
+		dragAndDropController: contextDropZoneProvider,
+	})
+	context.subscriptions.push(dropZoneTreeView)
 
 	// Check for worktree auto-open path (set when switching to a worktree)
 	await checkWorktreeAutoOpen(context, outputChannel)

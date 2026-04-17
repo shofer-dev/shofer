@@ -34,6 +34,8 @@ export interface ExtensionMessage {
 		| "taskHistoryUpdated"
 		| "taskHistoryItemUpdated"
 		| "selectedImages"
+		| "droppedContextFiles"
+		| "removeContextFileMention"
 		| "theme"
 		| "workspaceUpdated"
 		| "invoke"
@@ -133,6 +135,7 @@ export interface ExtensionMessage {
 	 */
 	state?: Partial<ExtensionState>
 	images?: string[]
+	paths?: string[] // For droppedContextFiles/removeContextFileMention - workspace-relative paths
 	filePaths?: string[]
 	openedTabs?: Array<{
 		label: string
