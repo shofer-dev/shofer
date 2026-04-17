@@ -28,6 +28,7 @@ import { useMcpToolTool } from "../tools/UseMcpToolTool"
 import { accessMcpResourceTool } from "../tools/accessMcpResourceTool"
 import { askFollowupQuestionTool } from "../tools/AskFollowupQuestionTool"
 import { switchModeTool } from "../tools/SwitchModeTool"
+import { setTaskTitleTool } from "../tools/SetTaskTitleTool"
 import { attemptCompletionTool, AttemptCompletionCallbacks } from "../tools/AttemptCompletionTool"
 import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
@@ -378,6 +379,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name}]`
 					case "switch_mode":
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
+					case "set_task_title":
+						return `[${block.name} to '${block.params.title}']`
 					case "codebase_search":
 						return `[${block.name} for '${block.params.query}']`
 					case "codebase_search_with_lsp":
@@ -820,6 +823,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "switch_mode":
 					await switchModeTool.handle(cline, block as ToolUse<"switch_mode">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "set_task_title":
+					await setTaskTitleTool.handle(cline, block as ToolUse<"set_task_title">, {
 						askApproval,
 						handleError,
 						pushToolResult,
