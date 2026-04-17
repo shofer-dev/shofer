@@ -184,6 +184,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 * This removes event listeners from the old instance and sets up listeners
 	 * on the new instance, then updates the activeTasks map.
 	 *
+	 * Note: Does NOT change the task state - let the task's natural event flow
+	 * (TaskStarted, TaskInteractive, TaskIdle, etc.) determine the correct state.
+	 *
 	 * @param targetTaskId The task ID
 	 * @param newTask The new Task instance
 	 */
@@ -201,9 +204,6 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		this.activeTasks.set(targetTaskId, newTask)
 		this.setupManagedTaskEventListeners(newTask)
-
-		// Reset state to running since the task is being resumed
-		this.updateTaskExecutionState(targetTaskId, "running")
 	}
 
 	/**
