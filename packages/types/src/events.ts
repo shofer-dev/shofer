@@ -16,6 +16,7 @@ export enum RooCodeEventName {
 	TaskStarted = "taskStarted",
 	TaskCompleted = "taskCompleted",
 	TaskAborted = "taskAborted",
+	TaskError = "taskError",
 	TaskFocused = "taskFocused",
 	TaskUnfocused = "taskUnfocused",
 	TaskActive = "taskActive",
@@ -73,6 +74,7 @@ export const rooCodeEventsSchema = z.object({
 		}),
 	]),
 	[RooCodeEventName.TaskAborted]: z.tuple([z.string()]),
+	[RooCodeEventName.TaskError]: z.tuple([z.string(), z.string()]), // taskId, errorType
 	[RooCodeEventName.TaskFocused]: z.tuple([z.string()]),
 	[RooCodeEventName.TaskUnfocused]: z.tuple([z.string()]),
 	[RooCodeEventName.TaskActive]: z.tuple([z.string()]),

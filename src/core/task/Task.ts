@@ -1436,6 +1436,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						if (message) {
 							this.idleAsk = message
 							this.emit(RooCodeEventName.TaskIdle, this.taskId)
+
+							// Emit TaskError for error conditions so TaskManager can set error state
+							const errorAskTypes = [
+								"api_req_failed",
+								"mistake_limit_reached",
+								"auto_approval_max_req_reached",
+							]
+							if (errorAskTypes.includes(type)) {
+								this.emit(RooCodeEventName.TaskError, this.taskId, type)
+							}
 						}
 					}, statusMutationTimeout),
 				)

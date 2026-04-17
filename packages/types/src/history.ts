@@ -8,6 +8,7 @@ export const taskExecutionStateSchema = z.enum([
 	"running", // Actively processing (API call in progress)
 	"waiting_input", // Paused, needs user approval/input
 	"paused", // Manually paused by user
+	"error", // Stopped due to an error
 ])
 
 export type TaskExecutionState = z.infer<typeof taskExecutionStateSchema>
