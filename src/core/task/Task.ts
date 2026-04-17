@@ -2922,6 +2922,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							continue
 						}
 
+						// Debug log every chunk received in the stream consumer
+						this.diagLog(
+							`[Task#${this.taskId}] [STREAM_CONSUMER] Received chunk type=${chunk?.type}, preview=${JSON.stringify(chunk)?.slice(0, 200)}`,
+						)
+
 						switch (chunk.type) {
 							case "reasoning": {
 								reasoningMessage += chunk.text
@@ -3079,6 +3084,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 							case "tool_call": {
 								// Legacy: Handle complete tool calls (for backward compatibility)
+								this.diagLog(
+									`[Task#${this.taskId}] [TOOL_CALL_DEBUG] Received tool_call chunk: id=${chunk.id}, name=${chunk.name}, args_length=${chunk.arguments?.length}`,
+								)
 								// Convert native tool call to ToolUse format
 								const toolUse = NativeToolCallParser.parseToolCall({
 									id: chunk.id,
@@ -3087,6 +3095,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								})
 
 								if (!toolUse) {
+									this.diagLog(
+										`[Task#${this.taskId}] [TOOL_CALL_DEBUG] parseToolCall returned null for: id=${chunk.id}, name=${chunk.name}`,
+									)
 									console.error(`Failed to parse tool call for task ${this.taskId}:`, chunk)
 									break
 								}
@@ -3097,6 +3108,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 								// Add the tool use to assistant message content
 								this.assistantMessageContent.push(toolUse)
+								this.diagLog(
+									`[Task#${this.taskId}] [TOOL_CALL_DEBUG] Added to assistantMessageContent, length now=${this.assistantMessageContent.length}`,
+								)
 
 								// Mark that we have new content to process
 								this.userMessageContentReady = false
@@ -3507,6 +3521,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				const hasToolUses = this.assistantMessageContent.some(
 					(block) => block.type === "tool_use" || block.type === "mcp_tool_use",
+				)
+
+				this.diagLog(
+					`[Task#${this.taskId}] [TOOL_CALL_DEBUG] Post-stream check: hasTextContent=${hasTextContent}, hasToolUses=${hasToolUses}, assistantMessageContent=${JSON.stringify(this.assistantMessageContent.map((b) => ({ type: b.type, name: (b as any).name })))}`,
 				)
 
 				if (hasTextContent || hasToolUses) {
@@ -4397,6 +4415,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 
 			const firstChunk = await Promise.race([firstChunkPromise, abortPromise])
+			this.diagLog(
+				`[Task#${this.taskId}] [STREAM_PASSTHROUGH] Yielding FIRST chunk type=${firstChunk.value?.type}, preview=${JSON.stringify(firstChunk.value)?.slice(0, 200)}`,
+			)
 			yield firstChunk.value
 			this.isWaitingForFirstChunk = false
 		} catch (error) {
@@ -4464,7 +4485,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// it's saying "yield all remaining values from this iterator". This
 		// effectively passes along all subsequent chunks from the original
 		// stream.
-		yield* iterator
+		// Manual loop with debug logging to trace chunk flow
+		for await (const chunk of { [Symbol.asyncIterator]: () => iterator }) {
+			this.diagLog(
+				`[Task#${this.taskId}] [STREAM_PASSTHROUGH] Yielding chunk type=${chunk?.type}, preview=${JSON.stringify(chunk)?.slice(0, 200)}`,
+			)
+			yield chunk
+		}
 	}
 
 	// Shared exponential backoff for retries (first-chunk and mid-stream)

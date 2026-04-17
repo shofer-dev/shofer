@@ -68,6 +68,14 @@ let settingsUpdatedHandler: (() => void) | undefined
 let userInfoHandler: ((data: { userInfo: CloudUserInfo }) => Promise<void>) | undefined
 
 /**
+ * Get the extension's output channel for logging.
+ * Returns undefined if called before extension activation.
+ */
+export function getOutputChannel(): vscode.OutputChannel | undefined {
+	return outputChannel
+}
+
+/**
  * Check if we should auto-open the Roo Code sidebar after switching to a worktree.
  * This is called during extension activation to handle the worktree auto-open flow.
  */
