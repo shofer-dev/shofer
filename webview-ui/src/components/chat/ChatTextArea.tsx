@@ -809,7 +809,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		)
 
 		const handleDrop = useCallback(
-			async (e: React.DragEvent<HTMLElement>) => {
+			async (e: React.DragEvent<HTMLDivElement>) => {
 				e.preventDefault()
 				setIsDraggingOver(false)
 
@@ -1073,25 +1073,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								onPaste={handlePaste}
 								onSelect={updateCursorPosition}
 								onMouseUp={updateCursorPosition}
-								onDrop={handleDrop}
-								onDragOver={(e) => {
-									e.preventDefault()
-									setIsDraggingOver(true)
-									e.dataTransfer.dropEffect = "copy"
-								}}
-								onDragLeave={(e) => {
-									e.preventDefault()
-									const rect = e.currentTarget.getBoundingClientRect()
-
-									if (
-										e.clientX <= rect.left ||
-										e.clientX >= rect.right ||
-										e.clientY <= rect.top ||
-										e.clientY >= rect.bottom
-									) {
-										setIsDraggingOver(false)
-									}
-								}}
 								onHeightChange={(height) => {
 									if (textAreaBaseHeight === undefined || height < textAreaBaseHeight) {
 										setTextAreaBaseHeight(height)
