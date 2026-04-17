@@ -4,6 +4,11 @@ import { Package } from "../shared/package"
 import { ClineProvider } from "../core/webview/ClineProvider"
 import { t } from "../i18n"
 
+/**
+ * Handles the "New Task" command (pencil icon in sidebar header).
+ * Uses createManagedTask to preserve the current task in the background
+ * rather than aborting it, enabling parallel task execution.
+ */
 export const handleNewTask = async (params: { prompt?: string } | null | undefined) => {
 	let prompt = params?.prompt
 
@@ -19,5 +24,9 @@ export const handleNewTask = async (params: { prompt?: string } | null | undefin
 		return
 	}
 
-	await ClineProvider.handleCodeAction("newTask", "NEW_TASK", { userInput: prompt })
+	// Use createManagedTask to preserve current task in background (parallel execution)
+	const visibleProvider = await ClineProvider.getInstance()
+	if (visibleProvider) {
+		await visibleProvider.createManagedTask(undefined, prompt, undefined)
+	}
 }
