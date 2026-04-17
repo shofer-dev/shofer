@@ -5,6 +5,7 @@
 	"views.terminalMenu.label": "Roo Code",
 	"views.activitybar.title": "Roo Code",
 	"views.sidebar.name": "Roo Code",
+	"views.dropZone.name": "Drop Files Here",
 	"command.newTask.title": "New Task",
 	"command.history.title": "Task History",
 	"command.marketplace.title": "Marketplace",
