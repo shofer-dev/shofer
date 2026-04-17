@@ -43,6 +43,7 @@ export const toolParamNames = [
 	"diff",
 	"mode_slug",
 	"reason",
+	"title", // set_task_title parameter
 	"line",
 	"mode",
 	"message",
@@ -113,6 +114,7 @@ export type NativeToolArgs = {
 	skill: { skill: string; args?: string }
 	search_files: { path: string; regex: string; file_pattern?: string | null }
 	switch_mode: { mode_slug: string; reason: string }
+	set_task_title: { title: string }
 	update_todo_list: { todos: string }
 	use_mcp_tool: { server_name: string; tool_name: string; arguments?: Record<string, unknown> }
 	write_to_file: { path: string; content: string }
@@ -323,6 +325,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	rename_symbol: "rename symbols",
 	view_image: "view images",
 	codebase_search_with_lsp: "search codebase via LSP",
+	set_task_title: "set task title",
 } as const
 
 // Define available tool groups.
@@ -379,6 +382,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
+	"set_task_title",
 ] as const
 
 /**

@@ -60,6 +60,7 @@ export const toolNames = [
 	"rename_symbol",
 	"view_image",
 	"codebase_search_with_lsp",
+	"set_task_title",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
