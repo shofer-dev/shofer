@@ -1396,14 +1396,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Keep queued user messages intact during command_output asks. Those asks
 		// are terminal flow-control, not conversational turns.
 		const shouldDrainQueuedMessageForAsk = type !== "command_output"
-		const isStatusMutable = !partial && isBlocking && !isMessageQueued && approval.decision === "ask"
+		// State is mutable when the task will actually wait for user input.
+		// Both "ask" and "timeout" decisions block waiting for input (timeout may auto-approve after delay).
+		const isWaitingForInput = approval.decision === "ask" || approval.decision === "timeout"
+		const isStatusMutable = !partial && isBlocking && !isMessageQueued && isWaitingForInput
 
 		if (isStatusMutable) {
 			// For background tasks (not the focused task), emit state changes immediately
 			// so the task selector shows the correct indicator without delay.
-			// For focused tasks, use a 2s delay to prevent UI flickering during quick interactions.
+			// For focused tasks, use a 2s delay to prevent UI flickering during quick interactions
+			// (e.g., tool approvals that might be quickly auto-approved).
+			// Exception: "followup" asks should show yellow immediately since the LLM is
+			// genuinely waiting for user input.
 			const isBackgroundTask = provider?.taskManager?.getFocusedTaskId() !== this.taskId
-			const statusMutationTimeout = isBackgroundTask ? 0 : 2_000
+			const isFollowupAsk = type === "followup"
+			const statusMutationTimeout = isBackgroundTask || isFollowupAsk ? 0 : 2_000
 
 			if (isInteractiveAsk(type)) {
 				timeouts.push(
