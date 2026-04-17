@@ -555,6 +555,14 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "set_task_title":
+				if (partialArgs.title !== undefined) {
+					nativeArgs = {
+						title: partialArgs.title,
+					}
+				}
+				break
+
 			case "use_mcp_tool":
 				if (partialArgs.server_name !== undefined || partialArgs.tool_name !== undefined) {
 					nativeArgs = {
@@ -633,6 +641,120 @@ export class NativeToolCallParser {
 						mode: partialArgs.mode,
 						message: partialArgs.message,
 						todos: partialArgs.todos,
+					}
+				}
+				break
+
+			case "create_directory":
+				if (partialArgs.path !== undefined) {
+					nativeArgs = {
+						path: partialArgs.path,
+					}
+				}
+				break
+
+			case "create_new_workspace":
+				if (partialArgs.path !== undefined || partialArgs.name !== undefined) {
+					nativeArgs = {
+						path: partialArgs.path,
+						name: partialArgs.name,
+						folders: partialArgs.folders,
+						openInNewWindow: this.coerceOptionalBoolean(partialArgs.openInNewWindow),
+					}
+				}
+				break
+
+			case "fetch_web_page":
+				if (partialArgs.urls !== undefined) {
+					nativeArgs = {
+						urls: partialArgs.urls,
+						query: partialArgs.query,
+					}
+				}
+				break
+
+			case "find_files":
+				if (partialArgs.pattern !== undefined) {
+					nativeArgs = {
+						pattern: partialArgs.pattern,
+						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
+					}
+				}
+				break
+
+			case "get_errors":
+				nativeArgs = {
+					filePaths: partialArgs.filePaths,
+				}
+				break
+
+			case "get_project_setup_info":
+				nativeArgs = {}
+				break
+
+			case "get_search_results":
+				if (partialArgs.query !== undefined) {
+					nativeArgs = {
+						query: partialArgs.query,
+						isRegex: this.coerceOptionalBoolean(partialArgs.isRegex),
+						includePattern: partialArgs.includePattern,
+						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
+					}
+				}
+				break
+
+			case "insert_edit":
+				if (partialArgs.filePath !== undefined || partialArgs.line !== undefined) {
+					nativeArgs = {
+						filePath: partialArgs.filePath,
+						line: this.coerceOptionalNumber(partialArgs.line)!,
+						column: this.coerceOptionalNumber(partialArgs.column),
+						text: partialArgs.text,
+					}
+				}
+				break
+
+			case "list_code_usages":
+				if (partialArgs.filePath !== undefined) {
+					nativeArgs = {
+						filePath: partialArgs.filePath,
+						line: this.coerceOptionalNumber(partialArgs.line)!,
+						column: this.coerceOptionalNumber(partialArgs.column)!,
+					}
+				}
+				break
+
+			case "read_project_structure":
+				nativeArgs = {
+					maxDepth: this.coerceOptionalNumber(partialArgs.maxDepth),
+					includeHidden: this.coerceOptionalBoolean(partialArgs.includeHidden),
+				}
+				break
+
+			case "rename_symbol":
+				if (partialArgs.filePath !== undefined) {
+					nativeArgs = {
+						filePath: partialArgs.filePath,
+						line: this.coerceOptionalNumber(partialArgs.line)!,
+						column: this.coerceOptionalNumber(partialArgs.column)!,
+						newName: partialArgs.newName,
+					}
+				}
+				break
+
+			case "view_image":
+				if (partialArgs.filePath !== undefined) {
+					nativeArgs = {
+						filePath: partialArgs.filePath,
+					}
+				}
+				break
+
+			case "codebase_search_with_lsp":
+				if (partialArgs.query !== undefined) {
+					nativeArgs = {
+						query: partialArgs.query,
+						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
 					}
 				}
 				break
@@ -891,6 +1013,14 @@ export class NativeToolCallParser {
 					}
 					break
 
+				case "set_task_title":
+					if (args.title !== undefined) {
+						nativeArgs = {
+							title: args.title,
+						} as NativeArgsFor<TName>
+					}
+					break
+
 				case "read_command_output":
 					if (args.artifact_id !== undefined) {
 						nativeArgs = {
@@ -982,6 +1112,125 @@ export class NativeToolCallParser {
 							mode: args.mode,
 							message: args.message,
 							todos: args.todos,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "create_directory":
+					if (args.path !== undefined) {
+						nativeArgs = {
+							path: args.path,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "create_new_workspace":
+					if (args.path !== undefined && args.name !== undefined) {
+						nativeArgs = {
+							path: args.path,
+							name: args.name,
+							folders: args.folders,
+							openInNewWindow: this.coerceOptionalBoolean(args.openInNewWindow),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "fetch_web_page":
+					if (args.urls !== undefined) {
+						nativeArgs = {
+							urls: args.urls,
+							query: args.query,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "find_files":
+					if (args.pattern !== undefined) {
+						nativeArgs = {
+							pattern: args.pattern,
+							maxResults: this.coerceOptionalNumber(args.maxResults),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "get_errors":
+					nativeArgs = {
+						filePaths: args.filePaths,
+					} as NativeArgsFor<TName>
+					break
+
+				case "get_project_setup_info":
+					nativeArgs = {} as NativeArgsFor<TName>
+					break
+
+				case "get_search_results":
+					if (args.query !== undefined) {
+						nativeArgs = {
+							query: args.query,
+							isRegex: this.coerceOptionalBoolean(args.isRegex),
+							includePattern: args.includePattern,
+							maxResults: this.coerceOptionalNumber(args.maxResults),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "insert_edit":
+					if (args.filePath !== undefined && args.line !== undefined && args.text !== undefined) {
+						nativeArgs = {
+							filePath: args.filePath,
+							line: this.coerceOptionalNumber(args.line)!,
+							column: this.coerceOptionalNumber(args.column),
+							text: args.text,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "list_code_usages":
+					if (args.filePath !== undefined && args.line !== undefined && args.column !== undefined) {
+						nativeArgs = {
+							filePath: args.filePath,
+							line: this.coerceOptionalNumber(args.line)!,
+							column: this.coerceOptionalNumber(args.column)!,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "read_project_structure":
+					nativeArgs = {
+						maxDepth: this.coerceOptionalNumber(args.maxDepth),
+						includeHidden: this.coerceOptionalBoolean(args.includeHidden),
+					} as NativeArgsFor<TName>
+					break
+
+				case "rename_symbol":
+					if (
+						args.filePath !== undefined &&
+						args.line !== undefined &&
+						args.column !== undefined &&
+						args.newName !== undefined
+					) {
+						nativeArgs = {
+							filePath: args.filePath,
+							line: this.coerceOptionalNumber(args.line)!,
+							column: this.coerceOptionalNumber(args.column)!,
+							newName: args.newName,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "view_image":
+					if (args.filePath !== undefined) {
+						nativeArgs = {
+							filePath: args.filePath,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "codebase_search_with_lsp":
+					if (args.query !== undefined) {
+						nativeArgs = {
+							query: args.query,
+							maxResults: this.coerceOptionalNumber(args.maxResults),
 						} as NativeArgsFor<TName>
 					}
 					break
