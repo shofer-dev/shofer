@@ -1399,7 +1399,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const isStatusMutable = !partial && isBlocking && !isMessageQueued && approval.decision === "ask"
 
 		if (isStatusMutable) {
-			const statusMutationTimeout = 2_000
+			// For background tasks (not the focused task), emit state changes immediately
+			// so the task selector shows the correct indicator without delay.
+			// For focused tasks, use a 2s delay to prevent UI flickering during quick interactions.
+			const isBackgroundTask = provider?.taskManager?.getFocusedTaskId() !== this.taskId
+			const statusMutationTimeout = isBackgroundTask ? 0 : 2_000
 
 			if (isInteractiveAsk(type)) {
 				timeouts.push(

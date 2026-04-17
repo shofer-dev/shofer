@@ -92,7 +92,16 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		await visibleProvider.removeClineFromStack()
+		// Pop current task WITHOUT aborting - it continues in background
+		const poppedTask = visibleProvider.popFromStackWithoutAborting()
+		if (poppedTask) {
+			// Register as background task so it shows correct state indicators
+			visibleProvider.taskManager.registerBackgroundTask(poppedTask)
+			visibleProvider.log(
+				`[plusButtonClicked] Task ${poppedTask.taskId} moved to background (parallel execution)`,
+			)
+		}
+
 		await visibleProvider.refreshWorkspace()
 		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 		// Send focusInput action immediately after chatButtonClicked

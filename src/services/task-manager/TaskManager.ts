@@ -467,6 +467,13 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			this.updateTaskExecutionState(targetTaskId, "running")
 		}
 
+		// Handle task entering idle state (completion_result, api_req_failed, etc.)
+		// This is emitted when the task reaches an idle ask state.
+		const onIdle = (taskId: string) => {
+			if (taskId !== targetTaskId) return
+			this.updateTaskExecutionState(targetTaskId, "idle")
+		}
+
 		// Handle task completion
 		const onComplete = (taskId: string, _tokenUsage: TokenUsage, _toolUsage: ToolUsage) => {
 			if (taskId !== targetTaskId) return
@@ -485,6 +492,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		task.on(RooCodeEventName.TaskStarted, onStarted)
 		task.on(RooCodeEventName.TaskInteractive, onInteractive)
 		task.on(RooCodeEventName.TaskActive, onActive)
+		task.on(RooCodeEventName.TaskIdle, onIdle)
 		task.on(RooCodeEventName.TaskCompleted, onComplete)
 		task.on(RooCodeEventName.TaskToolFailed, onError)
 
@@ -493,6 +501,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			task.off(RooCodeEventName.TaskStarted, onStarted)
 			task.off(RooCodeEventName.TaskInteractive, onInteractive)
 			task.off(RooCodeEventName.TaskActive, onActive)
+			task.off(RooCodeEventName.TaskIdle, onIdle)
 			task.off(RooCodeEventName.TaskCompleted, onComplete)
 			task.off(RooCodeEventName.TaskToolFailed, onError)
 		}
