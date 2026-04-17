@@ -30,6 +30,7 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | ----- | ------------------------------------------------------- |
 | 🆕 WS | Ported from `workspace-tools` extension in this session |
 | 🔵 RC | Pre-existing RooCode tool                               |
+| 🟣 AW | New Arkware tool (custom addition)                      |
 
 ---
 
@@ -270,14 +271,25 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 
 ## Task & Workflow Management
 
-| Tool                    | Origin | Group | Always Available | Status | Description                |
-| ----------------------- | :----: | ----- | :--------------: | :----: | -------------------------- |
-| `ask_followup_question` | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question    |
-| `attempt_completion`    | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion     |
-| `switch_mode`           | 🔵 RC  | modes |        ✅        |   ✅   | Switch to a different mode |
-| `new_task`              | 🔵 RC  | modes |        ✅        |   ✅   | Spawn a new sub-task       |
-| `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list       |
-| `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill   |
+| Tool                    | Origin | Group | Always Available | Status | Description                        |
+| ----------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------- |
+| `ask_followup_question` | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question            |
+| `attempt_completion`    | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion             |
+| `switch_mode`           | 🔵 RC  | modes |        ✅        |   ✅   | Switch to a different mode         |
+| `new_task`              | 🔵 RC  | modes |        ✅        |   ✅   | Spawn a new sub-task               |
+| `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list               |
+| `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill           |
+| `set_task_title`        | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task |
+
+### `set_task_title`
+
+Sets a short, descriptive title for the current task/conversation. Use this early in a conversation to replace the auto-generated title with something meaningful.
+
+| Param   | Type   | Required | Description                            |
+| ------- | ------ | :------: | -------------------------------------- |
+| `title` | string |    ✅    | Short descriptive title (max 60 chars) |
+
+No approval prompt needed — this is a non-destructive meta-operation.
 
 ---
 
@@ -354,6 +366,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `new_task`                 |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `update_todo_list`         |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `skill`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `set_task_title`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `run_slash_command`        |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
 
 **Notes:**
