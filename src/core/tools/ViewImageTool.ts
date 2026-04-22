@@ -27,7 +27,7 @@ const SUPPORTED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", "
 /**
  * Gets the MIME type for an image file extension.
  */
-function getImageMimeType(ext: string): Anthropic.Base64ImageSource["media_type"] | null {
+function getImageMimeType(ext: string): Anthropic.ImageBlockParam.Source["media_type"] | null {
 	const normalized = ext.toLowerCase()
 	switch (normalized) {
 		case ".png":

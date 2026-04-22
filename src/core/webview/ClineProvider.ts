@@ -3080,7 +3080,7 @@ export class ClineProvider
 		// These will be transferred to the new task after rehydration
 		const queuedMessages = [...task.messageQueueService.messages]
 		this.log(
-			`[DIAG cancelTask] queuedMessages=${queuedMessages.length}, abort=${task.abort}, abandoned=${task.abandoned}, isStreaming=${task.isStreaming}, askResponse=${task.askResponse}`,
+			`[DIAG cancelTask] queuedMessages=${queuedMessages.length}, abort=${task.abort}, abandoned=${task.abandoned}, isStreaming=${task.isStreaming}`,
 		)
 		if (queuedMessages.length > 0) {
 			this.log(`[cancelTask] preserving ${queuedMessages.length} queued message(s) for transfer`)

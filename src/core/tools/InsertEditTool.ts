@@ -103,7 +103,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"insert_edit">): Promise<void> {
-		const filePath: string | undefined = block.params.filePath
+		const filePath: string | undefined = block.params.file_path
 
 		if (!this.hasPathStabilized(filePath)) {
 			return

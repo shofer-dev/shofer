@@ -74,7 +74,7 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 
 			let result = limitedFiles.join("\n")
 			if (didHitLimit) {
-				result += `\n\n... limited to ${maxResults} results (${files.length} total matches)`
+				result += `\n\n... limited to ${maxResults} results (${uris.length} total matches)`
 			}
 
 			pushToolResult(result)

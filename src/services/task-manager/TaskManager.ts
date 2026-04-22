@@ -36,6 +36,7 @@ export interface TaskManagerEvents {
 	"managedTask:needs-input": [notification: ManagedTaskNotification]
 	"managedTask:completed": [targetTaskId: string]
 	"managedTask:error": [targetTaskId: string, error: string]
+	"managedTask:tool-error": [targetTaskId: string, error: string]
 	"tasks:updated": [managedTasks: ManagedTask[]]
 }
 

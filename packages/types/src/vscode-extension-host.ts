@@ -835,6 +835,10 @@ export interface ClineSayTool {
 		| "runSlashCommand"
 		| "updateTodoList"
 		| "skill"
+		| "createDirectory"
+		| "createNewWorkspace"
+		| "findFiles"
+		| "viewImage"
 	path?: string
 	// For readCommandOutput
 	readStart?: number
