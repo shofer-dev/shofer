@@ -51,6 +51,9 @@ import { listCodeUsagesTool } from "../tools/ListCodeUsagesTool"
 import { readProjectStructureTool } from "../tools/ReadProjectStructureTool"
 import { renameSymbolTool } from "../tools/RenameSymbolTool"
 import { viewImageTool } from "../tools/ViewImageTool"
+import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool"
+import { waitForTaskTool } from "../tools/WaitForTaskTool"
+import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -397,6 +400,12 @@ export async function presentAssistantMessage(cline: Task) {
 					}
 					case "run_slash_command":
 						return `[${block.name} for '${block.params.command}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
+					case "check_task_status":
+						return `[${block.name} for '${block.params.task_id}']`
+					case "wait_for_task":
+						return `[${block.name} for '${block.params.task_id}']`
+					case "list_background_tasks":
+						return `[${block.name}]`
 					case "skill":
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "generate_image":
@@ -879,6 +888,27 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 				case "run_slash_command":
 					await runSlashCommandTool.handle(cline, block as ToolUse<"run_slash_command">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "check_task_status":
+					await checkTaskStatusTool.handle(cline, block as ToolUse<"check_task_status">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "wait_for_task":
+					await waitForTaskTool.handle(cline, block as ToolUse<"wait_for_task">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "list_background_tasks":
+					await listBackgroundTasksTool.handle(cline, block as ToolUse<"list_background_tasks">, {
 						askApproval,
 						handleError,
 						pushToolResult,

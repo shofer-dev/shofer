@@ -35,6 +35,7 @@ import {
 	type ModelInfo,
 	type ClineApiReqCancelReason,
 	type ClineApiReqInfo,
+	type TaskHandle,
 	RooCodeEventName,
 	TelemetryEventName,
 	TaskStatus,
@@ -165,6 +166,38 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	readonly parentTaskId?: string
 	childTaskId?: string
 	pendingNewTaskToolCallId?: string
+
+	// NEW: Track background children
+	backgroundChildren: Map<string, TaskHandle> = new Map()
+
+	// Helper to check if child is alive
+	isBackgroundChildAlive(childId: string): boolean {
+		if (
+			this.providerRef.deref() &&
+			typeof (this.providerRef.deref() as any).getManagedTaskInstance === "function"
+		) {
+			return (this.providerRef.deref() as any).getManagedTaskInstance(childId) !== undefined
+		}
+		return false
+	}
+
+	// Cleanup dead children on parent resume/load
+	async cleanupBackgroundChildren(): Promise<void> {
+		for (const [childId, handle] of this.backgroundChildren) {
+			if (!this.isBackgroundChildAlive(childId)) {
+				try {
+					// Check final status from history
+					const provider = this.providerRef.deref()
+					if (provider) {
+						const historyItem = await (provider as any).getTaskWithId(childId)
+						handle.status = historyItem.status === "completed" ? "completed" : "error"
+					}
+				} catch (_) {
+					handle.status = "error"
+				}
+			}
+		}
+	}
 
 	readonly instanceId: string
 	readonly metadata: TaskMetadata

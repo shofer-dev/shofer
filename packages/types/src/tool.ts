@@ -61,6 +61,10 @@ export const toolNames = [
 	"view_image",
 	"codebase_search_with_lsp",
 	"set_task_title",
+	// Async background task tools
+	"check_task_status",
+	"wait_for_task",
+	"list_background_tasks",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

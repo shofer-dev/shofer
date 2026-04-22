@@ -124,6 +124,15 @@ export enum TaskStatus {
 	None = "none",
 }
 
+export type BackgroundTaskStatus = "starting" | "running" | "waiting" | "completed" | "error" | "paused"
+
+export interface TaskHandle {
+	taskId: string
+	status: BackgroundTaskStatus
+	createdAt: number
+	parentTaskId: string
+}
+
 export const taskMetadataSchema = z.object({
 	task: z.string().optional(),
 	images: z.array(z.string()).optional(),
