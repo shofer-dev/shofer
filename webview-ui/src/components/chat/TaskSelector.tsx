@@ -9,6 +9,58 @@ import { StandardTooltip } from "@src/components/ui"
 import { vscode } from "@src/utils/vscode"
 
 /**
+ * A node in the flattened task tree used for rendering.
+ *
+ * The tree is built from `taskHistory` using `parentTaskId`. Siblings are
+ * ordered by creation time (`ts`). The flat list preserves DFS pre-order so
+ * that the rendered rows appear in the expected top-to-bottom order.
+ */
+interface TaskTreeNode {
+	item: HistoryItem
+	/** Nesting depth (0 = root task). */
+	depth: number
+	/**
+	 * Whether this node is the last sibling among its parent's children.
+	 * Used to decide which tree connector to draw (└ vs ├).
+	 */
+	isLastSibling: boolean
+	/**
+	 * For each ancestor level, whether that ancestor was the last sibling.
+	 * Used to decide whether to draw a vertical continuation line (│) for
+	 * each ancestor column.
+	 */
+	ancestorIsLast: boolean[]
+}
+
+/**
+ * Builds a flattened DFS-pre-order list of TaskTreeNode from a flat
+ * HistoryItem array.  Tasks without a known parent (or whose parentTaskId
+ * is not present in the list) are treated as roots.  Siblings are sorted
+ * ascending by `ts` (creation time).
+ */
+function buildFlatTree(taskHistory: HistoryItem[]): TaskTreeNode[] {
+	const byId = new Map(taskHistory.map((i) => [i.id, i]))
+
+	const roots = taskHistory.filter((i) => !i.parentTaskId || !byId.has(i.parentTaskId)).sort((a, b) => b.ts - a.ts)
+
+	const result: TaskTreeNode[] = []
+
+	function visit(item: HistoryItem, depth: number, isLastSibling: boolean, ancestorIsLast: boolean[]) {
+		result.push({ item, depth, isLastSibling, ancestorIsLast })
+
+		const children = taskHistory.filter((i) => i.parentTaskId === item.id).sort((a, b) => b.ts - a.ts)
+
+		children.forEach((child, ci) => {
+			visit(child, depth + 1, ci === children.length - 1, [...ancestorIsLast, isLastSibling])
+		})
+	}
+
+	roots.forEach((root, i) => visit(root, 0, i === roots.length - 1, []))
+
+	return result
+}
+
+/**
  * Task state indicator colors and labels.
  */
 const TASK_STATE_CONFIG: Record<string, { color: string; label: string; pulse: boolean }> = {
@@ -59,12 +111,14 @@ function getTaskDisplayName(item: HistoryItem): string {
 }
 
 /**
- * TaskSelector provides a dropdown for switching between all tasks in history.
+ * TaskSelector provides a hierarchical dropdown for switching between all tasks
+ * in history, showing the parent-child delegation tree.
  *
  * LLM hint: Uses taskHistory (same data as HistoryView) as the authoritative task
  * list. parallelTasks overlays runtime state (running/paused/etc.) for tasks that
  * have a live instance in the current session. currentTaskId identifies the task
- * currently shown in the chat panel.
+ * currently shown in the chat panel.  The tree is built from parentTaskId links on
+ * HistoryItem; siblings are ordered ascending by ts (creation time).
  */
 export const TaskSelector = memo(
 	({ taskHistory, parallelTasks, currentTaskId, notificationCount }: TaskSelectorProps) => {
@@ -75,6 +129,9 @@ export const TaskSelector = memo(
 
 		// Build a fast O(1) lookup map from parallelTasks for runtime state overlay.
 		const runtimeStateMap = useMemo(() => new Map(parallelTasks.map((t) => [t.id, t])), [parallelTasks])
+
+		// Build the flattened DFS tree once per taskHistory change.
+		const flatTree = useMemo(() => buildFlatTree(taskHistory), [taskHistory])
 
 		const currentItem = taskHistory.find((i) => i.id === currentTaskId)
 		const currentRuntime = currentTaskId ? runtimeStateMap.get(currentTaskId) : undefined
@@ -175,7 +232,7 @@ export const TaskSelector = memo(
 				{isOpen && (
 					<div
 						className={cn(
-							"absolute top-full left-0 mt-1 w-72 z-50",
+							"absolute top-full left-0 mt-1 w-80 z-50",
 							"bg-[var(--vscode-editorWidget-background,#252526)] border border-[var(--vscode-editorWidget-border,#454545)] rounded-md shadow-lg",
 							"max-h-[400px] overflow-y-auto",
 						)}>
@@ -191,14 +248,14 @@ export const TaskSelector = memo(
 							<span>{t("chat:taskSelector.newTask", "New Task")}</span>
 						</button>
 
-						{/* Task list — mirrors History, same data source (taskHistory) */}
-						{taskHistory.length === 0 ? (
+						{/* Task tree — DFS pre-order, siblings sorted by creation time */}
+						{flatTree.length === 0 ? (
 							<div className="px-3 py-4 text-sm text-[var(--vscode-descriptionForeground,#8b8b8b)] text-center">
 								{t("chat:taskSelector.noTasks", "No tasks yet")}
 							</div>
 						) : (
 							<div className="py-1">
-								{taskHistory.map((item) => {
+								{flatTree.map(({ item, depth, isLastSibling, ancestorIsLast }) => {
 									const runtime = runtimeStateMap.get(item.id)
 									const state = runtime?.state ?? "idle"
 									const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
@@ -211,23 +268,56 @@ export const TaskSelector = memo(
 											key={item.id}
 											onClick={() => !isEditing && handleFocusTask(item.id)}
 											className={cn(
-												"flex items-center gap-2 px-3 py-2 text-sm cursor-pointer group",
+												"flex items-center gap-1 pr-2 py-2 text-sm cursor-pointer group",
 												"hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] transition-colors",
 												isCurrent &&
 													"bg-[var(--vscode-list-activeSelectionBackground,#094771)]",
 											)}>
-											{/* Runtime state indicator — gray dot for idle (non-parallel) tasks */}
-											<span
-												className={cn(
-													"w-2 h-2 rounded-full flex-shrink-0",
-													stateConfig.color,
-													stateConfig.pulse && "animate-pulse",
+											{/*
+											 * Tree connector gutter:
+											 * For each ancestor level, draw either a vertical
+											 * continuation line (│) or empty space, then for this
+											 * node draw └ (last sibling) or ├ (non-last).
+											 */}
+											<span className="flex items-center flex-shrink-0 select-none" aria-hidden>
+												{/* Root indent */}
+												<span className="w-3" />
+												{depth === 0 ? null : (
+													<>
+														{/* Ancestor continuation columns */}
+														{ancestorIsLast.slice(1).map((anc, ai) => (
+															<span
+																key={ai}
+																className="inline-flex items-center justify-center w-3"
+																style={{
+																	color: "var(--vscode-editorIndentGuide-background,#404040)",
+																}}>
+																{anc ? "\u00a0" : "│"}
+															</span>
+														))}
+														{/* This node's connector */}
+														<span className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)]">
+															{isLastSibling ? "└" : "├"}
+														</span>
+														<span className="w-1" />
+													</>
 												)}
-											/>
+											</span>
+
+											{/* Runtime state indicator */}
+											<StandardTooltip content={stateConfig.label}>
+												<span
+													className={cn(
+														"w-2 h-2 rounded-full flex-shrink-0",
+														stateConfig.color,
+														stateConfig.pulse && "animate-pulse",
+													)}
+												/>
+											</StandardTooltip>
 
 											{/* Task name (editable inline) */}
 											{isEditing ? (
-												<div className="flex items-center gap-1 flex-1 min-w-0">
+												<div className="flex items-center gap-1 flex-1 min-w-0 ml-1">
 													<input
 														type="text"
 														value={editName}
@@ -260,7 +350,7 @@ export const TaskSelector = memo(
 												</div>
 											) : (
 												<>
-													<span className="flex-1 min-w-0 truncate">{displayName}</span>
+													<span className="flex-1 min-w-0 truncate ml-1">{displayName}</span>
 
 													{/* Task actions — runtime controls only shown for active parallel tasks */}
 													<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
@@ -318,7 +408,7 @@ export const TaskSelector = memo(
 
 											{/* Current-task indicator */}
 											{isCurrent && !isEditing && (
-												<span className="text-[var(--vscode-descriptionForeground,#8b8b8b)] text-xs">
+												<span className="text-[var(--vscode-descriptionForeground,#8b8b8b)] text-xs ml-1">
 													✓
 												</span>
 											)}
