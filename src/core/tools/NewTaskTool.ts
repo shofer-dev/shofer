@@ -1,7 +1,6 @@
 import * as vscode from "vscode"
 
 import { TodoItem } from "@roo-code/types"
-import { v7 as uuidv7 } from "uuid"
 
 import { Task } from "../task/Task"
 import { getModeBySlug } from "../../shared/modes"
@@ -23,7 +22,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, todos, is_background, task_id } = params
+		const { mode, message, todos, is_background } = params
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
@@ -115,42 +114,49 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			}
 
 			if (is_background) {
-				// Async background path: use the existing delegateParentAndOpenChild which already
-				// supports background parents (when parent is not the focused task it uses
-				// keepCurrentTask=true and registerBackgroundTask). We then skip the delegation
-				// metadata so the parent is NOT put into "delegated" state.
-				const childTaskId = task_id || uuidv7()
-
-				// delegateParentAndOpenChild creates the child and, when the parent is not focused,
-				// automatically calls registerBackgroundTask(child) and keeps the parent active.
-				// However it also sets awaitingChildId / status="delegated" on the parent, which
-				// we must override afterwards to keep the parent in "active" state.
-				const child = await provider.delegateParentAndOpenChild({
-					parentTaskId: task.taskId,
-					message: unescapedMessage,
+				// Async background path: create the child WITHOUT touching the parent's stack
+				// position. We must NOT call delegateParentAndOpenChild here because when the
+				// parent is the focused task it calls removeClineFromStack(), which sets
+				// parent.abort=true and triggers the synchronous delegation resume flow.
+				//
+				// Instead we call createTask() directly with openInStack=false so the child
+				// runs concurrently while the parent continues uninterrupted.
+				const child = await provider.createTask(unescapedMessage, undefined, task as any, {
 					initialTodos: todoItems,
-					mode: effectiveMode,
+					initialStatus: "active",
+					// startTask is irrelevant here: createTask always calls task.start() internally.
+					initialMode: effectiveMode,
+					// openInStack=false: child is NOT pushed onto clineStack, so the parent
+					// remains the focused task and is never aborted.
+					openInStack: false,
+					// keepCurrentTask is only checked when parentTask is falsy, so it doesn't
+					// matter here, but set it for clarity.
+					keepCurrentTask: true,
 				})
 
-				// Override the parent history: remove delegated/awaitingChildId markers and
-				// add the child to backgroundChildIds instead so the parent stays active.
+				// Register the child with TaskManager so it is tracked as a managed background task.
+				provider.taskManager.registerBackgroundTask(child)
+
+				// Persist the parent-child relationship in parent's history WITHOUT changing
+				// status or setting awaitingChildId (parent must remain "active").
 				try {
 					const { historyItem: parentHistory } = await provider.getTaskWithId(task.taskId)
 					const backgroundChildIds = Array.from(
 						new Set([...(parentHistory.backgroundChildIds ?? []), child.taskId]),
 					)
+					const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), child.taskId]))
 					await provider.updateTaskHistory({
 						...parentHistory,
-						status: "active",
-						awaitingChildId: undefined,
+						// Deliberately NOT changing status or setting awaitingChildId.
 						backgroundChildIds,
+						childIds,
 					})
 				} catch (err) {
-					// Non-fatal: parent history metadata may be stale but child still runs
+					// Non-fatal: parent history metadata may be stale but child still runs.
 					console.error(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
 				}
 
-				// Track in-memory handle on the parent task instance
+				// Track in-memory handle on the parent task instance.
 				task.backgroundChildren.set(child.taskId, {
 					taskId: child.taskId,
 					status: "starting",
