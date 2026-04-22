@@ -68,6 +68,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	private disposable: vscode.Disposable | null
 	private currentRequestCancellation: vscode.CancellationTokenSource | null
 	private conversationId: string
+	private parentConversationId: string | undefined
+	private rootConversationId: string | undefined
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -77,6 +79,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		this.currentRequestCancellation = null
 		// Use taskId from options if provided, otherwise generate a fallback UUID
 		this.conversationId = options.taskId ?? uuidv7()
+		this.parentConversationId = options.parentTaskId
+		this.rootConversationId = options.rootTaskId
 
 		try {
 			// Listen for model changes and reset client
@@ -408,6 +412,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				tools: convertToVsCodeLmTools(metadata?.tools ?? []),
 				modelOptions: {
 					conversationId: this.conversationId,
+					...(this.parentConversationId && { parentConversationId: this.parentConversationId }),
+					...(this.rootConversationId && { rootConversationId: this.rootConversationId }),
 					systemPrompt,
 					...(maxTokens && { maxTokens }),
 				},
@@ -655,7 +661,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			const client = await this.getClient()
 			const response = await client.sendRequest(
 				[vscode.LanguageModelChatMessage.User(prompt)],
-				{ modelOptions: { conversationId: this.conversationId } },
+				{
+					modelOptions: {
+						conversationId: this.conversationId,
+						...(this.parentConversationId && { parentConversationId: this.parentConversationId }),
+						...(this.rootConversationId && { rootConversationId: this.rootConversationId }),
+					},
+				},
 				new vscode.CancellationTokenSource().token,
 			)
 			let result = ""

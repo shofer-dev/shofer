@@ -40,6 +40,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const { result } = params
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
+		console.log(
+			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, result=${result?.substring(0, 100)}`,
+		)
+
 		// Prevent attempt_completion if any tool failed in the current turn
 		if (task.didToolFailInCurrentTurn) {
 			const errorMsg = t("common:errors.attempt_completion_tool_failed")
@@ -80,6 +84,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			await task.say("completion_result", result, undefined, false)
 
+			console.log(
+				`[AttemptCompletionTool.execute] Checking delegation: taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}`,
+			)
+
 			// Check for subtask using parentTaskId (metadata-driven delegation)
 			if (task.parentTaskId) {
 				// Check if this subtask has already completed and returned to parent
@@ -91,11 +99,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						const status = historyItem?.status
 
 						if (status === "completed") {
+							console.log(
+								`[AttemptCompletionTool.execute] Child task already completed, skipping delegation taskId=${task.taskId}`,
+							)
 							// Subtask already completed - skip delegation flow entirely
 							// Fall through to normal completion ask flow below (outside this if block)
 							// This shows the user the completion result and waits for acceptance
 							// without injecting another tool_result to the parent
 						} else if (status === "active") {
+							console.log(
+								`[AttemptCompletionTool.execute] Child task active, starting delegation taskId=${task.taskId}`,
+							)
 							// Normal subtask completion - do delegation
 							const delegation = await this.delegateToParent(
 								task,
@@ -104,9 +118,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								askFinishSubTaskApproval,
 								pushToolResult,
 							)
-							if (delegation === "delegated") {
-								this.emitTaskCompleted(task)
-							}
+							console.log(
+								`[AttemptCompletionTool.execute] Delegation returned: ${delegation}, taskId=${task.taskId}`,
+							)
 							if (delegation !== "continue") return
 						} else {
 							// Unexpected status (undefined or "delegated") - log error and skip delegation
@@ -129,16 +143,27 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
+			console.log(`[AttemptCompletionTool.execute] Showing completion ask to user, taskId=${task.taskId}`)
 			const { response, text, images } = await task.ask("completion_result", "", false)
 
 			if (response === "yesButtonClicked") {
+				console.log(
+					`[AttemptCompletionTool.execute] User approved completion, emitting TaskCompleted, taskId=${task.taskId}`,
+				)
 				this.emitTaskCompleted(task)
+				// Set abort to stop the task loop from continuing after completion
+				task.abort = true
+				console.log(
+					`[AttemptCompletionTool.execute] Set abort=true and RETURNING after TaskCompleted, taskId=${task.taskId}`,
+				)
 				return
 			}
 
+			console.log(
+				`[AttemptCompletionTool.execute] User provided feedback, continuing task, taskId=${task.taskId}`,
+			)
 			// User provided feedback - push tool result to continue the conversation
 			await task.say("user_feedback", text ?? "", images)
-
 			const feedbackText = `<user_message>\n${text}\n</user_message>`
 			pushToolResult(formatResponse.toolResult(feedbackText, images))
 		} catch (error) {
@@ -160,6 +185,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		askFinishSubTaskApproval: () => Promise<boolean>,
 		pushToolResult: (result: string) => void,
 	): Promise<"delegated" | "denied" | "continue"> {
+		console.log(
+			`[AttemptCompletionTool.delegateToParent] START childTaskId=${task.taskId}, parentTaskId=${task.parentTaskId}`,
+		)
 		const didApprove = await askFinishSubTaskApproval()
 
 		if (!didApprove) {
@@ -169,12 +197,26 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 		pushToolResult("")
 
+		// Emit completion BEFORE delegation cleanup. The delegation reopen flow may
+		// abort/remove the child task instance as part of cleanup; emitting after
+		// that point can miss TaskManager listeners and leave runtime state stale.
+		this.emitTaskCompleted(task)
+
+		// Set abort to stop the child task loop from continuing after completion
+		task.abort = true
+
+		console.log(
+			`[AttemptCompletionTool.delegateToParent] Calling reopenParentFromDelegation parentTaskId=${task.parentTaskId}, childTaskId=${task.taskId}`,
+		)
 		await provider.reopenParentFromDelegation({
 			parentTaskId: task.parentTaskId!,
 			childTaskId: task.taskId,
 			completionResultSummary: result,
 		})
 
+		console.log(
+			`[AttemptCompletionTool.delegateToParent] COMPLETED delegation parentTaskId=${task.parentTaskId}, childTaskId=${task.taskId}`,
+		)
 		return "delegated"
 	}
 
@@ -197,12 +239,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	private emitTaskCompleted(task: Task): void {
+		console.log(`[AttemptCompletionTool.emitTaskCompleted] Emitting TaskCompleted event, taskId=${task.taskId}`)
 		// Force final token usage update before emitting TaskCompleted.
 		// This ensures the latest stats are captured regardless of throttle timer.
 		task.emitFinalTokenUsageUpdate()
 
 		TelemetryService.instance.captureTaskCompleted(task.taskId)
 		task.emit(RooCodeEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage)
+		console.log(`[AttemptCompletionTool.emitTaskCompleted] TaskCompleted event emitted, taskId=${task.taskId}`)
 	}
 }
 

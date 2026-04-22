@@ -3496,6 +3496,10 @@ export class ClineProvider
 		const { parentTaskId, childTaskId, completionResultSummary } = params
 		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 
+		this.log(
+			`[reopenParentFromDelegation] START parentTaskId=${parentTaskId}, childTaskId=${childTaskId}, summary=${completionResultSummary.substring(0, 100)}`,
+		)
+
 		// 1) Load parent from history and current persisted messages
 		const { historyItem } = await this.getTaskWithId(parentTaskId)
 
@@ -3609,14 +3613,30 @@ export class ClineProvider
 
 		await saveApiMessages({ messages: parentApiMessages as any, taskId: parentTaskId, globalStoragePath })
 
-		// 3) Close child instance if still open (single-open-task invariant).
+		// 3) Close child instance if still active.
 		//    This MUST happen BEFORE updating the child's status to "completed" because
-		//    removeClineFromStack() → abortTask(true) → saveClineMessages() writes
-		//    the historyItem with initialStatus (typically "active"), which would
-		//    overwrite a "completed" status set earlier.
+		//    abortTask(true) / removeClineFromStack() may write historyItem with
+		//    initialStatus (typically "active"), which would overwrite a pre-written
+		//    "completed" status.
 		const current = this.getCurrentTask()
 		if (current?.taskId === childTaskId) {
 			await this.removeClineFromStack()
+		} else {
+			// Child may still be running in background (parallel mode). Ensure it is
+			// stopped and detached so it doesn't continue issuing tool calls.
+			const activeChild = this.taskManager?.getManagedTaskInstance?.(childTaskId)
+			if (activeChild) {
+				try {
+					await activeChild.abortTask(true)
+				} catch (err) {
+					this.log(
+						`[reopenParentFromDelegation] Failed to abort background child ${childTaskId}: ${
+							(err as Error)?.message ?? String(err)
+						}`,
+					)
+				}
+				this.taskManager.removeManagedTaskInstance(childTaskId)
+			}
 		}
 
 		// 4) Update child metadata to "completed" status.
@@ -3661,13 +3681,21 @@ export class ClineProvider
 		// foreground stack and preserves the user's current focused task.
 		let parentInstance = this.taskManager?.getManagedTaskInstance?.(parentTaskId)
 		if (parentInstance && (parentInstance.abandoned || parentInstance.abort)) {
+			this.log(
+				`[reopenParentFromDelegation] Parent instance found but abandoned/aborted, will rehydrate parentTaskId=${parentTaskId}`,
+			)
 			parentInstance = undefined
 		}
 
 		if (!parentInstance) {
+			this.log(`[reopenParentFromDelegation] REHYDRATING parent from history parentTaskId=${parentTaskId}`)
 			// Fallback: parent instance not available/alive, rehydrate from history.
 			// IMPORTANT: startTask=false to suppress resume-from-history ask scheduling.
 			parentInstance = await this.createTaskWithHistoryItem(updatedHistory, { startTask: false })
+		} else {
+			this.log(
+				`[reopenParentFromDelegation] IN-PLACE resume of parent parentTaskId=${parentTaskId}, instanceId=${parentInstance.instanceId}`,
+			)
 		}
 
 		// 8) Inject restored histories into the in-memory instance before resuming
@@ -3684,7 +3712,11 @@ export class ClineProvider
 			}
 
 			// Auto-resume parent without ask("resume_task")
+			this.log(
+				`[reopenParentFromDelegation] Calling resumeAfterDelegation on parentTaskId=${parentTaskId}, instanceId=${parentInstance.instanceId}`,
+			)
 			await parentInstance.resumeAfterDelegation()
+			this.log(`[reopenParentFromDelegation] COMPLETED resumeAfterDelegation for parentTaskId=${parentTaskId}`)
 		}
 
 		// 9) Emit TaskDelegationResumed (provider-level)
@@ -3693,6 +3725,8 @@ export class ClineProvider
 		} catch {
 			// non-fatal
 		}
+
+		this.log(`[reopenParentFromDelegation] FINISHED parentTaskId=${parentTaskId}, childTaskId=${childTaskId}`)
 	}
 
 	/**

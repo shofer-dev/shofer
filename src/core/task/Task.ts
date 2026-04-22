@@ -384,6 +384,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	didRejectTool = false
 	didAlreadyUseTool = false
 	didToolFailInCurrentTurn = false
+	didExecuteAttemptCompletion = false
 	didCompleteReadingStream = false
 	private _started = false
 	// No streaming parser is required.
@@ -485,7 +486,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		})
 
 		this.apiConfiguration = apiConfiguration
-		this.api = buildApiHandler(this.apiConfiguration, { taskId: this.taskId })
+		this.api = buildApiHandler(this.apiConfiguration, {
+			taskId: this.taskId,
+			parentTaskId: this.parentTaskId,
+			rootTaskId: this.rootTaskId,
+		})
 		this.autoApprovalHandler = new AutoApprovalHandler()
 
 		this.consecutiveMistakeLimit = consecutiveMistakeLimit ?? DEFAULT_CONSECUTIVE_MISTAKE_LIMIT
@@ -1627,7 +1632,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public updateApiConfiguration(newApiConfiguration: ProviderSettings): void {
 		// Update the configuration and rebuild the API handler
 		this.apiConfiguration = newApiConfiguration
-		this.api = buildApiHandler(this.apiConfiguration, { taskId: this.taskId })
+		this.api = buildApiHandler(this.apiConfiguration, {
+			taskId: this.taskId,
+			parentTaskId: this.parentTaskId,
+			rootTaskId: this.rootTaskId,
+		})
 	}
 
 	public async submitUserMessage(
@@ -2489,6 +2498,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * - Immediately continues task loop without user interaction
 	 */
 	public async resumeAfterDelegation(): Promise<void> {
+		this.diagLog(
+			`[DIAG resumeAfterDelegation] START taskId=${this.taskId}.${this.instanceId}, abort=${this.abort}, abandoned=${this.abandoned}`,
+		)
 		// Clear any ask states that might have been set during history load
 		this.idleAsk = undefined
 		this.resumableAsk = undefined
@@ -2570,8 +2582,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.emit(RooCodeEventName.TaskStarted)
 
 		while (!this.abort) {
+			this.diagLog(
+				`[DIAG initiateTaskLoop] Loop iteration START taskId=${this.taskId}.${this.instanceId}, nextUserContent blocks=${nextUserContent.length}`,
+			)
 			const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
 			includeFileDetails = false // We only need file details the first time.
+			this.diagLog(
+				`[DIAG initiateTaskLoop] Loop iteration END taskId=${this.taskId}.${this.instanceId}, didEndLoop=${didEndLoop}`,
+			)
 
 			// The way this agentic loop works is that cline will be given a
 			// task that he then calls tools to complete. Unless there's an
@@ -2864,6 +2882,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.userMessageContentReady = false
 				this.didRejectTool = false
 				this.didAlreadyUseTool = false
+				this.didExecuteAttemptCompletion = false
 				this.assistantMessageSavedToHistory = false
 				// Reset tool failure flag for each new assistant turn - this ensures that tool failures
 				// only prevent attempt_completion within the same assistant message, not across turns
@@ -3705,10 +3724,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 					await pWaitFor(() => this.userMessageContentReady)
 
+					this.diagLog(
+						`[DIAG recursivelyMakeClineRequests] After tools executed: taskId=${this.taskId}.${this.instanceId}, abort=${this.abort}, userMessageContent length=${this.userMessageContent.length}`,
+					)
+
 					// If the model did not tool use, then we need to tell it to
 					// either use a tool or attempt_completion.
 					const didToolUse = this.assistantMessageContent.some(
 						(block) => block.type === "tool_use" || block.type === "mcp_tool_use",
+					)
+
+					this.diagLog(
+						`[DIAG recursivelyMakeClineRequests] Tool usage check: didToolUse=${didToolUse}, consecutiveNoToolUseCount=${this.consecutiveNoToolUseCount}`,
 					)
 
 					if (!didToolUse) {
@@ -3735,6 +3762,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Push to stack if there's content OR if we're paused waiting for a subtask.
 					// When paused, we push an empty item so the loop continues to the pause check.
 					if (this.userMessageContent.length > 0 || this.isPaused) {
+						this.diagLog(
+							`[DIAG recursivelyMakeClineRequests] Pushing to stack and continuing loop: userMessageContent length=${this.userMessageContent.length}, isPaused=${this.isPaused}`,
+						)
 						stack.push({
 							userContent: [...this.userMessageContent], // Create a copy to avoid mutation issues
 							includeFileDetails: false, // Subsequent iterations don't need file details
@@ -3744,6 +3774,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						await new Promise((resolve) => setImmediate(resolve))
 					}
 
+					this.diagLog(
+						`[DIAG recursivelyMakeClineRequests] Continuing stack loop: stack length=${stack.length}`,
+					)
 					continue
 				} else {
 					// If there's no assistant_responses, that means we got no text

@@ -109,7 +109,10 @@ export interface ApiHandler {
 	countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number>
 }
 
-export function buildApiHandler(configuration: ProviderSettings, extraOptions?: { taskId?: string }): ApiHandler {
+export function buildApiHandler(
+	configuration: ProviderSettings,
+	extraOptions?: { taskId?: string; parentTaskId?: string; rootTaskId?: string },
+): ApiHandler {
 	const { apiProvider, ...options } = configuration
 	const handlerOptions = { ...options, ...extraOptions }
 
