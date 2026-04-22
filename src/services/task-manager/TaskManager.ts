@@ -519,6 +519,12 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		// Handle task abort (user cancelled or abandoned)
 		const onAborted = () => {
+			const currentState = this.getTaskExecutionState(targetTaskId)
+			// Preserve terminal outcomes when abort is used for cleanup (e.g.,
+			// delegated child shutdown after completion/error).
+			if (currentState === "idle" || currentState === "error") {
+				return
+			}
 			this.updateTaskExecutionState(targetTaskId, "paused")
 		}
 

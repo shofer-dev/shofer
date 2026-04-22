@@ -713,6 +713,78 @@ describe("History resume delegation - parent metadata transitions", () => {
 		expect(activeParentInstance.resumeAfterDelegation).toHaveBeenCalledTimes(1)
 	})
 
+	it("reopenParentFromDelegation aborts and detaches active background child instance", async () => {
+		const activeParentInstance = {
+			abandoned: false,
+			abort: false,
+			resumeAfterDelegation: vi.fn().mockResolvedValue(undefined),
+			overwriteClineMessages: vi.fn().mockResolvedValue(undefined),
+			overwriteApiConversationHistory: vi.fn().mockResolvedValue(undefined),
+		}
+		const activeChildInstance = {
+			abortTask: vi.fn().mockResolvedValue(undefined),
+		}
+
+		const removeManagedTaskInstance = vi.fn()
+
+		const provider = {
+			contextProxy: { globalStorageUri: { fsPath: "/tmp" } },
+			getTaskWithId: vi.fn().mockImplementation(async (id: string) => {
+				if (id === "parent-bg-cleanup") {
+					return {
+						historyItem: {
+							id: "parent-bg-cleanup",
+							status: "delegated",
+							awaitingChildId: "child-bg-cleanup",
+							childIds: ["child-bg-cleanup"],
+							ts: 900,
+							task: "Parent cleanup",
+							tokensIn: 0,
+							tokensOut: 0,
+							totalCost: 0,
+						},
+					}
+				}
+				return {
+					historyItem: {
+						id: "child-bg-cleanup",
+						status: "active",
+						ts: 901,
+						task: "Child cleanup",
+						tokensIn: 0,
+						tokensOut: 0,
+						totalCost: 0,
+					},
+				}
+			}),
+			emit: vi.fn(),
+			getCurrentTask: vi.fn(() => ({ taskId: "different-focused-task" })),
+			removeClineFromStack: vi.fn().mockResolvedValue(undefined),
+			createTaskWithHistoryItem: vi.fn().mockResolvedValue(undefined),
+			updateTaskHistory: vi.fn().mockResolvedValue([]),
+			taskManager: {
+				getManagedTaskInstance: vi.fn((id: string) => {
+					if (id === "parent-bg-cleanup") return activeParentInstance
+					if (id === "child-bg-cleanup") return activeChildInstance
+					return undefined
+				}),
+				removeManagedTaskInstance,
+			},
+		} as unknown as ClineProvider
+
+		vi.mocked(readTaskMessages).mockResolvedValue([])
+		vi.mocked(readApiMessages).mockResolvedValue([])
+
+		await (ClineProvider.prototype as any).reopenParentFromDelegation.call(provider, {
+			parentTaskId: "parent-bg-cleanup",
+			childTaskId: "child-bg-cleanup",
+			completionResultSummary: "done",
+		})
+
+		expect(activeChildInstance.abortTask).toHaveBeenCalledWith(true)
+		expect(removeManagedTaskInstance).toHaveBeenCalledWith("child-bg-cleanup")
+	})
+
 	it("reopenParentFromDelegation logs child status persistence failure and continues reopen flow (RPD-04)", async () => {
 		const logSpy = vi.fn()
 		const emitSpy = vi.fn()

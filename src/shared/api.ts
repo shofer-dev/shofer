@@ -28,6 +28,16 @@ export type ApiHandlerOptions = Omit<ProviderSettings, "apiProvider"> & {
 	 * Used by vscode-lm provider to pass conversationId in modelOptions.
 	 */
 	taskId?: string
+	/**
+	 * Parent task/conversation ID for task hierarchy tracking.
+	 * Used by vscode-lm provider to pass parentConversationId in modelOptions.
+	 */
+	parentTaskId?: string
+	/**
+	 * Root task/conversation ID for task hierarchy tracking.
+	 * Used by vscode-lm provider to pass rootConversationId in modelOptions.
+	 */
+	rootTaskId?: string
 }
 
 // RouterName
