@@ -84,6 +84,8 @@ export const toolParamNames = [
 	// read_file legacy format parameter (backward compatibility)
 	"files",
 	"line_ranges",
+	// find_files parameter
+	"pattern",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]

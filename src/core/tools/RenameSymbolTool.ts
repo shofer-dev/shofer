@@ -137,7 +137,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"rename_symbol">): Promise<void> {
-		const filePath: string | undefined = block.params.filePath
+		const filePath: string | undefined = block.params.file_path
 
 		if (!this.hasPathStabilized(filePath)) {
 			return
