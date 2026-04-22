@@ -94,11 +94,21 @@ export interface CreateTaskOptions {
 	consecutiveMistakeLimit?: number
 	experiments?: Record<string, boolean>
 	initialTodos?: TodoItem[]
+	/**
+	 * Override the initial task mode for this task only.
+	 * Useful when creating delegated/background tasks without mutating global mode.
+	 */
+	initialMode?: string
 	/** Initial status for the task's history item (e.g., "active" for child tasks) */
 	initialStatus?: "active" | "delegated" | "completed"
 	/** Whether to start the task loop immediately (default: true).
 	 *  When false, the caller must invoke `task.start()` manually. */
 	startTask?: boolean
+	/**
+	 * Whether to push the created task onto the provider stack and focus it.
+	 * Defaults to true. Set to false for background-only task creation.
+	 */
+	openInStack?: boolean
 	/**
 	 * When true, skip the single-open-task invariant (don't remove/abort the current task).
 	 * Used for parallel task creation where multiple tasks run simultaneously.

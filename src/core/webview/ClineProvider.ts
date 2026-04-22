@@ -2971,6 +2971,7 @@ export class ClineProvider
 		options: CreateTaskOptions = {},
 		configuration: RooCodeSettings = {},
 	): Promise<Task> {
+		const openInStack = options.openInStack ?? true
 		if (configuration) {
 			await this.setValues(configuration)
 
@@ -3037,7 +3038,11 @@ export class ClineProvider
 			task: text,
 			images,
 			experiments,
-			rootTask: this.clineStack.length > 0 ? this.clineStack[0] : undefined,
+			rootTask: parentTask
+				? (parentTask.rootTask ?? parentTask)
+				: this.clineStack.length > 0
+					? this.clineStack[0]
+					: undefined,
 			parentTask,
 			taskNumber: this.clineStack.length + 1,
 			onCreated: this.taskCreationCallback,
@@ -3048,7 +3053,11 @@ export class ClineProvider
 			...options,
 		})
 
-		await this.addClineToStack(task)
+		if (openInStack) {
+			await this.addClineToStack(task)
+		} else {
+			task.emit(RooCodeEventName.TaskUnfocused)
+		}
 		task.start()
 
 		this.log(
@@ -3347,16 +3356,15 @@ export class ClineProvider
 
 		// Metadata-driven delegation is always enabled
 
-		// 1) Get parent (must be current task)
-		const parent = this.getCurrentTask()
+		// 1) Resolve parent task. For focused delegation this is top-of-stack.
+		// For parallel/background execution, the parent may be active but not focused.
+		const currentTask = this.getCurrentTask()
+		const parent =
+			currentTask?.taskId === parentTaskId ? currentTask : this.taskManager.getManagedTaskInstance(parentTaskId)
 		if (!parent) {
 			throw new Error("[delegateParentAndOpenChild] No current task")
 		}
-		if (parent.taskId !== parentTaskId) {
-			throw new Error(
-				`[delegateParentAndOpenChild] Parent mismatch: expected ${parentTaskId}, current ${parent.taskId}`,
-			)
-		}
+		const isParentFocused = currentTask?.taskId === parentTaskId
 		// 2) Flush pending tool results to API history BEFORE disposing the parent.
 		//    This is critical: when tools are called before new_task,
 		//    their tool_result blocks are in userMessageContent but not yet saved to API history.
@@ -3391,32 +3399,33 @@ export class ClineProvider
 			)
 		}
 
-		// 3) Enforce single-open invariant by closing/disposing the parent first
-		//    This ensures we never have >1 tasks open at any time during delegation.
-		//    Await abort completion to ensure clean disposal and prevent unhandled rejections.
-		try {
-			await this.removeClineFromStack({ skipDelegationRepair: true })
-		} catch (error) {
-			this.log(
-				`[delegateParentAndOpenChild] Error during parent disposal (non-fatal): ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			)
-			// Non-fatal: proceed with child creation even if parent cleanup had issues
+		// 3) For focused parent, preserve legacy delegation behavior by replacing stack top.
+		//    For background parent, keep the focused task untouched and run child in background.
+		if (isParentFocused) {
+			try {
+				await this.removeClineFromStack({ skipDelegationRepair: true })
+			} catch (error) {
+				this.log(
+					`[delegateParentAndOpenChild] Error during parent disposal (non-fatal): ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+				// Non-fatal: proceed with child creation even if parent cleanup had issues
+			}
 		}
 
-		// 3) Switch provider mode to child's requested mode BEFORE creating the child task
-		//    This ensures the child's system prompt and configuration are based on the correct mode.
-		//    The mode switch must happen before createTask() because the Task constructor
-		//    initializes its mode from provider.getState() during initializeTaskMode().
-		try {
-			await this.handleModeSwitch(mode as any)
-		} catch (e) {
-			this.log(
-				`[delegateParentAndOpenChild] handleModeSwitch failed for mode '${mode}': ${
-					(e as Error)?.message ?? String(e)
-				}`,
-			)
+		// 4) For focused delegation, keep existing mode-switch behavior.
+		// For background delegation, avoid mutating global provider mode; set child mode directly.
+		if (isParentFocused) {
+			try {
+				await this.handleModeSwitch(mode as any)
+			} catch (e) {
+				this.log(
+					`[delegateParentAndOpenChild] handleModeSwitch failed for mode '${mode}': ${
+						(e as Error)?.message ?? String(e)
+					}`,
+				)
+			}
 		}
 
 		// 4) Create child as sole active (parent reference preserved for lineage)
@@ -3434,7 +3443,14 @@ export class ClineProvider
 			initialTodos,
 			initialStatus: "active",
 			startTask: false,
+			initialMode: mode,
+			keepCurrentTask: !isParentFocused,
+			openInStack: isParentFocused,
 		})
+
+		if (!isParentFocused) {
+			this.taskManager.registerBackgroundTask(child)
+		}
 
 		// 5) Persist parent delegation metadata BEFORE the child starts writing.
 		try {
@@ -3639,9 +3655,20 @@ export class ClineProvider
 			// non-fatal
 		}
 
-		// 7) Reopen the parent from history as the sole active task (restores saved mode)
-		//    IMPORTANT: startTask=false to suppress resume-from-history ask scheduling
-		const parentInstance = await this.createTaskWithHistoryItem(updatedHistory, { startTask: false })
+		// 7) Resume parent.
+		// Prefer in-place resume when the parent task instance is still active in memory
+		// (common for background delegation). This avoids pulling the parent into the
+		// foreground stack and preserves the user's current focused task.
+		let parentInstance = this.taskManager?.getManagedTaskInstance?.(parentTaskId)
+		if (parentInstance && (parentInstance.abandoned || parentInstance.abort)) {
+			parentInstance = undefined
+		}
+
+		if (!parentInstance) {
+			// Fallback: parent instance not available/alive, rehydrate from history.
+			// IMPORTANT: startTask=false to suppress resume-from-history ask scheduling.
+			parentInstance = await this.createTaskWithHistoryItem(updatedHistory, { startTask: false })
+		}
 
 		// 8) Inject restored histories into the in-memory instance before resuming
 		if (parentInstance) {
