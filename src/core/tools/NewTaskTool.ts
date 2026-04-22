@@ -28,7 +28,9 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 		try {
 			// Validate required parameters.
-			if (!mode) {
+			// If mode is not specified, fall back to the parent task's current mode.
+			const effectiveMode = mode || (await task.getTaskMode())
+			if (!effectiveMode) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("new_task")
 				task.didToolFailInCurrentTurn = true
@@ -91,10 +93,10 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			const unescapedMessage = message.replace(/\\\\@/g, "\\@")
 
 			// Verify the mode exists
-			const targetMode = getModeBySlug(mode, state?.customModes)
+			const targetMode = getModeBySlug(effectiveMode, state?.customModes)
 
 			if (!targetMode) {
-				pushToolResult(formatResponse.toolError(`Invalid mode: ${mode}`))
+				pushToolResult(formatResponse.toolError(`Invalid mode: ${effectiveMode}`))
 				return
 			}
 
@@ -103,6 +105,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				mode: targetMode.name,
 				content: message,
 				todos: todoItems,
+				is_background: is_background ?? false,
 			})
 
 			const didApprove = await askApproval("tool", toolMessage)
@@ -126,7 +129,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					parentTaskId: task.taskId,
 					message: unescapedMessage,
 					initialTodos: todoItems,
-					mode,
+					mode: effectiveMode,
 				})
 
 				// Override the parent history: remove delegated/awaitingChildId markers and
@@ -163,7 +166,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					parentTaskId: task.taskId,
 					message: unescapedMessage,
 					initialTodos: todoItems,
-					mode,
+					mode: effectiveMode,
 				})
 
 				// Reflect delegation in tool result (no pause/unpause, no wait)
