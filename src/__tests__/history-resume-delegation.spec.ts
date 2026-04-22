@@ -642,6 +642,77 @@ describe("History resume delegation - parent metadata transitions", () => {
 		expect(parentInstance.resumeAfterDelegation).toHaveBeenCalledTimes(1)
 	})
 
+	it("reopenParentFromDelegation resumes active background parent in-place without rehydrating into foreground stack", async () => {
+		const activeParentInstance = {
+			abandoned: false,
+			abort: false,
+			resumeAfterDelegation: vi.fn().mockResolvedValue(undefined),
+			overwriteClineMessages: vi.fn().mockResolvedValue(undefined),
+			overwriteApiConversationHistory: vi.fn().mockResolvedValue(undefined),
+		}
+
+		const updateTaskHistory = vi.fn().mockResolvedValue([])
+		const removeClineFromStack = vi.fn().mockResolvedValue(undefined)
+		const createTaskWithHistoryItem = vi.fn().mockResolvedValue(undefined)
+
+		const provider = {
+			contextProxy: { globalStorageUri: { fsPath: "/tmp" } },
+			getTaskWithId: vi.fn().mockImplementation(async (id: string) => {
+				if (id === "parent-inplace") {
+					return {
+						historyItem: {
+							id: "parent-inplace",
+							status: "delegated",
+							awaitingChildId: "child-inplace",
+							childIds: ["child-inplace"],
+							ts: 800,
+							task: "Parent in-place",
+							tokensIn: 0,
+							tokensOut: 0,
+							totalCost: 0,
+						},
+					}
+				}
+				return {
+					historyItem: {
+						id: "child-inplace",
+						status: "active",
+						ts: 801,
+						task: "Child in-place",
+						tokensIn: 0,
+						tokensOut: 0,
+						totalCost: 0,
+					},
+				}
+			}),
+			emit: vi.fn(),
+			getCurrentTask: vi.fn(() => ({ taskId: "some-other-focused-task" })),
+			taskManager: {
+				getManagedTaskInstance: vi.fn((id: string) =>
+					id === "parent-inplace" ? activeParentInstance : undefined,
+				),
+			},
+			removeClineFromStack,
+			createTaskWithHistoryItem,
+			updateTaskHistory,
+		} as unknown as ClineProvider
+
+		vi.mocked(readTaskMessages).mockResolvedValue([])
+		vi.mocked(readApiMessages).mockResolvedValue([])
+
+		await (ClineProvider.prototype as any).reopenParentFromDelegation.call(provider, {
+			parentTaskId: "parent-inplace",
+			childTaskId: "child-inplace",
+			completionResultSummary: "Child completed while parent stayed background",
+		})
+
+		expect(removeClineFromStack).not.toHaveBeenCalled()
+		expect(createTaskWithHistoryItem).not.toHaveBeenCalled()
+		expect(activeParentInstance.overwriteClineMessages).toHaveBeenCalledTimes(1)
+		expect(activeParentInstance.overwriteApiConversationHistory).toHaveBeenCalledTimes(1)
+		expect(activeParentInstance.resumeAfterDelegation).toHaveBeenCalledTimes(1)
+	})
+
 	it("reopenParentFromDelegation logs child status persistence failure and continues reopen flow (RPD-04)", async () => {
 		const logSpy = vi.fn()
 		const emitSpy = vi.fn()

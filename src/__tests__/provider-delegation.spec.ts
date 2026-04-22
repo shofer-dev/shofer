@@ -68,6 +68,9 @@ describe("ClineProvider.delegateParentAndOpenChild()", () => {
 			initialTodos: [],
 			initialStatus: "active",
 			startTask: false,
+			initialMode: "code",
+			keepCurrentTask: false,
+			openInStack: true,
 		})
 
 		// Metadata persistence - parent gets "delegated" status (child status is set at creation via initialStatus)
@@ -141,5 +144,67 @@ describe("ClineProvider.delegateParentAndOpenChild()", () => {
 
 		// Verify ordering: createTask → updateTaskHistory → child.start
 		expect(callOrder).toEqual(["createTask", "updateTaskHistory", "child.start"])
+	})
+
+	it("delegates from background parent without replacing current focused stack task", async () => {
+		const focusedTask = { taskId: "focused-1", emit: vi.fn() } as any
+		const backgroundParentTask = {
+			taskId: "parent-bg",
+			flushPendingToolResultsToHistory: vi.fn().mockResolvedValue(true),
+			retrySaveApiConversationHistory: vi.fn().mockResolvedValue(true),
+		} as any
+
+		const childStart = vi.fn()
+		const removeClineFromStack = vi.fn().mockResolvedValue(undefined)
+		const createTask = vi.fn().mockResolvedValue({ taskId: "child-bg", start: childStart })
+		const handleModeSwitch = vi.fn().mockResolvedValue(undefined)
+		const updateTaskHistory = vi.fn().mockResolvedValue(undefined)
+		const getTaskWithId = vi.fn().mockResolvedValue({
+			historyItem: {
+				id: "parent-bg",
+				task: "Parent BG",
+				tokensIn: 0,
+				tokensOut: 0,
+				totalCost: 0,
+				childIds: [],
+			},
+		})
+		const registerBackgroundTask = vi.fn()
+
+		const provider = {
+			emit: vi.fn(),
+			getCurrentTask: vi.fn(() => focusedTask),
+			taskManager: {
+				getManagedTaskInstance: vi.fn((id: string) => (id === "parent-bg" ? backgroundParentTask : undefined)),
+				registerBackgroundTask,
+			},
+			removeClineFromStack,
+			createTask,
+			getTaskWithId,
+			updateTaskHistory,
+			handleModeSwitch,
+			log: vi.fn(),
+		} as unknown as ClineProvider
+
+		const child = await (ClineProvider.prototype as any).delegateParentAndOpenChild.call(provider, {
+			parentTaskId: "parent-bg",
+			message: "Do background work",
+			initialTodos: [],
+			mode: "debug",
+		})
+
+		expect(child.taskId).toBe("child-bg")
+		expect(removeClineFromStack).not.toHaveBeenCalled()
+		expect(handleModeSwitch).not.toHaveBeenCalled()
+		expect(createTask).toHaveBeenCalledWith("Do background work", undefined, backgroundParentTask, {
+			initialTodos: [],
+			initialStatus: "active",
+			startTask: false,
+			initialMode: "debug",
+			keepCurrentTask: true,
+			openInStack: false,
+		})
+		expect(registerBackgroundTask).toHaveBeenCalledWith(expect.objectContaining({ taskId: "child-bg" }))
+		expect(childStart).toHaveBeenCalledTimes(1)
 	})
 })
