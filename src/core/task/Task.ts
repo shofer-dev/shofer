@@ -2384,6 +2384,27 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public async abortTask(isAbandoned = false) {
 		// Aborting task
 
+		// Abort all background children before aborting self (Decision: abort propagation).
+		// We fire-and-forget each child abort in parallel so a slow child cannot delay ours.
+		if (this.backgroundChildren.size > 0) {
+			const provider = this.providerRef.deref()
+			if (provider) {
+				await Promise.all(
+					Array.from(this.backgroundChildren.keys()).map(async (childId) => {
+						try {
+							const child = provider.taskManager.getManagedTaskInstance(childId)
+							if (child) {
+								await child.abortTask(isAbandoned)
+							}
+						} catch (err) {
+							console.error(`[Task#abortTask] Failed to abort background child ${childId}:`, err)
+						}
+					}),
+				)
+			}
+			this.backgroundChildren.clear()
+		}
+
 		// Will stop any autonomously running promises.
 		if (isAbandoned) {
 			this.abandoned = true
