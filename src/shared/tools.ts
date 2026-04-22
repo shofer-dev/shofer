@@ -57,6 +57,8 @@ export const toolParamNames = [
 	"start_line",
 	"end_line",
 	"todos",
+	"is_background", // new_task async mode parameter
+	"task_id", // check_task_status, wait_for_task parameter
 	"prompt",
 	"image",
 	// read_file parameters (native protocol)
@@ -103,7 +105,10 @@ export type NativeToolArgs = {
 	edit_file: { file_path: string; old_string: string; new_string: string; expected_replacements?: number }
 	apply_patch: { patch: string }
 	list_files: { path: string; recursive?: boolean }
-	new_task: { mode: string; message: string; todos?: string }
+	new_task: { mode: string; message: string; todos?: string; is_background?: boolean; task_id?: string }
+	check_task_status: { task_id: string }
+	wait_for_task: { task_id: string; timeout?: number }
+	list_background_tasks: Record<string, never>
 	ask_followup_question: {
 		question: string
 		follow_up: Array<{ text: string; mode?: string }>
@@ -326,6 +331,9 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	view_image: "view images",
 	codebase_search_with_lsp: "search codebase via LSP",
 	set_task_title: "set task title",
+	check_task_status: "check background task status",
+	wait_for_task: "wait for background task",
+	list_background_tasks: "list background tasks",
 } as const
 
 // Define available tool groups.
@@ -383,6 +391,9 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"run_slash_command",
 	"skill",
 	"set_task_title",
+	"check_task_status",
+	"wait_for_task",
+	"list_background_tasks",
 ] as const
 
 /**

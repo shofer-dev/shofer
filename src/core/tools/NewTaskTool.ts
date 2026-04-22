@@ -1,11 +1,11 @@
 import * as vscode from "vscode"
 
 import { TodoItem } from "@roo-code/types"
+import { v7 as uuidv7 } from "uuid"
 
 import { Task } from "../task/Task"
 import { getModeBySlug } from "../../shared/modes"
 import { formatResponse } from "../prompts/responses"
-import { t } from "../../i18n"
 import { parseMarkdownChecklist } from "./UpdateTodoListTool"
 import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -15,13 +15,15 @@ interface NewTaskParams {
 	mode: string
 	message: string
 	todos?: string
+	is_background?: boolean
+	task_id?: string
 }
 
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, todos } = params
+		const { mode, message, todos, is_background, task_id } = params
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
@@ -109,17 +111,65 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				return
 			}
 
-			// Delegate parent and open child as sole active task
-			const child = await (provider as any).delegateParentAndOpenChild({
-				parentTaskId: task.taskId,
-				message: unescapedMessage,
-				initialTodos: todoItems,
-				mode,
-			})
+			if (is_background) {
+				// Async background path: use the existing delegateParentAndOpenChild which already
+				// supports background parents (when parent is not the focused task it uses
+				// keepCurrentTask=true and registerBackgroundTask). We then skip the delegation
+				// metadata so the parent is NOT put into "delegated" state.
+				const childTaskId = task_id || uuidv7()
 
-			// Reflect delegation in tool result (no pause/unpause, no wait)
-			pushToolResult(`Delegated to child task ${child.taskId}`)
-			return
+				// delegateParentAndOpenChild creates the child and, when the parent is not focused,
+				// automatically calls registerBackgroundTask(child) and keeps the parent active.
+				// However it also sets awaitingChildId / status="delegated" on the parent, which
+				// we must override afterwards to keep the parent in "active" state.
+				const child = await provider.delegateParentAndOpenChild({
+					parentTaskId: task.taskId,
+					message: unescapedMessage,
+					initialTodos: todoItems,
+					mode,
+				})
+
+				// Override the parent history: remove delegated/awaitingChildId markers and
+				// add the child to backgroundChildIds instead so the parent stays active.
+				try {
+					const { historyItem: parentHistory } = await provider.getTaskWithId(task.taskId)
+					const backgroundChildIds = Array.from(
+						new Set([...(parentHistory.backgroundChildIds ?? []), child.taskId]),
+					)
+					await provider.updateTaskHistory({
+						...parentHistory,
+						status: "active",
+						awaitingChildId: undefined,
+						backgroundChildIds,
+					})
+				} catch (err) {
+					// Non-fatal: parent history metadata may be stale but child still runs
+					console.error(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
+				}
+
+				// Track in-memory handle on the parent task instance
+				task.backgroundChildren.set(child.taskId, {
+					taskId: child.taskId,
+					status: "starting",
+					createdAt: Date.now(),
+					parentTaskId: task.taskId,
+				})
+
+				pushToolResult(`Child task started: ${child.taskId}\nStatus: starting`)
+				return
+			} else {
+				// Synchronous delegation: parent enters "delegated" state and waits
+				const child = await provider.delegateParentAndOpenChild({
+					parentTaskId: task.taskId,
+					message: unescapedMessage,
+					initialTodos: todoItems,
+					mode,
+				})
+
+				// Reflect delegation in tool result (no pause/unpause, no wait)
+				pushToolResult(`Delegated to child task ${child.taskId}`)
+				return
+			}
 		} catch (error) {
 			await handleError("creating new task", error)
 			return
@@ -130,12 +180,17 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 		const mode: string | undefined = block.params.mode
 		const message: string | undefined = block.params.message
 		const todos: string | undefined = block.params.todos
+		const is_background: boolean | undefined =
+			block.params.is_background === "true" ? true : block.params.is_background === "false" ? false : undefined
+		const task_id: string | undefined = block.params.task_id
 
 		const partialMessage = JSON.stringify({
 			tool: "newTask",
 			mode: mode ?? "",
 			content: message ?? "",
 			todos: todos,
+			is_background: is_background,
+			task_id: task_id,
 		})
 
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})

@@ -43,6 +43,9 @@ export const historyItemSchema = z.object({
 	name: z.string().optional(), // User-defined task name
 	lastActiveTs: z.number().optional(), // Track when last switched to
 	taskExecutionState: taskExecutionStateSchema.optional(), // Current execution state
+	// Async task fields
+	backgroundChildIds: z.array(z.string()).optional(),
+	isBackground: z.boolean().optional(),
 })
 
 export type HistoryItem = z.infer<typeof historyItemSchema>

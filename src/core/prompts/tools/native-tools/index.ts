@@ -32,6 +32,9 @@ import searchFiles from "./search_files"
 import switchMode from "./switch_mode"
 import updateTodoList from "./update_todo_list"
 import setTaskTitle from "./set_task_title"
+import checkTaskStatus from "./check_task_status"
+import waitForTask from "./wait_for_task"
+import listBackgroundTasks from "./list_background_tasks"
 import viewImage from "./view_image"
 import writeToFile from "./write_to_file"
 
@@ -93,6 +96,9 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		searchFiles,
 		switchMode,
 		setTaskTitle,
+		checkTaskStatus,
+		waitForTask,
+		listBackgroundTasks,
 		updateTodoList,
 		viewImage,
 		writeToFile,
