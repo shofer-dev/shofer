@@ -34,7 +34,21 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 
 	async execute(params: WaitForTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { task_id, timeout = DEFAULT_TIMEOUT_SECONDS } = params
-		const { pushToolResult } = callbacks
+		const { askApproval, pushToolResult } = callbacks
+
+		// Finalize the streaming partial "tool" ask so the ChatRow shows a complete
+		// entry instead of a dangling partial. Auto-approval marks this tool as
+		// always-approved (see src/core/auto-approval/index.ts), so this does not
+		// block on user input.
+		const completeMessage = JSON.stringify({
+			tool: "waitForTask",
+			task_id,
+			timeout,
+		})
+		const didApprove = await askApproval("tool", completeMessage)
+		if (!didApprove) {
+			return
+		}
 
 		const handle = task.backgroundChildren.get(task_id)
 		if (!handle) {
@@ -48,16 +62,45 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 			return
 		}
 
-		// If the task has already finished (no live instance), resolve immediately
-		const liveTask = provider.taskManager.getManagedTaskInstance(task_id)
-		if (!liveTask) {
+		// Authoritative-status resolution order:
+		//   1. In-memory `handle.status` — AttemptCompletionTool sets this to
+		//      "completed" the instant the background child finishes, before the
+		//      managed Task instance is cleaned up. It is the fastest and most
+		//      reliable terminal indicator.
+		//   2. Persisted HistoryItem.status — survives process boundaries.
+		//   3. Live managed Task instance — only meaningful if the task has NOT
+		//      yet reached a terminal state.
+		//
+		// Previously this tool jumped straight to step 3 and entered an
+		// event-driven wait whenever `getManagedTaskInstance` returned a value.
+		// Because the managed instance lingers in the TaskManager maps after the
+		// child has already completed and emitted `managedTask:completed`, the
+		// listener was registered too late and the wait timed out — reporting
+		// "running" even though both handle.status and the persisted history
+		// said "completed". Check the authoritative sources first.
+
+		const readPersistedStatus = async (): Promise<"completed" | "error" | "pending"> => {
 			try {
 				const { historyItem } = await provider.getTaskWithId(task_id)
-				handle.status = historyItem.status === "completed" ? "completed" : "error"
+				if (historyItem.status === "completed") return "completed"
+				// A persisted status of "active" / "delegated" is not terminal for
+				// the purposes of wait_for_task — the task may still be running.
+				return "pending"
 			} catch (_) {
-				handle.status = "error"
+				// No persisted history yet — treat as pending, not error. The
+				// child may simply not have saved its first history snapshot.
+				return "pending"
 			}
-		} else {
+		}
+
+		if (handle.status !== "completed" && handle.status !== "error") {
+			const persisted = await readPersistedStatus()
+			if (persisted === "completed") {
+				handle.status = "completed"
+			}
+		}
+
+		if (handle.status !== "completed" && handle.status !== "error") {
 			// Event-driven wait: resolves when the task emits completed or error, or times out.
 			// This is non-blocking for the Node event loop (no sleep-polling).
 			await new Promise<void>((resolve) => {
@@ -85,10 +128,17 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 					resolve()
 				}
 
-				const timer = setTimeout(() => {
-					// Timeout: update status from live task if still running
-					const stillLive = provider.taskManager.getManagedTaskInstance(task_id)
-					handle.status = stillLive ? mapTaskStatus(stillLive.taskStatus) : "error"
+				const timer = setTimeout(async () => {
+					// Timeout: re-check authoritative sources before giving up.
+					// The task may have completed between our initial check and
+					// now without us observing the event (race window).
+					const persisted = await readPersistedStatus()
+					if (persisted === "completed") {
+						handle.status = "completed"
+					} else {
+						const stillLive = provider.taskManager.getManagedTaskInstance(task_id)
+						handle.status = stillLive ? mapTaskStatus(stillLive.taskStatus) : "error"
+					}
 					cleanup()
 					resolve()
 				}, timeout * 1000)
