@@ -101,6 +101,13 @@ export interface CreateTaskOptions {
 	initialMode?: string
 	/** Initial status for the task's history item (e.g., "active" for child tasks) */
 	initialStatus?: "active" | "delegated" | "completed"
+	/**
+	 * When true, marks the task as a background child of its parent so that
+	 * `attempt_completion` does NOT trigger the synchronous delegation flow
+	 * (which would otherwise abort/rehydrate the parent). The flag is persisted
+	 * onto the task's `HistoryItem.isBackground` from the very first save.
+	 */
+	isBackground?: boolean
 	/** Whether to start the task loop immediately (default: true).
 	 *  When false, the caller must invoke `task.start()` manually. */
 	startTask?: boolean

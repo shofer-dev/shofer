@@ -641,8 +641,31 @@ export class NativeToolCallParser {
 						mode: partialArgs.mode,
 						message: partialArgs.message,
 						todos: partialArgs.todos,
+						is_background: this.coerceOptionalBoolean(partialArgs.is_background),
+						task_id: partialArgs.task_id,
 					}
 				}
+				break
+
+			case "wait_for_task":
+				if (partialArgs.task_id !== undefined) {
+					nativeArgs = {
+						task_id: partialArgs.task_id,
+						timeout: this.coerceOptionalNumber(partialArgs.timeout),
+					}
+				}
+				break
+
+			case "check_task_status":
+				if (partialArgs.task_id !== undefined) {
+					nativeArgs = {
+						task_id: partialArgs.task_id,
+					}
+				}
+				break
+
+			case "list_background_tasks":
+				nativeArgs = {}
 				break
 
 			case "create_directory":
@@ -1112,8 +1135,31 @@ export class NativeToolCallParser {
 							mode: args.mode,
 							message: args.message,
 							todos: args.todos,
+							is_background: this.coerceOptionalBoolean(args.is_background),
+							task_id: args.task_id,
 						} as NativeArgsFor<TName>
 					}
+					break
+
+				case "wait_for_task":
+					if (args.task_id !== undefined) {
+						nativeArgs = {
+							task_id: args.task_id,
+							timeout: this.coerceOptionalNumber(args.timeout),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "check_task_status":
+					if (args.task_id !== undefined) {
+						nativeArgs = {
+							task_id: args.task_id,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "list_background_tasks":
+					nativeArgs = {} as NativeArgsFor<TName>
 					break
 
 				case "create_directory":
