@@ -3885,6 +3885,15 @@ export class ClineProvider
 				}
 				// Load task from history (without killing the currently running task)
 				await this.showTaskWithId(taskId, { keepCurrentTask: true })
+				// Re-register the freshly rehydrated task instance with TaskManager
+				// (if this was a managed task) so that state-change events
+				// (running / waiting_input / idle) are forwarded correctly from
+				// this point on. Without this, the state stays "paused" permanently
+				// and no event listeners exist on the new instance.
+				const resumedTask = this.getCurrentTask()
+				if (resumedTask && resumedTask.taskId === taskId) {
+					this.taskManager.updateTaskInstance(taskId, resumedTask)
+				}
 			}
 		} catch (error) {
 			this.log(`Failed to focus task: ${error}`)

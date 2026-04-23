@@ -305,6 +305,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	/**
 	 * Pause a task's processing (non-destructive).
+	 * Cancels the in-flight HTTP request immediately so the API stream stops,
+	 * then soft-aborts the task loop (abandoned=false) so task history is preserved
+	 * and the task can be resumed later via focusTask / showTaskWithId.
 	 */
 	async pauseManagedTask(targetTaskId: string): Promise<void> {
 		const managedTask = this.managedTasks.get(targetTaskId)
@@ -314,7 +317,11 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		const task = this.activeTasks.get(targetTaskId)
 		if (task) {
-			// Non-destructive abort - keeps task state
+			// Cancel the in-flight HTTP request before aborting the loop so that
+			// the API stream stops immediately rather than draining to completion.
+			task.cancelCurrentRequest()
+			// Non-destructive abort - keeps task state (abandoned=false) so the
+			// task can be resumed from history.
 			await task.abortTask(false).catch(() => {})
 		}
 
