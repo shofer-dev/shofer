@@ -3705,39 +3705,97 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						}
 					}
 
-					// Enforce new_task isolation: if new_task is called alongside other tools,
-					// truncate any tools that come after it and inject error tool_results.
-					// This prevents orphaned tools when delegation disposes the parent task.
-					const newTaskIndex = assistantContent.findIndex(
-						(block) => block.type === "tool_use" && block.name === "new_task",
+					// Enforce new_task isolation rules to prevent orphaned tools when
+					// delegation/background-launch disposes or diverges from the parent task.
+					//
+					// Three cases:
+					// 1. Multiple new_task calls, all with is_background=true  → allow all (fan-out).
+					// 2. Multiple new_task calls, any without is_background=true → reject ALL; the
+					//    first one would otherwise create an unintended sync child before the LLM
+					//    retries with is_background, leading to one extra child task.
+					// 3. Single new_task followed by other tools               → truncate trailing tools.
+					const newTaskBlocks = assistantContent.filter(
+						(block): block is Anthropic.ToolUseBlockParam =>
+							block.type === "tool_use" && (block as Anthropic.ToolUseBlockParam).name === "new_task",
 					)
 
-					if (newTaskIndex !== -1 && newTaskIndex < assistantContent.length - 1) {
-						// new_task found but not last - truncate subsequent tools
-						const truncatedTools = assistantContent.slice(newTaskIndex + 1)
-						assistantContent.length = newTaskIndex + 1 // Truncate API history array
-
-						// ALSO truncate the execution array (assistantMessageContent) to prevent
-						// tools after new_task from being executed by presentAssistantMessage().
-						// Find new_task index in assistantMessageContent (may differ from assistantContent
-						// due to text blocks being structured differently).
-						const executionNewTaskIndex = this.assistantMessageContent.findIndex(
-							(block) => block.type === "tool_use" && block.name === "new_task",
+					if (newTaskBlocks.length > 1) {
+						const allBackground = newTaskBlocks.every(
+							(block) => (block.input as Record<string, unknown>)?.is_background === true,
 						)
-						if (executionNewTaskIndex !== -1) {
-							this.assistantMessageContent.length = executionNewTaskIndex + 1
-						}
 
-						// Pre-inject error tool_results for truncated tools
-						for (const tool of truncatedTools) {
-							if (tool.type === "tool_use" && (tool as Anthropic.ToolUseBlockParam).id) {
-								this.pushToolResultToUserContent({
-									type: "tool_result",
-									tool_use_id: (tool as Anthropic.ToolUseBlockParam).id,
-									content:
-										"This tool was not executed because new_task was called in the same message turn. The new_task tool must be the last tool in a message.",
-									is_error: true,
-								})
+						if (!allBackground) {
+							// Reject every new_task call so the LLM gets a clear signal to retry
+							// with is_background: true on all of them.
+							for (const block of newTaskBlocks) {
+								if (block.id) {
+									this.pushToolResultToUserContent({
+										type: "tool_result",
+										tool_use_id: block.id,
+										content:
+											"This new_task call was not executed. When calling new_task multiple times in one message, every call must have is_background: true. To launch parallel subtasks, set is_background: true on each new_task call and send them all in one message.",
+										is_error: true,
+									})
+								}
+							}
+
+							// Remove all new_task blocks from the API-history array (in reverse to
+							// keep indices valid) so the assistant turn records them as not-run.
+							for (let i = assistantContent.length - 1; i >= 0; i--) {
+								if (
+									assistantContent[i].type === "tool_use" &&
+									(assistantContent[i] as Anthropic.ToolUseBlockParam).name === "new_task"
+								) {
+									assistantContent.splice(i, 1)
+								}
+							}
+
+							// Remove from the execution array so presentAssistantMessage() skips them.
+							for (let i = this.assistantMessageContent.length - 1; i >= 0; i--) {
+								if (
+									this.assistantMessageContent[i].type === "tool_use" &&
+									(this.assistantMessageContent[i] as { name?: string }).name === "new_task"
+								) {
+									this.assistantMessageContent.splice(i, 1)
+								}
+							}
+						}
+						// else: all background — allow all to execute; no truncation needed.
+					} else {
+						// Single new_task case: truncate any tools that come after it.
+						const newTaskIndex = assistantContent.findIndex(
+							(block) =>
+								block.type === "tool_use" && (block as Anthropic.ToolUseBlockParam).name === "new_task",
+						)
+
+						if (newTaskIndex !== -1 && newTaskIndex < assistantContent.length - 1) {
+							// new_task found but not last - truncate subsequent tools
+							const truncatedTools = assistantContent.slice(newTaskIndex + 1)
+							assistantContent.length = newTaskIndex + 1 // Truncate API history array
+
+							// ALSO truncate the execution array (assistantMessageContent) to prevent
+							// tools after new_task from being executed by presentAssistantMessage().
+							// Find new_task index in assistantMessageContent (may differ from assistantContent
+							// due to text blocks being structured differently).
+							const executionNewTaskIndex = this.assistantMessageContent.findIndex(
+								(block) =>
+									block.type === "tool_use" && (block as { name?: string }).name === "new_task",
+							)
+							if (executionNewTaskIndex !== -1) {
+								this.assistantMessageContent.length = executionNewTaskIndex + 1
+							}
+
+							// Pre-inject error tool_results for truncated tools
+							for (const tool of truncatedTools) {
+								if (tool.type === "tool_use" && (tool as Anthropic.ToolUseBlockParam).id) {
+									this.pushToolResultToUserContent({
+										type: "tool_result",
+										tool_use_id: (tool as Anthropic.ToolUseBlockParam).id,
+										content:
+											"This tool was not executed because new_task was called in the same message turn. The new_task tool must be the last tool in a message.",
+										is_error: true,
+									})
+								}
 							}
 						}
 					}
