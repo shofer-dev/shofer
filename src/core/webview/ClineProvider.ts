@@ -3820,6 +3820,10 @@ export class ClineProvider
 
 			await this.updateTaskHistory(historyItem)
 
+			// Notify the webview of the new current task and switch to the chat tab.
+			await this.postStateToWebview()
+			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+
 			this.log(`Created managed task: ${managedTask.id} (${managedTask.name})`)
 		} catch (error) {
 			// Restore the old task to the stack if creation failed
