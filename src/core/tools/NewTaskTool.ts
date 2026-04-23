@@ -8,21 +8,35 @@ import { formatResponse } from "../prompts/responses"
 import { parseMarkdownChecklist } from "./UpdateTodoListTool"
 import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { parseToolBoolean, isNativeBoolean } from "./helpers/toolInputParsing"
 import type { ToolUse } from "../../shared/tools"
 
 interface NewTaskParams {
 	mode: string
 	message: string
 	todos?: string | null
-	is_background?: boolean
+	// Declared boolean in the JSON schema but some models send strings ("True"/"False")
+	// or numbers (1/0). Normalized via parseToolBoolean() at the start of execute().
+	is_background?: boolean | string | number | null
 }
 
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, is_background } = params
+		const { mode, message } = params
 		const { askApproval, handleError, pushToolResult } = callbacks
+
+		// Normalize is_background: some models serialize booleans as strings (e.g., "True")
+		// or numbers (1/0). parseToolBoolean() handles all common representations.
+		const rawIsBackground = params.is_background
+		const is_background = parseToolBoolean(rawIsBackground)
+		if (!isNativeBoolean(rawIsBackground) && rawIsBackground !== undefined && rawIsBackground !== null) {
+			console.warn(
+				`[NewTaskTool][task=${task.taskId}] is_background coerced from non-boolean value: ` +
+					`${JSON.stringify(rawIsBackground)} (${typeof rawIsBackground}) → ${is_background}`,
+			)
+		}
 
 		// Normalise `todos`: the schema permits string|null, but some models emit the
 		// literal string "null" (or whitespace) instead of a real null. Treat those as
@@ -54,15 +68,17 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			}
 
 			// `is_background` is declared required in the JSON schema, but some models
-			// still omit it. Reject explicitly so the LLM is forced to pick a mode
-			// rather than silently falling through to the synchronous delegation path.
-			if (typeof is_background !== "boolean") {
+			// still omit it or send an unrecognizable value. Reject explicitly so the
+			// LLM is forced to declare a mode rather than silently defaulting.
+			if (is_background === undefined) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("new_task")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(
 					formatResponse.toolError(
-						"Missing or invalid 'is_background' parameter: must be a boolean (true for background/async, false for synchronous delegation).",
+						"Missing or unrecognizable 'is_background' parameter. " +
+							`Received: ${JSON.stringify(rawIsBackground)}. ` +
+							"Expected a boolean: true for background/async, false for synchronous delegation.",
 					),
 				)
 				return
@@ -180,7 +196,10 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					})
 				} catch (err) {
 					// Non-fatal: parent history metadata may be stale but child still runs.
-					console.error(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
+					console.error(
+						`[NewTaskTool][parentTask=${task.taskId}][childTask=${child.taskId}] ` +
+							`Failed to update parent history for background child: ${err}`,
+					)
 				}
 
 				// Track in-memory handle on the parent task instance.
@@ -225,8 +244,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 		const mode: string | undefined = block.params.mode
 		const message: string | undefined = block.params.message
 		const todos: string | undefined = block.params.todos
-		const is_background: boolean | undefined =
-			block.params.is_background === "true" ? true : block.params.is_background === "false" ? false : undefined
+		const is_background = parseToolBoolean(block.params.is_background)
 
 		const partialMessage = JSON.stringify({
 			tool: "newTask",
