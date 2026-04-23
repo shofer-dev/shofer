@@ -161,6 +161,13 @@ export async function checkAutoApproval({
 			return state.alwaysAllowSubtasks === true ? { decision: "approve" } : { decision: "ask" }
 		}
 
+		// Background-task status tools are purely informational queries against in-memory
+		// state owned by the parent task. They mutate nothing, so they are always auto-approved
+		// — matching the UX of `updateTodoList` / `skill`.
+		if (["waitForTask", "checkTaskStatus", "listBackgroundTasks"].includes(tool?.tool)) {
+			return { decision: "approve" }
+		}
+
 		const isOutsideWorkspace = !!tool.isOutsideWorkspace
 
 		if (isReadOnlyToolAction(tool)) {
