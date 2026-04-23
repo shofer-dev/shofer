@@ -1,5 +1,5 @@
 import { TaskStatus } from "@roo-code/types"
-import type { BackgroundTaskStatus } from "@roo-code/types"
+import type { BackgroundTaskStatus, TaskHandle } from "@roo-code/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { Task } from "../task/Task"
@@ -7,11 +7,12 @@ import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { readTaskMessages } from "../task-persistence/taskMessages"
 
-const DEFAULT_TIMEOUT_SECONDS = 300
+const DEFAULT_TIMEOUT_SECONDS = 120
 
 interface WaitForTaskParams {
-	task_id: string
-	timeout?: number
+	task_ids: string[]
+	wait?: "all" | "any" | null
+	timeout?: number | null
 }
 
 /** Map a live TaskStatus to BackgroundTaskStatus. */
@@ -33,26 +34,37 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 	readonly name = "wait_for_task" as const
 
 	async execute(params: WaitForTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { task_id, timeout = DEFAULT_TIMEOUT_SECONDS } = params
+		const { task_ids, wait = "all", timeout = DEFAULT_TIMEOUT_SECONDS } = params
 		const { askApproval, pushToolResult } = callbacks
 
-		// Look up the handle first so we can include the human-readable title in
-		// the ChatRow entry (the UI shows the title rather than the raw UUID).
-		const handle = task.backgroundChildren.get(task_id)
-		if (!handle) {
-			pushToolResult(formatResponse.toolError(`Task ${task_id} not found in background children`))
+		const effectiveWait = wait ?? "all"
+		const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT_SECONDS
+
+		// Validate all task IDs exist in this task's background children.
+		const handles = new Map<string, TaskHandle>()
+		const missing: string[] = []
+		for (const id of task_ids) {
+			const handle = task.backgroundChildren.get(id)
+			if (!handle) {
+				missing.push(id)
+			} else {
+				handles.set(id, handle)
+			}
+		}
+		if (missing.length > 0) {
+			pushToolResult(formatResponse.toolError(`Tasks not found in background children: ${missing.join(", ")}`))
 			return
 		}
 
 		// Finalize the streaming partial "tool" ask so the ChatRow shows a complete
-		// entry instead of a dangling partial. Auto-approval marks this tool as
-		// always-approved (see src/core/auto-approval/index.ts), so this does not
-		// block on user input.
+		// entry. Auto-approval marks this tool as always-approved (see
+		// src/core/auto-approval/index.ts), so this does not block on user input.
 		const completeMessage = JSON.stringify({
 			tool: "waitForTask",
-			task_id,
-			task_title: handle.title,
-			timeout,
+			task_ids,
+			task_titles: task_ids.map((id) => handles.get(id)!.title),
+			wait: effectiveWait,
+			timeout: effectiveTimeout,
 		})
 		const didApprove = await askApproval("tool", completeMessage)
 		if (!didApprove) {
@@ -65,47 +77,39 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 			return
 		}
 
-		// Authoritative-status resolution order:
-		//   1. In-memory `handle.status` — AttemptCompletionTool sets this to
-		//      "completed" the instant the background child finishes, before the
-		//      managed Task instance is cleaned up. It is the fastest and most
-		//      reliable terminal indicator.
-		//   2. Persisted HistoryItem.status — survives process boundaries.
-		//   3. Live managed Task instance — only meaningful if the task has NOT
-		//      yet reached a terminal state.
-		//
-		// Previously this tool jumped straight to step 3 and entered an
-		// event-driven wait whenever `getManagedTaskInstance` returned a value.
-		// Because the managed instance lingers in the TaskManager maps after the
-		// child has already completed and emitted `managedTask:completed`, the
-		// listener was registered too late and the wait timed out — reporting
-		// "running" even though both handle.status and the persisted history
-		// said "completed". Check the authoritative sources first.
-
-		const readPersistedStatus = async (): Promise<"completed" | "error" | "pending"> => {
+		const readPersistedStatus = async (taskId: string): Promise<"completed" | "pending"> => {
 			try {
-				const { historyItem } = await provider.getTaskWithId(task_id)
-				if (historyItem.status === "completed") return "completed"
-				// A persisted status of "active" / "delegated" is not terminal for
-				// the purposes of wait_for_task — the task may still be running.
-				return "pending"
+				const { historyItem } = await provider.getTaskWithId(taskId)
+				return historyItem.status === "completed" ? "completed" : "pending"
 			} catch (_) {
-				// No persisted history yet — treat as pending, not error. The
-				// child may simply not have saved its first history snapshot.
+				// No persisted history yet — treat as pending.
 				return "pending"
 			}
 		}
 
-		if (handle.status !== "completed" && handle.status !== "error") {
-			const persisted = await readPersistedStatus()
-			if (persisted === "completed") {
-				handle.status = "completed"
+		const isTerminal = (id: string) => {
+			const h = handles.get(id)!
+			return h.status === "completed" || h.status === "error"
+		}
+
+		// Phase 1: resolve any non-terminal handles from persisted state first,
+		// so tasks that already finished (but whose event we missed) are caught early.
+		for (const [id, handle] of handles) {
+			if (!isTerminal(id)) {
+				const persisted = await readPersistedStatus(id)
+				if (persisted === "completed") {
+					handle.status = "completed"
+				}
 			}
 		}
 
-		if (handle.status !== "completed" && handle.status !== "error") {
-			// Event-driven wait: resolves when the task emits completed or error, or times out.
-			// This is non-blocking for the Node event loop (no sleep-polling).
+		// Condition predicates for the two wait modes.
+		const allTerminal = () => [...handles.keys()].every(isTerminal)
+		const anyCompleted = () => [...handles.values()].some((h) => h.status === "completed")
+		const conditionMet = () => (effectiveWait === "all" ? allTerminal() : anyCompleted())
+
+		if (!conditionMet()) {
+			// Event-driven wait — no polling; resolves on the first relevant event.
 			await new Promise<void>((resolve) => {
 				let settled = false
 
@@ -117,73 +121,106 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 					clearTimeout(timer)
 				}
 
+				const checkAndMaybeResolve = () => {
+					if (conditionMet()) {
+						cleanup()
+						resolve()
+					}
+				}
+
 				const onComplete = (completedId: string) => {
-					if (completedId !== task_id) return
+					const handle = handles.get(completedId)
+					if (!handle) return
 					handle.status = "completed"
-					cleanup()
-					resolve()
+					checkAndMaybeResolve()
 				}
 
 				const onError = (erroredId: string) => {
-					if (erroredId !== task_id) return
+					const handle = handles.get(erroredId)
+					if (!handle) return
 					handle.status = "error"
-					cleanup()
-					resolve()
+					// For "all" mode an error is still a terminal state — recheck.
+					checkAndMaybeResolve()
 				}
 
 				const timer = setTimeout(async () => {
-					// Timeout: re-check authoritative sources before giving up.
-					// The task may have completed between our initial check and
-					// now without us observing the event (race window).
-					const persisted = await readPersistedStatus()
-					if (persisted === "completed") {
-						handle.status = "completed"
-					} else {
-						const stillLive = provider.taskManager.getManagedTaskInstance(task_id)
-						handle.status = stillLive ? mapTaskStatus(stillLive.taskStatus) : "error"
+					// Timeout: re-check authoritative sources before giving up to close
+					// the race window between our initial check and the timer firing.
+					for (const [id, handle] of handles) {
+						if (!isTerminal(id)) {
+							const persisted = await readPersistedStatus(id)
+							if (persisted === "completed") {
+								handle.status = "completed"
+							} else {
+								const liveInstance = provider.taskManager.getManagedTaskInstance(id)
+								handle.status = liveInstance ? mapTaskStatus(liveInstance.taskStatus) : "error"
+							}
+						}
 					}
 					cleanup()
 					resolve()
-				}, timeout * 1000)
+				}, effectiveTimeout * 1000)
 
 				provider.taskManager.on("managedTask:completed", onComplete)
 				provider.taskManager.on("managedTask:error", onError)
 			})
 		}
 
-		let result: string | undefined
-		let errorText: string | undefined
+		// Build results — for each task, fetch the last completion/error message.
+		const resultLines: string[] = []
+		const completedIds: string[] = []
 
-		if (handle.status === "completed" || handle.status === "error") {
-			const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
-			const messages = await readTaskMessages({ taskId: task_id, globalStoragePath })
-			for (let i = messages.length - 1; i >= 0; i--) {
-				const msg = messages[i]
-				if (msg.type === "say" && msg.say === "completion_result") {
-					result = msg.text
-					break
-				}
-				if (msg.type === "say" && msg.say === "error") {
-					errorText = msg.text
-					break
+		for (const [id, handle] of handles) {
+			let result: string | undefined
+			let errorText: string | undefined
+
+			if (handle.status === "completed" || handle.status === "error") {
+				const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
+				const messages = await readTaskMessages({ taskId: id, globalStoragePath })
+				for (let i = messages.length - 1; i >= 0; i--) {
+					const msg = messages[i]
+					if (msg.type === "say" && msg.say === "completion_result") {
+						result = msg.text
+						break
+					}
+					if (msg.type === "say" && msg.say === "error") {
+						errorText = msg.text
+						break
+					}
 				}
 			}
+
+			if (handle.status === "completed") {
+				completedIds.push(id)
+			}
+
+			const timedOut = handle.status === "running" || handle.status === "waiting"
+			resultLines.push(
+				`Task: ${id}\nStatus: ${handle.status}` +
+					(timedOut ? `\nTimed out after ${effectiveTimeout}s` : "") +
+					(result ? `\nResult: ${result.slice(0, 1000)}` : "") +
+					(errorText ? `\nError: ${errorText.slice(0, 1000)}` : ""),
+			)
 		}
 
-		const timedOut = handle.status === "running" || handle.status === "waiting"
+		const timedOut = [...handles.values()].some((h) => h.status === "running" || h.status === "waiting")
+		const summary =
+			`Completed: [${completedIds.join(", ")}]\n` +
+			(timedOut ? `Timed out (${effectiveTimeout}s limit reached)\n` : "") +
+			`\n` +
+			resultLines.join("\n\n")
 
-		pushToolResult(
-			`Task: ${task_id}\nStatus: ${handle.status}\n` +
-				(timedOut ? `Timed out after ${timeout}s\n` : "") +
-				(result ? `Result: ${result.slice(0, 1000)}\n` : "") +
-				(errorText ? `Error: ${errorText.slice(0, 1000)}\n` : ""),
-		)
+		pushToolResult(summary)
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"wait_for_task">): Promise<void> {
+		const rawIds = block.params.task_ids
+		// `task_ids` streams as a JSON array fragment; show whatever is available.
+		const ids: string[] = Array.isArray(rawIds) ? rawIds : []
 		const partialMessage = JSON.stringify({
 			tool: "waitForTask",
-			task_id: block.params.task_id ?? "",
+			task_ids: ids,
+			wait: block.params.wait ?? "all",
 			timeout: block.params.timeout ?? DEFAULT_TIMEOUT_SECONDS,
 		})
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})

@@ -1140,9 +1140,10 @@ export class NativeToolCallParser {
 					break
 
 				case "wait_for_task":
-					if (args.task_id !== undefined) {
+					if (args.task_ids !== undefined) {
 						nativeArgs = {
-							task_id: args.task_id,
+							task_ids: Array.isArray(args.task_ids) ? args.task_ids : [args.task_ids],
+							wait: args.wait === "any" ? "any" : "all",
 							timeout: this.coerceOptionalNumber(args.timeout),
 						} as NativeArgsFor<TName>
 					}

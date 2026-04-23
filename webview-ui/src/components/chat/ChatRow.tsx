@@ -896,6 +896,16 @@ export const ChatRowContent = ({
 				)
 			case "waitForTask": {
 				const timeoutSeconds = typeof tool.timeout === "number" ? tool.timeout : undefined
+				// Support both new multi-task (task_ids/task_titles) and legacy single-task fields.
+				const displayTitles: string[] = tool.task_titles?.length
+					? tool.task_titles
+					: tool.task_ids?.length
+						? tool.task_ids
+						: tool.task_title
+							? [tool.task_title]
+							: tool.task_id
+								? [tool.task_id]
+								: []
 				return (
 					<>
 						<div style={headerStyle}>
@@ -905,11 +915,12 @@ export const ChatRowContent = ({
 									? t("chat:backgroundTasks.waitForTaskWithTimeout", { timeout: timeoutSeconds })
 									: t("chat:backgroundTasks.waitForTask")}
 							</span>
+							{tool.wait && tool.wait !== "all" && (
+								<span className="ml-1 text-xs text-vscode-descriptionForeground">({tool.wait})</span>
+							)}
 						</div>
-						{(tool.task_title || tool.task_id) && (
-							<div className="pl-6 text-vscode-descriptionForeground">
-								{tool.task_title ?? tool.task_id}
-							</div>
+						{displayTitles.length > 0 && (
+							<div className="pl-6 text-vscode-descriptionForeground">{displayTitles.join(", ")}</div>
 						)}
 					</>
 				)
