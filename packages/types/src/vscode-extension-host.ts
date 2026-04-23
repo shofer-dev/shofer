@@ -625,6 +625,7 @@ export interface WebviewMessage {
 		| "focusParallelTask"
 		| "startParallelTask"
 		| "pauseParallelTask"
+		| "resumeParallelTask"
 		| "stopParallelTask"
 		| "renameParallelTask"
 		| "deleteParallelTask"
