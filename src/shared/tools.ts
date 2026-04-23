@@ -58,7 +58,9 @@ export const toolParamNames = [
 	"end_line",
 	"todos",
 	"is_background", // new_task async mode parameter
-	"task_id", // check_task_status, wait_for_task parameter
+	"task_id", // check_task_status parameter
+	"task_ids", // wait_for_task parameter (accepts multiple IDs)
+	"wait", // wait_for_task strategy: "all" | "any"
 	"prompt",
 	"image",
 	// read_file parameters (native protocol)
@@ -109,7 +111,7 @@ export type NativeToolArgs = {
 	list_files: { path: string; recursive?: boolean }
 	new_task: { mode: string; message: string; todos?: string; is_background?: boolean }
 	check_task_status: { task_id: string }
-	wait_for_task: { task_id: string; timeout?: number }
+	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
 	list_background_tasks: Record<string, never>
 	ask_followup_question: {
 		question: string
