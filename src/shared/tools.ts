@@ -109,7 +109,10 @@ export type NativeToolArgs = {
 	edit_file: { file_path: string; old_string: string; new_string: string; expected_replacements?: number }
 	apply_patch: { patch: string }
 	list_files: { path: string; recursive?: boolean }
-	new_task: { mode: string; message: string; todos?: string; is_background?: boolean }
+	// `is_background` is declared boolean in the JSON schema but some models serialize it
+	// as a string ("True"/"False") or number (1/0). The actual type is widened here to
+	// reflect that reality; NewTaskTool normalizes the value via parseToolBoolean().
+	new_task: { mode: string; message: string; todos?: string; is_background?: boolean | string | number | null }
 	check_task_status: { task_id: string }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
 	list_background_tasks: Record<string, never>
