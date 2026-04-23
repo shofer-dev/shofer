@@ -651,7 +651,9 @@ export async function presentAssistantMessage(cline: Task) {
 			}
 
 			// Check for identical consecutive tool calls.
-			if (!block.partial) {
+			// new_task is exempt: calling it multiple times in one turn is legitimate fan-out
+			// parallelism (models like Claude 3.5+ emit several tool-use blocks simultaneously).
+			if (!block.partial && block.name !== "new_task") {
 				// Use the detector to check for repetition, passing the ToolUse
 				// block directly.
 				const repetitionCheck = cline.toolRepetitionDetector.check(block)
