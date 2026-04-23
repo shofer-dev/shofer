@@ -894,6 +894,66 @@ export const ChatRowContent = ({
 						</div>
 					</>
 				)
+			case "waitForTask": {
+				const timeoutSeconds = typeof tool.timeout === "number" ? tool.timeout : undefined
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("watch")}
+							<span style={{ fontWeight: "bold" }}>
+								{timeoutSeconds !== undefined
+									? t("chat:backgroundTasks.waitForTaskWithTimeout", { timeout: timeoutSeconds })
+									: t("chat:backgroundTasks.waitForTask")}
+							</span>
+						</div>
+						{tool.task_id && (
+							<div className="pl-6 text-vscode-descriptionForeground">
+								<code>{tool.task_id}</code>
+							</div>
+						)}
+					</>
+				)
+			}
+			case "checkTaskStatus":
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("pulse")}
+							<span style={{ fontWeight: "bold" }}>{t("chat:backgroundTasks.checkTaskStatus")}</span>
+						</div>
+						{tool.task_id && (
+							<div className="pl-6 text-vscode-descriptionForeground">
+								<code>{tool.task_id}</code>
+							</div>
+						)}
+					</>
+				)
+			case "listBackgroundTasks": {
+				const bgTasks = Array.isArray(tool.tasks) ? tool.tasks : []
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("list-unordered")}
+							<span style={{ fontWeight: "bold" }}>{t("chat:backgroundTasks.listBackgroundTasks")}</span>
+						</div>
+						<div className="pl-6 text-vscode-descriptionForeground">
+							{bgTasks.length === 0 ? (
+								<div>{t("chat:backgroundTasks.noTasks")}</div>
+							) : (
+								<ul className="list-none p-0 m-0">
+									{bgTasks.map((bgTask) => (
+										<li key={bgTask.task_id} className="mb-1">
+											<code>{bgTask.task_id}</code>
+											{" — "}
+											{t("chat:backgroundTasks.status")}: {bgTask.status}
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+					</>
+				)
+			}
 			case "runSlashCommand": {
 				const slashCommandInfo = tool
 				return (

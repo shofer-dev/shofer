@@ -9,13 +9,25 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 	readonly name = "list_background_tasks" as const
 
 	async execute(params: ListBackgroundTasksParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { pushToolResult } = callbacks
+		const { askApproval, pushToolResult } = callbacks
 
 		const tasks = Array.from(task.backgroundChildren.values()).map((h) => ({
 			task_id: h.taskId,
 			status: h.status,
 			created_at: h.createdAt,
 		}))
+
+		// Finalize the streaming partial "tool" ask with the task snapshot so the
+		// ChatRow can render a list of background children. Auto-approval marks
+		// this tool as always-approved, so askApproval returns immediately.
+		const completeMessage = JSON.stringify({
+			tool: "listBackgroundTasks",
+			tasks,
+		})
+		const didApprove = await askApproval("tool", completeMessage)
+		if (!didApprove) {
+			return
+		}
 
 		pushToolResult(JSON.stringify({ tasks }, null, 2))
 	}

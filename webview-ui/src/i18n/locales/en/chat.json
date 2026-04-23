@@ -311,6 +311,15 @@
 		"completionInstructions": "You can review the results and suggest any corrections or next steps. If everything looks good, confirm to return the result to the parent task.",
 		"goToSubtask": "View task"
 	},
+	"backgroundTasks": {
+		"waitForTask": "Roo is waiting for background task",
+		"waitForTaskWithTimeout": "Roo is waiting for background task (timeout {{timeout}}s)",
+		"checkTaskStatus": "Roo is checking the status of background task",
+		"listBackgroundTasks": "Roo is listing background tasks",
+		"noTasks": "No background tasks",
+		"status": "Status",
+		"created": "Created"
+	},
 	"questions": {
 		"hasQuestion": "Roo has a question"
 	},
