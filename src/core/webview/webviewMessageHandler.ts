@@ -3747,6 +3747,17 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		case "resumeParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.resumeManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error resuming managed task: ${error}`)
+			}
+			break
+		}
+
 		case "stopParallelTask": {
 			try {
 				if (message.taskId) {
