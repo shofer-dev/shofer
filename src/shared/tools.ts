@@ -107,7 +107,7 @@ export type NativeToolArgs = {
 	edit_file: { file_path: string; old_string: string; new_string: string; expected_replacements?: number }
 	apply_patch: { patch: string }
 	list_files: { path: string; recursive?: boolean }
-	new_task: { mode: string; message: string; todos?: string; is_background?: boolean; task_id?: string }
+	new_task: { mode: string; message: string; todos?: string; is_background?: boolean }
 	check_task_status: { task_id: string }
 	wait_for_task: { task_id: string; timeout?: number }
 	list_background_tasks: Record<string, never>

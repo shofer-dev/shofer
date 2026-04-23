@@ -906,9 +906,9 @@ export const ChatRowContent = ({
 									: t("chat:backgroundTasks.waitForTask")}
 							</span>
 						</div>
-						{tool.task_id && (
+						{(tool.task_title || tool.task_id) && (
 							<div className="pl-6 text-vscode-descriptionForeground">
-								<code>{tool.task_id}</code>
+								{tool.task_title ?? tool.task_id}
 							</div>
 						)}
 					</>
@@ -921,9 +921,9 @@ export const ChatRowContent = ({
 							{toolIcon("pulse")}
 							<span style={{ fontWeight: "bold" }}>{t("chat:backgroundTasks.checkTaskStatus")}</span>
 						</div>
-						{tool.task_id && (
+						{(tool.task_title || tool.task_id) && (
 							<div className="pl-6 text-vscode-descriptionForeground">
-								<code>{tool.task_id}</code>
+								{tool.task_title ?? tool.task_id}
 							</div>
 						)}
 					</>
@@ -943,7 +943,7 @@ export const ChatRowContent = ({
 								<ul className="list-none p-0 m-0">
 									{bgTasks.map((bgTask) => (
 										<li key={bgTask.task_id} className="mb-1">
-											<code>{bgTask.task_id}</code>
+											{bgTask.title ?? bgTask.task_id}
 											{" — "}
 											{t("chat:backgroundTasks.status")}: {bgTask.status}
 										</li>

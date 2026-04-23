@@ -16,8 +16,6 @@ const TODOS_PARAMETER_DESCRIPTION = `Optional initial todo list written as a mar
 
 const IS_BACKGROUND_PARAMETER_DESCRIPTION = `When true, start the child task in the background and return immediately without blocking the parent. Defaults to false (synchronous delegation).`
 
-const TASK_ID_PARAMETER_DESCRIPTION = `Optional caller-specified identifier for the background task. If omitted, a unique ID is generated. Only used when is_background is true.`
-
 export default {
 	type: "function",
 	function: {
@@ -43,12 +41,8 @@ export default {
 					type: ["boolean", "null"],
 					description: IS_BACKGROUND_PARAMETER_DESCRIPTION,
 				},
-				task_id: {
-					type: ["string", "null"],
-					description: TASK_ID_PARAMETER_DESCRIPTION,
-				},
 			},
-			required: ["mode", "message", "todos", "is_background", "task_id"],
+			required: ["mode", "message", "todos", "is_background"],
 			additionalProperties: false,
 		},
 	},

@@ -642,7 +642,6 @@ export class NativeToolCallParser {
 						message: partialArgs.message,
 						todos: partialArgs.todos,
 						is_background: this.coerceOptionalBoolean(partialArgs.is_background),
-						task_id: partialArgs.task_id,
 					}
 				}
 				break
@@ -1136,7 +1135,6 @@ export class NativeToolCallParser {
 							message: args.message,
 							todos: args.todos,
 							is_background: this.coerceOptionalBoolean(args.is_background),
-							task_id: args.task_id,
 						} as NativeArgsFor<TName>
 					}
 					break
