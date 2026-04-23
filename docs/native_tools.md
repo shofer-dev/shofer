@@ -271,15 +271,55 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 
 ## Task & Workflow Management
 
-| Tool                    | Origin | Group | Always Available | Status | Description                        |
-| ----------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------- |
-| `ask_followup_question` | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question            |
-| `attempt_completion`    | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion             |
-| `switch_mode`           | 🔵 RC  | modes |        ✅        |   ✅   | Switch to a different mode         |
-| `new_task`              | 🔵 RC  | modes |        ✅        |   ✅   | Spawn a new sub-task               |
-| `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list               |
-| `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill           |
-| `set_task_title`        | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task |
+| Tool                    | Origin | Group | Always Available | Status | Description                                          |
+| ----------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------------- |
+| `ask_followup_question` | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question                              |
+| `attempt_completion`    | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                               |
+| `switch_mode`           | 🔵 RC  | modes |        ✅        |   ✅   | Switch to a different mode                           |
+| `new_task`              | 🔵 RC  | modes |        ✅        |   ✅   | Spawn a sub-task (sync or background)                |
+| `check_task_status`     | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task       |
+| `wait_for_task`         | 🟣 AW  | –     |        ✅        |   ✅   | Block until a background child task completes        |
+| `list_background_tasks` | 🟣 AW  | –     |        ✅        |   ✅   | List all background child tasks started by this task |
+| `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                 |
+| `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                             |
+| `set_task_title`        | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                   |
+
+### `new_task`
+
+Create a new task instance in the chosen mode. Supports two execution models:
+
+- **Synchronous (default):** The parent blocks until the child completes. Must be called alone — no other tools in the same turn.
+- **Background (`is_background=true`):** The child starts immediately and runs concurrently. The parent receives the child's `task_id` and continues without blocking. Use `check_task_status` or `wait_for_task` to retrieve results later.
+
+| Param           | Type    | Required | Description                                                          |
+| --------------- | ------- | :------: | -------------------------------------------------------------------- |
+| `mode`          | string  |    ✅    | Mode slug (e.g., `code`, `debug`)                                    |
+| `message`       | string  |    ✅    | Initial instructions for the child task                              |
+| `todos`         | string  |    –     | Initial markdown checklist for the child                             |
+| `is_background` | boolean |    –     | When `true`, run child concurrently and return `task_id` immediately |
+
+### `check_task_status`
+
+Check the current status of a background child task started with `new_task` using `is_background=true`. Returns the task's status and, if it has completed or errored, its result or error message.
+
+| Param     | Type   | Required | Description                                           |
+| --------- | ------ | :------: | ----------------------------------------------------- |
+| `task_id` | string |    ✅    | The task ID returned when the background task started |
+
+### `wait_for_task`
+
+Block until a background child task (started with `is_background=true`) completes or errors, then return its result. Returns early as soon as the task finishes — does not poll. Use this when you need a background task's result before continuing.
+
+| Param     | Type   | Required | Description                                                             |
+| --------- | ------ | :------: | ----------------------------------------------------------------------- |
+| `task_id` | string |    ✅    | The task ID returned when the background task started                   |
+| `timeout` | number |    –     | Max seconds to wait (default: 300). Returns current status if exceeded. |
+
+### `list_background_tasks`
+
+List all background child tasks started by this task via `new_task` with `is_background=true`. Returns each task's ID, current status, and creation timestamp.
+
+**Parameters:** None.
 
 ### `set_task_title`
 
@@ -365,6 +405,9 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `switch_mode`              |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `new_task`                 |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `update_todo_list`         |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `check_task_status`        |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `wait_for_task`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `list_background_tasks`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `skill`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `set_task_title`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `run_slash_command`        |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
