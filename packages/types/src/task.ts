@@ -135,6 +135,8 @@ export type BackgroundTaskStatus = "starting" | "running" | "waiting" | "complet
 
 export interface TaskHandle {
 	taskId: string
+	/** Short human-readable label derived from the first line of the task message. */
+	title: string
 	status: BackgroundTaskStatus
 	createdAt: number
 	parentTaskId: string

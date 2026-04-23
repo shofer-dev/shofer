@@ -900,12 +900,15 @@ export interface ClineSayTool {
 	// Properties for skill tool
 	skill?: string
 	// Properties for background-task status tools (waitForTask / checkTaskStatus / listBackgroundTasks).
-	// `task_id` identifies the target background child task. `timeout` is the wait_for_task cap in seconds.
+	// `task_id` identifies the target background child task. `task_title` is the human-readable
+	// label shown in the UI instead of the raw UUID. `timeout` is the wait_for_task cap in seconds.
 	// `tasks` carries the snapshot rendered by list_background_tasks.
 	task_id?: string
+	task_title?: string
 	timeout?: number
 	tasks?: Array<{
 		task_id: string
+		title: string
 		status: string
 		created_at?: number
 	}>

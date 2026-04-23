@@ -36,6 +36,14 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		const { task_id, timeout = DEFAULT_TIMEOUT_SECONDS } = params
 		const { askApproval, pushToolResult } = callbacks
 
+		// Look up the handle first so we can include the human-readable title in
+		// the ChatRow entry (the UI shows the title rather than the raw UUID).
+		const handle = task.backgroundChildren.get(task_id)
+		if (!handle) {
+			pushToolResult(formatResponse.toolError(`Task ${task_id} not found in background children`))
+			return
+		}
+
 		// Finalize the streaming partial "tool" ask so the ChatRow shows a complete
 		// entry instead of a dangling partial. Auto-approval marks this tool as
 		// always-approved (see src/core/auto-approval/index.ts), so this does not
@@ -43,16 +51,11 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		const completeMessage = JSON.stringify({
 			tool: "waitForTask",
 			task_id,
+			task_title: handle.title,
 			timeout,
 		})
 		const didApprove = await askApproval("tool", completeMessage)
 		if (!didApprove) {
-			return
-		}
-
-		const handle = task.backgroundChildren.get(task_id)
-		if (!handle) {
-			pushToolResult(formatResponse.toolError(`Task ${task_id} not found in background children`))
 			return
 		}
 

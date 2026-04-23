@@ -15,7 +15,6 @@ interface NewTaskParams {
 	message: string
 	todos?: string | null
 	is_background?: boolean
-	task_id?: string | null
 }
 
 export class NewTaskTool extends BaseTool<"new_task"> {
@@ -185,14 +184,23 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				}
 
 				// Track in-memory handle on the parent task instance.
+				// Derive a short human-readable title from the first non-empty line of the
+				// message (capped at 80 chars) so the UI can display it instead of the UUID.
+				const titleLine =
+					unescapedMessage
+						.split(/\n/)
+						.map((l) => l.trim())
+						.find((l) => l.length > 0) ?? unescapedMessage
+				const title = titleLine.length > 80 ? `${titleLine.slice(0, 77)}…` : titleLine
 				task.backgroundChildren.set(child.taskId, {
 					taskId: child.taskId,
+					title,
 					status: "starting",
 					createdAt: Date.now(),
 					parentTaskId: task.taskId,
 				})
 
-				pushToolResult(`Child task started: ${child.taskId}\nStatus: starting`)
+				pushToolResult(`Child task started: ${child.taskId}\nTitle: ${title}\nStatus: starting`)
 				return
 			} else {
 				// Synchronous delegation: parent enters "delegated" state and waits
@@ -219,7 +227,6 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 		const todos: string | undefined = block.params.todos
 		const is_background: boolean | undefined =
 			block.params.is_background === "true" ? true : block.params.is_background === "false" ? false : undefined
-		const task_id: string | undefined = block.params.task_id
 
 		const partialMessage = JSON.stringify({
 			tool: "newTask",
@@ -227,7 +234,6 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			content: message ?? "",
 			todos: todos,
 			is_background: is_background,
-			task_id: task_id,
 		})
 
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
