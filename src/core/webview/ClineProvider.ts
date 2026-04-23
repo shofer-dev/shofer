@@ -3930,6 +3930,66 @@ export class ClineProvider
 	}
 
 	/**
+	 * Resume a managed task that was paused.
+	 *
+	 * Loads the task from history into the chat panel and auto-approves the
+	 * `resume_task` ask that `resumeTaskFromHistory()` presents, so the task
+	 * continues without requiring the user to click "Continue" manually.
+	 *
+	 * The `TaskResumable` event fires via `setTimeout(0)` for background tasks
+	 * (i.e. tasks that are not the current `focusedTaskId` in TaskManager).
+	 * Since the dead-task path in `focusTask` does not update `focusedTaskId`,
+	 * the rehydrated task is treated as a background task and the event fires
+	 * immediately, avoiding the 2-second focused-task delay.
+	 */
+	public async resumeManagedTask(taskId: string): Promise<void> {
+		try {
+			// Load the task from history into the chat panel without killing the
+			// currently focused task. This creates a new Task instance that starts
+			// resumeTaskFromHistory() asynchronously.
+			await this.focusTask(taskId)
+
+			// After focusTask, the freshly rehydrated task instance is registered
+			// in TaskManager via updateTaskInstance.
+			const task = this.taskManager.getManagedTaskInstance(taskId)
+			if (!task) {
+				this.log(`[resumeManagedTask] No task instance found for ${taskId}`)
+				return
+			}
+
+			// If the task already reached the resume_task ask before our listener
+			// was registered, approve it immediately.
+			if (task.resumableAsk) {
+				task.approveAsk()
+				return
+			}
+
+			// Otherwise, wait for TaskResumable which fires when ask("resume_task")
+			// begins waiting for user input (setTimeout(0) for background tasks).
+			const onResumable = (resumedTaskId: string) => {
+				if (resumedTaskId === taskId) {
+					task.approveAsk()
+				}
+			}
+			task.once(RooCodeEventName.TaskResumable, onResumable)
+
+			// Safety cleanup: remove the listener if the task never becomes resumable
+			// (e.g. already completed or aborted before we could attach).
+			const cleanupTimeout = setTimeout(() => {
+				task.off(RooCodeEventName.TaskResumable, onResumable)
+				this.log(`[resumeManagedTask] Timed out waiting for resume_task for ${taskId}`)
+			}, 30_000)
+
+			const clearCleanup = () => clearTimeout(cleanupTimeout)
+			task.once(RooCodeEventName.TaskActive, clearCleanup)
+			task.once(RooCodeEventName.TaskCompleted, clearCleanup)
+			task.once(RooCodeEventName.TaskAborted, clearCleanup)
+		} catch (error) {
+			this.log(`[resumeManagedTask] Failed to resume managed task: ${error}`)
+		}
+	}
+
+	/**
 	 * Stop a managed task.
 	 */
 	public async stopManagedTask(taskId: string): Promise<void> {
