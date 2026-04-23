@@ -222,16 +222,82 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				pushToolResult(`Child task started: ${child.taskId}\nTitle: ${title}\nStatus: starting`)
 				return
 			} else {
-				// Synchronous delegation: parent enters "delegated" state and waits
-				const child = await provider.delegateParentAndOpenChild({
-					parentTaskId: task.taskId,
-					message: unescapedMessage,
-					initialTodos: todoItems,
-					mode: effectiveMode,
+				// Blocking foreground path: child takes focus while parent suspends in-place.
+				//
+				// The parent task stays alive in the clineStack below the child (not aborted,
+				// not rehydrated). A Promise is created and its resolver stored in the provider
+				// so that when the child calls attempt_completion, the resolver fires and
+				// the parent's tool loop resumes immediately with the child's result.
+				// No history manipulation or task rehydration is needed.
+
+				// Register resolver BEFORE creating the child to prevent any race with a
+				// very fast child (though in practice LLM latency makes this a non-issue).
+				let completionResolver!: (result: string) => void
+				const childCompletionPromise = new Promise<string>((resolve) => {
+					completionResolver = resolve
 				})
 
-				// Reflect delegation in tool result (no pause/unpause, no wait)
-				pushToolResult(`Delegated to child task ${child.taskId}`)
+				// createTask pushes child onto the stack (openInStack=true by default) and
+				// calls task.start() immediately. The parent remains in the stack below the
+				// child so that when the child is later popped, the parent is revealed.
+				const child = await provider.createTask(unescapedMessage, undefined, task as any, {
+					initialTodos: todoItems,
+					initialStatus: "active",
+					initialMode: effectiveMode,
+					openInStack: true, // child takes the foreground; user sees it
+					keepCurrentTask: true, // do NOT abort the parent task
+					isBackground: false,
+				})
+
+				// Store the resolver so resumeBlockingParent() can fire it.
+				provider.registerBlockingChildResolver(child.taskId, completionResolver)
+
+				// Persist parent→child delegation metadata.
+				try {
+					const { historyItem: parentHistory } = await provider.getTaskWithId(task.taskId)
+					const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), child.taskId]))
+					await provider.updateTaskHistory({
+						...parentHistory,
+						status: "delegated",
+						delegatedToId: child.taskId,
+						awaitingChildId: child.taskId,
+						childIds,
+					})
+				} catch (err) {
+					console.error(
+						`[NewTaskTool][parentTask=${task.taskId}][childTask=${child.taskId}] ` +
+							`Failed to persist parent delegation metadata: ${err}`,
+					)
+				}
+
+				// Track in-memory handle on the parent task instance.
+				const titleLine =
+					unescapedMessage
+						.split(/\n/)
+						.map((l) => l.trim())
+						.find((l) => l.length > 0) ?? unescapedMessage
+				const title = titleLine.length > 80 ? `${titleLine.slice(0, 77)}…` : titleLine
+				task.backgroundChildren.set(child.taskId, {
+					taskId: child.taskId,
+					title,
+					status: "starting",
+					createdAt: Date.now(),
+					parentTaskId: task.taskId,
+				})
+
+				// Parent's tool loop suspends here until the child calls attempt_completion,
+				// which fires completionResolver via resumeBlockingParent().
+				const childResult = await childCompletionPromise
+
+				// Update handle status now that we've resumed.
+				const handle = task.backgroundChildren.get(child.taskId)
+				if (handle) {
+					handle.status = "completed"
+				}
+
+				// Return child's result as this tool's output — the parent's LLM will see
+				// it in the next turn and decide what to do next.
+				pushToolResult(`Subtask ${child.taskId} completed.\n\nResult:\n${childResult}`)
 				return
 			}
 		} catch (error) {

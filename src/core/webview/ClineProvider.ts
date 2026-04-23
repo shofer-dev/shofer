@@ -159,6 +159,14 @@ export class ClineProvider
 	private pendingOperations: Map<string, PendingEditOperation> = new Map()
 	private static readonly PENDING_OPERATION_TIMEOUT_MS = 30000 // 30 seconds
 
+	/**
+	 * Resolvers for blocking foreground subtasks (is_background=false).
+	 * Maps child task ID → resolve function that resumes the parent's suspended tool loop.
+	 * Set in NewTaskTool before the child starts; fired in resumeBlockingParent() when the
+	 * child calls attempt_completion.
+	 */
+	private blockingChildResolvers: Map<string, (result: string) => void> = new Map()
+
 	private cloudOrganizationsCache: CloudOrganizationMembership[] | null = null
 	private cloudOrganizationsCacheTimestamp: number | null = null
 	private static readonly CLOUD_ORGANIZATIONS_CACHE_DURATION_MS = 5 * 1000 // 5 seconds
@@ -3727,6 +3735,94 @@ export class ClineProvider
 		}
 
 		this.log(`[reopenParentFromDelegation] FINISHED parentTaskId=${parentTaskId}, childTaskId=${childTaskId}`)
+	}
+
+	/**
+	 * Resume a parent task that was suspended waiting for a blocking foreground subtask.
+	 *
+	 * Unlike reopenParentFromDelegation (which rehydrates from history), this path works
+	 * entirely in-memory: the parent task instance is still alive in the clineStack (below
+	 * the child), so we only need to:
+	 *   1. Update history for both tasks.
+	 *   2. Pop the child from the stack to reveal the parent.
+	 *   3. Refresh the webview so the user sees the parent's chat.
+	 *   4. Fire the resolver that unblocks NewTaskTool's awaiting Promise.
+	 *
+	 * @returns true if a blocking resolver was found and fired; false otherwise.
+	 */
+	public async resumeBlockingParent(params: {
+		parentTaskId: string
+		childTaskId: string
+		completionResult: string
+	}): Promise<boolean> {
+		const { parentTaskId, childTaskId, completionResult } = params
+
+		const resolver = this.blockingChildResolvers.get(childTaskId)
+		if (!resolver) {
+			return false
+		}
+		this.blockingChildResolvers.delete(childTaskId)
+
+		this.log(`[resumeBlockingParent] childTaskId=${childTaskId} completed, resuming parentTaskId=${parentTaskId}`)
+
+		// 1) Update child history to "completed".
+		try {
+			const { historyItem: childHistory } = await this.getTaskWithId(childTaskId)
+			await this.updateTaskHistory({
+				...childHistory,
+				status: "completed",
+				completionResultSummary: completionResult,
+			})
+		} catch (err) {
+			this.log(`[resumeBlockingParent] Failed to update child history (non-fatal): ${err}`)
+		}
+
+		// 2) Update parent history: clear delegation fields, mark active.
+		try {
+			const { historyItem: parentHistory } = await this.getTaskWithId(parentTaskId)
+			const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), childTaskId]))
+			await this.updateTaskHistory({
+				...parentHistory,
+				status: "active",
+				awaitingChildId: undefined,
+				completedByChildId: childTaskId,
+				completionResultSummary: completionResult,
+				childIds,
+			})
+		} catch (err) {
+			this.log(`[resumeBlockingParent] Failed to update parent history (non-fatal): ${err}`)
+		}
+
+		// 3) Pop child from the stack (the parent is revealed below it).
+		const current = this.getCurrentTask()
+		if (current?.taskId === childTaskId) {
+			this.popFromStackWithoutAborting()
+		}
+
+		// 4) Refresh the webview so the user sees the parent's chat again.
+		await this.postStateToWebview()
+
+		// 5) Emit provider-level event.
+		try {
+			this.emit(RooCodeEventName.TaskDelegationCompleted, parentTaskId, childTaskId, completionResult)
+		} catch {
+			// non-fatal
+		}
+
+		// 6) Fire the resolver to unblock the parent's NewTaskTool.execute() await.
+		resolver(completionResult)
+
+		this.log(`[resumeBlockingParent] DONE parentTaskId=${parentTaskId}, childTaskId=${childTaskId}`)
+		return true
+	}
+
+	/**
+	 * Register a blocking resolver for a foreground subtask child.
+	 * Called by NewTaskTool before starting the child so the resolver is ready
+	 * before attempt_completion could fire.
+	 */
+	public registerBlockingChildResolver(childTaskId: string, resolver: (result: string) => void): void {
+		this.blockingChildResolvers.set(childTaskId, resolver)
 	}
 
 	/**

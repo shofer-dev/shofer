@@ -31,6 +31,17 @@ interface DelegationProvider {
 		childTaskId: string
 		completionResultSummary: string
 	}): Promise<void>
+	/**
+	 * Handles completion of a blocking foreground subtask (is_background=false).
+	 * Pops the child from the stack, reveals the parent, and fires the resolver
+	 * that unblocks the parent's NewTaskTool.execute() await.
+	 * @returns true if a blocking resolver was found and handled; false otherwise.
+	 */
+	resumeBlockingParent(params: {
+		parentTaskId: string
+		childTaskId: string
+		completionResult: string
+	}): Promise<boolean>
 	updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]>
 	taskManager?: {
 		getManagedTaskInstance?(taskId: string): Task | undefined
@@ -99,6 +110,25 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				const provider = task.providerRef.deref() as DelegationProvider | undefined
 				if (provider) {
 					try {
+						// Blocking foreground path (is_background=false, new design):
+						// The parent is suspended in NewTaskTool.execute() awaiting a Promise.
+						// resumeBlockingParent() pops the child from the stack to reveal
+						// the parent, updates history, and fires the resolver — no rehydration.
+						const blockingHandled = await provider.resumeBlockingParent({
+							parentTaskId: task.parentTaskId,
+							childTaskId: task.taskId,
+							completionResult: result,
+						})
+						if (blockingHandled) {
+							console.log(
+								`[AttemptCompletionTool.execute] Blocking foreground path handled taskId=${task.taskId}`,
+							)
+							pushToolResult("")
+							this.emitTaskCompleted(task)
+							task.abort = true
+							return
+						}
+
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
 						const status = historyItem?.status
 
@@ -153,7 +183,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							console.log(
 								`[AttemptCompletionTool.execute] Child task active, starting delegation taskId=${task.taskId}`,
 							)
-							// Normal subtask completion - do delegation
+							// Old-style synchronous delegation: rehydrates parent from history.
+							// Only reached for tasks created before the blocking-foreground redesign.
 							const delegation = await this.delegateToParent(
 								task,
 								result,
