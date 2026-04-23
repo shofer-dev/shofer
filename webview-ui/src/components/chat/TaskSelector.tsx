@@ -147,11 +147,6 @@ export const TaskSelector = memo(
 			setIsOpen(false)
 		}, [])
 
-		const handleStartTask = useCallback((taskId: string, e: React.MouseEvent) => {
-			e.stopPropagation()
-			vscode.postMessage({ type: "startParallelTask", taskId })
-		}, [])
-
 		const handlePauseTask = useCallback((taskId: string, e: React.MouseEvent) => {
 			e.stopPropagation()
 			vscode.postMessage({ type: "pauseParallelTask", taskId })
@@ -354,35 +349,47 @@ export const TaskSelector = memo(
 
 													{/* Task actions — runtime controls only shown for active parallel tasks */}
 													<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-														{state === "running" && (
-															<StandardTooltip
-																content={t("chat:taskSelector.pause", "Pause")}>
-																<button
-																	onClick={(e) => handlePauseTask(item.id, e)}
-																	className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																	<Pause className="w-3 h-3" />
-																</button>
-															</StandardTooltip>
-														)}
-														{(state === "paused" || state === "idle") && runtime && (
-															<StandardTooltip
-																content={t("chat:taskSelector.start", "Start")}>
-																<button
-																	onClick={(e) => handleStartTask(item.id, e)}
-																	className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																	<Play className="w-3 h-3" />
-																</button>
-															</StandardTooltip>
-														)}
-														{state === "waiting_input" && (
-															<StandardTooltip
-																content={t("chat:taskSelector.stop", "Stop")}>
-																<button
-																	onClick={(e) => handleStopTask(item.id, e)}
-																	className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																	<Square className="w-3 h-3" />
-																</button>
-															</StandardTooltip>
+														{/* Pause/Play/Stop are only meaningful for non-completed tasks */}
+														{item.status !== "completed" && (
+															<>
+																{state === "running" && (
+																	<StandardTooltip
+																		content={t("chat:taskSelector.pause", "Pause")}>
+																		<button
+																			onClick={(e) => handlePauseTask(item.id, e)}
+																			className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+																			<Pause className="w-3 h-3" />
+																		</button>
+																	</StandardTooltip>
+																)}
+																{(state === "paused" || state === "idle") &&
+																	runtime && (
+																		<StandardTooltip
+																			content={t(
+																				"chat:taskSelector.start",
+																				"Start",
+																			)}>
+																			<button
+																				onClick={(e) => {
+																					e.stopPropagation()
+																					handleFocusTask(item.id)
+																				}}
+																				className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+																				<Play className="w-3 h-3" />
+																			</button>
+																		</StandardTooltip>
+																	)}
+																{state === "waiting_input" && (
+																	<StandardTooltip
+																		content={t("chat:taskSelector.stop", "Stop")}>
+																		<button
+																			onClick={(e) => handleStopTask(item.id, e)}
+																			className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+																			<Square className="w-3 h-3" />
+																		</button>
+																	</StandardTooltip>
+																)}
+															</>
 														)}
 														<StandardTooltip
 															content={t("chat:taskSelector.rename", "Rename")}>
