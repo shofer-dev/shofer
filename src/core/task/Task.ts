@@ -448,6 +448,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Initial status for the task's history item (set at creation time to avoid race conditions)
 	private readonly initialStatus?: "active" | "delegated" | "completed"
 
+	// When true, this task is a background child of another task. Persisted onto
+	// the task's HistoryItem.isBackground from the first save and used by
+	// AttemptCompletionTool to skip the synchronous delegation flow.
+	private readonly isBackground: boolean
+
 	// MessageManager for high-level message operations (lazy initialized)
 	private _messageManager?: MessageManager
 
@@ -471,6 +476,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		workspacePath,
 		initialStatus,
 		initialMode,
+		isBackground,
 	}: TaskOptions) {
 		super()
 
@@ -536,6 +542,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.parentTask = parentTask
 		this.taskNumber = taskNumber
 		this.initialStatus = initialStatus
+		// Prefer explicit constructor flag; otherwise inherit from history item on rehydration.
+		this.isBackground = isBackground ?? historyItem?.isBackground ?? false
 
 		// Store the task's mode and API config name when it's created.
 		// For history items, use the stored values; for new tasks, we'll set them
@@ -1287,6 +1295,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				mode: this._taskMode || defaultModeSlug, // Use the task's own mode, not the current provider mode.
 				apiConfigName: this._taskApiConfigName, // Use the task's own provider profile, not the current provider profile.
 				initialStatus: this.initialStatus,
+				isBackground: this.isBackground,
 			})
 
 			// Emit token/tool usage updates using debounced function

@@ -25,6 +25,8 @@ export type TaskMetadataOptions = {
 	apiConfigName?: string
 	/** Initial status for the task (e.g., "active" for child tasks) */
 	initialStatus?: "active" | "delegated" | "completed"
+	/** When true, persist `isBackground: true` on the history item. */
+	isBackground?: boolean
 }
 
 export async function taskMetadata({
@@ -38,6 +40,7 @@ export async function taskMetadata({
 	mode,
 	apiConfigName,
 	initialStatus,
+	isBackground,
 }: TaskMetadataOptions) {
 	const taskDir = await getTaskDirectoryPath(globalStoragePath, id)
 
@@ -112,6 +115,7 @@ export async function taskMetadata({
 		mode,
 		...(typeof apiConfigName === "string" && apiConfigName.length > 0 ? { apiConfigName } : {}),
 		...(initialStatus && { status: initialStatus }),
+		...(isBackground ? { isBackground: true } : {}),
 	}
 
 	return { historyItem, tokenUsage }

@@ -13,17 +13,26 @@ import type { ToolUse } from "../../shared/tools"
 interface NewTaskParams {
 	mode: string
 	message: string
-	todos?: string
+	todos?: string | null
 	is_background?: boolean
-	task_id?: string
+	task_id?: string | null
 }
 
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, todos, is_background } = params
+		const { mode, message, is_background } = params
 		const { askApproval, handleError, pushToolResult } = callbacks
+
+		// Normalise `todos`: the schema permits string|null, but some models emit the
+		// literal string "null" (or whitespace) instead of a real null. Treat those as
+		// "no todos provided" so we don't feed garbage into parseMarkdownChecklist.
+		const rawTodos = params.todos
+		const todos: string | undefined =
+			typeof rawTodos === "string" && rawTodos.trim() !== "" && rawTodos.trim().toLowerCase() !== "null"
+				? rawTodos
+				: undefined
 
 		try {
 			// Validate required parameters.
@@ -42,6 +51,21 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				task.recordToolError("new_task")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "message"))
+				return
+			}
+
+			// `is_background` is declared required in the JSON schema, but some models
+			// still omit it. Reject explicitly so the LLM is forced to pick a mode
+			// rather than silently falling through to the synchronous delegation path.
+			if (typeof is_background !== "boolean") {
+				task.consecutiveMistakeCount++
+				task.recordToolError("new_task")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(
+					formatResponse.toolError(
+						"Missing or invalid 'is_background' parameter: must be a boolean (true for background/async, false for synchronous delegation).",
+					),
+				)
 				return
 			}
 
@@ -132,6 +156,10 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					// keepCurrentTask is only checked when parentTask is falsy, so it doesn't
 					// matter here, but set it for clarity.
 					keepCurrentTask: true,
+					// Mark the child as a background task so AttemptCompletionTool will
+					// skip the synchronous delegation flow (which would otherwise abort
+					// the parent and trigger reopenParentFromDelegation).
+					isBackground: true,
 				})
 
 				// Register the child with TaskManager so it is tracked as a managed background task.

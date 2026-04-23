@@ -31,6 +31,10 @@ interface DelegationProvider {
 		childTaskId: string
 		completionResultSummary: string
 	}): Promise<void>
+	updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]>
+	taskManager?: {
+		getManagedTaskInstance?(taskId: string): Task | undefined
+	}
 }
 
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
@@ -97,6 +101,45 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					try {
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
 						const status = historyItem?.status
+
+						if (historyItem?.isBackground) {
+							// Background child completion path. The parent is the focused
+							// task and is running concurrently; we MUST NOT trigger the
+							// synchronous delegation flow (reopenParentFromDelegation),
+							// which would call removeClineFromStack on the parent and set
+							// parent.abort=true.
+							//
+							// Instead: persist completion status on the child's own
+							// history, update the parent's in-memory backgroundChildren
+							// handle, emit TaskCompleted, and abort the child cleanly.
+							console.log(
+								`[AttemptCompletionTool.execute] Background child completed, skipping delegation taskId=${task.taskId}`,
+							)
+
+							pushToolResult("")
+
+							try {
+								await provider.updateTaskHistory({
+									...historyItem,
+									status: "completed",
+									completionResultSummary: result,
+								})
+							} catch (err) {
+								console.error(
+									`[AttemptCompletionTool] Failed to persist background child completion for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
+								)
+							}
+
+							const parentInstance = provider.taskManager?.getManagedTaskInstance?.(task.parentTaskId)
+							const handle = parentInstance?.backgroundChildren.get(task.taskId)
+							if (handle) {
+								handle.status = "completed"
+							}
+
+							this.emitTaskCompleted(task)
+							task.abort = true
+							return
+						}
 
 						if (status === "completed") {
 							console.log(
