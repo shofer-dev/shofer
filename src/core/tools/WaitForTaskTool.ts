@@ -62,7 +62,6 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		const completeMessage = JSON.stringify({
 			tool: "waitForTask",
 			task_ids,
-			task_titles: task_ids.map((id) => handles.get(id)!.title),
 			wait: effectiveWait,
 			timeout: effectiveTimeout,
 		})
