@@ -2,6 +2,7 @@ import { TaskStatus } from "@roo-code/types"
 import type { BackgroundTaskStatus, TaskHandle } from "@roo-code/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
@@ -59,9 +60,13 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		// Finalize the streaming partial "tool" ask so the ChatRow shows a complete
 		// entry. Auto-approval marks this tool as always-approved (see
 		// src/core/auto-approval/index.ts), so this does not block on user input.
+		// Per the shared title-fallback policy, we emit `undefined` for unknown
+		// titles and let the UI fall back to the task id.
+		const task_titles = task_ids.map((id) => getManagedTaskTitle(task, id))
 		const completeMessage = JSON.stringify({
 			tool: "waitForTask",
 			task_ids,
+			task_titles,
 			wait: effectiveWait,
 			timeout: effectiveTimeout,
 		})

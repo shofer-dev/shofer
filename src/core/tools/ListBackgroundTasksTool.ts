@@ -1,6 +1,6 @@
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 
 type ListBackgroundTasksParams = Record<string, never>
@@ -13,6 +13,7 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 
 		const tasks = Array.from(task.backgroundChildren.values()).map((h) => ({
 			task_id: h.taskId,
+			title: getManagedTaskTitle(task, h.taskId),
 			status: h.status,
 			created_at: h.createdAt,
 		}))
