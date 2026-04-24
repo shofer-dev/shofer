@@ -13,7 +13,6 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 
 		const tasks = Array.from(task.backgroundChildren.values()).map((h) => ({
 			task_id: h.taskId,
-			title: h.title,
 			status: h.status,
 			created_at: h.createdAt,
 		}))

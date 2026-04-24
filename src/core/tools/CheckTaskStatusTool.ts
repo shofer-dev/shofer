@@ -34,8 +34,7 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		const { task_id } = params
 		const { askApproval, pushToolResult } = callbacks
 
-		// Check if task is tracked by this parent (look up before askApproval so we
-		// can include the human-readable title in the ChatRow entry).
+		// Check if task is tracked by this parent.
 		const handle = task.backgroundChildren.get(task_id)
 		if (!handle) {
 			pushToolResult(formatResponse.toolError(`Task ${task_id} not found in background children`))
@@ -48,7 +47,6 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		const completeMessage = JSON.stringify({
 			tool: "checkTaskStatus",
 			task_id,
-			task_title: handle.title,
 		})
 		const didApprove = await askApproval("tool", completeMessage)
 		if (!didApprove) {
