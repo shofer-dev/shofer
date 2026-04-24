@@ -29,6 +29,7 @@ import { CustomSupportPrompts } from "@roo/support-prompt"
 import { experimentDefault } from "@roo/experiments"
 
 import { vscode } from "@src/utils/vscode"
+import { webviewLog } from "@src/utils/webviewLog"
 import { convertTextMateToHljs } from "@src/utils/textMateToHljs"
 
 export interface ManagedTask {
@@ -424,6 +425,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					break
 				}
 				case "mcpServers": {
+					webviewLog(`[MCP-DEBUG] webview received mcpServers count=${message.mcpServers?.length ?? 0}`)
 					setMcpServers(message.mcpServers ?? [])
 					break
 				}
