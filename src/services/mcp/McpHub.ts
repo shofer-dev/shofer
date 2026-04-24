@@ -158,6 +158,9 @@ export class McpHub {
 	isConnecting: boolean = false
 	private refCount: number = 0 // Reference counter for active clients
 	private configChangeDebounceTimers: Map<string, NodeJS.Timeout> = new Map()
+	// Injected by McpServerManager to broadcast to all registered providers.
+	// Avoids circular import: McpHub cannot import McpServerManager directly.
+	private notifyAllProvidersFn?: (message: any) => void
 	private isProgrammaticUpdate: boolean = false
 	private flagResetTimer?: NodeJS.Timeout
 	private sanitizedNameRegistry: Map<string, string> = new Map()
@@ -172,6 +175,14 @@ export class McpHub {
 			this.initializeGlobalMcpServers(),
 			this.initializeProjectMcpServers(),
 		]).then(() => {})
+	}
+
+	/**
+	 * Sets the callback used to broadcast server changes to all registered providers.
+	 * Called by McpServerManager immediately after hub creation to avoid circular imports.
+	 */
+	public setNotifyAllProviders(fn: (message: any) => void): void {
+		this.notifyAllProvidersFn = fn
 	}
 
 	/**
@@ -1404,26 +1415,28 @@ export class McpHub {
 			return aIsGlobal ? 1 : -1
 		})
 
-		// Send sorted servers to webview
-		const targetProvider: ClineProvider | undefined = this.providerRef.deref()
+		const serversToSend = sortedConnections.map((connection) => connection.server)
+		const message = {
+			type: "mcpServers" as const,
+			mcpServers: serversToSend,
+		}
 
-		if (targetProvider) {
-			const serversToSend = sortedConnections.map((connection) => connection.server)
-
-			const message = {
-				type: "mcpServers" as const,
-				mcpServers: serversToSend,
-			}
-
-			try {
-				await targetProvider.postMessageToWebview(message)
-			} catch (error) {
-				console.error("[McpHub] Error calling targetProvider.postMessageToWebview:", error)
-			}
+		// Prefer broadcasting to all registered providers so every open webview gets
+		// the updated list (notifyAllProvidersFn is injected by McpServerManager).
+		if (this.notifyAllProvidersFn) {
+			this.notifyAllProvidersFn(message)
 		} else {
-			console.error(
-				"[McpHub] No target provider available (neither from getInstance nor providerRef) - cannot send mcpServers message to webview",
-			)
+			// Fallback: notify only the provider that created this hub.
+			const targetProvider: ClineProvider | undefined = this.providerRef.deref()
+			if (targetProvider) {
+				try {
+					await targetProvider.postMessageToWebview(message)
+				} catch (error) {
+					console.error("[McpHub] Error calling targetProvider.postMessageToWebview:", error)
+				}
+			} else {
+				console.error("[McpHub] No target provider available - cannot send mcpServers message to webview")
+			}
 		}
 	}
 
