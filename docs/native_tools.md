@@ -183,6 +183,7 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 | ------------------------ | :----: | ----- | :--------------: | :----: | -------------------------------------------------- |
 | `get_errors`             | 🆕 WS  | read  |        –         |   ✅   | Get compile/lint diagnostics                       |
 | `get_project_setup_info` | 🆕 WS  | read  |        –         |   ✅   | Detect project languages, frameworks, build system |
+| `get_changed_files`      | 🟣 AW  | read  |        –         |   ✅   | List files changed in current task with line stats |
 | `read_project_structure` | 🆕 WS  | read  |        –         |   ✅   | ASCII tree of workspace structure                  |
 | `rename_symbol`          | 🆕 WS  | edit  |        –         |   ✅   | Rename symbol across codebase (LSP)                |
 | `view_image`             | 🆕 WS  | read  |        –         |   ✅   | View image file for visual analysis                |
@@ -198,6 +199,17 @@ Retrieves compile/lint errors and warnings from VS Code's language server diagno
 ### `get_project_setup_info`
 
 Analyzes workspace root for config files and detects languages, frameworks, build systems, and package managers.
+
+**Parameters:** None.
+
+### `get_changed_files`
+
+Returns the list of files changed during the current task, with insertions/deletions per file. Combines two sources:
+
+- **Shadow git checkpoint diff** (`git diff --numstat` against the task's initial commit) — authoritative line counts including binary detection.
+- **`FileContextTracker`** entries with source `roo_edited` or `user_edited` — ensures files Roo touched are listed even when no checkpoint is available.
+
+No approval prompt — read-only meta-operation.
 
 **Parameters:** None.
 
@@ -385,6 +397,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `list_code_usages`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `get_errors`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `get_project_setup_info`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_changed_files`        |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `codebase_search`          |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
 | `codebase_search_with_lsp` |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `fetch_web_page`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
