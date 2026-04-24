@@ -1,21 +1,21 @@
 /**
- * GetChangedFilesTool - Reports the files Roo has changed during the current task,
- * along with the number of inserted and deleted lines per file.
+ * GetChangedFilesTool - Reports the files changed during the current task.
  *
- * Mirrors VS Code Copilot's `copilot_getChangedFiles`. Two complementary sources
- * are combined to produce the result:
+ * Mirrors VS Code Copilot's `copilot_getChangedFiles`, but exposes BOTH
+ * available signals separately (rather than merging them) so the model can
+ * reason about conflicts between cumulative state and recent activity:
  *
- *  1. The shadow-git checkpoint service (`ShadowCheckpointService.getDiffStat`),
- *     when checkpoints are enabled. This is the authoritative source for
- *     line-level insertions/deletions because it diffs the task's base commit
- *     against the current working tree.
- *  2. The {@link FileContextTracker} (`getFilesEditedByRoo`), which records every
- *     file Roo edited during the task. Used as a fallback when checkpoints are
- *     disabled, and to surface files that the checkpoint diff doesn't yet
- *     include (e.g. immediately after an edit before staging).
+ *  1. **Cumulative diff** (shadow-git checkpoint) — every file that differs
+ *     from the task's base commit, with line insertions/deletions and binary
+ *     detection. This represents the full picture of what has changed since
+ *     the task began, regardless of which actor made the change.
+ *  2. **This session's edits** (FileContextTracker) — files Roo itself edited
+ *     during the current run. Useful for distinguishing Roo-driven changes
+ *     from pre-existing diffs / external edits, and works even when the
+ *     checkpoint service is unavailable.
  *
- * When the checkpoint diff is unavailable, line counts are reported as `null`
- * for files known only via the tracker.
+ * Both sources are always reported when available; their intersection and
+ * symmetric difference are visible to the caller.
  */
 
 import { Task } from "../task/Task"
@@ -27,12 +27,11 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface GetChangedFilesParams {}
 
-interface ChangedFileEntry {
+interface CheckpointEntry {
 	path: string
-	insertions: number | null
-	deletions: number | null
+	insertions: number
+	deletions: number
 	binary: boolean
-	source: "checkpoint" | "tracker"
 }
 
 export class GetChangedFilesTool extends BaseTool<"get_changed_files"> {
@@ -44,79 +43,76 @@ export class GetChangedFilesTool extends BaseTool<"get_changed_files"> {
 		try {
 			task.consecutiveMistakeCount = 0
 
-			const byPath = new Map<string, ChangedFileEntry>()
-
-			// Source 1: shadow-git checkpoint diff (authoritative for line counts).
+			// Source 1: shadow-git checkpoint diff (cumulative since task start).
+			let checkpointEntries: CheckpointEntry[] = []
 			let checkpointError: string | undefined
+			let checkpointAvailable = false
 			try {
 				const service = await getCheckpointService(task)
 				if (service?.isInitialized && service.baseHash) {
+					checkpointAvailable = true
 					const stats = await service.getDiffStat({ from: service.baseHash })
-					for (const stat of stats) {
-						byPath.set(stat.relative, {
-							path: stat.relative,
-							insertions: stat.insertions,
-							deletions: stat.deletions,
-							binary: stat.binary,
-							source: "checkpoint",
-						})
-					}
+					checkpointEntries = stats.map((s) => ({
+						path: s.relative,
+						insertions: s.insertions,
+						deletions: s.deletions,
+						binary: s.binary,
+					}))
 				}
 			} catch (err) {
 				checkpointError = err instanceof Error ? err.message : String(err)
 			}
 
-			// Source 2: FileContextTracker — surfaces files Roo edited even if
-			// checkpoints are disabled or the diff is empty.
-			const trackedEdits = await task.fileContextTracker.getFilesEditedByRoo()
-			for (const filePath of trackedEdits) {
-				if (!byPath.has(filePath)) {
-					byPath.set(filePath, {
-						path: filePath,
-						insertions: null,
-						deletions: null,
-						binary: false,
-						source: "tracker",
-					})
-				}
-			}
+			// Source 2: FileContextTracker — files Roo edited in this session.
+			const sessionEdits = (await task.fileContextTracker.getFilesEditedByRoo()).slice().sort()
 
-			if (byPath.size === 0) {
+			if (checkpointEntries.length === 0 && sessionEdits.length === 0 && !checkpointError) {
 				pushToolResult("No files have been changed by Roo in the current task.")
 				return
 			}
 
-			// Sort: checkpoint-known files first, then by path.
-			const entries = Array.from(byPath.values()).sort((a, b) => {
-				if (a.source !== b.source) {
-					return a.source === "checkpoint" ? -1 : 1
-				}
-				return a.path.localeCompare(b.path)
-			})
+			const sections: string[] = []
 
-			let totalInsertions = 0
-			let totalDeletions = 0
-			const lines: string[] = []
-			for (const entry of entries) {
-				const display = getReadablePath(task.cwd, entry.path)
-				if (entry.source === "checkpoint") {
-					if (entry.binary) {
-						lines.push(`  ${display}  (binary)`)
-					} else {
-						totalInsertions += entry.insertions ?? 0
-						totalDeletions += entry.deletions ?? 0
-						lines.push(`  ${display}  +${entry.insertions ?? 0}  -${entry.deletions ?? 0}`)
-					}
-				} else {
-					// Tracker-only entry: line counts unknown.
-					const reason = checkpointError ? "checkpoints unavailable" : "not yet in checkpoint"
-					lines.push(`  ${display}  +?  -?  (${reason})`)
-				}
+			// --- Section 1: cumulative checkpoint diff -----------------------
+			if (checkpointError) {
+				sections.push(`Cumulative changes since task start: unavailable (${checkpointError})`)
+			} else if (!checkpointAvailable) {
+				sections.push("Cumulative changes since task start: unavailable (checkpoints not initialized)")
+			} else if (checkpointEntries.length === 0) {
+				sections.push("Cumulative changes since task start: none")
+			} else {
+				const sorted = checkpointEntries.slice().sort((a, b) => a.path.localeCompare(b.path))
+				let totalIns = 0
+				let totalDel = 0
+				const lines = sorted.map((e) => {
+					const display = getReadablePath(task.cwd, e.path)
+					if (e.binary) return `  ${display}  (binary)`
+					totalIns += e.insertions
+					totalDel += e.deletions
+					return `  ${display}  +${e.insertions}  -${e.deletions}`
+				})
+				sections.push(
+					`Cumulative changes since task start: ${sorted.length} file(s) (+${totalIns} -${totalDel})\n${lines.join("\n")}`,
+				)
 			}
 
-			const header =
-				`Changed files in current task: ${entries.length}` + ` (+${totalInsertions} -${totalDeletions})`
-			pushToolResult(`${header}\n${lines.join("\n")}`)
+			// --- Section 2: files Roo edited in this session -----------------
+			if (sessionEdits.length === 0) {
+				sections.push("Files Roo edited in this session: none")
+			} else {
+				const checkpointPaths = new Set(checkpointEntries.map((e) => e.path))
+				const lines = sessionEdits.map((p) => {
+					const display = getReadablePath(task.cwd, p)
+					// Annotate when the tracker knows about a file the checkpoint
+					// diff does not (yet) reflect — useful for conflict detection.
+					const inCheckpoint = checkpointPaths.has(p)
+					const note = checkpointAvailable && !inCheckpoint ? "  (not in checkpoint diff)" : ""
+					return `  ${display}${note}`
+				})
+				sections.push(`Files Roo edited in this session: ${sessionEdits.length}\n${lines.join("\n")}`)
+			}
+
+			pushToolResult(sections.join("\n\n"))
 		} catch (error) {
 			await handleError("getting changed files", error instanceof Error ? error : new Error(String(error)))
 		}
