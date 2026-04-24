@@ -26,6 +26,11 @@ export interface AttemptCompletionCallbacks extends ToolCallbacks {
  */
 interface DelegationProvider {
 	getTaskWithId(id: string): Promise<{ historyItem: HistoryItem }>
+	reopenParentFromDelegation(params: {
+		parentTaskId: string
+		childTaskId: string
+		completionResultSummary: string
+	}): Promise<void>
 	/**
 	 * Handles completion of a blocking foreground subtask (is_background=false).
 	 * Pops the child from the stack, reveals the parent, and fires the resolver
@@ -125,12 +130,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						}
 
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
+						const status = historyItem?.status
 
 						if (historyItem?.isBackground) {
 							// Background child completion path. The parent is the focused
-							// task and is running concurrently; we MUST NOT call
-							// removeClineFromStack on the parent or fire the blocking
-							// parent resolver (which is only for foreground subtasks).
+							// task and is running concurrently; we MUST NOT trigger the
+							// synchronous delegation flow (reopenParentFromDelegation),
+							// which would call removeClineFromStack on the parent and set
+							// parent.abort=true.
 							//
 							// Instead: persist completion status on the child's own
 							// history, update the parent's in-memory backgroundChildren
@@ -162,6 +169,42 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							this.emitTaskCompleted(task)
 							task.abort = true
 							return
+						}
+
+						if (status === "completed") {
+							console.log(
+								`[AttemptCompletionTool.execute] Child task already completed, skipping delegation taskId=${task.taskId}`,
+							)
+							// Subtask already completed - skip delegation flow entirely
+							// Fall through to normal completion ask flow below (outside this if block)
+							// This shows the user the completion result and waits for acceptance
+							// without injecting another tool_result to the parent
+						} else if (status === "active") {
+							console.log(
+								`[AttemptCompletionTool.execute] Child task active, starting delegation taskId=${task.taskId}`,
+							)
+							// Old-style synchronous delegation: rehydrates parent from history.
+							// Only reached for tasks created before the blocking-foreground redesign.
+							const delegation = await this.delegateToParent(
+								task,
+								result,
+								provider,
+								askFinishSubTaskApproval,
+								pushToolResult,
+							)
+							console.log(
+								`[AttemptCompletionTool.execute] Delegation returned: ${delegation}, taskId=${task.taskId}`,
+							)
+							if (delegation !== "continue") return
+						} else {
+							// Unexpected status (undefined or "delegated") - log error and skip delegation
+							// undefined indicates a bug in status persistence during child creation
+							// "delegated" would mean this child has its own grandchild pending (shouldn't reach attempt_completion)
+							console.error(
+								`[AttemptCompletionTool] Unexpected child task status "${status}" for task ${task.taskId}. ` +
+									`Expected "active" or "completed". Skipping delegation to prevent data corruption.`,
+							)
+							// Fall through to normal completion ask flow
 						}
 					} catch (err) {
 						// If we can't get the history, log error and skip delegation
@@ -200,6 +243,55 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		} catch (error) {
 			await handleError("inspecting site", error as Error)
 		}
+	}
+
+	/**
+	 * Handles the common delegation flow when a subtask completes.
+	 * Returns:
+	 * - "delegated" when completion was approved and parent resumed
+	 * - "denied" when user denied finishing the subtask
+	 * - "continue" when caller should fall through to normal completion ask flow
+	 */
+	private async delegateToParent(
+		task: Task,
+		result: string,
+		provider: DelegationProvider,
+		askFinishSubTaskApproval: () => Promise<boolean>,
+		pushToolResult: (result: string) => void,
+	): Promise<"delegated" | "denied" | "continue"> {
+		console.log(
+			`[AttemptCompletionTool.delegateToParent] START childTaskId=${task.taskId}, parentTaskId=${task.parentTaskId}`,
+		)
+		const didApprove = await askFinishSubTaskApproval()
+
+		if (!didApprove) {
+			pushToolResult(formatResponse.toolDenied())
+			return "denied"
+		}
+
+		pushToolResult("")
+
+		// Emit completion BEFORE delegation cleanup. The delegation reopen flow may
+		// abort/remove the child task instance as part of cleanup; emitting after
+		// that point can miss TaskManager listeners and leave runtime state stale.
+		this.emitTaskCompleted(task)
+
+		// Set abort to stop the child task loop from continuing after completion
+		task.abort = true
+
+		console.log(
+			`[AttemptCompletionTool.delegateToParent] Calling reopenParentFromDelegation parentTaskId=${task.parentTaskId}, childTaskId=${task.taskId}`,
+		)
+		await provider.reopenParentFromDelegation({
+			parentTaskId: task.parentTaskId!,
+			childTaskId: task.taskId,
+			completionResultSummary: result,
+		})
+
+		console.log(
+			`[AttemptCompletionTool.delegateToParent] COMPLETED delegation parentTaskId=${task.parentTaskId}, childTaskId=${task.taskId}`,
+		)
+		return "delegated"
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"attempt_completion">): Promise<void> {
