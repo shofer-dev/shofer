@@ -284,16 +284,17 @@
 	},
 	"tools": {
 		"description": "Manage which tools are available to the AI assistant. Disabled tools will not be sent to the model and cannot be called during tasks.",
+		"scopeNote": "This setting is global — it disables the tool across all modes. To restrict tools per mode, use the Modes tab.",
 		"disableAllNonEssential": "Disable all non-essential",
-		"resetToDefaults": "Reset to defaults",
+		"enableAll": "Enable all",
 		"groupToolCount": "({{count}} tools)",
 		"alwaysAvailableTooltip": "This tool is always available and cannot be disabled.",
 		"badges": {
-			"alwaysAvailable": "Always available",
 			"optInOnly": "Opt-in only",
 			"aliases": "(aliases: {{aliases}})"
 		},
 		"groups": {
+			"essential": "Essential (always available)",
 			"read": "Read",
 			"edit": "Edit",
 			"command": "Command",
