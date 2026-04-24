@@ -60,48 +60,55 @@ vi.mock("../updateTodoListTool", () => ({
 	}),
 }))
 
-// Define a minimal type for the resolved value
-type MockClineInstance = { taskId: string }
+// Provider method mocks — shared across describe blocks
+const mockCreateTask = vi.fn().mockResolvedValue({ taskId: "child-1" })
+/**
+ * Fires the resolver immediately so `await childCompletionPromise` in
+ * NewTaskTool.execute() unblocks synchronously in tests.
+ */
+const mockRegisterBlockingChildResolver = vi.fn((_childTaskId: string, resolver: (result: string) => void) => {
+	resolver("Task completed successfully")
+})
+const mockGetTaskWithId = vi.fn().mockResolvedValue({
+	historyItem: { id: "mock-parent-task-id", status: "active", childIds: [] },
+})
+const mockUpdateTaskHistory = vi.fn().mockResolvedValue([])
+const mockRegisterBackgroundTask = vi.fn()
 
-// Mock dependencies after modules are mocked
 const mockAskApproval = vi.fn<AskApproval>()
 const mockHandleError = vi.fn<HandleError>()
 const mockPushToolResult = vi.fn()
 const mockEmit = vi.fn()
 const mockRecordToolError = vi.fn()
 const mockSayAndCreateMissingParamError = vi.fn()
-const mockStartSubtask = vi
-	.fn<(message: string, todoItems: any[], mode: string) => Promise<MockClineInstance>>()
-	.mockResolvedValue({ taskId: "mock-subtask-id" })
-
-// Adapter to satisfy legacy expectations while exercising new delegation path
-const mockDelegateParentAndOpenChild = vi.fn(
-	async (args: { parentTaskId: string; message: string; initialTodos: any[]; mode: string }) => {
-		// Call legacy spy so existing expectations still pass
-		await mockStartSubtask(args.message, args.initialTodos, args.mode)
-		return { taskId: "child-1" }
-	},
-)
 const mockCheckpointSave = vi.fn()
 
-// Mock the Cline instance and its methods/properties
+// Mock the Cline instance and its methods/properties.
+// backgroundChildren is a real Map so set/get work correctly.
 const mockCline = {
 	ask: vi.fn(),
 	sayAndCreateMissingParamError: mockSayAndCreateMissingParamError,
 	emit: mockEmit,
 	recordToolError: mockRecordToolError,
 	consecutiveMistakeCount: 0,
+	didToolFailInCurrentTurn: false,
 	isPaused: false,
 	pausedModeSlug: "ask",
 	taskId: "mock-parent-task-id",
 	enableCheckpoints: false,
 	checkpointSave: mockCheckpointSave,
-	startSubtask: mockStartSubtask,
+	getTaskMode: vi.fn().mockResolvedValue(undefined),
+	backgroundChildren: new Map<string, any>(),
 	providerRef: {
 		deref: vi.fn(() => ({
-			getState: vi.fn(() => ({ customModes: [], mode: "ask" })),
-			handleModeSwitch: vi.fn(),
-			delegateParentAndOpenChild: mockDelegateParentAndOpenChild,
+			getState: vi.fn().mockResolvedValue({ customModes: [], mode: "ask" }),
+			createTask: mockCreateTask,
+			registerBlockingChildResolver: mockRegisterBlockingChildResolver,
+			getTaskWithId: mockGetTaskWithId,
+			updateTaskHistory: mockUpdateTaskHistory,
+			taskManager: {
+				registerBackgroundTask: mockRegisterBackgroundTask,
+			},
 		})),
 	},
 }
@@ -111,31 +118,44 @@ import { newTaskTool } from "../NewTaskTool"
 import { getModeBySlug } from "../../../shared/modes"
 import * as vscode from "vscode"
 
+/**
+ * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.
+ * `is_background` is forwarded so the tool's boolean normalisation runs correctly.
+ */
 const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => ({
 	...block,
-	// Native tool calling: `nativeArgs` is the source of truth for tool execution.
-	// These tests intentionally exercise missing-param behavior, so we allow undefined
-	// values and let the tool's runtime validation handle it.
 	nativeArgs: {
 		mode: block.params.mode,
 		message: block.params.message,
 		todos: block.params.todos,
+		is_background: block.params.is_background,
 	} as unknown as NativeToolArgs["new_task"],
 })
 
 describe("newTaskTool", () => {
 	beforeEach(() => {
-		// Reset mocks before each test
 		vi.clearAllMocks()
-		mockAskApproval.mockResolvedValue(true) // Default to approved
+		mockAskApproval.mockResolvedValue(true)
 		vi.mocked(getModeBySlug).mockReturnValue({
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "Test role definition",
 			groups: ["command", "read", "edit"],
-		}) // Default valid mode
+		})
 		mockCline.consecutiveMistakeCount = 0
+		mockCline.didToolFailInCurrentTurn = false
 		mockCline.isPaused = false
+		mockCline.backgroundChildren.clear()
+		// Re-wire the resolver mock: fires immediately to unblock the foreground await.
+		mockRegisterBlockingChildResolver.mockImplementation(
+			(_childTaskId: string, resolver: (result: string) => void) => {
+				resolver("Task completed successfully")
+			},
+		)
+		mockCreateTask.mockResolvedValue({ taskId: "child-1" })
+		mockGetTaskWithId.mockResolvedValue({
+			historyItem: { id: "mock-parent-task-id", status: "active", childIds: [] },
+		})
 		// Default: VSCode setting is disabled
 		const mockGet = vi.fn().mockReturnValue(false)
 		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
@@ -145,12 +165,13 @@ describe("newTaskTool", () => {
 
 	it("should correctly un-escape \\\\@ to \\@ in the message passed to the new task", async () => {
 		const block: ToolUse<"new_task"> = {
-			type: "tool_use", // Add required 'type' property
-			name: "new_task", // Correct property name
+			type: "tool_use",
+			name: "new_task",
 			params: {
 				mode: "code",
-				message: "Review this: \\\\@file1.txt and also \\\\\\\\@file2.txt", // Input with \\@ and \\\\@
+				message: "Review this: \\\\@file1.txt and also \\\\\\\\@file2.txt",
 				todos: "[ ] First task\n[ ] Second task",
+				is_background: "false",
 			},
 			partial: false,
 		}
@@ -161,31 +182,34 @@ describe("newTaskTool", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		// Verify askApproval was called
 		expect(mockAskApproval).toHaveBeenCalled()
 
-		// Verify the message passed to startSubtask reflects the code's behavior in unit tests
-		expect(mockStartSubtask).toHaveBeenCalledWith(
-			"Review this: \\@file1.txt and also \\\\\\@file2.txt", // Unit Test Expectation: \\@ -> \@, \\\\@ -> \\\\@
-			expect.arrayContaining([
-				expect.objectContaining({ content: "First task" }),
-				expect.objectContaining({ content: "Second task" }),
-			]),
-			"code",
+		// createTask receives the unescaped message
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"Review this: \\@file1.txt and also \\\\\\@file2.txt",
+			undefined,
+			mockCline,
+			expect.objectContaining({
+				initialTodos: expect.arrayContaining([
+					expect.objectContaining({ content: "First task" }),
+					expect.objectContaining({ content: "Second task" }),
+				]),
+				initialMode: "code",
+			}),
 		)
 
-		// Verify side effects
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Delegated to child task"))
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
 	})
 
-	it("should not un-escape single escaped \@", async () => {
+	it("should not un-escape single escaped \\@", async () => {
 		const block: ToolUse<"new_task"> = {
-			type: "tool_use", // Add required 'type' property
-			name: "new_task", // Correct property name
+			type: "tool_use",
+			name: "new_task",
 			params: {
 				mode: "code",
 				message: "This is already unescaped: \\@file1.txt",
 				todos: "[ ] Test todo",
+				is_background: "false",
 			},
 			partial: false,
 		}
@@ -196,21 +220,23 @@ describe("newTaskTool", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		expect(mockStartSubtask).toHaveBeenCalledWith(
-			"This is already unescaped: \\@file1.txt", // Expected: \@ remains \@
-			expect.any(Array),
-			"code",
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"This is already unescaped: \\@file1.txt",
+			undefined,
+			mockCline,
+			expect.objectContaining({ initialMode: "code" }),
 		)
 	})
 
 	it("should not un-escape non-escaped @", async () => {
 		const block: ToolUse<"new_task"> = {
-			type: "tool_use", // Add required 'type' property
-			name: "new_task", // Correct property name
+			type: "tool_use",
+			name: "new_task",
 			params: {
 				mode: "code",
 				message: "A normal mention @file1.txt",
 				todos: "[ ] Test todo",
+				is_background: "false",
 			},
 			partial: false,
 		}
@@ -221,21 +247,23 @@ describe("newTaskTool", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		expect(mockStartSubtask).toHaveBeenCalledWith(
-			"A normal mention @file1.txt", // Expected: @ remains @
-			expect.any(Array),
-			"code",
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"A normal mention @file1.txt",
+			undefined,
+			mockCline,
+			expect.objectContaining({ initialMode: "code" }),
 		)
 	})
 
 	it("should handle mixed escaping scenarios", async () => {
 		const block: ToolUse<"new_task"> = {
-			type: "tool_use", // Add required 'type' property
-			name: "new_task", // Correct property name
+			type: "tool_use",
+			name: "new_task",
 			params: {
 				mode: "code",
 				message: "Mix: @file0.txt, \\@file1.txt, \\\\@file2.txt, \\\\\\\\@file3.txt",
 				todos: "[ ] Test todo",
+				is_background: "false",
 			},
 			partial: false,
 		}
@@ -246,10 +274,11 @@ describe("newTaskTool", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		expect(mockStartSubtask).toHaveBeenCalledWith(
-			"Mix: @file0.txt, \\@file1.txt, \\@file2.txt, \\\\\\@file3.txt", // Unit Test Expectation: @->@, \@->\@, \\@->\@, \\\\@->\\\\@
-			expect.any(Array),
-			"code",
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"Mix: @file0.txt, \\@file1.txt, \\@file2.txt, \\\\\\@file3.txt",
+			undefined,
+			mockCline,
+			expect.objectContaining({ initialMode: "code" }),
 		)
 	})
 
@@ -260,6 +289,7 @@ describe("newTaskTool", () => {
 			params: {
 				mode: "code",
 				message: "Test message",
+				is_background: "false",
 				// todos missing - should work for backward compatibility
 			},
 			partial: false,
@@ -271,16 +301,18 @@ describe("newTaskTool", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		// Should NOT error when todos is missing
 		expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
 		expect(mockCline.consecutiveMistakeCount).toBe(0)
 		expect(mockCline.recordToolError).not.toHaveBeenCalledWith("new_task")
 
-		// Should create task with empty todos array
-		expect(mockStartSubtask).toHaveBeenCalledWith("Test message", [], "code")
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"Test message",
+			undefined,
+			mockCline,
+			expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+		)
 
-		// Should complete successfully
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Delegated to child task"))
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
 	})
 
 	it("should work with todos parameter when provided", async () => {
@@ -291,6 +323,7 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "Test message with todos",
 				todos: "[ ] First task\n[ ] Second task",
+				is_background: "false",
 			},
 			partial: false,
 		}
@@ -301,17 +334,20 @@ describe("newTaskTool", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		// Should parse and include todos when provided
-		expect(mockStartSubtask).toHaveBeenCalledWith(
+		expect(mockCreateTask).toHaveBeenCalledWith(
 			"Test message with todos",
-			expect.arrayContaining([
-				expect.objectContaining({ content: "First task" }),
-				expect.objectContaining({ content: "Second task" }),
-			]),
-			"code",
+			undefined,
+			mockCline,
+			expect.objectContaining({
+				initialTodos: expect.arrayContaining([
+					expect.objectContaining({ content: "First task" }),
+					expect.objectContaining({ content: "Second task" }),
+				]),
+				initialMode: "code",
+			}),
 		)
 
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Delegated to child task"))
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
 	})
 
 	it("should error when mode parameter is missing", async () => {
@@ -319,7 +355,7 @@ describe("newTaskTool", () => {
 			type: "tool_use",
 			name: "new_task",
 			params: {
-				// mode missing
+				// mode missing — getTaskMode() returns undefined → error
 				message: "Test message",
 				todos: "[ ] Test todo",
 			},
@@ -368,6 +404,7 @@ describe("newTaskTool", () => {
 				mode: "code",
 				message: "Test message",
 				todos: "[ ] Pending task\n[x] Completed task\n[-] In progress task",
+				is_background: "false",
 			},
 			partial: false,
 		}
@@ -378,20 +415,22 @@ describe("newTaskTool", () => {
 			pushToolResult: mockPushToolResult,
 		})
 
-		expect(mockStartSubtask).toHaveBeenCalledWith(
+		expect(mockCreateTask).toHaveBeenCalledWith(
 			"Test message",
-			expect.arrayContaining([
-				expect.objectContaining({ content: "Pending task", status: "pending" }),
-				expect.objectContaining({ content: "Completed task", status: "completed" }),
-				expect.objectContaining({ content: "In progress task", status: "in_progress" }),
-			]),
-			"code",
+			undefined,
+			mockCline,
+			expect.objectContaining({
+				initialTodos: expect.arrayContaining([
+					expect.objectContaining({ content: "Pending task", status: "pending" }),
+					expect.objectContaining({ content: "Completed task", status: "completed" }),
+					expect.objectContaining({ content: "In progress task", status: "in_progress" }),
+				]),
+			}),
 		)
 	})
 
 	describe("VSCode setting: newTaskRequireTodos", () => {
 		it("should NOT require todos when VSCode setting is disabled (default)", async () => {
-			// Ensure VSCode setting is disabled
 			const mockGet = vi.fn().mockReturnValue(false)
 			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
 				get: mockGet,
@@ -403,6 +442,7 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
+					is_background: "false",
 					// todos missing - should work when setting is disabled
 				},
 				partial: false,
@@ -414,20 +454,21 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Should NOT error when todos is missing and setting is disabled
 			expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
 			expect(mockCline.consecutiveMistakeCount).toBe(0)
 			expect(mockCline.recordToolError).not.toHaveBeenCalledWith("new_task")
 
-			// Should create task with empty todos array
-			expect(mockStartSubtask).toHaveBeenCalledWith("Test message", [], "code")
+			expect(mockCreateTask).toHaveBeenCalledWith(
+				"Test message",
+				undefined,
+				mockCline,
+				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+			)
 
-			// Should complete successfully
-			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Delegated to child task"))
+			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
 		})
 
 		it("should REQUIRE todos when VSCode setting is enabled", async () => {
-			// Enable VSCode setting
 			const mockGet = vi.fn().mockReturnValue(true)
 			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
 				get: mockGet,
@@ -439,6 +480,7 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
+					is_background: "false",
 					// todos missing - should error when setting is enabled
 				},
 				partial: false,
@@ -450,20 +492,14 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Should error when todos is missing and setting is enabled
 			expect(mockSayAndCreateMissingParamError).toHaveBeenCalledWith("new_task", "todos")
 			expect(mockCline.consecutiveMistakeCount).toBe(1)
 			expect(mockCline.recordToolError).toHaveBeenCalledWith("new_task")
 
-			// Should NOT create task
-			expect(mockStartSubtask).not.toHaveBeenCalled()
-			expect(mockPushToolResult).not.toHaveBeenCalledWith(
-				expect.stringContaining("Successfully created new task"),
-			)
+			expect(mockCreateTask).not.toHaveBeenCalled()
 		})
 
 		it("should work with todos when VSCode setting is enabled", async () => {
-			// Enable VSCode setting
 			const mockGet = vi.fn().mockReturnValue(true)
 			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
 				get: mockGet,
@@ -476,6 +512,7 @@ describe("newTaskTool", () => {
 					mode: "code",
 					message: "Test message",
 					todos: "[ ] First task\n[ ] Second task",
+					is_background: "false",
 				},
 				partial: false,
 			}
@@ -486,26 +523,26 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Should NOT error when todos is provided and setting is enabled
 			expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
 			expect(mockCline.consecutiveMistakeCount).toBe(0)
 
-			// Should create task with parsed todos
-			expect(mockStartSubtask).toHaveBeenCalledWith(
+			expect(mockCreateTask).toHaveBeenCalledWith(
 				"Test message",
-				expect.arrayContaining([
-					expect.objectContaining({ content: "First task" }),
-					expect.objectContaining({ content: "Second task" }),
-				]),
-				"code",
+				undefined,
+				mockCline,
+				expect.objectContaining({
+					initialTodos: expect.arrayContaining([
+						expect.objectContaining({ content: "First task" }),
+						expect.objectContaining({ content: "Second task" }),
+					]),
+					initialMode: "code",
+				}),
 			)
 
-			// Should complete successfully
-			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Delegated to child task"))
+			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
 		})
 
 		it("should work with empty todos string when VSCode setting is enabled", async () => {
-			// Enable VSCode setting
 			const mockGet = vi.fn().mockReturnValue(true)
 			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
 				get: mockGet,
@@ -518,6 +555,7 @@ describe("newTaskTool", () => {
 					mode: "code",
 					message: "Test message",
 					todos: "", // Empty string should be accepted
+					is_background: "false",
 				},
 				partial: false,
 			}
@@ -528,15 +566,17 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Should NOT error when todos is empty string and setting is enabled
 			expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
 			expect(mockCline.consecutiveMistakeCount).toBe(0)
 
-			// Should create task with empty todos array
-			expect(mockStartSubtask).toHaveBeenCalledWith("Test message", [], "code")
+			expect(mockCreateTask).toHaveBeenCalledWith(
+				"Test message",
+				undefined,
+				mockCline,
+				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+			)
 
-			// Should complete successfully
-			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Delegated to child task"))
+			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
 		})
 
 		it("should check VSCode setting with Package.name configuration key", async () => {
@@ -552,6 +592,7 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
+					is_background: "false",
 				},
 				partial: false,
 			}
@@ -562,20 +603,17 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Verify that VSCode configuration was accessed with Package.name
 			expect(mockGetConfiguration).toHaveBeenCalledWith("roo-cline")
 			expect(mockGet).toHaveBeenCalledWith("newTaskRequireTodos", false)
 		})
 
 		it("should use current Package.name value (roo-code-nightly) when accessing VSCode configuration", async () => {
-			// Arrange: capture calls to VSCode configuration and ensure we can assert the namespace
 			const mockGet = vi.fn().mockReturnValue(false)
 			const mockGetConfiguration = vi.fn().mockReturnValue({
 				get: mockGet,
 			} as any)
 			vi.mocked(vscode.workspace.getConfiguration).mockImplementation(mockGetConfiguration)
 
-			// Mutate the mocked Package.name dynamically to simulate a different build variant
 			const pkg = await import("../../../shared/package")
 			;(pkg.Package as any).name = "roo-code-nightly"
 
@@ -585,6 +623,7 @@ describe("newTaskTool", () => {
 				params: {
 					mode: "code",
 					message: "Test message",
+					is_background: "false",
 				},
 				partial: false,
 			}
@@ -595,46 +634,60 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Assert: configuration was read using the dynamic nightly namespace
 			expect(mockGetConfiguration).toHaveBeenCalledWith("roo-code-nightly")
 			expect(mockGet).toHaveBeenCalledWith("newTaskRequireTodos", false)
 		})
 	})
-
-	// Add more tests for error handling (invalid mode, approval denied) if needed
 })
 
 describe("newTaskTool delegation flow", () => {
-	it("delegates to provider and does not call legacy startSubtask", async () => {
-		// Arrange: stub provider delegation
-		const providerSpy = {
-			getState: vi.fn().mockResolvedValue({
-				mode: "ask",
-				experiments: {},
-			}),
-			delegateParentAndOpenChild: vi.fn().mockResolvedValue({ taskId: "child-1" }),
-			handleModeSwitch: vi.fn(),
-		} as any
-
-		// Use a fresh local cline instance to avoid cross-test interference
-		const localStartSubtask = vi.fn()
+	it("creates child via provider.createTask and suspends parent via resolver", async () => {
+		// Fresh provider with the same immediate-resolver pattern.
+		const localCreateTask = vi.fn().mockResolvedValue({ taskId: "child-1" })
+		const localRegisterBlockingChildResolver = vi.fn((_childTaskId: string, resolver: (result: string) => void) => {
+			resolver("Work done")
+		})
+		const localGetTaskWithId = vi.fn().mockResolvedValue({
+			historyItem: { id: "mock-parent-task-id", status: "active", childIds: [] },
+		})
+		const localUpdateTaskHistory = vi.fn().mockResolvedValue([])
 		const localEmit = vi.fn()
+
 		const localCline = {
 			ask: vi.fn(),
-			sayAndCreateMissingParamError: mockSayAndCreateMissingParamError,
+			sayAndCreateMissingParamError: vi.fn(),
 			emit: localEmit,
-			recordToolError: mockRecordToolError,
+			recordToolError: vi.fn(),
 			consecutiveMistakeCount: 0,
+			didToolFailInCurrentTurn: false,
 			isPaused: false,
 			pausedModeSlug: "ask",
 			taskId: "mock-parent-task-id",
 			enableCheckpoints: false,
-			checkpointSave: mockCheckpointSave,
-			startSubtask: localStartSubtask,
+			checkpointSave: vi.fn(),
+			getTaskMode: vi.fn().mockResolvedValue(undefined),
+			backgroundChildren: new Map<string, any>(),
 			providerRef: {
-				deref: vi.fn(() => providerSpy),
+				deref: vi.fn(() => ({
+					getState: vi.fn().mockResolvedValue({ customModes: [], mode: "ask" }),
+					createTask: localCreateTask,
+					registerBlockingChildResolver: localRegisterBlockingChildResolver,
+					getTaskWithId: localGetTaskWithId,
+					updateTaskHistory: localUpdateTaskHistory,
+					taskManager: { registerBackgroundTask: vi.fn() },
+				})),
 			},
 		}
+
+		vi.mocked(getModeBySlug).mockReturnValue({
+			slug: "code",
+			name: "Code Mode",
+			roleDefinition: "Test role definition",
+			groups: ["command", "read", "edit"],
+		})
+		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+			get: vi.fn().mockReturnValue(false),
+		} as any)
 
 		const block: ToolUse<"new_task"> = {
 			type: "tool_use",
@@ -642,36 +695,44 @@ describe("newTaskTool delegation flow", () => {
 			params: {
 				mode: "code",
 				message: "Do something",
-				// no todos -> should default to []
+				is_background: "false",
 			},
 			partial: false,
 		}
 
-		// Act
+		const mockAsk = vi.fn().mockResolvedValue(true)
+
 		await newTaskTool.handle(localCline as any, withNativeArgs(block), {
-			askApproval: mockAskApproval,
-			handleError: mockHandleError,
+			askApproval: mockAsk,
+			handleError: vi.fn(),
 			pushToolResult: mockPushToolResult,
 		})
 
-		// Assert: provider method called with correct params
-		expect(providerSpy.delegateParentAndOpenChild).toHaveBeenCalledWith({
-			parentTaskId: "mock-parent-task-id",
-			message: "Do something",
-			initialTodos: [],
-			mode: "code",
-		})
+		// createTask called with the unescaped message, no parent image, parent task, and foreground options
+		expect(localCreateTask).toHaveBeenCalledWith(
+			"Do something",
+			undefined,
+			localCline,
+			expect.objectContaining({
+				initialTodos: [],
+				initialMode: "code",
+				openInStack: true,
+				keepCurrentTask: true,
+				isBackground: false,
+			}),
+		)
 
-		// Assert: legacy path not used
-		expect(localStartSubtask).not.toHaveBeenCalled()
+		// Resolver registered for the child
+		expect(localRegisterBlockingChildResolver).toHaveBeenCalledWith("child-1", expect.any(Function))
 
-		// Assert: no pause/unpause events emitted in delegation path
+		// Parent's result contains child's completion output
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
+		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Work done"))
+
+		// No pause/unpause events emitted
 		const pauseEvents = (localEmit as any).mock.calls.filter(
 			(c: any[]) => c[0] === "taskPaused" || c[0] === "taskUnpaused",
 		)
 		expect(pauseEvents.length).toBe(0)
-
-		// Assert: tool result reflects delegation
-		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Delegated to child task child-1"))
 	})
 })
