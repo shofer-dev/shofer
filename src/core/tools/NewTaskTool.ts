@@ -8,13 +8,14 @@ import { formatResponse } from "../prompts/responses"
 import { parseMarkdownChecklist } from "./UpdateTodoListTool"
 import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { parseToolBoolean } from "./helpers/toolInputParsing"
 import type { ToolUse } from "../../shared/tools"
 
 interface NewTaskParams {
 	mode: string
 	message: string
 	todos?: string
-	is_background?: boolean
+	is_background?: boolean | string | number | null
 	task_id?: string
 }
 
@@ -22,7 +23,10 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, todos, is_background } = params
+		const { mode, message, todos } = params
+		// Normalize is_background across the various representations LLMs emit
+		// ("true"/"false", 0/1, native boolean, etc.). Absent/unrecognized → false.
+		const is_background = parseToolBoolean(params.is_background) ?? false
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {

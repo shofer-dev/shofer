@@ -716,9 +716,8 @@ describe("newTaskTool delegation flow", () => {
 			expect.objectContaining({
 				initialTodos: [],
 				initialMode: "code",
+				initialStatus: "active",
 				openInStack: true,
-				keepCurrentTask: true,
-				isBackground: false,
 			}),
 		)
 

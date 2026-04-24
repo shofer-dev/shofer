@@ -2,6 +2,7 @@ import { TaskStatus } from "@roo-code/types"
 import type { BackgroundTaskStatus } from "@roo-code/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
@@ -41,21 +42,22 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			return
 		}
 
+		const provider = task.providerRef.deref()
+		if (!provider) {
+			pushToolResult(formatResponse.toolError("Provider reference lost"))
+			return
+		}
+
 		// Finalize the streaming partial "tool" ask so the ChatRow shows a complete
 		// entry. Auto-approval marks this tool as always-approved, so askApproval
 		// returns immediately without blocking on user input.
 		const completeMessage = JSON.stringify({
 			tool: "checkTaskStatus",
 			task_id,
+			task_title: getManagedTaskTitle(task, task_id),
 		})
 		const didApprove = await askApproval("tool", completeMessage)
 		if (!didApprove) {
-			return
-		}
-
-		const provider = task.providerRef.deref()
-		if (!provider) {
-			pushToolResult(formatResponse.toolError("Provider reference lost"))
 			return
 		}
 

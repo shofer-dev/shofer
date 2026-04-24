@@ -897,15 +897,18 @@ export const ChatRowContent = ({
 			case "waitForTask": {
 				const timeoutSeconds = typeof tool.timeout === "number" ? tool.timeout : undefined
 				// Support both new multi-task (task_ids/task_titles) and legacy single-task fields.
-				const displayTitles: string[] = tool.task_titles?.length
+				// task_titles is parallel to task_ids and may contain undefined entries when no
+				// title is known (per the shared title-fallback policy); fall back to the
+				// matching task_id for those slots.
+				const idsArr: string[] = tool.task_ids?.length ? tool.task_ids : tool.task_id ? [tool.task_id] : []
+				const titlesArr: Array<string | undefined> = tool.task_titles?.length
 					? tool.task_titles
-					: tool.task_ids?.length
-						? tool.task_ids
-						: tool.task_title
-							? [tool.task_title]
-							: tool.task_id
-								? [tool.task_id]
-								: []
+					: tool.task_title
+						? [tool.task_title]
+						: []
+				const displayTitles: string[] = idsArr.length
+					? idsArr.map((id, i) => titlesArr[i] ?? id)
+					: titlesArr.filter((t): t is string => !!t)
 				return (
 					<>
 						<div style={headerStyle}>
