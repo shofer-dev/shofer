@@ -13,7 +13,7 @@ import { arePathsEqual } from "../../utils/path"
 import { executeRipgrep } from "../../services/search/file-search"
 import { t } from "../../i18n"
 
-import { CheckpointDiff, CheckpointResult, CheckpointEventMap } from "./types"
+import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types"
 import { getExcludePatterns } from "./excludes"
 
 /**
@@ -403,6 +403,52 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		}
 
 		return result
+	}
+
+	/**
+	 * Returns per-file line-level change statistics between two refs (or between
+	 * `from` and the current working tree when `to` is omitted).
+	 *
+	 * Unlike {@link getDiff}, this does not load file contents; it only reports
+	 * the number of inserted/deleted lines per file using `git diff --numstat`
+	 * (via simple-git's `diffSummary`). Untracked files are staged first so they
+	 * are included in the summary.
+	 *
+	 * Defaults `from` to the initial (root) commit when not provided, mirroring
+	 * {@link getDiff}.
+	 */
+	public async getDiffStat({ from, to }: { from?: string; to?: string }): Promise<CheckpointDiffStat[]> {
+		if (!this.git) {
+			throw new Error("Shadow git repo not initialized")
+		}
+
+		if (!from) {
+			from = (await this.git.raw(["rev-list", "--max-parents=0", "HEAD"])).trim()
+		}
+
+		// Stage all changes so that untracked files appear in the diff summary.
+		await this.stageAll(this.git)
+
+		this.log(`[${this.constructor.name}#getDiffStat] diffing ${to ? `${from}..${to}` : `${from}..HEAD`}`)
+		const { files } = to ? await this.git.diffSummary([`${from}..${to}`]) : await this.git.diffSummary([from])
+
+		const cwdPath = (await this.getShadowGitConfigWorktree(this.git)) || this.workspaceDir || ""
+
+		// simple-git's `DiffResult` returns either `DiffResultTextFile` (with
+		// `insertions`/`deletions`) or `DiffResultBinaryFile` (with `binary: true`
+		// and a byte-level `before`/`after`). Normalize both into our shape.
+		return files.map((file) => {
+			const binary = (file as { binary?: boolean }).binary === true
+			const insertions = binary ? 0 : ((file as { insertions?: number }).insertions ?? 0)
+			const deletions = binary ? 0 : ((file as { deletions?: number }).deletions ?? 0)
+			return {
+				relative: file.file,
+				absolute: path.join(cwdPath, file.file),
+				insertions,
+				deletions,
+				binary,
+			}
+		})
 	}
 
 	/**

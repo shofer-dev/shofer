@@ -265,6 +265,48 @@ export class FileContextTracker {
 		return files
 	}
 
+	/**
+	 * Returns the unique file paths that Roo has edited during this task,
+	 * sorted by most-recent edit first.
+	 *
+	 * Source of truth is the persisted task metadata (`files_in_context`),
+	 * which is appended to whenever {@link addFileToFileContextTracker} is
+	 * invoked with `roo_edited`. This is independent of the shadow-git
+	 * checkpoint service and works even when checkpoints are disabled.
+	 *
+	 * @param sinceTimestamp - Optional epoch ms; only include files edited at/after this time.
+	 */
+	async getFilesEditedByRoo(sinceTimestamp?: number): Promise<string[]> {
+		try {
+			const metadata = await this.getTaskMetadata(this.taskId)
+
+			const editEntries = metadata.files_in_context.filter((entry) => {
+				if (entry.record_source !== "roo_edited" || !entry.roo_edit_date) {
+					return false
+				}
+				if (sinceTimestamp && entry.roo_edit_date < sinceTimestamp) {
+					return false
+				}
+				return true
+			})
+
+			editEntries.sort((a, b) => (b.roo_edit_date ?? 0) - (a.roo_edit_date ?? 0))
+
+			const seen = new Set<string>()
+			const uniquePaths: string[] = []
+			for (const entry of editEntries) {
+				if (!seen.has(entry.path)) {
+					seen.add(entry.path)
+					uniquePaths.push(entry.path)
+				}
+			}
+			return uniquePaths
+		} catch (error) {
+			console.error("Failed to get files edited by Roo:", error)
+			return []
+		}
+	}
+
 	// Marks a file as edited by Roo to prevent false positives in file watchers
 	markFileAsEditedByRoo(filePath: string): void {
 		this.recentlyEditedByRoo.add(filePath)

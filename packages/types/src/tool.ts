@@ -54,6 +54,7 @@ export const toolNames = [
 	"get_errors",
 	"get_project_setup_info",
 	"get_search_results",
+	"get_changed_files",
 	"insert_edit",
 	"list_code_usages",
 	"read_project_structure",
