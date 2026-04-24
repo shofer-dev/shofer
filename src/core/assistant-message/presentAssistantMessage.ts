@@ -43,6 +43,7 @@ import { createDirectoryTool } from "../tools/CreateDirectoryTool"
 import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool"
 import { fetchWebPageTool } from "../tools/FetchWebPageTool"
 import { findFilesTool } from "../tools/FindFilesTool"
+import { getChangedFilesTool } from "../tools/GetChangedFilesTool"
 import { getErrorsTool } from "../tools/GetErrorsTool"
 import { getProjectSetupInfoTool } from "../tools/GetProjectSetupInfoTool"
 import { getSearchResultsTool } from "../tools/GetSearchResultsTool"
@@ -962,6 +963,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "get_errors":
 					await getErrorsTool.handle(cline, block as ToolUse<"get_errors">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "get_changed_files":
+					await getChangedFilesTool.handle(cline, block as ToolUse<"get_changed_files">, {
 						askApproval,
 						handleError,
 						pushToolResult,

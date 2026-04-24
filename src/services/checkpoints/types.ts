@@ -13,6 +13,20 @@ export type CheckpointDiff = {
 	}
 }
 
+/**
+ * Per-file line-level change summary between two checkpoints (or between a
+ * checkpoint and the current working tree). Mirrors what `git diff --numstat`
+ * reports per file, with insertions/deletions counted against the working tree
+ * (or `to` ref when provided).
+ */
+export type CheckpointDiffStat = {
+	relative: string
+	absolute: string
+	insertions: number
+	deletions: number
+	binary: boolean
+}
+
 export interface CheckpointServiceOptions {
 	taskId: string
 	workspaceDir: string

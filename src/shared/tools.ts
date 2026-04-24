@@ -135,6 +135,7 @@ export type NativeToolArgs = {
 	create_new_workspace: { path: string; name: string; folders?: string[] | null; openInNewWindow?: boolean | null }
 	fetch_web_page: { urls: string[]; query?: string | null }
 	find_files: { pattern: string; maxResults?: number }
+	get_changed_files: Record<string, never>
 	get_errors: { filePaths?: string[] | null }
 	get_project_setup_info: Record<string, never>
 	get_search_results: {
@@ -328,6 +329,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	create_new_workspace: "create workspaces",
 	fetch_web_page: "fetch web pages",
 	find_files: "find files by pattern",
+	get_changed_files: "list files changed by Roo",
 	get_errors: "get diagnostics",
 	get_project_setup_info: "get project info",
 	get_search_results: "search text in files",
@@ -359,6 +361,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"list_code_usages",
 			"get_errors",
 			"get_project_setup_info",
+			"get_changed_files",
 			"codebase_search_with_lsp",
 			"fetch_web_page",
 		],

@@ -13,6 +13,7 @@ import executeCommand from "./execute_command"
 import fetchWebPage from "./fetch_web_page"
 import findFiles from "./find_files"
 import generateImage from "./generate_image"
+import getChangedFiles from "./get_changed_files"
 import getErrors from "./get_errors"
 import getProjectSetupInfo from "./get_project_setup_info"
 import getSearchResults from "./get_search_results"
@@ -77,6 +78,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		fetchWebPage,
 		findFiles,
 		generateImage,
+		getChangedFiles,
 		getErrors,
 		getProjectSetupInfo,
 		getSearchResults,
