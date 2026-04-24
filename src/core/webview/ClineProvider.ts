@@ -270,6 +270,11 @@ export class ClineProvider
 			.then((hub) => {
 				this.mcpHub = hub
 				this.mcpHub.registerClient()
+				// The webview may have already launched and received an empty mcpServers list
+				// while the hub was still initializing (race condition). Push the real list now.
+				this.postMessageToWebview({ type: "mcpServers", mcpServers: hub.getAllServers() }).catch((error) =>
+					this.log(`Failed to post initial MCP servers to webview: ${error}`),
+				)
 			})
 			.catch((error) => {
 				this.log(`Failed to initialize MCP Hub: ${error}`)

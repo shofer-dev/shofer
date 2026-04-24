@@ -37,6 +37,9 @@ export class McpServerManager {
 				// Double-check instance in case it was created while we were waiting
 				if (!this.instance) {
 					const hub = new McpHub(provider)
+					// Inject the broadcast callback so hub can notify all providers without
+					// a circular import (McpHub → McpServerManager → McpHub would be circular).
+					hub.setNotifyAllProviders((message) => McpServerManager.notifyProviders(message))
 					// Wait for all MCP servers to finish connecting (or timing out)
 					await hub.waitUntilReady()
 					this.instance = hub
