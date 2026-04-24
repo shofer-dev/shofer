@@ -1996,8 +1996,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				return { enabledToolCount: 0, enabledServerCount: 0 }
 			}
 
-			const mcpHub = await McpServerManager.getInstance(provider.context, provider)
+			// Defensive deadline: McpServerManager.getInstance() awaits hub.waitUntilReady(),
+			// which in turn awaits every server's connectToServer(). The MCP SDK does not
+			// always honour a connect-time deadline (e.g. a TCP-accepting but
+			// non-responsive HTTP/SSE endpoint), so a misbehaving server could otherwise
+			// hang task startup indefinitely. The MCP-tool-count warning is informational
+			// only, so we cap the wait and skip the warning if the hub isn't ready in time.
+			const MCP_READY_DEADLINE_MS = 12_000
+			const mcpHub = await Promise.race([
+				McpServerManager.getInstance(provider.context, provider),
+				new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), MCP_READY_DEADLINE_MS)),
+			])
 			if (!mcpHub) {
+				console.warn(
+					`[Task#getEnabledMcpToolsCount] MCP hub not ready within ${MCP_READY_DEADLINE_MS}ms; skipping tool-count warning`,
+				)
 				return { enabledToolCount: 0, enabledServerCount: 0 }
 			}
 

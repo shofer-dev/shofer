@@ -886,8 +886,37 @@ export class McpHub {
 			}
 			this.connections.push(connection)
 
-			// Connect (this will automatically start the transport)
-			await client.connect(transport)
+			// Connect (this will automatically start the transport).
+			// The MCP SDK does not impose a connect-time timeout on HTTP/SSE transports,
+			// so an unreachable or unresponsive server (TCP accept but no MCP handshake)
+			// would block the connect call indefinitely. That in turn blocks
+			// initializationPromise → waitUntilReady() → Task.startTask() (via the
+			// MCP-tool-count warning), preventing any new task from running.
+			//
+			// Apply a hard connect deadline for non-stdio transports (stdio already
+			// surfaces failures via its child-process error path).
+			if (configInjected.type === "stdio") {
+				await client.connect(transport)
+			} else {
+				const CONNECT_TIMEOUT_MS = 10_000
+				let timeoutId: NodeJS.Timeout | undefined
+				const timeoutPromise = new Promise<never>((_, reject) => {
+					timeoutId = setTimeout(
+						() =>
+							reject(
+								new Error(
+									`MCP connect timed out after ${CONNECT_TIMEOUT_MS}ms (${configInjected.type} → ${configInjected.url})`,
+								),
+							),
+						CONNECT_TIMEOUT_MS,
+					)
+				})
+				try {
+					await Promise.race([client.connect(transport), timeoutPromise])
+				} finally {
+					if (timeoutId) clearTimeout(timeoutId)
+				}
+			}
 			connection.server.status = "connected"
 			connection.server.error = ""
 			connection.server.instructions = client.getInstructions()
