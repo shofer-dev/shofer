@@ -272,6 +272,8 @@ export class ClineProvider
 			.then((hub) => {
 				this.mcpHub = hub
 				this.mcpHub.registerClient()
+				const hasView = !!(this as any).view
+				this.log(`[MCP-DEBUG] ClineProvider.then(hub) servers=${hub.getAllServers().length} hasView=${hasView}`)
 				// The webview may have already launched and received an empty mcpServers list
 				// while the hub was still initializing (race condition). Push the real list now.
 				this.postMessageToWebview({ type: "mcpServers", mcpServers: hub.getAllServers() }).catch((error) =>

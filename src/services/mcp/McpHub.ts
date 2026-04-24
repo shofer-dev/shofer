@@ -31,6 +31,7 @@ import type {
 import { t } from "../../i18n"
 
 import { ClineProvider } from "../../core/webview/ClineProvider"
+import { mcpLog } from "./mcpLogger"
 
 import { GlobalFileNames } from "../../shared/globalFileNames"
 
@@ -1420,6 +1421,9 @@ export class McpHub {
 			type: "mcpServers" as const,
 			mcpServers: serversToSend,
 		}
+		mcpLog(
+			`[MCP-DEBUG] notifyWebviewOfServerChanges servers=${serversToSend.length} hasBroadcast=${!!this.notifyAllProvidersFn}`,
+		)
 
 		// Prefer broadcasting to all registered providers so every open webview gets
 		// the updated list (notifyAllProvidersFn is injected by McpServerManager).

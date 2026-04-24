@@ -535,6 +535,10 @@ export const webviewMessageHandler = async (
 	}
 
 	switch (message.type) {
+		case "webviewLog":
+			// Diagnostic log forwarded from the webview so it lands in Roo-Code's OutputChannel.
+			provider.log(`[webview] ${message.text ?? ""}`)
+			break
 		case "webviewDidLaunch":
 			// Load custom modes first
 			const customModes = await provider.customModesManager.getCustomModes()
@@ -584,6 +588,9 @@ export const webviewMessageHandler = async (
 			// If MCP Hub is already initialized, update the webview with
 			// current server list.
 			const mcpHub = provider.getMcpHub()
+			provider.log(
+				`[MCP-DEBUG] webviewDidLaunch hasMcpHub=${!!mcpHub} servers=${mcpHub?.getAllServers().length ?? "n/a"}`,
+			)
 
 			if (mcpHub) {
 				provider.postMessageToWebview({ type: "mcpServers", mcpServers: mcpHub.getAllServers() })

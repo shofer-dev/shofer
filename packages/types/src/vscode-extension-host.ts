@@ -632,6 +632,8 @@ export interface WebviewMessage {
 		| "clearTaskNotification"
 		| "approveBackgroundTask"
 		| "requestParallelTasks"
+		// Diagnostic logging from webview → extension OutputChannel
+		| "webviewLog"
 	text?: string
 	taskId?: string
 	editedMessageContent?: string
