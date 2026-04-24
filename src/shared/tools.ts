@@ -2,6 +2,15 @@ import { Anthropic } from "@anthropic-ai/sdk"
 
 import type { ClineAsk, ToolProgressStatus, ToolGroup, ToolName, GenerateImageParams } from "@roo-code/types"
 
+// Re-export tool metadata from @roo-code/types to avoid duplication
+export {
+	type ToolGroupConfig,
+	TOOL_DISPLAY_NAMES,
+	TOOL_GROUPS,
+	ALWAYS_AVAILABLE_TOOLS,
+	TOOL_ALIASES,
+} from "@roo-code/types"
+
 export type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
 
 export type AskApproval = (
@@ -291,135 +300,6 @@ export interface GenerateImageToolUse extends ToolUse<"generate_image"> {
 	name: "generate_image"
 	params: Partial<Pick<Record<ToolParamName, string>, "prompt" | "path" | "image">>
 }
-
-// Define tool group configuration
-export type ToolGroupConfig = {
-	tools: readonly string[]
-	alwaysAvailable?: boolean // Whether this group is always available and shouldn't show in prompts view
-	customTools?: readonly string[] // Opt-in only tools - only available when explicitly included via model's includedTools
-}
-
-export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
-	execute_command: "run commands",
-	read_file: "read files",
-	read_command_output: "read command output",
-	write_to_file: "write files",
-	apply_diff: "apply changes",
-	edit: "edit files",
-	search_and_replace: "apply changes using search and replace",
-	search_replace: "apply single search and replace",
-	edit_file: "edit files using search and replace",
-	apply_patch: "apply patches using codex format",
-	search_files: "search files",
-	list_files: "list files",
-	use_mcp_tool: "use mcp tools",
-	access_mcp_resource: "access mcp resources",
-	ask_followup_question: "ask questions",
-	attempt_completion: "complete tasks",
-	switch_mode: "switch modes",
-	new_task: "create new task",
-	codebase_search: "codebase search",
-	update_todo_list: "update todo list",
-	run_slash_command: "run slash command",
-	skill: "load skill",
-	generate_image: "generate images",
-	custom_tool: "use custom tools",
-	// New native tools (ported from workspace-tools)
-	create_directory: "create directories",
-	create_new_workspace: "create workspaces",
-	fetch_web_page: "fetch web pages",
-	find_files: "find files by pattern",
-	get_changed_files: "list files changed by Roo",
-	get_errors: "get diagnostics",
-	get_project_setup_info: "get project info",
-	get_search_results: "search text in files",
-	insert_edit: "insert text at position",
-	list_code_usages: "find code references",
-	read_project_structure: "read project structure",
-	rename_symbol: "rename symbols",
-	view_image: "view images",
-	codebase_search_with_lsp: "search codebase via LSP",
-	set_task_title: "set task title",
-	check_task_status: "check background task status",
-	wait_for_task: "wait for background task",
-	list_background_tasks: "list background tasks",
-} as const
-
-// Define available tool groups.
-export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
-	read: {
-		tools: [
-			"read_file",
-			"search_files",
-			"list_files",
-			"codebase_search",
-			// New native tools
-			"find_files",
-			"read_project_structure",
-			"view_image",
-			"get_search_results",
-			"list_code_usages",
-			"get_errors",
-			"get_project_setup_info",
-			"get_changed_files",
-			"codebase_search_with_lsp",
-			"fetch_web_page",
-		],
-	},
-	edit: {
-		tools: [
-			"apply_diff",
-			"write_to_file",
-			"generate_image",
-			// New native tools
-			"insert_edit",
-			"rename_symbol",
-			"create_directory",
-			"create_new_workspace",
-		],
-		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
-	},
-	command: {
-		tools: ["execute_command", "read_command_output"],
-	},
-	mcp: {
-		tools: ["use_mcp_tool", "access_mcp_resource"],
-	},
-	modes: {
-		tools: ["switch_mode", "new_task"],
-		alwaysAvailable: true,
-	},
-}
-
-// Tools that are always available to all modes.
-export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
-	"ask_followup_question",
-	"attempt_completion",
-	"switch_mode",
-	"new_task",
-	"update_todo_list",
-	"run_slash_command",
-	"skill",
-	"set_task_title",
-	"check_task_status",
-	"wait_for_task",
-	"list_background_tasks",
-] as const
-
-/**
- * Central registry of tool aliases.
- * Maps alias name -> canonical tool name.
- *
- * This allows models to use alternative names for tools (e.g., "edit_file" instead of "apply_diff").
- * When a model calls a tool by its alias, the system resolves it to the canonical name for execution,
- * but preserves the alias in API conversation history for consistency.
- *
- * To add a new alias, simply add an entry here. No other files need to be modified.
- */
-export const TOOL_ALIASES: Record<string, ToolName> = {
-	write_file: "write_to_file",
-	search_and_replace: "edit",
-} as const
 
 export type DiffResult =
 	| { success: true; content: string; failParts?: DiffResult[] }

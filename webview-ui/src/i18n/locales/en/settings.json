@@ -32,6 +32,7 @@
 		"worktrees": "Worktrees",
 		"skills": "Skills",
 		"autoApprove": "Auto-Approve",
+		"tools": "Tools",
 		"checkpoints": "Checkpoints",
 		"notifications": "Notifications",
 		"contextManagement": "Context",
@@ -280,6 +281,25 @@
 		"workspaceToggleLabel": "Enable indexing for this workspace",
 		"workspaceDisabledMessage": "Indexing is configured but not enabled for this workspace.",
 		"autoEnableDefaultLabel": "Auto-enable indexing for new workspaces"
+	},
+	"tools": {
+		"description": "Manage which tools are available to the AI assistant. Disabled tools will not be sent to the model and cannot be called during tasks.",
+		"disableAllNonEssential": "Disable all non-essential",
+		"resetToDefaults": "Reset to defaults",
+		"groupToolCount": "({{count}} tools)",
+		"alwaysAvailableTooltip": "This tool is always available and cannot be disabled.",
+		"badges": {
+			"alwaysAvailable": "Always available",
+			"optInOnly": "Opt-in only",
+			"aliases": "(aliases: {{aliases}})"
+		},
+		"groups": {
+			"read": "Read",
+			"edit": "Edit",
+			"command": "Command",
+			"mcp": "MCP",
+			"modes": "Modes"
+		}
 	},
 	"autoApprove": {
 		"description": "Run these actions without asking for permission. Only enable for actions you fully trust and if you understand the security risks.",

@@ -29,6 +29,7 @@ import {
 	ArrowLeft,
 	GitCommitVertical,
 	GraduationCap,
+	Wrench,
 } from "lucide-react"
 
 import {
@@ -77,6 +78,7 @@ import { Section } from "./Section"
 import PromptsSettings from "./PromptsSettings"
 import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { SkillsSettings } from "./SkillsSettings"
+import { ToolsSettings } from "./ToolsSettings"
 import { UISettings } from "./UISettings"
 import ModesView from "../modes/ModesView"
 import McpView from "../mcp/McpView"
@@ -98,6 +100,7 @@ export interface SettingsViewRef {
 export const sectionNames = [
 	"providers",
 	"autoApprove",
+	"tools",
 	"slashCommands",
 	"skills",
 	"checkpoints",
@@ -165,6 +168,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		autoCondenseContextPercent,
 		enableCheckpoints,
 		checkpointTimeout,
+		disabledTools,
 		experiments,
 		maxOpenTabsContext,
 		maxWorkspaceFiles,
@@ -422,6 +426,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					openRouterImageGenerationSelectedModel,
 					experiments,
 					customSupportPrompts,
+					disabledTools: disabledTools ?? [],
 				},
 			})
 
@@ -513,6 +518,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "skills", icon: GraduationCap },
 			{ id: "slashCommands", icon: SquareSlash },
 			{ id: "autoApprove", icon: CheckCheck },
+			{ id: "tools", icon: Wrench },
 			{ id: "mcp", icon: Server },
 			{ id: "checkpoints", icon: GitCommitVertical },
 			{ id: "notifications", icon: Bell },
@@ -797,6 +803,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								deniedCommands={deniedCommands}
 								setCachedStateField={setCachedStateField}
 							/>
+						)}
+
+						{/* Tools Section */}
+						{renderTab === "tools" && (
+							<ToolsSettings disabledTools={disabledTools} setCachedStateField={setCachedStateField} />
 						)}
 
 						{/* Slash Commands Section */}
