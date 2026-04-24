@@ -799,9 +799,7 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "clearTask":
-			// Clear task resets the current task. Delegation flows are
-			// handled via metadata; parent resumption occurs through
-			// reopenParentFromDelegation, not via finishSubTask.
+			// Clear task resets the current task.
 			await provider.clearTask()
 			await provider.postStateToWebview()
 			break
