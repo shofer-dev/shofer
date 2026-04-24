@@ -8,44 +8,22 @@ import { formatResponse } from "../prompts/responses"
 import { parseMarkdownChecklist } from "./UpdateTodoListTool"
 import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { parseToolBoolean, isNativeBoolean } from "./helpers/toolInputParsing"
 import type { ToolUse } from "../../shared/tools"
 
 interface NewTaskParams {
 	mode: string
 	message: string
-	todos?: string | null
-	// Declared boolean in the JSON schema but some models send strings ("True"/"False")
-	// or numbers (1/0). Normalized via parseToolBoolean() at the start of execute().
-	is_background?: boolean | string | number | null
+	todos?: string
+	is_background?: boolean
+	task_id?: string
 }
 
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message } = params
+		const { mode, message, todos, is_background } = params
 		const { askApproval, handleError, pushToolResult } = callbacks
-
-		// Normalize is_background: some models serialize booleans as strings (e.g., "True")
-		// or numbers (1/0). parseToolBoolean() handles all common representations.
-		const rawIsBackground = params.is_background
-		const is_background = parseToolBoolean(rawIsBackground)
-		if (!isNativeBoolean(rawIsBackground) && rawIsBackground !== undefined && rawIsBackground !== null) {
-			console.warn(
-				`[NewTaskTool][task=${task.taskId}] is_background coerced from non-boolean value: ` +
-					`${JSON.stringify(rawIsBackground)} (${typeof rawIsBackground}) → ${is_background}`,
-			)
-		}
-
-		// Normalise `todos`: the schema permits string|null, but some models emit the
-		// literal string "null" (or whitespace) instead of a real null. Treat those as
-		// "no todos provided" so we don't feed garbage into parseMarkdownChecklist.
-		const rawTodos = params.todos
-		const todos: string | undefined =
-			typeof rawTodos === "string" && rawTodos.trim() !== "" && rawTodos.trim().toLowerCase() !== "null"
-				? rawTodos
-				: undefined
 
 		try {
 			// Validate required parameters.
@@ -64,23 +42,6 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				task.recordToolError("new_task")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "message"))
-				return
-			}
-
-			// `is_background` is declared required in the JSON schema, but some models
-			// still omit it or send an unrecognizable value. Reject explicitly so the
-			// LLM is forced to declare a mode rather than silently defaulting.
-			if (is_background === undefined) {
-				task.consecutiveMistakeCount++
-				task.recordToolError("new_task")
-				task.didToolFailInCurrentTurn = true
-				pushToolResult(
-					formatResponse.toolError(
-						"Missing or unrecognizable 'is_background' parameter. " +
-							`Received: ${JSON.stringify(rawIsBackground)}. ` +
-							"Expected a boolean: true for background/async, false for synchronous delegation.",
-					),
-				)
 				return
 			}
 
@@ -154,12 +115,8 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 			if (is_background) {
 				// Async background path: create the child WITHOUT touching the parent's stack
-				// position. We must NOT call delegateParentAndOpenChild here because when the
-				// parent is the focused task it calls removeClineFromStack(), which sets
-				// parent.abort=true and triggers the synchronous delegation resume flow.
-				//
-				// Instead we call createTask() directly with openInStack=false so the child
-				// runs concurrently while the parent continues uninterrupted.
+				// position. We call createTask() with openInStack=false so the child runs
+				// concurrently while the parent continues uninterrupted.
 				const child = await provider.createTask(unescapedMessage, undefined, task as any, {
 					initialTodos: todoItems,
 					initialStatus: "active",
@@ -171,9 +128,8 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					// keepCurrentTask is only checked when parentTask is falsy, so it doesn't
 					// matter here, but set it for clarity.
 					keepCurrentTask: true,
-					// Mark the child as a background task so AttemptCompletionTool will
-					// skip the synchronous delegation flow (which would otherwise abort
-					// the parent and trigger reopenParentFromDelegation).
+					// Mark the child as a background task so AttemptCompletionTool takes
+					// the background-completion path rather than the foreground-resume path.
 					isBackground: true,
 				})
 
@@ -196,108 +152,45 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					})
 				} catch (err) {
 					// Non-fatal: parent history metadata may be stale but child still runs.
-					console.error(
-						`[NewTaskTool][parentTask=${task.taskId}][childTask=${child.taskId}] ` +
-							`Failed to update parent history for background child: ${err}`,
-					)
+					console.error(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
 				}
 
 				// Track in-memory handle on the parent task instance.
-				// Derive a short human-readable title from the first non-empty line of the
-				// message (capped at 80 chars) so the UI can display it instead of the UUID.
-				const titleLine =
-					unescapedMessage
-						.split(/\n/)
-						.map((l) => l.trim())
-						.find((l) => l.length > 0) ?? unescapedMessage
-				const title = titleLine.length > 80 ? `${titleLine.slice(0, 77)}…` : titleLine
 				task.backgroundChildren.set(child.taskId, {
 					taskId: child.taskId,
-					title,
 					status: "starting",
 					createdAt: Date.now(),
 					parentTaskId: task.taskId,
 				})
 
-				pushToolResult(`Child task started: ${child.taskId}\nTitle: ${title}\nStatus: starting`)
+				pushToolResult(`Child task started: ${child.taskId}\nStatus: starting`)
 				return
 			} else {
-				// Blocking foreground path: child takes focus while parent suspends in-place.
-				//
-				// The parent task stays alive in the clineStack below the child (not aborted,
-				// not rehydrated). A Promise is created and its resolver stored in the provider
-				// so that when the child calls attempt_completion, the resolver fires and
-				// the parent's tool loop resumes immediately with the child's result.
-				// No history manipulation or task rehydration is needed.
-
-				// Register resolver BEFORE creating the child to prevent any race with a
-				// very fast child (though in practice LLM latency makes this a non-issue).
-				let completionResolver!: (result: string) => void
+				// Foreground (blocking) path: parent suspends via Promise until child completes.
+				// The parent Task instance stays alive in the clineStack below the child;
+				// this tool handler awaits the Promise, keeping the parent's tool loop alive.
+				let resolveChildCompletion!: (result: string) => void
 				const childCompletionPromise = new Promise<string>((resolve) => {
-					completionResolver = resolve
+					resolveChildCompletion = resolve
 				})
 
-				// createTask pushes child onto the stack (openInStack=true by default) and
-				// calls task.start() immediately. The parent remains in the stack below the
-				// child so that when the child is later popped, the parent is revealed.
 				const child = await provider.createTask(unescapedMessage, undefined, task as any, {
 					initialTodos: todoItems,
 					initialStatus: "active",
 					initialMode: effectiveMode,
-					openInStack: true, // child takes the foreground; user sees it
-					keepCurrentTask: true, // do NOT abort the parent task
-					isBackground: false,
+					// openInStack=true (default): child is pushed onto clineStack on top of parent.
+					openInStack: true,
 				})
 
-				// Store the resolver so resumeBlockingParent() can fire it.
-				provider.registerBlockingChildResolver(child.taskId, completionResolver)
+				// Register resolver after createTask so we have the child's taskId.
+				// The child runs asynchronously, so registration completes before any
+				// attempt_completion could fire.
+				provider.registerBlockingChildResolver(child.taskId, resolveChildCompletion)
 
-				// Persist parent→child delegation metadata.
-				try {
-					const { historyItem: parentHistory } = await provider.getTaskWithId(task.taskId)
-					const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), child.taskId]))
-					await provider.updateTaskHistory({
-						...parentHistory,
-						status: "delegated",
-						delegatedToId: child.taskId,
-						awaitingChildId: child.taskId,
-						childIds,
-					})
-				} catch (err) {
-					console.error(
-						`[NewTaskTool][parentTask=${task.taskId}][childTask=${child.taskId}] ` +
-							`Failed to persist parent delegation metadata: ${err}`,
-					)
-				}
+				// Suspend this tool handler until the child completes.
+				const completionResult = await childCompletionPromise
 
-				// Track in-memory handle on the parent task instance.
-				const titleLine =
-					unescapedMessage
-						.split(/\n/)
-						.map((l) => l.trim())
-						.find((l) => l.length > 0) ?? unescapedMessage
-				const title = titleLine.length > 80 ? `${titleLine.slice(0, 77)}…` : titleLine
-				task.backgroundChildren.set(child.taskId, {
-					taskId: child.taskId,
-					title,
-					status: "starting",
-					createdAt: Date.now(),
-					parentTaskId: task.taskId,
-				})
-
-				// Parent's tool loop suspends here until the child calls attempt_completion,
-				// which fires completionResolver via resumeBlockingParent().
-				const childResult = await childCompletionPromise
-
-				// Update handle status now that we've resumed.
-				const handle = task.backgroundChildren.get(child.taskId)
-				if (handle) {
-					handle.status = "completed"
-				}
-
-				// Return child's result as this tool's output — the parent's LLM will see
-				// it in the next turn and decide what to do next.
-				pushToolResult(`Subtask ${child.taskId} completed.\n\nResult:\n${childResult}`)
+				pushToolResult(`Subtask ${child.taskId} completed\n${completionResult}`)
 				return
 			}
 		} catch (error) {
@@ -310,7 +203,9 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 		const mode: string | undefined = block.params.mode
 		const message: string | undefined = block.params.message
 		const todos: string | undefined = block.params.todos
-		const is_background = parseToolBoolean(block.params.is_background)
+		const is_background: boolean | undefined =
+			block.params.is_background === "true" ? true : block.params.is_background === "false" ? false : undefined
+		const task_id: string | undefined = block.params.task_id
 
 		const partialMessage = JSON.stringify({
 			tool: "newTask",
@@ -318,6 +213,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			content: message ?? "",
 			todos: todos,
 			is_background: is_background,
+			task_id: task_id,
 		})
 
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
