@@ -44,15 +44,34 @@ function mapSeverity(severity: vscode.DiagnosticSeverity): Severity {
 	}
 }
 
+import { type ClineSayTool } from "@roo-code/types"
+
 export class GetErrorsTool extends BaseTool<"get_errors"> {
 	readonly name = "get_errors" as const
 
 	async execute(params: GetErrorsParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { filePaths } = params
-		const { handleError, pushToolResult } = callbacks
+		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
 			task.consecutiveMistakeCount = 0
+
+			const sharedMessageProps: ClineSayTool = {
+				tool: "getErrors",
+				path: filePaths?.[0],
+			}
+
+			const completeMessage = JSON.stringify({
+				...sharedMessageProps,
+				content: filePaths
+					? `Getting diagnostics for ${filePaths.length} file(s)`
+					: "Getting workspace diagnostics",
+			} satisfies ClineSayTool)
+
+			const didApprove = await askApproval("tool", completeMessage)
+			if (!didApprove) {
+				return
+			}
 
 			const allDiagnostics = vscode.languages.getDiagnostics()
 			const entries: DiagnosticEntry[] = []

@@ -29,12 +29,14 @@ interface SearchMatch {
 
 const DEFAULT_MAX_RESULTS = 100
 
+import { type ClineSayTool } from "@roo-code/types"
+
 export class GetSearchResultsTool extends BaseTool<"get_search_results"> {
 	readonly name = "get_search_results" as const
 
 	async execute(params: GetSearchResultsParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { query, isRegex = false, includePattern, maxResults = DEFAULT_MAX_RESULTS } = params
-		const { handleError, pushToolResult } = callbacks
+		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
 			if (!query) {
@@ -46,6 +48,22 @@ export class GetSearchResultsTool extends BaseTool<"get_search_results"> {
 			}
 
 			task.consecutiveMistakeCount = 0
+
+			const sharedMessageProps: ClineSayTool = {
+				tool: "getSearchResults",
+				regex: query,
+				filePattern: includePattern ?? undefined,
+			}
+
+			const completeMessage = JSON.stringify({
+				...sharedMessageProps,
+				content: `Searching for: ${query}`,
+			} satisfies ClineSayTool)
+
+			const didApprove = await askApproval("tool", completeMessage)
+			if (!didApprove) {
+				return
+			}
 
 			const effectiveMax = maxResults ?? DEFAULT_MAX_RESULTS
 

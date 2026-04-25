@@ -153,6 +153,11 @@ export async function checkAutoApproval({
 			return { decision: "approve" }
 		}
 
+		// Non-destructive meta-operation: only renames the task in UI and history.
+		if (tool.tool === "setTaskTitle") {
+			return { decision: "approve" }
+		}
+
 		if (tool?.tool === "switchMode") {
 			return state.alwaysAllowModeSwitch === true ? { decision: "approve" } : { decision: "ask" }
 		}

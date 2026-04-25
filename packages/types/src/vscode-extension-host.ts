@@ -826,6 +826,7 @@ export interface ClineSayTool {
 		| "appliedDiff"
 		| "newFileCreated"
 		| "codebaseSearch"
+		| "codebaseSearchWithLsp"
 		| "readFile"
 		| "readCommandOutput"
 		| "listFilesTopLevel"
@@ -846,6 +847,16 @@ export interface ClineSayTool {
 		| "waitForTask"
 		| "checkTaskStatus"
 		| "listBackgroundTasks"
+		| "getErrors"
+		| "getChangedFiles"
+		| "getProjectSetupInfo"
+		| "getSearchResults"
+		| "readProjectStructure"
+		| "listCodeUsages"
+		| "fetchWebPage"
+		| "renameSymbol"
+		| "setTaskTitle"
+		| "insertEdit"
 	path?: string
 	// For readCommandOutput
 	readStart?: number

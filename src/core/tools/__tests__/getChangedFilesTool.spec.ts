@@ -24,7 +24,7 @@ describe("getChangedFilesTool", () => {
 			},
 		}
 		mockCallbacks = {
-			askApproval: vi.fn(),
+			askApproval: vi.fn().mockResolvedValue(true),
 			handleError: vi.fn(),
 			pushToolResult: vi.fn(),
 		}

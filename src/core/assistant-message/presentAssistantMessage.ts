@@ -411,6 +411,32 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
+					case "get_errors":
+						return `[${block.name}]`
+					case "get_changed_files":
+						return `[${block.name}]`
+					case "get_project_setup_info":
+						return `[${block.name}]`
+					case "get_search_results":
+						return `[${block.name} for '${block.params.query}']`
+					case "read_project_structure":
+						return `[${block.name}]`
+					case "list_code_usages":
+						return `[${block.name} for '${block.params.filePath}']`
+					case "fetch_web_page":
+						return `[${block.name} for '${block.params.urls}']`
+					case "create_directory":
+						return `[${block.name} for '${block.params.path}']`
+					case "create_new_workspace":
+						return `[${block.name} for '${block.params.path}']`
+					case "find_files":
+						return `[${block.name} for '${block.params.pattern}']`
+					case "view_image":
+						return `[${block.name} for '${block.params.filePath}']`
+					case "insert_edit":
+						return `[${block.name} for '${block.params.filePath}']`
+					case "rename_symbol":
+						return `[${block.name} for '${block.params.filePath}']`
 					default:
 						return `[${block.name}]`
 				}
