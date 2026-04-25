@@ -464,7 +464,9 @@
 	},
 	"queuedMessages": {
 		"title": "Queued Messages",
-		"clickToEdit": "Click to edit message"
+		"clickToEdit": "Click to edit message",
+		"forceSend": "Cancel current operation and send now",
+		"sendNow": "Send Now"
 	},
 	"contextMenu": {
 		"noResults": "No results",

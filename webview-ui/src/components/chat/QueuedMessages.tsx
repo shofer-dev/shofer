@@ -13,9 +13,10 @@ interface QueuedMessagesProps {
 	queue: QueuedMessage[]
 	onRemove: (index: number) => void
 	onUpdate: (index: number, newText: string) => void
+	onForceSend?: () => void
 }
 
-export const QueuedMessages = ({ queue, onRemove, onUpdate }: QueuedMessagesProps) => {
+export const QueuedMessages = ({ queue, onRemove, onUpdate, onForceSend }: QueuedMessagesProps) => {
 	const { t } = useTranslation("chat")
 	const [editingStates, setEditingStates] = useState<Record<string, { isEditing: boolean; value: string }>>({})
 
@@ -41,7 +42,19 @@ export const QueuedMessages = ({ queue, onRemove, onUpdate }: QueuedMessagesProp
 
 	return (
 		<div className="px-[15px] py-[10px] pr-[6px]" data-testid="queued-messages">
-			<div className="text-vscode-descriptionForeground text-md mb-2">{t("queuedMessages.title")}</div>
+			<div className="flex justify-between items-center mb-2">
+				<span className="text-vscode-descriptionForeground text-md">{t("queuedMessages.title")}</span>
+				{onForceSend && (
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => onForceSend()}
+						title={t("queuedMessages.forceSend")}>
+						<span className="codicon codicon-send" />
+						<span className="ml-1">{t("queuedMessages.sendNow")}</span>
+					</Button>
+				)}
+			</div>
 			<div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
 				{queue.map((message, index) => {
 					const editState = getEditState(message.id, message.text)

@@ -1733,6 +1733,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						})
 					}
 				}}
+				onForceSend={() => {
+					vscode.postMessage({ type: "cancelAndSendQueuedMessages" })
+				}}
 			/>
 			{showRetiredProviderWarning && (
 				<div className="px-[15px] py-1">
