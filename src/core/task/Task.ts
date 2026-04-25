@@ -4867,4 +4867,49 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			console.error(`[Task] Queue processing error:`, e)
 		}
 	}
+
+	/**
+	 * Cancel the current API request and immediately send the first queued message to the LLM.
+	 * This allows the user to interrupt a long-running operation and prioritize a queued message.
+	 *
+	 * The cancellation follows these steps:
+	 * 1. Cancel the current HTTP request
+	 * 2. Set abort flag to stop the task loop
+	 * 3. Reset task state
+	 * 4. Restart the task loop with the queued message
+	 */
+	public cancelAndProcessQueuedMessages(): void {
+		this.diagLog(`[Task#${this.taskId}.${this.instanceId}] cancelAndProcessQueuedMessages called`)
+
+		// Step 1: Cancel the current HTTP request if one is in progress
+		if (this.currentRequestAbortController) {
+			this.diagLog(`[Task] Cancelling current HTTP request`)
+			this.currentRequestAbortController.abort()
+			this.currentRequestAbortController = undefined
+		}
+
+		// Step 2: Set abort flag to stop the task loop
+		// This will cause the initiateTaskLoop to exit after the current operation completes
+		this.abort = true
+		this.diagLog(`[Task] Set abort=true to stop task loop`)
+
+		// Step 3: Reset ask states so the task can handle the queued message
+		this.idleAsk = undefined
+		this.resumableAsk = undefined
+		this.interactiveAsk = undefined
+		this.emit(RooCodeEventName.TaskActive, this.taskId)
+
+		// Step 4: Process the queued messages (if any)
+		// Get the queued message but don't send via submitUserMessage - instead restart the task loop directly
+		const queued = this.messageQueueService.dequeueMessage()
+		if (queued) {
+			this.diagLog(`[Task] Restarting task loop with queued message: ${queued.text?.substring(0, 100)}`)
+			// Reset abort to allow the task loop to run
+			this.abort = false
+			// Start a new task loop with the queued message
+			this.initiateTaskLoop([{ type: "text", text: queued.text }]).catch((err) => {
+				console.error(`[Task] Failed to restart task loop:`, err)
+			})
+		}
+	}
 }

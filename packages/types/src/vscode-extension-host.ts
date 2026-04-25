@@ -586,6 +586,7 @@ export interface WebviewMessage {
 		| "imageGenerationSettings"
 		| "queueMessage"
 		| "removeQueuedMessage"
+		| "cancelAndSendQueuedMessages"
 		| "editQueuedMessage"
 		| "dismissUpsell"
 		| "getDismissedUpsells"

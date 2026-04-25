@@ -3308,7 +3308,19 @@ export const webviewMessageHandler = async (
 				const { id, text, images } = message.payload as EditQueuedMessagePayload
 				provider.getCurrentTask()?.messageQueueService.updateMessage(id, text, images)
 			}
+			break
+		}
 
+		case "cancelAndSendQueuedMessages": {
+			const currentTask = provider.getCurrentTask()
+			if (currentTask) {
+				provider.log(
+					`[DIAG webviewHandler] cancelAndSendQueuedMessages: taskId=${currentTask.taskId}.${currentTask.instanceId}, queueSize=${currentTask.messageQueueService.messages.length}`,
+				)
+				await currentTask.cancelAndProcessQueuedMessages()
+			} else {
+				provider.log(`[DIAG webviewHandler] cancelAndSendQueuedMessages: no current task`)
+			}
 			break
 		}
 
