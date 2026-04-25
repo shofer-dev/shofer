@@ -8,9 +8,9 @@
 import * as path from "path"
 import * as vscode from "vscode"
 
+import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
-import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
@@ -44,31 +44,23 @@ function mapSeverity(severity: vscode.DiagnosticSeverity): Severity {
 	}
 }
 
-import { type ClineSayTool } from "@roo-code/types"
-
 export class GetErrorsTool extends BaseTool<"get_errors"> {
 	readonly name = "get_errors" as const
 
 	async execute(params: GetErrorsParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { filePaths } = params
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { handleError, pushToolResult } = callbacks
 
 		try {
 			task.consecutiveMistakeCount = 0
 
-			const sharedMessageProps: ClineSayTool = {
+			const didApprove = await this.askToolApproval(callbacks, {
 				tool: "getErrors",
 				path: filePaths?.[0],
-			}
-
-			const completeMessage = JSON.stringify({
-				...sharedMessageProps,
 				content: filePaths
 					? `Getting diagnostics for ${filePaths.length} file(s)`
 					: "Getting workspace diagnostics",
-			} satisfies ClineSayTool)
-
-			const didApprove = await askApproval("tool", completeMessage)
+			})
 			if (!didApprove) {
 				return
 			}

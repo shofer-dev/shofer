@@ -37,29 +37,21 @@ const SKIP_DIRS = new Set([
 	"bazel-testlogs",
 ])
 
-import { type ClineSayTool } from "@roo-code/types"
-
 export class ReadProjectStructureTool extends BaseTool<"read_project_structure"> {
 	readonly name = "read_project_structure" as const
 
 	async execute(params: ReadProjectStructureParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { handleError, pushToolResult } = callbacks
 		const maxDepth = params.maxDepth ?? DEFAULT_MAX_DEPTH
 		const includeHidden = params.includeHidden ?? false
 
 		try {
 			task.consecutiveMistakeCount = 0
 
-			const sharedMessageProps: ClineSayTool = {
+			const didApprove = await this.askToolApproval(callbacks, {
 				tool: "readProjectStructure",
-			}
-
-			const completeMessage = JSON.stringify({
-				...sharedMessageProps,
 				content: "Reading project structure",
-			} satisfies ClineSayTool)
-
-			const didApprove = await askApproval("tool", completeMessage)
+			})
 			if (!didApprove) {
 				return
 			}

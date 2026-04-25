@@ -18,8 +18,6 @@
  * symmetric difference are visible to the caller.
  */
 
-import { type ClineSayTool } from "@roo-code/types"
-
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { getCheckpointService } from "../checkpoints"
@@ -40,21 +38,15 @@ export class GetChangedFilesTool extends BaseTool<"get_changed_files"> {
 	readonly name = "get_changed_files" as const
 
 	async execute(_params: GetChangedFilesParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { handleError, pushToolResult } = callbacks
 
 		try {
 			task.consecutiveMistakeCount = 0
 
-			const sharedMessageProps: ClineSayTool = {
+			const didApprove = await this.askToolApproval(callbacks, {
 				tool: "getChangedFiles",
-			}
-
-			const completeMessage = JSON.stringify({
-				...sharedMessageProps,
 				content: "Getting changed files",
-			} satisfies ClineSayTool)
-
-			const didApprove = await askApproval("tool", completeMessage)
+			})
 			if (!didApprove) {
 				return
 			}
