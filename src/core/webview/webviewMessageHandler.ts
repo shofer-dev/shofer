@@ -687,11 +687,16 @@ export const webviewMessageHandler = async (
 		case "askResponse":
 			{
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
+
+				// Get dropped file mentions and prepend to message text
+				const droppedMentions = provider.getDroppedFileMentions?.() ?? ""
+				const messageText = droppedMentions ? `${droppedMentions} ${resolved.text ?? ""}`.trim() : resolved.text
+
 				const currentTask = provider.getCurrentTask()
 				provider.log(
-					`[DIAG webviewHandler] askResponse received: askResponse=${message.askResponse}, text=${resolved.text?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}`,
+					`[DIAG webviewHandler] askResponse received: askResponse=${message.askResponse}, text=${messageText?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}`,
 				)
-				currentTask?.handleWebviewAskResponse(message.askResponse!, resolved.text, resolved.images)
+				currentTask?.handleWebviewAskResponse(message.askResponse!, messageText, resolved.images)
 			}
 			break
 
@@ -3282,11 +3287,16 @@ export const webviewMessageHandler = async (
 
 		case "queueMessage": {
 			const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
+
+			// Get dropped file mentions and prepend to message text
+			const droppedMentions = provider.getDroppedFileMentions?.() ?? ""
+			const messageText = droppedMentions ? `${droppedMentions} ${resolved.text ?? ""}`.trim() : resolved.text
+
 			const currentTask = provider.getCurrentTask()
 			provider.log(
-				`[DIAG webviewHandler] queueMessage received: text=${resolved.text?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}, queueSize=${currentTask?.messageQueueService.messages.length}`,
+				`[DIAG webviewHandler] queueMessage received: text=${messageText?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}, queueSize=${currentTask?.messageQueueService.messages.length}`,
 			)
-			currentTask?.messageQueueService.addMessage(resolved.text, resolved.images)
+			currentTask?.messageQueueService.addMessage(messageText, resolved.images)
 			break
 		}
 		case "removeQueuedMessage": {
