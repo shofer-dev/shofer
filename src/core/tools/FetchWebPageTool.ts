@@ -24,14 +24,12 @@ interface WebPageResult {
 
 const MAX_OUTPUT_SIZE = 200 * 1024 // 200KB
 
-import { type ClineSayTool } from "@roo-code/types"
-
 export class FetchWebPageTool extends BaseTool<"fetch_web_page"> {
 	readonly name = "fetch_web_page" as const
 
 	async execute(params: FetchWebPageParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { urls, query } = params
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { handleError, pushToolResult } = callbacks
 
 		if (!urls || urls.length === 0) {
 			task.consecutiveMistakeCount++
@@ -44,16 +42,10 @@ export class FetchWebPageTool extends BaseTool<"fetch_web_page"> {
 		try {
 			task.consecutiveMistakeCount = 0
 
-			const sharedMessageProps: ClineSayTool = {
+			const didApprove = await this.askToolApproval(callbacks, {
 				tool: "fetchWebPage",
-			}
-
-			const completeMessage = JSON.stringify({
-				...sharedMessageProps,
 				content: `Fetching ${urls.length} URL(s)${query ? ` with query: ${query}` : ""}`,
-			} satisfies ClineSayTool)
-
-			const didApprove = await askApproval("tool", completeMessage)
+			})
 			if (!didApprove) {
 				return
 			}

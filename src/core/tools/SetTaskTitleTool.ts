@@ -6,11 +6,10 @@
  * shows in the chat UI for visibility.
  */
 
-import { type ClineSayTool } from "@roo-code/types"
-
-import { Task } from "../task/Task"
-import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
+import { Task } from "../task/Task"
+
+import { BaseTool, ToolCallbacks } from "./BaseTool"
 
 interface SetTaskTitleParams {
 	title: string
@@ -21,7 +20,7 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 
 	async execute(params: SetTaskTitleParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { title } = params
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { handleError, pushToolResult } = callbacks
 
 		try {
 			// Validate required param
@@ -38,25 +37,21 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 			// Clean and truncate the title (max 60 chars)
 			const cleanTitle = title.trim().substring(0, 60)
 
-			const sharedMessageProps: ClineSayTool = {
-				tool: "setTaskTitle",
-			}
-
-			const completeMessage = JSON.stringify({
-				...sharedMessageProps,
-				content: `Setting task title to: "${cleanTitle}"`,
-			} satisfies ClineSayTool)
-
-			// Auto-approved via checkAutoApproval, but still shows in chat UI
-			const didApprove = await askApproval("tool", completeMessage)
-			if (!didApprove) {
-				return
-			}
-
+			// Validate before showing UI/approval — the empty-after-trim case is a usage
+			// error, not an action worth surfacing to the user.
 			if (!cleanTitle) {
 				task.recordToolError("set_task_title")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult("Error: Title cannot be empty or whitespace only.")
+				return
+			}
+
+			// Auto-approved via checkAutoApproval, but still shows in chat UI for visibility.
+			const didApprove = await this.askToolApproval(callbacks, {
+				tool: "setTaskTitle",
+				content: `Setting task title to: "${cleanTitle}"`,
+			})
+			if (!didApprove) {
 				return
 			}
 

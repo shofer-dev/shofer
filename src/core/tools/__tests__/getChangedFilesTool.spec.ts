@@ -135,4 +135,29 @@ describe("getChangedFilesTool", () => {
 		expect(result).toContain("Files Roo edited in this session: 1")
 		expect(result).toContain("src/e.ts")
 	})
+
+	it("requests approval before performing any work and renders a getChangedFiles tool entry", async () => {
+		vi.mocked(getCheckpointService).mockResolvedValue(undefined as any)
+
+		await getChangedFilesTool.handle(mockTask as Task, block, mockCallbacks)
+
+		expect(mockCallbacks.askApproval).toHaveBeenCalledTimes(1)
+		const [askKind, payload] = mockCallbacks.askApproval.mock.calls[0]
+		expect(askKind).toBe("tool")
+		const parsed = JSON.parse(payload)
+		expect(parsed.tool).toBe("getChangedFiles")
+		expect(parsed.content).toBe("Getting changed files")
+	})
+
+	it("returns early without side effects when approval is rejected", async () => {
+		mockCallbacks.askApproval.mockResolvedValue(false)
+
+		await getChangedFilesTool.handle(mockTask as Task, block, mockCallbacks)
+
+		// No checkpoint lookup, no result pushed, no error reported.
+		expect(getCheckpointService).not.toHaveBeenCalled()
+		expect(mockTask.fileContextTracker.getFilesEditedByRoo).not.toHaveBeenCalled()
+		expect(mockCallbacks.pushToolResult).not.toHaveBeenCalled()
+		expect(mockCallbacks.handleError).not.toHaveBeenCalled()
+	})
 })

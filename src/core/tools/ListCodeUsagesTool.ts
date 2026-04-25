@@ -27,14 +27,12 @@ interface CodeUsage {
 
 const MAX_USAGES = 50
 
-import { type ClineSayTool } from "@roo-code/types"
-
 export class ListCodeUsagesTool extends BaseTool<"list_code_usages"> {
 	readonly name = "list_code_usages" as const
 
 	async execute(params: ListCodeUsagesParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { filePath, line, column } = params
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { handleError, pushToolResult } = callbacks
 
 		try {
 			if (!filePath) {
@@ -61,17 +59,11 @@ export class ListCodeUsagesTool extends BaseTool<"list_code_usages"> {
 
 			task.consecutiveMistakeCount = 0
 
-			const sharedMessageProps: ClineSayTool = {
+			const didApprove = await this.askToolApproval(callbacks, {
 				tool: "listCodeUsages",
 				path: filePath,
-			}
-
-			const completeMessage = JSON.stringify({
-				...sharedMessageProps,
 				content: `Listing code usages at ${filePath}:${line}:${column}`,
-			} satisfies ClineSayTool)
-
-			const didApprove = await askApproval("tool", completeMessage)
+			})
 			if (!didApprove) {
 				return
 			}
