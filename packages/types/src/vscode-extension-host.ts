@@ -202,6 +202,7 @@ export interface ExtensionMessage {
 		state: string
 	}>
 	focusedTaskId?: string | null
+	taskId?: string
 	notification?: {
 		taskId: string
 		type: string
