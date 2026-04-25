@@ -520,12 +520,13 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					break
 				}
 				case "taskNotificationCleared": {
-					if (message.parallelTasks) {
-						setState((prevState) => ({
-							...prevState,
-							parallelTasks: message.parallelTasks!,
-						}))
-					}
+					setState((prevState) => ({
+						...prevState,
+						taskNotifications: (prevState.taskNotifications ?? []).filter(
+							(n) => n.taskId !== message.taskId,
+						),
+						...(message.parallelTasks && { parallelTasks: message.parallelTasks }),
+					}))
 					break
 				}
 			}

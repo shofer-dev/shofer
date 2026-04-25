@@ -3763,6 +3763,7 @@ export class ClineProvider
 		this.taskManager.clearTaskNotification(taskId)
 		this.postMessageToWebview({
 			type: "taskNotificationCleared",
+			taskId,
 			parallelTasks: this.taskManager.getManagedTasks().map((s) => ({
 				id: s.id,
 				name: s.name,
