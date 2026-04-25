@@ -66,14 +66,30 @@ const PROJECT_INDICATORS = {
 	} as Record<string, string[]>,
 }
 
+import { type ClineSayTool } from "@roo-code/types"
+
 export class GetProjectSetupInfoTool extends BaseTool<"get_project_setup_info"> {
 	readonly name = "get_project_setup_info" as const
 
 	async execute(_params: GetProjectSetupInfoParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { handleError, pushToolResult } = callbacks
+		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
 			task.consecutiveMistakeCount = 0
+
+			const sharedMessageProps: ClineSayTool = {
+				tool: "getProjectSetupInfo",
+			}
+
+			const completeMessage = JSON.stringify({
+				...sharedMessageProps,
+				content: "Analyzing project setup",
+			} satisfies ClineSayTool)
+
+			const didApprove = await askApproval("tool", completeMessage)
+			if (!didApprove) {
+				return
+			}
 
 			const rootPath = task.cwd
 			const entries = await fs.readdir(rootPath)

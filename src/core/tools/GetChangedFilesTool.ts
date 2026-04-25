@@ -18,6 +18,8 @@
  * symmetric difference are visible to the caller.
  */
 
+import { type ClineSayTool } from "@roo-code/types"
+
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { getCheckpointService } from "../checkpoints"
@@ -38,10 +40,24 @@ export class GetChangedFilesTool extends BaseTool<"get_changed_files"> {
 	readonly name = "get_changed_files" as const
 
 	async execute(_params: GetChangedFilesParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { handleError, pushToolResult } = callbacks
+		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
 			task.consecutiveMistakeCount = 0
+
+			const sharedMessageProps: ClineSayTool = {
+				tool: "getChangedFiles",
+			}
+
+			const completeMessage = JSON.stringify({
+				...sharedMessageProps,
+				content: "Getting changed files",
+			} satisfies ClineSayTool)
+
+			const didApprove = await askApproval("tool", completeMessage)
+			if (!didApprove) {
+				return
+			}
 
 			// Source 1: shadow-git checkpoint diff (cumulative since task start).
 			let checkpointEntries: CheckpointEntry[] = []

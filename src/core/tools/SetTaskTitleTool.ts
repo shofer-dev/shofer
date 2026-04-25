@@ -2,8 +2,11 @@
  * SetTaskTitleTool - Allows the LLM to set a descriptive title for the current task.
  *
  * This is a meta-operation tool that updates the task's display name in the UI
- * and history. It does not require user approval since renaming is non-destructive.
+ * and history. It is auto-approved since renaming is non-destructive, but still
+ * shows in the chat UI for visibility.
  */
+
+import { type ClineSayTool } from "@roo-code/types"
 
 import { Task } from "../task/Task"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -18,7 +21,7 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 
 	async execute(params: SetTaskTitleParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { title } = params
-		const { handleError, pushToolResult } = callbacks
+		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
 			// Validate required param
@@ -34,6 +37,21 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 
 			// Clean and truncate the title (max 60 chars)
 			const cleanTitle = title.trim().substring(0, 60)
+
+			const sharedMessageProps: ClineSayTool = {
+				tool: "setTaskTitle",
+			}
+
+			const completeMessage = JSON.stringify({
+				...sharedMessageProps,
+				content: `Setting task title to: "${cleanTitle}"`,
+			} satisfies ClineSayTool)
+
+			// Auto-approved via checkAutoApproval, but still shows in chat UI
+			const didApprove = await askApproval("tool", completeMessage)
+			if (!didApprove) {
+				return
+			}
 
 			if (!cleanTitle) {
 				task.recordToolError("set_task_title")
@@ -67,7 +85,6 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 				return
 			}
 
-			// No approval needed - this is a non-destructive meta-operation
 			pushToolResult(`Task title set to: "${cleanTitle}"`)
 		} catch (error) {
 			await handleError("setting task title", error instanceof Error ? error : new Error(String(error)))
