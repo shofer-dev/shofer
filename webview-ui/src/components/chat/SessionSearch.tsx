@@ -11,10 +11,16 @@ import { Input } from "@src/components/ui/input"
  * case-insensitive substring search against the `text` field of every
  * `ClineMessage` in the active task and exposes prev/next navigation.
  *
- * The component is purely presentational w.r.t. scrolling and highlighting:
- * matched message timestamps are reported via `onNavigate`; the parent
- * (`ChatView`) is responsible for scrolling the virtualized list and
- * applying the highlight ring on the matched `ChatRow`.
+ * Match counts and navigation targets (message `ts`) are derived from the
+ * raw message text. The actual *visual* highlighting of matched substrings
+ * is painted on top of the rendered DOM via the CSS Custom Highlight API
+ * (`CSS.highlights` + `::highlight(...)` rules in `index.css`), which lets
+ * us highlight inside markdown-rendered content without mutating the React
+ * DOM. Matches inside the currently-selected row use a stronger highlight
+ * color to disambiguate from other matches.
+ *
+ * The parent (`ChatView`) is responsible for scrolling the virtualized
+ * list to the selected match (reported via `onNavigate`).
  */
 
 interface SessionSearchProps {
@@ -24,6 +30,27 @@ interface SessionSearchProps {
 	/** Invoked with the timestamp of the currently selected match (or null when there is no match). */
 	onNavigate: (ts: number | null) => void
 }
+
+// Highlight registry names (must match `::highlight(...)` rules in index.css).
+const HL_ALL = "session-search-all"
+const HL_CURRENT = "session-search-current"
+
+/** Minimum browser plumbing for the CSS Custom Highlight API. */
+type HighlightCtor = new (...ranges: Range[]) => unknown
+type HighlightRegistry = {
+	set: (name: string, highlight: unknown) => void
+	delete: (name: string) => void
+}
+const getHighlightRegistry = (): HighlightRegistry | null => {
+	const cssAny = (typeof CSS !== "undefined" ? CSS : undefined) as unknown as
+		| { highlights?: HighlightRegistry }
+		| undefined
+	const HighlightClass = (globalThis as unknown as { Highlight?: HighlightCtor }).Highlight
+	if (!cssAny?.highlights || !HighlightClass) return null
+	return cssAny.highlights
+}
+const getHighlightCtor = (): HighlightCtor | null =>
+	(globalThis as unknown as { Highlight?: HighlightCtor }).Highlight ?? null
 
 const SessionSearch: React.FC<SessionSearchProps> = ({ messages, isOpen, onClose, onNavigate }) => {
 	const [query, setQuery] = useState("")
@@ -69,6 +96,94 @@ const SessionSearch: React.FC<SessionSearchProps> = ({ messages, isOpen, onClose
 		const ts = matchTimestamps[currentIndex] ?? null
 		onNavigate(ts)
 	}, [isOpen, matchTimestamps, currentIndex, onNavigate])
+
+	// Paint per-occurrence text highlights via the CSS Custom Highlight API.
+	//
+	// We re-scan the rendered DOM (rows are tagged with `data-message-ts`)
+	// every time the query, the selected match, or the set of mounted rows
+	// changes. Virtuoso virtualizes the list, so a MutationObserver bumps
+	// `domVersion` whenever rows are added/removed — that keeps highlights
+	// in sync as the user scrolls into matches that weren't previously
+	// rendered.
+	const [domVersion, setDomVersion] = useState(0)
+	useEffect(() => {
+		if (!isOpen) return
+		let pending = 0
+		const bump = () => {
+			if (pending) return
+			pending = window.setTimeout(() => {
+				pending = 0
+				setDomVersion((v) => v + 1)
+			}, 80)
+		}
+		const observer = new MutationObserver(bump)
+		observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+		return () => {
+			observer.disconnect()
+			if (pending) window.clearTimeout(pending)
+		}
+	}, [isOpen])
+
+	useEffect(() => {
+		const registry = getHighlightRegistry()
+		const HighlightCls = getHighlightCtor()
+		if (!registry || !HighlightCls) return
+
+		const cleanup = () => {
+			registry.delete(HL_ALL)
+			registry.delete(HL_CURRENT)
+		}
+
+		const needle = query.trim().toLowerCase()
+		if (!isOpen || !needle) {
+			cleanup()
+			return cleanup
+		}
+
+		const currentTs = matchTimestamps[currentIndex]
+		const matchSet = new Set(matchTimestamps)
+		const allRanges: Range[] = []
+		const currentRanges: Range[] = []
+
+		const rows = document.querySelectorAll<HTMLElement>("[data-message-ts]")
+		rows.forEach((row) => {
+			const ts = Number(row.getAttribute("data-message-ts"))
+			if (!matchSet.has(ts)) return
+			const target = ts === currentTs ? currentRanges : allRanges
+
+			const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT, {
+				acceptNode: (node) => {
+					// Skip text nodes inside <script>/<style> just in case.
+					const parent = node.parentElement
+					if (!parent) return NodeFilter.FILTER_REJECT
+					const tag = parent.tagName
+					if (tag === "SCRIPT" || tag === "STYLE") return NodeFilter.FILTER_REJECT
+					return NodeFilter.FILTER_ACCEPT
+				},
+			})
+			let node = walker.nextNode()
+			while (node) {
+				const text = node.textContent ?? ""
+				const lower = text.toLowerCase()
+				let from = 0
+				while (true) {
+					const idx = lower.indexOf(needle, from)
+					if (idx < 0) break
+					const range = document.createRange()
+					range.setStart(node, idx)
+					range.setEnd(node, idx + needle.length)
+					target.push(range)
+					from = idx + needle.length
+				}
+				node = walker.nextNode()
+			}
+		})
+
+		registry.set(HL_ALL, new HighlightCls(...allRanges))
+		registry.set(HL_CURRENT, new HighlightCls(...currentRanges))
+
+		return cleanup
+	}, [isOpen, query, matchTimestamps, currentIndex, domVersion])
 
 	// Auto-focus + select-all when the search box opens so subsequent Ctrl+F
 	// presses behave like a typical browser/editor find experience.

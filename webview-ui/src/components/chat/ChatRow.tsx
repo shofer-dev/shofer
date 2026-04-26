@@ -139,8 +139,11 @@ const ChatRow = memo(
 
 		const [chatrow, { height }] = useSize(
 			<div
+				data-message-ts={message.ts}
 				className={`px-[15px] py-[10px] pr-[6px] ${
-					props.isSearchHighlighted ? "ring-2 ring-yellow-400 bg-yellow-500/10 rounded-md" : ""
+					props.isSearchHighlighted
+						? "border-l-2 border-vscode-focusBorder bg-vscode-list-inactiveSelectionBackground/40 rounded-sm"
+						: ""
 				}`}>
 				<ChatRowContent {...props} />
 			</div>,
