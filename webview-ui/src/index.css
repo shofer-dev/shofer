@@ -590,3 +590,15 @@ input[cmdk-input]:focus {
 	padding: 8px;
 	margin: -8px;
 }
+
+/* In-session search (Ctrl+F) text highlights, rendered via the
+ * CSS Custom Highlight API from `SessionSearch`. The ranges themselves
+ * are added/removed at runtime through `CSS.highlights.set(...)`. */
+::highlight(session-search-all) {
+	background-color: color-mix(in srgb, var(--vscode-editor-findMatchHighlightBackground, #ea5c0055) 80%, transparent);
+	color: var(--vscode-editor-foreground);
+}
+::highlight(session-search-current) {
+	background-color: var(--vscode-editor-findMatchBackground, #ff8f00cc);
+	color: var(--vscode-editor-findMatchForeground, var(--vscode-editor-foreground));
+}
