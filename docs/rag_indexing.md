@@ -13,7 +13,7 @@ CodeIndexManager (singleton per workspace)
  ├── CodeIndexConfigManager       — reads/writes settings & secrets
  ├── CodeIndexStateManager        — UI progress events
  │                                   (IndexingState: Standby|Indexing|Indexed|Error|Stopping)
- ├── CacheManager                 — file hash cache (avoids re-indexing unchanged files)
+ ├── CacheManager                 — file hash cache (SHA-256 per file, stored in VS Code globalStorage, NOT on Qdrant PVC)
  ├── CodeIndexServiceFactory      — creates embedder, vector-store, scanner, parser, file-watcher
  ├── CodeIndexOrchestrator        — drives the indexing workflow (scan → watch)
  │    ├── DirectoryScanner        — walks files, parses, batches embeddings, upserts to Qdrant
@@ -146,6 +146,59 @@ vectorStore.initialize() → create Qdrant collection if needed
   → start FileWatcher for incremental updates
   → markIndexingComplete()
 ```
+
+### Storage Topology
+
+The system uses **two separate storage locations** for different kinds of data:
+
+| Data                                      | Storage Location                                                                                                                                         | Survives Reboot?                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_arkware_qdrant-storage/`                                | ✓ Yes — persisted on Kubernetes PVC             |
+| **File hash cache** (SHA-256 per file)    | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/roo-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
+| **Metadata marker** (`indexing_complete`) | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                             | ✓ Yes — persisted in Qdrant                     |
+
+#### Hash Cache Location
+
+The `CacheManager` persists file hashes to a JSON file in VS Code's extension global storage directory:
+
+```
+~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/roo-index-cache-<sha256-of-workspace-path>.json
+```
+
+Example:
+
+```
+~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/roo-index-cache-7d1f5ec07233fd91a20daff100cb1dafca4849d96205580a64af9b043026c073.json
+```
+
+This cache file is **NOT** on the Qdrant PVC. It lives on the local filesystem with VS Code's settings.
+
+#### Incremental Scan Logic
+
+After a reboot, when `CodeIndexManager.initialize()` runs:
+
+```
+1. vectorStore.initialize() → connects to Qdrant, collection already exists with N points
+2. hasIndexedData() → checks if collection has points AND metadata marker exists
+   → if points_count > 0 → collection has indexed data ✓
+3. if hasIndexedData():
+       → runs incremental scan: skips unchanged files via SHA-256 hash comparison
+   else:
+       → runs full scan: embed all files
+```
+
+The critical dependency: **incremental scans require the hash cache file to be present**. Without it, the system cannot determine which files are unchanged → treats all files as new/changed → re-embeds everything, even though Qdrant already contains the vectors.
+
+#### Reboot Behavior
+
+After a system reboot, **no restart of indexing is needed** because:
+
+- ✓ Qdrant PVC retains all vectors (53,000+ points survive)
+- ✓ Metadata marker (`indexing_complete`) stored in Qdrant, survives reboot
+- ✓ If hash cache is intact → incremental scan skips unchanged files
+- ⚠ If hash cache was lost/deleted → full re-embed (vectors re-created but identical)
+
+The hash cache is the only component that may not survive a reboot depending on system configuration. The Qdrant PVC is the durable store of record.
 
 ### 4. Search (`CodebaseSearchTool.ts` → `search-service.ts`)
 
