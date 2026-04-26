@@ -124,6 +124,7 @@ interface ChatRowProps {
 	isFollowUpAutoApprovalPaused?: boolean
 	editable?: boolean
 	hasCheckpoint?: boolean
+	isSearchHighlighted?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -137,7 +138,10 @@ const ChatRow = memo(
 		const prevHeightRef = useRef(0)
 
 		const [chatrow, { height }] = useSize(
-			<div className="px-[15px] py-[10px] pr-[6px]">
+			<div
+				className={`px-[15px] py-[10px] pr-[6px] ${
+					props.isSearchHighlighted ? "ring-2 ring-yellow-400 bg-yellow-500/10 rounded-md" : ""
+				}`}>
 				<ChatRowContent {...props} />
 			</div>,
 		)
