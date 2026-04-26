@@ -46,6 +46,7 @@ import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
 import { WorktreeSelector } from "./WorktreeSelector"
 import FileChangesPanel from "./FileChangesPanel"
+import SessionSearch from "./SessionSearch"
 import DismissibleUpsell from "../common/DismissibleUpsell"
 import { useCloudUpsell } from "@src/hooks/useCloudUpsell"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
@@ -174,6 +175,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const autoApproveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 	const userRespondedRef = useRef<boolean>(false)
 	const [currentFollowUpTs, setCurrentFollowUpTs] = useState<number | null>(null)
+	const [searchHighlightTs, setSearchHighlightTs] = useState<number | null>(null)
+	const [isSessionSearchOpen, setIsSessionSearchOpen] = useState(false)
 	const [aggregatedCostsMap, setAggregatedCostsMap] = useState<
 		Map<
 			string,
@@ -1420,6 +1423,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					onFollowUpUnmount={handleFollowUpUnmount}
 					isFollowUpAnswered={messageOrGroup.isAnswered === true || messageOrGroup.ts === currentFollowUpTs}
 					isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
+					isSearchHighlighted={searchHighlightTs === messageOrGroup.ts}
 					editable={
 						messageOrGroup.type === "ask" &&
 						messageOrGroup.ask === "tool" &&
@@ -1453,6 +1457,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			isFollowUpAutoApprovalPaused,
 			enableButtons,
 			primaryButtonText,
+			searchHighlightTs,
 		],
 	)
 
@@ -1485,9 +1490,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				} else {
 					switchToNextMode()
 				}
+			} else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+				// Ctrl/Cmd+F opens the in-session search overlay. Only intercept
+				// while a task is loaded (otherwise let the platform default win).
+				if (!task) return
+				event.preventDefault()
+				setIsSessionSearchOpen(true)
+			} else if (event.key === "Escape" && isSessionSearchOpen) {
+				// Close from anywhere; the overlay also closes via its own input handler.
+				event.preventDefault()
+				setIsSessionSearchOpen(false)
 			}
 		},
-		[switchToNextMode, switchToPreviousMode],
+		[switchToNextMode, switchToPreviousMode, task, isSessionSearchOpen],
 	)
 
 	useEffect(() => {
@@ -1627,7 +1642,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 			{task && (
 				<>
-					<div className="grow flex" ref={scrollContainerRef}>
+					<div className="grow flex relative" ref={scrollContainerRef}>
 						<Virtuoso
 							ref={virtuosoRef}
 							key={task.ts}
@@ -1638,6 +1653,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
 							atBottomThreshold={10}
+						/>
+						<SessionSearch
+							messages={messages}
+							isOpen={isSessionSearchOpen}
+							onClose={() => setIsSessionSearchOpen(false)}
+							onNavigate={(ts) => {
+								setSearchHighlightTs(ts)
+								if (ts === null) return
+								const index = groupedMessages.findIndex((msg) => msg.ts === ts)
+								if (index >= 0 && virtuosoRef.current) {
+									virtuosoRef.current.scrollToIndex({ index, align: "center" })
+								}
+							}}
 						/>
 					</div>
 					<FileChangesPanel clineMessages={messages} />
