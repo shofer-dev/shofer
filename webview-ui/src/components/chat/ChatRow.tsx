@@ -142,7 +142,7 @@ const ChatRow = memo(
 				data-message-ts={message.ts}
 				className={`px-[15px] py-[10px] pr-[6px] ${
 					props.isSearchHighlighted
-						? "border-l-2 border-vscode-focusBorder bg-vscode-list-inactiveSelectionBackground/40 rounded-sm"
+						? "ring-2 ring-vscode-focusBorder bg-vscode-list-inactiveSelectionBackground/30 rounded-md"
 						: ""
 				}`}>
 				<ChatRowContent {...props} />
