@@ -1,5 +1,6 @@
 import { memo, useState, useCallback, useMemo } from "react"
 import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import { ChevronDown, Plus, Pause, Play, Square, Trash2, Pencil, Check, X } from "lucide-react"
 
 import type { HistoryItem } from "@roo-code/types"
@@ -7,6 +8,7 @@ import type { HistoryItem } from "@roo-code/types"
 import { cn } from "@src/lib/utils"
 import { StandardTooltip } from "@src/components/ui"
 import { vscode } from "@src/utils/vscode"
+import { formatTimeAgo } from "@src/utils/format"
 
 /**
  * A node in the flattened task tree used for rendering.
@@ -62,13 +64,84 @@ function buildFlatTree(taskHistory: HistoryItem[]): TaskTreeNode[] {
 
 /**
  * Task state indicator colors and labels.
+ *
+ * `icon` is a codicon class name used for the leading status glyph in the
+ * dropdown rows (matches the VS Code "Sessions" panel look). `dot` is the
+ * legacy small colored dot kept for the trigger button.
  */
-const TASK_STATE_CONFIG: Record<string, { color: string; label: string; pulse: boolean }> = {
-	idle: { color: "bg-gray-400", label: "Idle", pulse: false },
-	running: { color: "bg-green-500", label: "Running", pulse: true },
-	waiting_input: { color: "bg-yellow-500", label: "Needs Input", pulse: true },
-	paused: { color: "bg-orange-500", label: "Paused", pulse: false },
-	error: { color: "bg-red-500", label: "Error", pulse: false },
+const TASK_STATE_CONFIG: Record<
+	string,
+	{ dot: string; label: string; pulse: boolean; icon: string; iconColor: string }
+> = {
+	idle: {
+		dot: "bg-[var(--vscode-descriptionForeground)]",
+		label: "Idle",
+		pulse: false,
+		icon: "codicon-circle-large-outline",
+		iconColor: "text-[var(--vscode-descriptionForeground)]",
+	},
+	running: {
+		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
+		label: "Running",
+		pulse: true,
+		icon: "codicon-sync codicon-modifier-spin",
+		iconColor: "text-[var(--vscode-charts-blue,#3b82f6)]",
+	},
+	waiting_input: {
+		dot: "bg-[var(--vscode-charts-yellow,#eab308)]",
+		label: "Needs Input",
+		pulse: true,
+		icon: "codicon-question",
+		iconColor: "text-[var(--vscode-charts-yellow,#eab308)]",
+	},
+	paused: {
+		dot: "bg-[var(--vscode-charts-orange,#f97316)]",
+		label: "Paused",
+		pulse: false,
+		icon: "codicon-debug-pause",
+		iconColor: "text-[var(--vscode-charts-orange,#f97316)]",
+	},
+	error: {
+		dot: "bg-[var(--vscode-errorForeground,#ef4444)]",
+		label: "Failed",
+		pulse: false,
+		icon: "codicon-error",
+		iconColor: "text-[var(--vscode-errorForeground,#ef4444)]",
+	},
+}
+
+/**
+ * Date-bucket definitions used to group tasks in the dropdown the same way
+ * VS Code groups sessions (Today / Yesterday / Last 7 Days / Older).
+ *
+ * Each bucket keeps the original DFS pre-order ordering of nodes so that the
+ * tree connectors (├ / └) still render correctly within the bucket.
+ */
+type DateBucketKey = "today" | "yesterday" | "last7" | "older"
+
+const DATE_BUCKET_ORDER: DateBucketKey[] = ["today", "yesterday", "last7", "older"]
+
+const DATE_BUCKET_LABELS: Record<DateBucketKey, { key: string; fallback: string }> = {
+	today: { key: "chat:taskSelector.groups.today", fallback: "Today" },
+	yesterday: { key: "chat:taskSelector.groups.yesterday", fallback: "Yesterday" },
+	last7: { key: "chat:taskSelector.groups.last7", fallback: "Last 7 Days" },
+	older: { key: "chat:taskSelector.groups.older", fallback: "Older" },
+}
+
+/**
+ * Bucketize a timestamp into one of the date groups. Uses the local-day
+ * boundary (midnight) so "Today" / "Yesterday" match the user's wall clock.
+ */
+function bucketForTimestamp(ts: number, now: number): DateBucketKey {
+	const startOfToday = new Date(now)
+	startOfToday.setHours(0, 0, 0, 0)
+	const todayMs = startOfToday.getTime()
+	const dayMs = 24 * 60 * 60 * 1000
+
+	if (ts >= todayMs) return "today"
+	if (ts >= todayMs - dayMs) return "yesterday"
+	if (ts >= todayMs - 7 * dayMs) return "last7"
+	return "older"
 }
 
 /**
@@ -111,6 +184,220 @@ function getTaskDisplayName(item: HistoryItem): string {
 }
 
 /**
+ * Props for the row renderer factored out of the dropdown body.
+ *
+ * Keeping this as a free function (rather than a sub-component) lets each row
+ * stay a plain JSX node — Virtuoso isn't used here and the dropdown is small,
+ * so React's reconciliation cost is negligible compared to the readability win
+ * of pulling 100+ lines of nested JSX out of the main return.
+ */
+interface TaskRowParams {
+	node: TaskTreeNode
+	runtimeStateMap: Map<string, ManagedTask>
+	currentTaskId: string | undefined
+	editingTaskId: string | null
+	editName: string
+	setEditName: (v: string) => void
+	handleFocusTask: (taskId: string) => void
+	handlePauseTask: (taskId: string, e: React.MouseEvent) => void
+	handleResumeTask: (taskId: string, e: React.MouseEvent) => void
+	handleStopTask: (taskId: string, e: React.MouseEvent) => void
+	handleDeleteTask: (taskId: string, e: React.MouseEvent) => void
+	handleStartRename: (taskId: string, currentName: string, e: React.MouseEvent) => void
+	handleConfirmRename: (taskId: string, e: React.MouseEvent) => void
+	handleCancelRename: (e: React.MouseEvent) => void
+	t: TFunction
+}
+
+/**
+ * Renders a single task row in the dropdown.
+ *
+ * Layout (left → right):
+ *   [tree-gutter] [status-icon] [title \n state · time] [hover actions] [✓]
+ *
+ * The tree-gutter draws ├ / └ / │ connectors so subtasks visually nest under
+ * their parent within a date bucket.
+ */
+function renderTaskRow({
+	node,
+	runtimeStateMap,
+	currentTaskId,
+	editingTaskId,
+	editName,
+	setEditName,
+	handleFocusTask,
+	handlePauseTask,
+	handleResumeTask,
+	handleStopTask,
+	handleDeleteTask,
+	handleStartRename,
+	handleConfirmRename,
+	handleCancelRename,
+	t,
+}: TaskRowParams) {
+	const { item, depth, isLastSibling, ancestorIsLast } = node
+	const runtime = runtimeStateMap.get(item.id)
+	const state = runtime?.state ?? "idle"
+	const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
+	const isCurrent = item.id === currentTaskId
+	const isEditing = editingTaskId === item.id
+	const displayName = getTaskDisplayName(item)
+
+	return (
+		<div
+			key={item.id}
+			onClick={() => !isEditing && handleFocusTask(item.id)}
+			className={cn(
+				"flex items-center gap-2 pl-2 pr-2 py-1.5 cursor-pointer group",
+				"hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] transition-colors",
+				isCurrent && "bg-[var(--vscode-list-activeSelectionBackground,#094771)]",
+			)}>
+			{/* Tree connector gutter */}
+			{depth > 0 && (
+				<span className="flex items-center flex-shrink-0 select-none" aria-hidden>
+					{ancestorIsLast.slice(1).map((anc, ai) => (
+						<span
+							key={ai}
+							className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)]">
+							{anc ? "\u00a0" : "│"}
+						</span>
+					))}
+					<span className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)]">
+						{isLastSibling ? "└" : "├"}
+					</span>
+				</span>
+			)}
+
+			{/* Leading status icon (codicon) — matches VS Code Sessions panel look */}
+			<StandardTooltip content={stateConfig.label}>
+				<span
+					className={cn(
+						"codicon flex-shrink-0 text-base leading-none",
+						stateConfig.icon,
+						stateConfig.iconColor,
+					)}
+				/>
+			</StandardTooltip>
+
+			{/* Title + subtitle column */}
+			{isEditing ? (
+				<div className="flex items-center gap-1 flex-1 min-w-0">
+					<input
+						type="text"
+						value={editName}
+						onChange={(e) => setEditName(e.target.value)}
+						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								handleConfirmRename(item.id, e as any)
+							} else if (e.key === "Escape") {
+								handleCancelRename(e as any)
+							}
+						}}
+						className={cn(
+							"flex-1 min-w-0 px-1 py-0.5 text-sm",
+							"bg-[var(--vscode-input-background,#3c3c3c)] border border-[var(--vscode-input-border,#3c3c3c)] rounded",
+							"focus:outline-none focus:ring-1 focus:ring-[var(--vscode-focusBorder,#007fd4)]",
+						)}
+						autoFocus
+					/>
+					<button
+						onClick={(e) => handleConfirmRename(item.id, e)}
+						className="p-0.5 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+						<Check className="w-3 h-3" />
+					</button>
+					<button
+						onClick={handleCancelRename}
+						className="p-0.5 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+						<X className="w-3 h-3" />
+					</button>
+				</div>
+			) : (
+				<div className="flex-1 min-w-0 flex flex-col">
+					<span className="truncate text-sm leading-tight">{displayName}</span>
+					<span className="truncate text-[11px] leading-tight text-[var(--vscode-descriptionForeground)]">
+						{state !== "idle" && (
+							<>
+								<span>{stateConfig.label}</span>
+								<span className="mx-1">·</span>
+							</>
+						)}
+						<span>{formatTimeAgo(item.ts)}</span>
+					</span>
+				</div>
+			)}
+
+			{!isEditing && (
+				<>
+					{/* Hover actions */}
+					<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+						{item.status !== "completed" && (
+							<>
+								{state === "running" && (
+									<StandardTooltip content={t("chat:taskSelector.pause", "Pause")}>
+										<button
+											onClick={(e) => handlePauseTask(item.id, e)}
+											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+											<Pause className="w-3 h-3" />
+										</button>
+									</StandardTooltip>
+								)}
+								{state === "paused" && runtime && (
+									<StandardTooltip content={t("chat:taskSelector.resume", "Resume")}>
+										<button
+											onClick={(e) => handleResumeTask(item.id, e)}
+											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+											<Play className="w-3 h-3" />
+										</button>
+									</StandardTooltip>
+								)}
+								{state === "idle" && runtime && (
+									<StandardTooltip content={t("chat:taskSelector.start", "Start")}>
+										<button
+											onClick={(e) => {
+												e.stopPropagation()
+												handleFocusTask(item.id)
+											}}
+											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+											<Play className="w-3 h-3" />
+										</button>
+									</StandardTooltip>
+								)}
+								{state === "waiting_input" && (
+									<StandardTooltip content={t("chat:taskSelector.stop", "Stop")}>
+										<button
+											onClick={(e) => handleStopTask(item.id, e)}
+											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+											<Square className="w-3 h-3" />
+										</button>
+									</StandardTooltip>
+								)}
+							</>
+						)}
+						<StandardTooltip content={t("chat:taskSelector.rename", "Rename")}>
+							<button
+								onClick={(e) => handleStartRename(item.id, displayName, e)}
+								className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+								<Pencil className="w-3 h-3" />
+							</button>
+						</StandardTooltip>
+						<StandardTooltip content={t("chat:taskSelector.delete", "Delete")}>
+							<button
+								onClick={(e) => handleDeleteTask(item.id, e)}
+								className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded text-red-400">
+								<Trash2 className="w-3 h-3" />
+							</button>
+						</StandardTooltip>
+					</div>
+
+					{isCurrent && <span className="text-[var(--vscode-descriptionForeground)] text-xs">✓</span>}
+				</>
+			)}
+		</div>
+	)
+}
+
+/**
  * TaskSelector provides a hierarchical dropdown for switching between all tasks
  * in history, showing the parent-child delegation tree.
  *
@@ -119,6 +406,10 @@ function getTaskDisplayName(item: HistoryItem): string {
  * have a live instance in the current session. currentTaskId identifies the task
  * currently shown in the chat panel.  The tree is built from parentTaskId links on
  * HistoryItem; siblings are ordered ascending by ts (creation time).
+ *
+ * Layout: matches VS Code's "Sessions" panel — sticky header with task count,
+ * full-width "New Task" button, date-bucketed sections (Today / Yesterday /
+ * Last 7 Days / Older), and a footer link to the full history view.
  */
 export const TaskSelector = memo(
 	({ taskHistory, parallelTasks, currentTaskId, notificationCount }: TaskSelectorProps) => {
@@ -191,6 +482,35 @@ export const TaskSelector = memo(
 			setEditName("")
 		}, [])
 
+		/**
+		 * Group nodes by date bucket while preserving DFS pre-order within
+		 * each bucket. We bucket by the root task's timestamp so that a
+		 * subtask is shown together with (and immediately after) its parent
+		 * even if its own ts would land it in a different bucket.
+		 */
+		const groupedTree = useMemo(() => {
+			const now = Date.now()
+			const groups: Record<DateBucketKey, TaskTreeNode[]> = {
+				today: [],
+				yesterday: [],
+				last7: [],
+				older: [],
+			}
+			let currentBucket: DateBucketKey | null = null
+			for (const node of flatTree) {
+				if (node.depth === 0) {
+					currentBucket = bucketForTimestamp(node.item.ts, now)
+				}
+				if (currentBucket) {
+					groups[currentBucket].push(node)
+				}
+			}
+			return groups
+		}, [flatTree])
+
+		const totalTaskCount = flatTree.length
+		const currentStateConfig = TASK_STATE_CONFIG[currentState] || TASK_STATE_CONFIG.idle
+
 		return (
 			<div className="relative">
 				{/* Task selector button */}
@@ -207,8 +527,8 @@ export const TaskSelector = memo(
 						<span
 							className={cn(
 								"w-2 h-2 rounded-full",
-								TASK_STATE_CONFIG[currentState]?.color || "bg-gray-400",
-								TASK_STATE_CONFIG[currentState]?.pulse && "animate-pulse",
+								currentStateConfig.dot,
+								currentStateConfig.pulse && "animate-pulse",
 							)}
 						/>
 					)}
@@ -228,221 +548,104 @@ export const TaskSelector = memo(
 					<ChevronDown className={cn("w-4 h-4 transition-transform", isOpen && "rotate-180")} />
 				</button>
 
-				{/* Dropdown */}
+				{/*
+				 * Dropdown panel. Layout mirrors the VS Code "Sessions" panel:
+				 *   - Sticky header with title + new-task button
+				 *   - Sections grouped by date (Today / Yesterday / Last 7 Days / Older),
+				 *     each with a right-aligned count badge
+				 *   - Two-line rows: leading status icon, title, subtitle (state · time ago),
+				 *     hover actions on the right
+				 *   - Sticky footer linking to the full history view
+				 */}
 				{isOpen && (
 					<div
 						className={cn(
-							"absolute top-full left-0 mt-1 w-80 z-50",
+							"absolute top-full left-0 mt-1 w-[22rem] z-50 flex flex-col",
 							"bg-[var(--vscode-editorWidget-background,#252526)] border border-[var(--vscode-editorWidget-border,#454545)] rounded-md shadow-lg",
-							"max-h-[400px] overflow-y-auto",
+							"max-h-[28rem] overflow-hidden",
 						)}>
-						{/* Create new task button */}
-						<button
-							onClick={handleCreateTask}
+						{/* Header */}
+						<div
 							className={cn(
-								"flex items-center gap-2 w-full px-3 py-2 text-sm",
-								"hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] transition-colors",
+								"flex items-center justify-between px-3 py-2 flex-shrink-0",
+								"text-xs font-semibold uppercase tracking-wide",
+								"text-[var(--vscode-sideBarSectionHeader-foreground,var(--vscode-foreground))]",
+								"bg-[var(--vscode-sideBarSectionHeader-background,transparent)]",
 								"border-b border-[var(--vscode-editorWidget-border,#454545)]",
 							)}>
-							<Plus className="w-4 h-4" />
-							<span>{t("chat:taskSelector.newTask", "New Task")}</span>
-						</button>
+							<span>{t("chat:taskSelector.title", "Tasks")}</span>
+							<span className="text-[var(--vscode-descriptionForeground)] font-normal normal-case">
+								{totalTaskCount}
+							</span>
+						</div>
 
-						{/* Task tree — DFS pre-order, siblings sorted by creation time */}
-						{flatTree.length === 0 ? (
-							<div className="px-3 py-4 text-sm text-[var(--vscode-descriptionForeground,#8b8b8b)] text-center">
-								{t("chat:taskSelector.noTasks", "No tasks yet")}
-							</div>
-						) : (
-							<div className="py-1">
-								{flatTree.map(({ item, depth, isLastSibling, ancestorIsLast }) => {
-									const runtime = runtimeStateMap.get(item.id)
-									const state = runtime?.state ?? "idle"
-									const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
-									const isCurrent = item.id === currentTaskId
-									const isEditing = editingTaskId === item.id
-									const displayName = getTaskDisplayName(item)
+						{/* New task button — full-width pill, like VS Code's "New Session" */}
+						<div className="px-2 pt-2 pb-2 flex-shrink-0">
+							<button
+								onClick={handleCreateTask}
+								className={cn(
+									"flex items-center justify-center gap-2 w-full px-3 py-1.5 text-sm rounded",
+									"bg-[var(--vscode-button-secondaryBackground,var(--vscode-button-background))]",
+									"text-[var(--vscode-button-secondaryForeground,var(--vscode-button-foreground))]",
+									"hover:bg-[var(--vscode-button-secondaryHoverBackground,var(--vscode-button-hoverBackground))]",
+									"transition-colors",
+								)}>
+								<Plus className="w-4 h-4" />
+								<span>{t("chat:taskSelector.newTask", "New Task")}</span>
+							</button>
+						</div>
 
+						{/* Scrollable list area */}
+						<div className="flex-1 overflow-y-auto">
+							{totalTaskCount === 0 ? (
+								<div className="px-3 py-6 text-sm text-[var(--vscode-descriptionForeground)] text-center">
+									{t("chat:taskSelector.noTasks", "No tasks yet")}
+								</div>
+							) : (
+								DATE_BUCKET_ORDER.map((bucket) => {
+									const nodes = groupedTree[bucket]
+									if (nodes.length === 0) return null
+									const label = DATE_BUCKET_LABELS[bucket]
 									return (
-										<div
-											key={item.id}
-											onClick={() => !isEditing && handleFocusTask(item.id)}
-											className={cn(
-												"flex items-center gap-1 pr-2 py-2 text-sm cursor-pointer group",
-												"hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] transition-colors",
-												isCurrent &&
-													"bg-[var(--vscode-list-activeSelectionBackground,#094771)]",
-											)}>
-											{/*
-											 * Tree connector gutter:
-											 * For each ancestor level, draw either a vertical
-											 * continuation line (│) or empty space, then for this
-											 * node draw └ (last sibling) or ├ (non-last).
-											 */}
-											<span className="flex items-center flex-shrink-0 select-none" aria-hidden>
-												{/* Root indent */}
-												<span className="w-3" />
-												{depth === 0 ? null : (
-													<>
-														{/* Ancestor continuation columns */}
-														{ancestorIsLast.slice(1).map((anc, ai) => (
-															<span
-																key={ai}
-																className="inline-flex items-center justify-center w-3"
-																style={{
-																	color: "var(--vscode-editorIndentGuide-background,#404040)",
-																}}>
-																{anc ? "\u00a0" : "│"}
-															</span>
-														))}
-														{/* This node's connector */}
-														<span className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)]">
-															{isLastSibling ? "└" : "├"}
-														</span>
-														<span className="w-1" />
-													</>
-												)}
-											</span>
+										<div key={bucket} className="mb-1">
+											{/* Section header */}
+											<div
+												className={cn(
+													"flex items-center justify-between px-3 py-1",
+													"text-[11px] font-semibold uppercase tracking-wide",
+													"text-[var(--vscode-descriptionForeground)]",
+												)}>
+												<span>{t(label.key, label.fallback)}</span>
+												<span className="font-normal">{nodes.length}</span>
+											</div>
 
-											{/* Runtime state indicator */}
-											<StandardTooltip content={stateConfig.label}>
-												<span
-													className={cn(
-														"w-2 h-2 rounded-full flex-shrink-0",
-														stateConfig.color,
-														stateConfig.pulse && "animate-pulse",
-													)}
-												/>
-											</StandardTooltip>
-
-											{/* Task name (editable inline) */}
-											{isEditing ? (
-												<div className="flex items-center gap-1 flex-1 min-w-0 ml-1">
-													<input
-														type="text"
-														value={editName}
-														onChange={(e) => setEditName(e.target.value)}
-														onClick={(e) => e.stopPropagation()}
-														onKeyDown={(e) => {
-															if (e.key === "Enter") {
-																handleConfirmRename(item.id, e as any)
-															} else if (e.key === "Escape") {
-																handleCancelRename(e as any)
-															}
-														}}
-														className={cn(
-															"flex-1 min-w-0 px-1 py-0.5 text-sm",
-															"bg-[var(--vscode-input-background,#3c3c3c)] border border-[var(--vscode-input-border,#3c3c3c)] rounded",
-															"focus:outline-none focus:ring-1 focus:ring-[var(--vscode-focusBorder,#007fd4)]",
-														)}
-														autoFocus
-													/>
-													<button
-														onClick={(e) => handleConfirmRename(item.id, e)}
-														className="p-0.5 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-														<Check className="w-3 h-3" />
-													</button>
-													<button
-														onClick={handleCancelRename}
-														className="p-0.5 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-														<X className="w-3 h-3" />
-													</button>
-												</div>
-											) : (
-												<>
-													<span className="flex-1 min-w-0 truncate ml-1">{displayName}</span>
-
-													{/* Task actions — runtime controls only shown for active parallel tasks */}
-													<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-														{/* Pause/Play/Stop are only meaningful for non-completed tasks */}
-														{item.status !== "completed" && (
-															<>
-																{state === "running" && (
-																	<StandardTooltip
-																		content={t("chat:taskSelector.pause", "Pause")}>
-																		<button
-																			onClick={(e) => handlePauseTask(item.id, e)}
-																			className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																			<Pause className="w-3 h-3" />
-																		</button>
-																	</StandardTooltip>
-																)}
-																{state === "paused" && runtime && (
-																	<StandardTooltip
-																		content={t(
-																			"chat:taskSelector.resume",
-																			"Resume",
-																		)}>
-																		<button
-																			onClick={(e) =>
-																				handleResumeTask(item.id, e)
-																			}
-																			className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																			<Play className="w-3 h-3" />
-																		</button>
-																	</StandardTooltip>
-																)}
-																{state === "idle" && runtime && (
-																	<StandardTooltip
-																		content={t("chat:taskSelector.start", "Start")}>
-																		<button
-																			onClick={(e) => {
-																				e.stopPropagation()
-																				handleFocusTask(item.id)
-																			}}
-																			className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																			<Play className="w-3 h-3" />
-																		</button>
-																	</StandardTooltip>
-																)}
-																{state === "waiting_input" && (
-																	<StandardTooltip
-																		content={t("chat:taskSelector.stop", "Stop")}>
-																		<button
-																			onClick={(e) => handleStopTask(item.id, e)}
-																			className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																			<Square className="w-3 h-3" />
-																		</button>
-																	</StandardTooltip>
-																)}
-															</>
-														)}
-														<StandardTooltip
-															content={t("chat:taskSelector.rename", "Rename")}>
-															<button
-																onClick={(e) =>
-																	handleStartRename(item.id, displayName, e)
-																}
-																className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-																<Pencil className="w-3 h-3" />
-															</button>
-														</StandardTooltip>
-														<StandardTooltip
-															content={t("chat:taskSelector.delete", "Delete")}>
-															<button
-																onClick={(e) => handleDeleteTask(item.id, e)}
-																className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded text-red-400">
-																<Trash2 className="w-3 h-3" />
-															</button>
-														</StandardTooltip>
-													</div>
-												</>
-											)}
-
-											{/* Current-task indicator */}
-											{isCurrent && !isEditing && (
-												<span className="text-[var(--vscode-descriptionForeground,#8b8b8b)] text-xs ml-1">
-													✓
-												</span>
+											{nodes.map((node) =>
+												renderTaskRow({
+													node,
+													runtimeStateMap,
+													currentTaskId,
+													editingTaskId,
+													editName,
+													setEditName,
+													handleFocusTask,
+													handlePauseTask,
+													handleResumeTask,
+													handleStopTask,
+													handleDeleteTask,
+													handleStartRename,
+													handleConfirmRename,
+													handleCancelRename,
+													t,
+												}),
 											)}
 										</div>
 									)
-								})}
-							</div>
-						)}
+								})
+							)}
+						</div>
 
-						{/* View all tasks link */}
-						<div className="border-t border-[var(--vscode-editorWidget-border,#454545)]">
+						{/* Footer: View all tasks link */}
+						<div className="border-t border-[var(--vscode-editorWidget-border,#454545)] flex-shrink-0">
 							<button
 								onClick={() => {
 									vscode.postMessage({ type: "switchTab", tab: "history" })
