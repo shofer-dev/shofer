@@ -121,6 +121,15 @@ const App = () => {
 			const message: ExtensionMessage = e.data
 
 			if (message.type === "action" && message.action) {
+				// The Tasks title-bar button toggles the parallel-tasks side
+				// drawer rendered inside TaskHeader / TaskSelector. We re-emit
+				// it as a window event so the (deeply nested) drawer can listen
+				// without us having to thread state through the component tree.
+				if (message.action === "tasksButtonClicked") {
+					window.dispatchEvent(new CustomEvent("roo-cline.taskSidebarToggle"))
+					return
+				}
+
 				// Handle switchTab action with tab parameter
 				if (message.action === "switchTab" && message.tab) {
 					const targetTab = message.tab as Tab
