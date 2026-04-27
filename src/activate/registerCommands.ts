@@ -138,6 +138,18 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		visibleProvider.postMessageToWebview({ type: "action", action: "historyButtonClicked" })
 	},
+	tasksButtonClicked: () => {
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+
+		if (!visibleProvider) {
+			return
+		}
+
+		TelemetryService.instance.captureTitleButtonClicked("tasks")
+
+		// Surface the parallel-tasks side panel inside the webview.
+		visibleProvider.postMessageToWebview({ type: "action", action: "tasksButtonClicked" })
+	},
 	marketplaceButtonClicked: () => {
 		const visibleProvider = getVisibleProviderOrLog(outputChannel)
 		if (!visibleProvider) return

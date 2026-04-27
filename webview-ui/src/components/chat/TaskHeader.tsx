@@ -25,7 +25,7 @@ import { ContextWindowProgress } from "./ContextWindowProgress"
 import { Mention } from "./Mention"
 import { TodoListDisplay } from "./TodoListDisplay"
 import { LucideIconButton } from "./LucideIconButton"
-import { TaskSelector } from "./TaskSelector"
+import { TaskSelector, getTaskDisplayName, TASK_STATE_CONFIG } from "./TaskSelector"
 
 export interface TaskHeaderProps {
 	task: ClineMessage
@@ -135,16 +135,49 @@ const TaskHeader = ({
 		}
 	}
 
+	// Resolve the runtime state of the currently-shown task so the in-chat
+	// title can render a small status dot mirroring the drawer's row icons.
+	const currentTitle = currentTaskItem ? getTaskDisplayName(currentTaskItem) : ""
+	const currentRuntime = currentTaskItem ? parallelTasks?.find((p) => p.id === currentTaskItem.id) : undefined
+	const currentStateConfig = TASK_STATE_CONFIG[currentRuntime?.state ?? "idle"] || TASK_STATE_CONFIG.idle
+
 	return (
 		<div className="group pt-2 pb-0 px-3">
-			{/* Task Selector - always visible */}
-			<div className="mb-2 flex items-center justify-between">
-				<TaskSelector
-					taskHistory={taskHistory || []}
-					parallelTasks={parallelTasks || []}
-					currentTaskId={currentTaskItem?.id}
-					notificationCount={notificationCount}
-				/>
+			{/*
+			 * Top strip: shows the current task's title + runtime-state dot in
+			 * the spot where the in-webview Tasks trigger used to live. The
+			 * actual trigger has been promoted to the VS Code view title bar
+			 * (`roo-cline.tasksButtonClicked`); the drawer is mounted below
+			 * and listens for the global toggle event the action dispatches.
+			 */}
+			<div className="mb-2 flex items-center justify-between gap-2">
+				<div className="flex items-center gap-2 min-w-0 flex-1">
+					{currentTaskItem && (
+						<span
+							aria-hidden
+							className={cn(
+								"w-2 h-2 rounded-full flex-shrink-0",
+								currentStateConfig.dot,
+								currentStateConfig.pulse && "animate-pulse",
+							)}
+						/>
+					)}
+					<StandardTooltip content={currentTitle || t("chat:task.title")}>
+						<span className="truncate text-sm font-medium text-vscode-foreground">
+							{currentTitle || t("chat:task.title")}
+						</span>
+					</StandardTooltip>
+					{notificationCount > 0 && (
+						<span
+							className={cn(
+								"flex items-center justify-center flex-shrink-0",
+								"min-w-[16px] h-4 px-1 text-[10px] font-medium rounded-full",
+								"bg-yellow-500 text-black",
+							)}>
+							{notificationCount}
+						</span>
+					)}
+				</div>
 				{isSubtask && (
 					<Button
 						variant="ghost"
@@ -156,6 +189,13 @@ const TaskHeader = ({
 					</Button>
 				)}
 			</div>
+			{/* Drawer host: the trigger lives in the VS Code title bar, but the
+			 * drawer markup must be mounted in the webview. */}
+			<TaskSelector
+				taskHistory={taskHistory || []}
+				parallelTasks={parallelTasks || []}
+				currentTaskId={currentTaskItem?.id}
+			/>
 			{showLongRunningTaskMessage && !isTaskComplete && (
 				<DismissibleUpsell
 					upsellId="longRunningTask"

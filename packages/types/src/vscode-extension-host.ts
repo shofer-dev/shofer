@@ -122,6 +122,7 @@ export interface ExtensionMessage {
 		| "historyButtonClicked"
 		| "marketplaceButtonClicked"
 		| "cloudButtonClicked"
+		| "tasksButtonClicked"
 		| "didBecomeVisible"
 		| "focusInput"
 		| "switchTab"

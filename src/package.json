@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.52.81",
+	"version": "3.52.82",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -82,6 +82,11 @@
 				"command": "roo-cline.plusButtonClicked",
 				"title": "%command.newTask.title%",
 				"icon": "$(edit)"
+			},
+			{
+				"command": "roo-cline.tasksButtonClicked",
+				"title": "%command.tasks.title%",
+				"icon": "$(list-tree)"
 			},
 			{
 				"command": "roo-cline.historyButtonClicked",
@@ -209,18 +214,23 @@
 					"when": "view == roo-cline.SidebarProvider"
 				},
 				{
-					"command": "roo-cline.settingsButtonClicked",
+					"command": "roo-cline.tasksButtonClicked",
 					"group": "navigation@2",
 					"when": "view == roo-cline.SidebarProvider"
 				},
 				{
-					"command": "roo-cline.cloudButtonClicked",
+					"command": "roo-cline.settingsButtonClicked",
 					"group": "navigation@3",
 					"when": "view == roo-cline.SidebarProvider"
 				},
 				{
-					"command": "roo-cline.marketplaceButtonClicked",
+					"command": "roo-cline.cloudButtonClicked",
 					"group": "navigation@4",
+					"when": "view == roo-cline.SidebarProvider"
+				},
+				{
+					"command": "roo-cline.marketplaceButtonClicked",
+					"group": "navigation@5",
 					"when": "view == roo-cline.SidebarProvider"
 				},
 				{
@@ -281,18 +291,23 @@
 					"when": "activeWebviewPanelId == roo-cline.TabPanelProvider"
 				},
 				{
-					"command": "roo-cline.settingsButtonClicked",
+					"command": "roo-cline.tasksButtonClicked",
 					"group": "navigation@2",
 					"when": "activeWebviewPanelId == roo-cline.TabPanelProvider"
 				},
 				{
-					"command": "roo-cline.cloudButtonClicked",
+					"command": "roo-cline.settingsButtonClicked",
 					"group": "navigation@3",
 					"when": "activeWebviewPanelId == roo-cline.TabPanelProvider"
 				},
 				{
-					"command": "roo-cline.marketplaceButtonClicked",
+					"command": "roo-cline.cloudButtonClicked",
 					"group": "navigation@4",
+					"when": "activeWebviewPanelId == roo-cline.TabPanelProvider"
+				},
+				{
+					"command": "roo-cline.marketplaceButtonClicked",
+					"group": "navigation@5",
 					"when": "activeWebviewPanelId == roo-cline.TabPanelProvider"
 				},
 				{
