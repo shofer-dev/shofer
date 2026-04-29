@@ -2560,14 +2560,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			modelId: getModelId(this.apiConfiguration),
 		})
 
-		await this.say("text", `Cost limit reached: $${spent.toFixed(2)} of $${limit.maxUsd.toFixed(2)}`)
-
-		if (limit.action === "abort") {
-			await root.abortTask(false)
-			return
-		}
-		if (limit.action === "kill") {
-			await root.abortTask(true)
+		if (limit.action === "abort" || limit.action === "kill") {
+			// Cancel the in-flight HTTP request first so the stream consumer
+			// stops yielding chunks immediately, then mark this task aborted
+			// so its loop exits at the next iteration boundary. Also abort the
+			// root if it's a different instance, so the whole tree winds down
+			// (subtasks die via the recursive backgroundChildren walk in
+			// abortTask).
+			try {
+				this.cancelCurrentRequest()
+			} catch {
+				/* best effort */
+			}
+			const isAbandoned = limit.action === "kill"
+			await this.abortTask(isAbandoned)
+			if (root !== this) {
+				await root.abortTask(isAbandoned)
+			}
 			return
 		}
 		// pause

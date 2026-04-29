@@ -2339,7 +2339,24 @@ export class ClineProvider
 			autoCondenseContextPercent: autoCondenseContextPercent ?? 100,
 			uriScheme: vscode.env.uriScheme,
 			currentTaskId: currentTask?.taskId,
-			currentTaskItem: currentTask?.taskId ? this.taskHistoryStore.get(currentTask.taskId) : undefined,
+			currentTaskItem: (() => {
+				if (!currentTask?.taskId) return undefined
+				const stored = this.taskHistoryStore.get(currentTask.taskId)
+				// Resolve the live cost limit by walking up to the root task,
+				// since the limit lives only on the root and the persisted
+				// HistoryItem may not reflect a freshly-seeded default until the
+				// first save. Fall back to the persisted value otherwise.
+				let liveCostLimit = stored?.costLimit
+				let cursor: Task | undefined = currentTask
+				while (cursor) {
+					if (cursor.costLimit) {
+						liveCostLimit = cursor.costLimit
+						break
+					}
+					cursor = cursor.parentTask
+				}
+				return stored ? { ...stored, costLimit: liveCostLimit } : undefined
+			})(),
 			clineMessages: currentTask?.clineMessages || [],
 			currentTaskTodos: currentTask?.todoList || [],
 			messageQueue: currentTask?.messageQueueService?.messages,
