@@ -12,6 +12,7 @@ import { Mode, getAllModes } from "@roo/modes"
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
+import { type DroppedContextFile, extractUriPayload, parseDroppedUris } from "@src/utils/droppedContextFiles"
 import {
 	ContextMenuOptionType,
 	getContextMenuOptions,
@@ -55,6 +56,15 @@ interface ChatTextAreaProps {
 	isStreaming?: boolean
 	onStop?: () => void
 	onEnqueueMessage?: () => void
+	/**
+	 * Called when path-style drops (Explorer files / editor tabs) land on
+	 * the textarea.  ChatView uses this to populate the shared
+	 * `droppedContextFiles` state.  This is the only drop path that
+	 * actually fires inside VSCode Desktop's webview, where the cross-
+	 * origin overlay swallows events that don't target a native
+	 * form-control descendant.
+	 */
+	onContextFilesDropped?: (files: DroppedContextFile[]) => void
 }
 
 export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
@@ -78,6 +88,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			isStreaming = false,
 			onStop,
 			onEnqueueMessage,
+			onContextFilesDropped,
 		},
 		ref,
 	) => {
@@ -828,96 +839,84 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		/**
 		 * Handle drops on the textarea container.
 		 *
-		 * All path-based drops (Explorer files, editor tabs) are handled by
-		 * the parent ChatView which creates context-file tags.  Here we only
-		 * handle image file drops (drag-and-drop of image files from the OS
-		 * file manager).  Image pastes (Ctrl+V) go through `handlePaste`.
+		 * VSCode Desktop's cross-origin webview overlay swallows drag events
+		 * that target the iframe root, but it *does* deliver them to native
+		 * form-control descendants — the textarea container is therefore the
+		 * only reliable drop target on Desktop.  We handle two payloads here:
+		 *
+		 *  1. Path-style drops (Explorer files, editor tabs):
+		 *     Parsed via the shared `extractUriPayload` / `parseDroppedUris`
+		 *     helpers and forwarded to ChatView via `onContextFilesDropped`,
+		 *     which appends them to the same `droppedContextFiles` state used
+		 *     by the webview-root drop handler.
+		 *
+		 *  2. Image file drops (PNG/JPEG/WebP from the OS file manager):
+		 *     Read as data URLs and added to `selectedImages`.
+		 *
+		 * Image pastes (Ctrl+V) go through `handlePaste` instead.
 		 */
 		const handleDrop = useCallback(
 			async (e: React.DragEvent<HTMLDivElement>) => {
 				e.preventDefault()
 				setIsDraggingOver(false)
 
-				const files = Array.from(e.dataTransfer.files)
-
-				// Log what was dropped on the textarea for debugging.
-				const fileTypes = files.map((f) => `${f.name} (${f.type || "unknown"})`)
-				const uriData = e.dataTransfer.getData("text/uri-list")
-				const plainData = e.dataTransfer.getData("text/plain")
+				// 1. Path-style drops first — these never carry a `files` list,
+				//    only a URI/text payload.
+				const payload = extractUriPayload(e.dataTransfer)
 				vscode.postMessage({
 					type: "webviewLog",
-					text: `[textarea-drop] files=${files.length} [${fileTypes.join(", ")}] uri-list=${!!uriData} text/plain=${!!plainData}`,
+					text: `[drop:textarea] fired payload=${payload ? `${payload.length}ch` : "none"} files=${e.dataTransfer.files.length} types=[${Array.from(e.dataTransfer.types).join(",")}]`,
 				})
-
-				if (files.length > 0) {
-					const acceptedTypes = ["png", "jpeg", "webp"]
-
-					const imageFiles = files.filter((file) => {
-						const [type, subtype] = file.type.split("/")
-						return type === "image" && acceptedTypes.includes(subtype)
-					})
-
-					if (shouldDisableImages) {
-						vscode.postMessage({
-							type: "webviewLog",
-							text: `[textarea-drop] images disabled, skipping ${imageFiles.length} image(s)`,
-						})
-					}
-
-					if (!shouldDisableImages && imageFiles.length > 0) {
-						vscode.postMessage({
-							type: "webviewLog",
-							text: `[textarea-drop] processing ${imageFiles.length} image file(s)`,
-						})
-						const imagePromises = imageFiles.map((file) => {
-							return new Promise<string | null>((resolve) => {
-								const reader = new FileReader()
-
-								reader.onloadend = () => {
-									if (reader.error) {
-										console.error(t("chat:errorReadingFile"), reader.error)
-										resolve(null)
-									} else {
-										const result = reader.result
-										resolve(typeof result === "string" ? result : null)
-									}
-								}
-
-								reader.readAsDataURL(file)
-							})
-						})
-
-						const imageDataArray = await Promise.all(imagePromises)
-						const dataUrls = imageDataArray.filter((dataUrl): dataUrl is string => dataUrl !== null)
-
-						if (dataUrls.length > 0) {
-							setSelectedImages((prevImages) =>
-								[...prevImages, ...dataUrls].slice(0, MAX_IMAGES_PER_MESSAGE),
-							)
-
-							if (typeof vscode !== "undefined") {
-								vscode.postMessage({ type: "draggedImages", dataUrls: dataUrls })
-							}
-							vscode.postMessage({
-								type: "webviewLog",
-								text: `[textarea-drop] added ${dataUrls.length} image(s)`,
-							})
-						} else {
-							console.warn(t("chat:noValidImages"))
-							vscode.postMessage({
-								type: "webviewLog",
-								text: "[textarea-drop] no valid images from file drop",
-							})
-						}
-					}
-				} else {
+				if (payload && onContextFilesDropped) {
+					const newFiles = parseDroppedUris(payload, cwd, [])
 					vscode.postMessage({
 						type: "webviewLog",
-						text: "[textarea-drop] no files — letting parent ChatView handle",
+						text: `[drop:textarea] parsed ${newFiles.length} new file(s)`,
 					})
+					if (newFiles.length > 0) {
+						onContextFilesDropped(newFiles)
+						return
+					}
+				}
+
+				// 2. Image file drops.
+				const files = Array.from(e.dataTransfer.files)
+				if (files.length === 0 || shouldDisableImages) return
+
+				const acceptedTypes = ["png", "jpeg", "webp"]
+				const imageFiles = files.filter((file) => {
+					const [type, subtype] = file.type.split("/")
+					return type === "image" && acceptedTypes.includes(subtype)
+				})
+				if (imageFiles.length === 0) return
+
+				const imagePromises = imageFiles.map((file) => {
+					return new Promise<string | null>((resolve) => {
+						const reader = new FileReader()
+						reader.onloadend = () => {
+							if (reader.error) {
+								console.error(t("chat:errorReadingFile"), reader.error)
+								resolve(null)
+							} else {
+								const result = reader.result
+								resolve(typeof result === "string" ? result : null)
+							}
+						}
+						reader.readAsDataURL(file)
+					})
+				})
+
+				const imageDataArray = await Promise.all(imagePromises)
+				const dataUrls = imageDataArray.filter((dataUrl): dataUrl is string => dataUrl !== null)
+
+				if (dataUrls.length > 0) {
+					setSelectedImages((prevImages) => [...prevImages, ...dataUrls].slice(0, MAX_IMAGES_PER_MESSAGE))
+					vscode.postMessage({ type: "draggedImages", dataUrls })
+				} else {
+					console.warn(t("chat:noValidImages"))
 				}
 			},
-			[shouldDisableImages, setSelectedImages, t],
+			[cwd, onContextFilesDropped, shouldDisableImages, setSelectedImages, t],
 		)
 
 		const [isTtsPlaying, setIsTtsPlaying] = useState(false)
