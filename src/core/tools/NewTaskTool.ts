@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 import { TodoItem } from "@roo-code/types"
 
 import { Task } from "../task/Task"
+import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
 import { getModeBySlug } from "../../shared/modes"
 import { formatResponse } from "../prompts/responses"
 import { parseMarkdownChecklist } from "./UpdateTodoListTool"
@@ -90,6 +91,34 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			}
 
 			task.consecutiveMistakeCount = 0
+
+			// Refuse to spawn a subtask that would push the root over its cost cap.
+			// Walks up to the true root, then aggregates costs across the whole subtree.
+			let rootCursor: Task = task
+			while (rootCursor.parentTask) {
+				rootCursor = rootCursor.parentTask
+			}
+			const costLimit = rootCursor.costLimit
+			if (costLimit && costLimit.maxUsd > 0) {
+				try {
+					const aggregated = await aggregateTaskCostsRecursive(rootCursor.taskId, (id) =>
+						provider.getTaskWithId(id).then((r) => r.historyItem),
+					)
+					if (aggregated.totalCost >= costLimit.maxUsd) {
+						pushToolResult(
+							formatResponse.toolError(
+								`Cost limit reached: $${aggregated.totalCost.toFixed(2)} of $${costLimit.maxUsd.toFixed(2)}. Cannot spawn new task.`,
+							),
+						)
+						return
+					}
+				} catch (err) {
+					// Non-fatal: if cost aggregation fails, prefer not to block the user.
+					provider.log(
+						`[NewTaskTool] cost-limit check failed for root ${rootCursor.taskId}: ${err instanceof Error ? err.message : String(err)}`,
+					)
+				}
+			}
 
 			// Un-escape one level of backslashes before '@' for hierarchical subtasks
 			// Un-escape one level: \\@ -> \@ (removes one backslash for hierarchical subtasks)

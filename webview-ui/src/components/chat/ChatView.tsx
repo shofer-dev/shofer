@@ -306,6 +306,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setPrimaryButtonText(t("chat:proceedAnyways.title"))
 							setSecondaryButtonText(t("chat:startNewTask.title"))
 							break
+						case "budget_limit":
+							setSendingDisabled(false)
+							setClineAsk("budget_limit")
+							setEnableButtons(true)
+							setPrimaryButtonText("Increase by $5")
+							setSecondaryButtonText("Abort task")
+							break
 						case "followup":
 							setSendingDisabled(isPartial)
 							setClineAsk("followup")
@@ -635,24 +642,62 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	/**
 	 * Handle file drops on the webview root.
-	 * Parses text/uri-list from Explorer drags and adds unique files to context.
+	 *
+	 * Tries several MIME types in order so that drops work across
+	 * platforms (VSCode Desktop, code-server / VSCode Web):
+	 *
+	 *   1. text/uri-list      — standard URI list from Explorer drags
+	 *   2. text/plain         — VSCode Desktop sometimes sends paths
+	 *                             as plain text (especially from tabs)
+	 *   3. application/vnd.code.uri-list — VSCode internal tab-drag format
+	 *
+	 * If none match, the handler is a no-op so that image drops (handled
+	 * by ChatTextArea) can fall through.
 	 */
 	const handleWebviewDrop = useCallback(
 		async (e: React.DragEvent) => {
 			e.preventDefault()
 			setIsDraggingFiles(false)
 
-			const uriList = e.dataTransfer.getData("text/uri-list")
+			const textUriList = e.dataTransfer.getData("text/uri-list")
+			const textPlain = e.dataTransfer.getData("text/plain")
+			const vndCodeUriList = e.dataTransfer.getData("application/vnd.code.uri-list")
+			vscode.postMessage({
+				type: "webviewLog",
+				text: `[webview-drop] text/uri-list=${!!textUriList} text/plain=${!!textPlain} vnd.code.uri-list=${!!vndCodeUriList} files=${e.dataTransfer.files.length}`,
+			})
+
+			let uriList = textUriList
+
+			// VSCode Desktop may send paths as plain text instead of a
+			// proper URI list (e.g. when dragging from the Explorer with
+			// Shift held).
 			if (!uriList) {
+				uriList = textPlain
+			}
+
+			// VSCode internal tab-drag format (application/vnd.code.uri-list).
+			if (!uriList) {
+				uriList = vndCodeUriList
+			}
+
+			if (!uriList) {
+				vscode.postMessage({ type: "webviewLog", text: "[webview-drop] no URI data — bailing out" })
 				return
 			}
 
+			vscode.postMessage({
+				type: "webviewLog",
+				text: `[webview-drop] raw data (first 300 chars): ${uriList.slice(0, 300)}`,
+			})
+
 			const lines = uriList
-				.split("\n")
+				.split(/\r?\n/)
 				.map((l) => l.trim())
 				.filter((l) => l.length > 0)
 
 			if (lines.length === 0) {
+				vscode.postMessage({ type: "webviewLog", text: "[webview-drop] no non-empty lines after parsing" })
 				return
 			}
 
@@ -661,53 +706,72 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			const newFiles: Array<{ path: string; isFile: boolean }> = []
 
 			for (const line of lines) {
+				// Try to parse as a file:// URI first (standard Explorer
+				// format), then fall back to treating the line as a raw
+				// path (used by text/plain and application/vnd.code.uri-list).
+				let absPath: string
+
 				try {
 					const uri = new URL(line)
-					let absPath = decodeURIComponent(uri.pathname)
+					absPath = decodeURIComponent(uri.pathname)
 
 					// On Windows, strip leading slash from /C:/...
 					if (/^\/[a-zA-Z]:/.test(absPath)) {
 						absPath = absPath.slice(1)
 					}
-
-					let relativePath: string
-					if (cwd && absPath.startsWith(cwd)) {
-						const rel = absPath.slice(cwd.length)
-						relativePath = rel.startsWith("/") ? rel : "/" + rel
-					} else {
-						relativePath = absPath
-					}
-
-					if (
-						!droppedContextFiles.some((f) => f.path === relativePath) &&
-						!newFiles.some((f) => f.path === relativePath)
-					) {
-						// Best-effort: try to determine if it's a file or folder from path extension
-						const isFile = /\.[a-zA-Z0-9]{1,10}$/.test(relativePath.split("/").pop() || "")
-						newFiles.push({ path: relativePath, isFile })
-					}
 				} catch {
-					// Skip malformed URIs
+					// Not a valid URI — treat as a plain filesystem path.
+					absPath = line.trim()
+					if (!absPath) continue
+				}
+
+				let relativePath: string
+				if (cwd && absPath.startsWith(cwd)) {
+					const rel = absPath.slice(cwd.length)
+					relativePath = rel.startsWith("/") ? rel : "/" + rel
+				} else {
+					relativePath = absPath
+				}
+
+				if (
+					!droppedContextFiles.some((f) => f.path === relativePath) &&
+					!newFiles.some((f) => f.path === relativePath)
+				) {
+					// Best-effort: try to determine if it's a file or folder from path extension
+					const isFile = /\.[a-zA-Z0-9]{1,10}$/.test(relativePath.split("/").pop() || "")
+					newFiles.push({ path: relativePath, isFile })
 				}
 			}
 
 			if (newFiles.length > 0) {
+				vscode.postMessage({
+					type: "webviewLog",
+					text: `[webview-drop] adding ${newFiles.length} context file(s): ${newFiles.map((f) => f.path).join(", ")}`,
+				})
 				setDroppedContextFiles((prev) => [...prev, ...newFiles])
+			} else {
+				vscode.postMessage({
+					type: "webviewLog",
+					text: "[webview-drop] no new files to add (all duplicates or unparseable)",
+				})
 			}
 		},
 		[droppedContextFiles],
 	)
 
 	/**
-	 * Handle drag-over on the webview root — only activate for file drops.
+	 * Handle drag-over on the webview root.
+	 *
+	 * Always accepts the drop so that VSCode Explorer drags work on all
+	 * platforms.  On VSCode Desktop the webview lives in a cross-origin
+	 * iframe which hides `dataTransfer.types` during dragover, so we
+	 * cannot gate on the MIME type here — the real filtering happens in
+	 * handleWebviewDrop.
 	 */
 	const handleWebviewDragOver = useCallback((e: React.DragEvent) => {
-		// Only show drop indicator if files are being dragged
-		if (e.dataTransfer.types.includes("text/uri-list") || e.dataTransfer.types.includes("Files")) {
-			e.preventDefault()
-			e.dataTransfer.dropEffect = "copy"
-			setIsDraggingFiles(true)
-		}
+		e.preventDefault()
+		e.dataTransfer.dropEffect = "copy"
+		setIsDraggingFiles(true)
 	}, [])
 
 	/**
@@ -790,6 +854,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "completion_result": // If this happens then the user has feedback for the completion result.
 						case "resume_task":
 						case "resume_completed_task":
+						case "budget_limit":
 						case "mistake_limit_reached":
 							vscode.postMessage({
 								type: "askResponse",
@@ -876,6 +941,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "command":
 				case "tool":
 				case "use_mcp_server":
+				case "budget_limit":
 				case "mistake_limit_reached":
 					// Only send text/images if they exist
 					if (trimmedInput || (images && images.length > 0)) {
@@ -956,6 +1022,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "mistake_limit_reached":
 				case "resume_task":
 					startNewTask()
+					break
+				case "budget_limit":
+					// "Abort task" — defer to the Task's askUserForBudgetDecision
+					// handler so the abort flows through root.abortTask(false).
+					vscode.postMessage({ type: "askResponse", askResponse: "noButtonClicked" })
 					break
 				case "command":
 				case "tool":
@@ -1620,9 +1691,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				} else {
 					switchToNextMode()
 				}
-			} else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+			} else if (
+				(event.metaKey || event.ctrlKey) &&
+				!event.shiftKey &&
+				!event.altKey &&
+				event.key.toLowerCase() === "f"
+			) {
 				// Ctrl/Cmd+F opens the in-session search overlay. Only intercept
 				// while a task is loaded (otherwise let the platform default win).
+				// Modifier combos like Ctrl+Shift+F (workspace search) and
+				// Ctrl+Alt+F must fall through to VS Code so they keep working
+				// when the Roo webview happens to hold focus.
 				if (!task) return
 				event.preventDefault()
 				setIsSessionSearchOpen(true)
@@ -1743,6 +1822,16 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								aggregatedCostsMap.get(currentTaskItem.id)!.childrenCost > 0
 							)
 						}
+						costLimit={currentTaskItem?.costLimit}
+						onUpdateCostLimit={(newLimit) => {
+							if (currentTaskItem?.id) {
+								vscode.postMessage({
+									type: "updateCostLimit",
+									taskId: currentTaskItem.id,
+									costLimit: newLimit,
+								})
+							}
+						}}
 						parentTaskId={currentTaskItem?.parentTaskId}
 						costBreakdown={
 							currentTaskItem?.id && aggregatedCostsMap.has(currentTaskItem.id)
@@ -1827,6 +1916,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								}
 							}}
 						/>
+						{!isSessionSearchOpen && (
+							<StandardTooltip content="Find in session (Ctrl+F)">
+								<button
+									type="button"
+									onClick={() => setIsSessionSearchOpen(true)}
+									aria-label="Find in session"
+									className="absolute top-2 right-3 z-20 flex items-center justify-center w-7 h-7 rounded-md border border-vscode-panel-border bg-vscode-editor-background/80 hover:bg-vscode-toolbar-hoverBackground text-vscode-foreground shadow-sm">
+									<span className="codicon codicon-search text-xs" />
+								</button>
+							</StandardTooltip>
+						)}
 					</div>
 					<FileChangesPanel clineMessages={messages} />
 					{areButtonsVisible && (

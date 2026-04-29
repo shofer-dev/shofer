@@ -3056,6 +3056,16 @@ export class ClineProvider
 			...options,
 		})
 
+		// For root tasks (no parent), seed the cost cap from the global default
+		// when the task itself didn't bring one from history. Subtasks inherit
+		// the cap implicitly via Task.resolveCostLimit() walking up to the root.
+		if (!parentTask && !task.costLimit) {
+			const defaultLimit = this.contextProxy.getValue("defaultCostLimit")
+			if (defaultLimit && defaultLimit.maxUsd > 0) {
+				task.costLimit = { maxUsd: defaultLimit.maxUsd, action: defaultLimit.action }
+			}
+		}
+
 		if (openInStack) {
 			await this.addClineToStack(task)
 		} else {

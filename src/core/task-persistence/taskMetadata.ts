@@ -27,6 +27,8 @@ export type TaskMetadataOptions = {
 	initialStatus?: "active" | "delegated" | "completed"
 	/** When true, persist `isBackground: true` on the history item. */
 	isBackground?: boolean
+	/** Per-root-task cost limit (only set on root tasks). */
+	costLimit?: import("@roo-code/types").CostLimit
 }
 
 export async function taskMetadata({
@@ -41,6 +43,7 @@ export async function taskMetadata({
 	apiConfigName,
 	initialStatus,
 	isBackground,
+	costLimit,
 }: TaskMetadataOptions) {
 	const taskDir = await getTaskDirectoryPath(globalStoragePath, id)
 
@@ -116,6 +119,7 @@ export async function taskMetadata({
 		...(typeof apiConfigName === "string" && apiConfigName.length > 0 ? { apiConfigName } : {}),
 		...(initialStatus && { status: initialStatus }),
 		...(isBackground ? { isBackground: true } : {}),
+		...(costLimit ? { costLimit } : {}),
 	}
 
 	return { historyItem, tokenUsage }

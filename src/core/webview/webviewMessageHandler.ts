@@ -799,6 +799,36 @@ export const webviewMessageHandler = async (
 				provider.getCurrentTask()?.handleTerminalOperation(message.terminalOperation)
 			}
 			break
+		case "updateCostLimit":
+			// Live-edit the cost cap on a running task and persist it to history.
+			// Affects only the root task (subtasks resolve via the parent chain).
+			if (message.taskId && message.costLimit) {
+				const task = provider.taskManager.getManagedTaskInstance(message.taskId)
+				if (task) {
+					// Walk to root \u2014 the cap lives only on the root task.
+					let root = task
+					while (root.parentTask) {
+						root = root.parentTask
+					}
+					root.costLimit = message.costLimit
+					root.invalidateCostLimitCache()
+				}
+				try {
+					const { historyItem } = await provider.getTaskWithId(message.taskId)
+					if (historyItem) {
+						await provider.updateTaskHistory({
+							...historyItem,
+							costLimit: message.costLimit,
+						})
+					}
+				} catch (err) {
+					provider.log(
+						`[updateCostLimit] persist failed for ${message.taskId}: ${err instanceof Error ? err.message : String(err)}`,
+					)
+				}
+				await provider.postStateToWebview()
+			}
+			break
 		case "clearTask":
 			// Clear task resets the current task.
 			await provider.clearTask()
