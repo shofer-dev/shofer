@@ -181,13 +181,6 @@ export class ClineProvider
 	public readonly providerSettingsManager: ProviderSettingsManager
 	public readonly customModesManager: CustomModesManager
 
-	/**
-	 * Callback to get and clear dropped file mentions when a new task is created.
-	 * Set by extension.ts to decouple ClineProvider from ContextDropZoneProvider.
-	 * Returns the @mentions string to prepend to the message text.
-	 */
-	public getDroppedFileMentions?: () => string
-
 	constructor(
 		readonly context: vscode.ExtensionContext,
 		private readonly outputChannel: vscode.OutputChannel,

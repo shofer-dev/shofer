@@ -664,9 +664,7 @@ export const webviewMessageHandler = async (
 			try {
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 
-				// Get dropped file mentions and prepend to message text
-				const droppedMentions = provider.getDroppedFileMentions?.() ?? ""
-				const messageText = droppedMentions ? `${droppedMentions} ${resolved.text ?? ""}`.trim() : resolved.text
+				const messageText = resolved.text
 
 				await provider.createManagedTask(undefined, messageText, resolved.images)
 				// Task created successfully - notify the UI to reset
@@ -688,9 +686,7 @@ export const webviewMessageHandler = async (
 			{
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 
-				// Get dropped file mentions and prepend to message text
-				const droppedMentions = provider.getDroppedFileMentions?.() ?? ""
-				const messageText = droppedMentions ? `${droppedMentions} ${resolved.text ?? ""}`.trim() : resolved.text
+				const messageText = resolved.text
 
 				const currentTask = provider.getCurrentTask()
 				provider.log(
@@ -3288,9 +3284,7 @@ export const webviewMessageHandler = async (
 		case "queueMessage": {
 			const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
 
-			// Get dropped file mentions and prepend to message text
-			const droppedMentions = provider.getDroppedFileMentions?.() ?? ""
-			const messageText = droppedMentions ? `${droppedMentions} ${resolved.text ?? ""}`.trim() : resolved.text
+			const messageText = resolved.text
 
 			const currentTask = provider.getCurrentTask()
 			provider.log(

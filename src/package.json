@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.52.82",
+	"version": "3.52.83",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -69,11 +69,6 @@
 					"type": "webview",
 					"id": "roo-cline.SidebarProvider",
 					"name": "%views.sidebar.name%"
-				},
-				{
-					"type": "tree",
-					"id": "roo-cline.contextDropZone",
-					"name": "%views.dropZone.name%"
 				}
 			]
 		},
@@ -182,32 +177,10 @@
 				"command": "roo-cline.toggleAutoApprove",
 				"title": "%command.toggleAutoApprove.title%",
 				"category": "%configuration.title%"
-			},
-			{
-				"command": "roo-cline.removeContextFile",
-				"title": "Remove from Context",
-				"icon": "$(close)"
-			},
-			{
-				"command": "roo-cline.clearAllContextFiles",
-				"title": "Clear All Context Files",
-				"icon": "$(clear-all)"
 			}
 		],
 		"menus": {
-			"view/item/context": [
-				{
-					"command": "roo-cline.removeContextFile",
-					"when": "view == roo-cline.contextDropZone && viewItem == droppedFile",
-					"group": "inline"
-				}
-			],
 			"view/title": [
-				{
-					"command": "roo-cline.clearAllContextFiles",
-					"when": "view == roo-cline.contextDropZone",
-					"group": "navigation"
-				},
 				{
 					"command": "roo-cline.plusButtonClicked",
 					"group": "navigation@1",
