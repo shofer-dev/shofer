@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.54.10",
+	"version": "3.54.12",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -69,6 +69,12 @@
 					"type": "webview",
 					"id": "roo-cline.SidebarProvider",
 					"name": "%views.sidebar.name%"
+				},
+				{
+					"type": "tree",
+					"id": "roo-cline.contextDropZone",
+					"name": "%views.dropZone.name%",
+					"initialSize": 1
 				}
 			]
 		},

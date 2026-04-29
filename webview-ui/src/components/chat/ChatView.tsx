@@ -26,6 +26,7 @@ import { getLatestTodo } from "@roo/todo"
 import { escapeSpaces } from "@src/utils/path-mentions"
 
 import { vscode } from "@src/utils/vscode"
+import { type DroppedContextFile, extractUriPayload, parseDroppedUris } from "@src/utils/droppedContextFiles"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"
@@ -307,10 +308,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setSecondaryButtonText(t("chat:startNewTask.title"))
 							break
 						case "budget_limit":
+							// Pause-mode budget prompt. Three outcomes:
+							//   * Primary button → continue without further enforcement
+							//     for the rest of this task (yesButtonClicked).
+							//   * Secondary button → abort the task tree
+							//     (noButtonClicked).
+							//   * Text input → user-specified new dollar limit
+							//     (messageResponse with parsable number).
 							setSendingDisabled(false)
 							setClineAsk("budget_limit")
 							setEnableButtons(true)
-							setPrimaryButtonText("Increase by $5")
+							setPrimaryButtonText("Continue without limit")
 							setSecondaryButtonText("Abort task")
 							break
 						case "followup":
@@ -643,117 +651,37 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	/**
 	 * Handle file drops on the webview root.
 	 *
-	 * Tries several MIME types in order so that drops work across
-	 * platforms (VSCode Desktop, code-server / VSCode Web):
+	 * Parses any of `text/uri-list`, `text/plain`, or
+	 * `application/vnd.code.uri-list` (whichever is present) into
+	 * workspace-relative context-file entries and appends them to
+	 * `droppedContextFiles`.  Image drops are ignored here so that the
+	 * textarea-level handler in ChatTextArea can pick them up.
 	 *
-	 *   1. text/uri-list      — standard URI list from Explorer drags
-	 *   2. text/plain         — VSCode Desktop sometimes sends paths
-	 *                             as plain text (especially from tabs)
-	 *   3. application/vnd.code.uri-list — VSCode internal tab-drag format
-	 *
-	 * If none match, the handler is a no-op so that image drops (handled
-	 * by ChatTextArea) can fall through.
+	 * Note: VSCode Desktop's cross-origin webview overlay swallows drag
+	 * events at the iframe root, so on Desktop this handler effectively
+	 * never fires — drops there are handled by ChatTextArea.handleDrop,
+	 * which uses the same parser via `onContextFilesDropped`.
 	 */
 	const handleWebviewDrop = useCallback(
 		async (e: React.DragEvent) => {
 			e.preventDefault()
 			setIsDraggingFiles(false)
 
-			const textUriList = e.dataTransfer.getData("text/uri-list")
-			const textPlain = e.dataTransfer.getData("text/plain")
-			const vndCodeUriList = e.dataTransfer.getData("application/vnd.code.uri-list")
+			const payload = extractUriPayload(e.dataTransfer)
 			vscode.postMessage({
 				type: "webviewLog",
-				text: `[webview-drop] text/uri-list=${!!textUriList} text/plain=${!!textPlain} vnd.code.uri-list=${!!vndCodeUriList} files=${e.dataTransfer.files.length}`,
+				text: `[drop:root] fired payload=${payload ? `${payload.length}ch` : "none"} files=${e.dataTransfer.files.length} types=[${Array.from(e.dataTransfer.types).join(",")}]`,
 			})
-
-			let uriList = textUriList
-
-			// VSCode Desktop may send paths as plain text instead of a
-			// proper URI list (e.g. when dragging from the Explorer with
-			// Shift held).
-			if (!uriList) {
-				uriList = textPlain
-			}
-
-			// VSCode internal tab-drag format (application/vnd.code.uri-list).
-			if (!uriList) {
-				uriList = vndCodeUriList
-			}
-
-			if (!uriList) {
-				vscode.postMessage({ type: "webviewLog", text: "[webview-drop] no URI data — bailing out" })
-				return
-			}
-
-			vscode.postMessage({
-				type: "webviewLog",
-				text: `[webview-drop] raw data (first 300 chars): ${uriList.slice(0, 300)}`,
-			})
-
-			const lines = uriList
-				.split(/\r?\n/)
-				.map((l) => l.trim())
-				.filter((l) => l.length > 0)
-
-			if (lines.length === 0) {
-				vscode.postMessage({ type: "webviewLog", text: "[webview-drop] no non-empty lines after parsing" })
-				return
-			}
+			if (!payload) return
 
 			const cwd = (typeof window !== "undefined" && (window as any).CWD) || ""
-
-			const newFiles: Array<{ path: string; isFile: boolean }> = []
-
-			for (const line of lines) {
-				// Try to parse as a file:// URI first (standard Explorer
-				// format), then fall back to treating the line as a raw
-				// path (used by text/plain and application/vnd.code.uri-list).
-				let absPath: string
-
-				try {
-					const uri = new URL(line)
-					absPath = decodeURIComponent(uri.pathname)
-
-					// On Windows, strip leading slash from /C:/...
-					if (/^\/[a-zA-Z]:/.test(absPath)) {
-						absPath = absPath.slice(1)
-					}
-				} catch {
-					// Not a valid URI — treat as a plain filesystem path.
-					absPath = line.trim()
-					if (!absPath) continue
-				}
-
-				let relativePath: string
-				if (cwd && absPath.startsWith(cwd)) {
-					const rel = absPath.slice(cwd.length)
-					relativePath = rel.startsWith("/") ? rel : "/" + rel
-				} else {
-					relativePath = absPath
-				}
-
-				if (
-					!droppedContextFiles.some((f) => f.path === relativePath) &&
-					!newFiles.some((f) => f.path === relativePath)
-				) {
-					// Best-effort: try to determine if it's a file or folder from path extension
-					const isFile = /\.[a-zA-Z0-9]{1,10}$/.test(relativePath.split("/").pop() || "")
-					newFiles.push({ path: relativePath, isFile })
-				}
-			}
-
+			const newFiles = parseDroppedUris(payload, cwd, droppedContextFiles)
+			vscode.postMessage({
+				type: "webviewLog",
+				text: `[drop:root] parsed ${newFiles.length} new file(s)`,
+			})
 			if (newFiles.length > 0) {
-				vscode.postMessage({
-					type: "webviewLog",
-					text: `[webview-drop] adding ${newFiles.length} context file(s): ${newFiles.map((f) => f.path).join(", ")}`,
-				})
 				setDroppedContextFiles((prev) => [...prev, ...newFiles])
-			} else {
-				vscode.postMessage({
-					type: "webviewLog",
-					text: "[webview-drop] no new files to add (all duplicates or unparseable)",
-				})
 			}
 		},
 		[droppedContextFiles],
@@ -1142,6 +1070,24 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							const newMap = new Map(prev)
 							newMap.set(message.text!, message.aggregatedCosts!)
 							return newMap
+						})
+					}
+					break
+				case "addContextFiles":
+					// Files dropped onto the native ContextDropZone TreeView in
+					// the Roo Code sidebar.  Merge into the existing tag list,
+					// deduping by path so dragging the same file twice is a no-op.
+					if (message.contextFiles && message.contextFiles.length > 0) {
+						setDroppedContextFiles((prev) => {
+							const seen = new Set(prev.map((f) => f.path))
+							const merged = [...prev]
+							for (const f of message.contextFiles!) {
+								if (!seen.has(f.path)) {
+									seen.add(f.path)
+									merged.push(f)
+								}
+							}
+							return merged
 						})
 					}
 					break
@@ -2105,6 +2051,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				isStreaming={isStreaming}
 				onStop={handleStopTask}
 				onEnqueueMessage={handleEnqueueCurrentMessage}
+				onContextFilesDropped={(files: DroppedContextFile[]) =>
+					setDroppedContextFiles((prev) => {
+						const seen = new Set(prev.map((f) => f.path))
+						const merged = [...prev]
+						for (const f of files) {
+							if (!seen.has(f.path)) {
+								seen.add(f.path)
+								merged.push(f)
+							}
+						}
+						return merged
+					})
+				}
 			/>
 
 			{isProfileDisabled && (
