@@ -70,6 +70,25 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	private conversationId: string
 	private parentConversationId: string | undefined
 	private rootConversationId: string | undefined
+	/**
+	 * Pricing in USD per 1M tokens for the currently selected model, when
+	 * known. Populated asynchronously after `initializeClient` by querying
+	 * the well-known `arkware.llm.getModelPricing` command exposed by the
+	 * Arkware LLM Model Provider extension. The VS Code LM Chat API itself
+	 * carries no pricing fields, so without this side channel `getModel()`
+	 * would have to keep returning `inputPrice: 0`/`outputPrice: 0`, which
+	 * makes Roo's downstream `calculateApiCostOpenAI` produce `0` and the
+	 * task header's `apiCost` row never render. Stays `undefined` for
+	 * non-arkware vendors, in which case behaviour is unchanged.
+	 */
+	private arkwarePricing:
+		| {
+				inputPrice: number
+				outputPrice: number
+				cacheReadsPrice?: number
+				cacheWritesPrice?: number
+		  }
+		| undefined
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -81,6 +100,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		this.conversationId = options.taskId ?? uuidv7()
 		this.parentConversationId = options.parentTaskId
 		this.rootConversationId = options.rootTaskId
+		console.log(
+			`[DEEPSEEK-DIAG] VsCodeLmHandler created: conversationId=${this.conversationId}, taskId=${options.taskId}, parentTaskId=${options.parentTaskId}, rootTaskId=${options.rootTaskId}`,
+		)
 
 		try {
 			// Listen for model changes and reset client
@@ -121,11 +143,42 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			// Create a new client instance
 			this.client = await this.createClient(this.options.vsCodeLmModelSelector || {})
 			console.debug("Roo Code <Language Model API>: Client initialized successfully")
+			// Best-effort prefetch of pricing for the selected model. Failures
+			// are non-fatal: non-arkware setups simply leave pricing unset.
+			void this.refreshArkwarePricing()
 		} catch (error) {
 			// Handle errors during client initialization
 			const errorMessage = error instanceof Error ? error.message : "Unknown error"
 			console.error("Roo Code <Language Model API>: Client initialization failed:", errorMessage)
 			throw new Error(`Roo Code <Language Model API>: Failed to initialize client: ${errorMessage}`)
+		}
+	}
+
+	/**
+	 * Look up pricing for the active client's model via the Arkware LLM
+	 * Model Provider extension's well-known command. Tries the bare model id
+	 * first and falls back to the slash-free `family` identifier so the
+	 * provider can resolve either form. Sets `this.arkwarePricing` on
+	 * success; silently leaves it untouched on miss/failure.
+	 */
+	private async refreshArkwarePricing(): Promise<void> {
+		if (!this.client) return
+		const candidates = [this.client.id, this.client.family].filter(
+			(s): s is string => typeof s === "string" && s.length > 0,
+		)
+		for (const candidate of candidates) {
+			try {
+				const pricing = await vscode.commands.executeCommand<
+					| { inputPrice: number; outputPrice: number; cacheReadsPrice?: number; cacheWritesPrice?: number }
+					| undefined
+				>("arkware.llm.getModelPricing", candidate)
+				if (pricing && (pricing.inputPrice > 0 || pricing.outputPrice > 0)) {
+					this.arkwarePricing = pricing
+					return
+				}
+			} catch {
+				// Command not registered (no arkware extension) or threw — try next.
+			}
 		}
 	}
 	/**
@@ -376,6 +429,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
+		console.log(
+			`[DEEPSEEK-DIAG] VsCodeLmHandler.createMessage: conversationId=${this.conversationId}, parentConversationId=${this.parentConversationId}, rootConversationId=${this.rootConversationId}, msgCount=${messages.length}`,
+		)
 		// Ensure clean state before starting a new request
 		this.ensureCleanState()
 		const client: vscode.LanguageModelChat = await this.getClient()
@@ -632,8 +688,14 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						: openAiModelInfoSaneDefaults.contextWindow,
 				supportsImages: false, // VSCode Language Model API currently doesn't support image inputs
 				supportsPromptCache: true,
-				inputPrice: 0,
-				outputPrice: 0,
+				inputPrice: this.arkwarePricing?.inputPrice ?? 0,
+				outputPrice: this.arkwarePricing?.outputPrice ?? 0,
+				...(this.arkwarePricing?.cacheReadsPrice !== undefined && {
+					cacheReadsPrice: this.arkwarePricing.cacheReadsPrice,
+				}),
+				...(this.arkwarePricing?.cacheWritesPrice !== undefined && {
+					cacheWritesPrice: this.arkwarePricing.cacheWritesPrice,
+				}),
 				description: `VSCode Language Model: ${modelId}`,
 			}
 
