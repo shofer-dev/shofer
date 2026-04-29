@@ -1703,13 +1703,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				// Ctrl+Alt+F must fall through to VS Code so they keep working
 				// when the Roo webview happens to hold focus.
 				if (!task) return
-				// Only handle when this webview iframe is actually focused.
-				// VS Code (and especially code-server) can forward keystrokes
-				// to background webviews, which would otherwise cause this
-				// handler to fire alongside the focused editor's own Ctrl+F.
-				if (typeof document !== "undefined" && !document.hasFocus()) return
+				// CRITICAL: VS Code's webview iframe wrapper installs its own
+				// bubble-phase keydown listener (`handleInnerKeydown` in
+				// `pre/index.html`) that posts a `did-keydown` message to the
+				// host for every keystroke, including Ctrl+F. The host then
+				// re-dispatches the keystroke into the workbench keybinding
+				// service, which opens the editor's find widget *in addition*
+				// to our overlay. We run in capture phase and call
+				// stopImmediatePropagation so the wrapper's listener never
+				// runs and the keystroke is not forwarded to the host.
 				event.preventDefault()
-				event.stopPropagation()
+				event.stopImmediatePropagation()
 				setIsSessionSearchOpen(true)
 			} else if (event.key === "Escape" && isSessionSearchOpen) {
 				// Close from anywhere; the overlay also closes via its own input handler.
@@ -1721,10 +1725,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	)
 
 	useEffect(() => {
-		window.addEventListener("keydown", handleKeyDown)
+		// Capture phase so we run BEFORE the VS Code webview iframe
+		// wrapper's own keydown listener, allowing stopImmediatePropagation
+		// to suppress the wrapper's `did-keydown` forwarding for shortcuts
+		// we claim (e.g. Ctrl+F).
+		window.addEventListener("keydown", handleKeyDown, true)
 
 		return () => {
-			window.removeEventListener("keydown", handleKeyDown)
+			window.removeEventListener("keydown", handleKeyDown, true)
 		}
 	}, [handleKeyDown])
 
