@@ -1,6 +1,6 @@
 # Per-Root-Task Cost Limit
 
-Status: **shipped in 3.53.0**.
+Status: **shipped in 3.53.0**, hardened through 3.54.7.
 
 A user-configurable USD spend cap, scoped to the root task, with
 subtask costs aggregated into the root via the existing
@@ -31,12 +31,15 @@ through real money with no upper bound.
 3. Three configurable behaviours when the limit is hit:
     - `pause` — interrupts the streaming loop and surfaces an
       `ask: budget_limit` with three outcomes:
-        - **Increase by $5** (yes button) — bumps the cap on the root
-          and persists it to history.
+        - **Continue without limit** (yes button) — sets a per-root
+          bypass flag for the rest of the task; no further checks fire.
         - **Abort task** (no button) — calls `root.abortTask(false)`;
           subtasks die via the existing recursive abort path.
-        - **Continue without limit** (free-text reply) — sets a
-          per-root bypass flag for the rest of the task.
+        - **New limit** (free-text reply with a positive dollar
+          amount, e.g. `0.10` or `$2.50`) — replaces the root's
+          `maxUsd` with the user-supplied value and persists it to
+          history. Non-numeric input falls back to "continue without
+          limit" so we never silently ignore the user.
     - `abort` — `root.abortTask(false)` (clean abort, persists state).
     - `kill` — `root.abortTask(true)` (abandoned, no further user
       interaction). Intended for headless / CLI / evals.
@@ -80,14 +83,36 @@ through real money with no upper bound.
 
 ### Where the check fires
 
-Single chokepoint in [`Task.ts`](../src/core/task/Task.ts) inside the
-streaming loop, **right after** `updateApiReqMsg` writes the new
-`cost` into `clineMessages[lastApiReqIndex]`. The call is
-`await`ed so the abort flag is observed before the next chunk is
-yielded — otherwise we'd keep burning tokens past the cap for the
-remainder of the stream.
+Two chokepoints inside the streaming loop in
+[`Task.ts`](../src/core/task/Task.ts), both `await`ed so the abort
+flag is observed before the next chunk is yielded — otherwise we'd
+keep burning tokens past the cap for the remainder of the stream.
 
-`checkCostLimit(requestIndex)`:
+**1. In-stream gate** (`checkInFlightCostLimit(currentRequestCostUsd)`),
+fired on every `usage` chunk during the main streaming loop:
+
+1. At the start of each API request,
+   `snapshotPriorAggregateForCostLimit()` records
+   `_priorAggregateUsd = aggregateTaskCostsRecursive(root.taskId, …)`
+   — the spend across the root's history, BEFORE this request's
+   own usage is added. Resets the per-request enforcement latch.
+2. On every `usage` chunk, compute
+   `spent = _priorAggregateUsd + chunk.totalCost`.
+3. Bypass if `_costLimitBypassed`,
+   `_costLimitEnforcementFiredForRequest`, or no snapshot.
+4. If `spent >= limit.maxUsd`, latch the per-request flag and call
+   `enforceCostLimit(root, limit, spent)` (shared with the
+   post-stream check).
+
+This is what makes the cap _tight_ — a single expensive completion
+can't silently blow past a small limit (e.g. $0.05) before the
+post-stream check fires, because the abort/pause is triggered as
+soon as the running spend crosses the cap.
+
+**2. Post-stream gate** (`checkCostLimit(requestIndex)`), fired
+from `drainStreamInBackgroundToFindAllUsage` after the request
+finishes — catches cases where `usage` arrives only at the very end
+or after stream drain. Behaves identically:
 
 1. Bypass if `_costLimitBypassed` is set on the root.
 2. Bypass if `_costLimitCheckCache.requestIndex === requestIndex`
@@ -100,15 +125,19 @@ remainder of the stream.
    "don't block"; we err on the side of not interrupting the user).
 6. Cache `{spent, requestIndex}`.
 7. If `spent < limit.maxUsd`, return.
-8. Emit `TelemetryEventName.BUDGET_EXCEEDED` and a
-   `say('text', "Cost limit reached: $X.XX of $Y.YY")` so the user
-   sees _why_ the task stopped.
-9. Branch on `limit.action`:
-    - `pause` → `askUserForBudgetDecision(root, limit, spent)`.
-    - `abort` → `await root.abortTask(false)`.
-    - `kill` → `await root.abortTask(true)`.
+8. Otherwise call `enforceCostLimit(root, limit, spent)`.
 
-A second chokepoint guards `new_task` in
+`enforceCostLimit(root, limit, spent)` (shared):
+
+1. Emit `TelemetryEventName.BUDGET_EXCEEDED`.
+2. Branch on `limit.action`:
+    - `pause` → `askUserForBudgetDecision(root, limit, spent)`.
+    - `abort` → cancel in-flight request,
+      `await this.abortTask(false)` and root if different.
+    - `kill` → cancel in-flight request,
+      `await this.abortTask(true)` and root if different.
+
+A third chokepoint guards `new_task` in
 [`NewTaskTool.ts`](../src/core/tools/NewTaskTool.ts): before
 constructing the child, walk to the root, aggregate costs, and refuse
 with a tool error if `aggregated.totalCost >= limit.maxUsd`.
@@ -121,9 +150,10 @@ with a tool error if `aggregated.totalCost >= limit.maxUsd`.
   [`BudgetLimitDialog.tsx`](../webview-ui/src/components/chat/BudgetLimitDialog.tsx)
   for live editing.
 - The pause-mode `ask` is wired to ChatView's existing primary /
-  secondary button infrastructure (yes = "Increase by $5",
-  no = "Abort task", free-text reply = "Continue without limit").
-  No separate dialog component is needed for the ask itself.
+  secondary button infrastructure (yes = "Continue without limit",
+  no = "Abort task", free-text reply with a positive dollar amount =
+  new limit). No separate dialog component is needed for the ask
+  itself.
 - ChatView owns the `updateCostLimit` postMessage and passes a
   callback down via the `onUpdateCostLimit` prop, so TaskHeader
   doesn't talk to the host directly.
@@ -154,21 +184,65 @@ spentUsd, action, modelId})` emits the
       `TelemetryEventName.BUDGET_EXCEEDED`.
 - [x] Core enforcement in `Task.ts`:
       `costLimit` field, `_costLimitCheckCache`, `_costLimitBypassed`,
+      `_priorAggregateUsd`, `_costLimitEnforcementFiredForRequest`,
       `resolveCostLimit()`, `invalidateCostLimitCache()`,
-      `checkCostLimit()` (awaited from the stream loop),
-      `askUserForBudgetDecision()` (yes/no/text outcomes).
+      `snapshotPriorAggregateForCostLimit()` (per-request snapshot),
+      `checkInFlightCostLimit()` (per-`usage`-chunk in-stream gate),
+      `checkCostLimit()` (post-stream gate from
+      `drainStreamInBackgroundToFindAllUsage`),
+      shared `enforceCostLimit()`, `askUserForBudgetDecision()`
+      (yes = "Continue without limit" / no = "Abort task" /
+      text = new positive USD limit).
 - [x] `new_task` tool guard.
 - [x] Default-limit seeding in `ClineProvider.createTask()`.
 - [x] `webviewMessageHandler.ts` `updateCostLimit` handler that
       walks to root, updates the live `Task`, invalidates the cache,
       and persists to history.
-- [x] UI: TaskHeader inline `$spent / $limit` + pencil affordance,
-      `BudgetLimitDialog` for live editing, ChatView wiring of the
-      `budget_limit` ask to primary/secondary buttons.
+- [x] UI: TaskHeader inline `$spent / $limit` + pencil affordance
+      visible from task start (default seeded immediately, not on
+      first request), `BudgetLimitDialog` for live editing, ChatView
+      wiring of the `budget_limit` ask to primary/secondary buttons
+      with "Continue without limit" / "Abort task" labels.
 - [x] Persistence round-trip via `taskMetadata.ts`.
 - [x] Telemetry event.
 - [x] Unit tests: parent-walk semantics + recursive cost aggregation
       ([`cost-limit.spec.ts`](../src/core/task/__tests__/cost-limit.spec.ts)).
+
+## Bug fixes since 3.53.0
+
+- **3.54.1** — Suppress webview `Ctrl+F` forwarding to host find widget.
+- **3.54.2** — `pause`-mode hard-stop on exceed (don't keep yielding
+  "Cost limit reached: $X.XX of $Y.YY" messages); surface the seeded
+  default cap immediately on task start so the row is visible from
+  request 1.
+- **3.54.5** — Removed the hard-coded `+ $5` increment on the pause
+  dialog (which produced absurdities like `0.04 + 5 = 5.04` for tight
+  budgets). The yes button now means "Continue without limit"; to
+  raise the cap the user types a new positive USD amount in the chat
+  reply.
+- **3.54.6** — Added the in-stream `checkInFlightCostLimit` gate
+  (above). Previously enforcement only ran from the fire-and-forget
+  `drainStreamInBackgroundToFindAllUsage`, so the main loop kicked
+  off the next request before the budget `ask` surfaced — meaning a
+  tight cap could be exceeded several times over before the prompt
+  appeared. The in-stream gate fires on every `usage` chunk and
+  cancels the in-flight HTTP request as soon as the running spend
+  crosses the cap.
+- **3.54.7** — Fixed cumulative-vs-per-request cost mismatch in the
+  `vscode-lm` provider. `arkware.llm.getRequestCost` returns the
+  running ledger total for the whole conversation, but Roo's pipeline
+  expects each `usage` chunk's `totalCost` to be the cost of THIS
+  request only (it gets stored on the `apiReqInfo` message and
+  re-summed by `consolidateTokenUsage`). The provider now snapshots
+  the ledger before the request and yields the delta, so per-message
+  accounting and the in-stream gate's `prior + thisReq` math are
+  both correct. Without this fix the cap could either fire wildly
+  early (ledger over-counted across consolidate) or — when the
+  ledger never moved past zero (e.g. composite pricing miss) —
+  never fire at all. Also added `[DIAG cost-limit]` provider-log
+  output at snapshot/in-flight/enforce points so future
+  "exceeded without stopping" reports are debuggable from the
+  output channel.
 
 ## What was deferred
 
@@ -204,13 +278,26 @@ Requires the cost data path:
 `calculateApiCostOpenAI` → `clineMessages[lastApiReqIndex].cost`,
 which landed in `llm-provider` 0.6.0 / Roo-Code 3.52.87.
 
-Without it, vscode-lm-routed models report `cost: 0` and the budget
-limit can never trip — this is by design (we only enforce on real
-billed cost), but worth flagging to users debugging "why isn't my
-limit firing?".
+For composite (`arkware/*`) models, where the underlying that served
+the request is selected per-attempt and a static per-token rate
+isn't meaningful, an additional path was added:
+`llm-router` stamps `usage.cost` (USD float, OpenRouter convention)
+on every chat-completion response based on the underlying model's
+real pricing → `llm-provider` accumulates per-`conversationId` in a
+bounded LRU ledger → `vscode-lm` queries the running total via
+`arkware.llm.getRequestCost` after each stream and yields it as
+`totalCost` in the usage chunk. Without this, composites would
+report `cost: 0` and the budget limit could never trip on them.
+
+Without either path, vscode-lm-routed models report `cost: 0` and
+the budget limit can never trip — this is by design (we only
+enforce on real billed cost), but worth flagging to users debugging
+"why isn't my limit firing?".
 
 ## Versioning
 
 Shipped as Roo-Code **3.53.0** (minor bump): new user-visible
 setting, new `ask` type, new persisted field on `HistoryItem`. No
 backward-compat shims — missing `costLimit` is treated as "no limit".
+Hardened across **3.54.1** – **3.54.6** (see "Bug fixes since
+3.53.0" above).
