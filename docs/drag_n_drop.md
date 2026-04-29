@@ -2,102 +2,71 @@
 
 ## Overview
 
-Roo Code provides a native VSCode TreeView drop zone that allows users to drag files and folders from the Explorer panel directly into the chat context. This approach bypasses VSCode Desktop's webview drag overlay limitation, which normally requires holding Shift to drop files into a webview.
+Roo Code allows users to drag files and folders from the Explorer panel directly into the webview to add them as context. The entire webview acts as a drop zone — dropped files appear as removable tags and are converted to `@mentions` automatically when the message is sent.
 
 ## Architecture
 
-The drag & drop feature is implemented as a native TreeView rather than relying on webview HTML5 drag events. This is necessary because VSCode Desktop renders webviews in an iframe with a transparent overlay that intercepts all mouse events, making standard webview drag & drop unreliable.
+The drag & drop feature is implemented directly in the webview using HTML5 drag-and-drop events. The root `ChatView` div listens for `dragover`, `dragleave`, and `drop` events, parsing file URIs and maintaining a list of dropped context files.
 
 ### Key Components
 
-| Component                 | File                                                                                               | Purpose                                                               |
-| ------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `ContextDropZoneProvider` | [`src/core/webview/ContextDropZoneProvider.ts`](../../src/core/webview/ContextDropZoneProvider.ts) | TreeDataProvider + DragAndDropController for the drop zone            |
-| `ChatView`                | [`webview-ui/src/components/chat/ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx) | Handles `droppedContextFiles` and `removeContextFileMention` messages |
-| Extension manifest        | [`src/package.json`](../../src/package.json)                                                       | View contribution, commands, and menu registrations                   |
+| Component  | File                                                                                               | Purpose                                              |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `ChatView` | [`webview-ui/src/components/chat/ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx) | Root drop zone, file tag display, mention generation |
 
 ### Data Flow
 
 ```
-┌──────────────┐     drop      ┌─────────────────────────┐
-│   Explorer   │──────────────▶│  ContextDropZoneProvider │
-│  (files)     │  text/uri-list│  (native TreeView)       │
-└──────────────┘               └────────────┬────────────┘
-                                            │
-                                   postMessage(paths)
-                                            │
-                                            ▼
-                                   ┌─────────────────┐
-                                   │    ChatView      │
-                                   │  (webview)       │
-                                   │                  │
-                                   │  setInputValue() │
-                                   │  @path1 @path2   │
-                                   └─────────────────┘
+┌──────────────┐     drop      ┌─────────────────┐
+│   Explorer   │──────────────▶│    ChatView      │
+│  (files)     │  text/uri-list│  (webview root)  │
+└──────────────┘               └────────┬────────┘
+                                        │
+                              files stored as tags
+                                        │
+                                        ▼
+                               ┌─────────────────┐
+                               │  handleSendMessage│
+                               │                  │
+                               │  Prepend @mentions│
+                               │  to message text  │
+                               └─────────────────┘
 ```
 
-1. User drags files from VSCode Explorer onto the "Drop Files Here" TreeView
-2. `ContextDropZoneProvider.handleDrop()` receives the URI list, converts to workspace-relative paths
-3. Provider sends `droppedContextFiles` message to webview with the paths
-4. `ChatView` appends `@path` mentions to the chat input
-
-## Message Types
-
-Two new message types were added to [`ExtensionMessage`](../../packages/types/src/vscode-extension-host.ts):
-
-### `droppedContextFiles`
-
-Sent from extension to webview when files are dropped into the TreeView.
-
-```typescript
-{
-  type: "droppedContextFiles",
-  paths: string[]  // workspace-relative paths
-}
-```
-
-### `removeContextFileMention`
-
-Sent from extension to webview when a file is removed from the drop zone (via inline remove button or clear-all).
-
-```typescript
-{
-  type: "removeContextFileMention",
-  paths: string[]  // workspace-relative paths to remove from @mentions
-}
-```
+1. User drags files from VSCode Explorer anywhere onto the webview
+2. `ChatView.handleWebviewDrop()` receives the URI list, converts to workspace-relative paths
+3. Dropped files are displayed as removable tags above the text area
+4. When the user clicks Send, `handleSendMessage` converts tags to `@path` mentions and prepends them to the message
 
 ## UI Elements
 
-### TreeView
+### Drag Overlay
 
-- **View ID**: `roo-cline.contextDropZone`
-- **Title**: "Drop Files Here" (localized via `views.dropZone.name` in [`package.nls.json`](../../src/package.nls.json))
-- **Location**: Activity bar (Roo Code sidebar)
+When files are being dragged over the webview, a semi-transparent overlay appears with a dashed border and "Drop files to add to context" guidance text.
 
-### TreeView Items
+### File Tags
 
-- **Hint item**: Shown when no files are dropped; displays an inbox icon with guidance text
-- **Dropped files**: Each file/folder shown with appropriate icon (`file` or `folder`), tooltip shows full path
+Dropped files are displayed as stylized tags (chips) above the chat input area:
 
-### Commands
+- Each tag shows a file or folder icon
+- Each tag has a remove (×) button
+- A "clear all" button removes all tags at once
 
-| Command   | ID                               | Description                                              |
-| --------- | -------------------------------- | -------------------------------------------------------- |
-| Remove    | `roo-cline.removeContextFile`    | Inline button to remove a single file from the drop zone |
-| Clear All | `roo-cline.clearAllContextFiles` | Title bar button to clear all dropped files              |
+### Mentions on Send
 
-## Why Not Webview Drag & Drop?
+When the user clicks Send:
 
-VSCode Desktop uses a transparent overlay `<div>` on top of webviews to intercept keyboard shortcuts. This overlay also captures drag events, preventing `ondrop` from firing in the webview unless the user holds Shift while dropping. This behavior is:
+1. All dropped file tags are converted to `@/relative/path` mentions
+2. Mentions are prepended to the message text
+3. Tags are cleared after sending
 
-- **Unreliable**: The overlay behavior varies across VSCode versions
-- **Undiscoverable**: Users don't know they need to hold Shift
-- **Inconsistent**: Works differently on VSCode Web vs Desktop
+## Platform Notes
 
-The native TreeView approach works identically across all VSCode platforms without requiring modifier keys.
+- **code-server / VSCode Web**: Drag-and-drop works natively in the webview without any limitations.
+- **VSCode Desktop**: The transparent overlay that VSCode Desktop places over webviews may intercept drag events. Users may need to hold **Shift** while dropping files onto the webview. This is a platform limitation that cannot be bypassed from within the webview.
 
 ## Related Commits
 
-- `499ac9e` - `feat(drop-zone): Add native TreeView drop zone with file list and remove capability`
-- `a579235` - `Revert "fix(chat): add drag & drop handlers to textarea for VSCode webview compatibility"` (removed unreliable textarea handlers in favor of the native drop zone)
+- `499ac9e` — `feat(drop-zone): Add native TreeView drop zone with file list and remove capability` (previous TreeView approach)
+- `a579235` — `Revert "fix(chat): add drag & drop handlers to textarea for VSCode webview compatibility"`
+- Current — Moved drag-and-drop into the webview, making the entire ChatView a drop zone with file tags

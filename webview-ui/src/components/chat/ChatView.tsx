@@ -23,6 +23,7 @@ import { getApiMetrics } from "@roo/getApiMetrics"
 import { getAllModes } from "@roo/modes"
 import { ProfileValidator } from "@roo/ProfileValidator"
 import { getLatestTodo } from "@roo/todo"
+import { escapeSpaces } from "@src/utils/path-mentions"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
@@ -145,6 +146,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const textAreaRef = useRef<HTMLTextAreaElement>(null)
 	const [sendingDisabled, setSendingDisabled] = useState(false)
 	const [selectedImages, setSelectedImages] = useState<string[]>([])
+
+	/** Files dragged onto the webview — displayed as tags, converted to @mentions on send. */
+	const [droppedContextFiles, setDroppedContextFiles] = useState<Array<{ path: string; isFile: boolean }>>([])
+	const [isDraggingFiles, setIsDraggingFiles] = useState(false)
 
 	// We need to hold on to the ask because useEffect > lastMessage will always
 	// let us know when an ask comes in and handle it, but by the time
@@ -590,11 +595,129 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setInputValue("")
 		setSendingDisabled(true)
 		setSelectedImages([])
+		setDroppedContextFiles([])
 		setClineAsk(undefined)
 		setEnableButtons(false)
 		// Do not reset mode here as it should persist.
 		// setPrimaryButtonText(undefined)
 		// setSecondaryButtonText(undefined)
+	}, [])
+
+	/**
+	 * Remove a single file from the dropped-context list.
+	 */
+	const handleRemoveContextFile = useCallback((filePath: string) => {
+		setDroppedContextFiles((prev) => prev.filter((f) => f.path !== filePath))
+	}, [])
+
+	/**
+	 * Clear all dropped context files.
+	 */
+	const handleClearContextFiles = useCallback(() => {
+		setDroppedContextFiles([])
+	}, [])
+
+	/**
+	 * Compute @mentions string from the current dropped files.
+	 * Mirrors the logic previously in ContextDropZoneProvider.getAndClearMentions().
+	 */
+	const getDroppedMentions = useCallback((): string => {
+		if (droppedContextFiles.length === 0) {
+			return ""
+		}
+		return droppedContextFiles
+			.map((f) => {
+				const escapedPath = escapeSpaces(f.path)
+				return `@${escapedPath}`
+			})
+			.join(" ")
+	}, [droppedContextFiles])
+
+	/**
+	 * Handle file drops on the webview root.
+	 * Parses text/uri-list from Explorer drags and adds unique files to context.
+	 */
+	const handleWebviewDrop = useCallback(
+		async (e: React.DragEvent) => {
+			e.preventDefault()
+			setIsDraggingFiles(false)
+
+			const uriList = e.dataTransfer.getData("text/uri-list")
+			if (!uriList) {
+				return
+			}
+
+			const lines = uriList
+				.split("\n")
+				.map((l) => l.trim())
+				.filter((l) => l.length > 0)
+
+			if (lines.length === 0) {
+				return
+			}
+
+			const cwd = (typeof window !== "undefined" && (window as any).CWD) || ""
+
+			const newFiles: Array<{ path: string; isFile: boolean }> = []
+
+			for (const line of lines) {
+				try {
+					const uri = new URL(line)
+					let absPath = decodeURIComponent(uri.pathname)
+
+					// On Windows, strip leading slash from /C:/...
+					if (/^\/[a-zA-Z]:/.test(absPath)) {
+						absPath = absPath.slice(1)
+					}
+
+					let relativePath: string
+					if (cwd && absPath.startsWith(cwd)) {
+						const rel = absPath.slice(cwd.length)
+						relativePath = rel.startsWith("/") ? rel : "/" + rel
+					} else {
+						relativePath = absPath
+					}
+
+					if (
+						!droppedContextFiles.some((f) => f.path === relativePath) &&
+						!newFiles.some((f) => f.path === relativePath)
+					) {
+						// Best-effort: try to determine if it's a file or folder from path extension
+						const isFile = /\.[a-zA-Z0-9]{1,10}$/.test(relativePath.split("/").pop() || "")
+						newFiles.push({ path: relativePath, isFile })
+					}
+				} catch {
+					// Skip malformed URIs
+				}
+			}
+
+			if (newFiles.length > 0) {
+				setDroppedContextFiles((prev) => [...prev, ...newFiles])
+			}
+		},
+		[droppedContextFiles],
+	)
+
+	/**
+	 * Handle drag-over on the webview root — only activate for file drops.
+	 */
+	const handleWebviewDragOver = useCallback((e: React.DragEvent) => {
+		// Only show drop indicator if files are being dragged
+		if (e.dataTransfer.types.includes("text/uri-list") || e.dataTransfer.types.includes("Files")) {
+			e.preventDefault()
+			e.dataTransfer.dropEffect = "copy"
+			setIsDraggingFiles(true)
+		}
+	}, [])
+
+	/**
+	 * Handle drag-leave on the webview root.
+	 */
+	const handleWebviewDragLeave = useCallback((e: React.DragEvent) => {
+		const rect = e.currentTarget.getBoundingClientRect()
+		if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
+			setIsDraggingFiles(false)
+		}
 	}, [])
 
 	/**
@@ -605,6 +728,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const handleSendMessage = useCallback(
 		(text: string, images: string[]) => {
 			text = text.trim()
+
+			// Prepend dropped context file @mentions to the message text.
+			const droppedMentions = getDroppedMentions()
+			if (droppedMentions) {
+				text = text ? `${droppedMentions} ${text}` : droppedMentions
+			}
 
 			if (text || images.length > 0) {
 				// Intercept when the active provider is retired — show a
@@ -630,6 +759,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						vscode.postMessage({ type: "queueMessage", text, images })
 						setInputValue("")
 						setSelectedImages([])
+						setDroppedContextFiles([])
 					} catch (error) {
 						console.error(
 							`Failed to queue message: ${error instanceof Error ? error.message : String(error)}`,
@@ -680,6 +810,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		},
 		[
 			handleChatReset,
+			getDroppedMentions,
 			markFollowUpAsAnswered,
 			sendingDisabled,
 			isStreaming,
@@ -888,7 +1019,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						)
 					}
 					break
-				// Note: droppedContextFiles is no longer sent - mentions are added server-side when task is created
 				case "invoke":
 					switch (message.invoke!) {
 						case "newChat":
@@ -1548,7 +1678,37 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	return (
 		<div
 			data-testid="chat-view"
-			className={isHidden ? "hidden" : "fixed top-0 left-0 right-0 bottom-0 flex flex-col overflow-hidden"}>
+			className={isHidden ? "hidden" : "fixed top-0 left-0 right-0 bottom-0 flex flex-col overflow-hidden"}
+			onDragOver={handleWebviewDragOver}
+			onDragLeave={handleWebviewDragLeave}
+			onDrop={handleWebviewDrop}>
+			{/* Drag overlay — shown when files are being dragged over the webview */}
+			{isDraggingFiles && (
+				<div
+					className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
+					style={{
+						backgroundColor: "color-mix(in srgb, var(--vscode-focusBorder) 10%, transparent)",
+						border: "2px dashed var(--vscode-focusBorder)",
+						margin: "8px",
+						borderRadius: "8px",
+					}}>
+					<div
+						className="px-6 py-4 rounded-lg text-center"
+						style={{
+							backgroundColor: "var(--vscode-editor-background)",
+							border: "1px solid var(--vscode-focusBorder)",
+							boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+						}}>
+						<span
+							className="codicon codicon-cloud-download text-2xl block mb-2"
+							style={{ color: "var(--vscode-focusBorder)" }}
+						/>
+						<p className="text-sm font-medium m-0" style={{ color: "var(--vscode-foreground)" }}>
+							Drop files to add to context
+						</p>
+					</div>
+				</div>
+			)}
 			{telemetrySetting === "unset" && <TelemetryBanner />}
 			{(showAnnouncement || showAnnouncementModal) && (
 				<Announcement
@@ -1773,6 +1933,39 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						actionText={t("chat:retiredProvider.openSettings")}
 						onAction={() => vscode.postMessage({ type: "switchTab", tab: "settings" })}
 					/>
+				</div>
+			)}
+			{/* Dropped context file tags — displayed as removable chips above the text area */}
+			{droppedContextFiles.length > 0 && (
+				<div className="flex flex-wrap items-center gap-1.5 px-[15px] py-1.5">
+					{droppedContextFiles.map((f) => (
+						<span
+							key={f.path}
+							className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
+							style={{
+								backgroundColor: "var(--vscode-badge-background)",
+								color: "var(--vscode-badge-foreground)",
+							}}
+							title={f.path}>
+							<span className={`codicon ${f.isFile ? "codicon-file" : "codicon-folder"} text-xs`} />
+							<span>{f.path.split("/").pop() || f.path}</span>
+							<button
+								aria-label={`Remove ${f.path}`}
+								className="inline-flex items-center justify-center w-4 h-4 ml-0.5 rounded-sm opacity-60 hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer"
+								style={{ color: "var(--vscode-badge-foreground)" }}
+								onClick={() => handleRemoveContextFile(f.path)}>
+								<span className="codicon codicon-close text-xs" />
+							</button>
+						</span>
+					))}
+					<button
+						aria-label="Clear all context files"
+						className="inline-flex items-center justify-center w-5 h-5 rounded-sm opacity-50 hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer ml-1"
+						style={{ color: "var(--vscode-descriptionForeground)" }}
+						onClick={handleClearContextFiles}
+						title="Clear all">
+						<span className="codicon codicon-clear-all text-xs" />
+					</button>
 				</div>
 			)}
 			<ChatTextArea
