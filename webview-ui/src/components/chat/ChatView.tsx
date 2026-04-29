@@ -1703,7 +1703,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				// Ctrl+Alt+F must fall through to VS Code so they keep working
 				// when the Roo webview happens to hold focus.
 				if (!task) return
+				// Only handle when this webview iframe is actually focused.
+				// VS Code (and especially code-server) can forward keystrokes
+				// to background webviews, which would otherwise cause this
+				// handler to fire alongside the focused editor's own Ctrl+F.
+				if (typeof document !== "undefined" && !document.hasFocus()) return
 				event.preventDefault()
+				event.stopPropagation()
 				setIsSessionSearchOpen(true)
 			} else if (event.key === "Escape" && isSessionSearchOpen) {
 				// Close from anywhere; the overlay also closes via its own input handler.
