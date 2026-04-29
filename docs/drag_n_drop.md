@@ -63,10 +63,6 @@ When the user clicks Send:
 ## Platform Notes
 
 - **code-server / VSCode Web**: Drag-and-drop works natively in the webview without any limitations.
-- **VSCode Desktop**: The transparent overlay that VSCode Desktop places over webviews may intercept drag events. Users may need to hold **Shift** while dropping files onto the webview. This is a platform limitation that cannot be bypassed from within the webview.
-
-## Related Commits
-
-- `499ac9e` — `feat(drop-zone): Add native TreeView drop zone with file list and remove capability` (previous TreeView approach)
-- `a579235` — `Revert "fix(chat): add drag & drop handlers to textarea for VSCode webview compatibility"`
-- Current — Moved drag-and-drop into the webview, making the entire ChatView a drop zone with file tags
+- **VSCode Desktop**: The transparent overlay that VSCode Desktop places over webviews intercepts drag events. **Hold Shift** while dropping files onto the webview to bypass the overlay — this is a platform limitation that cannot be worked around from within the webview. The webview drop-zone handlers have been hardened to work reliably when Shift is held:
+    - `handleWebviewDragOver` always accepts the drop (the MIME-type gate was removed because VSCode's cross-origin iframe hides `dataTransfer.types` during `dragover`).
+    - `handleWebviewDrop` tries `text/uri-list`, `text/plain`, and `application/vnd.code.uri-list` in order so that Explorer drags, tab drags, and plain-text path drops are all handled.
