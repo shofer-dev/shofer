@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import type { GlobalSettings, RooCodeSettings } from "./global-settings.js"
 import type { ProviderSettings, ProviderSettingsEntry } from "./provider-settings.js"
-import type { HistoryItem } from "./history.js"
+import type { HistoryItem, CostLimit } from "./history.js"
 import type { ModeConfig, PromptComponent } from "./mode.js"
 import type { TelemetrySetting } from "./telemetry.js"
 import type { Experiments } from "./experiment.js"
@@ -635,6 +635,7 @@ export interface WebviewMessage {
 		| "clearTaskNotification"
 		| "approveBackgroundTask"
 		| "requestParallelTasks"
+		| "updateCostLimit"
 		// Diagnostic logging from webview → extension OutputChannel
 		| "webviewLog"
 	text?: string
@@ -688,6 +689,8 @@ export interface WebviewMessage {
 	messageTs?: number
 	restoreCheckpoint?: boolean
 	historyPreviewCollapsed?: boolean
+	/** Per-root-task cost-limit payload for the `updateCostLimit` message. */
+	costLimit?: CostLimit
 	filters?: { type?: string; search?: string; tags?: string[] }
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	settings?: any

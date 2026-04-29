@@ -36,6 +36,7 @@ import {
 	type ClineApiReqCancelReason,
 	type ClineApiReqInfo,
 	type TaskHandle,
+	type CostLimit,
 	RooCodeEventName,
 	TelemetryEventName,
 	TaskStatus,
@@ -106,6 +107,7 @@ import { RooProtectedController } from "../protect/RooProtectedController"
 import { type AssistantMessageContent, presentAssistantMessage } from "../assistant-message"
 import { NativeToolCallParser } from "../assistant-message/NativeToolCallParser"
 import { manageContext, willManageContext } from "../context-management"
+import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
 import { ClineProvider } from "../webview/ClineProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import {
@@ -169,6 +171,27 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// NEW: Track background children
 	backgroundChildren: Map<string, TaskHandle> = new Map()
+
+	/**
+	 * Per-root-task USD budget cap. Stored only on root tasks; subtasks
+	 * resolve the limit by walking up the parentTask chain via
+	 * `resolveCostLimit()`. Unset or maxUsd <= 0 disables enforcement.
+	 */
+	costLimit?: CostLimit
+
+	/**
+	 * Cached aggregated cost for the current API request, keyed by the
+	 * `clineMessages` index of the request. Avoids re-scanning history
+	 * on every chunk of a single streaming response.
+	 */
+	private _costLimitCheckCache?: { spent: number; requestIndex: number }
+
+	/**
+	 * Set to `true` when the user has chosen to continue past the cost
+	 * cap for the remainder of this task. Reset only by abort/dispose.
+	 * Implements the "Continue without limit" branch of the pause dialog.
+	 */
+	private _costLimitBypassed = false
 
 	// Helper to check if child is alive
 	isBackgroundChildAlive(childId: string): boolean {
@@ -540,7 +563,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.checkpointTimeout = checkpointTimeout
 
 		this.parentTask = parentTask
+		this.rootTask = rootTask
 		this.taskNumber = taskNumber
+		// Restore the cost limit from history ONLY for root tasks. Subtasks
+		// resolve their effective limit via resolveCostLimit() and never carry
+		// their own — keeping a single source of truth on the root.
+		if (!parentTask) {
+			this.costLimit = historyItem?.costLimit
+		}
 		this.initialStatus = initialStatus
 		// Prefer explicit constructor flag; otherwise inherit from history item on rehydration.
 		this.isBackground = isBackground ?? historyItem?.isBackground ?? false
@@ -1296,6 +1326,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				apiConfigName: this._taskApiConfigName, // Use the task's own provider profile, not the current provider profile.
 				initialStatus: this.initialStatus,
 				isBackground: this.isBackground,
+				costLimit: this.costLimit,
 			})
 
 			// Emit token/tool usage updates using debounced function
@@ -2458,6 +2489,140 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * Walk up the parent chain to the true root and return its costLimit.
+	 * Subtasks never carry their own; only roots do.
+	 */
+	private resolveCostLimit(): { root: Task; limit: CostLimit | undefined } {
+		// eslint-disable-next-line @typescript-eslint/no-this-alias -- walking up the parentTask chain requires a mutable cursor
+		let cursor: Task = this
+		while (cursor.parentTask) {
+			cursor = cursor.parentTask
+		}
+		return { root: cursor, limit: cursor.costLimit }
+	}
+
+	/**
+	 * Public hook so the webview can invalidate the per-request cost cache
+	 * after the user updates the limit live (e.g. via TaskHeader's editor).
+	 * Without this the running stream would still apply the stale cached spent
+	 * value until the next request boundary.
+	 */
+	public invalidateCostLimitCache(): void {
+		this._costLimitCheckCache = undefined
+		this._costLimitBypassed = false
+	}
+
+	/**
+	 * Check whether the root task's aggregated cost has exceeded the budget
+	 * limit. Awaited from the streaming loop after `updateApiReqMsg` writes
+	 * the new per-request `cost`. If the limit is reached we either:
+	 *   - pause: ask the user (yes=increase / no=abort / msg=continue)
+	 *   - abort: clean abort, persists state
+	 *   - kill : abandoned abort (headless / evals)
+	 *
+	 * Awaiting matters: the caller in the stream consumer must observe the
+	 * abort flag *before* yielding the next chunk, otherwise we keep burning
+	 * tokens past the cap.
+	 */
+	private async checkCostLimit(requestIndex: number): Promise<void> {
+		if (this._costLimitBypassed) return
+		if (this._costLimitCheckCache?.requestIndex === requestIndex) return
+
+		const { root, limit } = this.resolveCostLimit()
+		if (!limit || limit.maxUsd <= 0) return
+
+		const provider = this.providerRef.deref()
+		if (!provider) return
+
+		let spent = 0
+		try {
+			const aggregated = await aggregateTaskCostsRecursive(root.taskId, (id) =>
+				provider.getTaskWithId(id).then((r) => r.historyItem),
+			)
+			spent = aggregated.totalCost
+		} catch (err) {
+			// History scan failed — don't block the user's task on telemetry math.
+			provider.log?.(
+				`[Task#${this.taskId}] checkCostLimit: aggregate failed for root ${root.taskId}: ${err instanceof Error ? err.message : String(err)}`,
+			)
+			return
+		}
+
+		this._costLimitCheckCache = { spent, requestIndex }
+		if (spent < limit.maxUsd) return
+
+		TelemetryService.instance.captureBudgetExceeded(this.taskId, {
+			rootTaskId: root.taskId,
+			limitUsd: limit.maxUsd,
+			spentUsd: spent,
+			action: limit.action,
+			modelId: getModelId(this.apiConfiguration),
+		})
+
+		await this.say("text", `Cost limit reached: $${spent.toFixed(2)} of $${limit.maxUsd.toFixed(2)}`)
+
+		if (limit.action === "abort") {
+			await root.abortTask(false)
+			return
+		}
+		if (limit.action === "kill") {
+			await root.abortTask(true)
+			return
+		}
+		// pause
+		await this.askUserForBudgetDecision(root, limit, spent)
+	}
+
+	/**
+	 * Pause-mode handler. Reuses the existing `ask` machinery with three
+	 * outcomes wired through ChatView's primary/secondary buttons:
+	 *   yesButtonClicked    → "Increase by $5". Bumps the root's cap by
+	 *                          $5 and persists it.
+	 *   noButtonClicked     → "Abort task". Cleanly aborts the root and
+	 *                          all subtasks via the existing recursive
+	 *                          abort path.
+	 *   messageResponse     → user typed something — treat as
+	 *                          "Continue without limit" for the rest of
+	 *                          this task (no further checks fire).
+	 *
+	 * The askText is JSON so the webview's BudgetLimitDialog can render
+	 * a structured message; ChatView falls back to the buttons when the
+	 * dialog isn't present.
+	 */
+	private async askUserForBudgetDecision(root: Task, limit: CostLimit, spent: number): Promise<void> {
+		const askText = JSON.stringify({ spentUsd: spent, limitUsd: limit.maxUsd, action: limit.action })
+		const { response } = await this.ask("budget_limit", askText)
+
+		if (response === "yesButtonClicked") {
+			// "Increase by $5" — bump the cap on the root and persist.
+			const next: CostLimit = { maxUsd: limit.maxUsd + 5, action: limit.action }
+			root.costLimit = next
+			root.invalidateCostLimitCache()
+			const provider = this.providerRef.deref()
+			if (provider) {
+				try {
+					const { historyItem } = await provider.getTaskWithId(root.taskId)
+					if (historyItem) {
+						await provider.updateTaskHistory({ ...historyItem, costLimit: next })
+					}
+				} catch (err) {
+					provider.log?.(
+						`[askUserForBudgetDecision] persist failed: ${err instanceof Error ? err.message : String(err)}`,
+					)
+				}
+			}
+			return
+		}
+		if (response === "noButtonClicked") {
+			await root.abortTask(false)
+			return
+		}
+		// messageResponse — "continue without limit" for this task.
+		root._costLimitBypassed = true
+		root._costLimitCheckCache = undefined
+	}
+
 	public dispose(): void {
 		console.log(`[Task#dispose] disposing task ${this.taskId}.${this.instanceId}`)
 
@@ -2930,9 +3095,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						}
 
 						// Debug log every chunk received in the stream consumer
-						this.diagLog(
-							`[Task#${this.taskId}] [STREAM_CONSUMER] Received chunk type=${chunk?.type}, preview=${JSON.stringify(chunk)?.slice(0, 200)}`,
-						)
+						//this.diagLog(
+						//	`[Task#${this.taskId}] [STREAM_CONSUMER] Received chunk type=${chunk?.type}, preview=${JSON.stringify(chunk)?.slice(0, 200)}`,
+						//)
 
 						switch (chunk.type) {
 							case "reasoning": {
@@ -3268,6 +3433,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									cacheReadTokens: tokens.cacheRead,
 									cost: tokens.total ?? costResult.totalCost,
 								})
+
+								// Per-root-task cost cap. Awaited so any abort/pause takes effect
+								// before the consumer pulls the next chunk; otherwise we'd keep
+								// burning tokens past the cap for the rest of this stream.
+								await this.checkCostLimit(messageIndex)
 							}
 						}
 
@@ -4436,9 +4606,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 
 			const firstChunk = await Promise.race([firstChunkPromise, abortPromise])
-			this.diagLog(
-				`[Task#${this.taskId}] [STREAM_PASSTHROUGH] Yielding FIRST chunk type=${firstChunk.value?.type}, preview=${JSON.stringify(firstChunk.value)?.slice(0, 200)}`,
-			)
+			//this.diagLog(
+			//	`[Task#${this.taskId}] [STREAM_PASSTHROUGH] Yielding FIRST chunk type=${firstChunk.value?.type}, preview=${JSON.stringify(firstChunk.value)?.slice(0, 200)}`,
+			//)
 			yield firstChunk.value
 			this.isWaitingForFirstChunk = false
 		} catch (error) {
@@ -4508,9 +4678,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// stream.
 		// Manual loop with debug logging to trace chunk flow
 		for await (const chunk of { [Symbol.asyncIterator]: () => iterator }) {
-			this.diagLog(
-				`[Task#${this.taskId}] [STREAM_PASSTHROUGH] Yielding chunk type=${chunk?.type}, preview=${JSON.stringify(chunk)?.slice(0, 200)}`,
-			)
+			// this.diagLog(
+			// 	`[Task#${this.taskId}] [STREAM_PASSTHROUGH] Yielding chunk type=${chunk?.type}, preview=${JSON.stringify(chunk)?.slice(0, 200)}`,
+			// )
 			yield chunk
 		}
 	}

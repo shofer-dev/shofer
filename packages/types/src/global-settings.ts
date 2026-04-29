@@ -7,7 +7,7 @@ import {
 	providerSettingsEntrySchema,
 	providerSettingsSchema,
 } from "./provider-settings.js"
-import { historyItemSchema } from "./history.js"
+import { historyItemSchema, costLimitSchema } from "./history.js"
 import { codebaseIndexModelsSchema, codebaseIndexConfigSchema } from "./codebase-index.js"
 import { experimentsSchema } from "./experiment.js"
 import { telemetrySettingsSchema } from "./telemetry.js"
@@ -232,6 +232,14 @@ export const globalSettingsSchema = z.object({
 	 * Tools in this list will be excluded from prompt generation and rejected at execution time.
 	 */
 	disabledTools: z.array(toolNamesSchema).optional(),
+
+	/**
+	 * Default per-root-task cost limit for new tasks.
+	 * When maxUsd is 0 or unset, cost limiting is disabled.
+	 * The action field controls behaviour when the limit is exceeded.
+	 * @default { maxUsd: 0, action: "pause" }
+	 */
+	defaultCostLimit: costLimitSchema.optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

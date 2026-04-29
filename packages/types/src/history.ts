@@ -14,6 +14,24 @@ export const taskExecutionStateSchema = z.enum([
 export type TaskExecutionState = z.infer<typeof taskExecutionStateSchema>
 
 /**
+ * BudgetAction defines the behaviour when a task's cost limit is exceeded.
+ */
+export const budgetActionSchema = z.enum(["pause", "abort", "kill"])
+
+export type BudgetAction = z.infer<typeof budgetActionSchema>
+
+/**
+ * CostLimit defines a per-root-task USD budget cap.
+ * Stored only on the root task; subtasks inherit the limit.
+ */
+export const costLimitSchema = z.object({
+	maxUsd: z.number().positive(),
+	action: budgetActionSchema,
+})
+
+export type CostLimit = z.infer<typeof costLimitSchema>
+
+/**
  * HistoryItem
  */
 
@@ -33,6 +51,7 @@ export const historyItemSchema = z.object({
 	workspace: z.string().optional(),
 	mode: z.string().optional(),
 	apiConfigName: z.string().optional(), // Provider profile name for sticky profile feature
+	costLimit: costLimitSchema.optional(), // Per-root-task budget cap
 	status: z.enum(["active", "completed", "delegated"]).optional(),
 	delegatedToId: z.string().optional(), // Last child this parent delegated to
 	childIds: z.array(z.string()).optional(), // All children spawned by this task

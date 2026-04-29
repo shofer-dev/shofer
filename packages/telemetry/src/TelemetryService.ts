@@ -165,6 +165,23 @@ export class TelemetryService {
 	}
 
 	/**
+	 * Captures when a task's cost limit has been exceeded.
+	 * Emitted before the limit action (pause/abort/kill) is taken.
+	 */
+	public captureBudgetExceeded(
+		taskId: string,
+		properties: {
+			rootTaskId: string
+			limitUsd: number
+			spentUsd: number
+			action: string
+			modelId: string | undefined
+		},
+	): void {
+		this.captureEvent(TelemetryEventName.BUDGET_EXCEEDED, { taskId, ...properties })
+	}
+
+	/**
 	 * Captures when a tab is shown due to user action
 	 * @param tab The tab that was shown
 	 */

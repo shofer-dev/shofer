@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, useMemo } from "react"
+import { memo, useEffect, useRef, useState, useMemo, useCallback } from "react"
 import { useTranslation } from "react-i18next"
 import { useCloudUpsell } from "@src/hooks/useCloudUpsell"
 import { CloudUpsellDialog } from "@src/components/cloud/CloudUpsellDialog"
@@ -26,6 +26,7 @@ import { Mention } from "./Mention"
 import { TodoListDisplay } from "./TodoListDisplay"
 import { LucideIconButton } from "./LucideIconButton"
 import { TaskSelector, getTaskDisplayName, TASK_STATE_CONFIG } from "./TaskSelector"
+import { BudgetLimitDialog } from "./BudgetLimitDialog"
 
 export interface TaskHeaderProps {
 	task: ClineMessage
@@ -42,6 +43,10 @@ export interface TaskHeaderProps {
 	buttonsDisabled: boolean
 	handleCondenseContext: (taskId: string) => void
 	todos?: any[]
+	/** Per-root-task cost cap (resolved on the parent in ChatView). */
+	costLimit?: { maxUsd: number; action: "pause" | "abort" | "kill" }
+	/** Live-update the cap; ChatView owns the actual postMessage call. */
+	onUpdateCostLimit?: (next: { maxUsd: number; action: "pause" | "abort" | "kill" }) => void
 }
 
 const TaskHeader = ({
@@ -59,6 +64,8 @@ const TaskHeader = ({
 	buttonsDisabled,
 	handleCondenseContext,
 	todos,
+	costLimit,
+	onUpdateCostLimit,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
 	const { apiConfiguration, currentTaskItem, clineMessages, taskHistory, parallelTasks, taskNotifications } =
@@ -134,6 +141,13 @@ const TaskHeader = ({
 			vscode.postMessage({ type: "showTaskWithId", text: parentTaskId })
 		}
 	}
+
+	const handleCostLimitSave = useCallback(
+		(newLimit: { maxUsd: number; action: "pause" | "abort" | "kill" }) => {
+			onUpdateCostLimit?.(newLimit)
+		},
+		[onUpdateCostLimit],
+	)
 
 	// Resolve the runtime state of the currently-shown task so the in-chat
 	// title can render a small status dot mirroring the drawer's row icons.
@@ -492,6 +506,18 @@ const TaskHeader = ({
 																title={t("chat:costs.includesSubtasks")}>
 																*
 															</span>
+														)}
+														{costLimit && costLimit.maxUsd > 0 && (
+															<>
+																<span className="text-xs text-vscode-descriptionForeground ml-1">
+																	/ ${costLimit.maxUsd.toFixed(2)} limit
+																</span>
+																<BudgetLimitDialog
+																	costLimit={costLimit}
+																	spent={aggregatedCost ?? totalCost}
+																	onSave={handleCostLimitSave}
+																/>
+															</>
 														)}
 													</span>
 												</StandardTooltip>
