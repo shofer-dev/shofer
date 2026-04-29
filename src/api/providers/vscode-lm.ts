@@ -181,6 +181,38 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			}
 		}
 	}
+
+	/**
+	 * Pull the running USD cost for `this.conversationId` from the Arkware
+	 * LLM Model Provider extension via the well-known
+	 * `arkware.llm.getRequestCost` command. Returns `undefined` when the
+	 * command isn't registered (no arkware extension), when the provider
+	 * has no cost data for this conversation (e.g. no completion has
+	 * routed through a model whose pricing the router can compute), or on
+	 * any error. Caller should treat `undefined` as "fall back to
+	 * per-token math".
+	 *
+	 * This is the canonical cost source for composite (`arkware/*`)
+	 * models, where the underlying serving model is picked at request
+	 * time and `getModel().info.inputPrice` is therefore zero — making
+	 * Roo's downstream `calculateApiCostOpenAI` produce $0 and the cost
+	 * row never render.
+	 */
+	private async fetchArkwareRequestCost(): Promise<number | undefined> {
+		if (!this.conversationId) return undefined
+		try {
+			const cost = await vscode.commands.executeCommand<number | undefined>(
+				"arkware.llm.getRequestCost",
+				this.conversationId,
+			)
+			if (typeof cost === "number" && Number.isFinite(cost) && cost >= 0) {
+				return cost
+			}
+			return undefined
+		} catch {
+			return undefined
+		}
+	}
 	/**
 	 * Creates a language model chat client based on the provided selector.
 	 *
@@ -449,6 +481,16 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		// Initialize cancellation token for the request
 		this.currentRequestCancellation = new vscode.CancellationTokenSource()
 
+		// Snapshot the per-conversation cumulative cost ledger BEFORE the
+		// request so we can yield a per-request delta after the stream
+		// completes. The Arkware LLM Model Provider's
+		// `arkware.llm.getRequestCost` returns a running cumulative across
+		// the whole conversation; if we yielded that as the chunk's
+		// `totalCost`, Roo would then store it on each `apiReqInfo` message
+		// and re-sum across messages in `consolidateTokenUsage`, multiplying
+		// the spend by O(N²) and silently breaking the cost-cap math.
+		const conversationCostUsdBefore = await this.fetchArkwareRequestCost()
+
 		// Calculate input tokens before starting the stream
 		const totalInputTokens: number = await this.calculateTotalInputTokens(vsCodeLmMessages)
 
@@ -619,11 +661,35 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				getOutputChannel()?.appendLine(logMsg)
 			}
 
+			// Pull the per-conversation USD cost computed by llm-router and
+			// accumulated by the Arkware LLM Model Provider extension. This
+			// is the only reliable cost source for composite (`arkware/*`)
+			// models, where the underlying that served the request is
+			// selected at request time and `getModel().info.inputPrice` is
+			// therefore zero. We compare against the pre-request snapshot
+			// taken above and yield the DELTA as `totalCost` (= the
+			// per-request cost), so Roo's per-message accounting and the
+			// consolidate-then-sum pipeline don't double-count.
+			const conversationCostUsdAfter = await this.fetchArkwareRequestCost()
+			let perRequestCostUsd: number | undefined
+			if (conversationCostUsdAfter !== undefined) {
+				const before = conversationCostUsdBefore ?? 0
+				const delta = conversationCostUsdAfter - before
+				// Guard against ledger-eviction or out-of-order updates that
+				// could produce a negative delta; clamp to zero rather than
+				// emit a nonsensical refund.
+				perRequestCostUsd = delta >= 0 ? delta : 0
+				getOutputChannel()?.appendLine(
+					`[vscode-lm] cost ledger: before=${before}, after=${conversationCostUsdAfter}, perRequest=${perRequestCostUsd}, conversationId=${this.conversationId}`,
+				)
+			}
+
 			// Report final usage after stream completion
 			yield {
 				type: "usage",
 				inputTokens: totalInputTokens,
 				outputTokens: totalOutputTokens,
+				...(perRequestCostUsd !== undefined ? { totalCost: perRequestCostUsd } : {}),
 			}
 		} catch (error: unknown) {
 			this.ensureCleanState()

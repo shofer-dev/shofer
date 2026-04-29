@@ -187,6 +187,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private _costLimitCheckCache?: { spent: number; requestIndex: number }
 
 	/**
+	 * Snapshot of the aggregated cost across the root task's history
+	 * captured at the start of the current API request, BEFORE this
+	 * request's own usage is added. Used by the in-stream check
+	 * (`checkInFlightCostLimit`) to compute live spend as
+	 * `_priorAggregateUsd + thisRequestCostUsd` on every `usage` chunk
+	 * without re-scanning history each time. Reset per request boundary.
+	 */
+	private _priorAggregateUsd?: number
+
+	/**
+	 * Per-request guard so the in-stream cost check fires its
+	 * abort/pause/kill action AT MOST ONCE for the current API call.
+	 * Without this, multiple `usage` chunks crossing the cap would each
+	 * try to enforce — re-aborting an already-aborting task or stacking
+	 * pause prompts. Reset per request boundary alongside the snapshot.
+	 */
+	private _costLimitEnforcementFiredForRequest = false
+
+	/**
 	 * Set to `true` when the user has chosen to continue past the cost
 	 * cap for the remainder of this task. Reset only by abort/dispose.
 	 * Implements the "Continue without limit" branch of the pause dialog.
@@ -2511,6 +2530,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public invalidateCostLimitCache(): void {
 		this._costLimitCheckCache = undefined
 		this._costLimitBypassed = false
+		this._costLimitEnforcementFiredForRequest = false
 	}
 
 	/**
@@ -2552,6 +2572,103 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this._costLimitCheckCache = { spent, requestIndex }
 		if (spent < limit.maxUsd) return
 
+		await this.enforceCostLimit(root, limit, spent)
+	}
+
+	/**
+	 * Snapshot the prior-history aggregate cost for the root and stash it
+	 * on `_priorAggregateUsd` so the per-chunk in-stream check can compare
+	 * `prior + currentRequestCost` against the cap without re-scanning
+	 * history on every chunk.
+	 *
+	 * Called once at the request boundary (before the first chunk of a new
+	 * API call). On error or no-limit, leaves the snapshot undefined so
+	 * `checkInFlightCostLimit` becomes a no-op for this request.
+	 */
+	private async snapshotPriorAggregateForCostLimit(): Promise<void> {
+		this._priorAggregateUsd = undefined
+		this._costLimitEnforcementFiredForRequest = false
+		const provider = this.providerRef.deref()
+		if (this._costLimitBypassed) {
+			provider?.log?.(`[Task#${this.taskId}] [DIAG cost-limit] snapshot: bypassed, skipping`)
+			return
+		}
+		const { root, limit } = this.resolveCostLimit()
+		if (!limit || limit.maxUsd <= 0) {
+			provider?.log?.(
+				`[Task#${this.taskId}] [DIAG cost-limit] snapshot: no limit configured (root=${root.taskId}, limit=${JSON.stringify(limit)})`,
+			)
+			return
+		}
+		if (!provider) return
+		try {
+			const aggregated = await aggregateTaskCostsRecursive(root.taskId, (id) =>
+				provider.getTaskWithId(id).then((r) => r.historyItem),
+			)
+			this._priorAggregateUsd = aggregated.totalCost
+			provider.log?.(
+				`[Task#${this.taskId}] [DIAG cost-limit] snapshot: priorAggregate=${aggregated.totalCost.toFixed(6)}, limit=${limit.maxUsd}, action=${limit.action}, root=${root.taskId}`,
+			)
+		} catch (err) {
+			provider.log?.(
+				`[Task#${this.taskId}] snapshotPriorAggregateForCostLimit: failed for root ${root.taskId}: ${err instanceof Error ? err.message : String(err)}`,
+			)
+		}
+	}
+
+	/**
+	 * In-stream cost-cap gate. Called from the main streaming loop on every
+	 * `usage` chunk so we abort/pause AS SOON AS the cumulative spend
+	 * (prior history aggregate + this request's running cost) crosses the
+	 * cap, rather than waiting for the request to finish. This is critical
+	 * for tight limits (e.g. 0.05 USD), where a single completion can
+	 * easily blow past the cap before the post-stream check would fire.
+	 *
+	 * No-ops when bypass is set, no limit is configured, or the prior
+	 * aggregate snapshot wasn't captured (see
+	 * `snapshotPriorAggregateForCostLimit`). The actual enforcement (abort
+	 * /kill /pause-ask) is delegated to `enforceCostLimit` so this path
+	 * shares behaviour with the post-stream `checkCostLimit`.
+	 */
+	private async checkInFlightCostLimit(currentRequestCostUsd: number | undefined): Promise<void> {
+		const provider = this.providerRef.deref()
+		if (this._costLimitBypassed) return
+		if (this._costLimitEnforcementFiredForRequest) return
+		if (this._priorAggregateUsd === undefined) {
+			provider?.log?.(
+				`[Task#${this.taskId}] [DIAG cost-limit] in-flight: skipping (prior snapshot undefined; either no limit or snapshot failed)`,
+			)
+			return
+		}
+		if (currentRequestCostUsd === undefined || !Number.isFinite(currentRequestCostUsd)) {
+			provider?.log?.(
+				`[Task#${this.taskId}] [DIAG cost-limit] in-flight: skipping (no per-request cost reported by provider; chunk.totalCost=${currentRequestCostUsd})`,
+			)
+			return
+		}
+		const { root, limit } = this.resolveCostLimit()
+		if (!limit || limit.maxUsd <= 0) return
+		const spent = this._priorAggregateUsd + currentRequestCostUsd
+		provider?.log?.(
+			`[Task#${this.taskId}] [DIAG cost-limit] in-flight: prior=${this._priorAggregateUsd.toFixed(6)} + thisReq=${currentRequestCostUsd.toFixed(6)} = spent=${spent.toFixed(6)}, limit=${limit.maxUsd}, willFire=${spent >= limit.maxUsd}`,
+		)
+		if (spent < limit.maxUsd) return
+		// Latch so subsequent chunks in the same request don't re-fire.
+		this._costLimitEnforcementFiredForRequest = true
+		await this.enforceCostLimit(root, limit, spent)
+	}
+
+	/**
+	 * Shared enforcement step: emit telemetry + branch on
+	 * `limit.action`. Used by both the post-stream `checkCostLimit` and
+	 * the in-stream `checkInFlightCostLimit` so behaviour stays
+	 * identical regardless of which gate fires first.
+	 */
+	private async enforceCostLimit(root: Task, limit: CostLimit, spent: number): Promise<void> {
+		const provider = this.providerRef.deref()
+		provider?.log?.(
+			`[Task#${this.taskId}] [DIAG cost-limit] enforce: action=${limit.action}, spent=${spent.toFixed(6)}, limit=${limit.maxUsd}, root=${root.taskId}`,
+		)
 		TelemetryService.instance.captureBudgetExceeded(this.taskId, {
 			rootTaskId: root.taskId,
 			limitUsd: limit.maxUsd,
@@ -2585,15 +2702,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	/**
 	 * Pause-mode handler. Reuses the existing `ask` machinery with three
-	 * outcomes wired through ChatView's primary/secondary buttons:
-	 *   yesButtonClicked    → "Increase by $5". Bumps the root's cap by
-	 *                          $5 and persists it.
+	 * outcomes wired through ChatView's primary/secondary buttons and the
+	 * text input:
+	 *   yesButtonClicked    → "Continue without limit". Bypasses further
+	 *                          enforcement for the remainder of this task
+	 *                          (no further checks fire).
 	 *   noButtonClicked     → "Abort task". Cleanly aborts the root and
 	 *                          all subtasks via the existing recursive
 	 *                          abort path.
-	 *   messageResponse     → user typed something — treat as
-	 *                          "Continue without limit" for the rest of
-	 *                          this task (no further checks fire).
+	 *   messageResponse     → user typed a new dollar amount. Parsed as a
+	 *                          positive float and used as the new
+	 *                          maxUsd on the root (action preserved).
+	 *                          Non-numeric/invalid input is treated as
+	 *                          "continue without limit" so we never silently
+	 *                          ignore the user's intent.
 	 *
 	 * The askText is JSON so the webview's BudgetLimitDialog can render
 	 * a structured message; ChatView falls back to the buttons when the
@@ -2601,33 +2723,40 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private async askUserForBudgetDecision(root: Task, limit: CostLimit, spent: number): Promise<void> {
 		const askText = JSON.stringify({ spentUsd: spent, limitUsd: limit.maxUsd, action: limit.action })
-		const { response } = await this.ask("budget_limit", askText)
+		const { response, text } = await this.ask("budget_limit", askText)
 
-		if (response === "yesButtonClicked") {
-			// "Increase by $5" — bump the cap on the root and persist.
-			const next: CostLimit = { maxUsd: limit.maxUsd + 5, action: limit.action }
-			root.costLimit = next
-			root.invalidateCostLimitCache()
-			const provider = this.providerRef.deref()
-			if (provider) {
-				try {
-					const { historyItem } = await provider.getTaskWithId(root.taskId)
-					if (historyItem) {
-						await provider.updateTaskHistory({ ...historyItem, costLimit: next })
-					}
-				} catch (err) {
-					provider.log?.(
-						`[askUserForBudgetDecision] persist failed: ${err instanceof Error ? err.message : String(err)}`,
-					)
-				}
-			}
-			return
-		}
 		if (response === "noButtonClicked") {
 			await root.abortTask(false)
 			return
 		}
-		// messageResponse — "continue without limit" for this task.
+		if (response === "messageResponse") {
+			// Parse the user-supplied new limit. Accept a bare number
+			// ("0.10") or a leading-$ form ("$0.10"); reject anything else.
+			const raw = (text ?? "").trim().replace(/^\$/, "")
+			const parsed = Number(raw)
+			if (raw.length > 0 && Number.isFinite(parsed) && parsed > 0) {
+				const next: CostLimit = { maxUsd: parsed, action: limit.action }
+				root.costLimit = next
+				root.invalidateCostLimitCache()
+				const provider = this.providerRef.deref()
+				if (provider) {
+					try {
+						const { historyItem } = await provider.getTaskWithId(root.taskId)
+						if (historyItem) {
+							await provider.updateTaskHistory({ ...historyItem, costLimit: next })
+						}
+					} catch (err) {
+						provider.log?.(
+							`[askUserForBudgetDecision] persist failed: ${err instanceof Error ? err.message : String(err)}`,
+						)
+					}
+				}
+				return
+			}
+			// Fall through to bypass on unparsable input.
+		}
+		// yesButtonClicked or unparsable messageResponse → "continue
+		// without limit" for this task.
 		root._costLimitBypassed = true
 		root._costLimitCheckCache = undefined
 	}
@@ -3058,6 +3187,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				const streamModelInfo = this.cachedStreamingModel.info
 				const cachedModelId = this.cachedStreamingModel.id
 
+				// Snapshot the running spend across the root's history BEFORE
+				// this request starts. The streaming `usage`-chunk handler
+				// below adds this request's in-flight cost on top and triggers
+				// abort/pause as soon as the sum crosses the cap, so a single
+				// expensive completion can't silently blow past a tight limit
+				// (e.g. $0.05) before the post-stream check fires.
+				await this.snapshotPriorAggregateForCostLimit()
+				if (this.abort) {
+					break
+				}
+
 				// Yields only if the first chunk is successful, otherwise will
 				// allow the user to retry the request (most likely due to rate
 				// limit error, which gets thrown on the first chunk).
@@ -3131,6 +3271,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								cacheWriteTokens += chunk.cacheWriteTokens ?? 0
 								cacheReadTokens += chunk.cacheReadTokens ?? 0
 								totalCost = chunk.totalCost
+								// In-stream cost-cap gate. Awaited so any
+								// abort/kill takes effect (sets `this.abort`
+								// + cancels the in-flight HTTP request)
+								// before the consumer pulls the next chunk;
+								// the post-switch `if (this.abort) break`
+								// then exits the streaming loop immediately
+								// instead of burning more tokens past the
+								// cap. The pause-mode branch awaits the
+								// user's decision here too — fine because
+								// no further tokens stream until we resume.
+								await this.checkInFlightCostLimit(totalCost)
 								break
 							case "grounding":
 								// Handle grounding sources separately from regular content
