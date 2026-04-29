@@ -76,6 +76,68 @@ import { cn } from "@/lib/utils"
 import { PathTooltip } from "../ui/PathTooltip"
 import { OpenMarkdownPreviewButton } from "./OpenMarkdownPreviewButton"
 
+/**
+ * Render a VS Code codicon span. Module-scoped so it can be reused by both the
+ * `ask` tool renderer and the inner `say` tool renderer (and by helpers like
+ * `renderGenericToolBlock`).
+ */
+function toolIcon(name: string) {
+	return (
+		<span
+			className={`codicon codicon-${name}`}
+			style={{ color: "var(--vscode-foreground)", marginBottom: "-1.5px" }}></span>
+	)
+}
+
+/**
+ * Convert a camelCase / snake_case tool identifier into a human-readable label.
+ * Used by the generic tool-block fallback so unknown tools still render meaningfully.
+ */
+function humanizeToolName(name: string): string {
+	const withSpaces = name
+		.replace(/[_-]+/g, " ")
+		.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+		.replace(/\s+/g, " ")
+		.trim()
+	return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1)
+}
+
+/**
+ * Generic chat-row renderer for `ClineSayTool` payloads that don't have a
+ * tool-specific block. Every tool invocation must produce some UI feedback
+ * — otherwise an auto-approved tool appears to "execute silently" and the
+ * user has no idea the model is acting on their workspace.
+ *
+ * The block is intentionally minimal: an icon, the humanized tool name with
+ * "Roo wants to use…" / "Roo used…" prefix, and (when present) the tool's
+ * `path` / `content` fields so common payload shapes display useful context.
+ */
+function renderGenericToolBlock(
+	tool: ClineSayTool,
+	isAsk: boolean,
+	headerStyle: React.CSSProperties,
+	t: (key: string, opts?: Record<string, unknown>) => string,
+): React.ReactNode {
+	const label = humanizeToolName(tool.tool)
+	const headerText = isAsk
+		? t("chat:genericTool.wantsToUse", { tool: label, defaultValue: `Roo wants to use ${label}` })
+		: t("chat:genericTool.didUse", { tool: label, defaultValue: `Roo used ${label}` })
+	const detail = tool.path || tool.query || tool.regex || tool.content
+	return (
+		<>
+			<div style={headerStyle}>
+				{toolIcon("tools")}
+				<span style={{ fontWeight: "bold" }}>{headerText}</span>
+			</div>
+			{detail && (
+				<div className="pl-6 text-vscode-descriptionForeground break-words">
+					{typeof detail === "string" ? detail : JSON.stringify(detail)}
+				</div>
+			)}
+		</>
+	)
+}
+
 // Helper function to get previous todos before a specific message
 function getPreviousTodos(messages: ClineMessage[], currentMessageTs: number): any[] {
 	// Find the previous updateTodoList message before the current one
@@ -429,12 +491,6 @@ export const ChatRowContent = ({
 	}, [message.type, message.ask, message.partial, message.text])
 
 	if (tool) {
-		const toolIcon = (name: string) => (
-			<span
-				className={`codicon codicon-${name}`}
-				style={{ color: "var(--vscode-foreground)", marginBottom: "-1.5px" }}></span>
-		)
-
 		switch (tool.tool as string) {
 			case "editedExistingFile":
 			case "appliedDiff":
@@ -1083,7 +1139,11 @@ export const ChatRowContent = ({
 					</>
 				)
 			default:
-				return null
+				// Generic fallback: every tool execution must show *something* in the chat UI,
+				// even if no tool-specific renderer exists yet. This prevents the silent
+				// `return null` UX where users see no indication that a tool was invoked
+				// (or, worse, an invisible approval prompt blocking the conversation).
+				return renderGenericToolBlock(tool, message.type === "ask", headerStyle, t)
 		}
 	}
 
@@ -1600,7 +1660,7 @@ export const ChatRowContent = ({
 							)
 						}
 						default:
-							return null
+							return renderGenericToolBlock(sayTool, false, headerStyle, t)
 					}
 				case "image":
 					// Parse the JSON to get imageUri and imagePath

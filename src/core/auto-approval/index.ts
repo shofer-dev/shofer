@@ -173,6 +173,28 @@ export async function checkAutoApproval({
 			return { decision: "approve" }
 		}
 
+		// Harmless informational / lightweight read-only tools are unconditionally auto-approved
+		// (independent of `alwaysAllowReadOnly`). These tools either query in-memory editor/LSP
+		// state, fetch a public URL, or list workspace metadata — they cannot mutate user state
+		// and gating them behind an approval prompt offers no security benefit while creating
+		// the appearance of a "silent hang" when the corresponding chat-row renderer is missing.
+		if (
+			[
+				"fetchWebPage",
+				"findFiles",
+				"viewImage",
+				"getErrors",
+				"getChangedFiles",
+				"getProjectSetupInfo",
+				"getSearchResults",
+				"readProjectStructure",
+				"listCodeUsages",
+				"codebaseSearchWithLsp",
+			].includes(tool?.tool)
+		) {
+			return { decision: "approve" }
+		}
+
 		const isOutsideWorkspace = !!tool.isOutsideWorkspace
 
 		if (isReadOnlyToolAction(tool)) {
