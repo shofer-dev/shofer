@@ -23,6 +23,7 @@ import { SetCachedStateField } from "./types"
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
+import { DefaultCostLimitSetting, DefaultCostLimit } from "./DefaultCostLimitSetting"
 import { vscode } from "@/utils/vscode"
 
 type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
@@ -42,6 +43,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	includeCurrentTime?: boolean
 	includeCurrentCost?: boolean
 	maxGitStatusFiles?: number
+	defaultCostLimit?: DefaultCostLimit
 	customSupportPrompts: Record<string, string | undefined>
 	setCustomSupportPrompts: (prompts: Record<string, string | undefined>) => void
 	setCachedStateField: SetCachedStateField<
@@ -60,6 +62,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "includeCurrentTime"
 		| "includeCurrentCost"
 		| "maxGitStatusFiles"
+		| "defaultCostLimit"
 	>
 }
 
@@ -81,6 +84,7 @@ export const ContextManagementSettings = ({
 	includeCurrentTime,
 	includeCurrentCost,
 	maxGitStatusFiles,
+	defaultCostLimit,
 	customSupportPrompts,
 	setCustomSupportPrompts,
 	className,
@@ -439,6 +443,11 @@ export const ContextManagementSettings = ({
 						{t("settings:contextManagement.includeCurrentCost.description")}
 					</div>
 				</SearchableSetting>
+
+				<DefaultCostLimitSetting
+					defaultCostLimit={defaultCostLimit}
+					setCachedStateField={setCachedStateField}
+				/>
 			</Section>
 			<Section className="pt-2">
 				{/* Context Condensing Prompt Editor */}

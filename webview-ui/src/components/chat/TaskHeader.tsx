@@ -471,7 +471,7 @@ const TaskHeader = ({
 										</tr>
 									)}
 
-									{!!totalCost && (
+									{(!!totalCost || !!currentTaskItem) && (
 										<tr>
 											<th className="font-medium text-left align-top w-1 whitespace-nowrap pr-3 h-[24px]">
 												{t("chat:task.apiCost")}
@@ -507,7 +507,7 @@ const TaskHeader = ({
 																*
 															</span>
 														)}
-														{costLimit && costLimit.maxUsd > 0 && (
+														{costLimit && costLimit.maxUsd > 0 ? (
 															<>
 																<span className="text-xs text-vscode-descriptionForeground ml-1">
 																	/ ${costLimit.maxUsd.toFixed(2)} limit
@@ -518,6 +518,11 @@ const TaskHeader = ({
 																	onSave={handleCostLimitSave}
 																/>
 															</>
+														) : (
+															<BudgetLimitDialog
+																spent={aggregatedCost ?? totalCost}
+																onSave={handleCostLimitSave}
+															/>
 														)}
 													</span>
 												</StandardTooltip>

@@ -239,7 +239,7 @@ export const globalSettingsSchema = z.object({
 	 * The action field controls behaviour when the limit is exceeded.
 	 * @default { maxUsd: 0, action: "pause" }
 	 */
-	defaultCostLimit: costLimitSchema.optional(),
+	defaultCostLimit: costLimitSchema.nullish(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>
