@@ -1,26 +1,57 @@
 import { useState, useEffect } from "react"
-import { Pencil } from "lucide-react"
+import { Pencil, Wallet } from "lucide-react"
 import { cn } from "@src/lib/utils"
 import { StandardTooltip, Button } from "@src/components/ui"
 
-export interface BudgetLimitDialogProps {
-	costLimit: { maxUsd: number; action: "pause" | "abort" | "kill" }
-	spent: number
-	onSave: (newLimit: { maxUsd: number; action: "pause" | "abort" | "kill" }) => void
+export type BudgetAction = "pause" | "abort" | "kill"
+
+export interface BudgetLimit {
+	maxUsd: number
+	action: BudgetAction
 }
+
+export interface BudgetLimitDialogProps {
+	/**
+	 * Current per-root cost cap. When undefined, the trigger renders as a
+	 * "Set budget" affordance (wallet icon) instead of the pencil-edit
+	 * affordance, and the popover opens with sensible defaults.
+	 */
+	costLimit?: BudgetLimit
+	/** Aggregated spend so far. Used to flag "already over limit" state. */
+	spent: number
+	onSave: (newLimit: BudgetLimit) => void
+	/** Visual size override for the trigger icon. */
+	iconSize?: number
+	/** Override the default trigger tooltip copy. */
+	triggerLabel?: string
+}
+
+const DEFAULT_INITIAL_LIMIT_USD = 5
+const DEFAULT_INITIAL_ACTION: BudgetAction = "pause"
 
 /**
  * Inline popover for editing the per-root-task cost limit.
- * Triggered by clicking the pencil icon next to the limit display in TaskHeader.
+ *
+ * Two modes:
+ * - **Edit mode** (`costLimit` provided): pencil-icon trigger, opens with
+ *   the current values pre-filled.
+ * - **Set mode** (`costLimit` undefined): wallet-icon trigger, opens with
+ *   `$5` / `pause` defaults so the user only has to confirm to opt in.
  */
-export const BudgetLimitDialog = ({ costLimit, spent, onSave }: BudgetLimitDialogProps) => {
+export const BudgetLimitDialog = ({
+	costLimit,
+	spent,
+	onSave,
+	iconSize = 12,
+	triggerLabel,
+}: BudgetLimitDialogProps) => {
 	const [open, setOpen] = useState(false)
-	const [maxUsd, setMaxUsd] = useState(String(costLimit.maxUsd))
-	const [action, setAction] = useState(costLimit.action)
+	const [maxUsd, setMaxUsd] = useState(String(costLimit?.maxUsd ?? DEFAULT_INITIAL_LIMIT_USD))
+	const [action, setAction] = useState<BudgetAction>(costLimit?.action ?? DEFAULT_INITIAL_ACTION)
 
 	useEffect(() => {
-		setMaxUsd(String(costLimit.maxUsd))
-		setAction(costLimit.action)
+		setMaxUsd(String(costLimit?.maxUsd ?? DEFAULT_INITIAL_LIMIT_USD))
+		setAction(costLimit?.action ?? DEFAULT_INITIAL_ACTION)
 	}, [costLimit])
 
 	const handleSave = () => {
@@ -31,21 +62,27 @@ export const BudgetLimitDialog = ({ costLimit, spent, onSave }: BudgetLimitDialo
 		}
 	}
 
-	const overLimit = spent >= costLimit.maxUsd
+	const overLimit = costLimit ? spent >= costLimit.maxUsd : false
+	const isSetMode = !costLimit
+	const tooltip = open ? undefined : (triggerLabel ?? (isSetMode ? "Set cost limit" : "Edit cost limit"))
+	const TriggerIcon = isSetMode ? Wallet : Pencil
 
 	return (
 		<span className="inline-flex items-center">
-			<StandardTooltip content={open ? undefined : "Edit cost limit"} side="top">
+			<StandardTooltip content={tooltip} side="top">
 				<button
 					className={cn(
-						"inline-flex items-center cursor-pointer ml-1 opacity-60 hover:opacity-100 transition-opacity",
+						"inline-flex items-center cursor-pointer ml-1 transition-opacity",
+						isSetMode
+							? "opacity-50 hover:opacity-100 text-vscode-descriptionForeground"
+							: "opacity-60 hover:opacity-100",
 						overLimit && "text-red-400 opacity-100",
 					)}
 					onClick={(e) => {
 						e.stopPropagation()
 						setOpen(!open)
 					}}>
-					<Pencil size={12} />
+					<TriggerIcon size={iconSize} />
 				</button>
 			</StandardTooltip>
 			{open && (
