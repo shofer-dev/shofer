@@ -1,6 +1,6 @@
 # Per-Root-Task Cost Limit
 
-Status: **shipped in 3.53.0**, hardened through 3.54.7.
+Status: **shipped in 3.53.0**, hardened through 3.54.10.
 
 A user-configurable USD spend cap, scoped to the root task, with
 subtask costs aggregated into the root via the existing
@@ -243,6 +243,18 @@ spentUsd, action, modelId})` emits the
   output at snapshot/in-flight/enforce points so future
   "exceeded without stopping" reports are debuggable from the
   output channel.
+- **3.54.8 – 3.54.10** — Iterated on the composite-cost path end-to-end
+  to confirm the in-stream gate fires for `arkware/*` models. Validated
+  in production logs: `[vscode-lm] cost ledger: before=0.005237
+after=0.015193 perRequest=0.009956` followed immediately by
+  `[DIAG cost-limit] in-flight: prior=0.005237 + thisReq=0.009956 =
+spent=0.015193, limit=0.01, willFire=true` and
+  `[DIAG cost-limit] enforce: action=pause, spent=0.015193,
+limit=0.01`. Pairs with `llm-router` 0.8.9 (forces
+  `stream_options.include_usage=true` so OpenAI-compatible upstreams
+  emit the final usage chunk that carries the stamped `usage.cost`)
+  and `llm-provider` 0.6.1 (per-conversation cost ledger and
+  `arkware.llm.getRequestCost` command).
 
 ## What was deferred
 
@@ -299,5 +311,5 @@ enforce on real billed cost), but worth flagging to users debugging
 Shipped as Roo-Code **3.53.0** (minor bump): new user-visible
 setting, new `ask` type, new persisted field on `HistoryItem`. No
 backward-compat shims — missing `costLimit` is treated as "no limit".
-Hardened across **3.54.1** – **3.54.6** (see "Bug fixes since
+Hardened across **3.54.1** – **3.54.10** (see "Bug fixes since
 3.53.0" above).
