@@ -21,7 +21,6 @@ import {
 	SearchResult,
 } from "@src/utils/context-mentions"
 import { cn } from "@src/lib/utils"
-import { convertToMentionPath } from "@src/utils/path-mentions"
 import { StandardTooltip } from "@src/components/ui"
 
 import Thumbnails from "../common/Thumbnails"
@@ -670,9 +669,11 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			async (e: React.ClipboardEvent) => {
 				const items = e.clipboardData.items
 
+				// Log all clipboard MIME types for debugging paste issues.
+				const itemTypes = Array.from(items).map((item) => item.type)
+				vscode.postMessage({ type: "webviewLog", text: `[paste] items: ${JSON.stringify(itemTypes)}` })
+
 				const pastedText = e.clipboardData.getData("text")
-				// Check if the pasted content is a URL, add space after so user
-				// can easily delete if they don't want it.
 				const urlRegex = /^\S+:\/\/\S+$/
 				if (urlRegex.test(pastedText.trim())) {
 					e.preventDefault()
@@ -703,7 +704,15 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					return type === "image" && acceptedTypes.includes(subtype)
 				})
 
+				if (shouldDisableImages) {
+					vscode.postMessage({
+						type: "webviewLog",
+						text: `[paste] images disabled, imageItems=${imageItems.length}`,
+					})
+				}
+
 				if (!shouldDisableImages && imageItems.length > 0) {
+					vscode.postMessage({ type: "webviewLog", text: `[paste] processing ${imageItems.length} image(s)` })
 					e.preventDefault()
 
 					const imagePromises = imageItems.map((item) => {
@@ -736,9 +745,17 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 					if (dataUrls.length > 0) {
 						setSelectedImages((prevImages) => [...prevImages, ...dataUrls].slice(0, MAX_IMAGES_PER_MESSAGE))
+						vscode.postMessage({ type: "webviewLog", text: `[paste] added ${dataUrls.length} image(s)` })
 					} else {
 						console.warn(t("chat:noValidImages"))
+						vscode.postMessage({ type: "webviewLog", text: "[paste] no valid images extracted" })
 					}
+				} else if (imageItems.length === 0) {
+					// No images found — text paste falls through to browser default.
+					vscode.postMessage({
+						type: "webviewLog",
+						text: `[paste] text paste (${pastedText.length} chars), letting browser handle`,
+					})
 				}
 			},
 			[shouldDisableImages, setSelectedImages, cursorPosition, setInputValue, inputValue, t],
@@ -808,53 +825,29 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			[updateCursorPosition],
 		)
 
+		/**
+		 * Handle drops on the textarea container.
+		 *
+		 * All path-based drops (Explorer files, editor tabs) are handled by
+		 * the parent ChatView which creates context-file tags.  Here we only
+		 * handle image file drops (drag-and-drop of image files from the OS
+		 * file manager).  Image pastes (Ctrl+V) go through `handlePaste`.
+		 */
 		const handleDrop = useCallback(
 			async (e: React.DragEvent<HTMLDivElement>) => {
 				e.preventDefault()
 				setIsDraggingOver(false)
 
-				const textFieldList = e.dataTransfer.getData("text")
-				const textUriList = e.dataTransfer.getData("application/vnd.code.uri-list")
-				// When textFieldList is empty, it may attempt to use textUriList obtained from drag-and-drop tabs; if not empty, it will use textFieldList.
-				const text = textFieldList || textUriList
-				if (text) {
-					// Split text on newlines to handle multiple files
-					const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "")
-
-					if (lines.length > 0) {
-						// Process each line as a separate file path
-						let newValue = inputValue.slice(0, cursorPosition)
-						let totalLength = 0
-
-						// Using a standard for loop instead of forEach for potential performance gains.
-						for (let i = 0; i < lines.length; i++) {
-							const line = lines[i]
-							// Convert each path to a mention-friendly format
-							const mentionText = convertToMentionPath(line, cwd)
-							newValue += mentionText
-							totalLength += mentionText.length
-
-							// Add space after each mention except the last one
-							if (i < lines.length - 1) {
-								newValue += " "
-								totalLength += 1
-							}
-						}
-
-						// Add space after the last mention and append the rest of the input
-						newValue += " " + inputValue.slice(cursorPosition)
-						totalLength += 1
-
-						setInputValue(newValue)
-						const newCursorPosition = cursorPosition + totalLength
-						setCursorPosition(newCursorPosition)
-						setIntendedCursorPosition(newCursorPosition)
-					}
-
-					return
-				}
-
 				const files = Array.from(e.dataTransfer.files)
+
+				// Log what was dropped on the textarea for debugging.
+				const fileTypes = files.map((f) => `${f.name} (${f.type || "unknown"})`)
+				const uriData = e.dataTransfer.getData("text/uri-list")
+				const plainData = e.dataTransfer.getData("text/plain")
+				vscode.postMessage({
+					type: "webviewLog",
+					text: `[textarea-drop] files=${files.length} [${fileTypes.join(", ")}] uri-list=${!!uriData} text/plain=${!!plainData}`,
+				})
 
 				if (files.length > 0) {
 					const acceptedTypes = ["png", "jpeg", "webp"]
@@ -864,7 +857,18 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						return type === "image" && acceptedTypes.includes(subtype)
 					})
 
+					if (shouldDisableImages) {
+						vscode.postMessage({
+							type: "webviewLog",
+							text: `[textarea-drop] images disabled, skipping ${imageFiles.length} image(s)`,
+						})
+					}
+
 					if (!shouldDisableImages && imageFiles.length > 0) {
+						vscode.postMessage({
+							type: "webviewLog",
+							text: `[textarea-drop] processing ${imageFiles.length} image file(s)`,
+						})
 						const imagePromises = imageFiles.map((file) => {
 							return new Promise<string | null>((resolve) => {
 								const reader = new FileReader()
@@ -894,23 +898,26 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							if (typeof vscode !== "undefined") {
 								vscode.postMessage({ type: "draggedImages", dataUrls: dataUrls })
 							}
+							vscode.postMessage({
+								type: "webviewLog",
+								text: `[textarea-drop] added ${dataUrls.length} image(s)`,
+							})
 						} else {
 							console.warn(t("chat:noValidImages"))
+							vscode.postMessage({
+								type: "webviewLog",
+								text: "[textarea-drop] no valid images from file drop",
+							})
 						}
 					}
+				} else {
+					vscode.postMessage({
+						type: "webviewLog",
+						text: "[textarea-drop] no files — letting parent ChatView handle",
+					})
 				}
 			},
-			[
-				cursorPosition,
-				cwd,
-				inputValue,
-				setInputValue,
-				setCursorPosition,
-				setIntendedCursorPosition,
-				shouldDisableImages,
-				setSelectedImages,
-				t,
-			],
+			[shouldDisableImages, setSelectedImages, t],
 		)
 
 		const [isTtsPlaying, setIsTtsPlaying] = useState(false)
