@@ -9,7 +9,7 @@ import { z } from "zod"
 import { zodToJsonSchema } from "zod-to-json-schema"
 
 import { toolGroups, deprecatedToolGroups } from "./tool.js"
-import { groupOptionsSchema, modeConfigSchema } from "./mode.js"
+import { groupOptionsSchema, modeConfigObjectSchema } from "./mode.js"
 
 // Build a ToolGroup enum that includes deprecated groups so existing configs
 // still validate.
@@ -28,7 +28,7 @@ const ruleFileSchema = z.object({
 
 // Build an extended ModeConfig schema that includes rulesFiles and uses the
 // extended groups (with deprecated entries).
-const exportedModeConfigSchema = modeConfigSchema.omit({ groups: true }).extend({
+const exportedModeConfigSchema = modeConfigObjectSchema.omit({ groups: true }).extend({
 	groups: z.array(groupEntrySchema),
 	rulesFiles: z.array(ruleFileSchema).optional(),
 })
