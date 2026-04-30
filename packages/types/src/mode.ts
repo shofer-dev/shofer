@@ -105,6 +105,7 @@ export const modeConfigSchema = z
 		tools_allowed: z.array(z.string()).optional(),
 		tools_denied: z.array(z.string()).optional(),
 		source: z.enum(["global", "project"]).optional(),
+		provider: z.string().optional(),
 	})
 	.refine((data) => data.groups !== undefined || data.tools_allowed !== undefined, {
 		message: "Either 'groups' or 'tools_allowed' must be provided",

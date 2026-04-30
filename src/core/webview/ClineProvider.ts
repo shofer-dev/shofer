@@ -1584,14 +1584,26 @@ export class ClineProvider
 				// The task will continue with the current/default configuration.
 			}
 		} else {
-			// If no saved config for this mode, save current config as default.
-			const currentApiConfigNameAfter = this.getGlobalState("currentApiConfigName")
+			// Check if the mode has a provider field pointing to a named API config.
+			const customModes = await this.customModesManager.getCustomModes()
+			const modeConfig = getModeBySlug(newMode, customModes)
 
-			if (currentApiConfigNameAfter) {
-				const config = listApiConfig.find((c) => c.name === currentApiConfigNameAfter)
+			if (modeConfig?.provider) {
+				const profile = listApiConfig.find((c) => c.name === modeConfig.provider)
 
-				if (config?.id) {
-					await this.providerSettingsManager.setModeConfig(newMode, config.id)
+				if (profile?.name) {
+					await this.activateProviderProfile({ name: profile.name })
+				}
+			} else {
+				// If no saved config for this mode, save current config as default.
+				const currentApiConfigNameAfter = this.getGlobalState("currentApiConfigName")
+
+				if (currentApiConfigNameAfter) {
+					const config = listApiConfig.find((c) => c.name === currentApiConfigNameAfter)
+
+					if (config?.id) {
+						await this.providerSettingsManager.setModeConfig(newMode, config.id)
+					}
 				}
 			}
 		}
