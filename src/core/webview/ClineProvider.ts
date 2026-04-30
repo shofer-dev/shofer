@@ -1044,6 +1044,47 @@ export class ClineProvider
 		const currentTask = this.getCurrentTask()
 		const isRehydratingCurrentTask = currentTask && currentTask.taskId === historyItem.id
 
+		// Live-instance idempotency guard.
+		//
+		// Parallel-task invariant: at any time there is AT MOST ONE live `Task`
+		// instance per `taskId`. If a caller asks us to rehydrate a task that
+		// already has a live instance (e.g. it is currently running in the
+		// background after a pencil-button pop), creating a second instance
+		// would (1) spawn a zombie that races the original on the same task
+		// history files and (2) trigger `resumeTaskFromHistory()` → `resume_task`
+		// ask, surfacing a spurious "Continue" button in the UI.
+		//
+		// Instead, swap the existing live instance back into the focused stack
+		// position and short-circuit. This makes `createTaskWithHistoryItem`
+		// idempotent w.r.t. live instances regardless of which code path
+		// (cancelTask, onTaskAborted, showTaskWithId, external API, etc.)
+		// invoked it.
+		if (!isRehydratingCurrentTask) {
+			const liveInstance = this.taskManager.getManagedTaskInstance(historyItem.id)
+			if (liveInstance && !liveInstance.abandoned && !liveInstance.abort) {
+				this.log(
+					`[createTaskWithHistoryItem] Live instance ${historyItem.id}.${liveInstance.instanceId} ` +
+						`already exists; swapping into stack instead of rehydrating ` +
+						`(caller stack: ${new Error().stack?.split("\n").slice(2, 6).join(" | ")})`,
+				)
+				if (options?.keepCurrentTask) {
+					this.popFromStackWithoutAborting()
+				} else {
+					await this.removeClineFromStack()
+				}
+				await this.addClineToStack(liveInstance)
+				// Keep TaskManager focus state in sync with the UI stack.
+				try {
+					await this.taskManager.focusTask(historyItem.id)
+				} catch {
+					// Task may not be in managedTasks map (e.g. external-API
+					// created); non-fatal.
+				}
+				await this.postStateToWebview()
+				return liveInstance
+			}
+		}
+
 		if (!isRehydratingCurrentTask) {
 			// If keepCurrentTask is true (parallel task switching), pop without aborting
 			// Otherwise, use removeClineFromStack which aborts the current task
