@@ -150,6 +150,22 @@ export const CodeActionKind = {
 	RefactorRewrite: { value: "refactor.rewrite" },
 }
 
+// Minimal TreeView shim — needed because `extension.ts` transitively imports
+// `ContextDropZoneProvider`, whose `HintItem` extends `vscode.TreeItem` at
+// module-evaluation time.
+export const TreeItemCollapsibleState = {
+	None: 0,
+	Collapsed: 1,
+	Expanded: 2,
+}
+
+export const TreeItem = class {
+	constructor(label, collapsibleState) {
+		this.label = label
+		this.collapsibleState = collapsibleState
+	}
+}
+
 export const EventEmitter = mockEventEmitter
 
 export default {
@@ -171,4 +187,6 @@ export default {
 	EventEmitter,
 	CodeAction,
 	CodeActionKind,
+	TreeItem,
+	TreeItemCollapsibleState,
 }
