@@ -308,7 +308,11 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 			toolName,
 		})
 
-		const toolResult = await task.providerRef.deref()?.getMcpHub()?.callTool(serverName, toolName, parsedArguments)
+		// Pass task.taskId as conversationId so mcp-server can track the conversation
+		const toolResult = await task.providerRef
+			.deref()
+			?.getMcpHub()
+			?.callTool(serverName, toolName, parsedArguments, undefined, task.taskId)
 
 		let toolResultPretty = "(No response)"
 		let images: string[] = []
