@@ -93,16 +93,22 @@ export const groupEntryArraySchema = z.preprocess((val) => {
 	return val.filter((entry) => !isDeprecatedGroupEntry(entry))
 }, rawGroupEntryArraySchema) as z.ZodType<GroupEntry[], z.ZodTypeDef, GroupEntry[]>
 
-export const modeConfigSchema = z.object({
-	slug: z.string().regex(/^[a-zA-Z0-9-]+$/, "Slug must contain only letters numbers and dashes"),
-	name: z.string().min(1, "Name is required"),
-	roleDefinition: z.string().min(1, "Role definition is required"),
-	whenToUse: z.string().optional(),
-	description: z.string().optional(),
-	customInstructions: z.string().optional(),
-	groups: groupEntryArraySchema,
-	source: z.enum(["global", "project"]).optional(),
-})
+export const modeConfigSchema = z
+	.object({
+		slug: z.string().regex(/^[a-zA-Z0-9-]+$/, "Slug must contain only letters numbers and dashes"),
+		name: z.string().min(1, "Name is required"),
+		roleDefinition: z.string().min(1, "Role definition is required"),
+		whenToUse: z.string().optional(),
+		description: z.string().optional(),
+		customInstructions: z.string().optional(),
+		groups: groupEntryArraySchema.optional(),
+		tools_allowed: z.array(z.string()).optional(),
+		tools_denied: z.array(z.string()).optional(),
+		source: z.enum(["global", "project"]).optional(),
+	})
+	.refine((data) => data.groups !== undefined || data.tools_allowed !== undefined, {
+		message: "Either 'groups' or 'tools_allowed' must be provided",
+	})
 
 export type ModeConfig = z.infer<typeof modeConfigSchema>
 

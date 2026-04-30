@@ -45,6 +45,77 @@ describe("roomodes JSON schema", () => {
 		expect(valid).toBe(true)
 	})
 
+	it("should accept a mode with tools_allowed instead of groups", () => {
+		const config = {
+			customModes: [
+				{
+					slug: "tools-only",
+					name: "Tools Only",
+					roleDefinition: "A mode with only tools_allowed.",
+					tools_allowed: ["read_file", "search_files"],
+				},
+			],
+		}
+
+		const valid = validate(config)
+		expect(validate.errors).toBeNull()
+		expect(valid).toBe(true)
+	})
+
+	it("should accept a mode with both groups and tools_allowed", () => {
+		const config = {
+			customModes: [
+				{
+					slug: "both-mode",
+					name: "Both Mode",
+					roleDefinition: "A mode with both groups and tools_allowed.",
+					groups: ["read"],
+					tools_allowed: ["execute_command", "read_command_output"],
+				},
+			],
+		}
+
+		const valid = validate(config)
+		expect(validate.errors).toBeNull()
+		expect(valid).toBe(true)
+	})
+
+	it("should accept a mode with tools_denied", () => {
+		const config = {
+			customModes: [
+				{
+					slug: "deny-mode",
+					name: "Deny Mode",
+					roleDefinition: "A mode with denied tools.",
+					groups: ["read", "command"],
+					tools_denied: ["execute_command"],
+				},
+			],
+		}
+
+		const valid = validate(config)
+		expect(validate.errors).toBeNull()
+		expect(valid).toBe(true)
+	})
+
+	it("should accept a mode with tools_allowed and tools_denied", () => {
+		const config = {
+			customModes: [
+				{
+					slug: "full-tools-mode",
+					name: "Full Tools Mode",
+					roleDefinition: "A mode with all tool fields.",
+					tools_allowed: ["read_file", "execute_command"],
+					tools_denied: ["write_to_file"],
+				},
+			],
+		}
+
+		const valid = validate(config)
+		expect(validate.errors).toBeNull()
+		expect(valid).toBe(true)
+	})
+
 	it("should accept a mode with all optional properties", () => {
 		const config = {
 			customModes: [
@@ -159,13 +230,13 @@ describe("roomodes JSON schema", () => {
 		expect(valid).toBe(false)
 	})
 
-	it("should reject a mode missing required groups", () => {
+	it("should reject a mode missing both groups and tools", () => {
 		const config = {
 			customModes: [
 				{
 					slug: "no-groups",
 					name: "No Groups",
-					roleDefinition: "Missing groups.",
+					roleDefinition: "Missing groups and tools.",
 				},
 			],
 		}

@@ -25,18 +25,39 @@ export function getGroupName(group: GroupEntry): ToolGroup {
 }
 
 // Helper to get all tools for a mode
-export function getToolsForMode(groups: readonly GroupEntry[]): string[] {
+export function getToolsForMode(
+	groups: readonly GroupEntry[] | undefined,
+	toolsAllowed?: readonly string[],
+	toolsDenied?: readonly string[],
+): string[] {
 	const tools = new Set<string>()
 
 	// Add tools from each group (excluding customTools which are opt-in only)
-	groups.forEach((group) => {
-		const groupName = getGroupName(group)
-		const groupConfig = TOOL_GROUPS[groupName]
-		groupConfig.tools.forEach((tool: string) => tools.add(tool))
-	})
+	if (groups) {
+		groups.forEach((group) => {
+			const groupName = getGroupName(group)
+			const groupConfig = TOOL_GROUPS[groupName]
+			groupConfig.tools.forEach((tool: string) => tools.add(tool))
+		})
+	}
+
+	// Add explicitly whitelisted tools from the mode's tools_allowed field (OR semantics)
+	if (toolsAllowed) {
+		toolsAllowed.forEach((tool: string) => tools.add(tool))
+	}
+
+	// Remove explicitly denied tools (denial takes priority over groups)
+	if (toolsDenied) {
+		toolsDenied.forEach((tool: string) => tools.delete(tool))
+	}
 
 	// Always add required tools
 	ALWAYS_AVAILABLE_TOOLS.forEach((tool) => tools.add(tool))
+
+	// Denial also applies to always-available tools
+	if (toolsDenied) {
+		toolsDenied.forEach((tool: string) => tools.delete(tool))
+	}
 
 	return Array.from(tools)
 }

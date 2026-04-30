@@ -65,6 +65,18 @@
 							]
 						}
 					},
+					"tools_allowed": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"tools_denied": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
 					"rulesFiles": {
 						"type": "array",
 						"items": {
@@ -82,7 +94,8 @@
 						}
 					}
 				},
-				"required": ["slug", "name", "roleDefinition", "groups"],
+				"required": ["slug", "name", "roleDefinition"],
+				"anyOf": [{ "required": ["groups"] }, { "required": ["tools_allowed"] }],
 				"additionalProperties": false
 			}
 		}
