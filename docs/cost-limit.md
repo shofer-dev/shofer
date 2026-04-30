@@ -280,31 +280,90 @@ follow-ups:
       `spent >= limit` and each fire the action; only the first
       `abortTask` matters in practice but the behaviour is not
       formally specified).
-- [ ] AGENTS.md / `extensions/llm-provider/README.md` doc updates
-      mentioning the dependency on `arkware.llm.getModelPricing`.
+- [x] ~~AGENTS.md / `extensions/llm-provider/README.md` doc updates
+      mentioning the dependency on `arkware.llm.getModelPricing`.~~
+      → Done: [Dependencies](#dependencies) section documents both cost
+      paths end-to-end, covering `arkware.llm.getModelPricing`,
+      `arkware.llm.getRequestCost`, and the llm-router cost-stamping
+      pipeline.
 
 ## Dependencies
 
-Requires the cost data path:
-`arkware.llm.getModelPricing` → `vscode-lm.getModel().info` →
-`calculateApiCostOpenAI` → `clineMessages[lastApiReqIndex].cost`,
-which landed in `llm-provider` 0.6.0 / Roo-Code 3.52.87.
+Requires one of two cost-data paths. Both converge on the same
+`totalCost` field in the `usage` chunk, which feeds the in-stream
+gate and the `api_req_started` message that `consolidateTokenUsage`
+sums.
 
-For composite (`arkware/*`) models, where the underlying that served
-the request is selected per-attempt and a static per-token rate
-isn't meaningful, an additional path was added:
-`llm-router` stamps `usage.cost` (USD float, OpenRouter convention)
-on every chat-completion response based on the underlying model's
-real pricing → `llm-provider` accumulates per-`conversationId` in a
-bounded LRU ledger → `vscode-lm` queries the running total via
-`arkware.llm.getRequestCost` after each stream and yields it as
-`totalCost` in the usage chunk. Without this, composites would
-report `cost: 0` and the budget limit could never trip on them.
+### Path 1 — static per-token pricing (direct models)
 
-Without either path, vscode-lm-routed models report `cost: 0` and
-the budget limit can never trip — this is by design (we only
-enforce on real billed cost), but worth flagging to users debugging
-"why isn't my limit firing?".
+`arkware.llm.getModelPricing` → `vscode-lm.getModel().info`
+(`inputPrice` / `outputPrice` / `cacheReadsPrice`) →
+`calculateApiCostOpenAI` → `clineMessages[lastApiReqIndex].cost`.
+
+Landed in `llm-provider` 0.6.0 / Roo-Code 3.52.87.
+
+Used as the **fallback** whenever the usage chunk carries no
+`totalCost` (Path 2 not available). Does not differentiate
+cache-hit vs cache-miss tokens because the vscode-lm provider counts
+tokens locally (VS Code LM API) and has no per-token cache metadata.
+
+### Path 2 — `usage.cost` from llm-router (all providers with streaming usage)
+
+`llm-router` computes and stamps `usage.cost` (USD float, OpenRouter
+convention) on the final streaming chunk via generic `stampUsageCost`
+in [`provider.go`](../llm-router/internal/services/provider.go) →
+`llm-provider` accumulates per-`conversationId` in a bounded LRU
+ledger → `vscode-lm` snapshots the ledger before and after the stream,
+yielding the **delta** as `totalCost` in the usage chunk.
+
+Originally added for composite (`arkware/*`) models where the
+underlying is selected per-attempt. Now applied **universally** to
+every provider whose upstream returns a `usage` object in the
+streaming response (OpenAI, Google, Zhipu, Xiaomi, Moonshot, MiniMax,
+DeepSeek). The stamping normalises across field-name variations:
+
+| Upstream field                                      | Canonical meaning  |
+| --------------------------------------------------- | ------------------ |
+| `prompt_tokens_details.cached_tokens` (OpenAI)      | Cache-hit tokens   |
+| `cache_read_input_tokens` (Anthropic non-streaming) | Cache-hit tokens   |
+| `prompt_cache_hit_tokens` (DeepSeek)                | Cache-hit tokens   |
+| `prompt_tokens_details.cache_creation_tokens`       | Cache-write tokens |
+| `cache_creation_input_tokens`                       | Cache-write tokens |
+
+Cache-write tokens are billed at `ContextCacheWrite` (or `Prompt` if
+unset); cache-read tokens at `ContextCacheRead` (or `Prompt` if
+unset). When no cache breakdown is reported, all prompt tokens are
+billed at the base `Prompt` rate — correct behaviour.
+
+Anthropic streaming splits usage across two SSE events
+(`message_start` carries input tokens, `message_delta` carries output
+tokens). The router accumulates these and emits a synthetic usage
+chunk after the final `finish_reason` chunk, which `stampUsageCost`
+then processes normally.
+
+**When Path 2 is active, `totalCost` arrives in the chunk and
+`calculateApiCostOpenAI` is NOT called** — the chunk's value wins
+(`totalCost ?? costResult.totalCost` in Task.ts). This avoids
+double-counting.
+
+### Priority
+
+Path 2 always wins when `totalCost` is present in the usage chunk
+(ledger delta available). Path 1 is the fallback, still needed for:
+
+- **Non-streaming requests** — [`handleNonStreamingRequest`](../llm-router/internal/handlers/chat.go:310)
+  does not stamp `usage.cost` on the response (only the streaming path
+  does). Non-streaming requests always use Path 1.
+- **Unknown models** — if `GetModelByID` returns nil (model not in
+  [`model_registry.go`](../llm-router/internal/types/model_registry.go:49)),
+  `stampUsageCost` returns the chunk unchanged and Path 1 takes over.
+- **Defense in depth** — if stamping fails for any reason (malformed
+  chunk, pricing not available), Path 1 provides a reasonable estimate.
+
+Without either path, vscode-lm-routed models report `cost: 0` and the
+budget limit can never trip — this is by design (we only enforce on
+real billed cost), but worth flagging to users debugging "why isn't my
+limit firing?".
 
 ## Versioning
 
