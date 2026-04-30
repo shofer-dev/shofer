@@ -173,9 +173,16 @@ export class CustomModesManager {
 				}
 			}
 
-			// For non-.roomodes files, just log and return empty object
+			// For non-.roomodes files (i.e. the global custom_modes.yaml), still surface
+			// a user-visible error. Silently dropping to `{}` would make every custom mode
+			// disappear from the UI with no in-product feedback — historically a major
+			// source of "my modes vanished" reports. The same i18n string is reused since
+			// the affected file is functionally equivalent from the user's perspective.
 			const errorMsg = yamlError instanceof Error ? yamlError.message : String(yamlError)
 			console.error(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
+			const lineMatch = errorMsg.match(/at line (\d+)/)
+			const line = lineMatch ? lineMatch[1] : "unknown"
+			vscode.window.showErrorMessage(t("common:customModes.errors.yamlParseError", { line }))
 			return {}
 		}
 	}
@@ -195,14 +202,14 @@ export class CustomModesManager {
 			if (!result.success) {
 				console.error(`[CustomModesManager] Schema validation failed for ${filePath}:`, result.error)
 
-				// Show user-friendly error for .roomodes files
-				if (filePath.endsWith(ROOMODES_FILENAME)) {
-					const issues = result.error.issues
-						.map((issue) => `• ${issue.path.join(".")}: ${issue.message}`)
-						.join("\n")
+				// Surface schema-validation failures for both .roomodes and the global
+				// custom_modes.yaml. A silent failure on the global file used to make
+				// every custom mode disappear from the UI with no feedback.
+				const issues = result.error.issues
+					.map((issue) => `• ${issue.path.join(".")}: ${issue.message}`)
+					.join("\n")
 
-					vscode.window.showErrorMessage(t("common:customModes.errors.schemaValidationError", { issues }))
-				}
+				vscode.window.showErrorMessage(t("common:customModes.errors.schemaValidationError", { issues }))
 
 				return []
 			}
