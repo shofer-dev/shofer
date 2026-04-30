@@ -181,6 +181,24 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				console.log(
 					`[AttemptCompletionTool.execute] User approved completion, emitting TaskCompleted, taskId=${task.taskId}`,
 				)
+				// Persist `status: "completed"` so the Task Selector renders the green
+				// check icon for this task even after a code-server restart (when the
+				// live runtime overlay is gone). Mirrors the background-child branch
+				// above. Failure is non-fatal — the in-flight UI still updates via the
+				// TaskCompleted event.
+				try {
+					const provider = task.providerRef.deref() as DelegationProvider | undefined
+					if (provider) {
+						const { historyItem } = await provider.getTaskWithId(task.taskId)
+						if (historyItem && historyItem.status !== "completed") {
+							await provider.updateTaskHistory({ ...historyItem, status: "completed" })
+						}
+					}
+				} catch (err) {
+					console.error(
+						`[AttemptCompletionTool] Failed to persist completed status for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
+					)
+				}
 				this.emitTaskCompleted(task)
 				// Set abort to stop the task loop from continuing after completion
 				task.abort = true
