@@ -435,6 +435,11 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	/**
 	 * Update the state of a managedTask.
+	 *
+	 * Side effect: persists the new state to the corresponding HistoryItem so that
+	 * the icon shown in the Task Selector survives an extension/code-server restart.
+	 * Persistence is fire-and-forget — failure to persist is non-fatal because the
+	 * in-memory overlay is still authoritative for live UI updates.
 	 */
 	updateTaskExecutionState(targetTaskId: string, state: ManagedTaskState): void {
 		const managedTask = this.managedTasks.get(targetTaskId)
@@ -448,6 +453,30 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		if (prevState !== state) {
 			this.emit("managedTask:state-changed", targetTaskId, state)
 			this.emit("tasks:updated", this.getManagedTasks())
+			void this.persistTaskExecutionState(targetTaskId, state)
+		}
+	}
+
+	/**
+	 * Write the given execution state through to the persisted HistoryItem.
+	 * No-op when the history item does not yet exist (the initial save will
+	 * include `taskExecutionState` because `updateTaskInstance`/`createManagedTask`
+	 * write it via `managedTaskToHistoryItem`).
+	 */
+	private async persistTaskExecutionState(targetTaskId: string, state: ManagedTaskState): Promise<void> {
+		const provider = this.providerRef.deref()
+		if (!provider) return
+		try {
+			const existing = provider.taskHistoryStore.get(targetTaskId)
+			if (!existing) return
+			if (existing.taskExecutionState === state) return
+			await provider.updateTaskHistory({ ...existing, taskExecutionState: state })
+		} catch (err) {
+			// Non-fatal — UI overlay still works without persistence.
+			console.error(
+				`[TaskManager] Failed to persist taskExecutionState for ${targetTaskId}:`,
+				err instanceof Error ? err.message : String(err),
+			)
 		}
 	}
 
@@ -637,12 +666,29 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 					workspace: item.workspace || "",
 					createdAt: item.ts,
 					lastActiveAt: item.lastActiveTs || item.ts,
-					state: item.taskExecutionState || "idle",
+					state: TaskManager.sanitizeRestoredState(item),
 				}
 				this.managedTasks.set(managedTask.id, managedTask)
 			}
 		}
 		this.emit("tasks:updated", this.getManagedTasks())
+	}
+
+	/**
+	 * Resolve the in-memory ManagedTask state from a persisted HistoryItem.
+	 *
+	 * After a restart there are no live Task instances, so any execution state
+	 * that implies in-flight work (`running`, `waiting_input`) is stale and must
+	 * be downgraded to `idle`. Terminal states (`error`, `paused`, `idle`) are
+	 * preserved. Tasks that finished successfully (status === "completed") are
+	 * also surfaced as `idle` so the green check from `item.status` wins in the
+	 * UI's resolution chain.
+	 */
+	private static sanitizeRestoredState(item: HistoryItem): ManagedTaskState {
+		const persisted = item.taskExecutionState
+		if (item.status === "completed") return "idle"
+		if (persisted === "running" || persisted === "waiting_input") return "idle"
+		return persisted ?? "idle"
 	}
 
 	// ────────────────────────────── Cleanup ──────────────────────────────

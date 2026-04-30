@@ -18,6 +18,12 @@ item.taskExecutionState      → persisted     (e.g., error after restart)
 fallback                     → "idle"        (grey circle)
 ```
 
+## Persistence
+
+- `HistoryItem.status = "completed"` is written by `AttemptCompletionTool` on every successful completion path: foreground approval, blocking subtask completion (`resumeBlockingParent`), and background-child completion. This guarantees the green check after restart for any task the user actually finished.
+- `HistoryItem.taskExecutionState` is written through by `TaskManager.updateTaskExecutionState` on every state transition (running, idle, paused, waiting_input, error). The runtime overlay stays authoritative for live UI; the persisted value is only consulted when the runtime is gone.
+- On restore (`TaskManager.restoreManagedTasks`), `running` and `waiting_input` are sanitized to `idle` because no live Task instance can exist after a restart. `error` and `paused` are preserved. Items with `status === "completed"` are also restored as `idle` so the green check (resolved from `status`) wins.
+
 ## State Icons
 
 | State           | Icon                           | Color                                   | Description                                                   |
