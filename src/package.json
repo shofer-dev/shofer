@@ -3,7 +3,7 @@
 	"displayName": "%extension.displayName%",
 	"description": "%extension.description%",
 	"publisher": "RooVeterinaryInc",
-	"version": "3.54.13",
+	"version": "3.54.15",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -183,6 +183,11 @@
 				"command": "roo-cline.toggleAutoApprove",
 				"title": "%command.toggleAutoApprove.title%",
 				"category": "%configuration.title%"
+			},
+			{
+				"command": "roo-cline.addFilesToContext",
+				"title": "Add to Roo Code Context",
+				"category": "%configuration.title%"
 			}
 		],
 		"menus": {
@@ -227,6 +232,12 @@
 				{
 					"submenu": "roo-cline.contextMenu",
 					"group": "1"
+				}
+			],
+			"explorer/context": [
+				{
+					"command": "roo-cline.addFilesToContext",
+					"group": "9_roo@1"
 				}
 			],
 			"roo-cline.contextMenu": [
