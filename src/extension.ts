@@ -30,7 +30,7 @@ import { Package } from "./shared/package"
 import { formatLanguage } from "./shared/language"
 import { ContextProxy } from "./core/config/ContextProxy"
 import { ClineProvider } from "./core/webview/ClineProvider"
-import { ContextDropZoneProvider } from "./core/webview/ContextDropZoneProvider"
+import { ContextDropZoneProvider, addUrisToContext } from "./core/webview/ContextDropZoneProvider"
 import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
@@ -320,6 +320,22 @@ export async function activate(context: vscode.ExtensionContext) {
 			treeDataProvider: contextDropZoneProvider,
 			dragAndDropController: contextDropZoneProvider,
 		}),
+	)
+
+	// Explorer context-menu command: "Add to Roo Code Context".  This is the
+	// fallback for runtimes where HTML5 drag/drop into the webview iframe is
+	// blocked by the host (VSCode Desktop overlay, code-server browser tab).
+	// VSCode invokes this with (clickedUri, allSelectedUris) when triggered
+	// from the Explorer context menu.
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			"roo-cline.addFilesToContext",
+			async (clickedUri?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+				const uris: vscode.Uri[] =
+					selectedUris && selectedUris.length > 0 ? selectedUris : clickedUri ? [clickedUri] : []
+				await addUrisToContext(uris, provider)
+			},
+		),
 	)
 
 	// Check for worktree auto-open path (set when switching to a worktree)
