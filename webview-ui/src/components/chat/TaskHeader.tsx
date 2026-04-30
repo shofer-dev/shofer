@@ -68,17 +68,13 @@ const TaskHeader = ({
 	onUpdateCostLimit,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
-	const { apiConfiguration, currentTaskItem, clineMessages, taskHistory, parallelTasks, taskNotifications } =
-		useExtensionState()
+	const { apiConfiguration, currentTaskItem, clineMessages, taskHistory, parallelTasks } = useExtensionState()
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 	const [showLongRunningTaskMessage, setShowLongRunningTaskMessage] = useState(false)
 	const { isOpen, openUpsell, closeUpsell, handleConnect } = useCloudUpsell({
 		autoOpenOnAuth: false,
 	})
-
-	// Task notification count for badge
-	const notificationCount = taskNotifications?.length || 0
 
 	// Check if the task is complete by looking at the last relevant message (skipping resume messages)
 	const isTaskComplete =
@@ -181,16 +177,6 @@ const TaskHeader = ({
 							{currentTitle || t("chat:task.title")}
 						</span>
 					</StandardTooltip>
-					{notificationCount > 0 && (
-						<span
-							className={cn(
-								"flex items-center justify-center flex-shrink-0",
-								"min-w-[16px] h-4 px-1 text-[10px] font-medium rounded-full",
-								"bg-yellow-500 text-black",
-							)}>
-							{notificationCount}
-						</span>
-					)}
 				</div>
 				{isSubtask && (
 					<Button
