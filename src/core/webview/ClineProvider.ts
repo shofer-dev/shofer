@@ -1561,54 +1561,105 @@ export class ClineProvider
 		// Update listApiConfigMeta first to ensure UI has latest data.
 		await this.updateGlobalState("listApiConfigMeta", listApiConfig)
 
-		// If this mode has a saved config, use it.
-		if (savedConfigId) {
-			const profile = listApiConfig.find(({ id }) => id === savedConfigId)
+		// Resolve the desired profile name for this mode, with the YAML `provider:` field
+		// taking precedence over the saved per-mode mapping. This keeps custom-mode YAML
+		// authoritative: manual edits to `provider:` always win, and the saved mapping is
+		// kept in sync 1:1 by `syncCustomModeProviderToYaml` whenever it's mutated.
+		const customModes = await this.customModesManager.getCustomModes()
+		const modeConfig = getModeBySlug(newMode, customModes)
 
-			if (profile?.name) {
-				// Check if the profile has actual API configuration (not just an id).
-				// In CLI mode, the ProviderSettingsManager may return empty default profiles
-				// that only contain 'id' and 'name' fields. Activating such a profile would
-				// overwrite the CLI's working API configuration with empty settings.
-				// Skip activation if the profile has no apiProvider set - this indicates
-				// an unconfigured/empty profile.
-				const fullProfile = await this.providerSettingsManager.getProfile({ name: profile.name })
-				const hasActualSettings = !!fullProfile.apiProvider
+		let profileName: string | undefined
+		if (modeConfig?.provider) {
+			profileName = listApiConfig.find((c) => c.name === modeConfig.provider)?.name
+		}
+		if (!profileName && savedConfigId) {
+			profileName = listApiConfig.find(({ id }) => id === savedConfigId)?.name
+		}
 
-				if (hasActualSettings) {
-					await this.activateProviderProfile({ name: profile.name })
-				} else {
-					// The task will continue with the current/default configuration.
-				}
-			} else {
-				// The task will continue with the current/default configuration.
+		if (profileName) {
+			// Check if the profile has actual API configuration (not just an id).
+			// In CLI mode, the ProviderSettingsManager may return empty default profiles
+			// that only contain 'id' and 'name' fields. Activating such a profile would
+			// overwrite the CLI's working API configuration with empty settings.
+			// Skip activation if the profile has no apiProvider set - this indicates
+			// an unconfigured/empty profile.
+			const fullProfile = await this.providerSettingsManager.getProfile({ name: profileName })
+			const hasActualSettings = !!fullProfile.apiProvider
+
+			if (hasActualSettings) {
+				await this.activateProviderProfile({ name: profileName })
 			}
-		} else {
-			// Check if the mode has a provider field pointing to a named API config.
-			const customModes = await this.customModesManager.getCustomModes()
-			const modeConfig = getModeBySlug(newMode, customModes)
+		} else if (!modeConfig?.provider) {
+			// No YAML provider hint and no saved mapping: persist the current config as
+			// the default for this mode (and mirror to YAML for custom modes).
+			const currentApiConfigNameAfter = this.getGlobalState("currentApiConfigName")
 
-			if (modeConfig?.provider) {
-				const profile = listApiConfig.find((c) => c.name === modeConfig.provider)
+			if (currentApiConfigNameAfter) {
+				const config = listApiConfig.find((c) => c.name === currentApiConfigNameAfter)
 
-				if (profile?.name) {
-					await this.activateProviderProfile({ name: profile.name })
-				}
-			} else {
-				// If no saved config for this mode, save current config as default.
-				const currentApiConfigNameAfter = this.getGlobalState("currentApiConfigName")
-
-				if (currentApiConfigNameAfter) {
-					const config = listApiConfig.find((c) => c.name === currentApiConfigNameAfter)
-
-					if (config?.id) {
-						await this.providerSettingsManager.setModeConfig(newMode, config.id)
-					}
+				if (config?.id) {
+					await this.providerSettingsManager.setModeConfig(newMode, config.id)
+					await this.syncCustomModeProviderToYaml(newMode, currentApiConfigNameAfter)
 				}
 			}
 		}
 
 		await this.postStateToWebview()
+	}
+
+	/**
+	 * Mirrors the per-mode API config selection back into the custom-mode YAML's
+	 * `provider:` field, so the YAML and the saved `modeApiConfigs` mapping stay 1:1.
+	 *
+	 * Targeting rule: if a workspace is open, the write always goes to the
+	 * project-scoped `.roomodes` file, even when the mode is currently defined only
+	 * globally. This keeps per-project API-profile preferences out of the global
+	 * `custom_modes.yaml` (which is shared across workspaces) and creates a project
+	 * override on demand. With no workspace open, the global file is updated.
+	 *
+	 * No-op for built-in modes (they have no YAML representation) and when the
+	 * existing entry already matches `configName`, to avoid spurious file writes.
+	 */
+	private async syncCustomModeProviderToYaml(mode: Mode, configName: string | undefined): Promise<void> {
+		if (!configName) return
+
+		try {
+			const customModes = await this.customModesManager.getCustomModes()
+			const modeConfig = getModeBySlug(mode, customModes)
+
+			// Built-in modes have no `source` and no YAML entry; skip.
+			if (!modeConfig || (modeConfig.source !== "global" && modeConfig.source !== "project")) {
+				return
+			}
+
+			// Always prefer writing to the project file when a workspace is open, so
+			// per-project provider preferences override (and don't pollute) the global file.
+			const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0
+			const targetSource: "global" | "project" = hasWorkspace ? "project" : "global"
+
+			// If the entry that already wins (project overrides global) matches, no-op —
+			// even when targeting project and the current entry is global, because the
+			// effective provider is identical.
+			if (modeConfig.provider === configName && modeConfig.source === targetSource) {
+				return
+			}
+			if (modeConfig.provider === configName && targetSource === "global") {
+				return
+			}
+
+			await this.customModesManager.updateCustomMode(mode, {
+				...modeConfig,
+				source: targetSource,
+				provider: configName,
+			})
+		} catch (error) {
+			// Don't fail the surrounding operation if YAML sync fails; just log.
+			this.log(
+				`Failed to sync provider field to custom mode YAML for "${mode}": ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			)
+		}
 	}
 
 	// Provider Profile Management
@@ -1695,6 +1746,9 @@ export class ClineProvider
 					this.providerSettingsManager.setModeConfig(mode, id),
 					this.contextProxy.setProviderSettings(providerSettings),
 				])
+
+				// Mirror the per-mode mapping into the custom-mode YAML so the two stay 1:1.
+				await this.syncCustomModeProviderToYaml(mode, name)
 
 				// Change the provider for the current task.
 				// TODO: We should rename `buildApiHandler` for clarity (e.g. `getProviderClient`).
@@ -1789,6 +1843,8 @@ export class ClineProvider
 
 		if (id && persistModeConfig) {
 			await this.providerSettingsManager.setModeConfig(mode, id)
+			// Mirror the per-mode mapping into the custom-mode YAML so the two stay 1:1.
+			await this.syncCustomModeProviderToYaml(mode, name)
 		}
 
 		// Change the provider for the current task.
