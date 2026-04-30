@@ -66,6 +66,7 @@ describe("useMcpToolTool", () => {
 		}
 
 		mockTask = {
+			taskId: "test-task-uuid",
 			consecutiveMistakeCount: 0,
 			recordToolError: vi.fn(),
 			sayAndCreateMissingParamError: vi.fn(),
@@ -637,8 +638,15 @@ describe("useMcpToolTool", () => {
 			expect(mockTask.recordToolError).not.toHaveBeenCalled()
 			expect(mockTask.say).toHaveBeenCalledWith("mcp_server_request_started")
 
-			// The original tool name (with hyphens) should be passed to callTool
-			expect(callToolMock).toHaveBeenCalledWith("test-server", "get-user-profile", {})
+			// The original tool name (with hyphens) should be passed to callTool,
+			// along with source (undefined) and conversationId (task.taskId)
+			expect(callToolMock).toHaveBeenCalledWith(
+				"test-server",
+				"get-user-profile",
+				{},
+				undefined,
+				"test-task-uuid",
+			)
 		})
 	})
 

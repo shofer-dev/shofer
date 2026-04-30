@@ -1778,6 +1778,7 @@ export class McpHub {
 		toolName: string,
 		toolArguments?: Record<string, unknown>,
 		source?: "global" | "project",
+		conversationId?: string,
 	): Promise<McpToolCallResponse> {
 		const connection = this.findConnection(serverName, source)
 		if (!connection || connection.type !== "connected") {
@@ -1799,13 +1800,22 @@ export class McpHub {
 			timeout = 60 * 1000
 		}
 
+		const params: Record<string, unknown> = {
+			name: toolName,
+			arguments: toolArguments,
+		}
+
+		// Inject conversationId into _meta if provided (required by mcp-server for tracing)
+		if (conversationId) {
+			params._meta = {
+				"vscode.conversationId": conversationId,
+			}
+		}
+
 		return await connection.client.request(
 			{
 				method: "tools/call",
-				params: {
-					name: toolName,
-					arguments: toolArguments,
-				},
+				params,
 			},
 			CallToolResultSchema,
 			{
