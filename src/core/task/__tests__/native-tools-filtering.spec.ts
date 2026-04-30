@@ -26,7 +26,7 @@ describe("Native Tools Filtering by Mode", () => {
 
 			// Test architect mode - should NOT have edit tools
 			const architectAllowedTools = new Set<string>()
-			architectMode.groups.forEach((groupEntry) => {
+			architectMode.groups!.forEach((groupEntry) => {
 				const groupName = typeof groupEntry === "string" ? groupEntry : groupEntry[0]
 				const toolGroup = TOOL_GROUPS[groupName]
 				if (toolGroup) {
@@ -53,7 +53,7 @@ describe("Native Tools Filtering by Mode", () => {
 
 			// Test code mode - SHOULD have edit tools
 			const codeAllowedTools = new Set<string>()
-			codeMode.groups.forEach((groupEntry) => {
+			codeMode.groups!.forEach((groupEntry) => {
 				const groupName = typeof groupEntry === "string" ? groupEntry : groupEntry[0]
 				const toolGroup = TOOL_GROUPS[groupName]
 				if (toolGroup) {

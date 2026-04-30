@@ -242,7 +242,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 			// Should successfully parse the complex fileRegex syntax
 			expect(modes).toHaveLength(1)
 			expect(modes[0].groups).toHaveLength(2)
-			expect(modes[0].groups[1]).toEqual(["edit", { fileRegex: "\\.md$", description: "Markdown files only" }])
+			expect(modes[0].groups![1]).toEqual(["edit", { fileRegex: "\\.md$", description: "Markdown files only" }])
 		})
 
 		it("should handle invalid fileRegex syntax with clear error", async () => {
@@ -443,7 +443,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 			expect(modes).toHaveLength(1)
 			expect(modes[0].name).toBe("Complex Mode's Name")
 			expect(modes[0].roleDefinition).toBe('Complex role with "quotes" and -dashes-')
-			expect(modes[0].groups[1]).toEqual([
+			expect(modes[0].groups![1]).toEqual([
 				"edit",
 				{
 					fileRegex: "\\.md$",
