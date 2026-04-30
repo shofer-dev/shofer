@@ -863,16 +863,8 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				// 1. Path-style drops first — these never carry a `files` list,
 				//    only a URI/text payload.
 				const payload = extractUriPayload(e.dataTransfer)
-				vscode.postMessage({
-					type: "webviewLog",
-					text: `[drop:textarea] fired payload=${payload ? `${payload.length}ch` : "none"} files=${e.dataTransfer.files.length} types=[${Array.from(e.dataTransfer.types).join(",")}]`,
-				})
 				if (payload && onContextFilesDropped) {
 					const newFiles = parseDroppedUris(payload, cwd, [])
-					vscode.postMessage({
-						type: "webviewLog",
-						text: `[drop:textarea] parsed ${newFiles.length} new file(s)`,
-					})
 					if (newFiles.length > 0) {
 						onContextFilesDropped(newFiles)
 						return

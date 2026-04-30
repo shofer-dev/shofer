@@ -21,6 +21,60 @@ import * as vscode from "vscode"
 import type { ClineProvider } from "./ClineProvider"
 
 /**
+ * Convert a list of file/folder URIs into the `addContextFiles` message
+ * payload and post it to the chat webview.  Shared between the TreeView
+ * drop handler and the Explorer context-menu command so both code paths
+ * behave identically.
+ */
+export async function addUrisToContext(
+	uris: readonly vscode.Uri[],
+	provider: ClineProvider | undefined,
+): Promise<number> {
+	if (!provider || uris.length === 0) return 0
+
+	const cwd = provider.cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
+
+	const newFiles: Array<{ path: string; isFile: boolean }> = []
+	for (const uri of uris) {
+		const absPath = uri.fsPath
+		let relativePath: string
+		if (cwd && absPath.startsWith(cwd)) {
+			const rel = absPath.slice(cwd.length)
+			relativePath = rel.startsWith("/") ? rel : "/" + rel
+		} else {
+			relativePath = absPath
+		}
+
+		let isFile = true
+		try {
+			const stat = await vscode.workspace.fs.stat(uri)
+			isFile = stat.type === vscode.FileType.File
+		} catch {
+			// Best-effort; default to file.
+		}
+
+		newFiles.push({ path: relativePath, isFile })
+	}
+
+	// Make sure the sidebar is visible so the user actually sees the tags appear.
+	try {
+		await vscode.commands.executeCommand("roo-cline.SidebarProvider.focus")
+	} catch {
+		// best-effort
+	}
+
+	await provider.postMessageToWebview({
+		type: "addContextFiles",
+		contextFiles: newFiles,
+	})
+
+	const message =
+		newFiles.length === 1 ? "Added 1 file to chat context" : `Added ${newFiles.length} files to chat context`
+	vscode.window.setStatusBarMessage(message, 2000)
+	return newFiles.length
+}
+
+/**
  * The single placeholder row shown inside the drop-zone tree.
  *
  * The TreeView API requires *some* item to be present; an empty tree shows a
@@ -91,44 +145,7 @@ export class ContextDropZoneProvider
 			})
 			.filter((uri): uri is vscode.Uri => uri !== null)
 
-		if (uris.length === 0) return
-
-		const cwd = this.clineProvider?.cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
-
-		const newFiles: Array<{ path: string; isFile: boolean }> = []
-		for (const uri of uris) {
-			const absPath = uri.fsPath
-			let relativePath: string
-			if (cwd && absPath.startsWith(cwd)) {
-				const rel = absPath.slice(cwd.length)
-				relativePath = rel.startsWith("/") ? rel : "/" + rel
-			} else {
-				relativePath = absPath
-			}
-
-			let isFile = true
-			try {
-				const stat = await vscode.workspace.fs.stat(uri)
-				isFile = stat.type === vscode.FileType.File
-			} catch {
-				// Best-effort; default to file.
-			}
-
-			newFiles.push({ path: relativePath, isFile })
-		}
-
-		if (newFiles.length === 0) return
-
-		// Forward to the webview.  ChatView merges/dedupes against its own
-		// droppedContextFiles state, so we do not need to track anything here.
-		await this.clineProvider?.postMessageToWebview({
-			type: "addContextFiles",
-			contextFiles: newFiles,
-		})
-
-		const message =
-			newFiles.length === 1 ? "Added 1 file to chat context" : `Added ${newFiles.length} files to chat context`
-		vscode.window.setStatusBarMessage(message, 2000)
+		await addUrisToContext(uris, this.clineProvider)
 	}
 
 	/** TreeDataProvider: return the single hint row. */
