@@ -172,8 +172,22 @@ export function isToolAllowedForMode(
 		return false
 	}
 
+	// Check if tool is explicitly denied — denial takes priority over groups
+	if (mode.tools_denied && mode.tools_denied.length > 0) {
+		if (mode.tools_denied.includes(tool) || mode.tools_denied.includes(resolvedTool)) {
+			return false
+		}
+	}
+
+	// Check if tool is explicitly whitelisted in mode.tools_allowed (OR with groups)
+	if (mode.tools_allowed && mode.tools_allowed.length > 0) {
+		if (mode.tools_allowed.includes(tool) || mode.tools_allowed.includes(resolvedTool)) {
+			return true
+		}
+	}
+
 	// Check if tool is in any of the mode's groups and respects any group options
-	for (const group of mode.groups) {
+	for (const group of mode.groups ?? []) {
 		const groupName = getGroupName(group)
 		const options = getGroupOptions(group)
 
