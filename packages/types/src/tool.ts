@@ -4,7 +4,7 @@ import { z } from "zod"
  * ToolGroup
  */
 
-export const toolGroups = ["read", "edit", "command", "mcp", "modes"] as const
+export const toolGroups = ["read", "edit", "command", "mcp", "modes", "uncategorized"] as const
 
 export const toolGroupsSchema = z.enum(toolGroups)
 
@@ -180,6 +180,9 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	modes: {
 		tools: ["switch_mode", "new_task"],
 		alwaysAvailable: true,
+	},
+	uncategorized: {
+		tools: [],
 	},
 }
 

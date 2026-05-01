@@ -286,6 +286,7 @@ export type ExtensionState = Pick<
 	| "alwaysAllowWriteOutsideWorkspace"
 	| "alwaysAllowWriteProtected"
 	| "alwaysAllowMcp"
+	| "alwaysAllowUncategorized"
 	| "alwaysAllowModeSwitch"
 	| "alwaysAllowSubtasks"
 	| "alwaysAllowFollowupQuestions"
@@ -510,7 +511,6 @@ export interface WebviewMessage {
 		| "openProjectMcpSettings"
 		| "restartMcpServer"
 		| "refreshAllMcpServers"
-		| "toggleToolAlwaysAllow"
 		| "toggleToolEnabledForPrompt"
 		| "toggleMcpServer"
 		| "updateMcpTimeout"
@@ -661,7 +661,6 @@ export interface WebviewMessage {
 	audioType?: AudioType
 	serverName?: string
 	toolName?: string
-	alwaysAllow?: boolean
 	isEnabled?: boolean
 	mode?: string
 	promptMode?: string | "enhance"

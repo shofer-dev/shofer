@@ -10,7 +10,7 @@ import {
 import { ClineAskResponse } from "../../shared/WebviewMessage"
 
 import { isWriteToolAction, isReadOnlyToolAction } from "./tools"
-import { isMcpToolAlwaysAllowed } from "./mcp"
+import { isMcpToolUncategorized } from "./mcp"
 import { getCommandDecision } from "./commands"
 
 // We have auto-approval actions for different categories.
@@ -18,6 +18,7 @@ export type AutoApprovalState =
 	| "alwaysAllowReadOnly"
 	| "alwaysAllowWrite"
 	| "alwaysAllowMcp"
+	| "alwaysAllowUncategorized"
 	| "alwaysAllowModeSwitch"
 	| "alwaysAllowSubtasks"
 	| "alwaysAllowExecute"
@@ -98,9 +99,21 @@ export async function checkAutoApproval({
 			const mcpServerUse = JSON.parse(text) as McpServerUse
 
 			if (mcpServerUse.type === "use_mcp_tool") {
-				return state.alwaysAllowMcp === true && isMcpToolAlwaysAllowed(mcpServerUse, state.mcpServers)
-					? { decision: "approve" }
-					: { decision: "ask" }
+				// `alwaysAllowMcp` is the master gate for auto-approving MCP tool
+				// calls. Per-tool granularity is controlled by tool groups (see
+				// `filterMcpToolsForMode`); tools without a group default to
+				// "uncategorized" and require an additional opt-in via
+				// `alwaysAllowUncategorized` (which is only meaningful when
+				// `alwaysAllowMcp` is also true).
+				if (state.alwaysAllowMcp !== true) {
+					return { decision: "ask" }
+				}
+
+				if (isMcpToolUncategorized(mcpServerUse, state.mcpServers) && state.alwaysAllowUncategorized !== true) {
+					return { decision: "ask" }
+				}
+
+				return { decision: "approve" }
 			} else if (mcpServerUse.type === "access_mcp_resource") {
 				return state.alwaysAllowMcp === true ? { decision: "approve" } : { decision: "ask" }
 			}

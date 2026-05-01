@@ -25,6 +25,7 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	alwaysAllowWriteOutsideWorkspace?: boolean
 	alwaysAllowWriteProtected?: boolean
 	alwaysAllowMcp?: boolean
+	alwaysAllowUncategorized?: boolean
 	alwaysAllowModeSwitch?: boolean
 	alwaysAllowSubtasks?: boolean
 	alwaysAllowExecute?: boolean
@@ -41,6 +42,7 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "alwaysAllowWriteOutsideWorkspace"
 		| "alwaysAllowWriteProtected"
 		| "alwaysAllowMcp"
+		| "alwaysAllowUncategorized"
 		| "alwaysAllowModeSwitch"
 		| "alwaysAllowSubtasks"
 		| "alwaysAllowExecute"
@@ -60,6 +62,7 @@ export const AutoApproveSettings = ({
 	alwaysAllowWriteOutsideWorkspace,
 	alwaysAllowWriteProtected,
 	alwaysAllowMcp,
+	alwaysAllowUncategorized,
 	alwaysAllowModeSwitch,
 	alwaysAllowSubtasks,
 	alwaysAllowExecute,
@@ -153,6 +156,7 @@ export const AutoApproveSettings = ({
 						alwaysAllowReadOnly={alwaysAllowReadOnly}
 						alwaysAllowWrite={alwaysAllowWrite}
 						alwaysAllowMcp={alwaysAllowMcp}
+						alwaysAllowUncategorized={alwaysAllowUncategorized}
 						alwaysAllowModeSwitch={alwaysAllowModeSwitch}
 						alwaysAllowSubtasks={alwaysAllowSubtasks}
 						alwaysAllowExecute={alwaysAllowExecute}

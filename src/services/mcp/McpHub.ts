@@ -27,6 +27,7 @@ import type {
 	McpTool,
 	McpToolCallResponse,
 } from "@roo-code/types"
+import { toolGroupsSchema } from "@roo-code/types"
 
 import { t } from "../../i18n"
 
@@ -68,9 +69,11 @@ export enum DisableReason {
 const BaseConfigSchema = z.object({
 	disabled: z.boolean().optional(),
 	timeout: z.number().min(1).max(3600).optional().default(60),
-	alwaysAllow: z.array(z.string()).default([]),
 	watchPaths: z.array(z.string()).optional(), // paths to watch for changes and restart server
 	disabledTools: z.array(z.string()).default([]),
+	// Per-tool group assignments. Keys are tool names; values must be a valid ToolGroup.
+	// Invalid group strings cause config load to fail (surface user errors early).
+	toolGroups: z.record(toolGroupsSchema).optional(),
 })
 
 // Custom error messages for better user feedback
@@ -485,6 +488,38 @@ export class McpHub {
 	getAllServers(): McpServer[] {
 		// Return all servers regardless of state
 		return this.connections.map((conn) => conn.server)
+	}
+
+	/**
+	 * Returns metadata about MCP tools including group assignments and the\n	 * server name they belong to. Used by mode-based tool filtering, where\n	 * server-qualified lookups are required to disambiguate tools sharing the\n	 * same name across different servers.
+	 *
+	 * @returns Array of `{ serverName, ...McpTool }` entries, deduplicated by\n	 *   `serverName + toolName` and excluding tools disabled for prompting.
+	 */
+	getMcpToolMetadata(): Array<McpTool & { serverName: string }> {
+		const servers = this.getServers()
+		const allTools: Array<McpTool & { serverName: string }> = []
+		const seenKeys = new Set<string>()
+
+		for (const server of servers) {
+			if (!server.tools) {
+				continue
+			}
+			for (const tool of server.tools) {
+				if (tool.enabledForPrompt === false) {
+					continue
+				}
+
+				const key = `${server.name}:${tool.name}`
+				if (seenKeys.has(key)) {
+					continue
+				}
+				seenKeys.add(key)
+
+				allTools.push({ ...tool, serverName: server.name })
+			}
+		}
+
+		return allTools
 	}
 
 	async getMcpServersPath(): Promise<string> {
@@ -1032,8 +1067,8 @@ export class McpHub {
 			// Determine the actual source of the server
 			const actualSource = connection.server.source || "global"
 			let configPath: string
-			let alwaysAllowConfig: string[] = []
 			let disabledToolsList: string[] = []
+			let toolGroupsConfig: Record<string, string> = {}
 
 			// Read from the appropriate config file based on the actual source
 			try {
@@ -1053,23 +1088,33 @@ export class McpHub {
 					serverConfigData = JSON.parse(content)
 				}
 				if (serverConfigData) {
-					alwaysAllowConfig = serverConfigData.mcpServers?.[serverName]?.alwaysAllow || []
 					disabledToolsList = serverConfigData.mcpServers?.[serverName]?.disabledTools || []
+					toolGroupsConfig = serverConfigData.mcpServers?.[serverName]?.toolGroups || {}
 				}
 			} catch (error) {
 				console.error(`Failed to read tool configuration for ${serverName}:`, error)
 				// Continue with empty configs
 			}
 
-			// Check if wildcard "*" is in the alwaysAllow config
-			const hasWildcard = alwaysAllowConfig.includes("*")
+			// Resolve per-tool group assignments. Priority order:
+			//   1. User-supplied override in mcp.json (`toolGroups[toolName]`)
+			//   2. Server-declared `tool.group`
+			//   3. Default `uncategorized`
+			// Auto-approval is gated by group, not by a per-tool flag.
+			const resolveGroup = (raw: unknown): McpTool["group"] => {
+				const parsed = toolGroupsSchema.safeParse(raw)
+				return parsed.success ? parsed.data : undefined
+			}
+			const tools: McpTool[] = (response?.tools || []).map((tool) => {
+				const group: McpTool["group"] =
+					resolveGroup(toolGroupsConfig[tool.name]) ?? resolveGroup(tool.group) ?? "uncategorized"
 
-			// Mark tools as always allowed and enabled for prompt based on settings
-			const tools = (response?.tools || []).map((tool) => ({
-				...tool,
-				alwaysAllow: hasWildcard || alwaysAllowConfig.includes(tool.name),
-				enabledForPrompt: !disabledToolsList.includes(tool.name),
-			}))
+				return {
+					...tool,
+					enabledForPrompt: !disabledToolsList.includes(tool.name),
+					group,
+				}
+			})
 
 			return tools
 		} catch (error) {
@@ -1636,11 +1681,6 @@ export class McpHub {
 			...configUpdate,
 		}
 
-		// Ensure required fields exist
-		if (!serverConfig.alwaysAllow) {
-			serverConfig.alwaysAllow = []
-		}
-
 		config.mcpServers[serverName] = serverConfig
 
 		// Write the entire config back
@@ -1825,21 +1865,20 @@ export class McpHub {
 	}
 
 	/**
-	 * Helper method to update a specific tool list (alwaysAllow or disabledTools)
-	 * in the appropriate settings file.
+	 * Helper method to update the per-server `disabledTools` list in the
+	 * appropriate settings file.
 	 * @param serverName The name of the server to update
 	 * @param source Whether to update the global or project config
 	 * @param toolName The name of the tool to add or remove
-	 * @param listName The name of the list to modify ("alwaysAllow" or "disabledTools")
 	 * @param addTool Whether to add (true) or remove (false) the tool from the list
 	 */
 	private async updateServerToolList(
 		serverName: string,
 		source: "global" | "project",
 		toolName: string,
-		listName: "alwaysAllow" | "disabledTools",
 		addTool: boolean,
 	): Promise<void> {
+		const listName = "disabledTools"
 		// Find the connection with matching name and source
 		const connection = this.findConnection(serverName, source)
 
@@ -1915,23 +1954,6 @@ export class McpHub {
 		}
 	}
 
-	async toggleToolAlwaysAllow(
-		serverName: string,
-		source: "global" | "project",
-		toolName: string,
-		shouldAllow: boolean,
-	): Promise<void> {
-		try {
-			await this.updateServerToolList(serverName, source, toolName, "alwaysAllow", shouldAllow)
-		} catch (error) {
-			this.showErrorMessage(
-				`Failed to toggle always allow for tool "${toolName}" on server "${serverName}" with source "${source}"`,
-				error,
-			)
-			throw error
-		}
-	}
-
 	async toggleToolEnabledForPrompt(
 		serverName: string,
 		source: "global" | "project",
@@ -1942,7 +1964,7 @@ export class McpHub {
 			// When isEnabled is true, we want to remove the tool from the disabledTools list.
 			// When isEnabled is false, we want to add the tool to the disabledTools list.
 			const addToolToDisabledList = !isEnabled
-			await this.updateServerToolList(serverName, source, toolName, "disabledTools", addToolToDisabledList)
+			await this.updateServerToolList(serverName, source, toolName, addToolToDisabledList)
 		} catch (error) {
 			this.showErrorMessage(`Failed to update settings for tool ${toolName}`, error)
 			throw error // Re-throw to ensure the error is properly handled

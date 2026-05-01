@@ -159,6 +159,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		language,
 		alwaysAllowExecute,
 		alwaysAllowMcp,
+		alwaysAllowUncategorized,
 		alwaysAllowModeSwitch,
 		alwaysAllowSubtasks,
 		alwaysAllowWrite,
@@ -376,6 +377,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					alwaysAllowWriteProtected: alwaysAllowWriteProtected ?? undefined,
 					alwaysAllowExecute: alwaysAllowExecute ?? undefined,
 					alwaysAllowMcp,
+					alwaysAllowUncategorized,
 					alwaysAllowModeSwitch,
 					allowedCommands: allowedCommands ?? [],
 					deniedCommands: deniedCommands ?? [],
@@ -794,6 +796,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								alwaysAllowWriteOutsideWorkspace={alwaysAllowWriteOutsideWorkspace}
 								alwaysAllowWriteProtected={alwaysAllowWriteProtected}
 								alwaysAllowMcp={alwaysAllowMcp}
+								alwaysAllowUncategorized={alwaysAllowUncategorized}
 								alwaysAllowModeSwitch={alwaysAllowModeSwitch}
 								alwaysAllowSubtasks={alwaysAllowSubtasks}
 								alwaysAllowExecute={alwaysAllowExecute}
@@ -809,7 +812,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* Tools Section */}
 						{renderTab === "tools" && (
-							<ToolsSettings disabledTools={disabledTools} setCachedStateField={setCachedStateField} />
+							<ToolsSettings
+								disabledTools={disabledTools}
+								setCachedStateField={setCachedStateField}
+								mcpServers={extensionState.mcpServers}
+							/>
 						)}
 
 						{/* Slash Commands Section */}

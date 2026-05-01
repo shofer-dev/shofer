@@ -291,7 +291,8 @@
 		"alwaysAvailableTooltip": "This tool is always available and cannot be disabled.",
 		"badges": {
 			"optInOnly": "Opt-in only",
-			"aliases": "(aliases: {{aliases}})"
+			"aliases": "(aliases: {{aliases}})",
+			"mcpTool": "MCP"
 		},
 		"groups": {
 			"essential": "Essential (always available)",
@@ -299,7 +300,8 @@
 			"edit": "Edit",
 			"command": "Command",
 			"mcp": "MCP",
-			"modes": "Modes"
+			"modes": "Modes",
+			"uncategorized": "Uncategorized"
 		}
 	},
 	"autoApprove": {
@@ -330,6 +332,10 @@
 		"mcp": {
 			"label": "MCP",
 			"description": "Enable auto-approval of individual MCP tools in the MCP Servers view (requires both this setting and the tool's individual \"Always allow\" checkbox)"
+		},
+		"uncategorized": {
+			"label": "Uncategorized",
+			"description": "Auto-approve MCP tools that have not been assigned to a specific category group. Requires the 'MCP' auto-approval and the per-tool 'Always allow' checkbox to also be enabled."
 		},
 		"modeSwitch": {
 			"label": "Mode",

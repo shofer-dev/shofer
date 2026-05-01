@@ -189,7 +189,6 @@ const createMockMcpHub = (withServers: boolean = false): McpHub =>
 		readResource: async () => ({ contents: [] }),
 		callTool: async () => ({ content: [] }),
 		toggleServerDisabled: async () => {},
-		toggleToolAlwaysAllow: async () => {},
 		isConnecting: false,
 		connections: [],
 	}) as unknown as McpHub

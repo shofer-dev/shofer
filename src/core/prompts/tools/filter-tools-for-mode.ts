@@ -1,8 +1,9 @@
 import type OpenAI from "openai"
-import type { ModeConfig, ToolName, ToolGroup, ModelInfo } from "@roo-code/types"
+import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@roo-code/types"
 import { getModeBySlug, getToolsForMode } from "../../../shared/modes"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../../shared/tools"
 import { defaultModeSlug } from "../../../shared/modes"
+import { buildMcpToolName } from "../../../utils/mcp-name"
 import type { CodeIndexManager } from "../../../services/code-index/manager"
 import type { McpHub } from "../../../services/mcp/McpHub"
 import { isToolAllowedForMode } from "../../../core/tools/validateToolUse"
@@ -426,31 +427,55 @@ export function getAvailableToolsInGroup(
 }
 
 /**
- * Filters MCP tools based on whether use_mcp_tool is allowed in the current mode.
+ * Filters MCP tools based on per-tool group membership and mode restrictions.
  *
- * @param mcpTools - Array of MCP tools
+ * Each MCP tool carries a `group` field (defaulting to "uncategorized" when not
+ * specified by the server and not overridden by the user). The mode's `groups`
+ * configuration determines which groups of MCP tools are exposed.
+ *
+ * @param mcpTools - Array of MCP tools (ChatCompletionTool definitions whose
+ *   function names follow the `mcp--<server>--<tool>` convention)
+ * @param mcpToolMeta - Per-tool metadata including server name and resolved group
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
- * @param experiments - Experiment flags
- * @returns Filtered array of MCP tools if use_mcp_tool is allowed, empty array otherwise
+ * @param experiments - Experiment flags (currently unused; kept for API symmetry)
+ * @returns Filtered array of MCP tools allowed for the mode
  */
 export function filterMcpToolsForMode(
 	mcpTools: OpenAI.Chat.ChatCompletionTool[],
+	mcpToolMeta: Array<McpTool & { serverName: string }>,
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
-	experiments: Record<string, boolean> | undefined,
+	_experiments: Record<string, boolean> | undefined,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	const modeSlug = mode ?? defaultModeSlug
+	const modeConfig = getModeBySlug(modeSlug, customModes)
 
-	// MCP tools are always in the mcp group, check if use_mcp_tool is allowed
-	const isMcpAllowed = isToolAllowedForMode(
-		"use_mcp_tool",
-		modeSlug,
-		customModes ?? [],
-		undefined,
-		undefined,
-		experiments ?? {},
-	)
+	if (!modeConfig) {
+		return []
+	}
 
-	return isMcpAllowed ? mcpTools : []
+	// Allowed groups for this mode (groups entries can be either a slug or a
+	// tuple `[slug, options]`).
+	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => (Array.isArray(g) ? g[0] : g)))
+
+	// Build a lookup keyed by the OpenAI function name. We intentionally rebuild
+	// the function name with `buildMcpToolName` (the same function used to
+	// produce tool names exposed to the model) so sanitization/truncation match
+	// exactly. This avoids brittle reverse-parsing of sanitized names and
+	// disambiguates tools that share a name across different servers.
+	const groupByFunctionName = new Map<string, string>()
+	for (const meta of mcpToolMeta) {
+		if (meta.enabledForPrompt === false) continue
+		const functionName = buildMcpToolName(meta.serverName, meta.name)
+		groupByFunctionName.set(functionName, meta.group ?? "uncategorized")
+	}
+
+	return mcpTools.filter((tool) => {
+		if (!("function" in tool)) {
+			return false
+		}
+		const group = groupByFunctionName.get(tool.function.name) ?? "uncategorized"
+		return allowedGroups.has(group)
+	})
 }

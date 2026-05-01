@@ -9,7 +9,6 @@ vi.mock("@src/i18n/TranslationContext", () => ({
 	useAppTranslation: () => ({
 		t: (key: string) => {
 			const translations: Record<string, string> = {
-				"mcp:tool.alwaysAllow": "Always allow",
 				"mcp:tool.parameters": "Parameters",
 				"mcp:tool.noDescription": "No description",
 				"mcp:tool.togglePromptInclusion": "Toggle prompt inclusion",
@@ -48,7 +47,6 @@ describe("McpToolRow", () => {
 	const mockTool = {
 		name: "test-tool",
 		description: "A test tool",
-		alwaysAllow: false,
 		enabledForPrompt: true,
 	}
 
@@ -63,50 +61,11 @@ describe("McpToolRow", () => {
 		expect(screen.getByText("A test tool")).toBeInTheDocument()
 	})
 
-	it("does not show always allow checkbox when serverName is not provided", () => {
-		render(<McpToolRow tool={mockTool} />)
-
-		expect(screen.queryByText("Always allow")).not.toBeInTheDocument()
-	})
-
-	it("shows always allow checkbox when serverName and alwaysAllowMcp are provided", () => {
-		render(<McpToolRow tool={mockTool} serverName="test-server" alwaysAllowMcp={true} />)
-
-		expect(screen.getByText("Always allow")).toBeInTheDocument()
-	})
-
-	it("sends message to toggle always allow when checkbox is clicked", () => {
-		render(<McpToolRow tool={mockTool} serverName="test-server" alwaysAllowMcp={true} />)
-
-		const checkbox = screen.getByRole("checkbox")
-		fireEvent.click(checkbox)
-
-		expect(vscode.postMessage).toHaveBeenCalledWith({
-			type: "toggleToolAlwaysAllow",
-			serverName: "test-server",
-			toolName: "test-tool",
-			alwaysAllow: true,
-			source: "global",
-		})
-	})
-
-	it("reflects always allow state in checkbox", () => {
-		const alwaysAllowedTool = {
-			...mockTool,
-			alwaysAllow: true,
-		}
-
-		render(<McpToolRow tool={alwaysAllowedTool} serverName="test-server" alwaysAllowMcp={true} />)
-
-		const checkbox = screen.getByRole("checkbox") as HTMLInputElement
-		expect(checkbox.checked).toBe(true)
-	})
-
-	it("prevents event propagation when clicking the checkbox", () => {
+	it("prevents event propagation when clicking the row container", () => {
 		const mockOnClick = vi.fn()
 		render(
 			<div onClick={mockOnClick}>
-				<McpToolRow tool={mockTool} serverName="test-server" alwaysAllowMcp={true} />
+				<McpToolRow tool={mockTool} serverName="test-server" />
 			</div>,
 		)
 
@@ -186,20 +145,6 @@ describe("McpToolRow", () => {
 			toolName: "test-tool",
 			isEnabled: false,
 		})
-	})
-
-	it("hides always allow checkbox when tool is disabled", () => {
-		const disabledTool = { ...mockTool, enabledForPrompt: false }
-		render(<McpToolRow tool={disabledTool} serverName="test-server" alwaysAllowMcp={true} />)
-
-		expect(screen.queryByText("Always allow")).not.toBeInTheDocument()
-	})
-
-	it("shows always allow checkbox when tool is enabled", () => {
-		const enabledTool = { ...mockTool, enabledForPrompt: true }
-		render(<McpToolRow tool={enabledTool} serverName="test-server" alwaysAllowMcp={true} />)
-
-		expect(screen.getByText("Always allow")).toBeInTheDocument()
 	})
 
 	it("hides parameters section when tool is disabled", () => {
