@@ -90,6 +90,25 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		  }
 		| undefined
 
+	/**
+	 * Capability flags for the active client's model, fetched from the
+	 * Arkware LLM Model Provider extension via the well-known
+	 * `arkware.llm.getModelCapabilities` command. The VS Code LM Chat API's
+	 * `LanguageModelChatProviderCapabilities` only models `imageInput` and
+	 * `toolCalling`, with no slot for prompt-cache support — and even those
+	 * two we prefer to source from llm-router's registry rather than rely on
+	 * VS Code's own capability surface, which is the single source of truth
+	 * for model capabilities across the stack. Stays `undefined` until the
+	 * async refresh completes or for non-arkware vendors.
+	 */
+	private arkwareCapabilities:
+		| {
+				imageInput: boolean
+				toolCalling: boolean
+				promptCache: boolean
+		  }
+		| undefined
+
 	constructor(options: ApiHandlerOptions) {
 		super()
 		this.options = options
@@ -143,9 +162,11 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			// Create a new client instance
 			this.client = await this.createClient(this.options.vsCodeLmModelSelector || {})
 			console.debug("Roo Code <Language Model API>: Client initialized successfully")
-			// Best-effort prefetch of pricing for the selected model. Failures
-			// are non-fatal: non-arkware setups simply leave pricing unset.
+			// Best-effort prefetch of pricing and capabilities for the selected
+			// model. Failures are non-fatal: non-arkware setups simply leave
+			// these unset (consumers fall back to conservative defaults).
 			void this.refreshArkwarePricing()
+			void this.refreshArkwareCapabilities()
 		} catch (error) {
 			// Handle errors during client initialization
 			const errorMessage = error instanceof Error ? error.message : "Unknown error"
@@ -174,6 +195,34 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				>("arkware.llm.getModelPricing", candidate)
 				if (pricing && (pricing.inputPrice > 0 || pricing.outputPrice > 0)) {
 					this.arkwarePricing = pricing
+					return
+				}
+			} catch {
+				// Command not registered (no arkware extension) or threw — try next.
+			}
+		}
+	}
+
+	/**
+	 * Look up capability flags for the active client's model via the
+	 * Arkware LLM Model Provider extension's well-known
+	 * `arkware.llm.getModelCapabilities` command. Mirrors
+	 * {@link refreshArkwarePricing} in identifier-resolution strategy. Sets
+	 * `this.arkwareCapabilities` on success; silently leaves it untouched on
+	 * miss/failure (e.g. when the arkware extension isn't installed).
+	 */
+	private async refreshArkwareCapabilities(): Promise<void> {
+		if (!this.client) return
+		const candidates = [this.client.id, this.client.family].filter(
+			(s): s is string => typeof s === "string" && s.length > 0,
+		)
+		for (const candidate of candidates) {
+			try {
+				const caps = await vscode.commands.executeCommand<
+					{ imageInput: boolean; toolCalling: boolean; promptCache: boolean } | undefined
+				>("arkware.llm.getModelCapabilities", candidate)
+				if (caps) {
+					this.arkwareCapabilities = caps
 					return
 				}
 			} catch {
@@ -752,12 +801,19 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			)
 			const modelInfo: ModelInfo = {
 				maxTokens: -1, // Unlimited tokens by default
+				// Context window must come from llm-router (via
+				// `client.maxInputTokens`). Falling back to a static default
+				// silently corrupts condensation/truncation math when the model
+				// supports far more (e.g. 1M-token deepseek-v4-pro), so leave it
+				// at 0 if the upstream value is missing — consumers will surface
+				// the misconfiguration instead of hiding it behind a 128K guess.
 				contextWindow:
-					typeof this.client.maxInputTokens === "number"
-						? Math.max(0, this.client.maxInputTokens)
-						: openAiModelInfoSaneDefaults.contextWindow,
-				supportsImages: false, // VSCode Language Model API currently doesn't support image inputs
-				supportsPromptCache: true,
+					typeof this.client.maxInputTokens === "number" ? Math.max(0, this.client.maxInputTokens) : 0,
+				// Capability flags are sourced from llm-router's model registry
+				// via the arkware side-channel. Conservative `false` default
+				// applies only when the side channel is unavailable.
+				supportsImages: this.arkwareCapabilities?.imageInput ?? false,
+				supportsPromptCache: this.arkwareCapabilities?.promptCache ?? false,
 				inputPrice: this.arkwarePricing?.inputPrice ?? 0,
 				outputPrice: this.arkwarePricing?.outputPrice ?? 0,
 				...(this.arkwarePricing?.cacheReadsPrice !== undefined && {
@@ -821,14 +877,111 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 // Static blacklist of VS Code Language Model IDs that should be excluded from the model list e.g. because they will never work
 const VSCODE_LM_STATIC_BLACKLIST: string[] = ["claude-3.7-sonnet", "claude-3.7-sonnet-thought"]
 
-export async function getVsCodeLmModels() {
+/**
+ * Capability flags exposed by the Arkware LLM Model Provider extension via
+ * the `arkware.llm.getModelCapabilities` side-channel command. Mirrors the
+ * shape of llm-router's `/v1/models` `capabilities` block.
+ */
+export interface ArkwareLmCapabilities {
+	imageInput: boolean
+	toolCalling: boolean
+	promptCache: boolean
+}
+
+/**
+ * Pricing flags exposed by the Arkware LLM Model Provider extension via the
+ * `arkware.llm.getModelPricing` side-channel command. USD per 1M tokens.
+ */
+export interface ArkwareLmPricing {
+	inputPrice: number
+	outputPrice: number
+	cacheReadsPrice?: number
+	cacheWritesPrice?: number
+}
+
+/**
+ * Shape returned to the webview for each VS Code LM model. We can't extend
+ * `vscode.LanguageModelChat` (it's a frozen interface), so we project the
+ * subset the UI needs and attach Arkware-only fields (`arkwareCapabilities`,
+ * `arkwarePricing`) sourced from the side-channel commands. The webview
+ * relies on these to render capability/pricing facts without hardcoded
+ * assumptions.
+ */
+export interface VsCodeLmModelDescriptor {
+	id: string
+	vendor: string
+	family: string
+	version: string
+	name: string
+	maxInputTokens: number
+	capabilities?: { imageInput?: boolean; toolCalling?: boolean }
+	arkwareCapabilities?: ArkwareLmCapabilities
+	arkwarePricing?: ArkwareLmPricing
+}
+
+/**
+ * Enumerate VS Code LM chat models, filter the static blacklist, and enrich
+ * each entry with Arkware capability/pricing data fetched from llm-provider.
+ *
+ * The enrichment uses two side-channel commands
+ * (`arkware.llm.getModelCapabilities`, `arkware.llm.getModelPricing`) keyed
+ * tolerantly on the model id and the slash-free `family` identifier; this
+ * mirrors {@link VsCodeLmHandler.refreshArkwareCapabilities} so both the
+ * runtime handler and the webview see the same source of truth. Failures
+ * for individual models leave their Arkware fields unset; callers must treat
+ * `undefined` as "not available" and not as a capability assertion.
+ */
+export async function getVsCodeLmModels(): Promise<VsCodeLmModelDescriptor[]> {
 	try {
 		const models = (await vscode.lm.selectChatModels({})) || []
-		return models.filter((model) => !VSCODE_LM_STATIC_BLACKLIST.includes(model.id))
+		const filtered = models.filter((model) => !VSCODE_LM_STATIC_BLACKLIST.includes(model.id))
+		return await Promise.all(filtered.map(enrichVsCodeLmModel))
 	} catch (error) {
 		console.error(
 			`Error fetching VS Code LM models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 		)
 		return []
+	}
+}
+
+async function enrichVsCodeLmModel(model: vscode.LanguageModelChat): Promise<VsCodeLmModelDescriptor> {
+	const candidates = [model.id, model.family].filter((s): s is string => typeof s === "string" && s.length > 0)
+	let arkwareCapabilities: ArkwareLmCapabilities | undefined
+	let arkwarePricing: ArkwareLmPricing | undefined
+	for (const candidate of candidates) {
+		if (!arkwareCapabilities) {
+			try {
+				arkwareCapabilities = await vscode.commands.executeCommand<ArkwareLmCapabilities | undefined>(
+					"arkware.llm.getModelCapabilities",
+					candidate,
+				)
+			} catch {
+				// Side-channel command unavailable (no arkware extension); leave undefined.
+			}
+		}
+		if (!arkwarePricing) {
+			try {
+				arkwarePricing = await vscode.commands.executeCommand<ArkwareLmPricing | undefined>(
+					"arkware.llm.getModelPricing",
+					candidate,
+				)
+			} catch {
+				// As above.
+			}
+		}
+		if (arkwareCapabilities && arkwarePricing) break
+	}
+	return {
+		id: model.id,
+		vendor: model.vendor,
+		family: model.family,
+		version: model.version,
+		name: model.name,
+		maxInputTokens: model.maxInputTokens,
+		capabilities: model.capabilities
+			? { imageInput: model.capabilities.imageInput, toolCalling: model.capabilities.toolCalling }
+			: undefined,
+		arkwareCapabilities,
+		arkwarePricing,
 	}
 }

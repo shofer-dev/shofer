@@ -137,7 +137,7 @@ function getSelectedModel({
 	openRouterModelProviders: Record<string, ModelInfo>
 	lmStudioModels: ModelRecord | undefined
 	ollamaModels: ModelRecord | undefined
-	vsCodeLmModels: any[]
+	vsCodeLmModels: VsCodeLmChatInfo[]
 }): { id: string; info: ModelInfo | undefined } {
 	// the `undefined` case are used to show the invalid selection to prevent
 	// users from seeing the default model if their selection is invalid
@@ -315,13 +315,29 @@ function getSelectedModel({
 				staticInfo?.contextWindow ??
 				(typeof dynamicModel?.maxInputTokens === "number" ? dynamicModel.maxInputTokens : undefined) ??
 				openAiModelInfoSaneDefaults.contextWindow
+			// Capability flags must come from llm-router (via the Arkware
+			// side-channel commands) rather than being hardcoded. We prefer
+			// the full `arkwareCapabilities` set; for `imageInput` only, we
+			// also accept VS Code's native `capabilities.imageInput` as a
+			// fallback for non-Arkware providers (e.g. bundled Copilot).
+			const supportsImages =
+				dynamicModel?.arkwareCapabilities?.imageInput ?? dynamicModel?.capabilities?.imageInput ?? false
+			const supportsPromptCache = dynamicModel?.arkwareCapabilities?.promptCache ?? false
+			const pricing = dynamicModel?.arkwarePricing
 			return {
 				id,
 				info: {
 					...openAiModelInfoSaneDefaults,
 					...staticInfo,
 					contextWindow,
-					supportsImages: false,
+					supportsImages,
+					supportsPromptCache,
+					...(pricing && {
+						inputPrice: pricing.inputPrice,
+						outputPrice: pricing.outputPrice,
+						...(pricing.cacheReadsPrice !== undefined && { cacheReadsPrice: pricing.cacheReadsPrice }),
+						...(pricing.cacheWritesPrice !== undefined && { cacheWritesPrice: pricing.cacheWritesPrice }),
+					}),
 				},
 			}
 		}
