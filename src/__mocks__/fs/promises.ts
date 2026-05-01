@@ -167,7 +167,6 @@ const mockFs = {
 						command: "node",
 						args: ["test.js"],
 						disabled: false,
-						alwaysAllow: ["existing-tool"],
 						disabledTools: [],
 					},
 				},

@@ -1,5 +1,3 @@
-import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
-
 import type { McpTool } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
@@ -10,24 +8,12 @@ type McpToolRowProps = {
 	tool: McpTool
 	serverName?: string
 	serverSource?: "global" | "project"
-	alwaysAllowMcp?: boolean
 	isInChatContext?: boolean
 }
 
-const McpToolRow = ({ tool, serverName, serverSource, alwaysAllowMcp, isInChatContext = false }: McpToolRowProps) => {
+const McpToolRow = ({ tool, serverName, serverSource, isInChatContext = false }: McpToolRowProps) => {
 	const { t } = useAppTranslation()
 	const isToolEnabled = tool.enabledForPrompt ?? true
-
-	const handleAlwaysAllowChange = () => {
-		if (!serverName) return
-		vscode.postMessage({
-			type: "toggleToolAlwaysAllow",
-			serverName,
-			source: serverSource || "global",
-			toolName: tool.name,
-			alwaysAllow: !tool.alwaysAllow,
-		})
-	}
 
 	const handleEnabledForPromptChange = () => {
 		if (!serverName) return
@@ -69,19 +55,6 @@ const McpToolRow = ({ tool, serverName, serverSource, alwaysAllowMcp, isInChatCo
 				{/* Controls section */}
 				{serverName && (
 					<div className="flex items-center gap-4 flex-shrink-0">
-						{/* Always Allow checkbox - only show when tool is enabled */}
-						{alwaysAllowMcp && isToolEnabled && (
-							<VSCodeCheckbox
-								checked={tool.alwaysAllow}
-								onChange={handleAlwaysAllowChange}
-								data-tool={tool.name}
-								className="text-xs">
-								<span className="text-vscode-descriptionForeground whitespace-nowrap">
-									{t("mcp:tool.alwaysAllow")}
-								</span>
-							</VSCodeCheckbox>
-						)}
-
 						{/* Enabled toggle switch - only show in settings context */}
 						{!isInChatContext && (
 							<StandardTooltip content={t("mcp:tool.togglePromptInclusion")}>

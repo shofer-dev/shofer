@@ -30,12 +30,10 @@ interface McpExecutionProps {
 		tools?: Array<{
 			name: string
 			description?: string
-			alwaysAllow?: boolean
 		}>
 		source?: "global" | "project"
 	}
 	useMcpServer?: ClineAskUseMcpServer
-	alwaysAllowMcp?: boolean
 }
 
 export const McpExecution = ({
@@ -46,7 +44,6 @@ export const McpExecution = ({
 	isArguments = false,
 	server,
 	useMcpServer,
-	alwaysAllowMcp = false,
 }: McpExecutionProps) => {
 	const { t } = useTranslation("mcp")
 
@@ -243,13 +240,9 @@ export const McpExecution = ({
 								description:
 									server?.tools?.find((tool) => tool.name === useMcpServer.toolName)?.description ||
 									"",
-								alwaysAllow:
-									server?.tools?.find((tool) => tool.name === useMcpServer.toolName)?.alwaysAllow ||
-									false,
 							}}
 							serverName={useMcpServer.serverName}
 							serverSource={server?.source}
-							alwaysAllowMcp={alwaysAllowMcp}
 							isInChatContext={true}
 						/>
 					</div>
@@ -260,11 +253,9 @@ export const McpExecution = ({
 							tool={{
 								name: toolName || "",
 								description: "",
-								alwaysAllow: false,
 							}}
 							serverName={serverName}
 							serverSource={undefined}
-							alwaysAllowMcp={alwaysAllowMcp}
 							isInChatContext={true}
 						/>
 					</div>

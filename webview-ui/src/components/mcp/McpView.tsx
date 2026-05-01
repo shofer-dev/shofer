@@ -93,7 +93,7 @@ const TreeGroup = ({
 }
 
 const McpView = () => {
-	const { mcpServers: servers, alwaysAllowMcp, mcpEnabled } = useExtensionState()
+	const { mcpServers: servers, mcpEnabled } = useExtensionState()
 
 	const { t } = useAppTranslation()
 	const { isOverThreshold, title, message } = useTooManyTools()
@@ -152,11 +152,7 @@ const McpView = () => {
 						{servers.length > 0 && (
 							<div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
 								{servers.map((server) => (
-									<ServerRow
-										key={`${server.name}-${server.source || "global"}`}
-										server={server}
-										alwaysAllowMcp={alwaysAllowMcp}
-									/>
+									<ServerRow key={`${server.name}-${server.source || "global"}`} server={server} />
 								))}
 							</div>
 						)}
@@ -238,7 +234,7 @@ const McpView = () => {
 	)
 }
 
-const ServerRow = ({ server, alwaysAllowMcp }: { server: McpServer; alwaysAllowMcp?: boolean }) => {
+const ServerRow = ({ server }: { server: McpServer }) => {
 	const { t } = useAppTranslation()
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 	const [timeoutValue, setTimeoutValue] = useState(() => {
@@ -459,7 +455,6 @@ const ServerRow = ({ server, alwaysAllowMcp }: { server: McpServer; alwaysAllowM
 								tool={tool}
 								serverName={server.name}
 								serverSource={server.source || "global"}
-								alwaysAllowMcp={alwaysAllowMcp}
 							/>
 						))
 					) : (

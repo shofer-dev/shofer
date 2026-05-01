@@ -249,7 +249,7 @@ export const ChatRowContent = ({
 }: ChatRowContentProps) => {
 	const { t, i18n } = useTranslation()
 
-	const { mcpServers, alwaysAllowMcp, currentCheckpoint, mode, apiConfiguration, clineMessages, currentTaskItem } =
+	const { mcpServers, currentCheckpoint, mode, apiConfiguration, clineMessages, currentTaskItem } =
 		useExtensionState()
 	const { info: model } = useSelectedModel(apiConfiguration)
 	const [isEditing, setIsEditing] = useState(false)
@@ -1781,7 +1781,6 @@ export const ChatRowContent = ({
 										isArguments={true}
 										server={server}
 										useMcpServer={useMcpServer}
-										alwaysAllowMcp={alwaysAllowMcp}
 									/>
 								)}
 							</div>

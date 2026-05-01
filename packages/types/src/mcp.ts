@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { ToolGroup } from "./tool.js"
 
 /**
  * Maximum number of MCP tools that can be enabled before showing a warning.
@@ -71,8 +72,8 @@ export type McpTool = {
 	name: string
 	description?: string
 	inputSchema?: object
-	alwaysAllow?: boolean
 	enabledForPrompt?: boolean
+	group?: ToolGroup
 }
 
 export type McpResource = {

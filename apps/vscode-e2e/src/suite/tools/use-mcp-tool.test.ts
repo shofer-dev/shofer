@@ -46,7 +46,6 @@ suite.skip("Roo Code use_mcp_tool Tool", function () {
 				time: {
 					command: "uvx",
 					args: ["mcp-server-time"],
-					alwaysAllow: ["get_current_time", "convert_time"],
 				},
 			},
 		}

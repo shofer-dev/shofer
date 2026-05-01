@@ -35,6 +35,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		setAlwaysAllowWrite,
 		setAlwaysAllowExecute,
 		setAlwaysAllowMcp,
+		setAlwaysAllowUncategorized,
 		setAlwaysAllowModeSwitch,
 		setAlwaysAllowSubtasks,
 		setAlwaysAllowFollowupQuestions,
@@ -59,6 +60,9 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 				case "alwaysAllowMcp":
 					setAlwaysAllowMcp(value)
 					break
+				case "alwaysAllowUncategorized":
+					setAlwaysAllowUncategorized(value)
+					break
 				case "alwaysAllowModeSwitch":
 					setAlwaysAllowModeSwitch(value)
 					break
@@ -82,6 +86,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 			setAlwaysAllowWrite,
 			setAlwaysAllowExecute,
 			setAlwaysAllowMcp,
+			setAlwaysAllowUncategorized,
 			setAlwaysAllowModeSwitch,
 			setAlwaysAllowSubtasks,
 			setAlwaysAllowFollowupQuestions,
@@ -205,8 +210,10 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 						</p>
 					</div>
 					<div className="grid grid-cols-1 min-[340px]:grid-cols-2 gap-x-2 gap-y-2 p-3">
-						{settingsArray.map(({ key, labelKey, descriptionKey, icon }) => {
+						{settingsArray.map(({ key, labelKey, descriptionKey, icon, isDisabled }) => {
 							const isEnabled = toggles[key]
+							const dependencyDisabled = isDisabled?.(toggles) ?? false
+							const buttonDisabled = !effectiveAutoApprovalEnabled || dependencyDisabled
 							return (
 								<StandardTooltip key={key} content={t(descriptionKey)}>
 									<Button
@@ -217,9 +224,10 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 											"transition-all duration-150",
 											!effectiveAutoApprovalEnabled &&
 												"opacity-50 cursor-not-allowed hover:opacity-50",
+											dependencyDisabled && "opacity-30 cursor-not-allowed hover:opacity-30",
 											!isEnabled && "bg-vscode-button-background/15",
 										)}
-										disabled={!effectiveAutoApprovalEnabled}
+										disabled={buttonDisabled}
 										data-testid={`auto-approve-${key}`}>
 										<span className={`codicon codicon-${icon} text-sm flex-shrink-0`} />
 										<span className="flex-1 truncate">{t(labelKey)}</span>

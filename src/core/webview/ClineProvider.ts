@@ -2689,6 +2689,7 @@ export class ClineProvider
 			alwaysAllowWriteProtected: stateValues.alwaysAllowWriteProtected ?? false,
 			alwaysAllowExecute: stateValues.alwaysAllowExecute ?? false,
 			alwaysAllowMcp: stateValues.alwaysAllowMcp ?? false,
+			alwaysAllowUncategorized: stateValues.alwaysAllowUncategorized ?? false,
 			alwaysAllowModeSwitch: stateValues.alwaysAllowModeSwitch ?? false,
 			alwaysAllowSubtasks: stateValues.alwaysAllowSubtasks ?? false,
 			alwaysAllowFollowupQuestions: stateValues.alwaysAllowFollowupQuestions ?? false,

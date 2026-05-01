@@ -1512,23 +1512,6 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
-		case "toggleToolAlwaysAllow": {
-			try {
-				await provider
-					.getMcpHub()
-					?.toggleToolAlwaysAllow(
-						message.serverName!,
-						message.source as "global" | "project",
-						message.toolName!,
-						Boolean(message.alwaysAllow),
-					)
-			} catch (error) {
-				provider.log(
-					`Failed to toggle auto-approve for tool ${message.toolName}: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-				)
-			}
-			break
-		}
 		case "toggleToolEnabledForPrompt": {
 			try {
 				await provider

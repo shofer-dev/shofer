@@ -9,6 +9,7 @@ type AutoApproveToggles = Pick<
 	| "alwaysAllowReadOnly"
 	| "alwaysAllowWrite"
 	| "alwaysAllowMcp"
+	| "alwaysAllowUncategorized"
 	| "alwaysAllowModeSwitch"
 	| "alwaysAllowSubtasks"
 	| "alwaysAllowExecute"
@@ -23,6 +24,13 @@ type AutoApproveConfig = {
 	descriptionKey: string
 	icon: string
 	testId: string
+	/**
+	 * Optional predicate. When it returns true the toggle is disabled in the
+	 * UI (greyed out, not clickable). Used for settings whose effect requires
+	 * another setting to also be enabled — e.g. `alwaysAllowUncategorized`
+	 * is meaningless without `alwaysAllowMcp`.
+	 */
+	isDisabled?: (props: AutoApproveToggles) => boolean
 }
 
 export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveConfig> = {
@@ -46,6 +54,15 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 		descriptionKey: "settings:autoApprove.mcp.description",
 		icon: "plug",
 		testId: "always-allow-mcp-toggle",
+	},
+	alwaysAllowUncategorized: {
+		key: "alwaysAllowUncategorized",
+		labelKey: "settings:autoApprove.uncategorized.label",
+		descriptionKey: "settings:autoApprove.uncategorized.description",
+		icon: "question",
+		testId: "always-allow-uncategorized-toggle",
+		// Only meaningful when the master MCP auto-approval gate is on.
+		isDisabled: (props) => !props.alwaysAllowMcp,
 	},
 	alwaysAllowModeSwitch: {
 		key: "alwaysAllowModeSwitch",
@@ -86,20 +103,30 @@ export const AutoApproveToggle = ({ onToggle, ...props }: AutoApproveToggleProps
 
 	return (
 		<div className={cn("flex flex-row flex-wrap gap-2 py-2")}>
-			{Object.values(autoApproveSettingsConfig).map(({ key, descriptionKey, labelKey, icon, testId }) => (
-				<StandardTooltip key={key} content={t(descriptionKey || "")}>
-					<Button
-						variant={props[key] ? "primary" : "secondary"}
-						onClick={() => onToggle(key, !props[key])}
-						aria-label={t(labelKey)}
-						aria-pressed={!!props[key]}
-						data-testid={testId}
-						className={cn("gap-1.5 text-xs whitespace-nowrap", !props[key] && "opacity-50")}>
-						<span className={`codicon codicon-${icon} text-sm`} />
-						<span>{t(labelKey)}</span>
-					</Button>
-				</StandardTooltip>
-			))}
+			{Object.values(autoApproveSettingsConfig).map(
+				({ key, descriptionKey, labelKey, icon, testId, isDisabled }) => {
+					const disabled = isDisabled?.(props) ?? false
+					return (
+						<StandardTooltip key={key} content={t(descriptionKey || "")}>
+							<Button
+								variant={props[key] ? "primary" : "secondary"}
+								onClick={() => onToggle(key, !props[key])}
+								aria-label={t(labelKey)}
+								aria-pressed={!!props[key]}
+								data-testid={testId}
+								disabled={disabled}
+								className={cn(
+									"gap-1.5 text-xs whitespace-nowrap",
+									!props[key] && "opacity-50",
+									disabled && "opacity-30 cursor-not-allowed",
+								)}>
+								<span className={`codicon codicon-${icon} text-sm`} />
+								<span>{t(labelKey)}</span>
+							</Button>
+						</StandardTooltip>
+					)
+				},
+			)}
 		</div>
 	)
 }

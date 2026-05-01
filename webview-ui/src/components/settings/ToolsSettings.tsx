@@ -45,9 +45,26 @@ import { SearchableSetting } from "./SearchableSetting"
  * appended within each group.
  */
 
+import type { McpServer } from "@roo-code/types"
+
 type ToolsSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	disabledTools?: ToolName[]
 	setCachedStateField: SetCachedStateField<"disabledTools">
+	mcpServers?: McpServer[]
+}
+
+/**
+ * Represents an MCP tool entry for display alongside native tools.
+ */
+interface McpToolEntry {
+	/** The MCP server name this tool belongs to */
+	serverName: string
+	/** The tool name as used in the MCP protocol */
+	toolName: string
+	/** The resolved group this tool belongs to */
+	group: ToolGroup
+	/** Whether the tool is currently enabled for prompting */
+	enabled: boolean
 }
 
 /** Internal meta-name for user-defined custom tools — not toggleable. */
@@ -74,10 +91,52 @@ const REVERSE_ALIASES: Record<string, string[]> = (() => {
  */
 type Section = {
 	id: "essential" | ToolGroup
-	tools: ReadonlyArray<{ name: ToolName; isCustom: boolean }>
+	tools: ReadonlyArray<{
+		name: ToolName
+		isCustom: boolean
+		isMcp?: boolean
+		mcpDisplayName?: string
+		serverName?: string
+	}>
 }
 
-function buildSections(): Section[] {
+/**
+ * Extracts tools from MCP servers and organizes them by their assigned groups.
+ */
+function extractMcpTools(mcpServers: McpServer[] = []): McpToolEntry[] {
+	const tools: McpToolEntry[] = []
+
+	for (const server of mcpServers) {
+		// Skip disabled servers
+		if (server.disabled) continue
+
+		// Skip disconnected servers (no tools)
+		if (!server.tools || server.tools.length === 0) continue
+
+		// Deduplicate tool names across servers
+		const seenTools = new Set<string>()
+
+		for (const tool of server.tools) {
+			// Skip disabled tools
+			if (tool.enabledForPrompt === false) continue
+
+			const toolKey = `${server.name}__${tool.name}`
+			if (seenTools.has(toolKey)) continue
+			seenTools.add(toolKey)
+
+			tools.push({
+				serverName: server.name,
+				toolName: tool.name,
+				group: (tool.group ?? "uncategorized") as ToolGroup,
+				enabled: tool.enabledForPrompt ?? true,
+			})
+		}
+	}
+
+	return tools
+}
+
+function buildSections(mcpServers: McpServer[] = []): Section[] {
 	const seen = new Set<ToolName>()
 	const sections: Section[] = []
 
@@ -88,6 +147,7 @@ function buildSections(): Section[] {
 		tools: essentialTools.map((name) => ({ name, isCustom: false })),
 	})
 
+	// Add native tools
 	for (const group of toolGroups) {
 		const cfg = TOOL_GROUPS[group]
 		const entries: { name: ToolName; isCustom: boolean }[] = []
@@ -101,12 +161,47 @@ function buildSections(): Section[] {
 		if (entries.length > 0) sections.push({ id: group, tools: entries })
 	}
 
+	// Add MCP tools grouped by their assigned group
+	const mcpTools = extractMcpTools(mcpServers)
+	const toolsByGroup = mcpTools.reduce<Record<ToolGroup, McpToolEntry[]>>(
+		(acc, tool) => {
+			if (!acc[tool.group]) acc[tool.group] = []
+			acc[tool.group].push(tool)
+			return acc
+		},
+		{} as Record<ToolGroup, McpToolEntry[]>,
+	)
+
+	// Append MCP tools to their respective group sections
+	for (const group of toolGroups) {
+		const section = sections.find((s) => s.id === group)
+		const mcpGroupTools = toolsByGroup[group]
+
+		if (mcpGroupTools && mcpGroupTools.length > 0) {
+			const existingTools = section?.tools ?? []
+			const mcpToolEntries = mcpGroupTools.map((tool) => ({
+				name: `mcp--${tool.serverName}--${tool.toolName}` as ToolName,
+				isCustom: false,
+				isMcp: true,
+				mcpDisplayName: `${tool.serverName}: ${tool.toolName}`,
+				serverName: tool.serverName,
+			}))
+
+			// If section exists, append tools; otherwise create new section
+			if (section) {
+				section.tools = [...existingTools, ...mcpToolEntries]
+			} else {
+				sections.push({ id: group, tools: mcpToolEntries })
+			}
+		}
+	}
+
 	return sections
 }
 
-export const ToolsSettings = ({ disabledTools, setCachedStateField, ...props }: ToolsSettingsProps) => {
+export const ToolsSettings = ({ disabledTools, setCachedStateField, mcpServers, ...props }: ToolsSettingsProps) => {
 	const { t } = useAppTranslation()
-	const sections = useMemo(buildSections, [])
+	const sections = useMemo(() => buildSections(mcpServers), [mcpServers])
 
 	const disabledSet = useMemo(() => new Set(disabledTools ?? []), [disabledTools])
 
@@ -161,11 +256,11 @@ export const ToolsSettings = ({ disabledTools, setCachedStateField, ...props }: 
 						</div>
 
 						<div className="space-y-1">
-							{section.tools.map(({ name, isCustom }) => {
+							{section.tools.map(({ name, isCustom, isMcp, mcpDisplayName }) => {
 								const isEssential = section.id === "essential"
 								const isToolDisabled = disabledSet.has(name)
 								const aliases = REVERSE_ALIASES[name] ?? []
-								const displayName = TOOL_DISPLAY_NAMES[name] ?? name
+								const displayName = mcpDisplayName ?? TOOL_DISPLAY_NAMES[name] ?? name
 
 								const checkbox = (
 									<VSCodeCheckbox
@@ -205,6 +300,11 @@ export const ToolsSettings = ({ disabledTools, setCachedStateField, ...props }: 
 											<span className="text-sm">{displayName}</span>
 
 											<div className="flex gap-1 ml-auto">
+												{isMcp && (
+													<span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
+														{t("settings:tools.badges.mcpTool")}
+													</span>
+												)}
 												{isCustom && (
 													<span className="text-xs bg-vscode-badge-background text-vscode-badge-foreground px-1.5 py-0.5 rounded">
 														{t("settings:tools.badges.optInOnly")}
