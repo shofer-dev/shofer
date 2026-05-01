@@ -36,6 +36,7 @@ import setTaskTitle from "./set_task_title"
 import checkTaskStatus from "./check_task_status"
 import waitForTask from "./wait_for_task"
 import listBackgroundTasks from "./list_background_tasks"
+import sleep from "./sleep"
 import viewImage from "./view_image"
 import writeToFile from "./write_to_file"
 
@@ -102,6 +103,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		waitForTask,
 		listBackgroundTasks,
 		updateTodoList,
+		sleep,
 		viewImage,
 		writeToFile,
 	] satisfies OpenAI.Chat.ChatCompletionTool[]

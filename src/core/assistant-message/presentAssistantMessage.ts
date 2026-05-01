@@ -55,6 +55,7 @@ import { viewImageTool } from "../tools/ViewImageTool"
 import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool"
 import { waitForTaskTool } from "../tools/WaitForTaskTool"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
+import { sleepTool } from "../tools/SleepTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -437,6 +438,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.filePath}']`
 					case "rename_symbol":
 						return `[${block.name} for '${block.params.filePath}']`
+					case "sleep":
+						return `[Sleep for ${block.params.seconds || "?"}s]`
 					default:
 						return `[${block.name}]`
 				}
@@ -1047,6 +1050,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "view_image":
 					await viewImageTool.handle(cline, block as ToolUse<"view_image">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "sleep":
+					await sleepTool.handle(cline, block as ToolUse<"sleep">, {
 						askApproval,
 						handleError,
 						pushToolResult,

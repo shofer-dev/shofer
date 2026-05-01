@@ -66,6 +66,7 @@ export const toolNames = [
 	"check_task_status",
 	"wait_for_task",
 	"list_background_tasks",
+	"sleep",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -130,6 +131,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	check_task_status: "check background task status",
 	wait_for_task: "wait for background task",
 	list_background_tasks: "list background tasks",
+	sleep: "wait / sleep",
 } as const
 
 /**
@@ -170,7 +172,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
 	},
 	command: {
-		tools: ["execute_command", "read_command_output"],
+		tools: ["execute_command", "read_command_output", "sleep"],
 	},
 	mcp: {
 		tools: ["use_mcp_tool", "access_mcp_resource"],
