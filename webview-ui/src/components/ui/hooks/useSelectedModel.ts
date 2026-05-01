@@ -4,6 +4,7 @@ import {
 	type ModelInfo,
 	type ModelRecord,
 	type RouterModels,
+	type VsCodeLmChatInfo,
 	anthropicModels,
 	bedrockModels,
 	deepSeekModels,
@@ -33,6 +34,7 @@ import {
 	getProviderDefaultModelId,
 } from "@roo-code/types"
 
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useRouterModels } from "./useRouterModels"
 import { useOpenRouterModelProviders } from "./useOpenRouterModelProviders"
 import { useLmStudioModels } from "./useLmStudioModels"
@@ -51,6 +53,7 @@ function getValidatedModelId(
 }
 
 export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
+	const { vsCodeLmModels } = useExtensionState()
 	const provider = apiConfiguration?.apiProvider || "anthropic"
 	const activeProvider: ProviderName | undefined = isRetiredProvider(provider) ? undefined : provider
 	const dynamicProvider = activeProvider && isDynamicProvider(activeProvider) ? activeProvider : undefined
@@ -98,6 +101,7 @@ export const useSelectedModel = (apiConfiguration?: ProviderSettings) => {
 					openRouterModelProviders: (openRouterModelProviders.data || {}) as Record<string, ModelInfo>,
 					lmStudioModels: (lmStudioModels.data || undefined) as ModelRecord | undefined,
 					ollamaModels: (ollamaModels.data || undefined) as ModelRecord | undefined,
+					vsCodeLmModels,
 				})
 			: { id: getProviderDefaultModelId(activeProvider ?? "anthropic"), info: undefined }
 
@@ -125,6 +129,7 @@ function getSelectedModel({
 	openRouterModelProviders,
 	lmStudioModels,
 	ollamaModels,
+	vsCodeLmModels,
 }: {
 	provider: ProviderName
 	apiConfiguration: ProviderSettings
@@ -132,6 +137,7 @@ function getSelectedModel({
 	openRouterModelProviders: Record<string, ModelInfo>
 	lmStudioModels: ModelRecord | undefined
 	ollamaModels: ModelRecord | undefined
+	vsCodeLmModels: any[]
 }): { id: string; info: ModelInfo | undefined } {
 	// the `undefined` case are used to show the invalid selection to prevent
 	// users from seeing the default model if their selection is invalid
@@ -299,8 +305,25 @@ function getSelectedModel({
 				? `${apiConfiguration.vsCodeLmModelSelector.vendor}/${apiConfiguration.vsCodeLmModelSelector.family}`
 				: vscodeLlmDefaultModelId
 			const modelFamily = apiConfiguration?.vsCodeLmModelSelector?.family ?? vscodeLlmDefaultModelId
-			const info = vscodeLlmModels[modelFamily as keyof typeof vscodeLlmModels]
-			return { id, info: { ...openAiModelInfoSaneDefaults, ...info, supportsImages: false } } // VSCode LM API currently doesn't support images.
+			// Try the static map first (for bundled Copilot models), then fall
+			// back to the dynamic `vsCodeLmModels` list (populated by the
+			// extension host via vscode.lm.selectChatModels, which carries
+			// maxInputTokens from provider extensions like llm-provider).
+			const staticInfo = vscodeLlmModels[modelFamily as keyof typeof vscodeLlmModels]
+			const dynamicModel = vsCodeLmModels?.find((m: VsCodeLmChatInfo) => `${m.vendor}/${m.family}` === id)
+			const contextWindow =
+				staticInfo?.contextWindow ??
+				(typeof dynamicModel?.maxInputTokens === "number" ? dynamicModel.maxInputTokens : undefined) ??
+				openAiModelInfoSaneDefaults.contextWindow
+			return {
+				id,
+				info: {
+					...openAiModelInfoSaneDefaults,
+					...staticInfo,
+					contextWindow,
+					supportsImages: false,
+				},
+			}
 		}
 		case "sambanova": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId

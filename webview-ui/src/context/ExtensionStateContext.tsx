@@ -16,6 +16,7 @@ import {
 	type SkillMetadata,
 	type Command,
 	type McpServer,
+	type VsCodeLmChatInfo,
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
@@ -153,6 +154,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	autoCondenseContextPercent: number
 	setAutoCondenseContextPercent: (value: number) => void
 	routerModels?: RouterModels
+	vsCodeLmModels: VsCodeLmChatInfo[]
 	includeDiagnosticMessages?: boolean
 	setIncludeDiagnosticMessages: (value: boolean) => void
 	maxDiagnosticMessages?: number
@@ -300,6 +302,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
 	const [currentCheckpoint, setCurrentCheckpoint] = useState<string>()
 	const [extensionRouterModels, setExtensionRouterModels] = useState<RouterModels | undefined>(undefined)
+	const [vsCodeLmModels, setVsCodeLmModels] = useState<VsCodeLmChatInfo[]>([])
 	const [marketplaceItems, setMarketplaceItems] = useState<any[]>([])
 	const [alwaysAllowFollowupQuestions, setAlwaysAllowFollowupQuestions] = useState(false) // Add state for follow-up questions auto-approve
 	const [followupAutoApproveTimeoutMs, setFollowupAutoApproveTimeoutMs] = useState<number | undefined>(undefined) // Will be set from global settings
@@ -441,6 +444,10 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					setExtensionRouterModels(message.routerModels)
 					break
 				}
+				case "vsCodeLmModels": {
+					setVsCodeLmModels(message.vsCodeLmModels ?? [])
+					break
+				}
 				case "marketplaceData": {
 					if (message.marketplaceItems !== undefined) {
 						setMarketplaceItems(message.marketplaceItems)
@@ -543,7 +550,14 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 
 	useEffect(() => {
 		vscode.postMessage({ type: "webviewDidLaunch" })
-	}, [])
+		// Proactively request VS Code LM models so the dynamic list is
+		// available before the user opens settings or starts a chat with
+		// a vscode-lm model. Without this, vsCodeLmModels stays empty
+		// until the settings panel sends its own requestVsCodeLmModels.
+		if (state.apiConfiguration?.apiProvider === "vscode-lm") {
+			vscode.postMessage({ type: "requestVsCodeLmModels" })
+		}
+	}, [state.apiConfiguration?.apiProvider])
 
 	// Watch for authentication state changes and refresh Roo models
 	useEffect(() => {
@@ -571,6 +585,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		ttsSpeed: state.ttsSpeed,
 		writeDelayMs: state.writeDelayMs,
 		routerModels: extensionRouterModels,
+		vsCodeLmModels,
 		cloudIsAuthenticated: state.cloudIsAuthenticated ?? false,
 		cloudOrganizations: state.cloudOrganizations ?? [],
 		organizationSettingsVersion: state.organizationSettingsVersion ?? -1,

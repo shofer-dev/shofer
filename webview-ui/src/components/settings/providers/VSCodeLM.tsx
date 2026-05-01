@@ -1,9 +1,8 @@
-import { useState, useCallback, useMemo } from "react"
-import { useEvent } from "react-use"
-import { LanguageModelChatSelector } from "vscode"
+import { useCallback, useMemo } from "react"
 
-import type { ProviderSettings, ExtensionMessage, ModelInfo } from "@roo-code/types"
+import type { ProviderSettings, ModelInfo, VsCodeLmChatInfo } from "@roo-code/types"
 
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 
 import { ModelPicker } from "../ModelPicker"
@@ -15,32 +14,22 @@ type VSCodeLMProps = {
 
 export const VSCodeLM = ({ apiConfiguration, setApiConfigurationField }: VSCodeLMProps) => {
 	const { t } = useAppTranslation()
+	const { vsCodeLmModels } = useExtensionState()
 
-	const [vsCodeLmModels, setVsCodeLmModels] = useState<LanguageModelChatSelector[]>([])
-
-	const onMessage = useCallback((event: MessageEvent) => {
-		const message: ExtensionMessage = event.data
-
-		switch (message.type) {
-			case "vsCodeLmModels":
-				{
-					const newModels = message.vsCodeLmModels ?? []
-					setVsCodeLmModels(newModels)
-				}
-				break
-		}
-	}, [])
-
-	useEvent("message", onMessage)
-
-	// Convert VSCode LM models array to Record format for ModelPicker
+	// Convert VSCode LM models array to Record format for ModelPicker.
+	// contextWindow is derived from maxInputTokens — the value set by the
+	// provider extension (llm-provider → llm-router → model_registry.go).
 	const modelsRecord = useMemo((): Record<string, ModelInfo> => {
 		return vsCodeLmModels.reduce(
-			(acc, model) => {
+			(acc, model: VsCodeLmChatInfo) => {
+				if (!model.vendor || !model.family) {
+					return acc
+				}
 				const modelId = `${model.vendor}/${model.family}`
+				const maxInputTokens = model.maxInputTokens ?? 0
 				acc[modelId] = {
 					maxTokens: 0,
-					contextWindow: 0,
+					contextWindow: Math.max(0, maxInputTokens),
 					supportsPromptCache: false,
 					description: `${model.vendor} - ${model.family}`,
 				}
