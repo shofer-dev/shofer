@@ -4480,6 +4480,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const systemPrompt = await this.getSystemPrompt()
 		const { contextTokens } = this.getTokenUsage()
 
+		console.log(
+			`[CONTEXT-DIAG] Task.attemptApiRequest entry — taskId=${this.taskId}, contextTokens=${contextTokens}, autoCondenseContext=${autoCondenseContext}, autoCondenseContextPercent=${autoCondenseContextPercent}, historyLen=${this.apiConversationHistory.length}, modelId=${this.api.getModel().id}, contextWindow=${this.api.getModel().info.contextWindow}`,
+		)
+
 		if (contextTokens) {
 			const modelInfo = this.api.getModel().info
 
