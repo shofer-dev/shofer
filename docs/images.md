@@ -132,15 +132,15 @@ Internally, Roo Code uses Anthropic's content block format as the canonical repr
 
 Roo Code converts the internal Anthropic-format image blocks to each provider's expected format:
 
-| Provider                 | Image Format                                                                    | Transform Location                                                         |
-| ------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Anthropic**            | `image` content block (native)                                                  | No transformation needed                                                   |
-| **OpenAI**               | `image_url` with `data:image/...;base64,...` URL                                | [`openai-format.ts`](../../src/api/transform/openai-format.ts)             |
-| **OpenAI Responses API** | `input_image` with `image_url` + `detail: "auto"`                               | [`responses-api-input.ts`](../../src/api/transform/responses-api-input.ts) |
-| **AI SDK**               | `image` with `data:...` URL + `mimeType`                                        | [`ai-sdk.ts`](../../src/api/transform/ai-sdk.ts)                           |
-| **VS Code LM**           | `[Image (base64): image/png not supported by VSCode LM API]` (placeholder text) | [`vscode-lm-format.ts`](../../src/api/transform/vscode-lm-format.ts)       |
-| **Gemini**               | Native multimodal support via Google AI SDK                                     | [`gemini-format.ts`](../../src/api/transform/gemini-format.ts)             |
-| **Bedrock**              | Native Converse API image blocks                                                | [`bedrock.ts`](../../src/api/providers/bedrock.ts)                         |
+| Provider                 | Image Format                                                                                                                                                                      | Transform Location                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Anthropic**            | `image` content block (native)                                                                                                                                                    | No transformation needed                                                   |
+| **OpenAI**               | `image_url` with `data:image/...;base64,...` URL                                                                                                                                  | [`openai-format.ts`](../../src/api/transform/openai-format.ts)             |
+| **OpenAI Responses API** | `input_image` with `image_url` + `detail: "auto"`                                                                                                                                 | [`responses-api-input.ts`](../../src/api/transform/responses-api-input.ts) |
+| **AI SDK**               | `image` with `data:...` URL + `mimeType`                                                                                                                                          | [`ai-sdk.ts`](../../src/api/transform/ai-sdk.ts)                           |
+| **VS Code LM**           | `vscode.LanguageModelDataPart.image(bytes, mime)` for user messages; text placeholder fallback when the API surface is unavailable or for image blocks nested inside tool results | [`vscode-lm-format.ts`](../../src/api/transform/vscode-lm-format.ts)       |
+| **Gemini**               | Native multimodal support via Google AI SDK                                                                                                                                       | [`gemini-format.ts`](../../src/api/transform/gemini-format.ts)             |
+| **Bedrock**              | Native Converse API image blocks                                                                                                                                                  | [`bedrock.ts`](../../src/api/providers/bedrock.ts)                         |
 
 ### Non-Vision Models
 
@@ -233,6 +233,7 @@ Image generation uses provider-specific endpoints (not the chat completions API)
 
 ## Changelog History
 
+- **v3.54.34** — VS Code LM provider: forward user-message images as `LanguageModelDataPart` (paired with llm-provider 0.6.6 which translates them to OpenAI-style `image_url` parts on the wire). Replaces the previous text-placeholder behaviour that caused models to reply 'I see an image was shared, but it's not supported by VSCode LM API'.
 - **v3.52.0** — Poe provider support (new vision-capable provider)
 - **v3.51.0** — CLI stdin stream image support (PR #11831)
 - **v3.39.0** — Image file `@`-mention support (PR #10189)
