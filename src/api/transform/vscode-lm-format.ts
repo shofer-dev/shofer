@@ -28,6 +28,39 @@ function asObjectSafe(value: any): object {
 	}
 }
 
+/**
+ * Convert an Anthropic-format image block (base64 source) into a
+ * `vscode.LanguageModelDataPart` so the underlying VS Code LM provider
+ * (e.g. Arkware llm-provider) can forward the actual image bytes to a
+ * vision-capable upstream rather than receiving a placeholder string.
+ *
+ * Returns a `LanguageModelTextPart` placeholder when the API surface is
+ * unavailable (older VS Code), the source isn't base64, or decoding fails
+ * — that way the message round-trips safely on hosts where the data part
+ * isn't supported.
+ *
+ * The cast through `any` is intentional: `LanguageModelChatMessage.User()`'s
+ * static signature in the stable typings only accepts text + tool-result
+ * parts, but at runtime modern VS Code accepts `LanguageModelDataPart` too
+ * (matching what `vscode.proposed.chatProvider2.d.ts` documents). Bypassing
+ * the typing here keeps the pinned `@types/vscode` floor unchanged.
+ */
+function imageBlockToContentPart(part: Anthropic.ImageBlockParam): vscode.LanguageModelTextPart | object {
+	const DataPart = (vscode as any).LanguageModelDataPart
+	const source = part.source
+	if (DataPart && source?.type === "base64" && source.data && source.media_type) {
+		try {
+			const bytes = Buffer.from(source.data, "base64")
+			return DataPart.image(bytes, source.media_type)
+		} catch (err) {
+			console.warn("Roo Code <Language Model API>: Failed to decode image data:", err)
+		}
+	}
+	return new vscode.LanguageModelTextPart(
+		`[Image (${source?.type || "unknown source-type"}): ${source?.media_type || "unknown media-type"} not supported by VSCode LM API]`,
+	)
+}
+
 export function convertToVsCodeLmMessages(
 	anthropicMessages: Anthropic.Messages.MessageParam[],
 ): vscode.LanguageModelChatMessage[] {
@@ -66,14 +99,17 @@ export function convertToVsCodeLmMessages(
 				const contentParts = [
 					// Convert tool messages to ToolResultParts
 					...toolMessages.map((toolMessage) => {
-						// Process tool result content into TextParts
+						// Process tool result content into TextParts (image
+						// parts inside tool results aren't widely supported
+						// by the LM tool-result API, so they fall back to a
+						// text marker).
 						const toolContentParts: vscode.LanguageModelTextPart[] =
 							typeof toolMessage.content === "string"
 								? [new vscode.LanguageModelTextPart(toolMessage.content)]
 								: (toolMessage.content?.map((part) => {
 										if (part.type === "image") {
 											return new vscode.LanguageModelTextPart(
-												`[Image (${part.source?.type || "Unknown source-type"}): ${part.source?.media_type || "unknown media-type"} not supported by VSCode LM API]`,
+												`[Image (${part.source?.type || "Unknown source-type"}): ${part.source?.media_type || "unknown media-type"} not supported in VSCode LM tool results]`,
 											)
 										}
 										return new vscode.LanguageModelTextPart(part.text)
@@ -82,19 +118,19 @@ export function convertToVsCodeLmMessages(
 						return new vscode.LanguageModelToolResultPart(toolMessage.tool_use_id, toolContentParts)
 					}),
 
-					// Convert non-tool messages to TextParts after tool messages
+					// Convert non-tool messages to TextParts/DataParts after tool messages
 					...nonToolMessages.map((part) => {
 						if (part.type === "image") {
-							return new vscode.LanguageModelTextPart(
-								`[Image (${part.source?.type || "Unknown source-type"}): ${part.source?.media_type || "unknown media-type"} not supported by VSCode LM API]`,
-							)
+							return imageBlockToContentPart(part)
 						}
 						return new vscode.LanguageModelTextPart(part.text)
 					}),
 				]
 
-				// Add single user message with all content parts
-				vsCodeLmMessages.push(vscode.LanguageModelChatMessage.User(contentParts))
+				// Add single user message with all content parts. Cast is
+				// needed because `User()`'s static signature predates the
+				// `LanguageModelDataPart` content type (see helper docstring).
+				vsCodeLmMessages.push(vscode.LanguageModelChatMessage.User(contentParts as any))
 				break
 			}
 
