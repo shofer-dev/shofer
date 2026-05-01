@@ -2,6 +2,9 @@ import { Anthropic } from "@anthropic-ai/sdk"
 
 import type { ClineAsk, ToolProgressStatus, ToolGroup, ToolName, GenerateImageParams } from "@roo-code/types"
 
+// NOTE: When adding a new tool parameter name to toolParamNames, also add it
+// to NativeToolArgs if the tool uses native (typed) arguments.
+
 // Re-export tool metadata from @roo-code/types to avoid duplication
 export {
 	type ToolGroupConfig,
@@ -97,6 +100,8 @@ export const toolParamNames = [
 	"line_ranges",
 	// find_files parameter
 	"pattern",
+	// sleep parameter
+	"seconds",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -159,6 +164,7 @@ export type NativeToolArgs = {
 	rename_symbol: { filePath: string; line: number; column: number; newName: string }
 	view_image: { filePath: string }
 	codebase_search_with_lsp: { query: string; maxResults?: number | null }
+	sleep: { seconds: number }
 	// Add more tools as they are migrated to native protocol
 }
 

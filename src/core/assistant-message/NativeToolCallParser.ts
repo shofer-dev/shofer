@@ -785,6 +785,14 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "sleep":
+				if (partialArgs.seconds !== undefined) {
+					nativeArgs = {
+						seconds: this.coerceOptionalNumber(partialArgs.seconds)!,
+					}
+				}
+				break
+
 			default:
 				break
 		}
@@ -1284,6 +1292,14 @@ export class NativeToolCallParser {
 						nativeArgs = {
 							query: args.query,
 							maxResults: this.coerceOptionalNumber(args.maxResults),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "sleep":
+					if (args.seconds !== undefined) {
+						nativeArgs = {
+							seconds: this.coerceOptionalNumber(args.seconds)!,
 						} as NativeArgsFor<TName>
 					}
 					break
