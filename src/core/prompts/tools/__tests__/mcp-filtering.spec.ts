@@ -150,6 +150,33 @@ describe("filterMcpToolsForMode", () => {
 		expect(filterMcpToolsForMode(mcpTools, mcpToolMeta, "nope", [], {})).toEqual([])
 	})
 
+	it("treats the 'mcp' group as a wildcard exposing every MCP tool regardless of its category", () => {
+		// Backward-compatibility: legacy modes declare the broad `mcp` group; in
+		// that case all MCP tools — including ones whose individual category is
+		// not in the mode's groups — should be exposed.
+		const customModes: ModeConfig[] = [
+			{
+				slug: "default-like",
+				name: "Default-like",
+				roleDefinition: "rd",
+				groups: ["read", "mcp"],
+			},
+		]
+
+		const result = filterMcpToolsForMode(mcpTools, mcpToolMeta, "default-like", customModes, {})
+
+		const names = result.map((t) => ("function" in t ? t.function.name : "")).sort()
+		expect(names).toEqual(
+			[
+				buildMcpToolName("github", "get_pull_request"),
+				buildMcpToolName("github", "create_issue"),
+				buildMcpToolName("github", "run_workflow"),
+				buildMcpToolName("slack", "post_message"),
+				buildMcpToolName("slack", "list_channels"),
+			].sort(),
+		)
+	})
+
 	it("handles empty inputs gracefully", () => {
 		const customModes: ModeConfig[] = [
 			{

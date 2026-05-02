@@ -1,30 +1,23 @@
 import type { McpTool } from "@roo-code/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { vscode } from "@src/utils/vscode"
-import { StandardTooltip, ToggleSwitch } from "@/components/ui"
+import { StandardTooltip } from "@/components/ui"
 
+/**
+ * Renders an individual MCP tool row.
+ *
+ * This component is purely presentational: per-tool enable/disable is owned
+ * by the **Settings → Tools** page (single source of truth for tool-level
+ * visibility). The MCP Servers page only manages server-level on/off via the
+ * server header.
+ */
 type McpToolRowProps = {
 	tool: McpTool
-	serverName?: string
-	serverSource?: "global" | "project"
-	isInChatContext?: boolean
 }
 
-const McpToolRow = ({ tool, serverName, serverSource, isInChatContext = false }: McpToolRowProps) => {
+const McpToolRow = ({ tool }: McpToolRowProps) => {
 	const { t } = useAppTranslation()
 	const isToolEnabled = tool.enabledForPrompt ?? true
-
-	const handleEnabledForPromptChange = () => {
-		if (!serverName) return
-		vscode.postMessage({
-			type: "toggleToolEnabledForPrompt",
-			serverName,
-			source: serverSource || "global",
-			toolName: tool.name,
-			isEnabled: !tool.enabledForPrompt,
-		})
-	}
 
 	return (
 		<div key={tool.name} className="py-2 border-b border-vscode-panel-border last:border-b-0">
@@ -32,7 +25,6 @@ const McpToolRow = ({ tool, serverName, serverSource, isInChatContext = false }:
 				data-testid="tool-row-container"
 				className="flex items-center gap-4"
 				onClick={(e) => e.stopPropagation()}>
-				{/* Tool name section */}
 				<div className="flex items-center min-w-0 flex-1">
 					<span
 						className={`codicon codicon-symbol-method mr-2 flex-shrink-0 ${
@@ -51,24 +43,6 @@ const McpToolRow = ({ tool, serverName, serverSource, isInChatContext = false }:
 						</span>
 					</StandardTooltip>
 				</div>
-
-				{/* Controls section */}
-				{serverName && (
-					<div className="flex items-center gap-4 flex-shrink-0">
-						{/* Enabled toggle switch - only show in settings context */}
-						{!isInChatContext && (
-							<StandardTooltip content={t("mcp:tool.togglePromptInclusion")}>
-								<ToggleSwitch
-									checked={isToolEnabled}
-									onChange={handleEnabledForPromptChange}
-									size="medium"
-									aria-label={t("mcp:tool.togglePromptInclusion")}
-									data-testid={`tool-prompt-toggle-${tool.name}`}
-								/>
-							</StandardTooltip>
-						)}
-					</div>
-				)}
 			</div>
 			{tool.description && (
 				<div

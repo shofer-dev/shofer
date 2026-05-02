@@ -427,18 +427,24 @@ export function getAvailableToolsInGroup(
 }
 
 /**
- * Filters MCP tools based on per-tool group membership and mode restrictions.
+ * Filters MCP tools based on mode-level MCP visibility.
  *
- * Each MCP tool carries a `group` field (defaulting to "uncategorized" when not
- * specified by the server and not overridden by the user). The mode's `groups`
- * configuration determines which groups of MCP tools are exposed.
+ * Visibility is all-or-nothing per mode: a mode either includes the broad
+ * `"mcp"` group (in which case every enabled MCP tool is exposed) or it does
+ * not (in which case no MCP tools are exposed). The per-tool `group` field is
+ * orthogonal — it categorises tools for *auto-approval* purposes only and
+ * never restricts what the model can see.
+ *
+ * Tools whose metadata has `enabledForPrompt === false` (the user-facing
+ * "include in prompt" toggle) are filtered out regardless of mode.
  *
  * @param mcpTools - Array of MCP tools (ChatCompletionTool definitions whose
  *   function names follow the `mcp--<server>--<tool>` convention)
- * @param mcpToolMeta - Per-tool metadata including server name and resolved group
+ * @param mcpToolMeta - Per-tool metadata including server name and
+ *   `enabledForPrompt`
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
- * @param experiments - Experiment flags (currently unused; kept for API symmetry)
+ * @param _experiments - Experiment flags (currently unused; kept for API symmetry)
  * @returns Filtered array of MCP tools allowed for the mode
  */
 export function filterMcpToolsForMode(
@@ -455,27 +461,31 @@ export function filterMcpToolsForMode(
 		return []
 	}
 
-	// Allowed groups for this mode (groups entries can be either a slug or a
-	// tuple `[slug, options]`).
+	// Mode-level MCP visibility: a mode entry is either a slug or a tuple
+	// `[slug, options]`. If the mode does not include the `mcp` group, hide all
+	// MCP tools.
 	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => (Array.isArray(g) ? g[0] : g)))
+	if (!allowedGroups.has("mcp")) {
+		return []
+	}
 
-	// Build a lookup keyed by the OpenAI function name. We intentionally rebuild
-	// the function name with `buildMcpToolName` (the same function used to
-	// produce tool names exposed to the model) so sanitization/truncation match
-	// exactly. This avoids brittle reverse-parsing of sanitized names and
-	// disambiguates tools that share a name across different servers.
-	const groupByFunctionName = new Map<string, string>()
+	// Per-tool prompt inclusion is independent of mode and is the user-facing
+	// kill switch for individual tools. Build the lookup using the canonical
+	// OpenAI function name (`buildMcpToolName(serverName, name)`) so that name
+	// sanitization/truncation matches exactly and tools sharing a name across
+	// different servers are not conflated.
+	const enabledByFunctionName = new Map<string, boolean>()
 	for (const meta of mcpToolMeta) {
-		if (meta.enabledForPrompt === false) continue
 		const functionName = buildMcpToolName(meta.serverName, meta.name)
-		groupByFunctionName.set(functionName, meta.group ?? "uncategorized")
+		enabledByFunctionName.set(functionName, meta.enabledForPrompt !== false)
 	}
 
 	return mcpTools.filter((tool) => {
 		if (!("function" in tool)) {
 			return false
 		}
-		const group = groupByFunctionName.get(tool.function.name) ?? "uncategorized"
-		return allowedGroups.has(group)
+		// Default to enabled when no metadata exists (e.g. server registered
+		// the tool but the per-tool config map hasn't been seeded yet).
+		return enabledByFunctionName.get(tool.function.name) ?? true
 	})
 }

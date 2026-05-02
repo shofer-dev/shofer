@@ -11,6 +11,7 @@ import {
 } from "@roo-code/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
+import { vscode } from "@/utils/vscode"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui"
 
@@ -59,6 +60,8 @@ type ToolsSettingsProps = HTMLAttributes<HTMLDivElement> & {
 interface McpToolEntry {
 	/** The MCP server name this tool belongs to */
 	serverName: string
+	/** Source of the server config ("global" | "project") */
+	serverSource: "global" | "project"
 	/** The tool name as used in the MCP protocol */
 	toolName: string
 	/** The resolved group this tool belongs to */
@@ -97,6 +100,12 @@ type Section = {
 		isMcp?: boolean
 		mcpDisplayName?: string
 		serverName?: string
+		/** Raw MCP tool name (without `mcp--<server>--` prefix). */
+		mcpToolName?: string
+		/** MCP server source ("global" | "project"). */
+		serverSource?: "global" | "project"
+		/** For MCP tools, the user-controlled enabled-for-prompt state. */
+		mcpEnabled?: boolean
 	}>
 }
 
@@ -117,15 +126,13 @@ function extractMcpTools(mcpServers: McpServer[] = []): McpToolEntry[] {
 		const seenTools = new Set<string>()
 
 		for (const tool of server.tools) {
-			// Skip disabled tools
-			if (tool.enabledForPrompt === false) continue
-
 			const toolKey = `${server.name}__${tool.name}`
 			if (seenTools.has(toolKey)) continue
 			seenTools.add(toolKey)
 
 			tools.push({
 				serverName: server.name,
+				serverSource: server.source ?? "global",
 				toolName: tool.name,
 				group: (tool.group ?? "uncategorized") as ToolGroup,
 				enabled: tool.enabledForPrompt ?? true,
@@ -185,6 +192,9 @@ function buildSections(mcpServers: McpServer[] = []): Section[] {
 				isMcp: true,
 				mcpDisplayName: `${tool.serverName}: ${tool.toolName}`,
 				serverName: tool.serverName,
+				mcpToolName: tool.toolName,
+				serverSource: tool.serverSource,
+				mcpEnabled: tool.enabled,
 			}))
 
 			// If section exists, append tools; otherwise create new section
@@ -205,9 +215,35 @@ export const ToolsSettings = ({ disabledTools, setCachedStateField, mcpServers, 
 
 	const disabledSet = useMemo(() => new Set(disabledTools ?? []), [disabledTools])
 
-	const handleToggle = (toolName: ToolName) => {
+	/**
+	 * Toggle a single tool's prompt-inclusion state.
+	 *
+	 * Routes to the correct backing store based on tool kind:
+	 *  - Native tools: written to global `disabledTools` (extension globalState).
+	 *  - MCP tools: dispatched as `toggleToolEnabledForPrompt` so `McpHub` writes
+	 *    to `mcp.json`'s per-server `disabledTools` list — the canonical source
+	 *    of truth for MCP per-tool visibility.
+	 */
+	const handleToggle = (entry: {
+		name: ToolName
+		isMcp?: boolean
+		serverName?: string
+		serverSource?: "global" | "project"
+		mcpToolName?: string
+		mcpEnabled?: boolean
+	}) => {
+		if (entry.isMcp && entry.serverName && entry.mcpToolName) {
+			vscode.postMessage({
+				type: "toggleToolEnabledForPrompt",
+				serverName: entry.serverName,
+				source: entry.serverSource ?? "global",
+				toolName: entry.mcpToolName,
+				isEnabled: !(entry.mcpEnabled ?? true),
+			})
+			return
+		}
 		const current = disabledTools ?? []
-		const next = current.includes(toolName) ? current.filter((x) => x !== toolName) : [...current, toolName]
+		const next = current.includes(entry.name) ? current.filter((x) => x !== entry.name) : [...current, entry.name]
 		setCachedStateField("disabledTools", next)
 	}
 
@@ -215,12 +251,39 @@ export const ToolsSettings = ({ disabledTools, setCachedStateField, mcpServers, 
 		const nonEssential: ToolName[] = []
 		for (const section of sections) {
 			if (section.id === "essential") continue
-			for (const { name } of section.tools) nonEssential.push(name)
+			for (const entry of section.tools) {
+				if (entry.isMcp && entry.serverName && entry.mcpToolName) {
+					if (entry.mcpEnabled !== false) {
+						vscode.postMessage({
+							type: "toggleToolEnabledForPrompt",
+							serverName: entry.serverName,
+							source: entry.serverSource ?? "global",
+							toolName: entry.mcpToolName,
+							isEnabled: false,
+						})
+					}
+				} else {
+					nonEssential.push(entry.name)
+				}
+			}
 		}
 		setCachedStateField("disabledTools", nonEssential)
 	}
 
 	const handleEnableAll = () => {
+		for (const section of sections) {
+			for (const entry of section.tools) {
+				if (entry.isMcp && entry.serverName && entry.mcpToolName && entry.mcpEnabled === false) {
+					vscode.postMessage({
+						type: "toggleToolEnabledForPrompt",
+						serverName: entry.serverName,
+						source: entry.serverSource ?? "global",
+						toolName: entry.mcpToolName,
+						isEnabled: true,
+					})
+				}
+			}
+		}
 		setCachedStateField("disabledTools", [])
 	}
 
@@ -256,9 +319,12 @@ export const ToolsSettings = ({ disabledTools, setCachedStateField, mcpServers, 
 						</div>
 
 						<div className="space-y-1">
-							{section.tools.map(({ name, isCustom, isMcp, mcpDisplayName }) => {
+							{section.tools.map((entry) => {
+								const { name, isCustom, isMcp, mcpDisplayName, mcpEnabled } = entry
 								const isEssential = section.id === "essential"
-								const isToolDisabled = disabledSet.has(name)
+								// MCP tools: read enabled state from per-server `mcp.json` (via the
+								// `mcpServers` prop). Native tools: read from global `disabledTools`.
+								const isToolDisabled = isMcp ? mcpEnabled === false : disabledSet.has(name)
 								const aliases = REVERSE_ALIASES[name] ?? []
 								const displayName = mcpDisplayName ?? TOOL_DISPLAY_NAMES[name] ?? name
 
@@ -266,7 +332,7 @@ export const ToolsSettings = ({ disabledTools, setCachedStateField, mcpServers, 
 									<VSCodeCheckbox
 										checked={!isToolDisabled}
 										disabled={isEssential}
-										onChange={() => !isEssential && handleToggle(name)}
+										onChange={() => !isEssential && handleToggle(entry)}
 										data-testid={`tool-toggle-${name}`}
 									/>
 								)

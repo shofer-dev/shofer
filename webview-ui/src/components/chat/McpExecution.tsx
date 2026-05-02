@@ -241,9 +241,6 @@ export const McpExecution = ({
 									server?.tools?.find((tool) => tool.name === useMcpServer.toolName)?.description ||
 									"",
 							}}
-							serverName={useMcpServer.serverName}
-							serverSource={server?.source}
-							isInChatContext={true}
 						/>
 					</div>
 				)}
@@ -254,9 +251,6 @@ export const McpExecution = ({
 								name: toolName || "",
 								description: "",
 							}}
-							serverName={serverName}
-							serverSource={undefined}
-							isInChatContext={true}
 						/>
 					</div>
 				)}

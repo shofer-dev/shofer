@@ -450,12 +450,7 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 					defaultOpen={true}>
 					{server.tools && server.tools.length > 0 ? (
 						server.tools.map((tool) => (
-							<McpToolRow
-								key={`${tool.name}-${server.name}-${server.source || "global"}`}
-								tool={tool}
-								serverName={server.name}
-								serverSource={server.source || "global"}
-							/>
+							<McpToolRow key={`${tool.name}-${server.name}-${server.source || "global"}`} tool={tool} />
 						))
 					) : (
 						<div
