@@ -278,6 +278,13 @@ export const clineMessageSchema = z.object({
 	isProtected: z.boolean().optional(),
 	apiProtocol: z.union([z.literal("openai"), z.literal("anthropic")]).optional(),
 	isAnswered: z.boolean().optional(),
+	/**
+	 * True when this `ask` was auto-approved by `checkAutoApproval` and the
+	 * task short-circuited the wait-for-user-response flow. The webview uses
+	 * this flag to suppress the Approve/Deny action buttons that would
+	 * otherwise be presented for the ask, since no input is required.
+	 */
+	autoApproved: z.boolean().optional(),
 })
 
 export type ClineMessage = z.infer<typeof clineMessageSchema>

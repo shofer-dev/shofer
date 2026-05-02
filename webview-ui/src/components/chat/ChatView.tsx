@@ -290,6 +290,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					// Reset user response flag when a new ask arrives to allow auto-approval
 					userRespondedRef.current = false
 					const isPartial = lastMessage.partial === true
+					// When the backend has already auto-approved (or auto-denied) this
+					// ask, no user input is required. Suppress the action buttons and
+					// re-enable sending so the chat doesn't appear blocked.
+					if (lastMessage.autoApproved) {
+						setSendingDisabled(false)
+						setClineAsk(undefined)
+						setEnableButtons(false)
+						setPrimaryButtonText(undefined)
+						setSecondaryButtonText(undefined)
+						break
+					}
 					switch (lastMessage.ask) {
 						case "api_req_failed":
 							playSound("progress_loop")

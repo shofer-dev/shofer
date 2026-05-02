@@ -1486,11 +1486,34 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const state = provider ? await provider.getState() : undefined
 		const approval = await checkAutoApproval({ state, ask: type, text, isProtected })
 
-		if (approval.decision === "approve") {
-			this.approveAsk()
-		} else if (approval.decision === "deny") {
-			this.denyAsk()
-		} else if (approval.decision === "timeout") {
+		// Fast-path for auto-approved / auto-denied asks: short-circuit the
+		// entire wait-for-webview flow.
+		//
+		// Why this exists: previously we wrote the ask, then called
+		// `approveAsk()` (which forwards to `handleWebviewAskResponse`), then
+		// entered `pWaitFor` to observe the resulting `askResponse` slot.
+		// `handleWebviewAskResponse` is gated by `isAwaitingAskResponse`,
+		// which only flips to true *after* `pWaitFor` starts — so the
+		// synthetic auto-approval response was being silently dropped and the
+		// task would hang.
+		//
+		// Beyond fixing that race, presenting Approve/Deny buttons for an ask
+		// the user can't actually act on is bad UX. Marking the message
+		// `autoApproved` lets the webview suppress those buttons entirely.
+		if (approval.decision === "approve" || approval.decision === "deny") {
+			const askMessage = this.findMessageByTimestamp(askTs)
+			if (askMessage) {
+				askMessage.autoApproved = true
+				await this.saveClineMessages()
+				this.updateClineMessage(askMessage)
+			}
+			this.emit(RooCodeEventName.TaskAskResponded)
+			const synthesized: ClineAskResponse =
+				approval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+			return { response: synthesized, text: undefined, images: undefined }
+		}
+
+		if (approval.decision === "timeout") {
 			// Store the auto-approval timeout so it can be cancelled if user interacts
 			this.autoApprovalTimeoutRef = setTimeout(() => {
 				const { askResponse, text, images } = approval.fn()
