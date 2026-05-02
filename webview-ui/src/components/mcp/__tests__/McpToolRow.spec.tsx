@@ -1,8 +1,6 @@
 import React from "react"
 import { render, fireEvent, screen } from "@/utils/test-utils"
 
-import { vscode } from "@src/utils/vscode"
-
 import McpToolRow from "../McpToolRow"
 
 vi.mock("@src/i18n/TranslationContext", () => ({
@@ -65,7 +63,7 @@ describe("McpToolRow", () => {
 		const mockOnClick = vi.fn()
 		render(
 			<div onClick={mockOnClick}>
-				<McpToolRow tool={mockTool} serverName="test-server" />
+				<McpToolRow tool={mockTool} />
 			</div>,
 		)
 
@@ -94,57 +92,13 @@ describe("McpToolRow", () => {
 			},
 		}
 
-		render(<McpToolRow tool={toolWithSchema} serverName="test-server" />)
+		render(<McpToolRow tool={toolWithSchema} />)
 
 		expect(screen.getByText("Parameters")).toBeInTheDocument()
 		expect(screen.getByText("param1")).toBeInTheDocument()
 		expect(screen.getByText("param2")).toBeInTheDocument()
 		expect(screen.getByText("First parameter")).toBeInTheDocument()
 		expect(screen.getByText("Second parameter")).toBeInTheDocument()
-	})
-
-	it("shows toggle switch when serverName is provided and not in chat context", () => {
-		render(<McpToolRow tool={mockTool} serverName="test-server" />)
-
-		const toggleSwitch = screen.getByRole("switch", { name: "Toggle prompt inclusion" })
-		expect(toggleSwitch).toBeInTheDocument()
-	})
-
-	it("hides toggle switch when isInChatContext is true", () => {
-		render(<McpToolRow tool={mockTool} serverName="test-server" isInChatContext={true} />)
-
-		const toggleSwitch = screen.queryByRole("switch", { name: "Toggle prompt inclusion" })
-		expect(toggleSwitch).not.toBeInTheDocument()
-	})
-
-	it("shows correct toggle switch state based on enabledForPrompt", () => {
-		// Test when enabled (should be checked)
-		const { rerender } = render(<McpToolRow tool={mockTool} serverName="test-server" />)
-
-		let toggleSwitch = screen.getByRole("switch", { name: "Toggle prompt inclusion" })
-		expect(toggleSwitch).toHaveAttribute("aria-checked", "true")
-
-		// Test when disabled (should not be checked)
-		const disabledTool = { ...mockTool, enabledForPrompt: false }
-		rerender(<McpToolRow tool={disabledTool} serverName="test-server" />)
-
-		toggleSwitch = screen.getByRole("switch", { name: "Toggle prompt inclusion" })
-		expect(toggleSwitch).toHaveAttribute("aria-checked", "false")
-	})
-
-	it("sends message to toggle enabledForPrompt when toggle switch is clicked", () => {
-		render(<McpToolRow tool={mockTool} serverName="test-server" />)
-
-		const toggleSwitch = screen.getByRole("switch", { name: "Toggle prompt inclusion" })
-		fireEvent.click(toggleSwitch)
-
-		expect(vscode.postMessage).toHaveBeenCalledWith({
-			type: "toggleToolEnabledForPrompt",
-			serverName: "test-server",
-			source: "global",
-			toolName: "test-tool",
-			isEnabled: false,
-		})
 	})
 
 	it("hides parameters section when tool is disabled", () => {
@@ -163,7 +117,7 @@ describe("McpToolRow", () => {
 			},
 		}
 
-		render(<McpToolRow tool={disabledToolWithSchema} serverName="test-server" />)
+		render(<McpToolRow tool={disabledToolWithSchema} />)
 
 		expect(screen.queryByText("Parameters")).not.toBeInTheDocument()
 		expect(screen.queryByText("param1")).not.toBeInTheDocument()
@@ -186,7 +140,7 @@ describe("McpToolRow", () => {
 			},
 		}
 
-		render(<McpToolRow tool={enabledToolWithSchema} serverName="test-server" />)
+		render(<McpToolRow tool={enabledToolWithSchema} />)
 
 		expect(screen.getByText("Parameters")).toBeInTheDocument()
 		expect(screen.getByText("param1")).toBeInTheDocument()
@@ -199,7 +153,7 @@ describe("McpToolRow", () => {
 			enabledForPrompt: false,
 			description: "A disabled tool",
 		}
-		render(<McpToolRow tool={disabledTool} serverName="test-server" />)
+		render(<McpToolRow tool={disabledTool} />)
 
 		const toolName = screen.getByText("test-tool")
 		const toolDescription = screen.getByText("A disabled tool")
@@ -217,7 +171,7 @@ describe("McpToolRow", () => {
 			enabledForPrompt: true,
 			description: "An enabled tool",
 		}
-		render(<McpToolRow tool={enabledTool} serverName="test-server" />)
+		render(<McpToolRow tool={enabledTool} />)
 
 		const toolName = screen.getByText("test-tool")
 		const toolDescription = screen.getByText("An enabled tool")
