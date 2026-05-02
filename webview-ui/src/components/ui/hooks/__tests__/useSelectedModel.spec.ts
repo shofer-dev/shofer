@@ -21,6 +21,9 @@ import { useOpenRouterModelProviders } from "../useOpenRouterModelProviders"
 
 vi.mock("../useRouterModels")
 vi.mock("../useOpenRouterModelProviders")
+vi.mock("@src/context/ExtensionStateContext", () => ({
+	useExtensionState: () => ({ vsCodeLmModels: [] }),
+}))
 
 const mockUseRouterModels = useRouterModels as Mock<typeof useRouterModels>
 const mockUseOpenRouterModelProviders = useOpenRouterModelProviders as Mock<typeof useOpenRouterModelProviders>
