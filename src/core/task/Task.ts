@@ -390,6 +390,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private askResponseImages?: string[]
 	public lastMessageTs?: number
 	private autoApprovalTimeoutRef?: NodeJS.Timeout
+	// True while ask() is actively waiting for a response from the user/webview.
+	// Used by handleWebviewAskResponse() to detect stray messageResponse arrivals
+	// (e.g. user typing during a tool execution window when no ask is pending) and
+	// route them to the message queue instead of silently overwriting unread
+	// askResponse* slots that the next ask() call would clear.
+	private isAwaitingAskResponse: boolean = false
 
 	// Tool Use
 	consecutiveMistakeCount: number = 0
@@ -1582,36 +1588,43 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 
-		// Wait for askResponse to be set
-		await pWaitFor(
-			() => {
-				if (this.askResponse !== undefined || this.lastMessageTs !== askTs) {
-					return true
-				}
+		// Wait for askResponse to be set. Mark that we are awaiting a response so that
+		// handleWebviewAskResponse() knows the askResponse* slots are being consumed by
+		// this invocation. The flag is cleared in finally to handle abort/throw paths.
+		this.isAwaitingAskResponse = true
+		try {
+			await pWaitFor(
+				() => {
+					if (this.askResponse !== undefined || this.lastMessageTs !== askTs) {
+						return true
+					}
 
-				// If a queued message arrives while we're blocked on an ask (e.g. a follow-up
-				// suggestion click that was incorrectly queued due to UI state), consume it
-				// immediately so the task doesn't hang.
-				if (shouldDrainQueuedMessageForAsk && !this.messageQueueService.isEmpty()) {
-					const message = this.messageQueueService.dequeueMessage()
-					if (message) {
-						this.diagLog(
-							`[DIAG ask/pWaitFor] draining queued message during wait for ask type=${type}: text=${message.text?.substring(0, 100)}`,
-						)
-						// If this is a tool approval ask, we need to approve first (yesButtonClicked)
-						// and include any queued text/images.
-						if (type === "tool" || type === "command" || type === "use_mcp_server") {
-							this.handleWebviewAskResponse("yesButtonClicked", message.text, message.images)
-						} else {
-							this.handleWebviewAskResponse("messageResponse", message.text, message.images)
+					// If a queued message arrives while we're blocked on an ask (e.g. a follow-up
+					// suggestion click that was incorrectly queued due to UI state), consume it
+					// immediately so the task doesn't hang.
+					if (shouldDrainQueuedMessageForAsk && !this.messageQueueService.isEmpty()) {
+						const message = this.messageQueueService.dequeueMessage()
+						if (message) {
+							this.diagLog(
+								`[DIAG ask/pWaitFor] draining queued message during wait for ask type=${type}: text=${message.text?.substring(0, 100)}`,
+							)
+							// If this is a tool approval ask, we need to approve first (yesButtonClicked)
+							// and include any queued text/images.
+							if (type === "tool" || type === "command" || type === "use_mcp_server") {
+								this.handleWebviewAskResponse("yesButtonClicked", message.text, message.images)
+							} else {
+								this.handleWebviewAskResponse("messageResponse", message.text, message.images)
+							}
 						}
 					}
-				}
 
-				return false
-			},
-			{ interval: 100 },
-		)
+					return false
+				},
+				{ interval: 100 },
+			)
+		} finally {
+			this.isAwaitingAskResponse = false
+		}
 
 		if (this.lastMessageTs !== askTs) {
 			// Could happen if we send multiple asks in a row i.e. with
@@ -1642,8 +1655,31 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
 		this.diagLog(
-			`[DIAG handleWebviewAskResponse] taskId=${this.taskId}.${this.instanceId}, askResponse=${askResponse}, text=${text?.substring(0, 100)}, abort=${this.abort}, abandoned=${this.abandoned}`,
+			`[DIAG handleWebviewAskResponse] taskId=${this.taskId}.${this.instanceId}, askResponse=${askResponse}, text=${text?.substring(0, 100)}, abort=${this.abort}, abandoned=${this.abandoned}, isAwaitingAskResponse=${this.isAwaitingAskResponse}`,
 		)
+
+		// Defensive: if no ask() is currently waiting, the askResponse* slots are not
+		// being consumed and would be cleared by the next ask() call, silently dropping
+		// the user's input. This happens when the webview's UI state is briefly stale
+		// (e.g. user types during the window between api_req_started finishing and the
+		// next ask appearing, or while a tool runs between asks) and falls into the
+		// bare `messageResponse` branch in ChatView.handleSendMessage.
+		//
+		// For messageResponse carrying text/images, route into the message queue so the
+		// next ask() (or cancelAndProcessQueuedMessages) drains it. Other response kinds
+		// (yes/no/objectResponse) are meaningless without a pending ask and are dropped.
+		if (!this.isAwaitingAskResponse && !this.abort && !this.abandoned) {
+			if (askResponse === "messageResponse" && (text || (images && images.length > 0))) {
+				this.diagLog(
+					`[DIAG handleWebviewAskResponse] no ask awaiting; enqueuing messageResponse: text=${text?.substring(0, 100)}`,
+				)
+				this.messageQueueService.addMessage(text ?? "", images)
+			} else {
+				this.diagLog(`[DIAG handleWebviewAskResponse] no ask awaiting; ignoring askResponse=${askResponse}`)
+			}
+			return
+		}
+
 		// Clear any pending auto-approval timeout when user responds
 		this.cancelAutoApprovalTimeout()
 
