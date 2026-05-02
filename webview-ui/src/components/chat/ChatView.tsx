@@ -590,6 +590,32 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		return false
 	}, [modifiedMessages, clineAsk, enableButtons, primaryButtonText])
 
+	/**
+	 * `canStop` is the broader notion of "the user should be able to abort
+	 * the current task right now". Unlike `isStreaming` (true only while
+	 * the assistant is mid-stream and no approval ask is pending), this
+	 * stays true through transient approval/in-progress states such as a
+	 * pending command approval or a CLI command currently executing.
+	 *
+	 * UX requirement: Stop must be possible at all times while a task is
+	 * active. Excluded states are those where the task is effectively
+	 * finished or already paused awaiting user direction:
+	 *   - completion_result / resume_completed_task: task is done
+	 *   - resume_task: task is paused; resume/terminate are the actions
+	 */
+	const canStop = useMemo(() => {
+		if (isStreaming) return true
+		if (task === undefined) return false
+		if (clineAsk === "completion_result" || clineAsk === "resume_task" || clineAsk === "resume_completed_task") {
+			return false
+		}
+		// Any other active ask (command, command_output, tool, use_mcp_server,
+		// followup, api_req_failed, mistake_limit_reached, budget_limit) is
+		// considered stoppable: the user may want to abort the task instead
+		// of answering the prompt.
+		return clineAsk !== undefined
+	}, [isStreaming, task, clineAsk])
+
 	const markFollowUpAsAnswered = useCallback(() => {
 		const lastFollowUpMessage = messagesRef.current.findLast((msg: ClineMessage) => msg.ask === "followup")
 		if (lastFollowUpMessage) {
@@ -2049,6 +2075,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				setMode={setMode}
 				modeShortcutText={modeShortcutText}
 				isStreaming={isStreaming}
+				canStop={canStop}
 				onStop={handleStopTask}
 				onEnqueueMessage={handleEnqueueCurrentMessage}
 				onContextFilesDropped={(files: DroppedContextFile[]) =>
