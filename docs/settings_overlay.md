@@ -2,7 +2,7 @@
 
 ## Overview
 
-Roo-Code stores mode configurations and custom instructions across multiple layers, merged at runtime with a specific precedence order. This document explains the source of truth (SoT), storage locations, and merge logic.
+Roo-Code stores mode configurations, custom instructions, and tool visibility/auto-approval settings across multiple layers, merged at runtime with a specific precedence order. This document explains the source of truth (SoT), storage locations, and merge logic.
 
 ---
 
@@ -31,7 +31,24 @@ customModes:
           Use our team's code style guide...
       whenToUse: "Use this mode for all code changes"
       groups: ["read", "edit", "command", "mcp"]
+      tools_allowed: ["update_todo_list"] # optional: per-mode whitelist (additive)
+      tools_denied: ["execute_command"] # optional: per-mode blacklist (overrides groups)
 ```
+
+> **`groups` semantics.** A mode's `groups` field controls **two things at once**:
+>
+> 1. **Visibility** — which tools the LLM is allowed to see in its tool catalog
+>    (`filterNativeToolsForMode` only emits tools whose canonical name passes
+>    `isToolAllowedForMode` for the mode's groups, plus `tools_allowed`, minus
+>    `tools_denied`).
+> 2. **Auto-approval eligibility** — the BRRR (Read/Edit/Command/MCP/Browser/
+>    Modes/Subtasks) toggles in the auto-approval UI gate approval at the
+>    _group_ level. If a mode does not include a group, the corresponding
+>    auto-approval toggle has no effect for that mode.
+>
+> `tools_allowed` is additive (whitelist on top of groups). `tools_denied`
+> takes precedence over both `tools_allowed` and groups. Both are evaluated
+> in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts).
 
 ### 2. Extension Global Storage — User settings (`custom_modes.yaml`)
 
@@ -81,6 +98,7 @@ Key globalState keys:
 | `customInstructions` | Global custom instructions (all modes) |
 | `customModes` | Merged result of `.roomodes` + settings file |
 | `customModePrompts` | Per-mode prompt overrides (roleDefinition, customInstructions, whenToUse) |
+| `disabledTools` | Global flat list of tool names hidden from the LLM (Settings → Tools) — applied across all modes by `filterNativeToolsForMode` |
 
 ### 4. Built-in Modes — Compiled into extension
 
@@ -289,6 +307,87 @@ roomodesWatcher.onDidDelete(handleRoomodesChange)
 ```
 
 On any file change, the manager re-reads both sources, re-merges, and updates `globalState`.
+
+---
+
+## Tool Visibility & Auto-Approval Composition
+
+Tool visibility (what the LLM sees in its tool catalog) and auto-approval
+(whether the user is asked before execution) are governed by **independent but
+overlapping** layers. Knowing which layer affects what is essential for
+debugging "why is tool X being asked / why is tool X invisible?" issues.
+
+### Visibility pipeline (what the LLM sees)
+
+The final list of tools sent to the LLM is computed by
+[`buildNativeToolsArray`](../src/core/task/build-tools.ts) →
+[`filterNativeToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts):
+
+```
+all native tools
+  ∩  (mode.groups ∪ mode.tools_allowed ∪ ALWAYS_AVAILABLE_TOOLS)
+  −  mode.tools_denied
+  −  feature-disabled tools (codebase_search, update_todo_list,
+                              generate_image, run_slash_command,
+                              access_mcp_resource if no MCP resources)
+  −  global  disabledTools  (Settings → Tools)
+  →  rename canonical → alias if model declares includedTools alias
+  =  tools sent to LLM
+```
+
+MCP tools follow a parallel pipeline via
+[`filterMcpToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts),
+gated by per-tool group assignment (`McpHub.getMcpToolMetadata`) and the
+per-server `disabledTools` list in `mcp.json`.
+
+### Two visibility kill-switches
+
+| Layer                         | Storage                                  | Scope                | Edited via                                                        |
+| ----------------------------- | ---------------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| Per-mode `groups` / `tools_*` | `.roomodes` / `custom_modes.yaml`        | Per mode             | Mode editor / file                                                |
+| Global `disabledTools`        | `globalState["disabledTools"]: string[]` | All modes            | Settings → Tools                                                  |
+| MCP per-tool visibility       | `mcp.json` per-server `disabledTools`    | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
+
+`ALWAYS_AVAILABLE_TOOLS` (defined in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts))
+bypasses mode/group restrictions — but **not** `disabledTools`. The execution-time
+guard in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts) honors
+`toolRequirements` (built from `disabledTools`) before the always-available check.
+
+### Auto-approval pipeline (whether the user is asked)
+
+Auto-approval is decided by
+[`checkAutoApproval`](../src/core/auto-approval/index.ts) and operates on
+`(mode.groups ∋ groupForTool, BRRR toggle for that group, isProtected)`. It is
+**independent** of `disabledTools`: if a tool is visible _and_ the matching BRRR
+toggle is on for the tool's group, the action is auto-approved.
+
+Auto-approved decisions short-circuit the `Task.ask()` round-trip and are
+marked `autoApproved=true` on the `ClineMessage` so the webview suppresses the
+Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)).
+
+### Diagnostics
+
+- The exact tool catalog sent to the LLM is logged on every API request from
+  [`Task.attemptApiRequest`](../src/core/task/Task.ts):
+
+    ```
+    [tools] sending N tool(s) to LLM (mode=code): tool_a, tool_b, ...
+    ```
+
+    Use this in the Roo-Code output channel to confirm visibility filtering.
+
+- If the model still calls a tool that has been removed by `disabledTools`
+  (typically a hallucination from training data),
+  [`validateToolUse`](../src/core/tools/validateToolUse.ts) throws a distinct
+  error so the model stops retrying:
+
+    ```
+    Tool "X" has been disabled by the user in Settings → Tools and is not
+    available in any mode. Do not attempt to call it again.
+    ```
+
+    This is reported separately from the mode-restriction error
+    (`Tool "X" is not allowed in <mode> mode.`).
 
 ---
 

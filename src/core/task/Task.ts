@@ -4771,6 +4771,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 			allTools = toolsResult.tools
 			allowedFunctionNames = toolsResult.allowedFunctionNames
+
+			// Log the exact tool catalog being sent to the LLM. This makes it trivial
+			// to confirm that Settings → Tools (visibility / `disabledTools`) and mode
+			// group restrictions are reflected in the outbound request, without
+			// having to capture the wire-level payload.
+			const toolNames = allTools.map((t) => (t as OpenAI.Chat.ChatCompletionFunctionTool).function.name)
+			provider.log(
+				`[tools] sending ${toolNames.length} tool(s) to LLM (mode=${mode ?? "default"}): ${toolNames.join(", ")}` +
+					(allowedFunctionNames ? ` | allowedFunctionNames=${allowedFunctionNames.join(", ")}` : ""),
+			)
 		}
 
 		const shouldIncludeTools = allTools.length > 0
