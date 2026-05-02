@@ -46,6 +46,27 @@ export function validateToolUse(
 		)
 	}
 
+	// Disabled-by-user check (Settings → Tools) takes priority over mode restrictions.
+	// `toolRequirements` is built from the global `disabledTools` list and maps each
+	// disabled tool (and its alias) to `false`. A disabled tool is intentionally
+	// removed from the LLM's tool catalog by `filterNativeToolsForMode`; if the model
+	// still calls it (typically because it hallucinated the tool from training data),
+	// we must give a distinct, actionable error so the model stops retrying. The
+	// generic "not allowed in <mode> mode" message previously used here led the model
+	// to attempt mode switches that could never resolve the situation.
+	const resolvedToolName = TOOL_ALIASES[toolName] ?? toolName
+	const isDisabledByUser =
+		!!toolRequirements &&
+		typeof toolRequirements === "object" &&
+		((toolName in toolRequirements && !toolRequirements[toolName]) ||
+			(resolvedToolName in toolRequirements && !toolRequirements[resolvedToolName]))
+
+	if (isDisabledByUser) {
+		throw new Error(
+			`Tool "${toolName}" has been disabled by the user in Settings → Tools and is not available in any mode. Do not attempt to call it again. Use a different tool to accomplish the task.`,
+		)
+	}
+
 	// Then check if the tool is allowed for the current mode
 	if (
 		!isToolAllowedForMode(
