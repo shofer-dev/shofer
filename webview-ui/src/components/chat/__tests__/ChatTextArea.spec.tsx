@@ -278,213 +278,129 @@ describe("ChatTextArea", () => {
 			mockConvertToMentionPath.mockClear()
 		})
 
-		it("should process multiple file paths separated by newlines", () => {
-			const setInputValue = vi.fn()
-
-			const { container } = render(
-				<ChatTextArea {...defaultProps} setInputValue={setInputValue} inputValue="Initial text" />,
-			)
-
-			// Create a mock dataTransfer object with text data containing multiple file paths
+		const dropOn = (container: HTMLElement, text: string, mime: string = "text") => {
 			const dataTransfer = {
-				getData: vi.fn().mockReturnValue("/Users/test/project/file1.js\n/Users/test/project/file2.js"),
+				getData: vi.fn((type: string) => (type === mime ? text : "")),
 				files: [],
 			}
-
-			// Simulate drop event
 			fireEvent.drop(container.querySelector(".chat-text-area")!, {
 				dataTransfer,
 				preventDefault: vi.fn(),
 			})
+		}
 
-			// Verify convertToMentionPath was called for each file path
-			expect(mockConvertToMentionPath).toHaveBeenCalledTimes(2)
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith("/Users/test/project/file1.js", mockCwd)
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith("/Users/test/project/file2.js", mockCwd)
+		it("should call onContextFilesDropped with parsed entries for newline-separated paths", () => {
+			const onContextFilesDropped = vi.fn()
+			const { container } = render(
+				<ChatTextArea
+					{...defaultProps}
+					onContextFilesDropped={onContextFilesDropped}
+					inputValue="Initial text"
+				/>,
+			)
 
-			// Verify setInputValue was called with the correct value
-			// The mock implementation of convertToMentionPath will convert the paths to @/file1.js and @/file2.js
-			expect(setInputValue).toHaveBeenCalledWith("@/file1.js @/file2.js Initial text")
+			dropOn(container, `${mockCwd}/file1.js\n${mockCwd}/file2.js`)
+
+			expect(onContextFilesDropped).toHaveBeenCalledTimes(1)
+			expect(onContextFilesDropped).toHaveBeenCalledWith([
+				{ path: "/file1.js", isFile: true },
+				{ path: "/file2.js", isFile: true },
+			])
 		})
 
 		it("should filter out empty lines in the dragged text", () => {
-			const setInputValue = vi.fn()
-
+			const onContextFilesDropped = vi.fn()
 			const { container } = render(
-				<ChatTextArea {...defaultProps} setInputValue={setInputValue} inputValue="Initial text" />,
+				<ChatTextArea {...defaultProps} onContextFilesDropped={onContextFilesDropped} />,
 			)
 
-			// Create a mock dataTransfer object with text data containing empty lines
-			const dataTransfer = {
-				getData: vi.fn().mockReturnValue("/Users/test/project/file1.js\n\n/Users/test/project/file2.js\n\n"),
-				files: [],
-			}
+			dropOn(container, `${mockCwd}/file1.js\n\n${mockCwd}/file2.js\n\n`)
 
-			// Simulate drop event
-			fireEvent.drop(container.querySelector(".chat-text-area")!, {
-				dataTransfer,
-				preventDefault: vi.fn(),
-			})
-
-			// Verify convertToMentionPath was called only for non-empty lines
-			expect(mockConvertToMentionPath).toHaveBeenCalledTimes(2)
-
-			// Verify setInputValue was called with the correct value
-			expect(setInputValue).toHaveBeenCalledWith("@/file1.js @/file2.js Initial text")
+			expect(onContextFilesDropped).toHaveBeenCalledTimes(1)
+			expect(onContextFilesDropped).toHaveBeenCalledWith([
+				{ path: "/file1.js", isFile: true },
+				{ path: "/file2.js", isFile: true },
+			])
 		})
 
-		it("should correctly update cursor position after adding multiple mentions", () => {
+		it("should not modify the input value on file drop", () => {
 			const setInputValue = vi.fn()
-			const initialCursorPosition = 5
-
+			const onContextFilesDropped = vi.fn()
 			const { container } = render(
-				<ChatTextArea {...defaultProps} setInputValue={setInputValue} inputValue="Hello world" />,
+				<ChatTextArea
+					{...defaultProps}
+					setInputValue={setInputValue}
+					onContextFilesDropped={onContextFilesDropped}
+					inputValue="Hello world"
+				/>,
 			)
 
-			// Set the cursor position manually
-			const textArea = container.querySelector("textarea")
-			if (textArea) {
-				textArea.selectionStart = initialCursorPosition
-				textArea.selectionEnd = initialCursorPosition
-			}
+			dropOn(container, `${mockCwd}/file1.js\n${mockCwd}/file2.js`)
 
-			// Create a mock dataTransfer object with text data
-			const dataTransfer = {
-				getData: vi.fn().mockReturnValue("/Users/test/project/file1.js\n/Users/test/project/file2.js"),
-				files: [],
-			}
-
-			// Simulate drop event
-			fireEvent.drop(container.querySelector(".chat-text-area")!, {
-				dataTransfer,
-				preventDefault: vi.fn(),
-			})
-
-			// The cursor position should be updated based on the implementation in the component
-			expect(setInputValue).toHaveBeenCalledWith("@/file1.js @/file2.js Hello world")
+			expect(setInputValue).not.toHaveBeenCalled()
+			expect(onContextFilesDropped).toHaveBeenCalled()
 		})
 
 		it("should handle very long file paths correctly", () => {
-			const setInputValue = vi.fn()
-
-			const { container } = render(<ChatTextArea {...defaultProps} setInputValue={setInputValue} inputValue="" />)
-
-			// Create a very long file path
-			const longPath =
-				"/Users/test/project/very/long/path/with/many/nested/directories/and/a/very/long/filename/with/extension.typescript"
-
-			// Create a mock dataTransfer object with the long path
-			const dataTransfer = {
-				getData: vi.fn().mockReturnValue(longPath),
-				files: [],
-			}
-
-			// Simulate drop event
-			fireEvent.drop(container.querySelector(".chat-text-area")!, {
-				dataTransfer,
-				preventDefault: vi.fn(),
-			})
-
-			// Verify convertToMentionPath was called with the long path
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith(longPath, mockCwd)
-
-			// The mock implementation will convert it to @/very/long/path/...
-			expect(setInputValue).toHaveBeenCalledWith(
-				"@/very/long/path/with/many/nested/directories/and/a/very/long/filename/with/extension.typescript ",
+			const onContextFilesDropped = vi.fn()
+			const { container } = render(
+				<ChatTextArea {...defaultProps} onContextFilesDropped={onContextFilesDropped} />,
 			)
+
+			const longRel =
+				"/very/long/path/with/many/nested/directories/and/a/very/long/filename/with/extension.typescript"
+			dropOn(container, `${mockCwd}${longRel}`)
+
+			expect(onContextFilesDropped).toHaveBeenCalledWith([{ path: longRel, isFile: true }])
 		})
 
 		it("should handle paths with special characters correctly", () => {
-			const setInputValue = vi.fn()
-
-			const { container } = render(<ChatTextArea {...defaultProps} setInputValue={setInputValue} inputValue="" />)
-
-			// Create paths with special characters
-			const specialPath1 = "/Users/test/project/file with spaces.js"
-			const specialPath2 = "/Users/test/project/file-with-dashes.js"
-			const specialPath3 = "/Users/test/project/file_with_underscores.js"
-			const specialPath4 = "/Users/test/project/file.with.dots.js"
-
-			// Create a mock dataTransfer object with the special paths
-			const dataTransfer = {
-				getData: vi.fn().mockReturnValue(`${specialPath1}\n${specialPath2}\n${specialPath3}\n${specialPath4}`),
-				files: [],
-			}
-
-			// Simulate drop event
-			fireEvent.drop(container.querySelector(".chat-text-area")!, {
-				dataTransfer,
-				preventDefault: vi.fn(),
-			})
-
-			// Verify convertToMentionPath was called for each path
-			expect(mockConvertToMentionPath).toHaveBeenCalledTimes(4)
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith(specialPath1, mockCwd)
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith(specialPath2, mockCwd)
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith(specialPath3, mockCwd)
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith(specialPath4, mockCwd)
-
-			// Verify setInputValue was called with the correct value
-			expect(setInputValue).toHaveBeenCalledWith(
-				"@/file with spaces.js @/file-with-dashes.js @/file_with_underscores.js @/file.with.dots.js ",
+			const onContextFilesDropped = vi.fn()
+			const { container } = render(
+				<ChatTextArea {...defaultProps} onContextFilesDropped={onContextFilesDropped} />,
 			)
+
+			const p1 = `${mockCwd}/file with spaces.js`
+			const p2 = `${mockCwd}/file-with-dashes.js`
+			const p3 = `${mockCwd}/file_with_underscores.js`
+			const p4 = `${mockCwd}/file.with.dots.js`
+			dropOn(container, `${p1}\n${p2}\n${p3}\n${p4}`)
+
+			expect(onContextFilesDropped).toHaveBeenCalledWith([
+				{ path: "/file with spaces.js", isFile: true },
+				{ path: "/file-with-dashes.js", isFile: true },
+				{ path: "/file_with_underscores.js", isFile: true },
+				{ path: "/file.with.dots.js", isFile: true },
+			])
 		})
 
 		it("should handle paths outside the current working directory", () => {
-			const setInputValue = vi.fn()
+			const onContextFilesDropped = vi.fn()
+			const { container } = render(
+				<ChatTextArea {...defaultProps} onContextFilesDropped={onContextFilesDropped} />,
+			)
 
-			const { container } = render(<ChatTextArea {...defaultProps} setInputValue={setInputValue} inputValue="" />)
-
-			// Create paths outside the current working directory
 			const outsidePath = "/Users/other/project/file.js"
+			dropOn(container, outsidePath)
 
-			// Mock the convertToMentionPath function to return the original path for paths outside cwd
-			mockConvertToMentionPath.mockImplementationOnce((path, _cwd) => {
-				return path // Return original path for this test
-			})
-
-			// Create a mock dataTransfer object with the outside path
-			const dataTransfer = {
-				getData: vi.fn().mockReturnValue(outsidePath),
-				files: [],
-			}
-
-			// Simulate drop event
-			fireEvent.drop(container.querySelector(".chat-text-area")!, {
-				dataTransfer,
-				preventDefault: vi.fn(),
-			})
-
-			// Verify convertToMentionPath was called with the outside path
-			expect(mockConvertToMentionPath).toHaveBeenCalledWith(outsidePath, mockCwd)
-
-			// Verify setInputValue was called with the original path
-			expect(setInputValue).toHaveBeenCalledWith("/Users/other/project/file.js ")
+			expect(onContextFilesDropped).toHaveBeenCalledWith([{ path: outsidePath, isFile: true }])
 		})
 
 		it("should do nothing when dropped text is empty", () => {
 			const setInputValue = vi.fn()
-
+			const onContextFilesDropped = vi.fn()
 			const { container } = render(
-				<ChatTextArea {...defaultProps} setInputValue={setInputValue} inputValue="Initial text" />,
+				<ChatTextArea
+					{...defaultProps}
+					setInputValue={setInputValue}
+					onContextFilesDropped={onContextFilesDropped}
+					inputValue="Initial text"
+				/>,
 			)
 
-			// Create a mock dataTransfer object with empty text
-			const dataTransfer = {
-				getData: vi.fn().mockReturnValue(""),
-				files: [],
-			}
+			dropOn(container, "")
 
-			// Simulate drop event
-			fireEvent.drop(container.querySelector(".chat-text-area")!, {
-				dataTransfer,
-				preventDefault: vi.fn(),
-			})
-
-			// Verify convertToMentionPath was not called
-			expect(mockConvertToMentionPath).not.toHaveBeenCalled()
-
-			// Verify setInputValue was not called
+			expect(onContextFilesDropped).not.toHaveBeenCalled()
 			expect(setInputValue).not.toHaveBeenCalled()
 		})
 

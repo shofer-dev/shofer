@@ -170,6 +170,10 @@ vi.mock("@/components/ui", () => ({
 		</button>
 	),
 	StandardTooltip: ({ children, content }: any) => <div title={content}>{children}</div>,
+	TooltipProvider: ({ children }: any) => <>{children}</>,
+	Tooltip: ({ children }: any) => <>{children}</>,
+	TooltipTrigger: ({ children }: any) => <>{children}</>,
+	TooltipContent: ({ children }: any) => <div>{children}</div>,
 	Input: ({ value, onChange, placeholder, "data-testid": dataTestId }: any) => (
 		<input type="text" value={value} onChange={onChange} placeholder={placeholder} data-testid={dataTestId} />
 	),

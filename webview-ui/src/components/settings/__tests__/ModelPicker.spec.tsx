@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ModelInfo } from "@roo-code/types"
 
 import { ModelPicker } from "../ModelPicker"
+import { useExtensionState } from "@src/context/ExtensionStateContext"
 
 vi.mock("@src/context/ExtensionStateContext", () => ({
 	useExtensionState: vi.fn(),
@@ -58,6 +59,9 @@ describe("ModelPicker", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.useFakeTimers()
+		;(useExtensionState as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+			vsCodeLmModels: [],
+		})
 	})
 
 	afterEach(() => {
