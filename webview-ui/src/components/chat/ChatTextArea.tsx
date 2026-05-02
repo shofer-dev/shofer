@@ -54,6 +54,16 @@ interface ChatTextAreaProps {
 	onCancel?: () => void
 	// Stop/Queue functionality
 	isStreaming?: boolean
+	/**
+	 * True when the current task is in a state where the user should be
+	 * able to abort it via the textarea Stop button. This is a superset of
+	 * `isStreaming`: it also covers states like awaiting command approval
+	 * or while a CLI command is mid-execution, where the underlying task
+	 * is still active and stoppable but `isStreaming` is false because an
+	 * approval ask is currently rendered. Per UX requirement: Stop must be
+	 * possible at all times while a task is active.
+	 */
+	canStop?: boolean
 	onStop?: () => void
 	onEnqueueMessage?: () => void
 	/**
@@ -86,6 +96,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			isEditMode = false,
 			onCancel,
 			isStreaming = false,
+			canStop = false,
 			onStop,
 			onEnqueueMessage,
 			onContextFilesDropped,
@@ -1188,8 +1199,8 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										</button>
 									</StandardTooltip>
 								)}
-								{/* Queue button - shown when streaming and user has typed content */}
-								{!isEditMode && isStreaming && hasInputContent && onEnqueueMessage && (
+								{/* Queue button - shown when the task is stoppable and user has typed content */}
+								{!isEditMode && (isStreaming || canStop) && hasInputContent && onEnqueueMessage && (
 									<StandardTooltip content={t("chat:enqueueMessage")}>
 										<button
 											aria-label={t("chat:enqueueMessage")}
@@ -1211,50 +1222,60 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 										</button>
 									</StandardTooltip>
 								)}
-								{/* Send/Stop button - morphs based on streaming state, always visible in edit mode */}
-								<StandardTooltip
-									content={
-										isEditMode
-											? t("chat:pressToSend", { keyCombination: sendKeyCombination })
-											: isStreaming
-												? t("chat:stop.title")
-												: t("chat:pressToSend", { keyCombination: sendKeyCombination })
-									}>
-									<button
-										aria-label={
-											isEditMode
-												? t("chat:pressToSend", { keyCombination: sendKeyCombination })
-												: isStreaming
-													? t("chat:stop.title")
-													: t("chat:pressToSend", { keyCombination: sendKeyCombination })
-										}
-										disabled={false}
-										onClick={isStreaming ? onStop : onSend}
-										className={cn(
-											"relative inline-flex items-center justify-center",
-											"bg-transparent border-none p-1.5",
-											"rounded-full min-w-[28px] min-h-[28px]",
-											"text-vscode-descriptionForeground hover:text-vscode-foreground",
-											"transition-all duration-200",
-											isEditMode || isStreaming || hasInputContent
-												? "opacity-100 hover:opacity-100 pointer-events-auto"
-												: "opacity-0 pointer-events-none",
-											(isEditMode || isStreaming || hasInputContent) &&
-												"hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
-											"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
-											(isEditMode || isStreaming || hasInputContent) &&
-												"active:bg-[rgba(255,255,255,0.1)]",
-											(isEditMode || isStreaming || hasInputContent) && "cursor-pointer",
-											isStreaming &&
-												"bg-vscode-button-background hover:bg-vscode-button-background",
-										)}>
-										{isStreaming ? (
-											<Square className="size-4 stroke-none fill-vscode-button-foreground" />
-										) : (
-											<SendHorizontal className="size-4" />
-										)}
-									</button>
-								</StandardTooltip>
+								{/* Send/Stop button - morphs based on streaming/stoppable state, always visible in edit mode.
+								    `showStop` makes Stop available at all times while a task is active
+								    (e.g. while a CLI command is running or awaiting approval), not only
+								    during pure assistant streaming. */}
+								{(() => {
+									const showStop = isStreaming || canStop
+									return (
+										<StandardTooltip
+											content={
+												isEditMode
+													? t("chat:pressToSend", { keyCombination: sendKeyCombination })
+													: showStop
+														? t("chat:stop.title")
+														: t("chat:pressToSend", { keyCombination: sendKeyCombination })
+											}>
+											<button
+												aria-label={
+													isEditMode
+														? t("chat:pressToSend", { keyCombination: sendKeyCombination })
+														: showStop
+															? t("chat:stop.title")
+															: t("chat:pressToSend", {
+																	keyCombination: sendKeyCombination,
+																})
+												}
+												disabled={false}
+												onClick={showStop ? onStop : onSend}
+												className={cn(
+													"relative inline-flex items-center justify-center",
+													"bg-transparent border-none p-1.5",
+													"rounded-full min-w-[28px] min-h-[28px]",
+													"text-vscode-descriptionForeground hover:text-vscode-foreground",
+													"transition-all duration-200",
+													isEditMode || showStop || hasInputContent
+														? "opacity-100 hover:opacity-100 pointer-events-auto"
+														: "opacity-0 pointer-events-none",
+													(isEditMode || showStop || hasInputContent) &&
+														"hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
+													"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
+													(isEditMode || showStop || hasInputContent) &&
+														"active:bg-[rgba(255,255,255,0.1)]",
+													(isEditMode || showStop || hasInputContent) && "cursor-pointer",
+													showStop &&
+														"bg-vscode-button-background hover:bg-vscode-button-background",
+												)}>
+												{showStop ? (
+													<Square className="size-4 stroke-none fill-vscode-button-foreground" />
+												) : (
+													<SendHorizontal className="size-4" />
+												)}
+											</button>
+										</StandardTooltip>
+									)
+								})()}
 							</div>
 
 							{!inputValue && (
