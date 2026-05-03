@@ -1504,6 +1504,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const askMessage = this.findMessageByTimestamp(askTs)
 			if (askMessage) {
 				askMessage.autoApproved = true
+				// Mirror the `isAnswered` bookkeeping that
+				// `handleWebviewAskResponse` performs for human-driven
+				// approvals. Without this, downstream consumers (notably the
+				// webview FileChangesPanel, which filters ask "tool" entries
+				// by `isAnswered`) treat auto-approved tool calls as still
+				// pending and silently drop them from the listing of
+				// modified files for the task.
+				if (approval.decision === "approve" && askMessage.type === "ask" && askMessage.ask === "tool") {
+					askMessage.isAnswered = true
+				}
 				await this.saveClineMessages()
 				this.updateClineMessage(askMessage)
 			}
