@@ -971,6 +971,12 @@ async function enrichVsCodeLmModel(model: vscode.LanguageModelChat): Promise<VsC
 		}
 		if (arkwareCapabilities && arkwarePricing) break
 	}
+	// `capabilities` exists at runtime on recent VS Code builds (forwarded via
+	// LanguageModelChat) but isn't declared in @types/vscode@1.100.0, so we
+	// access it through a structural cast rather than depend on an unstable
+	// proposed-API d.ts.
+	const runtimeCaps = (model as unknown as { capabilities?: { imageInput?: boolean; toolCalling?: boolean } })
+		.capabilities
 	return {
 		id: model.id,
 		vendor: model.vendor,
@@ -978,8 +984,8 @@ async function enrichVsCodeLmModel(model: vscode.LanguageModelChat): Promise<VsC
 		version: model.version,
 		name: model.name,
 		maxInputTokens: model.maxInputTokens,
-		capabilities: model.capabilities
-			? { imageInput: model.capabilities.imageInput, toolCalling: model.capabilities.toolCalling }
+		capabilities: runtimeCaps
+			? { imageInput: runtimeCaps.imageInput, toolCalling: runtimeCaps.toolCalling }
 			: undefined,
 		arkwareCapabilities,
 		arkwarePricing,
