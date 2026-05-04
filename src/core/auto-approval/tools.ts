@@ -61,7 +61,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
  *
  * Resolution order:
  *  1. Native tools — look up snake_case name in TOOL_GROUPS
- *  2. External LM tools — infer from naming prefix (browser_ → browser, vscode_ → read/execute)
+ *  2. External LM tools — infer from naming prefix (browser_ → browser, ide_ → read/execute)
  *  3. Fallback to "uncategorized"
  *
  * @param tool - The tool metadata from the approval payload
@@ -81,15 +81,15 @@ export function getToolGroupForSayTool(tool: ClineSayTool): string {
 	}
 
 	// External LM tools: infer group from the tool name prefix
-	// This handles browser_* and vscode_* tools when they use askApproval.
+	// This handles browser_* and ide_* tools when they use askApproval.
 	if (sayName.startsWith("browser") || sayName.startsWith("browser_")) {
 		return "browser"
 	}
 
-	// For vscode_* tools, we can't easily resolve the exact group here
+	// For ide_* tools, we can't easily resolve the exact group here
 	// (it depends on the extension's config). Default to "execute" for
-	// vscode_* since most vscode-tools are UI state mutations.
-	if (sayName.startsWith("vscode")) {
+	// ide_* since most ide-tools are UI state mutations.
+	if (sayName.startsWith("ide_") || sayName.startsWith("ide")) {
 		return "execute"
 	}
 
