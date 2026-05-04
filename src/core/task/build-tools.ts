@@ -92,21 +92,21 @@ interface ExternalLmToolMeta {
  *
  * Each extension that registers LM tools should contribute a
  * `toolGroups` property under its config namespace (e.g.,
- * `arkware.vscodeTools.toolGroups` for vscode-tools).
+ * `arkware.vscodeTools.toolGroups` for ide-tools).
  *
  * Resolution strategy:
  *  1. Read known config namespaces and look up the tool name.
  *  2. If found and the declared group is a valid ToolGroup, use it.
  *  3. Fall back to "uncategorized".
  *
- * @param toolName - The name of the tool (e.g., "vscode_file_read")
+ * @param toolName - The name of the tool (e.g., "ide_file_read")
  * @returns The ToolGroup declared by the tool's extension, or "uncategorized"
  */
 function resolveExternalLmToolGroup(toolName: string): ToolGroup {
 	// Known config namespaces for extensions that register LM tools.
 	// Each maps a config section to its publisher prefix for tool matching.
 	const configNamespaces: Array<{ section: string; toolPrefix: string }> = [
-		{ section: "arkware.vscodeTools", toolPrefix: "vscode_" },
+		{ section: "arkware.vscodeTools", toolPrefix: "ide_" },
 		{ section: "arkware.browserTools", toolPrefix: "browser_" },
 	]
 

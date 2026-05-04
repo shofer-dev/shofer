@@ -9,17 +9,17 @@ Roo Code uses a single unified ToolGroup system as the **single source of truth*
 
 ## The 9 Categories
 
-| #   | Category        | Purpose                                              | Example tools                                                                                                 |
-| --- | --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 1   | `read`          | Read-only data access                                | `read_file`, `search_files`, `list_files`, `codebase_search`, `vscode_file_read`, `vscode_get_viewport_state` |
-| 2   | `write`         | Content mutations — file creation, editing, patching | `apply_diff`, `write_to_file`, `insert_edit`, `rename_symbol`                                                 |
-| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `sleep`, `vscode_panel_open`, `vscode_editor_goto_line`             |
-| 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                                |
-| 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                                         |
-| 6   | `mode`          | Mode switching and task lifecycle                    | `switch_mode`, `new_task`                                                                                     |
-| 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `list_background_tasks`                                                 |
-| 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                                       |
-| 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools without a `group` field land here)                                               |
+| #   | Category        | Purpose                                              | Example tools                                                                                           |
+| --- | --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 1   | `read`          | Read-only data access                                | `read_file`, `search_files`, `list_files`, `codebase_search`, `ide_file_read`, `ide_get_viewport_state` |
+| 2   | `write`         | Content mutations — file creation, editing, patching | `apply_diff`, `write_to_file`, `insert_edit`, `rename_symbol`                                           |
+| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `sleep`, `ide_panel_open`, `ide_editor_goto_line`             |
+| 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                          |
+| 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                                   |
+| 6   | `mode`          | Mode switching and task lifecycle                    | `switch_mode`, `new_task`                                                                               |
+| 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `list_background_tasks`                                           |
+| 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                                 |
+| 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools without a `group` field land here)                                         |
 
 ## Where Each Tool Gets Its Group
 
@@ -47,17 +47,17 @@ Extensions that register language model tools via `vscode.lm.registerTool()` dec
 
 | Extension               | Config namespace                  | Tool prefix |
 | ----------------------- | --------------------------------- | ----------- |
-| `arkware-vscode-tools`  | `arkware.vscodeTools.toolGroups`  | `vscode_`   |
+| `arkware-vscode-tools`  | `arkware.vscodeTools.toolGroups`  | `ide_`      |
 | `arkware-browser-tools` | `arkware.browserTools.toolGroups` | `browser_`  |
 
 **Example — vscode-tools** (`extensions/vscode-tools/package.json`):
 
 ```json
 "arkware.vscodeTools.toolGroups": {
-    "vscode_file_read": "read",
-    "vscode_file_open": "execute",
-    "vscode_panel_focus": "execute",
-    "vscode_get_viewport_state": "read"
+    "ide_file_read": "read",
+    "ide_file_open": "execute",
+    "ide_panel_focus": "execute",
+    "ide_get_viewport_state": "read"
 }
 ```
 
