@@ -39,12 +39,12 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | Tool                   | Origin | Group | Always Available | Status | Description                                    |
 | ---------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
 | `read_file`            | 🔵 RC  | read  |        –         |   ✅   | Read file contents with line range             |
-| `write_to_file`        | 🔵 RC  | edit  |        –         |   ✅   | Create or overwrite a file                     |
-| `apply_diff`           | 🔵 RC  | edit  |        –         |   ✅   | Apply precise targeted modifications           |
-| `create_directory`     | 🆕 WS  | edit  |        –         |   ✅   | Create directory (mkdir -p)                    |
-| `insert_edit`          | 🆕 WS  | edit  |        –         |   ✅   | Insert text at a specific line:column position |
+| `write_to_file`        | 🔵 RC  | write |        –         |   ✅   | Create or overwrite a file                     |
+| `apply_diff`           | 🔵 RC  | write |        –         |   ✅   | Apply precise targeted modifications           |
+| `create_directory`     | 🆕 WS  | write |        –         |   ✅   | Create directory (mkdir -p)                    |
+| `insert_edit`          | 🆕 WS  | write |        –         |   ✅   | Insert text at a specific line:column position |
 | `list_files`           | 🔵 RC  | read  |        –         |   ✅   | List files and directories at a path           |
-| `create_new_workspace` | 🆕 WS  | edit  |        –         |   ✅   | Create new workspace directory structure       |
+| `create_new_workspace` | 🆕 WS  | write |        –         |   ✅   | Create new workspace directory structure       |
 
 ### `read_file`
 
@@ -185,7 +185,7 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 | `get_project_setup_info` | 🆕 WS  | read  |        –         |   ✅   | Detect project languages, frameworks, build system |
 | `get_changed_files`      | 🟣 AW  | read  |        –         |   ✅   | List files changed in current task with line stats |
 | `read_project_structure` | 🆕 WS  | read  |        –         |   ✅   | ASCII tree of workspace structure                  |
-| `rename_symbol`          | 🆕 WS  | edit  |        –         |   ✅   | Rename symbol across codebase (LSP)                |
+| `rename_symbol`          | 🆕 WS  | write |        –         |   ✅   | Rename symbol across codebase (LSP)                |
 | `view_image`             | 🆕 WS  | read  |        –         |   ✅   | View image file for visual analysis                |
 
 ### `get_errors`
@@ -249,8 +249,8 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 
 | Tool                  | Origin | Group   | Always Available | Status | Description                            |
 | --------------------- | :----: | ------- | :--------------: | :----: | -------------------------------------- |
-| `execute_command`     | 🔵 RC  | command |        –         |   ✅   | Execute a CLI command                  |
-| `read_command_output` | 🔵 RC  | command |        –         |   ✅   | Get full output of a truncated command |
+| `execute_command`     | 🔵 RC  | execute |        –         |   ✅   | Execute a CLI command                  |
+| `read_command_output` | 🔵 RC  | execute |        –         |   ✅   | Get full output of a truncated command |
 | `fetch_web_page`      | 🆕 WS  | read    |        –         |   ✅   | Fetch and extract web page content     |
 
 ### `execute_command`
@@ -259,7 +259,7 @@ Execute a CLI command in the user's terminal.
 
 | Param     | Type   | Required | Description        |
 | --------- | ------ | :------: | ------------------ |
-| `command` | string |    ✅    | Command to execute |
+| `execute` | string |    ✅    | Command to execute |
 | `cwd`     | string |    –     | Working directory  |
 
 ### `read_command_output`
@@ -287,8 +287,8 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 | ----------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------------------- |
 | `ask_followup_question` | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question                                     |
 | `attempt_completion`    | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                      |
-| `switch_mode`           | 🔵 RC  | modes |        ✅        |   ✅   | Switch to a different mode                                  |
-| `new_task`              | 🔵 RC  | modes |        ✅        |   ✅   | Spawn a sub-task (sync or background)                       |
+| `switch_mode`           | 🔵 RC  | mode  |        ✅        |   ✅   | Switch to a different mode                                  |
+| `new_task`              | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                       |
 | `check_task_status`     | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task              |
 | `wait_for_task`         | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any) |
 | `list_background_tasks` | 🟣 AW  | –     |        ✅        |   ✅   | List all background child tasks started by this task        |
@@ -361,7 +361,7 @@ No approval prompt needed — this is a non-destructive meta-operation.
 
 | Tool                | Origin | Group | Always Available | Gate                          | Description         |
 | ------------------- | :----: | ----- | :--------------: | ----------------------------- | ------------------- |
-| `generate_image`    | 🔵 RC  | edit  |        –         | `experiments.imageGeneration` | Generate images     |
+| `generate_image`    | 🔵 RC  | write |        –         | `experiments.imageGeneration` | Generate images     |
 | `run_slash_command` | 🔵 RC  | –     |        ✅        | `experiments.runSlashCommand` | Run a slash command |
 
 ---
@@ -372,7 +372,7 @@ These are alternative edit tool implementations selectable per-model. They map t
 
 | Tool                 | Origin | Canonical    | Status | Description                 |
 | -------------------- | :----: | ------------ | :----: | --------------------------- |
-| `edit`               | 🔵 RC  | (standalone) |   🔧   | Edit files (model-specific) |
+| `write`              | 🔵 RC  | (standalone) |   🔧   | Edit files (model-specific) |
 | `search_replace`     | 🔵 RC  | (standalone) |   🔧   | Single search-and-replace   |
 | `edit_file`          | 🔵 RC  | (standalone) |   🔧   | Edit via search-and-replace |
 | `apply_patch`        | 🔵 RC  | (standalone) |   🔧   | Apply unified diff patch    |
@@ -401,7 +401,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `codebase_search`          |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
 | `codebase_search_with_lsp` |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `fetch_web_page`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| **Edit group**             |
+| **Write group**            |
 | `apply_diff`               |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `write_to_file`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `insert_edit`              |    ✓ (md)    |    ✓    |        |    ✓     |        |
@@ -409,7 +409,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `create_directory`         |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `create_new_workspace`     |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `generate_image`           |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
-| **Command group**          |
+| **Execute group**          |
 | `execute_command`          |              |    ✓    |        |    ✓     |        |
 | `read_command_output`      |              |    ✓    |        |    ✓     |        |
 | **MCP group**              |

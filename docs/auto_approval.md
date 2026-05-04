@@ -32,15 +32,21 @@ The possible decisions are:
 
 These are the boolean toggles exposed in the UI. Each controls a specific class of actions.
 
-| Toggle (`alwaysAllow*`)        | Controls                                        | Additional Options                                              |
-| ------------------------------ | ----------------------------------------------- | --------------------------------------------------------------- |
-| `alwaysAllowReadOnly`          | Read-only file & workspace operations           | `alwaysAllowReadOnlyOutsideWorkspace`                           |
-| `alwaysAllowWrite`             | File edits, new file creation, image generation | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected` |
-| `alwaysAllowMcp`               | MCP tool calls and resource access              | `mcpServers` (per-tool `alwaysAllow` flag)                      |
-| `alwaysAllowModeSwitch`        | `switch_mode` tool                              | –                                                               |
-| `alwaysAllowSubtasks`          | `new_task` and `finishTask`                     | –                                                               |
-| `alwaysAllowExecute`           | Shell command execution                         | `allowedCommands`, `deniedCommands`                             |
-| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                  | `followupAutoApproveTimeoutMs`                                  |
+| Toggle (`alwaysAllow*`)        | Controls                           | Additional Options                                              |
+| ------------------------------ | ---------------------------------- | --------------------------------------------------------------- |
+| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup      | `alwaysAllowReadOnlyOutsideWorkspace`                           |
+| `alwaysAllowWrite`             | Tools in the `write` ToolGroup     | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected` |
+| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup   | –                                                               |
+| `alwaysAllowMcp`               | MCP tool calls and resource access | `mcpServers` (per-tool `alwaysAllow` flag)                      |
+| `alwaysAllowModeSwitch`        | `switch_mode` tool                 | –                                                               |
+| `alwaysAllowSubtasks`          | `new_task` and `finishTask`        | –                                                               |
+| `alwaysAllowExecute`           | Shell command execution            | `allowedCommands`, `deniedCommands`                             |
+| `alwaysAllowFollowupQuestions` | Follow-up question suggestions     | `followupAutoApproveTimeoutMs`                                  |
+
+> **Each toggle maps to a ToolGroup** (see [`tool-categories.md`](tool-categories.md)).
+> Adding a new group to `TOOL_GROUPS` in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)
+> automatically makes it available for auto-approval — a tool inherits the toggle of the group
+> it belongs to.
 
 ---
 
