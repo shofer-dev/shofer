@@ -312,7 +312,7 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 		const toolResult = await task.providerRef
 			.deref()
 			?.getMcpHub()
-			?.callTool(serverName, toolName, parsedArguments, undefined, task.taskId)
+			?.callTool(serverName, toolName, parsedArguments, undefined, task.taskId, task.abortSignal)
 
 		let toolResultPretty = "(No response)"
 		let images: string[] = []
