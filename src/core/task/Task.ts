@@ -341,6 +341,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	providerRef: WeakRef<ClineProvider>
 	private readonly globalStoragePath: string
 	abort: boolean = false
+
+	/**
+	 * Tracks the currently running initiateTaskLoop Promise.
+	 * Used by cancelAndProcessQueuedMessages to wait for the old task loop
+	 * to fully exit before starting a new one, preventing race conditions
+	 * that cause duplicate messages and orphaned tool_use blocks.
+	 */
+	private _taskLoopPromise: Promise<void> | undefined = undefined
 	currentRequestAbortController?: AbortController
 	skipPrevResponseIdOnce: boolean = false
 
@@ -2205,7 +2213,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
 
 			// Task starting
-			await this.initiateTaskLoop([
+			await this._runTaskLoop([
 				{
 					type: "text",
 					text: `<user_message>\n${task}\n</user_message>`,
@@ -2462,7 +2470,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				)
 
 				await this.overwriteApiConversationHistory(modifiedApiConversationHistory)
-				await this.initiateTaskLoop(userContent)
+				await this._runTaskLoop(userContent)
 			} else {
 				// No user redirect — just resume with tool_results + environment
 				let newUserContent: Anthropic.Messages.ContentBlockParam[] = [...modifiedOldUserContent]
@@ -2487,7 +2495,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				)
 
 				await this.overwriteApiConversationHistory(modifiedApiConversationHistory)
-				await this.initiateTaskLoop(newUserContent)
+				await this._runTaskLoop(newUserContent)
 			}
 		} catch (error) {
 			// Resume and cancellation can race when users issue repeated cancels.
@@ -2962,6 +2970,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				nextUserContent = [{ type: "text", text: formatResponse.noToolsUsed() }]
 			}
 		}
+	}
+
+	/**
+	 * Wraps initiateTaskLoop to track the running promise.
+	 * This allows cancelAndProcessQueuedMessages to await the old loop's
+	 * completion before starting a new one.
+	 */
+	private _runTaskLoop(userContent: Anthropic.Messages.ContentBlockParam[]): Promise<void> {
+		const promise = this.initiateTaskLoop(userContent).finally(() => {
+			if (this._taskLoopPromise === promise) {
+				this._taskLoopPromise = undefined
+			}
+		})
+		this._taskLoopPromise = promise
+		return promise
 	}
 
 	public async recursivelyMakeClineRequests(
@@ -5288,10 +5311,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * The cancellation follows these steps:
 	 * 1. Cancel the current HTTP request
 	 * 2. Set abort flag to stop the task loop
-	 * 3. Reset task state
-	 * 4. Restart the task loop with the queued message
+	 * 3. Wait for the old task loop to fully exit
+	 * 4. Clean up orphaned tool_use blocks in the API conversation history
+	 * 5. Reset task state
+	 * 6. Restart the task loop with the queued message
 	 */
-	public cancelAndProcessQueuedMessages(): void {
+	public async cancelAndProcessQueuedMessages(): Promise<void> {
 		this.diagLog(`[Task#${this.taskId}.${this.instanceId}] cancelAndProcessQueuedMessages called`)
 
 		// Step 1: Cancel the current HTTP request if one is in progress
@@ -5302,17 +5327,38 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		// Step 2: Set abort flag to stop the task loop
-		// This will cause the initiateTaskLoop to exit after the current operation completes
+		// This will cause the initiateTaskLoop while-loop to exit on its next iteration
 		this.abort = true
 		this.diagLog(`[Task] Set abort=true to stop task loop`)
 
-		// Step 3: Reset ask states so the task can handle the queued message
+		// Step 3: Wait for the old task loop to fully exit before starting a new one.
+		// Without this, the old loop may still be running error-handling or retry logic
+		// when the new loop starts, causing duplicate messages and corrupted API history.
+		if (this._taskLoopPromise) {
+			this.diagLog(`[Task] Waiting for old task loop to exit...`)
+			try {
+				await this._taskLoopPromise
+			} catch (_) {
+				// The old loop may throw due to abort — that's expected.
+			}
+			this.diagLog(`[Task] Old task loop has exited`)
+		}
+
+		// Step 4: Clean up orphaned tool_use blocks from the API conversation history.
+		// If the HTTP request was aborted mid-stream while the assistant was emitting
+		// tool_use blocks, those blocks are now in apiConversationHistory without
+		// matching tool_result blocks. We must add placeholder tool_results before
+		// starting a new task loop, otherwise the API will reject the request with
+		// "insufficient tool messages following tool_calls message".
+		this._cleanupOrphanedToolUses()
+
+		// Step 5: Reset ask states so the task can handle the queued message
 		this.idleAsk = undefined
 		this.resumableAsk = undefined
 		this.interactiveAsk = undefined
 		this.emit(RooCodeEventName.TaskActive, this.taskId)
 
-		// Step 4: Process the queued messages (if any)
+		// Step 6: Process the queued messages (if any)
 		// Get the queued message but don't send via submitUserMessage - instead restart the task loop directly
 		const queued = this.messageQueueService.dequeueMessage()
 		if (queued) {
@@ -5320,9 +5366,55 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Reset abort to allow the task loop to run
 			this.abort = false
 			// Start a new task loop with the queued message
-			this.initiateTaskLoop([{ type: "text", text: queued.text }]).catch((err) => {
+			this._runTaskLoop([{ type: "text", text: queued.text }]).catch((err) => {
 				console.error(`[Task] Failed to restart task loop:`, err)
 			})
 		}
+	}
+
+	/**
+	 * Clean up orphaned tool_use blocks in the API conversation history.
+	 *
+	 * If the last assistant message contains tool_use blocks that have no
+	 * corresponding tool_result blocks in the following user message, this
+	 * method adds a synthetic user message with placeholder tool_results.
+	 * This prevents API errors caused by incomplete tool call sequences
+	 * after an abort.
+	 */
+	private _cleanupOrphanedToolUses(): void {
+		if (this.apiConversationHistory.length === 0) {
+			return
+		}
+
+		const lastMessage = this.apiConversationHistory[this.apiConversationHistory.length - 1]
+
+		// Only need to clean up if the last message is from the assistant with tool_use blocks
+		if (lastMessage.role !== "assistant" || !Array.isArray(lastMessage.content)) {
+			return
+		}
+
+		const toolUseBlocks = lastMessage.content.filter(
+			(block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+		)
+
+		if (toolUseBlocks.length === 0) {
+			return
+		}
+
+		// Found orphaned tool_use blocks — add placeholder tool_results
+		const placeholderResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((toolUse) => ({
+			type: "tool_result" as const,
+			tool_use_id: toolUse.id,
+			content: "Tool execution was interrupted before completion.",
+		}))
+
+		this.diagLog(
+			`[Task] Adding ${placeholderResults.length} placeholder tool_result block(s) for orphaned tool_use(s): ${toolUseBlocks.map((b) => b.id).join(", ")}`,
+		)
+
+		this.apiConversationHistory.push({
+			role: "user",
+			content: placeholderResults,
+		})
 	}
 }
