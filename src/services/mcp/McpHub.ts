@@ -1794,7 +1794,12 @@ export class McpHub {
 		}
 	}
 
-	async readResource(serverName: string, uri: string, source?: "global" | "project"): Promise<McpResourceResponse> {
+	async readResource(
+		serverName: string,
+		uri: string,
+		source?: "global" | "project",
+		signal?: AbortSignal,
+	): Promise<McpResourceResponse> {
 		const connection = this.findConnection(serverName, source)
 		if (!connection || connection.type !== "connected") {
 			throw new Error(`No connection found for server: ${serverName}${source ? ` with source ${source}` : ""}`)
@@ -1810,6 +1815,7 @@ export class McpHub {
 				},
 			},
 			ReadResourceResultSchema,
+			signal ? { signal } : undefined,
 		)
 	}
 
@@ -1819,6 +1825,7 @@ export class McpHub {
 		toolArguments?: Record<string, unknown>,
 		source?: "global" | "project",
 		conversationId?: string,
+		signal?: AbortSignal,
 	): Promise<McpToolCallResponse> {
 		const connection = this.findConnection(serverName, source)
 		if (!connection || connection.type !== "connected") {
@@ -1860,6 +1867,7 @@ export class McpHub {
 			CallToolResultSchema,
 			{
 				timeout,
+				...(signal ? { signal } : {}),
 			},
 		)
 	}

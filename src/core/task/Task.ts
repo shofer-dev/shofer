@@ -350,6 +350,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private _taskLoopPromise: Promise<void> | undefined = undefined
 	currentRequestAbortController?: AbortController
+
+	/**
+	 * Task-lifetime AbortController. Aborted whenever the task is cancelled
+	 * (Stop button -> abortTask) or its current run is interrupted to drain
+	 * queued messages (Send Now -> cancelAndProcessQueuedMessages). Long-running
+	 * in-task operations (MCP tool calls, HTTP fetches initiated by tools, etc.)
+	 * subscribe to `abortSignal` so they can bail immediately instead of waiting
+	 * for their own per-operation timeout.
+	 *
+	 * For Send Now we replace the controller before restarting the loop so the
+	 * fresh run does not see an already-aborted signal.
+	 */
+	private _taskAbortController: AbortController = new AbortController()
+	public get abortSignal(): AbortSignal {
+		return this._taskAbortController.signal
+	}
 	skipPrevResponseIdOnce: boolean = false
 
 	// TaskStatus
@@ -2560,6 +2576,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		this.abort = true
+
+		// Signal any subscribers (e.g. in-flight MCP tool calls) that the task
+		// has been aborted so they can short-circuit instead of waiting for
+		// their own timeouts.
+		if (!this._taskAbortController.signal.aborted) {
+			this._taskAbortController.abort()
+		}
 
 		// Reset consecutive error counters on abort (manual intervention)
 		this.consecutiveNoToolUseCount = 0
@@ -5329,6 +5352,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Step 2: Set abort flag to stop the task loop
 		// This will cause the initiateTaskLoop while-loop to exit on its next iteration
 		this.abort = true
+		// Also fire the task-lifetime abort signal so any in-flight MCP tool
+		// calls (or other operations subscribed to abortSignal) bail immediately
+		// instead of waiting for their per-operation timeout.
+		if (!this._taskAbortController.signal.aborted) {
+			this._taskAbortController.abort()
+		}
 		this.diagLog(`[Task] Set abort=true to stop task loop`)
 
 		// Step 3: Wait for the old task loop to fully exit before starting a new one.
@@ -5365,6 +5394,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.diagLog(`[Task] Restarting task loop with queued message: ${queued.text?.substring(0, 100)}`)
 			// Reset abort to allow the task loop to run
 			this.abort = false
+			// Replace the task-lifetime abort controller so the fresh run does
+			// not see the already-aborted signal from the cancellation above.
+			this._taskAbortController = new AbortController()
 			// Start a new task loop with the queued message
 			this._runTaskLoop([{ type: "text", text: queued.text }]).catch((err) => {
 				console.error(`[Task] Failed to restart task loop:`, err)

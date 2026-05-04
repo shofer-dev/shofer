@@ -601,12 +601,22 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		return false
 	}, [modifiedMessages, clineAsk, enableButtons, primaryButtonText])
 
+	// Runtime execution state of the current task as published by TaskManager
+	// (running | waiting_input | paused | idle). Available even when there is no
+	// active ask and no streaming, e.g. while an auto-approved tool call (an MCP
+	// server tool, a long shell command) is executing inside the task loop.
+	const currentTaskRuntimeState = useMemo(() => {
+		if (!currentTaskItem) return undefined
+		return parallelTasks?.find((p) => p.id === currentTaskItem.id)?.state
+	}, [currentTaskItem, parallelTasks])
+
 	/**
 	 * `canStop` is the broader notion of "the user should be able to abort
 	 * the current task right now". Unlike `isStreaming` (true only while
 	 * the assistant is mid-stream and no approval ask is pending), this
 	 * stays true through transient approval/in-progress states such as a
-	 * pending command approval or a CLI command currently executing.
+	 * pending command approval, a CLI command currently executing, or an
+	 * auto-approved MCP tool call in flight.
 	 *
 	 * UX requirement: Stop must be possible at all times while a task is
 	 * active. Excluded states are those where the task is effectively
@@ -620,12 +630,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		if (clineAsk === "completion_result" || clineAsk === "resume_task" || clineAsk === "resume_completed_task") {
 			return false
 		}
+		// Task loop is actively executing (e.g. running an auto-approved tool
+		// such as an MCP server call, or processing a tool result between API
+		// turns). In this state there is no pending ask and no API streaming,
+		// but the user must still be able to interrupt the operation.
+		if (currentTaskRuntimeState === "running") return true
 		// Any other active ask (command, command_output, tool, use_mcp_server,
 		// followup, api_req_failed, mistake_limit_reached, budget_limit) is
 		// considered stoppable: the user may want to abort the task instead
 		// of answering the prompt.
 		return clineAsk !== undefined
-	}, [isStreaming, task, clineAsk])
+	}, [isStreaming, task, clineAsk, currentTaskRuntimeState])
 
 	const markFollowUpAsAnswered = useCallback(() => {
 		const lastFollowUpMessage = messagesRef.current.findLast((msg: ClineMessage) => msg.ask === "followup")

@@ -50,7 +50,10 @@ export class AccessMcpResourceTool extends BaseTool<"access_mcp_resource"> {
 
 			// Now execute the tool
 			await task.say("mcp_server_request_started")
-			const resourceResult = await task.providerRef.deref()?.getMcpHub()?.readResource(server_name, uri)
+			const resourceResult = await task.providerRef
+				.deref()
+				?.getMcpHub()
+				?.readResource(server_name, uri, undefined, task.abortSignal)
 
 			const resourceResultPretty =
 				resourceResult?.contents
