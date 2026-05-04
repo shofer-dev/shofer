@@ -950,6 +950,14 @@ export interface ClineAskUseMcpServer {
 	arguments?: string
 	uri?: string
 	response?: string
+	/**
+	 * When true, this `use_mcp_server` envelope was synthesised by Roo-Code to
+	 * visualise an external VS Code language-model tool call (registered via
+	 * `vscode.lm.tools`) — not a real MCP server invocation. Mirrors the
+	 * `external_lm_tool` flag on {@link McpToolCallInfo}; the webview uses it
+	 * to render the tool call with the correct header/badge.
+	 */
+	external_lm_tool?: boolean
 }
 
 export interface ClineApiReqInfo {
