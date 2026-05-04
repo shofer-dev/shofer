@@ -360,17 +360,23 @@ export const ChatRowContent = ({
 				if (mcpServerUse === undefined) {
 					return [null, null]
 				}
+				const isExternalLmTool = mcpServerUse.external_lm_tool === true
 				return [
 					isMcpServerResponding ? (
 						<ProgressIndicator />
 					) : (
 						<span
-							className="codicon codicon-server"
+							className={`codicon codicon-${isExternalLmTool ? "tools" : "server"}`}
 							style={{ color: normalColor, marginBottom: "-1.5px" }}></span>
 					),
 					<span style={{ color: normalColor, fontWeight: "bold" }}>
 						{mcpServerUse.type === "use_mcp_tool"
-							? t("chat:mcp.wantsToUseTool", { serverName: mcpServerUse.serverName })
+							? isExternalLmTool
+								? t("chat:mcp.wantsToUseExternalTool", {
+										toolName: mcpServerUse.toolName,
+										serverName: mcpServerUse.serverName,
+									})
+								: t("chat:mcp.wantsToUseTool", { serverName: mcpServerUse.serverName })
 							: t("chat:mcp.wantsToAccessResource", { serverName: mcpServerUse.serverName })}
 					</span>,
 				]

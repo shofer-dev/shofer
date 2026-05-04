@@ -294,7 +294,8 @@
 	},
 	"mcp": {
 		"wantsToUseTool": "Roo wants to use a tool on the {{serverName}} MCP server",
-		"wantsToAccessResource": "Roo wants to access a resource on the {{serverName}} MCP server"
+		"wantsToAccessResource": "Roo wants to access a resource on the {{serverName}} MCP server",
+		"wantsToUseExternalTool": "Roo wants to use the {{toolName}} tool from {{serverName}}"
 	},
 	"modes": {
 		"wantsToSwitch": "Roo wants to switch to {{mode}} mode",
