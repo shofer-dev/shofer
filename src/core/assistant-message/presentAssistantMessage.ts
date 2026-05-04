@@ -35,6 +35,7 @@ import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
 import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
 import { skillTool } from "../tools/SkillTool"
+import { skillUpdateTool } from "../tools/SkillUpdateTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
@@ -426,6 +427,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name}]`
 					case "skill":
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
+					case "skill_update":
+						return `[${block.name} '${block.params.skill}' (${block.params.mode})]`
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
 					case "get_errors":
@@ -964,6 +967,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "skill":
 					await skillTool.handle(cline, block as ToolUse<"skill">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "skill_update":
+					await skillUpdateTool.handle(cline, block as ToolUse<"skill_update">, {
 						askApproval,
 						handleError,
 						pushToolResult,

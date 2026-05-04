@@ -67,6 +67,7 @@ export const toolNames = [
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
+	"skill_update",
 	"generate_image",
 	"custom_tool",
 	// New native tools (ported from workspace-tools)
@@ -133,6 +134,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	update_todo_list: "update todo list",
 	run_slash_command: "run slash command",
 	skill: "load skill",
+	skill_update: "update skill",
 	generate_image: "generate images",
 	custom_tool: "use custom tools",
 	// New native tools (ported from workspace-tools)
@@ -227,6 +229,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
+	"skill_update",
 	"set_task_title",
 ] as const
 

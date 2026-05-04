@@ -27,6 +27,7 @@ import readProjectStructure from "./read_project_structure"
 import renameSymbol from "./rename_symbol"
 import runSlashCommand from "./run_slash_command"
 import skill from "./skill"
+import skillUpdate from "./skill_update"
 import searchReplace from "./search_replace"
 import edit_file from "./edit_file"
 import searchFiles from "./search_files"
@@ -93,6 +94,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		renameSymbol,
 		runSlashCommand,
 		skill,
+		skillUpdate,
 		searchReplace,
 		edit_file,
 		editTool,
