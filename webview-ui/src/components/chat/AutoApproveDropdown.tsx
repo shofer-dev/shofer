@@ -140,13 +140,16 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 	)
 
 	// Calculate enabled and total counts as separate properties
-	const allSettingsArray = Object.values(autoApproveSettingsConfig)
+	const allSettingsArray = React.useMemo(() => Object.values(autoApproveSettingsConfig), [])
 
 	// Filter to only show toggles for groups accessible in the current mode.
-	const allowedGroups = React.useMemo(() => getModeAllowedGroups(mode, (customModes as any) ?? []), [mode, customModes])
+	const allowedGroups = React.useMemo(
+		() => getModeAllowedGroups(mode, (customModes as any) ?? []),
+		[mode, customModes],
+	)
 	const settingsArray = React.useMemo(
 		() => allSettingsArray.filter((s) => allowedGroups.has(s.toolGroup)),
-		[allowedGroups],
+		[allSettingsArray, allowedGroups],
 	)
 
 	const handleSelectAll = React.useCallback(() => {
@@ -182,12 +185,17 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 	}, [autoApprovalEnabled, setAutoApprovalEnabled])
 
 	const enabledCount = React.useMemo(() => {
-		return Object.values(toggles).filter((value) => !!value).length
-	}, [toggles])
+		// Count only toggles whose tool group is reachable in the current mode,
+		// matching the buttons actually rendered in the dropdown. Otherwise the
+		// trigger badge can show a stale "N auto-approved" that includes toggles
+		// the active mode cannot exercise (e.g. MCP enabled while in a mode that
+		// excludes the `mcp` group).
+		return settingsArray.filter(({ key }) => !!toggles[key]).length
+	}, [toggles, settingsArray])
 
 	const totalCount = React.useMemo(() => {
-		return Object.keys(toggles).length
-	}, [toggles])
+		return settingsArray.length
+	}, [settingsArray])
 
 	const { effectiveAutoApprovalEnabled } = useAutoApprovalState(toggles, autoApprovalEnabled)
 

@@ -25,6 +25,9 @@ type AutoApproveConfig = {
 	descriptionKey: string
 	icon: string
 	testId: string
+	/** The ToolGroup this toggle controls. In the auto-approval popup, toggles
+	 *  are filtered to only show groups the current mode has access to. */
+	toolGroup: string
 	/**
 	 * Optional predicate. When it returns true the toggle is disabled in the
 	 * UI (greyed out, not clickable). Used for settings whose effect requires
@@ -37,6 +40,7 @@ type AutoApproveConfig = {
 export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveConfig> = {
 	alwaysAllowReadOnly: {
 		key: "alwaysAllowReadOnly",
+		toolGroup: "read",
 		labelKey: "settings:autoApprove.readOnly.label",
 		descriptionKey: "settings:autoApprove.readOnly.description",
 		icon: "eye",
@@ -44,6 +48,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowWrite: {
 		key: "alwaysAllowWrite",
+		toolGroup: "write",
 		labelKey: "settings:autoApprove.write.label",
 		descriptionKey: "settings:autoApprove.write.description",
 		icon: "edit",
@@ -51,6 +56,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowMcp: {
 		key: "alwaysAllowMcp",
+		toolGroup: "mcp",
 		labelKey: "settings:autoApprove.mcp.label",
 		descriptionKey: "settings:autoApprove.mcp.description",
 		icon: "plug",
@@ -58,6 +64,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowUncategorized: {
 		key: "alwaysAllowUncategorized",
+		toolGroup: "uncategorized",
 		labelKey: "settings:autoApprove.uncategorized.label",
 		descriptionKey: "settings:autoApprove.uncategorized.description",
 		icon: "question",
@@ -67,6 +74,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowModeSwitch: {
 		key: "alwaysAllowModeSwitch",
+		toolGroup: "mode",
 		labelKey: "settings:autoApprove.modeSwitch.label",
 		descriptionKey: "settings:autoApprove.modeSwitch.description",
 		icon: "sync",
@@ -74,6 +82,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowSubtasks: {
 		key: "alwaysAllowSubtasks",
+		toolGroup: "subtasks",
 		labelKey: "settings:autoApprove.subtasks.label",
 		descriptionKey: "settings:autoApprove.subtasks.description",
 		icon: "list-tree",
@@ -81,6 +90,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowBrowser: {
 		key: "alwaysAllowBrowser",
+		toolGroup: "browser",
 		labelKey: "settings:autoApprove.browser.label",
 		descriptionKey: "settings:autoApprove.browser.description",
 		icon: "globe",
@@ -88,6 +98,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowExecute: {
 		key: "alwaysAllowExecute",
+		toolGroup: "execute",
 		labelKey: "settings:autoApprove.execute.label",
 		descriptionKey: "settings:autoApprove.execute.description",
 		icon: "terminal",
@@ -95,6 +106,7 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 	},
 	alwaysAllowFollowupQuestions: {
 		key: "alwaysAllowFollowupQuestions",
+		toolGroup: "questions",
 		labelKey: "settings:autoApprove.followupQuestions.label",
 		descriptionKey: "settings:autoApprove.followupQuestions.description",
 		icon: "question",
