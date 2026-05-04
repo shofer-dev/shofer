@@ -33,6 +33,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		setAutoApprovalEnabled,
 		setAlwaysAllowReadOnly,
 		setAlwaysAllowWrite,
+		setAlwaysAllowBrowser,
 		setAlwaysAllowExecute,
 		setAlwaysAllowMcp,
 		setAlwaysAllowUncategorized,
@@ -53,6 +54,9 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 					break
 				case "alwaysAllowWrite":
 					setAlwaysAllowWrite(value)
+					break
+				case "alwaysAllowBrowser":
+					setAlwaysAllowBrowser(value)
 					break
 				case "alwaysAllowExecute":
 					setAlwaysAllowExecute(value)
@@ -84,6 +88,7 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 			autoApprovalEnabled,
 			setAlwaysAllowReadOnly,
 			setAlwaysAllowWrite,
+			setAlwaysAllowBrowser,
 			setAlwaysAllowExecute,
 			setAlwaysAllowMcp,
 			setAlwaysAllowUncategorized,

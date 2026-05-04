@@ -3,6 +3,7 @@ import { useMemo } from "react"
 interface AutoApprovalToggles {
 	alwaysAllowReadOnly?: boolean
 	alwaysAllowWrite?: boolean
+	alwaysAllowBrowser?: boolean
 	alwaysAllowExecute?: boolean
 	alwaysAllowMcp?: boolean
 	alwaysAllowModeSwitch?: boolean
