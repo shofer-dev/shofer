@@ -138,7 +138,7 @@ export type NativeToolArgs = {
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skill: { skill: string; args?: string }
-	skill_update: {
+	skill_save: {
 		skill: string
 		mode: "replace" | "append" | "patch"
 		content?: string
@@ -309,8 +309,8 @@ export interface SkillToolUse extends ToolUse<"skill"> {
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "args">>
 }
 
-export interface SkillUpdateToolUse extends ToolUse<"skill_update"> {
-	name: "skill_update"
+export interface SkillSaveToolUse extends ToolUse<"skill_save"> {
+	name: "skill_save"
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "mode" | "content" | "old_string" | "new_string">>
 }
 
