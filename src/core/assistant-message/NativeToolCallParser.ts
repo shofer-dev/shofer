@@ -1,3 +1,4 @@
+import * as vscode from "vscode"
 import { parseJSON } from "partial-json"
 
 import { type ToolName, toolNames, type FileEntry } from "@roo-code/types"
@@ -23,6 +24,22 @@ import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpTool
  * Returns the type from NativeToolArgs if the tool is defined there, otherwise never.
  */
 type NativeArgsFor<TName extends ToolName> = TName extends keyof NativeToolArgs ? NativeToolArgs[TName] : never
+
+/**
+ * Check whether a tool name belongs to an external language model tool
+ * registered by another extension via vscode.lm.tools.
+ *
+ * External tools are discovered dynamically at build-tools.ts time
+ * and filtered by mode. At parse time we just need to recognize them
+ * so the parser passes them through instead of rejecting them as unknown.
+ */
+function isExternalLmTool(toolName: string): boolean {
+	try {
+		return vscode.lm.tools.some((t) => t.name === toolName)
+	} catch {
+		return false
+	}
+}
 
 /**
  * Parser for native tool calls (OpenAI-style function calling).
@@ -382,8 +399,11 @@ export class NativeToolCallParser {
 		// because tool.handlePartial() methods rely on params to show UI updates.
 		const params: Partial<Record<ToolParamName, string>> = {}
 
+		// Allow external LM tool params through as well (they aren't in toolParamNames).
+		const isExternalTool = isExternalLmTool(name)
+
 		for (const [key, value] of Object.entries(partialArgs)) {
-			if (toolParamNames.includes(key as ToolParamName)) {
+			if (toolParamNames.includes(key as ToolParamName) || isExternalTool) {
 				params[key as ToolParamName] = typeof value === "string" ? value : JSON.stringify(value)
 			}
 		}
@@ -794,6 +814,11 @@ export class NativeToolCallParser {
 				break
 
 			default:
+				if (isExternalLmTool(name)) {
+					// External LM tools: pass partial args through as nativeArgs
+					// so the tool handler can process them once the call is complete.
+					nativeArgs = partialArgs
+				}
 				break
 		}
 
@@ -846,7 +871,13 @@ export class NativeToolCallParser {
 		const resolvedName = resolveToolAlias(toolCall.name as string) as TName
 
 		// Validate tool name (after alias resolution).
-		if (!toolNames.includes(resolvedName as ToolName) && !customToolRegistry.has(resolvedName)) {
+		// External LM tools (registered by other extensions via vscode.lm.tools)
+		// are discovered at build time and filtered by mode; allow them through.
+		if (
+			!toolNames.includes(resolvedName as ToolName) &&
+			!customToolRegistry.has(resolvedName) &&
+			!isExternalLmTool(resolvedName)
+		) {
 			console.error(`Invalid tool name: ${toolCall.name} (resolved: ${resolvedName})`)
 			console.error(`Valid tool names:`, toolNames)
 			return null
@@ -861,8 +892,13 @@ export class NativeToolCallParser {
 			const params: Partial<Record<ToolParamName, string>> = {}
 
 			for (const [key, value] of Object.entries(args)) {
-				// Validate parameter name
-				if (!toolParamNames.includes(key as ToolParamName) && !customToolRegistry.has(resolvedName)) {
+				// Validate parameter name — skip for external LM tools whose
+				// parameter schemas are defined by the registering extension.
+				if (
+					!toolParamNames.includes(key as ToolParamName) &&
+					!customToolRegistry.has(resolvedName) &&
+					!isExternalLmTool(resolvedName)
+				) {
 					console.warn(`Unknown parameter '${key}' for tool '${resolvedName}'`)
 					console.warn(`Valid param names:`, toolParamNames)
 					continue
@@ -1307,14 +1343,20 @@ export class NativeToolCallParser {
 				default:
 					if (customToolRegistry.has(resolvedName)) {
 						nativeArgs = args as NativeArgsFor<TName>
+					} else if (isExternalLmTool(resolvedName)) {
+						// External LM tools: pass raw arguments through.
+						// The actual schema validation is handled by the tool's
+						// registered inputSchema when invoked via vscode.lm.invokeTool.
+						nativeArgs = args as NativeArgsFor<TName>
 					}
 
 					break
 			}
 
 			// Native-only: core tools must always have typed nativeArgs.
+			// External tools pass raw args and are validated by the tool's own schema.
 			// If we couldn't construct it, the model produced an invalid tool call payload.
-			if (!nativeArgs && !customToolRegistry.has(resolvedName)) {
+			if (!nativeArgs && !customToolRegistry.has(resolvedName) && !isExternalLmTool(resolvedName)) {
 				throw new Error(
 					`[NativeToolCallParser] Invalid arguments for tool '${resolvedName}'. ` +
 						`Native tool calls require a valid JSON payload matching the tool schema. ` +
