@@ -53,7 +53,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	updateTodoList: "update_todo_list",
 	runSlashCommand: "run_slash_command",
 	skill: "skill",
-	updateSkill: "skill_update",
+	saveSkill: "skill_save",
 	setTaskTitle: "set_task_title",
 }
 

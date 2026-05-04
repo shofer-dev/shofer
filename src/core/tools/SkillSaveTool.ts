@@ -1,12 +1,20 @@
 /**
- * SkillUpdateTool — modify the SKILL.md body of an existing project skill.
+ * SkillSaveTool — create or update the SKILL.md body of a project skill.
  *
  * Skills live at `<project>/.roo/skills/<slug>/SKILL.md`. This tool exposes
- * three update modes (replace, append, patch) so the agent can iteratively
- * refine an authored runbook without recreating it from scratch.
+ * three save modes:
  *
- * The tool only operates on already-existing skills — creation is owned by
- * authoring pipelines (e.g. browser-tools observe-mode), not by the model.
+ *   - replace: overwrite the entire file with `content`. Creates the skill
+ *              (and parent directory) if it doesn't exist yet — this is the
+ *              intended path for authoring a new skill from scratch.
+ *   - append:  append `content` to the end of the file. Creates the skill if
+ *              missing, with `content` as the initial body.
+ *   - patch:   replace `old_string` with `new_string` (must match exactly
+ *              once). Requires the skill to already exist.
+ *
+ * The tool keeps a single, slug-qualified file per skill. It does not manage
+ * mode associations or other metadata — those are handled by the
+ * SkillsManager and the webview.
  */
 
 import * as path from "path"
@@ -18,11 +26,11 @@ import { formatResponse } from "../prompts/responses"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
-type SkillUpdateMode = "replace" | "append" | "patch"
+type SkillSaveMode = "replace" | "append" | "patch"
 
-interface SkillUpdateParams {
+interface SkillSaveParams {
 	skill: string
-	mode: SkillUpdateMode
+	mode: SkillSaveMode
 	content?: string
 	old_string?: string
 	new_string?: string
@@ -31,10 +39,10 @@ interface SkillUpdateParams {
 /** Slug regex matches the SkillsManager / agent-skills spec. */
 const SKILL_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
-export class SkillUpdateTool extends BaseTool<"skill_update"> {
-	readonly name = "skill_update" as const
+export class SkillSaveTool extends BaseTool<"skill_save"> {
+	readonly name = "skill_save" as const
 
-	async execute(params: SkillUpdateParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+	async execute(params: SkillSaveParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { skill: slug, mode, content, old_string, new_string } = params
 		const { handleError, pushToolResult } = callbacks
 
@@ -43,11 +51,11 @@ export class SkillUpdateTool extends BaseTool<"skill_update"> {
 				return this.fail(
 					task,
 					pushToolResult,
-					await task.sayAndCreateMissingParamError("skill_update", "skill"),
+					await task.sayAndCreateMissingParamError("skill_save", "skill"),
 				)
 			}
 			if (!mode) {
-				return this.fail(task, pushToolResult, await task.sayAndCreateMissingParamError("skill_update", "mode"))
+				return this.fail(task, pushToolResult, await task.sayAndCreateMissingParamError("skill_save", "mode"))
 			}
 			if (!SKILL_SLUG_RE.test(slug) || slug.length > 80) {
 				return this.fail(task, pushToolResult, formatResponse.toolError(`Invalid skill slug '${slug}'.`))
@@ -68,24 +76,20 @@ export class SkillUpdateTool extends BaseTool<"skill_update"> {
 				return this.fail(
 					task,
 					pushToolResult,
-					formatResponse.toolError("No workspace folder open; skill_update requires a project."),
+					formatResponse.toolError("No workspace folder open; skill_save requires a project."),
 				)
 			}
 
-			const skillFile = path.join(cwd, ".roo", "skills", slug, "SKILL.md")
+			const skillDir = path.join(cwd, ".roo", "skills", slug)
+			const skillFile = path.join(skillDir, "SKILL.md")
 
-			let existing: string
+			let existing: string | null
 			try {
 				existing = await fs.readFile(skillFile, "utf-8")
 			} catch {
-				return this.fail(
-					task,
-					pushToolResult,
-					formatResponse.toolError(
-						`Skill '${slug}' not found at .roo/skills/${slug}/SKILL.md. skill_update only modifies existing skills.`,
-					),
-				)
+				existing = null
 			}
+			const isCreating = existing === null
 
 			let nextContent: string
 			let summary: string
@@ -99,7 +103,9 @@ export class SkillUpdateTool extends BaseTool<"skill_update"> {
 						)
 					}
 					nextContent = content
-					summary = `Replaced entire SKILL.md (${nextContent.length} chars).`
+					summary = isCreating
+						? `Created SKILL.md (${nextContent.length} chars).`
+						: `Replaced entire SKILL.md (${nextContent.length} chars).`
 					break
 				case "append":
 					if (content === undefined) {
@@ -109,11 +115,25 @@ export class SkillUpdateTool extends BaseTool<"skill_update"> {
 							formatResponse.toolError("mode=append requires `content`."),
 						)
 					}
-					// Ensure separating newline between existing body and appended text.
-					nextContent = existing.endsWith("\n") ? existing + content : existing + "\n" + content
-					summary = `Appended ${content.length} chars to SKILL.md.`
+					if (isCreating) {
+						nextContent = content
+						summary = `Created SKILL.md (${nextContent.length} chars).`
+					} else {
+						// Ensure separating newline between existing body and appended text.
+						nextContent = existing!.endsWith("\n") ? existing + content : existing + "\n" + content
+						summary = `Appended ${content.length} chars to SKILL.md.`
+					}
 					break
 				case "patch": {
+					if (existing === null) {
+						return this.fail(
+							task,
+							pushToolResult,
+							formatResponse.toolError(
+								`Skill '${slug}' not found at .roo/skills/${slug}/SKILL.md. mode=patch requires an existing skill; use mode=replace to create one.`,
+							),
+						)
+					}
 					if (old_string === undefined || new_string === undefined) {
 						return this.fail(
 							task,
@@ -145,7 +165,7 @@ export class SkillUpdateTool extends BaseTool<"skill_update"> {
 			}
 
 			const didApprove = await this.askToolApproval(callbacks, {
-				tool: "updateSkill",
+				tool: "saveSkill",
 				path: path.relative(cwd, skillFile),
 				content: summary,
 			})
@@ -153,23 +173,26 @@ export class SkillUpdateTool extends BaseTool<"skill_update"> {
 				return
 			}
 
+			if (isCreating) {
+				await fs.mkdir(skillDir, { recursive: true })
+			}
 			await fs.writeFile(skillFile, nextContent, "utf-8")
 			pushToolResult(`${summary}\nFile: .roo/skills/${slug}/SKILL.md`)
 		} catch (error) {
-			await handleError("updating skill", error instanceof Error ? error : new Error(String(error)))
+			await handleError("saving skill", error instanceof Error ? error : new Error(String(error)))
 		}
 	}
 
 	private fail(task: Task, pushToolResult: (r: string) => void, message: string): void {
 		task.consecutiveMistakeCount++
-		task.recordToolError("skill_update")
+		task.recordToolError("skill_save")
 		task.didToolFailInCurrentTurn = true
 		pushToolResult(message)
 	}
 
-	override async handlePartial(task: Task, block: ToolUse<"skill_update">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"skill_save">): Promise<void> {
 		const partialMessage = JSON.stringify({
-			tool: "updateSkill",
+			tool: "saveSkill",
 			skill: block.params.skill ?? "",
 			mode: block.params.mode ?? "",
 		})
@@ -188,4 +211,4 @@ function countOccurrences(haystack: string, needle: string): number {
 	return count
 }
 
-export const skillUpdateTool = new SkillUpdateTool()
+export const skillSaveTool = new SkillSaveTool()
