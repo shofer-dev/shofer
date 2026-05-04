@@ -82,7 +82,7 @@ describe("ModeSelector", () => {
 			name: `Mode ${i}`,
 			description: `Description for mode ${i}`,
 			roleDefinition: "Role definition",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		}))
 
 		render(
@@ -112,7 +112,7 @@ describe("ModeSelector", () => {
 			name: `Mode ${i}`,
 			description: `Description for mode ${i}`,
 			roleDefinition: "Role definition",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		}))
 
 		render(
@@ -144,7 +144,7 @@ describe("ModeSelector", () => {
 			name: `Mode ${i}`,
 			description: `Description for mode ${i}`,
 			roleDefinition: "Role definition",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		}))
 
 		render(
@@ -174,7 +174,7 @@ describe("ModeSelector", () => {
 			name: `Mode ${i}`,
 			description: `Description for mode ${i}`,
 			roleDefinition: "Role definition",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		}))
 
 		render(
@@ -207,7 +207,7 @@ describe("ModeSelector", () => {
 			name: `Mode ${i}`,
 			description: `Description for mode ${i}`,
 			roleDefinition: "Role definition",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		}))
 
 		// Don't pass disableSearch prop (should default to false).
@@ -236,7 +236,7 @@ describe("ModeSelector", () => {
 				name: "Code",
 				description: "Code mode",
 				roleDefinition: "Role definition",
-				groups: ["read", "edit"],
+				groups: ["read", "write"],
 			},
 			{
 				slug: "other",
@@ -273,7 +273,7 @@ describe("ModeSelector", () => {
 				name: "Code",
 				description: "Code mode",
 				roleDefinition: "Role definition",
-				groups: ["read", "edit"],
+				groups: ["read", "write"],
 			},
 			{
 				slug: "other",

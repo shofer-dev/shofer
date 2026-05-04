@@ -9,6 +9,7 @@ export function useAutoApprovalToggles() {
 	const {
 		alwaysAllowReadOnly,
 		alwaysAllowWrite,
+		alwaysAllowBrowser,
 		alwaysAllowExecute,
 		alwaysAllowMcp,
 		alwaysAllowUncategorized,
@@ -21,6 +22,7 @@ export function useAutoApprovalToggles() {
 		() => ({
 			alwaysAllowReadOnly,
 			alwaysAllowWrite,
+			alwaysAllowBrowser,
 			alwaysAllowExecute,
 			alwaysAllowMcp,
 			alwaysAllowUncategorized,
@@ -31,6 +33,7 @@ export function useAutoApprovalToggles() {
 		[
 			alwaysAllowReadOnly,
 			alwaysAllowWrite,
+			alwaysAllowBrowser,
 			alwaysAllowExecute,
 			alwaysAllowMcp,
 			alwaysAllowUncategorized,

@@ -1142,14 +1142,14 @@ const ModesView = () => {
 											onChange={handleGroupChange(group, Boolean(isCustomMode), customMode)}
 											disabled={!isCustomMode}>
 											{t(`prompts:tools.toolNames.${group}`)}
-											{group === "edit" && (
+											{group === "write" && (
 												<div className="text-xs text-vscode-descriptionForeground mt-0.5">
 													{t("prompts:tools.allowedFiles")}{" "}
 													{(() => {
 														const currentMode = getCurrentMode()
 														const editGroup = currentMode?.groups?.find(
 															(g) =>
-																Array.isArray(g) && g[0] === "edit" && g[1]?.fileRegex,
+																Array.isArray(g) && g[0] === "write" && g[1]?.fileRegex,
 														)
 														if (!Array.isArray(editGroup)) return t("prompts:allFiles")
 														return editGroup[1].description || `/${editGroup[1].fileRegex}/`
