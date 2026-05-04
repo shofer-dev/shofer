@@ -18,6 +18,44 @@ import { Popover, PopoverContent, PopoverTrigger, StandardTooltip, ToggleSwitch,
 
 import { AutoApproveSetting, autoApproveSettingsConfig } from "../settings/AutoApproveToggle"
 
+/**
+ * Resolve the set of ToolGroup names accessible to the current mode.
+ *
+ * Mode group entries can be bare strings ("read") or tuples
+ * (["write", { fileRegex: "..." }]). This extracts just the group name
+ * from each entry.
+ */
+function getModeAllowedGroups(
+	modeSlug: string | undefined,
+	customModes: Array<{ slug: string; groups?: Array<string | [string, unknown]> }> | undefined,
+): Set<string> {
+	const DEFAULT_MODE_GROUPS: Record<string, string[]> = {
+		code: ["read", "write", "execute", "mcp"],
+		architect: ["read", "write", "mcp"],
+		ask: ["read", "mcp"],
+		debug: ["read", "write", "execute", "mcp"],
+		orchestrator: [],
+	}
+
+	// Check custom modes first
+	if (customModes && modeSlug) {
+		const custom = customModes.find((m) => m.slug === modeSlug)
+		if (custom?.groups) {
+			return new Set(custom.groups.map((g) => (Array.isArray(g) ? g[0] : g)))
+		}
+	}
+
+	// Fall back to default mode groups.
+	// If the slug is unrecognised (e.g. a custom mode without groups in
+	// customModes), show all toggles rather than hiding everything.
+	const slug = modeSlug ?? "code"
+	const defaults = DEFAULT_MODE_GROUPS[slug]
+	if (!defaults) {
+		return new Set(Object.values(autoApproveSettingsConfig).map((c) => c.toolGroup))
+	}
+	return new Set(defaults)
+}
+
 interface AutoApproveDropdownProps {
 	disabled?: boolean
 	triggerClassName?: string
@@ -40,6 +78,8 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		setAlwaysAllowModeSwitch,
 		setAlwaysAllowSubtasks,
 		setAlwaysAllowFollowupQuestions,
+		mode,
+		customModes,
 	} = useExtensionState()
 
 	const toggles = useAutoApprovalToggles()
@@ -99,24 +139,34 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		],
 	)
 
+	// Calculate enabled and total counts as separate properties
+	const allSettingsArray = Object.values(autoApproveSettingsConfig)
+
+	// Filter to only show toggles for groups accessible in the current mode.
+	const allowedGroups = React.useMemo(() => getModeAllowedGroups(mode, (customModes as any) ?? []), [mode, customModes])
+	const settingsArray = React.useMemo(
+		() => allSettingsArray.filter((s) => allowedGroups.has(s.toolGroup)),
+		[allowedGroups],
+	)
+
 	const handleSelectAll = React.useCallback(() => {
-		// Enable all options
-		Object.keys(autoApproveSettingsConfig).forEach((key) => {
-			onAutoApproveToggle(key as AutoApproveSetting, true)
+		// Enable all mode-accessible options
+		settingsArray.forEach(({ key }) => {
+			onAutoApproveToggle(key, true)
 		})
 		// Enable master auto-approval
 		if (!autoApprovalEnabled) {
 			setAutoApprovalEnabled(true)
 			vscode.postMessage({ type: "autoApprovalEnabled", bool: true })
 		}
-	}, [onAutoApproveToggle, autoApprovalEnabled, setAutoApprovalEnabled])
+	}, [onAutoApproveToggle, autoApprovalEnabled, setAutoApprovalEnabled, settingsArray])
 
 	const handleSelectNone = React.useCallback(() => {
-		// Disable all options
-		Object.keys(autoApproveSettingsConfig).forEach((key) => {
-			onAutoApproveToggle(key as AutoApproveSetting, false)
+		// Disable all mode-accessible options
+		settingsArray.forEach(({ key }) => {
+			onAutoApproveToggle(key, false)
 		})
-	}, [onAutoApproveToggle])
+	}, [onAutoApproveToggle, settingsArray])
 
 	const handleOpenSettings = React.useCallback(
 		() =>
@@ -130,9 +180,6 @@ export const AutoApproveDropdown = ({ disabled = false, triggerClassName = "" }:
 		setAutoApprovalEnabled(newValue)
 		vscode.postMessage({ type: "autoApprovalEnabled", bool: newValue })
 	}, [autoApprovalEnabled, setAutoApprovalEnabled])
-
-	// Calculate enabled and total counts as separate properties
-	const settingsArray = Object.values(autoApproveSettingsConfig)
 
 	const enabledCount = React.useMemo(() => {
 		return Object.values(toggles).filter((value) => !!value).length
