@@ -138,6 +138,13 @@ export type NativeToolArgs = {
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skill: { skill: string; args?: string }
+	skill_update: {
+		skill: string
+		mode: "replace" | "append" | "patch"
+		content?: string
+		old_string?: string
+		new_string?: string
+	}
 	search_files: { path: string; regex: string; file_pattern?: string | null }
 	switch_mode: { mode_slug: string; reason: string }
 	set_task_title: { title: string }
@@ -300,6 +307,11 @@ export interface RunSlashCommandToolUse extends ToolUse<"run_slash_command"> {
 export interface SkillToolUse extends ToolUse<"skill"> {
 	name: "skill"
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "args">>
+}
+
+export interface SkillUpdateToolUse extends ToolUse<"skill_update"> {
+	name: "skill_update"
+	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "mode" | "content" | "old_string" | "new_string">>
 }
 
 export interface GenerateImageToolUse extends ToolUse<"generate_image"> {

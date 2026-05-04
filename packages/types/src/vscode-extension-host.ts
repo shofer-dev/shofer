@@ -849,6 +849,7 @@ export interface ClineSayTool {
 		| "runSlashCommand"
 		| "updateTodoList"
 		| "skill"
+		| "updateSkill"
 		| "createDirectory"
 		| "createNewWorkspace"
 		| "findFiles"

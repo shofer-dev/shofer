@@ -548,6 +548,18 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "skill_update":
+				if (partialArgs.skill !== undefined || partialArgs.mode !== undefined) {
+					nativeArgs = {
+						skill: partialArgs.skill,
+						mode: partialArgs.mode,
+						content: partialArgs.content,
+						old_string: partialArgs.old_string,
+						new_string: partialArgs.new_string,
+					}
+				}
+				break
+
 			case "search_files":
 				if (partialArgs.path !== undefined || partialArgs.regex !== undefined) {
 					nativeArgs = {
@@ -1052,6 +1064,18 @@ export class NativeToolCallParser {
 						nativeArgs = {
 							skill: args.skill,
 							args: args.args,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "skill_update":
+					if (args.skill !== undefined && args.mode !== undefined) {
+						nativeArgs = {
+							skill: args.skill,
+							mode: args.mode,
+							content: args.content,
+							old_string: args.old_string,
+							new_string: args.new_string,
 						} as NativeArgsFor<TName>
 					}
 					break
