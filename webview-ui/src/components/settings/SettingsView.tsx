@@ -163,6 +163,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		alwaysAllowModeSwitch,
 		alwaysAllowSubtasks,
 		alwaysAllowWrite,
+		alwaysAllowBrowser,
 		alwaysAllowWriteOutsideWorkspace,
 		alwaysAllowWriteProtected,
 		autoCondenseContext,
@@ -373,6 +374,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					alwaysAllowReadOnly: alwaysAllowReadOnly ?? undefined,
 					alwaysAllowReadOnlyOutsideWorkspace: alwaysAllowReadOnlyOutsideWorkspace ?? undefined,
 					alwaysAllowWrite: alwaysAllowWrite ?? undefined,
+					alwaysAllowBrowser: alwaysAllowBrowser ?? undefined,
 					alwaysAllowWriteOutsideWorkspace: alwaysAllowWriteOutsideWorkspace ?? undefined,
 					alwaysAllowWriteProtected: alwaysAllowWriteProtected ?? undefined,
 					alwaysAllowExecute: alwaysAllowExecute ?? undefined,
@@ -793,6 +795,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								alwaysAllowReadOnly={alwaysAllowReadOnly}
 								alwaysAllowReadOnlyOutsideWorkspace={alwaysAllowReadOnlyOutsideWorkspace}
 								alwaysAllowWrite={alwaysAllowWrite}
+								alwaysAllowBrowser={alwaysAllowBrowser}
 								alwaysAllowWriteOutsideWorkspace={alwaysAllowWriteOutsideWorkspace}
 								alwaysAllowWriteProtected={alwaysAllowWriteProtected}
 								alwaysAllowMcp={alwaysAllowMcp}

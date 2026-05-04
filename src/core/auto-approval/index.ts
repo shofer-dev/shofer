@@ -9,7 +9,7 @@ import {
 
 import { ClineAskResponse } from "../../shared/WebviewMessage"
 
-import { isWriteToolAction, isReadOnlyToolAction } from "./tools"
+import { isWriteToolAction, isReadOnlyToolAction, getToolGroupForSayTool } from "./tools"
 import { isMcpToolUncategorized } from "./mcp"
 import { getCommandDecision } from "./commands"
 
@@ -17,6 +17,7 @@ import { getCommandDecision } from "./commands"
 export type AutoApprovalState =
 	| "alwaysAllowReadOnly"
 	| "alwaysAllowWrite"
+	| "alwaysAllowBrowser"
 	| "alwaysAllowMcp"
 	| "alwaysAllowUncategorized"
 	| "alwaysAllowModeSwitch"
@@ -209,6 +210,15 @@ export async function checkAutoApproval({
 		}
 
 		const isOutsideWorkspace = !!tool.isOutsideWorkspace
+
+		const toolGroup = getToolGroupForSayTool(tool)
+
+		// Browser tools — controlled by the alwaysAllowBrowser toggle.
+		// Automatically available for any tool whose group resolves to "browser"
+		// (browser-tools extension tools, browser_* prefixed tools).
+		if (toolGroup === "browser") {
+			return state.alwaysAllowBrowser === true ? { decision: "approve" } : { decision: "ask" }
+		}
 
 		if (isReadOnlyToolAction(tool)) {
 			return state.alwaysAllowReadOnly === true &&

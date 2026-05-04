@@ -8,6 +8,7 @@ type AutoApproveToggles = Pick<
 	GlobalSettings,
 	| "alwaysAllowReadOnly"
 	| "alwaysAllowWrite"
+	| "alwaysAllowBrowser"
 	| "alwaysAllowMcp"
 	| "alwaysAllowUncategorized"
 	| "alwaysAllowModeSwitch"
@@ -77,6 +78,13 @@ export const autoApproveSettingsConfig: Record<AutoApproveSetting, AutoApproveCo
 		descriptionKey: "settings:autoApprove.subtasks.description",
 		icon: "list-tree",
 		testId: "always-allow-subtasks-toggle",
+	},
+	alwaysAllowBrowser: {
+		key: "alwaysAllowBrowser",
+		labelKey: "settings:autoApprove.browser.label",
+		descriptionKey: "settings:autoApprove.browser.description",
+		icon: "globe",
+		testId: "always-allow-browser-toggle",
 	},
 	alwaysAllowExecute: {
 		key: "alwaysAllowExecute",
