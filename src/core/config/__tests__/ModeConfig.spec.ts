@@ -26,7 +26,7 @@ describe("CustomModeSchema", () => {
 				slug: "test",
 				name: "Test Mode",
 				roleDefinition: "Test role definition",
-				groups: ["read", "edit"] as const,
+				groups: ["read", "write"] as const,
 			} satisfies ModeConfig
 
 			expect(() => validateCustomMode(validMode)).not.toThrow()
@@ -191,7 +191,7 @@ describe("CustomModeSchema", () => {
 		test("accepts multiple groups", () => {
 			const mode = {
 				...validBaseMode,
-				groups: ["read", "edit"] as const,
+				groups: ["read", "write"] as const,
 			} satisfies ModeConfig
 
 			expect(() => modeConfigSchema.parse(mode)).not.toThrow()
@@ -200,7 +200,7 @@ describe("CustomModeSchema", () => {
 		test("accepts all available groups", () => {
 			const mode = {
 				...validBaseMode,
-				groups: ["read", "edit", "command", "mcp"] as const,
+				groups: ["read", "write", "execute", "mcp"] as const,
 			} satisfies ModeConfig
 
 			expect(() => modeConfigSchema.parse(mode)).not.toThrow()
@@ -255,7 +255,7 @@ describe("CustomModeSchema", () => {
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read", "browser", "edit"],
+				groups: ["read", "write"],
 			})
 			expect(result.groups).toEqual(["read", "edit"])
 		})

@@ -1,19 +1,42 @@
 import { z } from "zod"
 
 /**
- * ToolGroup
+ * ToolGroup — 8 categories shared across mode filtering, auto-approval,
+ * and external tool classification. Single source of truth.
+ *
+ *   read          – Read-only data access (files, search, diagnostics)
+ *   write         – Content mutations (apply_diff, write_to_file, etc.)
+ *   execute       – System command execution (execute_command, sleep)
+ *   mcp           – MCP protocol tools (use_mcp_tool, access_mcp_resource)
+ *   mode          – Mode switching and task lifecycle
+ *   subtasks      – Background / delegated task management
+ *   questions     – User-facing questions (ask_followup_question)
+ *   uncategorized – Fallback for tools without explicit classification
  */
-
-export const toolGroups = ["read", "edit", "command", "mcp", "modes", "uncategorized"] as const
+export const toolGroups = [
+	"read",
+	"write",
+	"execute",
+	"browser",
+	"mcp",
+	"mode",
+	"subtasks",
+	"questions",
+	"uncategorized",
+] as const
 
 export const toolGroupsSchema = z.enum(toolGroups)
 
 /**
- * Tool groups that have been removed but may still exist in user config files.
- * Used by schema preprocessing to silently strip these before validation,
+ * Tool groups that have been renamed or removed but may still exist in user config files.
+ * Used by schema preprocessing to silently map/remove them before validation,
  * preventing errors for users with older configs.
  */
-export const deprecatedToolGroups: readonly string[] = ["browser"]
+export const deprecatedToolGroups: Record<string, string | null> = {
+	edit: "write", // renamed
+	command: "execute", // renamed
+	modes: "mode", // renamed
+}
 
 export type ToolGroup = z.infer<typeof toolGroupsSchema>
 
@@ -158,7 +181,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"fetch_web_page",
 		],
 	},
-	edit: {
+	write: {
 		tools: [
 			"apply_diff",
 			"write_to_file",
@@ -171,15 +194,24 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		],
 		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
 	},
-	command: {
+	execute: {
 		tools: ["execute_command", "read_command_output", "sleep"],
 	},
 	mcp: {
 		tools: ["use_mcp_tool", "access_mcp_resource"],
 	},
-	modes: {
+	mode: {
 		tools: ["switch_mode", "new_task"],
 		alwaysAvailable: true,
+	},
+	subtasks: {
+		tools: ["check_task_status", "wait_for_task", "list_background_tasks"],
+	},
+	questions: {
+		tools: ["ask_followup_question"],
+	},
+	browser: {
+		tools: [],
 	},
 	uncategorized: {
 		tools: [],
@@ -191,17 +223,11 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
  * Tools that are always available to all modes and cannot be disabled.
  */
 export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
-	"ask_followup_question",
 	"attempt_completion",
-	"switch_mode",
-	"new_task",
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
 	"set_task_title",
-	"check_task_status",
-	"wait_for_task",
-	"list_background_tasks",
 ] as const
 
 /**

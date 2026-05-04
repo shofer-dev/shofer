@@ -119,13 +119,13 @@ vi.mock("../../../shared/modes", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "You are a code assistant",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		},
 		{
 			slug: "architect",
 			name: "Architect Mode",
 			roleDefinition: "You are an architect",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		},
 		{
 			slug: "ask",
@@ -137,7 +137,7 @@ vi.mock("../../../shared/modes", () => {
 			slug: "debug",
 			name: "Debug Mode",
 			roleDefinition: "You are a debugger",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		},
 		{
 			slug: "orchestrator",
@@ -168,7 +168,7 @@ vi.mock("../../../shared/modes", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "You are a code assistant",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		}),
 		defaultModeSlug: "code",
 	}

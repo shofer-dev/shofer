@@ -140,7 +140,7 @@ describe("newTaskTool", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "Test role definition",
-			groups: ["command", "read", "edit"],
+			groups: ["execute", "read", "write"],
 		})
 		mockCline.consecutiveMistakeCount = 0
 		mockCline.didToolFailInCurrentTurn = false
@@ -683,7 +683,7 @@ describe("newTaskTool delegation flow", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "Test role definition",
-			groups: ["command", "read", "edit"],
+			groups: ["execute", "read", "write"],
 		})
 		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
 			get: vi.fn().mockReturnValue(false),
