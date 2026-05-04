@@ -24,6 +24,7 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	alwaysAllowWrite?: boolean
 	alwaysAllowWriteOutsideWorkspace?: boolean
 	alwaysAllowWriteProtected?: boolean
+	alwaysAllowBrowser?: boolean
 	alwaysAllowMcp?: boolean
 	alwaysAllowUncategorized?: boolean
 	alwaysAllowModeSwitch?: boolean
@@ -41,6 +42,7 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "alwaysAllowWrite"
 		| "alwaysAllowWriteOutsideWorkspace"
 		| "alwaysAllowWriteProtected"
+		| "alwaysAllowBrowser"
 		| "alwaysAllowMcp"
 		| "alwaysAllowUncategorized"
 		| "alwaysAllowModeSwitch"
@@ -61,6 +63,7 @@ export const AutoApproveSettings = ({
 	alwaysAllowWrite,
 	alwaysAllowWriteOutsideWorkspace,
 	alwaysAllowWriteProtected,
+	alwaysAllowBrowser,
 	alwaysAllowMcp,
 	alwaysAllowUncategorized,
 	alwaysAllowModeSwitch,
@@ -155,6 +158,7 @@ export const AutoApproveSettings = ({
 					<AutoApproveToggle
 						alwaysAllowReadOnly={alwaysAllowReadOnly}
 						alwaysAllowWrite={alwaysAllowWrite}
+						alwaysAllowBrowser={alwaysAllowBrowser}
 						alwaysAllowMcp={alwaysAllowMcp}
 						alwaysAllowUncategorized={alwaysAllowUncategorized}
 						alwaysAllowModeSwitch={alwaysAllowModeSwitch}
