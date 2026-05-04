@@ -124,7 +124,7 @@ vi.mock("@roo-code/cloud", () => ({
 // Built-in mode `code` plus a custom mode `reviewer` are returned via getModeBySlug.
 // Each test replaces this default with a more specific mock.
 vi.mock("../../../shared/modes", () => {
-	const builtins = [{ slug: "code", name: "Code Mode", roleDefinition: "code", groups: ["read", "edit"] }]
+	const builtins = [{ slug: "code", name: "Code Mode", roleDefinition: "code", groups: ["read", "write"] }]
 	return {
 		modes: builtins,
 		getAllModes: vi.fn(() => [...builtins]),
@@ -364,7 +364,7 @@ describe("ClineProvider - custom-mode YAML provider sync", () => {
 				slug: "code",
 				name: "Code",
 				roleDefinition: "code",
-				groups: ["read", "edit"],
+				groups: ["read", "write"],
 			})
 			vi.spyOn(provider.customModesManager, "getCustomModes").mockResolvedValue([])
 			const updateSpy = vi.spyOn(provider.customModesManager, "updateCustomMode").mockResolvedValue(undefined)

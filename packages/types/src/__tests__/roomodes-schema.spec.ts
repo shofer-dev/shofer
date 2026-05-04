@@ -360,7 +360,7 @@ describe("roomodes JSON schema", () => {
 					slug: "browser-mode",
 					name: "Browser Mode",
 					roleDefinition: "A mode that uses the browser tool group.",
-					groups: ["read", "browser", "command"],
+					groups: ["read", "browser", "execute"],
 				},
 			],
 		}

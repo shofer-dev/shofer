@@ -845,7 +845,7 @@ describe("CustomModesManager", () => {
 							slug: "imported-mode",
 							name: "Imported Mode",
 							roleDefinition: "Imported Role",
-							groups: ["read", "edit"],
+							groups: ["read", "write"],
 						},
 					],
 				})
@@ -960,7 +960,7 @@ describe("CustomModesManager", () => {
 							slug: "mode2",
 							name: "Mode 2",
 							roleDefinition: "Role 2",
-							groups: ["edit"],
+							groups: ["write"],
 							rulesFiles: [
 								{
 									relativePath: "rules-mode2/rule.md",

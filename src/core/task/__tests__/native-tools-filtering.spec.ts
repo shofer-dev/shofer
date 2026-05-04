@@ -17,7 +17,7 @@ describe("Native Tools Filtering by Mode", () => {
 				slug: "code",
 				name: "Code",
 				roleDefinition: "Test code",
-				groups: ["read", "edit", "command", "mcp"] as const,
+				groups: ["read", "write", "execute", "mcp"] as const,
 			}
 
 			// Import the functions we need to test

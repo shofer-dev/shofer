@@ -56,7 +56,7 @@ describe("mode-validator", () => {
 						slug: "custom-mode",
 						name: "Custom Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "edit"] as const,
+						groups: ["read", "write"] as const,
 					},
 				]
 				// Should allow tools from read and edit groups
@@ -87,7 +87,7 @@ describe("mode-validator", () => {
 						slug: "custom-mode",
 						name: "Custom Mode",
 						roleDefinition: "Custom role",
-						groups: ["edit"] as const,
+						groups: ["write"] as const,
 					},
 				]
 				const requirements = { apply_diff: false }
@@ -173,7 +173,7 @@ describe("mode-validator", () => {
 						slug: "deny-mode",
 						name: "Deny Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "command"],
+						groups: ["read", "execute"],
 						tools_denied: ["execute_command", "write_to_file"],
 					} as ModeConfig,
 				]
@@ -216,7 +216,7 @@ describe("mode-validator", () => {
 						slug: "no-mcp-mode",
 						name: "No MCP Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "edit"] as const,
+						groups: ["read", "write"] as const,
 					},
 				]
 				// Custom mode without mcp group should not allow dynamic MCP tools

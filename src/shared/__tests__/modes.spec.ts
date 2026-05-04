@@ -19,19 +19,19 @@ describe("isToolAllowedForMode", () => {
 			slug: "markdown-editor",
 			name: "Markdown Editor",
 			roleDefinition: "You are a markdown editor",
-			groups: ["read", ["edit", { fileRegex: "\\.md$" }]],
+			groups: ["read", ["write", { fileRegex: "\\.md$" }]],
 		},
 		{
 			slug: "css-editor",
 			name: "CSS Editor",
 			roleDefinition: "You are a CSS editor",
-			groups: ["read", ["edit", { fileRegex: "\\.css$" }]],
+			groups: ["read", ["write", { fileRegex: "\\.css$" }]],
 		},
 		{
 			slug: "test-exp-mode",
 			name: "Test Exp Mode",
 			roleDefinition: "You are an experimental tester",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		},
 	]
 
@@ -150,7 +150,7 @@ describe("isToolAllowedForMode", () => {
 					slug: "docs-editor",
 					name: "Documentation Editor",
 					roleDefinition: "You are a documentation editor",
-					groups: ["read", ["edit", { fileRegex: "\\.(md|txt)$", description: "Documentation files only" }]],
+					groups: ["read", ["write", { fileRegex: "\\.(md|txt)$", description: "Documentation files only" }]],
 				},
 			]
 
@@ -529,7 +529,7 @@ describe("isToolAllowedForMode", () => {
 				slug: "test-custom-tools",
 				name: "Test Custom Tools Mode",
 				roleDefinition: "You are a test mode",
-				groups: ["read", "edit"],
+				groups: ["read", "write"],
 			},
 		]
 
@@ -613,7 +613,7 @@ describe("FileRestrictionError", () => {
 				name: "🪲 Debug",
 				roleDefinition:
 					"You are Roo, an expert software debugger specializing in systematic problem diagnosis and resolution.",
-				groups: ["read", "edit", "command", "mcp"],
+				groups: ["read", "write", "command", "mcp"],
 			})
 			expect(debugMode?.customInstructions).toContain(
 				"Reflect on 5-7 different possible sources of the problem, distill those down to 1-2 most likely sources, and then add logs to validate your assumptions. Explicitly ask the user to confirm the diagnosis before fixing the problem.",
@@ -734,7 +734,7 @@ describe("getModeSelection", () => {
 			name: "New Custom Mode",
 			roleDefinition: "New Custom Role",
 			customInstructions: "New Custom Instructions",
-			groups: ["edit"],
+			groups: ["write"],
 		},
 	]
 

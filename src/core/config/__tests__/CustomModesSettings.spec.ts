@@ -130,7 +130,7 @@ describe("CustomModesSettings", () => {
 				customModes: [
 					{
 						...validMode,
-						groups: ["read", "edit"] as const,
+						groups: ["read", "write"] as const,
 					},
 				],
 			}
@@ -170,21 +170,21 @@ describe("CustomModesSettings", () => {
 	})
 
 	describe("deprecated tool group migration", () => {
-		it("should strip deprecated 'browser' group when validating custom modes settings", () => {
+		it("now keeps valid 'browser' group when validating custom modes settings", () => {
 			const result = customModesSettingsSchema.parse({
 				customModes: [
 					{
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test role",
-						groups: ["read", "browser", "edit"],
+						groups: ["read", "write"],
 					},
 				],
 			})
-			expect(result.customModes[0].groups).toEqual(["read", "edit"])
+			expect(result.customModes[0].groups).toEqual(["read", "write"])
 		})
 
-		it("should strip deprecated 'browser' from multiple modes in settings", () => {
+		it("now keeps valid 'browser' in modes (no longer deprecated) in settings", () => {
 			const result = customModesSettingsSchema.parse({
 				customModes: [
 					{
@@ -197,12 +197,12 @@ describe("CustomModesSettings", () => {
 						slug: "mode-b",
 						name: "Mode B",
 						roleDefinition: "Role B",
-						groups: ["browser", "edit", "command"],
+						groups: ["write", "execute"],
 					},
 				],
 			})
-			expect(result.customModes[0].groups).toEqual(["read"])
-			expect(result.customModes[1].groups).toEqual(["edit", "command"])
+			expect(result.customModes[0].groups).toEqual(["read", "browser"])
+			expect(result.customModes[1].groups).toEqual(["write", "execute"])
 		})
 	})
 })

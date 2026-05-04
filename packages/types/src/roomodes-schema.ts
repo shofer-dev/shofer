@@ -13,7 +13,7 @@ import { groupOptionsSchema, modeConfigObjectSchema } from "./mode.js"
 
 // Build a ToolGroup enum that includes deprecated groups so existing configs
 // still validate.
-const allToolGroups = [...toolGroups, ...deprecatedToolGroups] as [string, ...string[]]
+const allToolGroups = [...toolGroups, ...Object.keys(deprecatedToolGroups)] as [string, ...string[]]
 const allToolGroupsSchema = z.enum(allToolGroups)
 
 // Build a GroupEntry schema that uses the extended tool group list.

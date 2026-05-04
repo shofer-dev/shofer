@@ -30,8 +30,8 @@ const mcpTools: OpenAI.Chat.ChatCompletionTool[] = [
 
 const mcpToolMeta: Meta[] = [
 	{ serverName: "github", name: "get_pull_request", group: "read", enabledForPrompt: true },
-	{ serverName: "github", name: "create_issue", group: "edit", enabledForPrompt: true },
-	{ serverName: "github", name: "run_workflow", group: "command", enabledForPrompt: true },
+	{ serverName: "github", name: "create_issue", group: "write", enabledForPrompt: true },
+	{ serverName: "github", name: "run_workflow", group: "execute", enabledForPrompt: true },
 	{ serverName: "slack", name: "post_message", group: "uncategorized", enabledForPrompt: true },
 	{ serverName: "slack", name: "list_channels", group: "read", enabledForPrompt: true },
 ]
@@ -61,7 +61,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "edit-only",
 				name: "Edit Only",
 				roleDefinition: "ed",
-				groups: ["edit"],
+				groups: ["write"],
 			},
 		]
 
@@ -129,7 +129,7 @@ describe("filterMcpToolsForMode", () => {
 		const tools = [makeMcpTool("alpha", "shared"), makeMcpTool("beta", "shared")]
 		const meta: Meta[] = [
 			{ serverName: "alpha", name: "shared", group: "read", enabledForPrompt: true },
-			{ serverName: "beta", name: "shared", group: "edit", enabledForPrompt: true },
+			{ serverName: "beta", name: "shared", group: "write", enabledForPrompt: true },
 		]
 
 		const customModes: ModeConfig[] = [

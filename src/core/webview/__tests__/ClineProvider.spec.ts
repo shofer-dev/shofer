@@ -219,13 +219,13 @@ vi.mock("../../../shared/modes", () => ({
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "You are a code assistant",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		},
 		{
 			slug: "architect",
 			name: "Architect Mode",
 			roleDefinition: "You are an architect",
-			groups: ["read", "edit"],
+			groups: ["read", "write"],
 		},
 		{
 			slug: "ask",
@@ -238,7 +238,7 @@ vi.mock("../../../shared/modes", () => ({
 		slug: "code",
 		name: "Code Mode",
 		roleDefinition: "You are a code assistant",
-		groups: ["read", "edit"],
+		groups: ["read", "write"],
 	}),
 	getGroupName: vi.fn().mockImplementation((group: string) => {
 		// Return appropriate group names for different tool groups
@@ -1540,7 +1540,7 @@ describe("ClineProvider", () => {
 					slug: "code",
 					name: "Code Mode",
 					roleDefinition: "You are a code assistant",
-					groups: ["read", "edit"],
+					groups: ["read", "write"],
 				}) // Subsequent calls return default mode
 
 			// Mock provider settings manager
@@ -1591,7 +1591,7 @@ describe("ClineProvider", () => {
 						slug: "custom-mode",
 						name: "Custom Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "edit"] as const,
+						groups: ["read", "write"] as const,
 					},
 				]),
 				dispose: vi.fn(),
@@ -1604,7 +1604,7 @@ describe("ClineProvider", () => {
 				slug: "custom-mode",
 				name: "Custom Mode",
 				roleDefinition: "Custom role",
-				groups: ["read", "edit"],
+				groups: ["read", "write"],
 			})
 
 			// Mock provider settings manager
@@ -1664,7 +1664,7 @@ describe("ClineProvider", () => {
 				slug: "architect",
 				name: "Architect Mode",
 				roleDefinition: "You are an architect",
-				groups: ["read", "edit"],
+				groups: ["read", "write"],
 			})
 
 			// Mock provider settings manager
@@ -1739,7 +1739,7 @@ describe("ClineProvider", () => {
 				slug: "code",
 				name: "Code Mode",
 				roleDefinition: "You are a code assistant",
-				groups: ["read", "edit"],
+				groups: ["read", "write"],
 			})
 
 			// Mock provider settings manager to throw error

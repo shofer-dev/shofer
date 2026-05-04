@@ -321,7 +321,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "emoji-mode",
 						name: "📝 Writing Mode",
 						roleDefinition: "A mode for writing with emojis 🚀",
-						groups: ["read", "edit"],
+						groups: ["read", "write"],
 					},
 				],
 			})
