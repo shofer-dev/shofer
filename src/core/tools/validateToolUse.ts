@@ -1,3 +1,4 @@
+import * as vscode from "vscode"
 import type { ToolName, ModeConfig, ExperimentId, GroupOptions, GroupEntry } from "@roo-code/types"
 import { toolNames as validToolNames } from "@roo-code/types"
 import { customToolRegistry } from "@roo-code/core"
@@ -5,6 +6,18 @@ import { customToolRegistry } from "@roo-code/core"
 import { type Mode, FileRestrictionError, getModeBySlug, getGroupName } from "../../shared/modes"
 import { EXPERIMENT_IDS } from "../../shared/experiments"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../shared/tools"
+
+/**
+ * Check whether a tool name belongs to an external language model tool
+ * registered by another extension via vscode.lm.tools.
+ */
+function isExternalLmTool(toolName: string): boolean {
+	try {
+		return vscode.lm.tools.some((t) => t.name === toolName)
+	} catch {
+		return false
+	}
+}
 
 /**
  * Checks if a tool name is a valid, known tool.
@@ -23,6 +36,11 @@ export function isValidToolName(toolName: string, experiments?: Record<string, b
 
 	// Check if it's a dynamic MCP tool (mcp_serverName_toolName format).
 	if (toolName.startsWith("mcp_")) {
+		return true
+	}
+
+	// Check if it's an external LM tool registered by another extension.
+	if (isExternalLmTool(toolName)) {
 		return true
 	}
 
@@ -177,6 +195,13 @@ export function isToolAllowedForMode(
 		return true
 	}
 
+	// External LM tools from other extensions (e.g., vscode-tools) are
+	// already filtered by mode at build-tools.ts time. Allow them through
+	// unconditionally at the validation layer.
+	if (isExternalLmTool(tool)) {
+		return true
+	}
+
 	// Check if this is a dynamic MCP tool (mcp_serverName_toolName)
 	// These should be allowed if the mcp group is allowed for the mode
 	const isDynamicMcpTool = tool.startsWith("mcp_")
@@ -237,8 +262,8 @@ export function isToolAllowedForMode(
 			return true
 		}
 
-		// For the edit group, check file regex if specified
-		if (groupName === "edit" && options.fileRegex) {
+		// For the write group, check file regex if specified
+		if (groupName === "write" && options.fileRegex) {
 			const filePath = toolParams?.path || toolParams?.file_path
 			// Check if this is an actual edit operation (not just path-only for streaming)
 			const isEditOperation = EDIT_OPERATION_PARAMS.some((param) => toolParams?.[param])

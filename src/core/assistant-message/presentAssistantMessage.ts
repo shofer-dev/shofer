@@ -1,3 +1,4 @@
+import * as vscode from "vscode"
 import { serializeError } from "serialize-error"
 import { Anthropic } from "@anthropic-ai/sdk"
 
@@ -59,6 +60,21 @@ import { sleepTool } from "../tools/SleepTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
+
+/**
+ * Check whether a tool name belongs to an external language model tool
+ * registered by another extension via vscode.lm.tools.
+ *
+ * External tools are discovered at build-tools.ts time and included in the
+ * model's tool list. At execution time we invoke them via vscode.lm.invokeTool.
+ */
+function isExternalLmTool(toolName: string): boolean {
+	try {
+		return vscode.lm.tools.some((t) => t.name === toolName)
+	} catch {
+		return false
+	}
+}
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -1113,7 +1129,41 @@ export async function presentAssistantMessage(cline: Task) {
 						break
 					}
 
-					// Not a custom tool - handle as unknown tool error
+					// Check if this is an external LM tool registered by another extension
+					// via vscode.lm.tools (e.g., vscode-tools, browser-tools).
+					if (isExternalLmTool(block.name)) {
+						try {
+							cline.consecutiveMistakeCount = 0
+
+							// Use nativeArgs if available (from NativeToolCallParser),
+							// otherwise fall back to the raw params.
+							const toolInput = (block.nativeArgs || block.params || {}) as Record<string, unknown>
+							const invocationResult = await vscode.lm.invokeTool(block.name, {
+								toolInvocationToken: undefined,
+								input: toolInput,
+							})
+
+							// Collect text content from the tool result parts.
+							const textParts: string[] = []
+							for (const part of invocationResult.content) {
+								if (part instanceof vscode.LanguageModelTextPart) {
+									textParts.push(part.value)
+								}
+							}
+							const resultText = textParts.join("\n") || "(tool returned empty result)"
+
+							pushToolResult(resultText)
+						} catch (execError: any) {
+							cline.consecutiveMistakeCount++
+							await handleError(
+								`executing external tool "${block.name}"`,
+								execError instanceof Error ? execError : new Error(String(execError)),
+							)
+						}
+						break
+					}
+
+					// Not a custom tool or external tool - handle as unknown tool error
 					const errorMessage = `Unknown tool "${block.name}". This tool does not exist. Please use one of the available tools.`
 					cline.consecutiveMistakeCount++
 					cline.recordToolError(block.name as ToolName, errorMessage)

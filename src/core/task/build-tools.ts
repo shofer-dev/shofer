@@ -1,8 +1,10 @@
 import path from "path"
+import * as vscode from "vscode"
 
 import type OpenAI from "openai"
 
-import type { ProviderSettings, ModeConfig, ModelInfo } from "@roo-code/types"
+import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@roo-code/types"
+import { toolGroupsSchema } from "@roo-code/types"
 import { customToolRegistry, formatNative } from "@roo-code/core"
 
 import type { ClineProvider } from "../webview/ClineProvider"
@@ -14,6 +16,7 @@ import {
 	filterMcpToolsForMode,
 	resolveToolAlias,
 } from "../prompts/tools/filter-tools-for-mode"
+import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
 
 interface BuildToolsOptions {
 	provider: ClineProvider
@@ -53,6 +56,152 @@ interface BuildToolsResult {
  */
 function getToolName(tool: OpenAI.Chat.ChatCompletionTool): string {
 	return (tool as OpenAI.Chat.ChatCompletionFunctionTool).function.name
+}
+
+/**
+ * Build a set of Roo-Code's own native tool names.
+ * Used to filter out Roo-Code tools from externally-registered LM tools
+ * so they don't appear twice in the model's tool list.
+ */
+let _nativeToolNamesCache: Set<string> | null = null
+
+function getNativeToolNames(): Set<string> {
+	if (!_nativeToolNamesCache) {
+		_nativeToolNamesCache = new Set(
+			getNativeTools().map((t) => (t as OpenAI.Chat.ChatCompletionFunctionTool).function.name),
+		)
+	}
+	return _nativeToolNamesCache
+}
+
+/**
+ * Metadata for an external language model tool discovered via vscode.lm.tools.
+ *
+ * Each tool's group is resolved from the tool-authoring extension's
+ * configuration (arkware.*.toolGroups), not inferred from name heuristics.
+ */
+interface ExternalLmToolMeta {
+	tool: OpenAI.Chat.ChatCompletionFunctionTool
+	/** The tool group assigned to this tool for mode filtering. */
+	group: ToolGroup
+}
+
+/**
+ * Resolve the ToolGroup for an external LM tool by reading the
+ * tool-authoring extension's declared `toolGroups` configuration.
+ *
+ * Each extension that registers LM tools should contribute a
+ * `toolGroups` property under its config namespace (e.g.,
+ * `arkware.vscodeTools.toolGroups` for vscode-tools).
+ *
+ * Resolution strategy:
+ *  1. Read known config namespaces and look up the tool name.
+ *  2. If found and the declared group is a valid ToolGroup, use it.
+ *  3. Fall back to "uncategorized".
+ *
+ * @param toolName - The name of the tool (e.g., "vscode_file_read")
+ * @returns The ToolGroup declared by the tool's extension, or "uncategorized"
+ */
+function resolveExternalLmToolGroup(toolName: string): ToolGroup {
+	// Known config namespaces for extensions that register LM tools.
+	// Each maps a config section to its publisher prefix for tool matching.
+	const configNamespaces: Array<{ section: string; toolPrefix: string }> = [
+		{ section: "arkware.vscodeTools", toolPrefix: "vscode_" },
+		{ section: "arkware.browserTools", toolPrefix: "browser_" },
+	]
+
+	for (const ns of configNamespaces) {
+		// Only check configs for tools whose names match the expected prefix.
+		if (!toolName.startsWith(ns.toolPrefix)) continue
+
+		try {
+			const config = vscode.workspace.getConfiguration(ns.section)
+			const toolGroups = config.get<Record<string, string>>("toolGroups")
+			if (toolGroups && typeof toolGroups[toolName] === "string") {
+				const declared = toolGroups[toolName]
+				// Validate that the declared value is a known ToolGroup.
+				if ((toolGroupsSchema.options as readonly string[]).includes(declared)) {
+					return declared as ToolGroup
+				}
+			}
+		} catch {
+			// Config read failed — fall through to uncategorized.
+		}
+	}
+
+	return "uncategorized"
+}
+
+/**
+ * Get language model tools registered by other extensions via vscode.lm.tools,
+ * each with an assigned tool group for mode filtering.
+ *
+ * VS Code's Language Model Tools API allows extensions to register tools that
+ * are globally available to LLM providers. This function discovers those tools
+ * at runtime, filters out Roo-Code's own native tools (already included via
+ * getNativeTools()), and returns metadata including a group classification.
+ *
+ * @returns Array of external LM tool metadata with group assignments
+ */
+function getExternalLmToolMeta(): ExternalLmToolMeta[] {
+	try {
+		const nativeNames = getNativeToolNames()
+		const allLmTools = vscode.lm.tools
+
+		return allLmTools
+			.filter((tool) => !nativeNames.has(tool.name))
+			.map((tool) => ({
+				tool: {
+					type: "function" as const,
+					function: {
+						name: tool.name,
+						description: tool.description || tool.name,
+						parameters: (tool.inputSchema || {
+							type: "object",
+							properties: {},
+						}) as OpenAI.FunctionParameters,
+					},
+				},
+				group: resolveExternalLmToolGroup(tool.name),
+			}))
+	} catch {
+		return []
+	}
+}
+
+/**
+ * Filter external LM tools by mode, using each tool's assigned group.
+ *
+ * A mode's `groups` list determines which ToolGroups are allowed. External
+ * tools whose group is present in the mode's allowed groups are included.
+ * An empty mode config (no groups) exposes all external tools.
+ *
+ * @param externalMeta - External tool metadata with group assignments
+ * @param mode - Current mode slug
+ * @param customModes - Custom mode configurations
+ * @returns Filtered external tool definitions
+ */
+function filterExternalToolsForMode(
+	externalMeta: ExternalLmToolMeta[],
+	mode: string | undefined,
+	customModes: ModeConfig[] | undefined,
+): OpenAI.Chat.ChatCompletionFunctionTool[] {
+	const modeSlug = mode ?? defaultModeSlug
+	const modeConfig = getModeBySlug(modeSlug, customModes)
+
+	// If no mode config, expose all external tools
+	if (!modeConfig) {
+		return externalMeta.map((m) => m.tool)
+	}
+
+	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => (Array.isArray(g) ? g[0] : g)))
+
+	// If mode has no groups defined, expose all external tools
+	if (allowedGroups.size === 0) {
+		return externalMeta.map((m) => m.tool)
+	}
+
+	return externalMeta.filter((meta) => allowedGroups.has(meta.group)).map((meta) => meta.tool)
 }
 
 /**
@@ -142,14 +291,25 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		}
 	}
 
+	// Get tools registered by other extensions via vscode.lm.tools,
+	// each with an assigned tool group for mode filtering.
+	const externalLmMeta = getExternalLmToolMeta()
+	const allExternalLmTools = externalLmMeta.map((meta) => meta.tool)
+	const filteredExternalLmTools = filterExternalToolsForMode(externalLmMeta, mode, customModes)
+
 	// Combine filtered tools (for backward compatibility and for allowedFunctionNames)
-	const filteredTools = [...filteredNativeTools, ...filteredMcpTools, ...nativeCustomTools]
+	const filteredTools = [
+		...filteredNativeTools,
+		...filteredMcpTools,
+		...nativeCustomTools,
+		...filteredExternalLmTools,
+	]
 
 	// If includeAllToolsWithRestrictions is true, return ALL tools but provide
 	// allowed names based on mode filtering
 	if (includeAllToolsWithRestrictions) {
-		// Combine ALL tools (unfiltered native + all MCP + custom)
-		const allTools = [...nativeTools, ...mcpTools, ...nativeCustomTools]
+		// Combine ALL tools (unfiltered native + all MCP + custom + external)
+		const allTools = [...nativeTools, ...mcpTools, ...nativeCustomTools, ...allExternalLmTools]
 
 		// Extract names of tools that are allowed based on mode filtering.
 		// Resolve any alias names to canonical names to ensure consistency with allTools
