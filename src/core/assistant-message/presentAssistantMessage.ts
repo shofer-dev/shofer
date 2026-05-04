@@ -1132,12 +1132,35 @@ export async function presentAssistantMessage(cline: Task) {
 					// Check if this is an external LM tool registered by another extension
 					// via vscode.lm.tools (e.g., vscode-tools, browser-tools).
 					if (isExternalLmTool(block.name)) {
+						// Surface the call through the same `use_mcp_server` chat-row
+						// renderer used by real MCP tools so the user gets visual
+						// feedback (request card + spinner + response). The
+						// `external_lm_tool: true` marker on the payload makes
+						// `checkAutoApproval` short-circuit MCP gating, since the user
+						// already opted in by installing the providing extension.
+						const toolInput = (block.nativeArgs || block.params || {}) as Record<string, unknown>
+						const externalServerName = block.name.startsWith("browser_")
+							? "browser-tools"
+							: block.name.startsWith("ide_")
+								? "vscode-tools"
+								: "external-lm-tools"
+						const askPayload = JSON.stringify({
+							type: "use_mcp_tool",
+							serverName: externalServerName,
+							toolName: block.name,
+							arguments: JSON.stringify(toolInput),
+							external_lm_tool: true,
+						})
+
+						const didApprove = await askApproval("use_mcp_server", askPayload)
+						if (!didApprove) {
+							break
+						}
+
 						try {
 							cline.consecutiveMistakeCount = 0
+							await cline.say("mcp_server_request_started")
 
-							// Use nativeArgs if available (from NativeToolCallParser),
-							// otherwise fall back to the raw params.
-							const toolInput = (block.nativeArgs || block.params || {}) as Record<string, unknown>
 							const invocationResult = await vscode.lm.invokeTool(block.name, {
 								toolInvocationToken: undefined,
 								input: toolInput,
@@ -1152,6 +1175,7 @@ export async function presentAssistantMessage(cline: Task) {
 							}
 							const resultText = textParts.join("\n") || "(tool returned empty result)"
 
+							await cline.say("mcp_server_response", resultText)
 							pushToolResult(resultText)
 						} catch (execError: any) {
 							cline.consecutiveMistakeCount++
