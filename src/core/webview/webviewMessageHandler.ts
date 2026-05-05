@@ -1426,7 +1426,7 @@ export const webviewMessageHandler = async (
 			const task = provider.getCurrentTask()
 			if (!task) break
 			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("chat:fileChanges.blockedTaskRunning"))
+				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
 				break
 			}
 			try {
@@ -1447,11 +1447,11 @@ export const webviewMessageHandler = async (
 				}
 				if (userEdited) {
 					const choice = await vscode.window.showWarningMessage(
-						t("chat:fileChanges.revertConfirmUserEdits", { path: relPath }),
+						t("common:fileChanges.revertConfirmUserEdits", { path: relPath }),
 						{ modal: true },
-						t("chat:fileChanges.revertConfirmYes"),
+						t("common:fileChanges.revertConfirmYes"),
 					)
-					if (choice !== t("chat:fileChanges.revertConfirmYes")) break
+					if (choice !== t("common:fileChanges.revertConfirmYes")) break
 				}
 				await restoreFile(task, relPath)
 				await provider.pushChangedFilesUpdate()
@@ -1465,15 +1465,15 @@ export const webviewMessageHandler = async (
 			const task = provider.getCurrentTask()
 			if (!task) break
 			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("chat:fileChanges.blockedTaskRunning"))
+				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
 				break
 			}
 			const choice = await vscode.window.showWarningMessage(
-				t("chat:fileChanges.revertAllConfirm"),
+				t("common:fileChanges.revertAllConfirm"),
 				{ modal: true },
-				t("chat:fileChanges.revertConfirmYes"),
+				t("common:fileChanges.revertConfirmYes"),
 			)
-			if (choice !== t("chat:fileChanges.revertConfirmYes")) break
+			if (choice !== t("common:fileChanges.revertConfirmYes")) break
 			try {
 				const { restoreAll } = await import("../file-changes/ChangedFilesService")
 				await restoreAll(task)
@@ -1490,7 +1490,7 @@ export const webviewMessageHandler = async (
 			const task = provider.getCurrentTask()
 			if (!task) break
 			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("chat:fileChanges.blockedTaskRunning"))
+				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
 				break
 			}
 			try {
