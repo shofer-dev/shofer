@@ -71,19 +71,37 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 		const entries: ChangedFileEntry[] = []
 		for (const relPath of candidates) {
 			const stat = byPath.get(relPath)
-			// File Roo edited but currently matches base (e.g. created then
-			// removed, or user reverted by hand) — drop from the list.
-			if (!stat) continue
 			const original = await task.fileContextTracker.getOriginalSnapshot(relPath)
 			const final = await task.fileContextTracker.getFinalSnapshot(relPath)
+			const currentExists = await readDiskExists(task.cwd, relPath)
+			// File Roo edited but currently matches base. Keep it visible as
+			// "reverted" if a final snapshot exists (so the user can Redo);
+			// otherwise drop entirely.
+			if (!stat) {
+				if (!final) continue
+				entries.push({
+					path: relPath,
+					insertions: 0,
+					deletions: 0,
+					binary: false,
+					state: "reverted",
+					source: "checkpoint",
+					hasOriginalContent: true, // checkpoint backend can always serve base
+					hasFinalContent: true,
+				})
+				continue
+			}
 			entries.push({
 				path: relPath,
 				insertions: stat.insertions,
 				deletions: stat.deletions,
 				binary: stat.binary,
-				state: deriveState(original, await readDiskExists(task.cwd, relPath)),
+				state: deriveState(original, currentExists),
 				source: "checkpoint",
-				hasOriginalContent: original !== undefined,
+				// In checkpoint mode the diff base is always available via shadow
+				// git, even when the per-task snapshot was not captured (e.g. the
+				// file was edited via a tool path that bypassed DiffViewProvider).
+				hasOriginalContent: true,
 				hasFinalContent: final !== undefined,
 			})
 		}
@@ -96,15 +114,36 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 		const original = await task.fileContextTracker.getOriginalSnapshot(relPath)
 		const currentExists = await readDiskExists(task.cwd, relPath)
 		const currentContent = currentExists ? await readDiskText(task.cwd, relPath) : undefined
+		const final = await task.fileContextTracker.getFinalSnapshot(relPath)
 
-		// Net-state filter: if disk matches the captured original, drop.
+		// Net-state filter: if disk matches the captured original, keep the
+		// entry only as "reverted" when a final snapshot exists (for Redo).
+		let matchesBase = false
 		if (original) {
-			if (original.kind === "absent" && !currentExists) continue
-			if (original.kind === "text" && currentContent !== undefined && original.hash === sha256(currentContent))
-				continue
+			if (original.kind === "absent" && !currentExists) matchesBase = true
+			else if (
+				original.kind === "text" &&
+				currentContent !== undefined &&
+				original.hash === sha256(currentContent)
+			) {
+				matchesBase = true
+			}
+		}
+		if (matchesBase) {
+			if (!final) continue
+			entries.push({
+				path: relPath,
+				insertions: 0,
+				deletions: 0,
+				binary: false,
+				state: "reverted",
+				source: "tracker",
+				hasOriginalContent: original !== undefined,
+				hasFinalContent: true,
+			})
+			continue
 		}
 
-		const final = await task.fileContextTracker.getFinalSnapshot(relPath)
 		entries.push({
 			path: relPath,
 			insertions: countLineDelta(original, currentContent).inserted,
@@ -171,15 +210,35 @@ async function readDiskText(cwd: string, relPath: string): Promise<string | unde
 
 /**
  * Returns the original-content snapshot for the given file in the current
- * Task, or null when none is available (file was never edited by Roo or
- * snapshot is missing). Binary originals return null.
+ * Task. Falls back to the checkpoint backend (`git show baseHash:<path>`)
+ * when no per-task snapshot exists, so the diff view still works for files
+ * Roo edited via tool paths that bypassed DiffViewProvider's snapshot hook.
+ * Returns null only when neither source has any base content for the file.
  */
 export async function getOriginalContent(task: Task, relPath: string): Promise<string | null> {
-	const snap = await task.fileContextTracker.getOriginalSnapshot(toPosix(relPath))
-	if (!snap) return null
-	if (snap.kind === "text") return snap.content ?? ""
-	// "absent" -> empty document, so the diff editor can show the additions.
-	if (snap.kind === "absent") return ""
+	const posix = toPosix(relPath)
+	const snap = await task.fileContextTracker.getOriginalSnapshot(posix)
+	if (snap) {
+		if (snap.kind === "text") return snap.content ?? ""
+		// "absent" -> empty document, so the diff editor can show the additions.
+		if (snap.kind === "absent") return ""
+	}
+	try {
+		const service = await getCheckpointService(task)
+		if (service?.isInitialized && service.baseHash) {
+			const svc = service as any
+			if (svc.git) {
+				try {
+					return await svc.git.show([`${service.baseHash}:${posix}`])
+				} catch {
+					// File did not exist at base.
+					return ""
+				}
+			}
+		}
+	} catch {
+		// fall through
+	}
 	return null
 }
 
@@ -215,7 +274,6 @@ export async function restoreFile(task: Task, relPath: string): Promise<void> {
 			// we want a per-file checkout instead. Drive the underlying simple-git
 			// instance through its `raw` interface via a small helper exposed below.
 			await checkoutSingleFileFromBase(service as any, posix)
-			await captureFinalAfter(task, posix)
 			return
 		}
 	} catch (err) {
@@ -237,7 +295,10 @@ export async function restoreFile(task: Task, relPath: string): Promise<void> {
 		await fs.mkdir(path.dirname(abs), { recursive: true })
 		await fs.writeFile(abs, snap.content ?? "", "utf8")
 	}
-	await captureFinalAfter(task, posix)
+	// NOTE: deliberately do NOT recapture the final snapshot here. The final
+	// snapshot represents the last "Roo-produced" state and is what Redo will
+	// re-apply. Overwriting it with the just-reverted state would make Redo
+	// a no-op.
 }
 
 /**
@@ -250,9 +311,7 @@ export async function restoreAll(task: Task): Promise<void> {
 		const service = await getCheckpointService(task)
 		if (service?.isInitialized && service.baseHash) {
 			await service.restoreCheckpoint(service.baseHash)
-			// Refresh final snapshots so the panel reflects post-revert state.
-			const candidates = await task.fileContextTracker.getFilesEditedByRoo()
-			for (const p of candidates) await captureFinalAfter(task, toPosix(p))
+			// NOTE: do not recapture finals — see restoreFile().
 			return
 		}
 	} catch (err) {
@@ -323,12 +382,4 @@ async function checkoutSingleFileFromBase(service: any, relPath: string): Promis
 	}
 	await fs.mkdir(path.dirname(abs), { recursive: true })
 	await fs.writeFile(abs, originalContent, "utf8")
-}
-
-async function captureFinalAfter(task: Task, relPath: string): Promise<void> {
-	try {
-		await task.fileContextTracker.captureFinal(relPath)
-	} catch (err) {
-		console.warn(`[ChangedFilesService] captureFinal failed for ${relPath}:`, err)
-	}
 }

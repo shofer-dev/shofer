@@ -30,13 +30,10 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 	const [payload, setPayload] = useState<ChangedFilesPayload | undefined>(undefined)
 	// Per-task accepted (reviewed) paths. Session-only — not persisted.
 	const [acceptedPaths, setAcceptedPaths] = useState<Set<string>>(new Set())
-	// Per-task reverted paths so we know to render Redo button. Session-only.
-	const [revertedPaths, setRevertedPaths] = useState<Set<string>>(new Set())
 
-	// On task switch, drop UI-only accept/revert state and re-pull payload.
+	// On task switch, drop UI-only accept state and re-pull payload.
 	useEffect(() => {
 		setAcceptedPaths(new Set())
-		setRevertedPaths(new Set())
 		setPayload(undefined)
 		vscode.postMessage({ type: "changedFiles/get" })
 	}, [taskId])
@@ -72,16 +69,10 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 
 	const handleRevert = useCallback((entry: ChangedFileEntry) => {
 		vscode.postMessage({ type: "changedFiles/revert", text: entry.path })
-		setRevertedPaths((prev) => new Set(prev).add(entry.path))
 	}, [])
 
 	const handleRedo = useCallback((entry: ChangedFileEntry) => {
 		vscode.postMessage({ type: "changedFiles/redo", text: entry.path })
-		setRevertedPaths((prev) => {
-			const next = new Set(prev)
-			next.delete(entry.path)
-			return next
-		})
 	}, [])
 
 	const handleAccept = useCallback((entry: ChangedFileEntry) => {
@@ -172,7 +163,6 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 						<FileRow
 							key={entry.path}
 							entry={entry}
-							reverted={revertedPaths.has(entry.path)}
 							onShowDiff={handleShowDiff}
 							onRevert={handleRevert}
 							onRedo={handleRedo}
@@ -192,16 +182,16 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 
 interface FileRowProps {
 	entry: ChangedFileEntry
-	reverted: boolean
 	onShowDiff: (entry: ChangedFileEntry) => void
 	onRevert: (entry: ChangedFileEntry) => void
 	onRedo: (entry: ChangedFileEntry) => void
 	onAccept: (entry: ChangedFileEntry) => void
 }
 
-const FileRow = memo(({ entry, reverted, onShowDiff, onRevert, onRedo, onAccept }: FileRowProps) => {
+const FileRow = memo(({ entry, onShowDiff, onRevert, onRedo, onAccept }: FileRowProps) => {
 	const { t } = useTranslation()
 	const canDiff = entry.hasOriginalContent
+	const reverted = entry.state === "reverted"
 	return (
 		<div
 			className={cn(

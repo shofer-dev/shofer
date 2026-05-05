@@ -472,7 +472,7 @@ export interface ChangedFileEntry {
 	insertions: number
 	deletions: number
 	binary: boolean
-	state: "modified" | "added" | "deleted"
+	state: "modified" | "added" | "deleted" | "reverted"
 	/** Backend that produced this entry. */
 	source: "checkpoint" | "tracker"
 	/** Whether an original-content snapshot is available for diff/revert. */
