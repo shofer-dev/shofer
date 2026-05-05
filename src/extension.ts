@@ -382,6 +382,21 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.registerTextDocumentContentProvider(DIFF_VIEW_URI_SCHEME, diffContentProvider),
 	)
 
+	// `roo-original:` virtual scheme used by the FileChangesPanel to display
+	// "original (Roo's start) ↔ current" diffs in the main editor area without
+	// touching disk. Content is carried base64-encoded in the URI's `query` so
+	// each invocation is self-contained (no runtime registry to keep in sync
+	// with task lifecycle).
+	const rooOriginalProvider = new (class implements vscode.TextDocumentContentProvider {
+		provideTextDocumentContent(uri: vscode.Uri): string {
+			return Buffer.from(uri.query, "base64").toString("utf-8")
+		}
+	})()
+
+	context.subscriptions.push(
+		vscode.workspace.registerTextDocumentContentProvider("roo-original", rooOriginalProvider),
+	)
+
 	context.subscriptions.push(vscode.window.registerUriHandler({ handleUri }))
 
 	// Register code actions provider.

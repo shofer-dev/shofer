@@ -109,11 +109,14 @@ export interface ExtensionMessage {
 		| "skills"
 		| "fileContent"
 		| "addContextFiles"
+		| "changedFiles/update"
 	text?: string
 	/** For fileContent: { path, content, error? } */
 	fileContent?: { path: string; content: string | null; error?: string }
 	/** For addContextFiles: workspace-relative paths to append to chat context. */
 	contextFiles?: Array<{ path: string; isFile: boolean }>
+	/** For changedFiles/update: snapshot of files Roo edited in the current Task. */
+	changedFiles?: ChangedFilesPayload
 	payload?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	checkpointWarning?: {
 		type: "WAIT_TIMEOUT" | "INIT_TIMEOUT"
@@ -455,6 +458,38 @@ export interface UpdateTodoListPayload {
 
 export type EditQueuedMessagePayload = Pick<QueuedMessage, "id" | "text" | "images">
 
+/**
+ * Per-file entry describing a file Roo edited in the current Task.
+ *
+ * The list is scoped to files Roo touched at least once. Net state is
+ * computed against the task's base (checkpoint base commit when checkpoints
+ * are enabled, otherwise the per-task original-content snapshot taken at
+ * first edit). Files whose net state matches the base are excluded.
+ */
+export interface ChangedFileEntry {
+	/** Workspace-relative POSIX path. */
+	path: string
+	insertions: number
+	deletions: number
+	binary: boolean
+	state: "modified" | "added" | "deleted"
+	/** Backend that produced this entry. */
+	source: "checkpoint" | "tracker"
+	/** Whether an original-content snapshot is available for diff/revert. */
+	hasOriginalContent: boolean
+	/** Whether a final-content snapshot is available for redo. */
+	hasFinalContent: boolean
+}
+
+export interface ChangedFilesPayload {
+	taskId: string
+	entries: ChangedFileEntry[]
+	backend: "checkpoint" | "tracker" | "none"
+	/** True when the preferred (checkpoint) backend was unavailable. */
+	degraded: boolean
+	reason?: string
+}
+
 export interface WebviewMessage {
 	type:
 		| "updateTodoList"
@@ -538,6 +573,11 @@ export interface WebviewMessage {
 		| "openCustomModesSettings"
 		| "checkpointDiff"
 		| "checkpointRestore"
+		| "changedFiles/get"
+		| "changedFiles/showDiff"
+		| "changedFiles/revert"
+		| "changedFiles/revertAll"
+		| "changedFiles/redo"
 		| "deleteMcpServer"
 		| "codebaseIndexEnabled"
 		| "telemetrySetting"

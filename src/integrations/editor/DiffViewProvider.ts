@@ -72,6 +72,17 @@ export class DiffViewProvider {
 			this.originalContent = ""
 		}
 
+		// Persist the pre-edit snapshot for the FileChangesPanel / unified
+		// ChangedFilesService. Idempotent per (task, relPath); intermediate Roo
+		// edits will not overwrite it. Pass `undefined` for files that did not
+		// exist on disk so a later Revert can delete them.
+		try {
+			const task = this.taskRef.deref()
+			await task?.fileContextTracker?.captureOriginal(relPath, fileExists ? this.originalContent : undefined)
+		} catch (err) {
+			console.warn(`[DiffViewProvider] captureOriginal failed for ${relPath}:`, err)
+		}
+
 		// For new files, create any necessary directories and keep track of new
 		// directories to delete if the user denies the operation.
 		this.createdDirs = await createDirectoriesForFile(absolutePath)

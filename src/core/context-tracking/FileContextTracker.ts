@@ -1,5 +1,6 @@
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import * as path from "path"
+import * as crypto from "crypto"
 import * as vscode from "vscode"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { GlobalFileNames } from "../../shared/globalFileNames"
@@ -8,6 +9,22 @@ import fs from "fs/promises"
 import { ContextProxy } from "../config/ContextProxy"
 import type { FileMetadataEntry, RecordSource, TaskMetadata } from "./FileContextTrackerTypes"
 import { ClineProvider } from "../webview/ClineProvider"
+
+/**
+ * Snapshot kind written to the per-task originals/finals stores.
+ *  - "absent" : the file did not exist on disk at the moment of capture.
+ *  - "text"   : the file existed and its content is captured verbatim.
+ *  - "binary" : the file existed but content is not retained (see notes).
+ */
+export type SnapshotKind = "absent" | "text" | "binary"
+
+export interface FileSnapshot {
+	kind: SnapshotKind
+	/** Captured text content when kind === "text". */
+	content?: string
+	/** sha256 of captured bytes (only meaningful when kind === "text"). */
+	hash?: string
+}
 
 // This class is responsible for tracking file operations that may result in stale context.
 // If a user modifies a file outside of Roo, the context may become stale and need to be updated.
@@ -194,6 +211,18 @@ export class FileContextTracker {
 
 			metadata.files_in_context.push(newEntry)
 			await this.saveTaskMetadata(taskId, metadata)
+
+			// Capture the post-edit "final" content snapshot so per-file Redo can
+			// re-apply Roo's last produced state after a Revert. Also notify the
+			// provider so the FileChangesPanel updates promptly. These are
+			// best-effort and must never propagate errors back to tools.
+			if (source === "roo_edited") {
+				this.captureFinal(filePath).catch((err) =>
+					console.error(`[FileContextTracker] captureFinal failed:`, err),
+				)
+				const provider = this.providerRef.deref()
+				provider?.scheduleChangedFilesUpdate?.(this.taskId)
+			}
 		} catch (error) {
 			console.error("Failed to add file to metadata:", error)
 		}
@@ -310,6 +339,113 @@ export class FileContextTracker {
 	// Marks a file as edited by Roo to prevent false positives in file watchers
 	markFileAsEditedByRoo(filePath: string): void {
 		this.recentlyEditedByRoo.add(filePath)
+	}
+
+	// ------------------------------------------------------------------
+	// Original/final content snapshot store (used by ChangedFilesService)
+	// ------------------------------------------------------------------
+
+	/**
+	 * Returns absolute paths to the per-task `originals/` and `finals/`
+	 * directories. Created on demand by callers that write into them.
+	 */
+	private async getSnapshotDirs(): Promise<{ originals: string; finals: string } | undefined> {
+		const storage = this.getContextProxy()?.globalStorageUri.fsPath
+		if (!storage) return undefined
+		const taskDir = await getTaskDirectoryPath(storage, this.taskId)
+		return {
+			originals: path.join(taskDir, "originals"),
+			finals: path.join(taskDir, "finals"),
+		}
+	}
+
+	private snapshotFileName(relPath: string): string {
+		// sha1 over the workspace-relative path is enough for collision-resistant
+		// per-file storage; the original path is kept inside the JSON payload.
+		return crypto.createHash("sha1").update(relPath).digest("hex") + ".json"
+	}
+
+	private async readSnapshot(dir: string, relPath: string): Promise<FileSnapshot | undefined> {
+		const file = path.join(dir, this.snapshotFileName(relPath))
+		if (!(await fileExistsAtPath(file))) return undefined
+		try {
+			const raw = await fs.readFile(file, "utf8")
+			return JSON.parse(raw) as FileSnapshot
+		} catch (err) {
+			console.error(`[FileContextTracker] Failed to read snapshot for ${relPath}:`, err)
+			return undefined
+		}
+	}
+
+	private async writeSnapshot(dir: string, relPath: string, snap: FileSnapshot): Promise<void> {
+		const file = path.join(dir, this.snapshotFileName(relPath))
+		await safeWriteJson(file, { ...snap, _path: relPath })
+	}
+
+	private buildSnapshotFromContent(content: string | undefined): FileSnapshot {
+		if (content === undefined) return { kind: "absent" }
+		return {
+			kind: "text",
+			content,
+			hash: crypto.createHash("sha256").update(content).digest("hex"),
+		}
+	}
+
+	/**
+	 * Captures the file's content as it existed BEFORE Roo's first edit in this
+	 * Task. Idempotent: subsequent calls for the same path are no-ops, so
+	 * intermediate Roo edits cannot overwrite the original.
+	 *
+	 * Should be called from edit infrastructure (e.g. DiffViewProvider.open)
+	 * after the original content has been read but before the file is mutated.
+	 * Pass `content === undefined` to indicate the file did not exist on disk.
+	 */
+	async captureOriginal(relPath: string, content: string | undefined): Promise<void> {
+		try {
+			const dirs = await this.getSnapshotDirs()
+			if (!dirs) return
+			const existing = await this.readSnapshot(dirs.originals, relPath)
+			if (existing) return
+			await this.writeSnapshot(dirs.originals, relPath, this.buildSnapshotFromContent(content))
+		} catch (err) {
+			console.error(`[FileContextTracker] captureOriginal failed for ${relPath}:`, err)
+		}
+	}
+
+	/**
+	 * Captures the file's current on-disk content as the latest "final" state
+	 * produced by Roo. Overwrites any prior final snapshot. Used to power Redo
+	 * after a per-file Revert.
+	 */
+	async captureFinal(relPath: string): Promise<void> {
+		try {
+			const dirs = await this.getSnapshotDirs()
+			if (!dirs) return
+			const cwd = this.getCwd()
+			if (!cwd) return
+			const abs = path.resolve(cwd, relPath)
+			let content: string | undefined
+			try {
+				content = await fs.readFile(abs, "utf8")
+			} catch {
+				content = undefined
+			}
+			await this.writeSnapshot(dirs.finals, relPath, this.buildSnapshotFromContent(content))
+		} catch (err) {
+			console.error(`[FileContextTracker] captureFinal failed for ${relPath}:`, err)
+		}
+	}
+
+	async getOriginalSnapshot(relPath: string): Promise<FileSnapshot | undefined> {
+		const dirs = await this.getSnapshotDirs()
+		if (!dirs) return undefined
+		return this.readSnapshot(dirs.originals, relPath)
+	}
+
+	async getFinalSnapshot(relPath: string): Promise<FileSnapshot | undefined> {
+		const dirs = await this.getSnapshotDirs()
+		if (!dirs) return undefined
+		return this.readSnapshot(dirs.finals, relPath)
 	}
 
 	// Disposes all file watchers
