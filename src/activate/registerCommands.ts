@@ -103,10 +103,11 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 			)
 		}
 
-		// Sticky-mode: a fresh "new task" surface starts in the default mode
-		// (typically "code"), regardless of which mode the previously focused
-		// task was using. The popped task keeps its own mode persisted on its
-		// `_taskMode` and in the history item, so it's restored on refocus.
+		// Sticky-mode: a fresh "new task" surface starts in the upstream
+		// default mode (`defaultModeSlug`, currently "architect"), regardless
+		// of which mode the previously focused task was using. The popped
+		// task keeps its own mode persisted on its `_taskMode` and in the
+		// history item, so it's restored on refocus.
 		await visibleProvider.handleModeSwitch(defaultModeSlug)
 
 		await visibleProvider.refreshWorkspace()

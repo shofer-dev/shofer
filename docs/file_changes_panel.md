@@ -264,3 +264,56 @@ The split is deliberate: keys consumed by the webview live in `chat.json`;
 keys consumed by host code (modal dialogs, toasts shown by
 `webviewMessageHandler.ts`) live in `common.json` because the host
 i18next instance loads the `common` namespace, not `chat`.
+
+## TODO / Future work
+
+### Patch-style Redo that preserves user edits made after Revert
+
+Today both Revert and Redo are **deterministic whole-file overwrites**:
+Revert writes the `original` snapshot to disk; Redo writes the `final`
+snapshot to disk. There is no 3-way merge and no patch-hunk replay. The
+symmetry is intentional — it makes both operations predictable, eliminates
+merge-conflict UX, and guarantees that Redo reproduces exactly the state
+the panel was advertising.
+
+The cost: if the user reverts a Roo change, then manually edits the same
+file (e.g. prepends a line), then clicks Redo, the manual edits are
+silently lost — Redo overwrites the file with `final` byte-for-byte.
+
+Two improvements worth doing, in increasing order of effort:
+
+1. **Cheap win — symmetric user-edits guard on Redo.** Revert already
+   shows a modal warning when disk content differs from `final` ("you
+   have edits Roo doesn't know about, continue?"). Add the analogous
+   guard to Redo: when disk content differs from `original`, show a
+   modal "Redo will overwrite your manual edits, continue?". This makes
+   the data-loss explicit without changing the underlying mechanism.
+   Implementation: mirror the `userEdited` check in the
+   `changedFiles/redo` handler in `webviewMessageHandler.ts`, comparing
+   current disk against `getOriginalContent(task, relPath)`.
+
+2. **Real fix — patch-style Redo via 3-way merge.** Store (or
+   reconstruct on demand) the diff `final - original` and re-apply it
+   to current disk with `git apply --3way`. On clean apply the user's
+   pre-existing edits survive; on conflict, surface conflict markers
+   and let the user resolve in the editor (or fall back to the current
+   overwrite behaviour with explicit confirmation).
+   Implementation sketch:
+
+    - Compute the patch from the two snapshots at Redo time
+      (`diff -u original final` via `simple-git` or a JS diff lib).
+    - Write the patch to a temp file, run `git apply --3way` against
+      the workspace path. The shadow git is not involved — this is a
+      pure working-tree operation, so it works regardless of which
+      backend produced the entry.
+    - On success: emit a `changedFiles/update` push as today.
+    - On conflict: leave the conflict-marked file in place, raise an
+      info notification pointing the user at it, and keep the entry in
+      `state: "reverted"` so they can re-try after resolving.
+
+    Symmetry note: Revert could be upgraded the same way (apply the
+    inverse patch to preserve user additions made on top of Roo's
+    change), but the current "warn + overwrite" flow is already
+    tolerable there because the typical mental model of Revert is
+    "throw away Roo's work entirely." Redo's mental model — "put back
+    what I just undid" — is much more sensitive to collateral loss.
