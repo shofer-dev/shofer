@@ -1771,12 +1771,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// user-visible send order. Use `prependMessage` to put it back at the FRONT.
 		if (!this.isAwaitingAskResponse && !this.abort && !this.abandoned) {
 			if (askResponse === "messageResponse" && (text || (images && images.length > 0))) {
-				this.diagLog(
-					`[DIAG handleWebviewAskResponse] no ask awaiting; re-prepending messageResponse: text=${text?.substring(0, 100)}`,
-				)
 				this.messageQueueService.prependMessage(text ?? "", images)
-			} else {
-				this.diagLog(`[DIAG handleWebviewAskResponse] no ask awaiting; ignoring askResponse=${askResponse}`)
 			}
 			return
 		}
