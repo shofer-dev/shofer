@@ -2430,10 +2430,6 @@ export class ClineProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
-		this.log(
-			`[DIAG getStateToPostToWebview] currentTaskId=${currentTask?.taskId}.${currentTask?.instanceId} queueSize=${currentTask?.messageQueueService?.messages?.length ?? 0} queue=[${(currentTask?.messageQueueService?.messages ?? []).map((m) => `"${m.text?.substring(0, 20)}"`).join(", ")}] stackDepth=${this.clineStack.length} stackIds=[${this.clineStack.map((t) => `${t.taskId}.${t.instanceId}`).join(", ")}]`,
-		)
-
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
 			apiConfiguration,
@@ -3698,10 +3694,6 @@ export class ClineProvider
 				return
 			}
 
-			this.log(
-				`[DIAG focusTask] switching focus: from=${currentTask?.taskId}.${currentTask?.instanceId} fromQueueSize=${currentTask?.messageQueueService.messages.length} fromQueue=[${currentTask?.messageQueueService.messages.map((m) => `"${m.text?.substring(0, 20)}"`).join(", ")}] -> to=${taskId}`,
-			)
-
 			// Check if we have a live Task instance for this task
 			const liveTask = this.taskManager.getManagedTaskInstance(taskId)
 			const isTaskAlive = liveTask && !liveTask.abandoned && !liveTask.abort
@@ -3723,17 +3715,11 @@ export class ClineProvider
 					// Replace in stack
 					this.clineStack[stackIndex] = liveTask
 					liveTask.emit(RooCodeEventName.TaskFocused)
-					this.log(
-						`[DIAG focusTask] live-swap: newTaskId=${liveTask.taskId}.${liveTask.instanceId} newQueueSize=${liveTask.messageQueueService.messages.length} newQueue=[${liveTask.messageQueueService.messages.map((m) => `"${m.text?.substring(0, 20)}"`).join(", ")}]`,
-					)
 					// Post state update
 					await this.postStateToWebview()
 				} else {
 					// Stack is empty — just push the task
 					await this.addClineToStack(liveTask)
-					this.log(
-						`[DIAG focusTask] live-push: newTaskId=${liveTask.taskId}.${liveTask.instanceId} newQueueSize=${liveTask.messageQueueService.messages.length}`,
-					)
 					await this.postStateToWebview()
 				}
 			} else {
