@@ -43,6 +43,7 @@ import ChatRow from "./ChatRow"
 import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
+import { TaskSelector } from "./TaskSelector"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -1943,37 +1944,44 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					)}
 				</>
 			) : (
-				<div className="flex flex-col h-full justify-center p-6 min-h-0 overflow-y-auto gap-4 relative">
-					<div className="flex flex-col items-start gap-2 justify-center h-full min-[400px]:px-6">
-						<VersionIndicator
-							onClick={() => setShowAnnouncementModal(true)}
-							className="absolute top-2 right-3 z-10"
-						/>
-						<div className="flex flex-col gap-4 w-full">
-							<RooHero />
-							{/* Show RooTips when authenticated or when user is new */}
-							{taskHistory.length < 6 && <RooTips />}
-							{/* Everyone should see their task history if any */}
-							{taskHistory.length > 0 && <HistoryPreview />}
+				<>
+					<div className="flex flex-col h-full justify-center p-6 min-h-0 overflow-y-auto gap-4 relative">
+						<div className="flex flex-col items-start gap-2 justify-center h-full min-[400px]:px-6">
+							<VersionIndicator
+								onClick={() => setShowAnnouncementModal(true)}
+								className="absolute top-2 right-3 z-10"
+							/>
+							<div className="flex flex-col gap-4 w-full">
+								<RooHero />
+								{/* Show RooTips when authenticated or when user is new */}
+								{taskHistory.length < 6 && <RooTips />}
+								{/* Everyone should see their task history if any */}
+								{taskHistory.length > 0 && <HistoryPreview />}
+							</div>
+							{/* Logged out users should see a one-time upsell, but not for brand new users */}
+							{!cloudIsAuthenticated && taskHistory.length >= 6 && (
+								<DismissibleUpsell
+									upsellId="taskList2"
+									icon={<Cloud className="size-5 shrink-0" />}
+									onClick={() => openUpsell()}
+									dismissOnClick={false}
+									className="bg-none mt-6 border-border rounded-xl p-3 !text-base">
+									<Trans
+										i18nKey="cloud:upsell.taskList"
+										components={{
+											learnMoreLink: <VSCodeLink href="#" />,
+										}}
+									/>
+								</DismissibleUpsell>
+							)}
 						</div>
-						{/* Logged out users should see a one-time upsell, but not for brand new users */}
-						{!cloudIsAuthenticated && taskHistory.length >= 6 && (
-							<DismissibleUpsell
-								upsellId="taskList2"
-								icon={<Cloud className="size-5 shrink-0" />}
-								onClick={() => openUpsell()}
-								dismissOnClick={false}
-								className="bg-none mt-6 border-border rounded-xl p-3 !text-base">
-								<Trans
-									i18nKey="cloud:upsell.taskList"
-									components={{
-										learnMoreLink: <VSCodeLink href="#" />,
-									}}
-								/>
-							</DismissibleUpsell>
-						)}
 					</div>
-				</div>
+					<TaskSelector
+						taskHistory={taskHistory || []}
+						parallelTasks={parallelTasks || []}
+						currentTaskId={currentTaskItem?.id}
+					/>
+				</>
 			)}
 
 			{!task && showWorktreesInHomeScreen && <WorktreeSelector />}
@@ -2017,7 +2025,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							</StandardTooltip>
 						)}
 					</div>
-					<FileChangesPanel clineMessages={messages} />
+					<FileChangesPanel taskId={currentTaskItem?.id} />
 					{areButtonsVisible && (
 						<div
 							className={`flex h-9 items-center mb-1 px-[15px] ${
