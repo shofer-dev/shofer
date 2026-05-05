@@ -379,6 +379,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	isInitialized = false
 	isPaused: boolean = false
 
+	/**
+	 * Soft-cancel marker for the "Send Now" flow.
+	 *
+	 * When the user clicks Send Now while the task is mid-stream, we want to
+	 * interrupt the current API request and immediately restart the loop with
+	 * the queued message — WITHOUT tearing down the task. The default abort
+	 * path (recursivelyMakeClineRequests catch block) calls `abortTask()` on
+	 * `this.abort === true`, which calls `dispose()`, which wipes the message
+	 * queue, removes the queue listener, and releases terminals. That would
+	 * silently delete the very message we are trying to send and leave the
+	 * webview with an orphan UI entry that cannot be dismissed.
+	 *
+	 * When this flag is set, callers that would otherwise fully abort the
+	 * task on `this.abort === true` should instead unwind cleanly so
+	 * `cancelAndProcessQueuedMessages()` can restart the loop.
+	 */
+	private _softCancelForQueuedMessage = false
+
 	// API
 	apiConfiguration: ProviderSettings
 	api: ApiHandler
@@ -1652,6 +1670,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		try {
 			await pWaitFor(
 				() => {
+					// Bail out as soon as the task is aborted (e.g. user clicked
+					// "Send Now" via cancelAndProcessQueuedMessages, or any other
+					// caller flipped this.abort). Without this check the loop
+					// would keep waiting indefinitely for a webview response that
+					// will never arrive, causing the Send-Now flow to hang on
+					// `await this._taskLoopPromise`.
+					if (this.abort) {
+						return true
+					}
+
 					if (this.askResponse !== undefined || this.lastMessageTs !== askTs) {
 						return true
 					}
@@ -1681,6 +1709,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			)
 		} finally {
 			this.isAwaitingAskResponse = false
+		}
+
+		// If pWaitFor returned because the task was aborted (rather than
+		// because the user actually responded), unwind the caller so any
+		// `_taskLoopPromise` awaiter (e.g. cancelAndProcessQueuedMessages)
+		// can proceed. We treat this the same as a superseded ask: a
+		// recoverable, expected control-flow exception.
+		if (this.abort && this.askResponse === undefined && this.lastMessageTs === askTs) {
+			throw new AskIgnoredError("aborted while awaiting ask response")
 		}
 
 		if (this.lastMessageTs !== askTs) {
@@ -1725,12 +1762,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// For messageResponse carrying text/images, route into the message queue so the
 		// next ask() (or cancelAndProcessQueuedMessages) drains it. Other response kinds
 		// (yes/no/objectResponse) are meaningless without a pending ask and are dropped.
+		//
+		// IMPORTANT (FIFO): A common cause of arriving here is `processQueuedMessages()`
+		// having JUST dequeued this message and then submitting it via `submitUserMessage()`
+		// — which lands here. If the surrounding state shifted in between (no ask awaiting
+		// at the moment of submission), naively re-enqueuing at the BACK would place this
+		// message after any messages that were queued in the same window, reversing the
+		// user-visible send order. Use `prependMessage` to put it back at the FRONT.
 		if (!this.isAwaitingAskResponse && !this.abort && !this.abandoned) {
 			if (askResponse === "messageResponse" && (text || (images && images.length > 0))) {
 				this.diagLog(
-					`[DIAG handleWebviewAskResponse] no ask awaiting; enqueuing messageResponse: text=${text?.substring(0, 100)}`,
+					`[DIAG handleWebviewAskResponse] no ask awaiting; re-prepending messageResponse: text=${text?.substring(0, 100)}`,
 				)
-				this.messageQueueService.addMessage(text ?? "", images)
+				this.messageQueueService.prependMessage(text ?? "", images)
 			} else {
 				this.diagLog(`[DIAG handleWebviewAskResponse] no ask awaiting; ignoring askResponse=${askResponse}`)
 			}
@@ -3816,6 +3860,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						await abortStream(cancelReason, streamingFailedMessage)
 
 						if (this.abort) {
+							// Soft-cancel path: the user clicked "Send Now" and we want to
+							// interrupt this request without disposing the task (which would
+							// wipe the message queue we are about to drain). Just unwind the
+							// loop; cancelAndProcessQueuedMessages will restart it.
+							if (this._softCancelForQueuedMessage) {
+								this.diagLog(
+									`[Task#${this.taskId}.${this.instanceId}] Soft-cancel during stream; skipping abortTask to allow queued message restart`,
+								)
+								break
+							}
 							// User cancelled - abort the entire task
 							this.abortReason = cancelReason
 							await this.abortTask()
@@ -5342,6 +5396,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public async cancelAndProcessQueuedMessages(): Promise<void> {
 		this.diagLog(`[Task#${this.taskId}.${this.instanceId}] cancelAndProcessQueuedMessages called`)
 
+		// Capture the next queued message BEFORE any abort plumbing runs.
+		// abortTask()/dispose() (which can fire on stream cancellation paths
+		// we don't fully control) wipes messageQueueService._messages — losing
+		// the very message we are about to send. The soft-cancel flag below
+		// is the primary defense, but capturing here makes the flow robust
+		// even if a future code path slips through.
+		const queued = this.messageQueueService.dequeueMessage()
+		if (!queued) {
+			this.diagLog(
+				`[Task#${this.taskId}.${this.instanceId}] cancelAndProcessQueuedMessages: queue is empty, nothing to do`,
+			)
+			return
+		}
+
+		// Mark soft-cancel so the streaming catch block in
+		// recursivelyMakeClineRequests does NOT call abortTask() (which would
+		// dispose this task and prevent us from restarting the loop).
+		this._softCancelForQueuedMessage = true
+
 		// Step 1: Cancel the current HTTP request if one is in progress
 		if (this.currentRequestAbortController) {
 			this.diagLog(`[Task] Cancelling current HTTP request`)
@@ -5387,21 +5460,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.interactiveAsk = undefined
 		this.emit(RooCodeEventName.TaskActive, this.taskId)
 
-		// Step 6: Process the queued messages (if any)
-		// Get the queued message but don't send via submitUserMessage - instead restart the task loop directly
-		const queued = this.messageQueueService.dequeueMessage()
-		if (queued) {
-			this.diagLog(`[Task] Restarting task loop with queued message: ${queued.text?.substring(0, 100)}`)
-			// Reset abort to allow the task loop to run
-			this.abort = false
-			// Replace the task-lifetime abort controller so the fresh run does
-			// not see the already-aborted signal from the cancellation above.
-			this._taskAbortController = new AbortController()
-			// Start a new task loop with the queued message
-			this._runTaskLoop([{ type: "text", text: queued.text }]).catch((err) => {
-				console.error(`[Task] Failed to restart task loop:`, err)
-			})
-		}
+		// Step 6: Restart the task loop with the captured queued message.
+		// We dequeued at the top of this method (before triggering abort) to
+		// guarantee we still hold the message even if any disposal path ran.
+		this.diagLog(`[Task] Restarting task loop with queued message: ${queued.text?.substring(0, 100)}`)
+		// Clear soft-cancel marker — the new run is a normal task loop again.
+		this._softCancelForQueuedMessage = false
+		// Reset abort to allow the task loop to run
+		this.abort = false
+		// Replace the task-lifetime abort controller so the fresh run does
+		// not see the already-aborted signal from the cancellation above.
+		this._taskAbortController = new AbortController()
+		// Start a new task loop with the queued message
+		this._runTaskLoop([{ type: "text", text: queued.text }]).catch((err) => {
+			console.error(`[Task] Failed to restart task loop:`, err)
+		})
 	}
 
 	/**

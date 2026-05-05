@@ -213,6 +213,63 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		inputValueRef.current = inputValue
 	}, [inputValue])
 
+	/**
+	 * Per-task draft preservation.
+	 *
+	 * The textarea's `inputValue` (and accompanying `selectedImages` /
+	 * `droppedContextFiles`) live as React state in this single ChatView
+	 * instance, which is reused across task switches. Without scoping, an
+	 * unsent draft typed for task A would visibly "follow" the user when they
+	 * switch to task B. We snapshot the draft per task id so each task keeps
+	 * its own pending input until it is actually sent.
+	 *
+	 * The map deliberately lives in a `useRef` (not state) — we don't need to
+	 * re-render when other tasks' drafts change, only when we restore on a
+	 * focus switch.
+	 */
+	const taskDraftsRef = useRef<
+		Map<
+			string,
+			{
+				inputValue: string
+				selectedImages: string[]
+				droppedContextFiles: Array<{ path: string; isFile: boolean }>
+			}
+		>
+	>(new Map())
+	const previousTaskIdRef = useRef<string | undefined>(currentTaskItem?.id)
+	useEffect(() => {
+		const newTaskId = currentTaskItem?.id
+		const prevTaskId = previousTaskIdRef.current
+
+		if (newTaskId === prevTaskId) {
+			return
+		}
+
+		// Save the draft of the task we're leaving (if any).
+		if (prevTaskId) {
+			taskDraftsRef.current.set(prevTaskId, {
+				inputValue: inputValueRef.current,
+				selectedImages,
+				droppedContextFiles,
+			})
+		}
+
+		// Restore the draft of the task we're switching into (or clear if none).
+		const restored = newTaskId ? taskDraftsRef.current.get(newTaskId) : undefined
+		setInputValue(restored?.inputValue ?? "")
+		setSelectedImages(restored?.selectedImages ?? [])
+		setDroppedContextFiles(restored?.droppedContextFiles ?? [])
+
+		previousTaskIdRef.current = newTaskId
+		// We intentionally exclude selectedImages / droppedContextFiles from deps:
+		// they are read via closure at the moment of the switch (their latest
+		// values are what we want to snapshot for the OUTGOING task), and we
+		// only want this effect to fire on task-id changes — not on every
+		// keystroke or image add.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [currentTaskItem?.id])
+
 	// Compute whether auto-approval is paused (user is typing in a followup)
 	const isFollowUpAutoApprovalPaused = useMemo(() => {
 		return !!(inputValue && inputValue.trim().length > 0 && clineAsk === "followup")
@@ -658,6 +715,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// Reset user response flag for new message
 		userRespondedRef.current = false
 
+		// Snapshot the unsent draft for the OUTGOING task before we wipe the
+		// textarea state. The task-id-change effect cannot do this on its own,
+		// because the "newChat" invoke that triggers a reset can race ahead of
+		// the state push that flips currentTaskItem.id, and by the time the
+		// effect runs, inputValue is already "".
+		const outgoingTaskId = previousTaskIdRef.current
+		if (outgoingTaskId) {
+			const draftText = inputValueRef.current
+			if (draftText || selectedImages.length > 0 || droppedContextFiles.length > 0) {
+				taskDraftsRef.current.set(outgoingTaskId, {
+					inputValue: draftText,
+					selectedImages,
+					droppedContextFiles,
+				})
+			} else {
+				// No draft worth keeping — drop any stale entry.
+				taskDraftsRef.current.delete(outgoingTaskId)
+			}
+		}
+
 		// Only reset message-specific state, preserving mode.
 		setInputValue("")
 		setSendingDisabled(true)
@@ -668,7 +745,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// Do not reset mode here as it should persist.
 		// setPrimaryButtonText(undefined)
 		// setSecondaryButtonText(undefined)
-	}, [])
+	}, [selectedImages, droppedContextFiles])
 
 	/**
 	 * Remove a single file from the dropped-context list.

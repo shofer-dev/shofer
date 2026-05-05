@@ -46,6 +46,38 @@ export class MessageQueueService extends EventEmitter<QueueEvents> {
 		}
 
 		this._messages.push(message)
+		console.log(
+			`[DIAG MessageQueue] addMessage: id=${message.id} text="${text?.substring(0, 80)}" newSize=${this._messages.length} order=[${this._messages.map((m) => `"${m.text?.substring(0, 20)}"`).join(", ")}]`,
+		)
+		this.emit("stateChanged", this._messages)
+
+		return message
+	}
+
+	/**
+	 * Re-insert a message at the FRONT of the queue.
+	 *
+	 * Used when a message that was just dequeued must be put back (e.g. the
+	 * downstream consumer discovered it had no awaiting ask to consume it).
+	 * Appending via addMessage() would place the message AFTER any messages
+	 * that arrived while we were trying to deliver it, violating FIFO order.
+	 */
+	public prependMessage(text: string, images?: string[]): QueuedMessage | undefined {
+		if (!text && !images?.length) {
+			return undefined
+		}
+
+		const message: QueuedMessage = {
+			timestamp: Date.now(),
+			id: uuidv4(),
+			text,
+			images,
+		}
+
+		this._messages.unshift(message)
+		console.log(
+			`[DIAG MessageQueue] prependMessage: id=${message.id} text="${text?.substring(0, 80)}" newSize=${this._messages.length} order=[${this._messages.map((m) => `"${m.text?.substring(0, 20)}"`).join(", ")}]`,
+		)
 		this.emit("stateChanged", this._messages)
 
 		return message
@@ -79,6 +111,9 @@ export class MessageQueueService extends EventEmitter<QueueEvents> {
 
 	public dequeueMessage(): QueuedMessage | undefined {
 		const message = this._messages.shift()
+		console.log(
+			`[DIAG MessageQueue] dequeueMessage: id=${message?.id} text="${message?.text?.substring(0, 80)}" remaining=${this._messages.length} order=[${this._messages.map((m) => `"${m.text?.substring(0, 20)}"`).join(", ")}]`,
+		)
 		this.emit("stateChanged", this._messages)
 		return message
 	}
