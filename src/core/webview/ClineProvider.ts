@@ -1555,6 +1555,31 @@ export class ClineProvider
 	}
 
 	/**
+	 * Sticky per-task mode restore. Updates the global `mode` state to match
+	 * the focused task's `_taskMode` (set on construction from the history item
+	 * or `defaultModeSlug`, and kept in sync by `handleModeSwitch`).
+	 *
+	 * Called from `focusTask` when swapping a live Task into the stack — without
+	 * this, switching focus would leave the mode picker showing whatever the
+	 * previously focused task last selected. The history-rehydration path
+	 * (`showTaskWithId`) already restores mode itself, so we don't call this
+	 * there.
+	 */
+	private async restoreTaskMode(task: Task): Promise<void> {
+		try {
+			const taskMode = await task.getTaskMode()
+			if (this.getGlobalState("mode") !== taskMode) {
+				await this.updateGlobalState("mode", taskMode)
+				this.emit(RooCodeEventName.ModeChanged, taskMode as Mode)
+			}
+		} catch (error) {
+			this.log(
+				`[restoreTaskMode] Failed to restore mode for task ${task.taskId}: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	/**
 	 * Handle switching to a new mode, including updating the associated API configuration
 	 * @param newMode The mode to switch to
 	 */
@@ -3761,11 +3786,18 @@ export class ClineProvider
 					// Replace in stack
 					this.clineStack[stackIndex] = liveTask
 					liveTask.emit(RooCodeEventName.TaskFocused)
+					// Sticky-mode: restore the focused task's mode as the active provider
+					// mode so the mode picker in the UI reflects what this task was last
+					// using. The mode is stored per-task on `_taskMode`; new tasks
+					// initialize it from `defaultModeSlug`, switches via
+					// `handleModeSwitch` keep it in sync.
+					await this.restoreTaskMode(liveTask)
 					// Post state update
 					await this.postStateToWebview()
 				} else {
 					// Stack is empty — just push the task
 					await this.addClineToStack(liveTask)
+					await this.restoreTaskMode(liveTask)
 					await this.postStateToWebview()
 				}
 			} else {

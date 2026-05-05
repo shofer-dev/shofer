@@ -13,6 +13,7 @@ import { handleNewTask } from "./handleTask"
 import { CodeIndexManager } from "../services/code-index/manager"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 import { MdmService } from "../services/mdm/MdmService"
+import { defaultModeSlug } from "../shared/modes"
 import { t } from "../i18n"
 
 /**
@@ -101,6 +102,12 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 				`[plusButtonClicked] Task ${poppedTask.taskId} moved to background (parallel execution)`,
 			)
 		}
+
+		// Sticky-mode: a fresh "new task" surface starts in the default mode
+		// (typically "code"), regardless of which mode the previously focused
+		// task was using. The popped task keeps its own mode persisted on its
+		// `_taskMode` and in the history item, so it's restored on refocus.
+		await visibleProvider.handleModeSwitch(defaultModeSlug)
 
 		await visibleProvider.refreshWorkspace()
 		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
