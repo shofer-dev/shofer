@@ -102,6 +102,9 @@ export const toolParamNames = [
 	"pattern",
 	// sleep parameter
 	"seconds",
+	// file tool parameters (rm/mv)
+	"subcommand",
+	"destination",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -154,6 +157,7 @@ export type NativeToolArgs = {
 	// New native tools (ported from workspace-tools)
 	create_directory: { path: string }
 	create_new_workspace: { path: string; name: string; folders?: string[] | null; openInNewWindow?: boolean | null }
+	file: { subcommand: "rm" | "mv"; path: string; destination?: string; recursive?: boolean | null }
 	fetch_web_page: { urls: string[]; query?: string | null }
 	find_files: { pattern: string; maxResults?: number }
 	get_changed_files: Record<string, never>

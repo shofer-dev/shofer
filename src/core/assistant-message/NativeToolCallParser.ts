@@ -718,6 +718,17 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "file":
+				if (partialArgs.subcommand !== undefined || partialArgs.path !== undefined) {
+					nativeArgs = {
+						subcommand: partialArgs.subcommand,
+						path: partialArgs.path,
+						destination: partialArgs.destination,
+						recursive: this.coerceOptionalBoolean(partialArgs.recursive),
+					}
+				}
+				break
+
 			case "fetch_web_page":
 				if (partialArgs.urls !== undefined) {
 					nativeArgs = {
@@ -1248,6 +1259,17 @@ export class NativeToolCallParser {
 							name: args.name,
 							folders: args.folders,
 							openInNewWindow: this.coerceOptionalBoolean(args.openInNewWindow),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "file":
+					if (args.subcommand !== undefined && args.path !== undefined) {
+						nativeArgs = {
+							subcommand: args.subcommand,
+							path: args.path,
+							destination: args.destination,
+							recursive: this.coerceOptionalBoolean(args.recursive),
 						} as NativeArgsFor<TName>
 					}
 					break

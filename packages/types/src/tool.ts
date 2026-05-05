@@ -73,6 +73,7 @@ export const toolNames = [
 	// New native tools (ported from workspace-tools)
 	"create_directory",
 	"create_new_workspace",
+	"file",
 	"fetch_web_page",
 	"find_files",
 	"get_errors",
@@ -140,6 +141,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	// New native tools (ported from workspace-tools)
 	create_directory: "create directories",
 	create_new_workspace: "create workspaces",
+	file: "manage files (rm/mv)",
 	fetch_web_page: "fetch web pages",
 	find_files: "find files by pattern",
 	get_changed_files: "list files changed by Roo",
@@ -193,6 +195,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"rename_symbol",
 			"create_directory",
 			"create_new_workspace",
+			"file",
 		],
 		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
 	},

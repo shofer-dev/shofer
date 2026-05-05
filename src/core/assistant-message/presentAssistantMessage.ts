@@ -44,6 +44,7 @@ import { codebaseSearchWithLspTool } from "../tools/CodebaseSearchWithLspTool"
 import { createDirectoryTool } from "../tools/CreateDirectoryTool"
 import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool"
 import { fetchWebPageTool } from "../tools/FetchWebPageTool"
+import { fileTool } from "../tools/FileTool"
 import { findFilesTool } from "../tools/FindFilesTool"
 import { getChangedFilesTool } from "../tools/GetChangedFilesTool"
 import { getErrorsTool } from "../tools/GetErrorsTool"
@@ -449,6 +450,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.path}']`
 					case "create_new_workspace":
 						return `[${block.name} for '${block.params.path}']`
+					case "file":
+						return `[${block.name} ${block.params.subcommand ?? "?"} '${block.params.path}'${block.params.destination ? ` -> '${block.params.destination}'` : ""}]`
 					case "find_files":
 						return `[${block.name} for '${block.params.pattern}']`
 					case "view_image":
@@ -997,6 +1000,14 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "create_new_workspace":
 					await createNewWorkspaceTool.handle(cline, block as ToolUse<"create_new_workspace">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "file":
+					await checkpointSaveAndMark(cline)
+					await fileTool.handle(cline, block as ToolUse<"file">, {
 						askApproval,
 						handleError,
 						pushToolResult,
