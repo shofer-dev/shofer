@@ -34,6 +34,21 @@
 	"fileChangesInConversation": {
 		"header": "{{count}} file(s) changed in this conversation"
 	},
+	"fileChanges": {
+		"limitedMode": "limited mode",
+		"limitedModeTooltip": "Checkpoints unavailable; revert/diff use per-task snapshots and may not detect renames or binary files.",
+		"diffUnavailable": "Original content not available for this file.",
+		"revert": "Revert",
+		"redo": "Redo",
+		"accept": "Accept",
+		"acceptAll": "Accept all",
+		"revertAll": "Revert all",
+		"revertConfirmUserEdits": "{{path}} appears to have been modified outside of Roo. Reverting will discard those changes. Continue?",
+		"revertConfirmYes": "Revert",
+		"revertAllConfirm": "Revert ALL files Roo edited in this task back to their state at task start? This cannot be undone.",
+		"blockedTaskRunning": "Cannot modify files while Roo is running. Pause or cancel the task first.",
+		"reviewedSection": "Reviewed ({{count}})"
+	},
 	"retry": {
 		"title": "Retry",
 		"tooltip": "Try the operation again"

@@ -1392,6 +1392,117 @@ export const webviewMessageHandler = async (
 		case "cancelTask":
 			await provider.cancelTask()
 			break
+		case "changedFiles/get": {
+			await provider.pushChangedFilesUpdate()
+			break
+		}
+		case "changedFiles/showDiff": {
+			const relPath = message.text || ""
+			if (!relPath) break
+			const task = provider.getCurrentTask()
+			if (!task) break
+			try {
+				const { getOriginalContent } = await import("../file-changes/ChangedFilesService")
+				const original = (await getOriginalContent(task, relPath)) ?? ""
+				const cwd = getCurrentCwd()
+				if (!cwd) break
+				const absPath = path.resolve(cwd, relPath)
+				if (isPathOutsideWorkspace(absPath)) break
+				const leftUri = vscode.Uri.parse(
+					`roo-original:/${encodeURIComponent(relPath)}?${Buffer.from(original, "utf8").toString("base64")}`,
+				)
+				const rightUri = vscode.Uri.file(absPath)
+				const title = `${path.basename(relPath)} (Roo changes)`
+				await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title)
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err)
+				vscode.window.showErrorMessage(`Failed to open Roo diff: ${errorMsg}`)
+			}
+			break
+		}
+		case "changedFiles/revert": {
+			const relPath = message.text || ""
+			if (!relPath) break
+			const task = provider.getCurrentTask()
+			if (!task) break
+			if (task.isStreaming) {
+				vscode.window.showWarningMessage(t("chat:fileChanges.blockedTaskRunning"))
+				break
+			}
+			try {
+				const { restoreFile, getFinalContent } = await import("../file-changes/ChangedFilesService")
+				// If the file on disk diverges from the last captured "final"
+				// state, the user has manual edits we'd be discarding.
+				const finalContent = await getFinalContent(task, relPath)
+				let userEdited = false
+				try {
+					const cwd = getCurrentCwd()
+					if (cwd) {
+						const current = await fs.readFile(path.resolve(cwd, relPath), "utf-8")
+						userEdited = finalContent !== null && current !== finalContent
+					}
+				} catch {
+					// File missing on disk while final exists -> treat as user edit.
+					userEdited = finalContent !== null
+				}
+				if (userEdited) {
+					const choice = await vscode.window.showWarningMessage(
+						t("chat:fileChanges.revertConfirmUserEdits", { path: relPath }),
+						{ modal: true },
+						t("chat:fileChanges.revertConfirmYes"),
+					)
+					if (choice !== t("chat:fileChanges.revertConfirmYes")) break
+				}
+				await restoreFile(task, relPath)
+				await provider.pushChangedFilesUpdate()
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err)
+				vscode.window.showErrorMessage(`Revert failed: ${errorMsg}`)
+			}
+			break
+		}
+		case "changedFiles/revertAll": {
+			const task = provider.getCurrentTask()
+			if (!task) break
+			if (task.isStreaming) {
+				vscode.window.showWarningMessage(t("chat:fileChanges.blockedTaskRunning"))
+				break
+			}
+			const choice = await vscode.window.showWarningMessage(
+				t("chat:fileChanges.revertAllConfirm"),
+				{ modal: true },
+				t("chat:fileChanges.revertConfirmYes"),
+			)
+			if (choice !== t("chat:fileChanges.revertConfirmYes")) break
+			try {
+				const { restoreAll } = await import("../file-changes/ChangedFilesService")
+				await restoreAll(task)
+				await provider.pushChangedFilesUpdate()
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err)
+				vscode.window.showErrorMessage(`Revert all failed: ${errorMsg}`)
+			}
+			break
+		}
+		case "changedFiles/redo": {
+			const relPath = message.text || ""
+			if (!relPath) break
+			const task = provider.getCurrentTask()
+			if (!task) break
+			if (task.isStreaming) {
+				vscode.window.showWarningMessage(t("chat:fileChanges.blockedTaskRunning"))
+				break
+			}
+			try {
+				const { redoFile } = await import("../file-changes/ChangedFilesService")
+				await redoFile(task, relPath)
+				await provider.pushChangedFilesUpdate()
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err)
+				vscode.window.showErrorMessage(`Redo failed: ${errorMsg}`)
+			}
+			break
+		}
 		case "cancelAutoApproval":
 			// Cancel any pending auto-approval timeout for the current task
 			provider.getCurrentTask()?.cancelAutoApprovalTimeout()

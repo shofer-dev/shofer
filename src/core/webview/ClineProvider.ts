@@ -1313,6 +1313,52 @@ export class ClineProvider
 		}
 	}
 
+	// ------------------------------------------------------------------
+	// FileChangesPanel push notifications.
+	//
+	// Every Roo edit triggers a debounced refresh of the
+	// `changedFiles/update` payload to the webview. This is the only push
+	// channel; the webview can also pull on demand via `changedFiles/get`.
+	// ------------------------------------------------------------------
+
+	private changedFilesPushTimer?: NodeJS.Timeout
+	private changedFilesPushPendingTaskId?: string
+	private static readonly CHANGED_FILES_PUSH_DEBOUNCE_MS = 500
+
+	/**
+	 * Schedules a debounced push of the unified ChangedFiles payload for the
+	 * given task. Called by FileContextTracker after each `roo_edited`. Safe
+	 * to call frequently — coalesces into one push per debounce window.
+	 */
+	public scheduleChangedFilesUpdate(taskId: string): void {
+		this.changedFilesPushPendingTaskId = taskId
+		if (this.changedFilesPushTimer) clearTimeout(this.changedFilesPushTimer)
+		this.changedFilesPushTimer = setTimeout(() => {
+			this.changedFilesPushTimer = undefined
+			void this.pushChangedFilesUpdate(this.changedFilesPushPendingTaskId)
+		}, ClineProvider.CHANGED_FILES_PUSH_DEBOUNCE_MS)
+	}
+
+	/**
+	 * Computes and pushes the ChangedFiles payload immediately. Used by the
+	 * debounced scheduler and by IPC handlers (e.g. after revert/redo).
+	 */
+	public async pushChangedFilesUpdate(taskId?: string): Promise<void> {
+		const task = this.getCurrentTask()
+		if (!task) return
+		// If the caller specified a taskId for which the update was queued,
+		// drop it when the current foreground task has changed (we don't want
+		// to surface a stale background-task panel).
+		if (taskId && task.taskId !== taskId) return
+		try {
+			const { getChangedFiles } = await import("../file-changes/ChangedFilesService")
+			const payload = await getChangedFiles(task)
+			await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
+		} catch (err) {
+			this.log(`[ClineProvider#pushChangedFilesUpdate] failed: ${err}`)
+		}
+	}
+
 	private async getHMRHtmlContent(webview: vscode.Webview): Promise<string> {
 		let localPort = "5173"
 
