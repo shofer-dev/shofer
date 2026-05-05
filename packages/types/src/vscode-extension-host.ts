@@ -907,7 +907,12 @@ export interface ClineSayTool {
 		| "renameSymbol"
 		| "setTaskTitle"
 		| "insertEdit"
+		| "fileOp"
 	path?: string
+	/** For `fileOp`: the rm/mv subcommand. */
+	fileOp?: "rm" | "mv"
+	/** For `fileOp` mv: destination path relative to workspace. */
+	destination?: string
 	// For readCommandOutput
 	readStart?: number
 	readEnd?: number

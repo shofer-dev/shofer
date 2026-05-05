@@ -42,6 +42,7 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | `write_to_file`        | 🔵 RC  | write |        –         |   ✅   | Create or overwrite a file                     |
 | `apply_diff`           | 🔵 RC  | write |        –         |   ✅   | Apply precise targeted modifications           |
 | `create_directory`     | 🆕 WS  | write |        –         |   ✅   | Create directory (mkdir -p)                    |
+| `file`                 | 🟣 AW  | write |        –         |   ✅   | Filesystem ops (rm/mv) tracked as Roo edits    |
 | `insert_edit`          | 🆕 WS  | write |        –         |   ✅   | Insert text at a specific line:column position |
 | `list_files`           | 🔵 RC  | read  |        –         |   ✅   | List files and directories at a path           |
 | `create_new_workspace` | 🆕 WS  | write |        –         |   ✅   | Create new workspace directory structure       |
@@ -81,6 +82,24 @@ Creates a directory including parent directories (mkdir -p).
 | Param  | Type   | Required | Description                          |
 | ------ | ------ | :------: | ------------------------------------ |
 | `path` | string |    ✅    | Directory path relative to workspace |
+
+### `file`
+
+Filesystem operations on workspace files. Use this instead of `execute_command` with `rm`/`mv` so the operation is captured in the FileChangesPanel and is reversible via per-file Revert/Redo.
+
+Subcommands:
+
+- `rm`: Delete a file (or directory tree when `recursive=true`).
+- `mv`: Move/rename a single file. Destination must not already exist.
+
+| Param         | Type             | Required | Description                                             |
+| ------------- | ---------------- | :------: | ------------------------------------------------------- |
+| `subcommand`  | `"rm"` \| `"mv"` |    ✅    | Operation to perform                                    |
+| `path`        | string           |    ✅    | Source path relative to workspace                       |
+| `destination` | string \| null   |    ✅    | Destination path for `mv` (required when `mv`)          |
+| `recursive`   | boolean \| null  |    ✅    | For `rm`: recursive directory delete (default: `false`) |
+
+Both endpoints of an `mv` are recorded in `FileContextTracker` as `roo_edited`, so the panel shows the source as deleted (revertable) and the destination as created (revertable).
 
 ### `insert_edit`
 

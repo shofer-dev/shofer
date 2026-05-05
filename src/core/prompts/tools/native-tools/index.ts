@@ -11,6 +11,7 @@ import createNewWorkspace from "./create_new_workspace"
 import editTool from "./edit"
 import executeCommand from "./execute_command"
 import fetchWebPage from "./fetch_web_page"
+import fileTool from "./file"
 import findFiles from "./find_files"
 import generateImage from "./generate_image"
 import getChangedFiles from "./get_changed_files"
@@ -78,6 +79,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		createNewWorkspace,
 		executeCommand,
 		fetchWebPage,
+		fileTool,
 		findFiles,
 		generateImage,
 		getChangedFiles,
