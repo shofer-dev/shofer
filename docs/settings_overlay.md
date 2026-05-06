@@ -2,13 +2,136 @@
 
 ## Overview
 
-Roo-Code stores mode configurations, custom instructions, and tool visibility/auto-approval settings across multiple layers, merged at runtime with a specific precedence order. This document explains the source of truth (SoT), storage locations, and merge logic.
+Roo-Code stores configuration across **three distinct categories**, each with its own storage backend, merge strategy, and scope. This document explains all storage layers, how they merge at runtime, and the import/export mechanics.
 
 ---
 
-## Storage Layers
+## Config Types at a Glance
 
-### 1. `.roomodes` — Project-level overrides
+| Category                 | Backend                                                         | Scope                        | Merge Priority                               |
+| ------------------------ | --------------------------------------------------------------- | ---------------------------- | -------------------------------------------- |
+| **API Provider Configs** | VS Code `SecretStorage` + `globalState`                         | Per-extension (machine-wide) | Profile IDs resolve per-mode                 |
+| **Mode Definitions**     | `.roomodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | `.roomodes` > `custom_modes.yaml` > built-in |
+| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                 | Per-extension (machine-wide) | Single file; no overlay                      |
+| **Global Settings**      | VS Code `globalState` (SQLite-backed)                           | Per-extension (machine-wide) | Flat key-value; no overlay                   |
+
+---
+
+## 1. API Provider Configuration Storage
+
+API provider configurations (profiles, keys, models, base URLs) are stored across
+**two VS Code extension APIs**, managed primarily by
+[`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts:57) and
+[`ContextProxy`](../src/core/config/ContextProxy.ts:40).
+
+### 1a. Provider Profiles — VS Code `SecretStorage`
+
+**Managed by:** [`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts:57)
+
+**Storage key:** `roo_cline_config_api_config` (constructed at
+[`ProviderSettingsManager.ts:576`](../src/core/config/ProviderSettingsManager.ts:576))
+
+This is the **source of truth** for all provider/API configuration profiles. It stores a
+single JSON blob in VS Code's secure credential store with this schema:
+
+```typescript
+{
+  currentApiConfigName: string,              // e.g. "default" or "my-anthropic-profile"
+  apiConfigs: {                              // all profiles keyed by name
+    "default": { id: "...", apiProvider: "anthropic", apiModelId: "...", apiKey: "sk-...", ... },
+    "my-profile": { id: "...", apiProvider: "openai", apiModelId: "gpt-5", apiKey: "sk-...", ... },
+  },
+  modeApiConfigs: {                          // per-mode profile assignments (by profile ID)
+    "code": "<profile-id>",
+    "architect": "<profile-id>",
+    ...
+  },
+  cloudProfileIds: ["..."],                 // IDs synced from Roo Code Cloud
+  migrations: { ... }                       // migration tracking flags
+}
+```
+
+Write/read methods: [`store()`](../src/core/config/ProviderSettingsManager.ts:669) /
+[`load()`](../src/core/config/ProviderSettingsManager.ts:580).
+
+### 1b. Individual API Keys — VS Code `SecretStorage`
+
+**Managed by:** [`ContextProxy`](../src/core/config/ContextProxy.ts:40)
+
+Each provider's API key is stored as a **separate** entry in VS Code's `SecretStorage`.
+The full list of secret keys is defined in
+[`SECRET_STATE_KEYS`](../packages/types/src/global-settings.ts:262):
+
+| Key                                                                                                                                                                                           | Provider                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `apiKey`                                                                                                                                                                                      | Generic / Anthropic              |
+| `openRouterApiKey`                                                                                                                                                                            | OpenRouter                       |
+| `openAiApiKey`                                                                                                                                                                                | OpenAI (compatible)              |
+| `openAiNativeApiKey`                                                                                                                                                                          | OpenAI (native Responses API)    |
+| `geminiApiKey`                                                                                                                                                                                | Google Gemini                    |
+| `deepSeekApiKey`                                                                                                                                                                              | DeepSeek                         |
+| `mistralApiKey`                                                                                                                                                                               | Mistral                          |
+| `xaiApiKey`                                                                                                                                                                                   | xAI / Grok                       |
+| `moonshotApiKey`                                                                                                                                                                              | Moonshot                         |
+| `minimaxApiKey`                                                                                                                                                                               | MiniMax                          |
+| `zaiApiKey`                                                                                                                                                                                   | Z.AI                             |
+| `fireworksApiKey`                                                                                                                                                                             | Fireworks                        |
+| `basetenApiKey`                                                                                                                                                                               | Baseten                          |
+| `sambaNovaApiKey`                                                                                                                                                                             | SambaNova                        |
+| `vercelAiGatewayApiKey`                                                                                                                                                                       | Vercel AI Gateway                |
+| `requestyApiKey`                                                                                                                                                                              | Requesty                         |
+| `unboundApiKey`                                                                                                                                                                               | Unbound                          |
+| `litellmApiKey`                                                                                                                                                                               | LiteLLM                          |
+| `ollamaApiKey`                                                                                                                                                                                | Ollama                           |
+| `awsAccessKey`, `awsApiKey`, `awsSecretKey`, `awsSessionToken`                                                                                                                                | AWS Bedrock                      |
+| `openRouterImageApiKey`                                                                                                                                                                       | Image generation (global secret) |
+| `codeIndexOpenAiKey`, `codebaseIndexOpenAiCompatibleApiKey`, `codebaseIndexGeminiApiKey`, `codebaseIndexMistralApiKey`, `codebaseIndexVercelAiGatewayApiKey`, `codebaseIndexOpenRouterApiKey` | Codebase indexing                |
+
+### 1c. Non-Secret Provider Settings — VS Code `globalState`
+
+Non-sensitive provider settings are stored in VS Code's `globalState` API (backed by
+a SQLite database at `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/state.vscdb`
+on Linux). These include:
+
+- `apiProvider`, `apiModelId` — selected provider and model
+- `anthropicBaseUrl`, `openAiBaseUrl`, `openAiNativeBaseUrl`, `googleGeminiBaseUrl`, etc. — custom base URLs
+- `modelMaxTokens`, `modelMaxThinkingTokens` — token limits
+- `temperature` — model temperature
+- `rateLimitSeconds` — API rate limiting
+- `consecutiveMistakeLimit` — error repetition guard
+- `todoListEnabled` — per-profile toggle
+
+### 1d. Runtime Merge (ContextProxy)
+
+[`ContextProxy`](../src/core/config/ContextProxy.ts:40) acts as a caching layer that
+merges `SecretStorage` (API keys) and `globalState` (non-secret settings) into a unified
+`RooCodeSettings` object at [`getValues()`](../src/core/config/ContextProxy.ts:515):
+
+```
+SecretStorage (apiKey, openRouterApiKey, ...)
+    +
+globalState (apiProvider, apiModelId, baseUrl, ...)
+    =
+RooCodeSettings (unified view for runtime)
+```
+
+The `ContextProxy` maintains an in-memory cache (`stateCache` + `secretCache`) for
+fast access and lazily syncs with the backing stores.
+
+> **Important:** VS Code `SecretStorage` delegates to the OS-level credential store
+> (libsecret/GNOME Keyring on Linux, Keychain on macOS, Credential Manager on Windows).
+> In Docker/container environments, this typically falls back to an **in-memory store**
+> that does NOT survive restarts. See the [Code-Server Pre-Configuration](#code-server-pre-configuration)
+> section for strategies.
+
+---
+
+## 2. Mode Configuration Storage
+
+Mode configurations (role definitions, groups, tool permissions) are stored across
+four layers, merged at runtime with a specific precedence order.
+
+### 2a. `.roomodes` — Project-level overrides
 
 | Property       | Value                                            |
 | -------------- | ------------------------------------------------ |
@@ -41,7 +164,7 @@ customModes:
 >    (`filterNativeToolsForMode` only emits tools whose canonical name passes
 >    `isToolAllowedForMode` for the mode's groups, plus `tools_allowed`, minus
 >    `tools_denied`).
-> 2. **Auto-approval eligibility** — the BRRR (Read/Edit/Command/MCP/Browser/
+> 2. **Auto-approval eligibility** — the All (Read/Edit/Command/MCP/Browser/
 >    Modes/Subtasks) toggles in the auto-approval UI gate approval at the
 >    _group_ level. If a mode does not include a group, the corresponding
 >    auto-approval toggle has no effect for that mode.
@@ -50,20 +173,27 @@ customModes:
 > takes precedence over both `tools_allowed` and groups. Both are evaluated
 > in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts).
 
-### 2. Extension Global Storage — User settings (`custom_modes.yaml`)
+### 2b. Extension Global Storage — User settings (`custom_modes.yaml`)
 
-| Property       | Value                                                                                      |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| **Path**       | `~/.vscode/extensions/rooveterinaryinc.roo-cline/globalStorage/settings/custom_modes.yaml` |
-| **Format**     | YAML                                                                                       |
-| **Scope**      | Per-extension install (shared across workspaces on the same machine)                       |
-| **Priority**   | Lower than `.roomodes`, higher than built-in                                               |
-| **Purpose**    | User's personal modes and customizations via Settings UI                                   |
-| **Source tag** | `source: "global"`                                                                         |
-| **In git?**    | **No** — runtime artifact, created fresh on each machine                                   |
-| **Editable**   | Via Settings UI (not recommended to edit directly)                                         |
+| Property       | Value                                                                |
+| -------------- | -------------------------------------------------------------------- |
+| **Path**       | `<globalStorage>/settings/custom_modes.yaml`                         |
+| **Format**     | YAML                                                                 |
+| **Scope**      | Per-extension install (shared across workspaces on the same machine) |
+| **Priority**   | Lower than `.roomodes`, higher than built-in                         |
+| **Purpose**    | User's personal modes and customizations via Settings UI             |
+| **Source tag** | `source: "global"`                                                   |
+| **In git?**    | **No** — runtime artifact, created fresh on each machine             |
+| **Editable**   | Via Settings UI (not recommended to edit directly)                   |
 
-> **This file is NOT part of the Roo-Code source tree.** It is a runtime artifact created on the user's machine when they first use the Settings UI to configure modes. The code references it only as a filename constant in [`GlobalFileNames`](../src/shared/globalFileNames.ts:5):
+Where `<globalStorage>` is `context.globalStorageUri.fsPath` (e.g.,
+`~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/` on Linux), overridable
+via the `roo-cline.customStoragePath` setting.
+
+> **This file is NOT part of the Roo-Code source tree.** It is a runtime artifact created
+> on the user's machine when they first use the Settings UI to configure modes. The code
+> references it only as a filename constant in
+> [`GlobalFileNames`](../src/shared/globalFileNames.ts:5):
 >
 > ```typescript
 > export const GlobalFileNames = {
@@ -71,36 +201,36 @@ customModes:
 > }
 > ```
 >
-> When the file doesn't exist yet, [`CustomModesManager`](../src/core/config/CustomModesManager.ts:261) writes an empty template:
+> When the file doesn't exist yet,
+> [`CustomModesManager`](../src/core/config/CustomModesManager.ts:261) writes an empty template:
 >
 > ```typescript
 > if (!fileExists) {
 > 	await fs.writeFile(filePath, yaml.stringify({ customModes: [] }, { lineWidth: 0 }))
 > }
 > ```
->
-> So the file is created fresh on each user's machine with no pre-existing content from the extension's source tree.
 
-### 3. VS Code `globalState` — Runtime persistence
+### 2c. VS Code `globalState` — Runtime persistence
 
 | Property     | Value                                                 |
 | ------------ | ----------------------------------------------------- |
-| **Type**     | In-memory with disk persistence                       |
+| **Type**     | In-memory with disk persistence (SQLite)              |
 | **API**      | `context.globalState.get()` / `.update()`             |
 | **Scope**    | Per-extension install                                 |
 | **Priority** | Equivalent to extension global storage (synchronized) |
 | **Purpose**  | Fast runtime access; acts as backup/fallback          |
 | **Editable** | Via Settings UI only                                  |
 
-Key globalState keys:
-| Key | Contents |
-|-----|----------|
-| `customInstructions` | Global custom instructions (all modes) |
-| `customModes` | Merged result of `.roomodes` + settings file |
-| `customModePrompts` | Per-mode prompt overrides (roleDefinition, customInstructions, whenToUse) |
-| `disabledTools` | Global flat list of tool names hidden from the LLM (Settings → Tools) — applied across all modes by `filterNativeToolsForMode` |
+Key globalState keys for modes:
 
-### 4. Built-in Modes — Compiled into extension
+| Key                  | Contents                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `customInstructions` | Global custom instructions (all modes)                                                                                         |
+| `customModes`        | Merged result of `.roomodes` + settings file                                                                                   |
+| `customModePrompts`  | Per-mode prompt overrides (roleDefinition, customInstructions, whenToUse)                                                      |
+| `disabledTools`      | Global flat list of tool names hidden from the LLM (Settings → Tools) — applied across all modes by `filterNativeToolsForMode` |
+
+### 2d. Built-in Modes — Compiled into extension
 
 | Property     | Value                                                         |
 | ------------ | ------------------------------------------------------------- |
@@ -122,7 +252,45 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 ]
 ```
 
-## Merge Order & Precedence
+---
+
+## 3. MCP Server Configuration Storage
+
+MCP server configurations are stored in a **single JSON file** managed by
+[`McpHub`](../src/services/mcp/McpHub.ts). There is **no overlay/merge** — it is a
+flat file.
+
+### 3a. `mcp_settings.json` — Global MCP config
+
+| Property       | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| **Path**       | `<globalStorage>/settings/mcp_settings.json`                           |
+| **Format**     | JSON                                                                   |
+| **Scope**      | Per-extension install (shared across workspaces)                       |
+| **Purpose**    | MCP server definitions (command, args, env, transport type, etc.)      |
+| **Editable**   | Via Settings UI (Tools tab → MCP Servers) or direct file edit          |
+| **Managed by** | [`McpHub.getMcpSettingsFilePath()`](../src/services/mcp/McpHub.ts:534) |
+
+The file is watched for changes via `chokidar` at
+[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557). On any change,
+servers are re-read and connections re-established.
+
+> **Note:** There is no project-level MCP config file. All MCP servers are defined in
+> this single global file. The file name constant is defined in
+> [`GlobalFileNames.mcpSettings`](../src/shared/globalFileNames.ts:4).
+
+### 3b. MCP Tool Visibility
+
+MCP tools have their own visibility pipeline parallel to native tools, in
+[`filterMcpToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts):
+
+- Gated by per-tool group assignment (`McpHub.getMcpToolMetadata`)
+- Per-server `disabledTools` list in `mcp_settings.json`
+- Allowed groups from the active mode
+
+---
+
+## 4. Mode Merge Order & Precedence
 
 The merge happens in **two stages**:
 
@@ -194,6 +362,17 @@ customModes.forEach((customMode) => {
 })
 ```
 
+### API Profile Assignment Per Mode
+
+Separately from mode definitions, each mode can be assigned a specific API provider
+profile via `modeApiConfigs` in the provider profiles blob (see §1a). This mapping
+is stored in the SecretStorage profiles blob, NOT in the mode definitions. Resolution
+happens at task creation time:
+
+```
+active mode slug → modeApiConfigs[slug] → profile ID → apiConfigs[profileName]
+```
+
 ### Combined Flow
 
 ```
@@ -202,6 +381,8 @@ customModes.forEach((customMode) => {
 global storage ┘                                      │
                                                       ├── Stage 2 overlay ──→ final ModeConfig[]
 built-in modes ───────────────────────────────────────┘
+
+API profile assignments (modeApiConfigs) ──→ resolved at task creation (SecretStorage)
 ```
 
 ### Conflict Resolution (Same Slug)
@@ -217,7 +398,7 @@ When the same slug exists in multiple sources:
 
 ---
 
-## Write Paths
+## 5. Write Paths
 
 ### Via Settings UI
 
@@ -226,7 +407,18 @@ Settings UI
   ├── globalState.update("customInstructions", value)    // global instructions
   ├── globalState.update("customModePrompts", {...})      // per-mode overrides
   ├── globalState.update("customModes", merged)           // merged result
-  └── Write to global storage YAML file                    // file-based backup
+  ├── Write to global storage YAML file                    // file-based backup
+  ├── ProviderSettingsManager.updateConfig(...)            // API profile changes → SecretStorage
+  └── McpHub writes mcp_settings.json                      // MCP server changes
+```
+
+### API Profile Changes
+
+```
+Settings UI (API Provider tab)
+  └── ProviderSettingsManager.updateConfig(name, config)
+       └── secrets.store("roo_cline_config_api_config", JSON)
+            └── ContextProxy.setProviderSettings(config)  // sync cache
 ```
 
 ### Via `.roomodes` file edit
@@ -239,7 +431,7 @@ User edits .roomodes
 
 ---
 
-## Custom Instructions Flow
+## 6. Custom Instructions Flow
 
 ### Global Custom Instructions (all modes)
 
@@ -288,7 +480,9 @@ if (globalCustomInstructions?.trim()) {
 
 ---
 
-## File Watchers
+## 7. File Watchers
+
+### Mode Configs
 
 The [`CustomModesManager`](../src/core/config/CustomModesManager.ts:268) watches both sources:
 
@@ -308,9 +502,155 @@ roomodesWatcher.onDidDelete(handleRoomodesChange)
 
 On any file change, the manager re-reads both sources, re-merges, and updates `globalState`.
 
+### MCP Configs
+
+The [`McpHub`](../src/services/mcp/McpHub.ts) watches both global and project MCP configs:
+
+**Global:** [`mcp_settings.json`](../src/shared/globalFileNames.ts:4) via
+[`watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557) using `FileSystemWatcher`.
+
+**Project:** `.roo/mcp.json` via
+[`watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:377) using `FileSystemWatcher`.
+
+Both use a 500ms debounce. On file change, servers are re-read, validated against
+`McpSettingsSchema`, and connections are updated. File deletion triggers cleanup of
+all project MCP servers.
+
+```typescript
+// Global: watchMcpSettingsFile()
+const settingsPattern = new vscode.RelativePattern(
+    path.dirname(settingsPath), path.basename(settingsPath))
+this.settingsWatcher = vscode.workspace.createFileSystemWatcher(settingsPattern)
+this.settingsWatcher.onDidChange((uri) => this.debounceConfigChange(...))
+this.settingsWatcher.onDidCreate((uri) => this.debounceConfigChange(...))
+
+// Project: watchProjectMcpFile()
+const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".roo/mcp.json")
+this.projectMcpWatcher = vscode.workspace.createFileSystemWatcher(projectMcpPattern)
+this.projectMcpWatcher.onDidChange((uri) => this.debounceConfigChange(...))
+this.projectMcpWatcher.onDidCreate((uri) => this.debounceConfigChange(...))
+this.projectMcpWatcher.onDidDelete(async () => this.cleanupProjectMcpServers())
+```
+
 ---
 
-## Tool Visibility & Auto-Approval Composition
+## 8. On-the-Fly Reloading (No Restart Required)
+
+This section documents whether each configuration type can be updated without
+restarting code-server or VS Code, and how changes are detected.
+
+### Summary Table
+
+| Config Type                                  | On-the-Fly?     | Detection Mechanism                    | Delay          | Notes                                                                       |
+| -------------------------------------------- | --------------- | -------------------------------------- | -------------- | --------------------------------------------------------------------------- |
+| **MCP servers** (global `mcp_settings.json`) | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | Servers restarted/reconnected automatically                                 |
+| **MCP servers** (project `.roo/mcp.json`)    | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | File deletion triggers cleanup of project servers                           |
+| **Mode definitions** (`.roomodes`)           | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
+| **Mode definitions** (`custom_modes.yaml`)   | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
+| **API profiles** (SecretStorage)             | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow; OS keychain changes undetected |
+| **API keys** (SecretStorage)                 | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow                                 |
+| **Global settings** (globalState)            | ⚠️ UI only      | No external change detection           | —              | VS Code `globalState` does not emit change events for external writes       |
+| **Auto-import**                              | 🔄 Startup only | Runs on extension `activate()`         | —              | Triggered only at extension activation; not re-triggerable without restart  |
+| **Slash commands / rules** (`.roo/`)         | ✅ Yes          | Read at task start / on-demand         | —              | Not cached — read fresh when constructing system prompt                     |
+
+### ✅ File-Based Configs: Instant Reload
+
+All JSON/YAML file-based configs use VS Code's `FileSystemWatcher` API (backed by
+`chokidar` for MCP settings) and reload **immediately** when the file changes on disk:
+
+#### MCP Settings (Global + Project)
+
+**Global:** [`mcp_settings.json`](../src/shared/globalFileNames.ts:4) at
+`<globalStorage>/settings/mcp_settings.json`, watched by
+[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557).
+
+**Project:** `.roo/mcp.json` at `<workspace>/.roo/mcp.json`, watched by
+[`McpHub.watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:377).
+
+Both use a **500ms debounce** via [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:316)
+to avoid redundant server restarts during rapid edits. Programmatic updates
+(from Settings UI) set `isProgrammaticUpdate = true` to skip the watcher-triggered
+re-read entirely.
+
+On change:
+
+1. File is re-read and parsed
+2. Schema validated against `McpSettingsSchema`
+3. [`updateServerConnections()`](../src/services/mcp/McpHub.ts:363) reconnects affected servers
+4. WebView is notified of server changes
+
+#### Mode Definitions (`.roomodes` + `custom_modes.yaml`)
+
+Both files are watched by [`CustomModesManager.watchCustomModesFiles()`](../src/core/config/CustomModesManager.ts:268):
+
+```typescript
+// .roomodes watcher (per workspace folder)
+const roomodesWatcher = vscode.workspace.createFileSystemWatcher(roomodesPath)
+roomodesWatcher.onDidChange(handleRoomodesChange)
+roomodesWatcher.onDidCreate(handleRoomodesChange)
+roomodesWatcher.onDidDelete(handleRoomodesChange)
+
+// custom_modes.yaml watcher (global settings)
+const settingsWatcher = vscode.workspace.createFileSystemWatcher(settingsPath)
+settingsWatcher.onDidChange(handleSettingsChange)
+settingsWatcher.onDidCreate(handleSettingsChange)
+settingsWatcher.onDidDelete(handleSettingsChange)
+```
+
+On change:
+
+1. Both sources are re-read
+2. Stage 1 + Stage 2 merge re-executed
+3. `globalState.update("customModes", merged)` written
+4. `onUpdate()` callback triggers webview state refresh
+
+### ⚠️ SecretStorage / globalState: No External Detection
+
+API profiles and keys are stored in VS Code's `SecretStorage` API, which delegates to
+the **OS-level credential store** (libsecret/Keychain/Credential Manager). There is
+**no file watcher** and **no change event API** for external modifications.
+
+Similarly, `globalState` is backed by a SQLite database with no change events.
+
+This means:
+
+| Change Method                       | Detected?                                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Settings UI** (user clicks Save)  | ✅ Immediate — `ProviderSettingsManager.updateConfig()` → `secrets.store()` → `ContextProxy.setProviderSettings()` |
+| **Import flow**                     | ✅ Immediate — `importSettingsFromPath()` → `ProviderSettingsManager.import()` → `ContextProxy.setValues()`        |
+| **Auto-import at startup**          | ✅ On activation — `autoImportSettings()` → full import                                                            |
+| **Direct OS keychain edit**         | ❌ Not detected                                                                                                    |
+| **Direct globalState SQLite write** | ❌ Not detected                                                                                                    |
+| **External `secrets.store()` call** | ❌ Not detected (no cross-process notification)                                                                    |
+
+### 🔄 Auto-Import: Startup Only
+
+The auto-import mechanism in [`autoImportSettings`](../src/utils/autoImportSettings.ts:16) is
+called **only once** during extension activation (in [`extension.ts:346`](../src/extension.ts:346)):
+
+```typescript
+// extension.ts activate()
+await autoImportSettings(outputChannel, {
+	providerSettingsManager: provider.providerSettingsManager,
+	contextProxy: provider.contextProxy,
+	customModesManager: provider.customModesManager,
+})
+```
+
+It reads the path from the VS Code setting `roo-cline.autoImportSettingsPath` and, if
+the file exists, imports both `providerProfiles` and `globalSettings`. There is **no
+re-trigger mechanism** — to re-import, the extension must be restarted (or the Settings UI
+Import button must be used manually).
+
+### ✅ Slash Commands & Rules: Read On-Demand
+
+Files under `.roo/commands/`, `.roo/rules/`, `.roo/rules-<mode>/`, and `AGENTS.md` are
+**not cached** and are read fresh each time the system prompt is constructed for a new
+task. There is no file watcher needed — the read happens at task start and on mode switch.
+
+---
+
+## 9. Tool Visibility & Auto-Approval Composition
 
 Tool visibility (what the LLM sees in its tool catalog) and auto-approval
 (whether the user is asked before execution) are governed by **independent but
@@ -338,15 +678,15 @@ all native tools
 MCP tools follow a parallel pipeline via
 [`filterMcpToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts),
 gated by per-tool group assignment (`McpHub.getMcpToolMetadata`) and the
-per-server `disabledTools` list in `mcp.json`.
+per-server `disabledTools` list in `mcp_settings.json`.
 
-### Two visibility kill-switches
+### Visibility kill-switches
 
-| Layer                         | Storage                                  | Scope                | Edited via                                                        |
-| ----------------------------- | ---------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Per-mode `groups` / `tools_*` | `.roomodes` / `custom_modes.yaml`        | Per mode             | Mode editor / file                                                |
-| Global `disabledTools`        | `globalState["disabledTools"]: string[]` | All modes            | Settings → Tools                                                  |
-| MCP per-tool visibility       | `mcp.json` per-server `disabledTools`    | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
+| Layer                         | Storage                                        | Scope                | Edited via                                                        |
+| ----------------------------- | ---------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| Per-mode `groups` / `tools_*` | `.roomodes` / `custom_modes.yaml`              | Per mode             | Mode editor / file                                                |
+| Global `disabledTools`        | `globalState["disabledTools"]: string[]`       | All modes            | Settings → Tools                                                  |
+| MCP per-tool visibility       | `mcp_settings.json` per-server `disabledTools` | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
 
 `ALWAYS_AVAILABLE_TOOLS` (defined in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts))
 bypasses mode/group restrictions — but **not** `disabledTools`. The execution-time
@@ -357,8 +697,8 @@ guard in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts) honors
 
 Auto-approval is decided by
 [`checkAutoApproval`](../src/core/auto-approval/index.ts) and operates on
-`(mode.groups ∋ groupForTool, BRRR toggle for that group, isProtected)`. It is
-**independent** of `disabledTools`: if a tool is visible _and_ the matching BRRR
+`(mode.groups ∋ groupForTool, All toggle for that group, isProtected)`. It is
+**independent** of `disabledTools`: if a tool is visible _and_ the matching All
 toggle is on for the tool's group, the action is auto-approved.
 
 Auto-approved decisions short-circuit the `Task.ask()` round-trip and are
@@ -391,19 +731,225 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
 
 ---
 
-## Export/Import
+## 10. Export / Import
 
-- **Export**: Settings → Modes → Export writes a JSON file to `<workspace>/.roo/settings/`
-- **Import**: Settings → Modes → Import reads a JSON file and merges into global state
-- Only `source: "global"` modes are exported (project modes from `.roomodes` stay in the project)
+### 10a. What Gets Exported
+
+Export (Settings → Modes → Export, or toolbar Export button) writes a single JSON file
+(`roo-code-settings.json`) containing two top-level sections:
+
+```json
+{
+  "providerProfiles": {
+    "currentApiConfigName": "default",
+    "apiConfigs": { ... },
+    "modeApiConfigs": { ... },
+    "cloudProfileIds": [...],
+    "migrations": { ... }
+  },
+  "globalSettings": {
+    "mode": "architect",
+    "customModes": [...],
+    "customInstructions": "...",
+    "customModePrompts": {...},
+    "customSupportPrompts": {...},
+    "autoApprovalEnabled": false,
+    "alwaysAllowReadOnly": true,
+    ... (see globalSettingsSchema for full list)
+  }
+}
+```
+
+#### `providerProfiles` — Full API Configuration
+
+Exported from [`ProviderSettingsManager.export()`](../src/core/config/ProviderSettingsManager.ts:511).
+Contains ALL provider profiles including:
+
+- **API keys** — included in each profile's `apiKey`, `openRouterApiKey`, etc. fields
+- **Model IDs** — `apiModelId` for each profile
+- **Base URLs** — custom endpoints per provider
+- **Model parameters** — `modelMaxTokens`, `modelMaxThinkingTokens`, `temperature`
+- **Rate limiting** — `rateLimitSeconds`, `consecutiveMistakeLimit`
+- **Headers** — `openAiHeaders`, custom provider headers
+- **Retired provider profiles** — preserved as-is (not filtered out)
+- **Profile-to-mode assignments** — `modeApiConfigs`
+
+Token fields (`modelMaxTokens`, `modelMaxThinkingTokens`) are stripped for models
+that don't support reasoning budgets during export.
+
+#### `globalSettings` — Global Configuration
+
+Exported from [`ContextProxy.export()`](../src/core/config/ContextProxy.ts:532).
+Based on [`globalSettingsExportSchema`](../src/core/config/ContextProxy.ts:34) which is
+`globalSettingsSchema` with these exclusions:
+
+- `taskHistory` — excluded (per-task data, not portable)
+- `listApiConfigMeta` — excluded (derived from providerProfiles)
+- `currentApiConfigName` — excluded (derived from providerProfiles)
+
+Includes:
+
+- **Mode:** `mode` (default mode slug)
+- **Custom modes:** `customModes` — only `source: "global"` entries (project `.roomodes` modes are excluded)
+- **Mode prompts:** `customModePrompts`, `customSupportPrompts`
+- **Custom instructions:** `customInstructions` (global, all modes)
+- **Auto-approval:** `autoApprovalEnabled`, all `alwaysAllow*` toggles, `followupAutoApproveTimeoutMs`
+- **Command permissions:** `allowedCommands`, `deniedCommands`, `commandTimeoutAllowlist`, `commandExecutionTimeout`
+- **Cost/rate limits:** `allowedMaxRequests`, `allowedMaxCost`
+- **Checkpoints:** `enableCheckpoints`, `checkpointTimeout`
+- **Context management:** `autoCondenseContext`, `autoCondenseContextPercent`, `writeDelayMs`
+- **Code indexing:** `codebaseIndexConfig`, `codebaseIndexEnabled`
+- **Experiments:** `experiments` (feature flags)
+- **Telemetry:** `telemetrySetting`
+- **UI preferences:** `includeCurrentTime`, `includeCurrentCost`, `includeDiagnosticMessages`, `maxDiagnosticMessages`, `maxGitStatusFiles`
+- **Image generation:** `imageGenerationProvider`, `openRouterImageGenerationSelectedModel`
+- **Storage:** `customStoragePath`, `preventCompletionWithOpenTodos`
+- **Other:** `lastShownAnnouncementId`, `dismissedUpsells`, `pinnedApiConfigs`
+
+### 10b. What Is NOT Exported
+
+| Item                                             | Reason                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **MCP server configs** (`mcp_settings.json`)     | Managed independently by `McpHub`; stored as a separate JSON file in `<globalStorage>/settings/` |
+| **Task history**                                 | Per-task data; explicitly excluded via `globalSettingsExportSchema.omit({ taskHistory: true })`  |
+| **Project `.roomodes` modes**                    | File-based, per-workspace; only `source: "global"` custom modes are exported                     |
+| **`currentApiConfigName` / `listApiConfigMeta`** | Derived from `providerProfiles` at import time                                                   |
+
+### 10c. Import Flow
+
+Import reads the JSON file and applies both sections:
+
+```
+roo-code-settings.json
+        │
+   ┌────┴────┐
+   ▼         ▼
+providerProfiles   globalSettings
+   │                │
+   ▼                ▼
+ProviderSettings   ContextProxy
+Manager.import()   .setValues()
+   │                │
+   ▼                ▼
+SecretStorage      globalState
+(profiles blob)    (all non-secret settings)
+   +
+SecretStorage
+(individual keys:
+ apiKey, openRouterApiKey,
+ geminiApiKey, etc.)
+```
+
+Import is handled by [`importSettingsFromPath`](../src/core/config/importExport.ts:75) which:
+
+1. Validates and sanitizes each provider profile (handles retired/invalid providers gracefully)
+2. Merges profiles with existing ones (does not delete existing profiles unless IDs conflict)
+3. Merges `modeApiConfigs` with existing assignments
+4. Imports `customModes` via `CustomModesManager.updateCustomMode()`
+5. Sets all global settings via `ContextProxy.setValues()`
+
+**Import is additive** for provider profiles — existing profiles not in the import file
+are preserved. API keys in the import file overwrite existing ones for matching profiles.
+
+### 9d. Auto-Import on Startup
+
+RooCode supports automatic import on extension activation via the VS Code setting
+`roo-cline.autoImportSettingsPath`. When set to a file path, the extension will
+automatically import settings from that file on startup.
+
+Implementation: [`autoImportSettings`](../src/utils/autoImportSettings.ts:16), called
+from [`extension.ts:346`](../src/extension.ts:346).
+
+```
+Extension activation
+  └── autoImportSettings()
+       ├── Read roo-cline.autoImportSettingsPath from VS Code config
+       ├── Check if file exists
+       └── importSettingsFromPath(filePath)
+            ├── ProviderSettingsManager.import(providerProfiles)  → SecretStorage
+            └── ContextProxy.setValues(globalSettings)            → globalState
+```
+
+This is the recommended mechanism for pre-configuring code-server or other automated
+deployments. The setting can be pre-seeded in VS Code's `settings.json`:
+
+```json
+{
+	"roo-cline.autoImportSettingsPath": "/etc/roocode/settings.json"
+}
+```
 
 ---
 
-## Summary Table
+## 11. Code-Server Pre-Configuration
 
-| Layer          | Path                                                                                       | Format           | Scope         | Priority        | Editable    |
-| -------------- | ------------------------------------------------------------------------------------------ | ---------------- | ------------- | --------------- | ----------- |
-| `.roomodes`    | `<workspace>/.roomodes`                                                                    | YAML             | Per-project   | Highest         | Direct edit |
-| Global storage | `~/.vscode/extensions/rooveterinaryinc.roo-cline/globalStorage/settings/custom_modes.yaml` | YAML             | Per-extension | Medium          | Settings UI |
-| globalState    | `context.globalState`                                                                      | In-memory + disk | Per-extension | Medium (synced) | Settings UI |
-| Built-in modes | `packages/types/src/mode.ts`                                                               | TypeScript       | Per-version   | Lowest          | Code change |
+When deploying RooCode in a code-server environment, the following strategies ensure
+API configurations are available:
+
+### Primary Approach: Auto-Import
+
+1. Export settings from a configured RooCode instance (creates `roo-code-settings.json`)
+2. Place the file at a known path on the code-server image (e.g., `/etc/roocode/settings.json`)
+3. Set the VS Code setting `roo-cline.autoImportSettingsPath` to point to it
+4. On extension activation, all API profiles and global settings are automatically imported
+
+### SecretStorage Persistence Caveat
+
+VS Code `SecretStorage` delegates to the OS credential store. In Docker containers,
+this typically falls back to an **in-memory store** that does NOT survive restarts.
+Mitigations:
+
+- **Re-import on restart:** Keep the auto-import path configured so API keys are
+  re-imported on each activation
+- **Mount a persistent volume:** for the code-server data directory
+  (`~/.local/share/code-server/`) so the SecretStorage backend can persist
+- **Use environment variables:** Set API keys via environment variables that the
+  provider handlers check (e.g., `OPENAI_API_KEY`)
+
+### Additional File Pre-Seeding
+
+| File                     | Path                                              | Contents                                             |
+| ------------------------ | ------------------------------------------------- | ---------------------------------------------------- |
+| `.roomodes`              | `<workspace>/.roomodes`                           | Project-specific mode overrides (YAML)               |
+| `custom_modes.yaml`      | `<globalStorage>/settings/custom_modes.yaml`      | Global user mode customizations (YAML)               |
+| `mcp_settings.json`      | `<globalStorage>/settings/mcp_settings.json`      | MCP server definitions (JSON)                        |
+| `roo-code-settings.json` | Any path (referenced by `autoImportSettingsPath`) | Full export including API profiles + global settings |
+
+> **Note:** `mcp_settings.json` is NOT covered by the export/import flow. To pre-configure
+> MCP servers, place the file directly in the `<globalStorage>/settings/` directory.
+
+---
+
+## 12. All GlobalFileNames Constants
+
+Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
+
+| Constant                 | Filename                        | Purpose                                   |
+| ------------------------ | ------------------------------- | ----------------------------------------- |
+| `apiConversationHistory` | `api_conversation_history.json` | Per-task API message history              |
+| `uiMessages`             | `ui_messages.json`              | Per-task UI message history               |
+| `mcpSettings`            | `mcp_settings.json`             | Global MCP server definitions             |
+| `customModes`            | `custom_modes.yaml`             | Global user mode customizations           |
+| `taskMetadata`           | `task_metadata.json`            | Per-task metadata (mode, workspace, etc.) |
+| `historyItem`            | `history_item.json`             | Per-task history item (for task list)     |
+| `historyIndex`           | `_index.json`                   | Task history index (listing all tasks)    |
+
+---
+
+## 13. Complete Storage Summary
+
+| Layer                       | Backend         | Path / Key                                                    | Format             | Scope         | Priority        | Editable           |
+| --------------------------- | --------------- | ------------------------------------------------------------- | ------------------ | ------------- | --------------- | ------------------ |
+| **API Profiles (SoT)**      | `SecretStorage` | `roo_cline_config_api_config`                                 | JSON blob          | Per-extension | —               | Settings UI        |
+| **API Keys**                | `SecretStorage` | `apiKey`, `openRouterApiKey`, … (30+ keys)                    | String             | Per-extension | —               | Settings UI        |
+| **Non-secret API settings** | `globalState`   | `apiProvider`, `apiModelId`, `anthropicBaseUrl`, …            | Key-value          | Per-extension | —               | Settings UI        |
+| **`.roomodes`**             | File            | `<workspace>/.roomodes`                                       | YAML               | Per-project   | Highest (modes) | Direct edit        |
+| **Global modes**            | File            | `<globalStorage>/settings/custom_modes.yaml`                  | YAML               | Per-extension | Medium (modes)  | Settings UI        |
+| **MCP servers**             | File            | `<globalStorage>/settings/mcp_settings.json`                  | JSON               | Per-extension | —               | Settings UI / file |
+| **Global settings**         | `globalState`   | `mode`, `customInstructions`, `autoApprovalEnabled`, …        | Key-value (SQLite) | Per-extension | —               | Settings UI        |
+| **Built-in modes**          | Code            | [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) | TypeScript         | Per-version   | Lowest (modes)  | Code change        |
+| **Task history**            | File            | `<globalStorage>/tasks/<id>/` (multiple JSON files)           | JSON               | Per-extension | —               | Task lifecycle     |
+| **Model cache**             | File            | `<globalStorage>/cache/<provider>_models.json`                | JSON               | Per-extension | —               | Auto-refreshed     |
+
+Where `<globalStorage>` defaults to `context.globalStorageUri.fsPath`, overridable
+via the `roo-cline.customStoragePath` VS Code setting.

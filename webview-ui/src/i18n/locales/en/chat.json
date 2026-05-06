@@ -261,15 +261,15 @@
 		"wantsToInsertAtEnd": "Roo wants to append content to the end of this file"
 	},
 	"directoryOperations": {
-		"wantsToViewTopLevel": "Roo wants to view the top level files in this directory",
-		"didViewTopLevel": "Roo viewed the top level files in this directory",
-		"wantsToViewTopLevelOutsideWorkspace": "Roo wants to view the top level files in this directory (outside workspace)",
-		"didViewTopLevelOutsideWorkspace": "Roo viewed the top level files in this directory (outside workspace)",
-		"wantsToViewRecursive": "Roo wants to recursively view all files in this directory",
-		"didViewRecursive": "Roo recursively viewed all files in this directory",
-		"wantsToViewRecursiveOutsideWorkspace": "Roo wants to recursively view all files in this directory (outside workspace)",
-		"didViewRecursiveOutsideWorkspace": "Roo recursively viewed all files in this directory (outside workspace)",
-		"wantsToViewMultipleDirectories": "Roo wants to view multiple directories",
+		"wantsToViewTopLevel": "Roo wants to list the top level files in this directory",
+		"didViewTopLevel": "Roo listed the top level files in this directory",
+		"wantsToViewTopLevelOutsideWorkspace": "Roo wants to list the top level files in this directory (outside workspace)",
+		"didViewTopLevelOutsideWorkspace": "Roo listed the top level files in this directory (outside workspace)",
+		"wantsToViewRecursive": "Roo wants to recursively list all files in this directory",
+		"didViewRecursive": "Roo recursively listed all files in this directory",
+		"wantsToViewRecursiveOutsideWorkspace": "Roo wants to recursively list all files in this directory (outside workspace)",
+		"didViewRecursiveOutsideWorkspace": "Roo recursively listed all files in this directory (outside workspace)",
+		"wantsToViewMultipleDirectories": "Roo wants to list multiple directories",
 		"wantsToSearch": "Roo wants to search this directory for <code>{{regex}}</code>",
 		"didSearch": "Roo searched this directory for <code>{{regex}}</code>",
 		"wantsToSearchOutsideWorkspace": "Roo wants to search this directory (outside workspace) for <code>{{regex}}</code>",
@@ -378,7 +378,7 @@
 		"triggerLabel_zero": "0 auto-approve",
 		"triggerLabel_one": "1 auto-approved",
 		"triggerLabel_other": "{{count}} auto-approved",
-		"triggerLabelAll": "BRRR"
+		"triggerLabelAll": "All"
 	},
 	"announcement": {
 		"title": "Roo Code {{version}} Released",
