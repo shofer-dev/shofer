@@ -124,7 +124,7 @@ describe("runSlashCommandTool", () => {
 		expect(mockCallbacks.askApproval).toHaveBeenCalledWith(
 			"tool",
 			JSON.stringify({
-				tool: "skill",
+				tool: "loadSkill",
 				skill: "skill-only",
 				args: "target flow",
 				source: "project",

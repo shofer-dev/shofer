@@ -24,7 +24,7 @@ export function buildSkillApprovalMessage(
 	skillContent: Pick<SkillContent, "source" | "description">,
 ): string {
 	return JSON.stringify({
-		tool: "skill",
+		tool: "loadSkill",
 		skill: skillName,
 		args,
 		source: skillContent.source,

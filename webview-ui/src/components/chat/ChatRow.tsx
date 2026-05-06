@@ -693,14 +693,14 @@ export const ChatRowContent = ({
 						</div>
 					</>
 				)
-			case "skill": {
+			case "loadSkill": {
 				const skillInfo = tool
 				return (
 					<>
 						<div style={headerStyle}>
 							{toolIcon("book")}
 							<span style={{ fontWeight: "bold" }}>
-								{message.type === "ask" ? t("chat:skill.wantsToLoad") : t("chat:skill.didLoad")}
+								{message.type === "ask" ? t("chat:loadSkill.wantsToLoad") : t("chat:loadSkill.didLoad")}
 							</span>
 						</div>
 						<div
