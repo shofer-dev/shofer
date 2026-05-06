@@ -34,8 +34,9 @@ import { attemptCompletionTool, AttemptCompletionCallbacks } from "../tools/Atte
 import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
 import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
-import { skillTool } from "../tools/SkillTool"
+import { skillLoadTool } from "../tools/SkillLoadTool"
 import { skillSaveTool } from "../tools/SkillSaveTool"
+import { skillDeleteTool } from "../tools/SkillDeleteTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
@@ -426,10 +427,12 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.task_id}']`
 					case "list_background_tasks":
 						return `[${block.name}]`
-					case "skill":
+					case "skill_load":
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "skill_save":
 						return `[${block.name} '${block.params.skill}' (${block.params.mode})]`
+					case "skill_delete":
+						return `[${block.name} '${block.params.skill}']`
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
 					case "get_errors":
@@ -968,8 +971,8 @@ export async function presentAssistantMessage(cline: Task) {
 						pushToolResult,
 					})
 					break
-				case "skill":
-					await skillTool.handle(cline, block as ToolUse<"skill">, {
+				case "skill_load":
+					await skillLoadTool.handle(cline, block as ToolUse<"skill_load">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -977,6 +980,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "skill_save":
 					await skillSaveTool.handle(cline, block as ToolUse<"skill_save">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "skill_delete":
+					await skillDeleteTool.handle(cline, block as ToolUse<"skill_delete">, {
 						askApproval,
 						handleError,
 						pushToolResult,

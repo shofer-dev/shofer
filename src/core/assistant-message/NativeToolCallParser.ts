@@ -539,11 +539,19 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "skill":
+			case "skill_load":
 				if (partialArgs.skill !== undefined) {
 					nativeArgs = {
 						skill: partialArgs.skill,
 						args: partialArgs.args,
+					}
+				}
+				break
+
+			case "skill_delete":
+				if (partialArgs.skill !== undefined) {
+					nativeArgs = {
+						skill: partialArgs.skill,
 					}
 				}
 				break
@@ -1070,11 +1078,19 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "skill":
+				case "skill_load":
 					if (args.skill !== undefined) {
 						nativeArgs = {
 							skill: args.skill,
 							args: args.args,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "skill_delete":
+					if (args.skill !== undefined) {
+						nativeArgs = {
+							skill: args.skill,
 						} as NativeArgsFor<TName>
 					}
 					break

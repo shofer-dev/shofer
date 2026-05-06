@@ -890,6 +890,7 @@ export interface ClineSayTool {
 		| "updateTodoList"
 		| "skill"
 		| "saveSkill"
+		| "deleteSkill"
 		| "createDirectory"
 		| "createNewWorkspace"
 		| "findFiles"

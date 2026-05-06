@@ -140,7 +140,7 @@ export type NativeToolArgs = {
 	codebase_search: { query: string; path?: string }
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
-	skill: { skill: string; args?: string }
+	skill_load: { skill: string; args?: string }
 	skill_save: {
 		skill: string
 		mode: "replace" | "append" | "patch"
@@ -148,6 +148,7 @@ export type NativeToolArgs = {
 		old_string?: string
 		new_string?: string
 	}
+	skill_delete: { skill: string }
 	search_files: { path: string; regex: string; file_pattern?: string | null }
 	switch_mode: { mode_slug: string; reason: string }
 	set_task_title: { title: string }
@@ -308,14 +309,19 @@ export interface RunSlashCommandToolUse extends ToolUse<"run_slash_command"> {
 	params: Partial<Pick<Record<ToolParamName, string>, "command" | "args">>
 }
 
-export interface SkillToolUse extends ToolUse<"skill"> {
-	name: "skill"
+export interface SkillLoadToolUse extends ToolUse<"skill_load"> {
+	name: "skill_load"
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "args">>
 }
 
 export interface SkillSaveToolUse extends ToolUse<"skill_save"> {
 	name: "skill_save"
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "mode" | "content" | "old_string" | "new_string">>
+}
+
+export interface SkillDeleteToolUse extends ToolUse<"skill_delete"> {
+	name: "skill_delete"
+	params: Partial<Pick<Record<ToolParamName, string>, "skill">>
 }
 
 export interface GenerateImageToolUse extends ToolUse<"generate_image"> {

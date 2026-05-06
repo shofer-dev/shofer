@@ -13,8 +13,8 @@ interface SkillParams {
 	args?: string
 }
 
-export class SkillTool extends BaseTool<"skill"> {
-	readonly name = "skill" as const
+export class SkillLoadTool extends BaseTool<"skill_load"> {
+	readonly name = "skill_load" as const
 
 	async execute(params: SkillParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { skill: skillName, args } = params
@@ -24,9 +24,9 @@ export class SkillTool extends BaseTool<"skill"> {
 			// Validate skill name parameter
 			if (!skillName) {
 				task.consecutiveMistakeCount++
-				task.recordToolError("skill")
+				task.recordToolError("skill_load")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("skill", "skill"))
+				pushToolResult(await task.sayAndCreateMissingParamError("skill_load", "skill"))
 				return
 			}
 
@@ -37,7 +37,7 @@ export class SkillTool extends BaseTool<"skill"> {
 			const skillsManager = provider?.getSkillsManager()
 
 			if (!skillsManager) {
-				task.recordToolError("skill")
+				task.recordToolError("skill_load")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(formatResponse.toolError("Skills Manager not available"))
 				return
@@ -55,7 +55,7 @@ export class SkillTool extends BaseTool<"skill"> {
 				const availableSkills = skillsManager.getSkillsForMode(currentMode)
 				const skillNames = availableSkills.map((s) => s.name)
 
-				task.recordToolError("skill")
+				task.recordToolError("skill_load")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(
 					formatResponse.toolError(
@@ -80,7 +80,7 @@ export class SkillTool extends BaseTool<"skill"> {
 		}
 	}
 
-	override async handlePartial(task: Task, block: ToolUse<"skill">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"skill_load">): Promise<void> {
 		const skillName: string | undefined = block.params.skill
 		const args: string | undefined = block.params.args
 
@@ -94,4 +94,4 @@ export class SkillTool extends BaseTool<"skill"> {
 	}
 }
 
-export const skillTool = new SkillTool()
+export const skillLoadTool = new SkillLoadTool()
