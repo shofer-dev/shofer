@@ -19,6 +19,7 @@
 
 import * as path from "path"
 import * as fs from "fs/promises"
+import matter from "gray-matter"
 
 import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
@@ -39,6 +40,62 @@ interface SkillSaveParams {
 /** Slug regex matches the SkillsManager / agent-skills spec. */
 const SKILL_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
+/** Max length of the `description` frontmatter field per agent-skills spec. */
+const SKILL_DESCRIPTION_MAX_LEN = 1024
+
+/**
+ * Validate that `content` is a well-formed SKILL.md body for the given slug.
+ * Enforces the same rules the SkillsManager uses to discover skills, so a
+ * successful save is guaranteed to be loadable. Returns null on success or a
+ * human-readable error string on failure.
+ */
+export function validateSkillFrontmatter(content: string, slug: string): string | null {
+	// Require an opening `---` fence on the very first line. gray-matter is lenient
+	// (it returns the whole body as `content` when no frontmatter is present), so
+	// we check explicitly to give the model a precise error.
+	if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) {
+		return (
+			"SKILL.md must start with a YAML frontmatter block delimited by `---` lines, " +
+			`containing at minimum \`name: ${slug}\` and a \`description\` field.`
+		)
+	}
+
+	let parsed: { data: Record<string, unknown> }
+	try {
+		parsed = matter(content) as { data: Record<string, unknown> }
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		return `SKILL.md frontmatter is not valid YAML: ${message}`
+	}
+
+	const { data } = parsed
+
+	const name = data.name
+	if (typeof name !== "string" || name.length === 0) {
+		return `SKILL.md frontmatter is missing the required \`name\` field (must equal the slug \`${slug}\`).`
+	}
+	if (name !== slug) {
+		return (
+			`SKILL.md frontmatter \`name: ${name}\` does not match the skill slug \`${slug}\`. ` +
+			"The loader requires `name` to equal the parent directory name; otherwise the skill is silently dropped."
+		)
+	}
+
+	const description = data.description
+	if (typeof description !== "string") {
+		return "SKILL.md frontmatter is missing the required `description` field (must be a non-empty string)."
+	}
+	const trimmed = description.trim()
+	if (trimmed.length < 1 || trimmed.length > SKILL_DESCRIPTION_MAX_LEN) {
+		return (
+			`SKILL.md frontmatter \`description\` must be 1–${SKILL_DESCRIPTION_MAX_LEN} characters ` +
+			`(got ${trimmed.length}).`
+		)
+	}
+
+	return null
+}
+
 export class SkillSaveTool extends BaseTool<"skill_save"> {
 	readonly name = "skill_save" as const
 
@@ -48,11 +105,7 @@ export class SkillSaveTool extends BaseTool<"skill_save"> {
 
 		try {
 			if (!slug) {
-				return this.fail(
-					task,
-					pushToolResult,
-					await task.sayAndCreateMissingParamError("skill_save", "skill"),
-				)
+				return this.fail(task, pushToolResult, await task.sayAndCreateMissingParamError("skill_save", "skill"))
 			}
 			if (!mode) {
 				return this.fail(task, pushToolResult, await task.sayAndCreateMissingParamError("skill_save", "mode"))
@@ -162,6 +215,15 @@ export class SkillSaveTool extends BaseTool<"skill_save"> {
 					summary = `Patched SKILL.md (1 occurrence replaced).`
 					break
 				}
+			}
+
+			// Validate the resulting SKILL.md body. We always validate the final content
+			// so the saved file is guaranteed to be discoverable by the loader. Skipping
+			// validation only when appending to an already-valid file would still let a
+			// bad append corrupt the frontmatter, so we validate unconditionally.
+			const validationError = validateSkillFrontmatter(nextContent, slug)
+			if (validationError !== null) {
+				return this.fail(task, pushToolResult, formatResponse.toolError(validationError))
 			}
 
 			const didApprove = await this.askToolApproval(callbacks, {
