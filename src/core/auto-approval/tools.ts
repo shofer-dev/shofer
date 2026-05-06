@@ -13,6 +13,8 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	// read group
 	readFile: "read_file",
 	listFiles: "list_files",
+	listFilesTopLevel: "list_files",
+	listFilesRecursive: "list_files",
 	searchFiles: "search_files",
 	codebaseSearch: "codebase_search",
 	codebaseSearchWithLsp: "codebase_search_with_lsp",
