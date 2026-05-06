@@ -8,7 +8,15 @@ export interface ToolRendererProps {
 export type ToolCategory = "file-read" | "file-write" | "search" | "command" | "mode" | "completion" | "other"
 
 export function getToolCategory(toolName: string): ToolCategory {
-	const fileReadTools = ["readFile", "read_file", "skill", "listFilesTopLevel", "listFilesRecursive", "list_files"]
+	const fileReadTools = [
+		"readFile",
+		"read_file",
+		"skill",
+		"skill_load",
+		"listFilesTopLevel",
+		"listFilesRecursive",
+		"list_files",
+	]
 
 	const fileWriteTools = [
 		"editedExistingFile",
