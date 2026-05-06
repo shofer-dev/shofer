@@ -180,6 +180,16 @@ export type CustomSupportPrompts = z.infer<typeof customSupportPromptsSchema>
 
 export const DEFAULT_MODES: readonly ModeConfig[] = [
 	{
+		slug: "code",
+		name: "💻 Code",
+		roleDefinition:
+			"You are Roo, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices.",
+		whenToUse:
+			"Use this mode when you need to write, modify, or refactor code. Ideal for implementing features, fixing bugs, creating new files, or making code improvements across any programming language or framework.",
+		description: "Write, modify, and refactor code",
+		groups: ["read", "write", "execute", "mcp", "mode", "subtasks", "questions", "uncategorized"],
+	},
+	{
 		slug: "architect",
 		name: "🏗️ Architect",
 		roleDefinition:
@@ -190,16 +200,6 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		groups: ["read", ["write", { fileRegex: "\\.md$", description: "Markdown files only" }], "mcp", "questions"],
 		customInstructions:
 			"1. Do some information gathering (using provided tools) to get more context about the task.\n\n2. You should also ask the user clarifying questions to get a better understanding of the task.\n\n3. Once you've gained more context about the user's request, break down the task into clear, actionable steps and create a todo list using the `update_todo_list` tool. Each todo item should be:\n   - Specific and actionable\n   - Listed in logical execution order\n   - Focused on a single, well-defined outcome\n   - Clear enough that another mode could execute it independently\n\n   **Note:** If the `update_todo_list` tool is not available, write the plan to a markdown file (e.g., `plan.md` or `todo.md`) instead.\n\n4. As you gather more information or discover new requirements, update the todo list to reflect the current understanding of what needs to be accomplished.\n\n5. Ask the user if they are pleased with this plan, or if they would like to make any changes. Think of this as a brainstorming session where you can discuss the task and refine the todo list.\n\n6. Include Mermaid diagrams if they help clarify complex workflows or system architecture. Please avoid using double quotes (\"\") and parentheses () inside square brackets ([]) in Mermaid diagrams, as this can cause parsing errors.\n\n7. Use the switch_mode tool to request that the user switch to another mode to implement the solution.\n\n**IMPORTANT: Focus on creating clear, actionable todo lists rather than lengthy markdown documents. Use the todo list as your primary planning tool to track and organize the work that needs to be done.**\n\n**CRITICAL: Never provide level of effort time estimates (e.g., hours, days, weeks) for tasks. Focus solely on breaking down the work into clear, actionable steps without estimating how long they will take.**\n\nUnless told otherwise, if you want to save a plan file, put it in the /plans directory",
-	},
-	{
-		slug: "code",
-		name: "💻 Code",
-		roleDefinition:
-			"You are Roo, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices.",
-		whenToUse:
-			"Use this mode when you need to write, modify, or refactor code. Ideal for implementing features, fixing bugs, creating new files, or making code improvements across any programming language or framework.",
-		description: "Write, modify, and refactor code",
-		groups: ["read", "write", "execute", "mcp", "mode", "subtasks", "questions", "uncategorized"],
 	},
 	{
 		slug: "ask",
