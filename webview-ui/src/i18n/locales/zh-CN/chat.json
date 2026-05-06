@@ -329,7 +329,7 @@
 			"description": "为保持在上下文窗口限制内，已从对话中移除较旧的消息。与压缩相比，这是一种快速但上下文保留较少的方法。"
 		}
 	},
-	"skill": {
+	"loadSkill": {
 		"wantsToLoad": "Roo 想要加载技能",
 		"didLoad": "Roo 加载了技能"
 	},

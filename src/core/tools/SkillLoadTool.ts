@@ -85,7 +85,7 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 		const args: string | undefined = block.params.args
 
 		const partialMessage = JSON.stringify({
-			tool: "skill",
+			tool: "loadSkill",
 			skill: skillName,
 			args: args,
 		})

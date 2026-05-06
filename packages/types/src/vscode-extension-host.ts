@@ -888,7 +888,7 @@ export interface ClineSayTool {
 		| "imageGenerated"
 		| "runSlashCommand"
 		| "updateTodoList"
-		| "skill"
+		| "loadSkill"
 		| "saveSkill"
 		| "deleteSkill"
 		| "createDirectory"

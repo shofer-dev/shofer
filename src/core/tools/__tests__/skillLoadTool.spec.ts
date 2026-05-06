@@ -124,7 +124,7 @@ describe("skillLoadTool", () => {
 		expect(mockCallbacks.askApproval).toHaveBeenCalledWith(
 			"tool",
 			JSON.stringify({
-				tool: "skill",
+				tool: "loadSkill",
 				skill: "create-mcp-server",
 				args: undefined,
 				source: "global",
@@ -219,7 +219,7 @@ Step 1: Create the server...`,
 		expect(mockTask.ask).toHaveBeenCalledWith(
 			"tool",
 			JSON.stringify({
-				tool: "skill",
+				tool: "loadSkill",
 				skill: "create-mcp-server",
 				args: "",
 			}),
@@ -324,7 +324,7 @@ Step 1: Create the server...`,
 		expect(mockCallbacks.askApproval).toHaveBeenCalledWith(
 			"tool",
 			JSON.stringify({
-				tool: "skill",
+				tool: "loadSkill",
 				skill: "my-project-skill",
 				args: undefined,
 				source: "project",

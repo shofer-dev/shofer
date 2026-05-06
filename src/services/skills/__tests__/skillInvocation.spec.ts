@@ -45,7 +45,7 @@ describe("skillInvocation", () => {
 			})
 
 			expect(JSON.parse(message)).toEqual({
-				tool: "skill",
+				tool: "loadSkill",
 				skill: "deploy",
 				args: "staging",
 				source: "project",

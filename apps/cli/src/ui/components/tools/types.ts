@@ -11,7 +11,7 @@ export function getToolCategory(toolName: string): ToolCategory {
 	const fileReadTools = [
 		"readFile",
 		"read_file",
-		"skill",
+		"loadSkill",
 		"skill_load",
 		"listFilesTopLevel",
 		"listFilesRecursive",

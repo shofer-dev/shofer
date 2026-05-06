@@ -329,7 +329,7 @@
 			"description": "Bağlam penceresi sınırında kalmak için eski mesajlar konuşmadan kaldırıldı. Bu, yoğunlaştırmaya kıyasla hızlı ancak daha az bağlam koruyucu bir yaklaşımdır."
 		}
 	},
-	"skill": {
+	"loadSkill": {
 		"wantsToLoad": "Roo bir beceri yüklemek istiyor",
 		"didLoad": "Roo bir beceri yükledi"
 	},

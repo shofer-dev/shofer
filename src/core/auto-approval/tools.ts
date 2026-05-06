@@ -55,7 +55,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	// mode-independent always-available
 	updateTodoList: "update_todo_list",
 	runSlashCommand: "run_slash_command",
-	skill: "skill_load",
+	loadSkill: "skill_load",
 	saveSkill: "skill_save",
 	deleteSkill: "skill_delete",
 	setTaskTitle: "set_task_title",
