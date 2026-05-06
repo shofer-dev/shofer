@@ -307,7 +307,7 @@
 		"triggerLabel_zero": "0 aprobaciones automáticas",
 		"triggerLabel_one": "1 aprobación automática",
 		"triggerLabel_other": "{{count}} aprobaciones automáticas",
-		"triggerLabelAll": "BRRR"
+		"triggerLabelAll": "All"
 	},
 	"reasoning": {
 		"thinking": "Pensando",

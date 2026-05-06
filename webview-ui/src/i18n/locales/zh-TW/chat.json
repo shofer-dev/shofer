@@ -356,7 +356,7 @@
 		"triggerLabel_zero": "0 個自動核准",
 		"triggerLabel_one": "1 個自動核准",
 		"triggerLabel_other": "{{count}} 個自動核准",
-		"triggerLabelAll": "BRRR"
+		"triggerLabelAll": "All"
 	},
 	"announcement": {
 		"title": "Roo Code {{version}} 已發布",
