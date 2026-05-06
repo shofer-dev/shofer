@@ -851,7 +851,7 @@ Import is handled by [`importSettingsFromPath`](../src/core/config/importExport.
 **Import is additive** for provider profiles — existing profiles not in the import file
 are preserved. API keys in the import file overwrite existing ones for matching profiles.
 
-### 9d. Auto-Import on Startup
+### 10d. Auto-Import on Startup
 
 RooCode supports automatic import on extension activation via the VS Code setting
 `roo-cline.autoImportSettingsPath`. When set to a file path, the extension will
