@@ -22,7 +22,23 @@ Modes:
 - append:  append \`content\` to the end of the file. Creates the skill if it doesn't exist.
 - patch:   replace \`old_string\` with \`new_string\` (must match exactly once). The skill must already exist.
 
-When creating a new skill, prefer mode=replace and include YAML frontmatter (description, applyTo, …) at the top of \`content\` so the skill is discoverable by the \`skill\` tool.`
+REQUIRED FRONTMATTER FORMAT — every SKILL.md must begin with a YAML frontmatter block (delimited by \`---\` lines) containing AT MINIMUM these two fields:
+  - \`name\`: must equal the skill slug exactly (the \`skill\` argument and the parent directory name). Skills whose \`name\` does not match the slug are silently rejected by the loader and will NOT appear in the skill list.
+  - \`description\`: 1–1024 character single-line summary of what the skill does and when to use it.
+Optional fields (\`modeSlugs\`, \`mode\`, etc.) may follow. Any other fields are ignored.
+
+Example of a minimal valid SKILL.md body:
+
+---
+name: my-skill
+description: Short summary of what this skill does and when to invoke it.
+---
+
+# My Skill
+
+Instructions go here.
+
+The tool validates the resulting file (for mode=replace, mode=append when creating a new file, and mode=patch) and returns an error if the frontmatter is missing or malformed. Fix the error and retry rather than working around it.`
 
 export default {
 	type: "function",
