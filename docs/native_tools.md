@@ -315,6 +315,7 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 | `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
 | `skill_update`          | 🟣 AW  | –     |        ✅        |   ✅   | Update an existing project skill (replace/append/patch)     |
 | `set_task_title`        | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
+| `give_feedback`         | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Arkware developers                     |
 
 ### `new_task`
 
@@ -365,6 +366,16 @@ Sets a short, descriptive title for the current task/conversation. Use this earl
 | `title` | string |    ✅    | Short descriptive title (max 60 chars) |
 
 No approval prompt needed — this is a non-destructive meta-operation.
+
+### `give_feedback`
+
+Send feedback to the Arkware developers. The feedback message is appended to the Roo Code extension output channel (auto-approved, harmless meta-operation).
+
+| Param      | Type   | Required | Description                                  |
+| ---------- | ------ | :------: | -------------------------------------------- |
+| `feedback` | string |    ✅    | The feedback message to send to Arkware devs |
+
+No approval prompt needed — non-destructive, written only to the extension output channel.
 
 ### `skill_update`
 
@@ -465,6 +476,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `skill`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `skill_update`             |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `set_task_title`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `give_feedback`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `run_slash_command`        |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
 
 **Notes:**

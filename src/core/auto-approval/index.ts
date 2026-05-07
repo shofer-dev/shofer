@@ -181,6 +181,11 @@ export async function checkAutoApproval({
 			return { decision: "approve" }
 		}
 
+		// Harmless meta-operation: appends a feedback line to the extension output channel.
+		if (tool.tool === "giveFeedback") {
+			return { decision: "approve" }
+		}
+
 		if (tool?.tool === "switchMode") {
 			return state.alwaysAllowModeSwitch === true ? { decision: "approve" } : { decision: "ask" }
 		}

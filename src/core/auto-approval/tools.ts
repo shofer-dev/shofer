@@ -59,6 +59,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	saveSkill: "skill_save",
 	deleteSkill: "skill_delete",
 	setTaskTitle: "set_task_title",
+	giveFeedback: "give_feedback",
 }
 
 /**

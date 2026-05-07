@@ -105,6 +105,8 @@ export const toolParamNames = [
 	// file tool parameters (rm/mv)
 	"subcommand",
 	"destination",
+	// give_feedback parameter
+	"feedback",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -152,6 +154,7 @@ export type NativeToolArgs = {
 	search_files: { path: string; regex: string; file_pattern?: string | null }
 	switch_mode: { mode_slug: string; reason: string }
 	set_task_title: { title: string }
+	give_feedback: { feedback: string }
 	update_todo_list: { todos: string }
 	use_mcp_tool: { server_name: string; tool_name: string; arguments?: Record<string, unknown> }
 	write_to_file: { path: string; content: string }

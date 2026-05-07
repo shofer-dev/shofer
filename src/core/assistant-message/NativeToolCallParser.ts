@@ -603,6 +603,14 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "give_feedback":
+				if (partialArgs.feedback !== undefined) {
+					nativeArgs = {
+						feedback: partialArgs.feedback,
+					}
+				}
+				break
+
 			case "use_mcp_tool":
 				if (partialArgs.server_name !== undefined || partialArgs.tool_name !== undefined) {
 					nativeArgs = {
@@ -1138,6 +1146,14 @@ export class NativeToolCallParser {
 					if (args.title !== undefined) {
 						nativeArgs = {
 							title: args.title,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "give_feedback":
+					if (args.feedback !== undefined) {
+						nativeArgs = {
+							feedback: args.feedback,
 						} as NativeArgsFor<TName>
 					}
 					break
