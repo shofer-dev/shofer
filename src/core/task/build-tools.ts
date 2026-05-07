@@ -16,7 +16,7 @@ import {
 	filterMcpToolsForMode,
 	resolveToolAlias,
 } from "../prompts/tools/filter-tools-for-mode"
-import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
+import { defaultModeSlug, getGroupName, getModeBySlug } from "../../shared/modes"
 
 interface BuildToolsOptions {
 	provider: ClineProvider
@@ -194,7 +194,7 @@ function filterExternalToolsForMode(
 		return externalMeta.map((m) => m.tool)
 	}
 
-	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => (Array.isArray(g) ? g[0] : g)))
+	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => getGroupName(g)))
 
 	// If mode has no groups defined, expose all external tools
 	if (allowedGroups.size === 0) {
