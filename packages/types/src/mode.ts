@@ -31,10 +31,46 @@ export const groupOptionsSchema = z.object({
 export type GroupOptions = z.infer<typeof groupOptionsSchema>
 
 /**
- * GroupEntry
+ * GroupScope — per-group tool allow/deny lists within a mode's groups array.
+ *
+ * When a group entry is an object (e.g., `{ read: { allowed: [...] } }`),
+ * the scope narrows the tool set the group normally provides:
+ *   - `allowed`: exclusive list — only these tools from the group are available
+ *   - `denied`:  removes the listed tools from the group's normal set
+ *
+ * Both fields are optional. An empty scope object `{}` is equivalent to a bare
+ * group name (all tools in the group).
  */
+export const groupScopeSchema = z.object({
+	allowed: z.array(z.string()).optional(),
+	denied: z.array(z.string()).optional(),
+})
 
-export const groupEntrySchema = z.union([toolGroupsSchema, z.tuple([toolGroupsSchema, groupOptionsSchema])])
+export type GroupScope = z.infer<typeof groupScopeSchema>
+
+/**
+ * GroupEntry
+ *
+ * A group entry can now be:
+ *   1. A bare group name string:             "read"
+ *   2. A [name, options] tuple:              ["write", { fileRegex: "\\.md$" }]
+ *   3. A scoped group object:                { "read": { allowed: [...], denied: [...] } }
+ *      (exactly one group name as the key)
+ */
+const scopedGroupEntrySchema = z
+	.record(z.string(), groupScopeSchema)
+	.refine((obj) => Object.keys(obj).length === 1, {
+		message: "Each scoped group entry must have exactly one group name",
+	})
+	.refine((obj) => toolGroupsSchema.safeParse(Object.keys(obj)[0]).success, {
+		message: "Scoped group entry key must be a valid group name",
+	})
+
+export const groupEntrySchema = z.union([
+	toolGroupsSchema,
+	z.tuple([toolGroupsSchema, groupOptionsSchema]),
+	scopedGroupEntrySchema,
+])
 
 export type GroupEntry = z.infer<typeof groupEntrySchema>
 
@@ -53,6 +89,10 @@ function isDeprecatedGroupEntry(entry: unknown): boolean {
 	if (Array.isArray(entry) && entry.length >= 1 && typeof entry[0] === "string") {
 		return entry[0] in deprecatedToolGroups
 	}
+	// Scoped group entry: { "groupName": { ... } }
+	if (typeof entry === "object" && entry !== null && !Array.isArray(entry)) {
+		return Object.keys(entry as Record<string, unknown>).some((k) => k in deprecatedToolGroups)
+	}
 	return false
 }
 
@@ -64,8 +104,9 @@ const rawGroupEntryArraySchema = z.array(groupEntrySchema).refine(
 		const seen = new Set()
 
 		return groups.every((group) => {
-			// For tuples, check the group name (first element).
-			const groupName = Array.isArray(group) ? group[0] : group
+			// Extract group name from any format: string, [name, opts], or { name: { ... } }
+			const groupName =
+				typeof group === "string" ? group : Array.isArray(group) ? group[0] : Object.keys(group)[0]!
 
 			if (seen.has(groupName)) {
 				return false

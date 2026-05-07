@@ -146,6 +146,18 @@ function getGroupOptions(group: GroupEntry): GroupOptions | undefined {
 	return Array.isArray(group) ? group[1] : undefined
 }
 
+/**
+ * Extract the group-level scope (allowed/denied) from a scoped group entry.
+ * Returns undefined for bare strings and tuples.
+ */
+function getGroupScope(group: GroupEntry): { allowed?: string[]; denied?: string[] } | undefined {
+	if (typeof group === "object" && !Array.isArray(group)) {
+		const groupName = getGroupName(group)
+		return (group as Record<string, { allowed?: string[]; denied?: string[] }>)[groupName]
+	}
+	return undefined
+}
+
 function doesFileMatchRegex(filePath: string, pattern: string): boolean {
 	try {
 		const regex = new RegExp(pattern)
@@ -236,6 +248,7 @@ export function isToolAllowedForMode(
 	for (const group of mode.groups ?? []) {
 		const groupName = getGroupName(group)
 		const options = getGroupOptions(group)
+		const scope = getGroupScope(group)
 
 		const groupConfig = TOOL_GROUPS[groupName]
 
@@ -255,6 +268,16 @@ export function isToolAllowedForMode(
 		// If the tool isn't in regular tools and isn't an included custom tool, continue to next group
 		if (!isRegularTool && !isCustomTool) {
 			continue
+		}
+
+		// Check group-level scope (allowed/denied) from scoped group entries
+		if (scope) {
+			if (scope.denied && (scope.denied.includes(tool) || scope.denied.includes(resolvedTool))) {
+				return false
+			}
+			if (scope.allowed && !scope.allowed.includes(tool) && !scope.allowed.includes(resolvedTool)) {
+				return false
+			}
 		}
 
 		// If there are no options, allow the tool

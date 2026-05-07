@@ -15,13 +15,18 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tools"
 
 export type Mode = string
 
-// Helper to extract group name regardless of format
+// Helper to extract group name regardless of format (string, tuple, or scoped object)
 export function getGroupName(group: GroupEntry): ToolGroup {
 	if (typeof group === "string") {
 		return group
 	}
 
-	return group[0]
+	if (Array.isArray(group)) {
+		return group[0]
+	}
+
+	// Scoped group entry: { "groupName": { allowed?, denied? } }
+	return Object.keys(group)[0] as ToolGroup
 }
 
 // Helper to get all tools for a mode
@@ -37,7 +42,29 @@ export function getToolsForMode(
 		groups.forEach((group) => {
 			const groupName = getGroupName(group)
 			const groupConfig = TOOL_GROUPS[groupName]
-			groupConfig.tools.forEach((tool: string) => tools.add(tool))
+
+			// Extract group-level scope (allowed/denied) from scoped entries
+			let scope: { allowed?: readonly string[]; denied?: readonly string[] } | undefined
+			if (typeof group === "object" && !Array.isArray(group)) {
+				scope = (group as Record<string, { allowed?: string[]; denied?: string[] }>)[groupName]
+			}
+
+			if (scope?.allowed) {
+				// Exclusive list: only these tools from the group (must be subset)
+				scope.allowed.forEach((tool: string) => {
+					if (groupConfig.tools.includes(tool)) {
+						tools.add(tool)
+					}
+				})
+			} else {
+				// Add all tools from the group
+				groupConfig.tools.forEach((tool: string) => tools.add(tool))
+			}
+
+			// Apply group-level denied (removes from what was added)
+			if (scope?.denied) {
+				scope.denied.forEach((tool: string) => tools.delete(tool))
+			}
 		})
 	}
 

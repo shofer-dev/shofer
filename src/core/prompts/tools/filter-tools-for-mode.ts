@@ -1,6 +1,6 @@
 import type OpenAI from "openai"
 import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@roo-code/types"
-import { getModeBySlug, getToolsForMode } from "../../../shared/modes"
+import { getGroupName, getModeBySlug, getToolsForMode } from "../../../shared/modes"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../../shared/tools"
 import { defaultModeSlug } from "../../../shared/modes"
 import { buildMcpToolName } from "../../../utils/mcp-name"
@@ -188,9 +188,7 @@ export function applyModelToolCustomization(
 		}
 
 		// Get the list of allowed groups for this mode
-		const allowedGroups = new Set(
-			(modeConfig.groups ?? []).map((groupEntry) => (Array.isArray(groupEntry) ? groupEntry[0] : groupEntry)),
-		)
+		const allowedGroups = new Set((modeConfig.groups ?? []).map((groupEntry) => getGroupName(groupEntry)))
 
 		// Add included tools only if they belong to an allowed group
 		// If the tool was specified as an alias, track the rename
@@ -464,7 +462,7 @@ export function filterMcpToolsForMode(
 	// Mode-level MCP visibility: a mode entry is either a slug or a tuple
 	// `[slug, options]`. If the mode does not include the `mcp` group, hide all
 	// MCP tools.
-	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => (Array.isArray(g) ? g[0] : g)))
+	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => getGroupName(g)))
 	if (!allowedGroups.has("mcp")) {
 		return []
 	}

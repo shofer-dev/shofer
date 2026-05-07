@@ -48,6 +48,10 @@ is:
 allowed(t, m)  ⇔  ( t ∈ groups(m)  ∨  t ∈ tools_allowed(m) )  ∧  t ∉ tools_denied(m)
 ```
 
+Where `groups(m)` includes per-group scoping: if a group entry uses the
+scoped form `{ "groupName": { allowed: [...], denied: [...] } }`, only
+tools matching the scope are included.
+
 Equivalently, `tools_denied` is an unconditional veto applied on top of the
 union of the two allow sources. The check order in code is:
 
@@ -55,8 +59,8 @@ union of the two allow sources. The check order in code is:
    The deny-list always wins; there is no override.
 2. **Explicit allow.** If `t ∈ tools_allowed`, return `true`.
 3. **Group allow.** Otherwise, walk `groups` and return `true` if `t` is in
-   any allowed group (subject to per-group options such as the `edit` group's
-   `fileRegex` restriction).
+   any allowed group (subject to per-group scoping and options such as the
+   `edit` group's `fileRegex` restriction).
 4. If none of the above match, return `false`.
 
 So for the ultimate decision, allow sources combine with **OR** semantics
@@ -66,10 +70,37 @@ So for the ultimate decision, allow sources combine with **OR** semantics
 
 ### `groups`
 
-A list of broad capability groups (e.g. `read`, `edit`, `command`, `mcp`,
-`browser`). Each entry can be either a bare group name or a `[name, options]`
-tuple. The most common option is `edit` with a `fileRegex` to restrict which
-files the mode may modify.
+A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
+`browser`). Each entry can be one of three forms:
+
+1. **Bare group name** (string): grants all tools in the group.
+
+    ```yaml
+    groups: [read, mcp]
+    ```
+
+2. **Tuple `[name, options]`**: group with metadata such as `fileRegex`.
+
+    ```yaml
+    groups: [["write", { fileRegex: "\\.md$" }]]
+    ```
+
+3. **Scoped group object** `{ name: { allowed?, denied? } }`: narrows the
+   tool set the group normally provides.
+    - `allowed`: exclusive list — only these tools from the group are available.
+      Must be a subset of what the group normally registers.
+    - `denied`: removes the listed tools from the group's normal set.
+    ```yaml
+    groups:
+        - browser
+        - mcp
+        - read:
+              allowed:
+                  - mcp--arkware--web_search
+    ```
+    In this example the mode gets ALL `browser` and `mcp` tools, but from the
+    `read` group it gets ONLY `mcp--arkware--web_search` — not `read_file`,
+    `search_files`, etc.
 
 Group definitions live in [`src/shared/tools.ts`](../src/shared/tools.ts) as
 `TOOL_GROUPS`, which maps each group name to the concrete tool IDs it grants.
