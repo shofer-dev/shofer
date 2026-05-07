@@ -907,6 +907,7 @@ export interface ClineSayTool {
 		| "fetchWebPage"
 		| "renameSymbol"
 		| "setTaskTitle"
+		| "giveFeedback"
 		| "insertEdit"
 		| "fileOp"
 	path?: string

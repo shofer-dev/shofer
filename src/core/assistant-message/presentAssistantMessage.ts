@@ -30,6 +30,7 @@ import { accessMcpResourceTool } from "../tools/accessMcpResourceTool"
 import { askFollowupQuestionTool } from "../tools/AskFollowupQuestionTool"
 import { switchModeTool } from "../tools/SwitchModeTool"
 import { setTaskTitleTool } from "../tools/SetTaskTitleTool"
+import { giveFeedbackTool } from "../tools/GiveFeedbackTool"
 import { attemptCompletionTool, AttemptCompletionCallbacks } from "../tools/AttemptCompletionTool"
 import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
@@ -405,6 +406,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "set_task_title":
 						return `[${block.name} to '${block.params.title}']`
+					case "give_feedback":
+						return `[${block.name}]`
 					case "codebase_search":
 						return `[${block.name} for '${block.params.query}']`
 					case "codebase_search_with_lsp":
@@ -896,6 +899,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "set_task_title":
 					await setTaskTitleTool.handle(cline, block as ToolUse<"set_task_title">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "give_feedback":
+					await giveFeedbackTool.handle(cline, block as ToolUse<"give_feedback">, {
 						askApproval,
 						handleError,
 						pushToolResult,

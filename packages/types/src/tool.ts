@@ -88,6 +88,7 @@ export const toolNames = [
 	"view_image",
 	"codebase_search_with_lsp",
 	"set_task_title",
+	"give_feedback",
 	// Async background task tools
 	"check_task_status",
 	"wait_for_task",
@@ -157,6 +158,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	view_image: "view images",
 	codebase_search_with_lsp: "search codebase via LSP",
 	set_task_title: "set task title",
+	give_feedback: "send feedback to Arkware",
 	check_task_status: "check background task status",
 	wait_for_task: "wait for background task",
 	list_background_tasks: "list background tasks",
@@ -237,6 +239,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"skill_save",
 	"skill_delete",
 	"set_task_title",
+	"give_feedback",
 ] as const
 
 /**
