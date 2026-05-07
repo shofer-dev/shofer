@@ -51,8 +51,9 @@ export function getToolsForMode(
 
 			if (scope?.allowed) {
 				// Exclusive list: only these tools from the group (must be subset)
+				const groupTools = groupConfig.tools as readonly string[]
 				scope.allowed.forEach((tool: string) => {
-					if (groupConfig.tools.includes(tool)) {
+					if (groupTools.includes(tool)) {
 						tools.add(tool)
 					}
 				})
