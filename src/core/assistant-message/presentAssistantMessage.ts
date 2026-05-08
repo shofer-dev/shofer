@@ -61,24 +61,9 @@ import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool"
 import { waitForTaskTool } from "../tools/WaitForTaskTool"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
 import { sleepTool } from "../tools/SleepTool"
-
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
-
-/**
- * Check whether a tool name belongs to an external language model tool
- * registered by another extension via vscode.lm.tools.
- *
- * External tools are discovered at build-tools.ts time and included in the
- * model's tool list. At execution time we invoke them via vscode.lm.invokeTool.
- */
-function isExternalLmTool(toolName: string): boolean {
-	try {
-		return vscode.lm.tools.some((t) => t.name === toolName)
-	} catch {
-		return false
-	}
-}
+import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -1170,65 +1155,51 @@ export async function presentAssistantMessage(cline: Task) {
 						break
 					}
 
-					// Check if this is an external LM tool registered by another extension
-					// via vscode.lm.tools (e.g., vscode-tools, browser-tools).
-					if (isExternalLmTool(block.name)) {
-						// Surface the call through the same `use_mcp_server` chat-row
-						// renderer used by real MCP tools so the user gets visual
-						// feedback (request card + spinner + response). The
-						// `external_lm_tool: true` marker on the payload makes
-						// `checkAutoApproval` short-circuit MCP gating, since the user
-						// already opted in by installing the providing extension.
-						const toolInput = (block.nativeArgs || block.params || {}) as Record<string, unknown>
-						const externalServerName = block.name.startsWith("browser_")
-							? "browser-tools"
-							: block.name.startsWith("ide_")
-								? "vscode-tools"
-								: "external-lm-tools"
-						const askPayload = JSON.stringify({
-							type: "use_mcp_tool",
-							serverName: externalServerName,
-							toolName: block.name,
-							arguments: JSON.stringify(toolInput),
-							external_lm_tool: true,
-						})
-
-						const didApprove = await askApproval("use_mcp_server", askPayload)
-						if (!didApprove) {
-							break
-						}
-
-						try {
-							cline.consecutiveMistakeCount = 0
-							await cline.say("mcp_server_request_started")
-
-							const invocationResult = await vscode.lm.invokeTool(block.name, {
-								toolInvocationToken: undefined,
-								input: toolInput,
+					// Check if this is a tool from a private provider
+					// (registered via arkware.privateToolProviders config).
+					if (isPrivateLmTool(block.name)) {
+						const invokeCommand = getPrivateToolInvokeCommand(block.name)
+						if (!invokeCommand) {
+							// Provider lost between build and execution — fall through to unknown tool.
+						} else {
+							const toolInput = (block.nativeArgs || block.params || {}) as Record<string, unknown>
+							const askPayload = JSON.stringify({
+								type: "use_mcp_tool",
+								serverName: "extension-tools",
+								toolName: block.name,
+								arguments: JSON.stringify(toolInput),
+								external_lm_tool: true,
 							})
 
-							// Collect text content from the tool result parts.
-							const textParts: string[] = []
-							for (const part of invocationResult.content) {
-								if (part instanceof vscode.LanguageModelTextPart) {
-									textParts.push(part.value)
-								}
+							const didApprove = await askApproval("use_mcp_server", askPayload)
+							if (!didApprove) {
+								break
 							}
-							const resultText = textParts.join("\n") || "(tool returned empty result)"
 
-							await cline.say("mcp_server_response", resultText)
-							pushToolResult(resultText)
-						} catch (execError: any) {
-							cline.consecutiveMistakeCount++
-							await handleError(
-								`executing external tool "${block.name}"`,
-								execError instanceof Error ? execError : new Error(String(execError)),
-							)
+							try {
+								cline.consecutiveMistakeCount = 0
+								await cline.say("mcp_server_request_started")
+
+								const result = await vscode.commands.executeCommand<{
+									content: string
+									is_error?: boolean
+								}>(invokeCommand, block.name, toolInput)
+
+								const resultText = result?.content ?? "(tool returned empty result)"
+								await cline.say("mcp_server_response", resultText)
+								pushToolResult(result.is_error ? formatResponse.toolError(resultText) : resultText)
+							} catch (execError: any) {
+								cline.consecutiveMistakeCount++
+								await handleError(
+									`executing private tool "${block.name}"`,
+									execError instanceof Error ? execError : new Error(String(execError)),
+								)
+							}
+							break
 						}
-						break
 					}
 
-					// Not a custom tool or external tool - handle as unknown tool error
+					// Not a custom tool or private tool — handle as unknown tool error
 					const errorMessage = `Unknown tool "${block.name}". This tool does not exist. Please use one of the available tools.`
 					cline.consecutiveMistakeCount++
 					cline.recordToolError(block.name as ToolName, errorMessage)

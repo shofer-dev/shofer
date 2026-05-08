@@ -58,150 +58,171 @@ function getToolName(tool: OpenAI.Chat.ChatCompletionTool): string {
 	return (tool as OpenAI.Chat.ChatCompletionFunctionTool).function.name
 }
 
-/**
- * Build a set of Roo-Code's own native tool names.
- * Used to filter out Roo-Code tools from externally-registered LM tools
- * so they don't appear twice in the model's tool list.
- */
-let _nativeToolNamesCache: Set<string> | null = null
+// ──────────────────────────────────────────────
+// Private Tool Provider system
+// ──────────────────────────────────────────────
+//
+// Extensions register tools via the `arkware.privateToolProviders` VS Code
+// configuration, not via `vscode.lm.tools` (which is Copilot's interface).
+// Each provider exposes two commands:
+//
+//   <getDefinitionsCommand>  → returns Array<{name, description, inputSchema, group?}>
+//   <invokeToolCommand>      → takes (name, input), returns {content, is_error?}
+//
+// See docs/tool-registration-interface.md for the full contract.
 
-function getNativeToolNames(): Set<string> {
-	if (!_nativeToolNamesCache) {
-		_nativeToolNamesCache = new Set(
-			getNativeTools().map((t) => (t as OpenAI.Chat.ChatCompletionFunctionTool).function.name),
-		)
-	}
-	return _nativeToolNamesCache
+/** Configuration shape for a single private tool provider. */
+interface PrivateToolProviderConfig {
+	/** VS Code command ID that returns all tool definitions. */
+	getDefinitionsCommand: string
+	/** VS Code command ID that invokes a tool by name. */
+	invokeToolCommand: string
 }
 
-/**
- * Metadata for an external language model tool discovered via vscode.lm.tools.
- *
- * Each tool's group is resolved from the tool-authoring extension's
- * configuration (arkware.*.toolGroups), not inferred from name heuristics.
- */
-interface ExternalLmToolMeta {
+/** A tool definition returned by a provider's getDefinitions command. */
+interface PrivateToolDef {
+	name: string
+	description: string
+	inputSchema: object
+	/** Optional tool group override. Falls back to provider config. */
+	group?: string
+}
+
+/** Metadata for a single tool discovered from a private provider. */
+interface PrivateToolMeta {
 	tool: OpenAI.Chat.ChatCompletionFunctionTool
-	/** The tool group assigned to this tool for mode filtering. */
 	group: ToolGroup
+	/** The VS Code command to invoke this tool at execution time. */
+	invokeCommand: string
 }
 
 /**
- * Resolve the ToolGroup for an external LM tool by reading the
- * tool-authoring extension's declared `toolGroups` configuration.
+ * Read all registered private tool providers from config and discover
+ * their tools. Returns a combined list with group assignments and
+ * invocation commands.
  *
- * Each extension that registers LM tools should contribute a
- * `toolGroups` property under its config namespace (e.g.,
- * `arkware.vscodeTools.toolGroups` for ide-tools).
- *
- * Resolution strategy:
- *  1. Read known config namespaces and look up the tool name.
- *  2. If found and the declared group is a valid ToolGroup, use it.
- *  3. Fall back to "uncategorized".
- *
- * @param toolName - The name of the tool (e.g., "ide_file_read")
- * @returns The ToolGroup declared by the tool's extension, or "uncategorized"
+ * Config key: `arkware.privateToolProviders`
  */
-function resolveExternalLmToolGroup(toolName: string): ToolGroup {
-	// Known config namespaces for extensions that register LM tools.
-	// Each maps a config section to its publisher prefix for tool matching.
-	const configNamespaces: Array<{ section: string; toolPrefix: string }> = [
-		{ section: "arkware.vscodeTools", toolPrefix: "ide_" },
-		{ section: "arkware.browserTools", toolPrefix: "browser_" },
-	]
+async function getPrivateLmToolMeta(): Promise<PrivateToolMeta[]> {
+	const config = vscode.workspace.getConfiguration("arkware")
+	const providers = config.get<Record<string, PrivateToolProviderConfig>>("privateToolProviders", {})
 
-	for (const ns of configNamespaces) {
-		// Only check configs for tools whose names match the expected prefix.
-		if (!toolName.startsWith(ns.toolPrefix)) continue
+	const allMeta: PrivateToolMeta[] = []
+
+	for (const [providerId, providerCfg] of Object.entries(providers)) {
+		if (!providerCfg?.getDefinitionsCommand || !providerCfg?.invokeToolCommand) continue
 
 		try {
-			const config = vscode.workspace.getConfiguration(ns.section)
-			const toolGroups = config.get<Record<string, string>>("toolGroups")
-			if (toolGroups && typeof toolGroups[toolName] === "string") {
-				const declared = toolGroups[toolName]
-				// Validate that the declared value is a known ToolGroup.
-				if ((toolGroupsSchema.options as readonly string[]).includes(declared)) {
-					return declared as ToolGroup
-				}
+			const definitions = await vscode.commands.executeCommand<PrivateToolDef[] | undefined>(
+				providerCfg.getDefinitionsCommand,
+			)
+
+			if (!definitions || !Array.isArray(definitions)) continue
+
+			for (const def of definitions) {
+				const group = resolvePrivateToolGroup(providerId, def)
+				allMeta.push({
+					tool: {
+						type: "function" as const,
+						function: {
+							name: def.name,
+							description: def.description || def.name,
+							parameters: (def.inputSchema || {
+								type: "object",
+								properties: {},
+							}) as OpenAI.FunctionParameters,
+						},
+					},
+					group,
+					invokeCommand: providerCfg.invokeToolCommand,
+				})
 			}
 		} catch {
-			// Config read failed — fall through to uncategorized.
+			// Provider extension not installed or not activated — skip.
 		}
+	}
+
+	return allMeta
+}
+
+/**
+ * Resolve the ToolGroup for a private tool:
+ *  1. If the tool definition has an explicit `group`, validate and use it.
+ *  2. Fall back to the provider's `arkware.<providerId>.toolGroups` config.
+ *  3. Default to "uncategorized".
+ */
+function resolvePrivateToolGroup(providerId: string, def: PrivateToolDef): ToolGroup {
+	// 1. Explicit group in the definition
+	if (def.group && (toolGroupsSchema.options as readonly string[]).includes(def.group)) {
+		return def.group as ToolGroup
+	}
+
+	// 2. Provider-level config
+	try {
+		const config = vscode.workspace.getConfiguration(`arkware.${providerId}`)
+		const toolGroups = config.get<Record<string, string>>("toolGroups")
+		if (toolGroups && typeof toolGroups[def.name] === "string") {
+			const declared = toolGroups[def.name]
+			if ((toolGroupsSchema.options as readonly string[]).includes(declared)) {
+				return declared as ToolGroup
+			}
+		}
+	} catch {
+		// Config read failed.
 	}
 
 	return "uncategorized"
 }
 
 /**
- * Get language model tools registered by other extensions via vscode.lm.tools,
- * each with an assigned tool group for mode filtering.
- *
- * VS Code's Language Model Tools API allows extensions to register tools that
- * are globally available to LLM providers. This function discovers those tools
- * at runtime, filters out Roo-Code's own native tools (already included via
- * getNativeTools()), and returns metadata including a group classification.
- *
- * @returns Array of external LM tool metadata with group assignments
+ * Lookup map: tool name → invoke command, built during discovery.
+ * Used by the execution layer (presentAssistantMessage.ts) to route
+ * private tool invocations to the correct provider.
  */
-function getExternalLmToolMeta(): ExternalLmToolMeta[] {
-	try {
-		const nativeNames = getNativeToolNames()
-		const allLmTools = vscode.lm.tools
+let _privateToolInvokeMap: Map<string, string> | null = null
 
-		return allLmTools
-			.filter((tool) => !nativeNames.has(tool.name))
-			.map((tool) => ({
-				tool: {
-					type: "function" as const,
-					function: {
-						name: tool.name,
-						description: tool.description || tool.name,
-						parameters: (tool.inputSchema || {
-							type: "object",
-							properties: {},
-						}) as OpenAI.FunctionParameters,
-					},
-				},
-				group: resolveExternalLmToolGroup(tool.name),
-			}))
-	} catch {
-		return []
-	}
+/**
+ * Return the invoke command for a private tool name, or undefined
+ * if the name is not a known private tool.
+ */
+export function getPrivateToolInvokeCommand(toolName: string): string | undefined {
+	return _privateToolInvokeMap?.get(toolName)
 }
 
 /**
- * Filter external LM tools by mode, using each tool's assigned group.
+ * Check whether a tool name belongs to any registered private provider.
+ */
+export function isPrivateLmTool(toolName: string): boolean {
+	return _privateToolInvokeMap?.has(toolName) ?? false
+}
+
+/**
+ * Filter private tools by mode, using each tool's assigned group.
  *
- * A mode's `groups` list determines which ToolGroups are allowed. External
- * tools whose group is present in the mode's allowed groups are included.
- * An empty mode config (no groups) exposes all external tools.
- *
- * @param externalMeta - External tool metadata with group assignments
+ * @param privateMeta - Private tool metadata with group assignments
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
- * @returns Filtered external tool definitions
+ * @returns Filtered private tool definitions
  */
-function filterExternalToolsForMode(
-	externalMeta: ExternalLmToolMeta[],
+function filterPrivateToolsForMode(
+	privateMeta: PrivateToolMeta[],
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
 ): OpenAI.Chat.ChatCompletionFunctionTool[] {
 	const modeSlug = mode ?? defaultModeSlug
 	const modeConfig = getModeBySlug(modeSlug, customModes)
 
-	// If no mode config, expose all external tools
 	if (!modeConfig) {
-		return externalMeta.map((m) => m.tool)
+		return privateMeta.map((m) => m.tool)
 	}
 
 	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => getGroupName(g)))
 
-	// If mode has no groups defined, expose all external tools
 	if (allowedGroups.size === 0) {
-		return externalMeta.map((m) => m.tool)
+		return privateMeta.map((m) => m.tool)
 	}
 
-	return externalMeta.filter((meta) => allowedGroups.has(meta.group)).map((meta) => meta.tool)
+	return privateMeta.filter((meta) => allowedGroups.has(meta.group)).map((meta) => meta.tool)
 }
 
 /**
@@ -218,15 +239,6 @@ export async function buildNativeToolsArray(options: BuildToolsOptions): Promise
 
 /**
  * Builds the complete tools array for native protocol requests with optional mode restrictions.
- * When includeAllToolsWithRestrictions is true, returns ALL tools but also provides
- * the list of allowed tool names for use with allowedFunctionNames.
- *
- * This enables providers like Gemini to pass all tool definitions to the model
- * (so it can reference historical tool calls) while restricting which tools
- * can actually be invoked via allowedFunctionNames in toolConfig.
- *
- * @param options - Configuration options for building the tools
- * @returns BuildToolsResult with tools array and optional allowedFunctionNames
  */
 export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsOptions): Promise<BuildToolsResult> {
 	const {
@@ -243,26 +255,19 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 
 	const mcpHub = provider.getMcpHub()
 
-	// Get CodeIndexManager for feature checking.
 	const { CodeIndexManager } = await import("../../services/code-index/manager")
 	const codeIndexManager = CodeIndexManager.getInstance(provider.context, cwd)
 
-	// Build settings object for tool filtering.
 	const filterSettings = {
 		todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 		disabledTools,
 		modelInfo,
 	}
 
-	// Check if the model supports images for read_file tool description.
 	const supportsImages = modelInfo?.supportsImages ?? false
 
-	// Build native tools with dynamic read_file tool based on settings.
-	const nativeTools = getNativeTools({
-		supportsImages,
-	})
+	const nativeTools = getNativeTools({ supportsImages })
 
-	// Filter native tools based on mode restrictions.
 	const filteredNativeTools = filterNativeToolsForMode(
 		nativeTools,
 		mode,
@@ -273,58 +278,36 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		mcpHub,
 	)
 
-	// Filter MCP tools based on mode restrictions using per-tool group assignments.
 	const mcpTools = getMcpServerTools(mcpHub)
 	const mcpToolMeta = mcpHub?.getMcpToolMetadata() ?? []
 	const filteredMcpTools = filterMcpToolsForMode(mcpTools, mcpToolMeta, mode, customModes, experiments)
 
-	// Add custom tools if they are available and the experiment is enabled.
 	let nativeCustomTools: OpenAI.Chat.ChatCompletionFunctionTool[] = []
-
 	if (experiments?.customTools) {
 		const toolDirs = getRooDirectoriesForCwd(cwd).map((dir) => path.join(dir, "tools"))
 		await customToolRegistry.loadFromDirectoriesIfStale(toolDirs)
 		const customTools = customToolRegistry.getAllSerialized()
-
 		if (customTools.length > 0) {
 			nativeCustomTools = customTools.map(formatNative)
 		}
 	}
 
-	// Get tools registered by other extensions via vscode.lm.tools,
-	// each with an assigned tool group for mode filtering.
-	const externalLmMeta = getExternalLmToolMeta()
-	const allExternalLmTools = externalLmMeta.map((meta) => meta.tool)
-	const filteredExternalLmTools = filterExternalToolsForMode(externalLmMeta, mode, customModes)
+	// Discover all tools from private providers (extensions using the
+	// arkware.privateToolProviders config convention).
+	const privateMeta = await getPrivateLmToolMeta()
+	const allPrivateTools = privateMeta.map((m) => m.tool)
+	const filteredPrivateTools = filterPrivateToolsForMode(privateMeta, mode, customModes)
 
-	// Combine filtered tools (for backward compatibility and for allowedFunctionNames)
-	const filteredTools = [
-		...filteredNativeTools,
-		...filteredMcpTools,
-		...nativeCustomTools,
-		...filteredExternalLmTools,
-	]
+	// Build the invoke-command lookup map for the execution layer.
+	_privateToolInvokeMap = new Map(privateMeta.map((m) => [getToolName(m.tool), m.invokeCommand]))
 
-	// If includeAllToolsWithRestrictions is true, return ALL tools but provide
-	// allowed names based on mode filtering
+	const filteredTools = [...filteredNativeTools, ...filteredMcpTools, ...nativeCustomTools, ...filteredPrivateTools]
+
 	if (includeAllToolsWithRestrictions) {
-		// Combine ALL tools (unfiltered native + all MCP + custom + external)
-		const allTools = [...nativeTools, ...mcpTools, ...nativeCustomTools, ...allExternalLmTools]
-
-		// Extract names of tools that are allowed based on mode filtering.
-		// Resolve any alias names to canonical names to ensure consistency with allTools
-		// (which uses canonical names). This prevents Gemini errors when tools are renamed
-		// to aliases in filteredTools but allTools contains the original canonical names.
+		const allTools = [...nativeTools, ...mcpTools, ...nativeCustomTools, ...allPrivateTools]
 		const allowedFunctionNames = filteredTools.map((tool) => resolveToolAlias(getToolName(tool)))
-
-		return {
-			tools: allTools,
-			allowedFunctionNames,
-		}
+		return { tools: allTools, allowedFunctionNames }
 	}
 
-	// Default behavior: return only filtered tools
-	return {
-		tools: filteredTools,
-	}
+	return { tools: filteredTools }
 }

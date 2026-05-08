@@ -8,16 +8,14 @@ import { EXPERIMENT_IDS } from "../../shared/experiments"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../shared/tools"
 
 /**
- * Check whether a tool name belongs to an external language model tool
- * registered by another extension via vscode.lm.tools.
+ * Check whether a tool name belongs to a tool from a private provider
+ * (arkware.privateToolProviders config convention).
+ *
+ * Tools from VS Code built-in extensions (e.g., GitHub Copilot) are excluded —
+ * they are tightly coupled to their owning extension's internal orchestration
+ * and reject invocations from outside callers.
  */
-function isExternalLmTool(toolName: string): boolean {
-	try {
-		return vscode.lm.tools.some((t) => t.name === toolName)
-	} catch {
-		return false
-	}
-}
+import { isPrivateLmTool } from "../task/build-tools"
 
 /**
  * Checks if a tool name is a valid, known tool.
@@ -39,8 +37,9 @@ export function isValidToolName(toolName: string, experiments?: Record<string, b
 		return true
 	}
 
-	// Check if it's an external LM tool registered by another extension.
-	if (isExternalLmTool(toolName)) {
+	// Check if it's a tool from a private provider
+	// (arkware.privateToolProviders config convention).
+	if (isPrivateLmTool(toolName)) {
 		return true
 	}
 
@@ -207,10 +206,9 @@ export function isToolAllowedForMode(
 		return true
 	}
 
-	// External LM tools from other extensions (e.g., vscode-tools) are
-	// already filtered by mode at build-tools.ts time. Allow them through
-	// unconditionally at the validation layer.
-	if (isExternalLmTool(tool)) {
+	// Private provider tools are already filtered by mode at
+	// build-tools.ts time. Allow them through unconditionally.
+	if (isPrivateLmTool(tool)) {
 		return true
 	}
 
