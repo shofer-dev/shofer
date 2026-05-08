@@ -99,9 +99,8 @@ export async function checkAutoApproval({
 		try {
 			const mcpServerUse = JSON.parse(text) as McpServerUse
 
-			// External VS Code language-model tools (registered via
-			// `vscode.lm.tools` by sibling extensions like browser-tools or
-			// vscode-tools) are surfaced through the same `use_mcp_server` ask
+			// Private provider tools (from extensions like vscode-tools or
+			// browser-tools) are surfaced through the same `use_mcp_server` ask
 			// purely for UI consistency. The user already opted in by
 			// installing the providing extension, so we bypass MCP gating.
 			if (mcpServerUse.external_lm_tool === true) {

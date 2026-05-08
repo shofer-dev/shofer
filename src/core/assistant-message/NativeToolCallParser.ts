@@ -25,21 +25,7 @@ import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpTool
  */
 type NativeArgsFor<TName extends ToolName> = TName extends keyof NativeToolArgs ? NativeToolArgs[TName] : never
 
-/**
- * Check whether a tool name belongs to an external language model tool
- * registered by another extension via vscode.lm.tools.
- *
- * External tools are discovered dynamically at build-tools.ts time
- * and filtered by mode. At parse time we just need to recognize them
- * so the parser passes them through instead of rejecting them as unknown.
- */
-function isExternalLmTool(toolName: string): boolean {
-	try {
-		return vscode.lm.tools.some((t) => t.name === toolName)
-	} catch {
-		return false
-	}
-}
+import { isPrivateLmTool } from "../task/build-tools"
 
 /**
  * Parser for native tool calls (OpenAI-style function calling).
@@ -399,8 +385,8 @@ export class NativeToolCallParser {
 		// because tool.handlePartial() methods rely on params to show UI updates.
 		const params: Partial<Record<ToolParamName, string>> = {}
 
-		// Allow external LM tool params through as well (they aren't in toolParamNames).
-		const isExternalTool = isExternalLmTool(name)
+		// Allow private LM tool params through as well (they aren't in toolParamNames).
+		const isExternalTool = isPrivateLmTool(name)
 
 		for (const [key, value] of Object.entries(partialArgs)) {
 			if (toolParamNames.includes(key as ToolParamName) || isExternalTool) {
@@ -853,8 +839,8 @@ export class NativeToolCallParser {
 				break
 
 			default:
-				if (isExternalLmTool(name)) {
-					// External LM tools: pass partial args through as nativeArgs
+				if (isPrivateLmTool(name)) {
+					// Private LM tools: pass partial args through as nativeArgs
 					// so the tool handler can process them once the call is complete.
 					nativeArgs = partialArgs
 				}
@@ -910,12 +896,12 @@ export class NativeToolCallParser {
 		const resolvedName = resolveToolAlias(toolCall.name as string) as TName
 
 		// Validate tool name (after alias resolution).
-		// External LM tools (registered by other extensions via vscode.lm.tools)
-		// are discovered at build time and filtered by mode; allow them through.
+		// Private provider tools are discovered at build time and filtered by mode;
+		// allow them through.
 		if (
 			!toolNames.includes(resolvedName as ToolName) &&
 			!customToolRegistry.has(resolvedName) &&
-			!isExternalLmTool(resolvedName)
+			!isPrivateLmTool(resolvedName)
 		) {
 			console.error(`Invalid tool name: ${toolCall.name} (resolved: ${resolvedName})`)
 			console.error(`Valid tool names:`, toolNames)
@@ -936,7 +922,7 @@ export class NativeToolCallParser {
 				if (
 					!toolParamNames.includes(key as ToolParamName) &&
 					!customToolRegistry.has(resolvedName) &&
-					!isExternalLmTool(resolvedName)
+					!isPrivateLmTool(resolvedName)
 				) {
 					console.warn(`Unknown parameter '${key}' for tool '${resolvedName}'`)
 					console.warn(`Valid param names:`, toolParamNames)
@@ -1421,7 +1407,7 @@ export class NativeToolCallParser {
 				default:
 					if (customToolRegistry.has(resolvedName)) {
 						nativeArgs = args as NativeArgsFor<TName>
-					} else if (isExternalLmTool(resolvedName)) {
+					} else if (isPrivateLmTool(resolvedName)) {
 						// External LM tools: pass raw arguments through.
 						// The actual schema validation is handled by the tool's
 						// registered inputSchema when invoked via vscode.lm.invokeTool.
@@ -1434,7 +1420,7 @@ export class NativeToolCallParser {
 			// Native-only: core tools must always have typed nativeArgs.
 			// External tools pass raw args and are validated by the tool's own schema.
 			// If we couldn't construct it, the model produced an invalid tool call payload.
-			if (!nativeArgs && !customToolRegistry.has(resolvedName) && !isExternalLmTool(resolvedName)) {
+			if (!nativeArgs && !customToolRegistry.has(resolvedName) && !isPrivateLmTool(resolvedName)) {
 				throw new Error(
 					`[NativeToolCallParser] Invalid arguments for tool '${resolvedName}'. ` +
 						`Native tool calls require a valid JSON payload matching the tool schema. ` +
