@@ -400,7 +400,17 @@ export const ChatRowContent = ({
 				return []
 			case "api_req_retry_delayed":
 				return []
-			case "api_req_started":
+			case "api_req_started": {
+				// On success (cost present, no cancel reason), hide the row entirely
+				// to avoid cluttering the chat — same as tool_preparing dismissal.
+				if (
+					cost !== null &&
+					cost !== undefined &&
+					(apiReqCancelReason === null || apiReqCancelReason === undefined)
+				) {
+					return []
+				}
+
 				const getIconSpan = (iconName: string, color: string) => (
 					<div
 						style={{
@@ -423,8 +433,6 @@ export const ChatRowContent = ({
 						) : (
 							getIconSpan("error", errorColor)
 						)
-					) : cost !== null && cost !== undefined ? (
-						getIconSpan("arrow-swap", normalColor)
 					) : apiRequestFailedMessage ? (
 						getIconSpan("error", errorColor)
 					) : isLast ? (
@@ -442,14 +450,13 @@ export const ChatRowContent = ({
 								{t("chat:apiRequest.streamingFailed")}
 							</span>
 						)
-					) : cost !== null && cost !== undefined ? (
-						<span style={{ color: normalColor }}>{t("chat:apiRequest.title")}</span>
 					) : apiRequestFailedMessage ? (
 						<span style={{ color: errorColor }}>{t("chat:apiRequest.failed")}</span>
 					) : (
 						<span style={{ color: normalColor }}>{t("chat:apiRequest.streaming")}</span>
 					),
 				]
+			}
 			case "followup":
 				return [
 					<MessageCircleQuestionMark className="w-4 shrink-0" aria-label="Question icon" />,
