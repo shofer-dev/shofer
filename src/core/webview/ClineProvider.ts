@@ -1614,7 +1614,14 @@ export class ClineProvider
 			}
 		}
 
-		await this.updateGlobalState("mode", newMode)
+		// Mode is task-scoped — do NOT update the global "mode" state here, as that
+		// would leak the mode change to every other active task sharing this provider.
+		// The webview's mode display is driven by the current task's _taskMode via
+		// getStateToPostToWebview(). restoreTaskMode() handles the global-state update
+		// when the user switches focus between tasks.
+		//
+		// We still propagate the mode change to the webview so the UI updates immediately,
+		// and emit ModeChanged for any downstream listeners that care about mode transitions.
 
 		this.emit(RooCodeEventName.ModeChanged, newMode)
 
@@ -2566,7 +2573,7 @@ export class ClineProvider
 			currentApiConfigName: currentApiConfigName ?? "default",
 			listApiConfigMeta: listApiConfigMeta ?? [],
 			pinnedApiConfigs: pinnedApiConfigs ?? {},
-			mode: mode ?? defaultModeSlug,
+			mode: (currentTask as any)?._taskMode || mode || defaultModeSlug,
 			customModePrompts: customModePrompts ?? {},
 			customSupportPrompts: customSupportPrompts ?? {},
 			enhancementApiConfigId,

@@ -332,8 +332,8 @@ describe("ClineProvider - Sticky Mode", () => {
 			// Switch mode
 			await provider.handleModeSwitch("architect")
 
-			// Verify mode was updated in global state
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
+			// Verify mode was updated on the task (not leaked to global state)
+			expect((mockTask as any)._taskMode).toBe("architect")
 
 			// Verify task history was updated with new mode
 			expect(updateTaskHistorySpy).toHaveBeenCalledWith(
@@ -662,8 +662,8 @@ describe("ClineProvider - Sticky Mode", () => {
 			// Switch mode - should not throw
 			await expect(provider.handleModeSwitch("architect")).resolves.not.toThrow()
 
-			// Verify mode was still updated in global state
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "architect")
+			// Task mode should not have been updated since save failed
+			expect((mockTask as any)._taskMode).toBeUndefined()
 		})
 
 		it("should handle null/undefined mode gracefully", async () => {
@@ -932,8 +932,8 @@ describe("ClineProvider - Sticky Mode", () => {
 			// Try to switch to invalid mode - it will actually switch
 			await provider.handleModeSwitch("invalid-mode" as any)
 
-			// The mode WILL be updated to invalid-mode (this is the actual behavior)
-			expect(mockContext.globalState.update).toHaveBeenCalledWith("mode", "invalid-mode")
+			// The mode is updated on the task only (task-scoped), not leaked to global state
+			expect((mockTask as any)._taskMode).toBe("invalid-mode")
 		})
 
 		it("should handle errors during mode switch gracefully", async () => {
@@ -1200,13 +1200,10 @@ describe("ClineProvider - Sticky Mode", () => {
 			// Wait for initialization to complete
 			await initPromise
 
-			// Check all mode update calls
-			const modeCalls = vi.mocked(mockContext.globalState.update).mock.calls.filter((call) => call[0] === "mode")
-
-			// Based on the actual behavior, the mode switch to "code" happens and persists
-			// The history mode restoration doesn't override it
-			const lastModeCall = modeCalls[modeCalls.length - 1]
-			expect(lastModeCall).toEqual(["mode", "code"])
+			// Mode is now task-scoped: handleModeSwitch no longer updates global state.
+			// The task created by createTaskWithHistoryItem gets its mode from the historyItem.
+			const newTask = provider.getCurrentTask()
+			expect((newTask as any)?._taskMode).toBe("architect")
 		})
 
 		it("should handle rapid task switches during mode changes", async () => {
