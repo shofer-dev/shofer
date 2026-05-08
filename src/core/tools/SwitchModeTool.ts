@@ -38,8 +38,9 @@ export class SwitchModeTool extends BaseTool<"switch_mode"> {
 				return
 			}
 
-			// Check if already in requested mode
-			const currentMode = (await task.providerRef.deref()?.getState())?.mode ?? defaultModeSlug
+			// Check if already in requested mode — use the task's own mode,
+			// not the provider-global mode, so parallel tasks don't interfere.
+			const currentMode = await task.getTaskMode()
 
 			if (currentMode === mode_slug) {
 				task.recordToolError("switch_mode")
