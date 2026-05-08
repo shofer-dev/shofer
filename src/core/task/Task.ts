@@ -2147,6 +2147,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * Finalize any tool_preparing partial row in the webview.
+	 * Called whenever a tool call reaches a terminal state (started, completed,
+	 * or finalized after streaming) so the preparing spinner disappears.
+	 */
+	private async dismissToolPreparingRow(): Promise<void> {
+		const lastPreparingIndex = findLastIndex(
+			this.clineMessages,
+			(m) => m.type === "say" && m.say === "tool_preparing" && m.partial === true,
+		)
+		if (lastPreparingIndex !== -1 && this.clineMessages[lastPreparingIndex].partial) {
+			this.clineMessages[lastPreparingIndex].partial = false
+			await this.updateClineMessage(this.clineMessages[lastPreparingIndex])
+		}
+	}
+
 	async sayAndCreateMissingParamError(toolName: ToolName, paramName: string, relPath?: string) {
 		await this.say(
 			"error",
@@ -3515,19 +3531,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 										this.assistantMessageContent.push(partialToolUse)
 										this.userMessageContentReady = false
 
-										// Finalize the tool_preparing row — the spinner
-										// should disappear now that the tool call has started.
-										const lastPreparingIndex = findLastIndex(
-											this.clineMessages,
-											(m) => m.type === "say" && m.say === "tool_preparing" && m.partial === true,
-										)
-										if (
-											lastPreparingIndex !== -1 &&
-											this.clineMessages[lastPreparingIndex].partial
-										) {
-											this.clineMessages[lastPreparingIndex].partial = false
-											await this.updateClineMessage(this.clineMessages[lastPreparingIndex])
-										}
+										// Dismiss any tool_preparing row now that the tool call has started.
+										await this.dismissToolPreparingRow()
 
 										presentAssistantMessage(this)
 									} else if (event.type === "tool_call_delta") {
@@ -3632,6 +3637,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 								// Mark that we have new content to process
 								this.userMessageContentReady = false
+
+								// Dismiss any tool_preparing row for this tool call.
+								await this.dismissToolPreparingRow()
 
 								// Present the tool call to user - presentAssistantMessage will execute
 								// tools sequentially and accumulate all results in userMessageContent
@@ -4006,10 +4014,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							this.userMessageContentReady = false
 
 							// Present the tool call - validation will handle missing params
+							await this.dismissToolPreparingRow()
 							presentAssistantMessage(this)
 						}
 					}
 				}
+				// Dismiss any remaining tool_preparing rows after all tools finalized.
+				await this.dismissToolPreparingRow()
 
 				// IMPORTANT: Capture partialBlocks AFTER finalizeRawChunks() to avoid double-presentation.
 				// Tools finalized above are already presented, so we only want blocks still partial after finalization.
