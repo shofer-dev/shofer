@@ -3514,6 +3514,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 										// Add to content and present
 										this.assistantMessageContent.push(partialToolUse)
 										this.userMessageContentReady = false
+
+										// Finalize the tool_preparing row — the spinner
+										// should disappear now that the tool call has started.
+										const lastPreparingIndex = findLastIndex(
+											this.clineMessages,
+											(m) => m.type === "say" && m.say === "tool_preparing" && m.partial === true,
+										)
+										if (
+											lastPreparingIndex !== -1 &&
+											this.clineMessages[lastPreparingIndex].partial
+										) {
+											this.clineMessages[lastPreparingIndex].partial = false
+											await this.updateClineMessage(this.clineMessages[lastPreparingIndex])
+										}
+
 										presentAssistantMessage(this)
 									} else if (event.type === "tool_call_delta") {
 										// Process chunk using streaming JSON parser
