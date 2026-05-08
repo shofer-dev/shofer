@@ -680,7 +680,8 @@ export async function presentAssistantMessage(cline: Task) {
 					// 2. NOT set didAlreadyUseTool = true (the tool was never executed, just failed validation)
 					// This prevents the stream from being interrupted with "Response interrupted by tool use result"
 					// which would cause the extension to appear to hang
-					const errorContent = formatResponse.toolError(error.message)
+					const errMsg = error instanceof Error ? error.message : String(error)
+					const errorContent = formatResponse.toolError(errMsg)
 					// Push tool_result directly without setting didAlreadyUseTool
 					cline.pushToolResultToUserContent({
 						type: "tool_result",
@@ -1125,7 +1126,11 @@ export async function presentAssistantMessage(cline: Task) {
 								try {
 									customToolArgs = customTool.parameters.parse(block.nativeArgs || block.params || {})
 								} catch (parseParamsError) {
-									const message = `Custom tool "${block.name}" argument validation failed: ${parseParamsError.message}`
+									const errMsg =
+										parseParamsError instanceof Error
+											? parseParamsError.message
+											: String(parseParamsError)
+									const message = `Custom tool "${block.name}" argument validation failed: ${errMsg}`
 									console.error(message)
 									cline.consecutiveMistakeCount++
 									await cline.say("error", message)
@@ -1288,6 +1293,9 @@ async function checkpointSaveAndMark(task: Task) {
 		await task.checkpointSave(true)
 		task.currentStreamingDidCheckpoint = true
 	} catch (error) {
-		console.error(`[Task#presentAssistantMessage] Error saving checkpoint: ${error.message}`, error)
+		console.error(
+			`[Task#presentAssistantMessage] Error saving checkpoint: ${error instanceof Error ? error.message : String(error)}`,
+			error,
+		)
 	}
 }

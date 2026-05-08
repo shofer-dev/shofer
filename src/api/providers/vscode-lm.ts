@@ -599,11 +599,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 					const chunkType =
 						chunk instanceof vscode.LanguageModelTextPart
 							? "LanguageModelTextPart"
-							: chunk instanceof vscode.LanguageModelThinkingPart
-								? "LanguageModelThinkingPart"
-								: chunk instanceof vscode.LanguageModelToolCallPart
-									? "LanguageModelToolCallPart"
-									: "Unknown"
+							: chunk instanceof vscode.LanguageModelToolCallPart
+								? "LanguageModelToolCallPart"
+								: "Unknown"
 					getOutputChannel()?.appendLine(`[XIAOMI] [vscode-lm] Received chunk type: ${chunkType}`)
 				}
 				if (chunk instanceof vscode.LanguageModelTextPart) {
@@ -618,14 +616,17 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						type: "text",
 						text: chunk.value,
 					}
-				} else if (chunk instanceof vscode.LanguageModelThinkingPart) {
-					// Handle thinking/reasoning content from models like mimo-v2-pro
-					if (typeof chunk.value === "string" && chunk.value.trim()) {
+				} else {
+					// Handle thinking/reasoning content from models like mimo-v2-pro.
+					// LanguageModelThinkingPart is not in current VSCode types; we treat
+					// any non-text, non-tool-call chunk as thinking content.
+					const value = (chunk as { value?: unknown }).value
+					if (typeof value === "string" && value.trim()) {
 						// Detect structured tool_preparing marker emitted by llm-provider.
 						// Format: \x00tool_preparing\x00<toolName>\x00<byteCount>\x00
 						// Null-byte delimiter prevents false positives from real thinking text.
 						// eslint-disable-next-line no-control-regex
-						const preparingMatch = chunk.value.match(/^\x00tool_preparing\x00([^\x00]+)\x00(\d+)\x00$/)
+						const preparingMatch = value.match(/^\x00tool_preparing\x00([^\x00]+)\x00(\d+)\x00$/)
 						if (preparingMatch) {
 							yield {
 								type: "tool_preparing",
@@ -635,11 +636,12 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						} else {
 							yield {
 								type: "reasoning",
-								text: chunk.value,
+								text: value,
 							}
 						}
 					}
-				} else if (chunk instanceof vscode.LanguageModelToolCallPart) {
+				}
+				if (chunk instanceof vscode.LanguageModelToolCallPart) {
 					try {
 						// Log tool call details for Xiaomi
 						if (isXiaomiModel) {

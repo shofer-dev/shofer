@@ -548,7 +548,7 @@ export class ClineProvider
 				}
 			} catch (error) {
 				this.log(`Failed to load full model details for LM Studio: ${error}`)
-				vscode.window.showErrorMessage(error.message)
+				vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
 			}
 		}
 	}
@@ -577,7 +577,7 @@ export class ClineProvider
 				await task.abortTask(true)
 			} catch (e) {
 				this.log(
-					`[ClineProvider#removeClineFromStack] abortTask() failed ${task.taskId}.${task.instanceId}: ${e.message}`,
+					`[ClineProvider#removeClineFromStack] abortTask() failed ${task.taskId}.${task.instanceId}: ${e instanceof Error ? e.message : String(e)}`,
 				)
 			}
 
@@ -1223,7 +1223,7 @@ export class ClineProvider
 				await oldTask.abortTask(true)
 			} catch (e) {
 				this.log(
-					`[createTaskWithHistoryItem] abortTask() failed for old task ${oldTask.taskId}.${oldTask.instanceId}: ${e.message}`,
+					`[createTaskWithHistoryItem] abortTask() failed for old task ${oldTask.taskId}.${oldTask.instanceId}: ${e instanceof Error ? e.message : String(e)}`,
 				)
 			}
 

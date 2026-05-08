@@ -60,7 +60,7 @@ type ImportModeResult = { type: "importModeResult"; success: boolean; slug?: str
 
 // Helper to get group name regardless of format
 function getGroupName(group: GroupEntry): ToolGroup {
-	return Array.isArray(group) ? group[0] : group
+	return (Array.isArray(group) ? group[0] : group) as ToolGroup
 }
 
 const ModesView = () => {

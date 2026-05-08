@@ -232,6 +232,7 @@ async function configureGlobalProxy(config: ProxyConfig): Promise<void> {
 
 	let bootstrap: (() => void) | undefined
 	try {
+		// @ts-ignore - global-agent has no type declarations
 		const mod = (await import("global-agent")) as typeof import("global-agent")
 		bootstrap = mod.bootstrap
 	} catch (error) {
@@ -244,7 +245,7 @@ async function configureGlobalProxy(config: ProxyConfig): Promise<void> {
 	// Bootstrap global-agent to intercept all HTTP/HTTPS requests
 	log(`Calling global-agent bootstrap()...`)
 	try {
-		bootstrap()
+		bootstrap!()
 		proxyInitialized = true
 		log(`global-agent bootstrap() completed successfully`)
 	} catch (error) {

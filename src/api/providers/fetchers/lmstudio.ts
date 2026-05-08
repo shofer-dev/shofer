@@ -24,7 +24,7 @@ export const forceFullModelDetailsLoad = async (baseUrl: string, modelId: string
 		// Mark this model as having full details loaded.
 		modelsWithLoadedDetails.add(modelId)
 	} catch (error) {
-		if (error.code === "ECONNREFUSED") {
+		if ((error as NodeJS.ErrnoException).code === "ECONNREFUSED") {
 			console.warn(`Error connecting to LMStudio at ${baseUrl}`)
 		} else {
 			console.error(
@@ -116,7 +116,7 @@ export async function getLMStudioModels(baseUrl = "http://localhost:1234"): Prom
 			modelsWithLoadedDetails.add(lmstudioModel.modelKey)
 		}
 	} catch (error) {
-		if (error.code === "ECONNREFUSED") {
+		if ((error as NodeJS.ErrnoException).code === "ECONNREFUSED") {
 			console.warn(`Error connecting to LMStudio at ${baseUrl}`)
 		} else {
 			console.error(

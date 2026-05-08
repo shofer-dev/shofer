@@ -363,7 +363,7 @@ export class McpHub {
 			await this.updateServerConnections(result.data.mcpServers || {}, source)
 		} catch (error) {
 			// Check if the error is because the file doesn't exist
-			if (error.code === "ENOENT" && source === "project") {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT" && source === "project") {
 				// File was deleted, clean up project MCP servers
 				await this.cleanupProjectMcpServers()
 				await this.notifyWebviewOfServerChanges()
