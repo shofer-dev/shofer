@@ -484,7 +484,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 							nextHistory[existingIndex] = item
 						}
 						// Keep UI semantics consistent with extension: newest-first ordering.
-						nextHistory.sort((a, b) => b.ts - a.ts)
+						nextHistory.sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 						return {
 							...prevState,
 							taskHistory: nextHistory,

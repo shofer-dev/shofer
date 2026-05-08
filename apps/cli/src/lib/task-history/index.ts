@@ -14,7 +14,7 @@ export function getDefaultCliTaskStoragePath(): string {
 export function filterSessionsForWorkspace(sessions: TaskSessionEntry[], workspacePath: string): TaskSessionEntry[] {
 	return sessions
 		.filter((session) => typeof session.workspace === "string" && arePathsEqual(session.workspace, workspacePath))
-		.sort((a, b) => b.ts - a.ts)
+		.sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 }
 
 export async function readWorkspaceTaskSessions(

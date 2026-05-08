@@ -2944,7 +2944,7 @@ export class ClineProvider
 		// Sort and filter the history the same way as getStateToPostToWebview
 		const sortedHistory = taskHistory
 			.filter((item: HistoryItem) => item.ts && item.task)
-			.sort((a: HistoryItem, b: HistoryItem) => b.ts - a.ts)
+			.sort((a: HistoryItem, b: HistoryItem) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 
 		await this.postMessageToWebview({
 			type: "taskHistoryUpdated",
@@ -3148,7 +3148,7 @@ export class ClineProvider
 			return this.recentTasksCache
 		}
 
-		workspaceTasks.sort((a, b) => b.ts - a.ts)
+		workspaceTasks.sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 		let recentTaskIds: string[] = []
 
 		if (workspaceTasks.length >= 100) {

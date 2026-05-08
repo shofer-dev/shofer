@@ -10,6 +10,7 @@ export interface TaskSessionEntry {
 	id: string
 	task: string
 	ts: number
+	createdAt?: number
 	workspace?: string
 	mode?: string
 	status?: HistoryItem["status"]
@@ -27,6 +28,7 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 	const id = value.id
 	const task = value.task
 	const ts = value.ts
+	const createdAt = value.createdAt
 	const workspace = value.workspace
 	const mode = value.mode
 	const status = value.status
@@ -39,6 +41,7 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 		id,
 		task,
 		ts,
+		createdAt: typeof createdAt === "number" ? createdAt : undefined,
 		workspace: typeof workspace === "string" ? workspace : undefined,
 		mode: typeof mode === "string" ? mode : undefined,
 		status: status === "active" || status === "completed" || status === "delegated" ? status : undefined,
@@ -101,5 +104,5 @@ export async function readTaskSessionsFromStoragePath(storageBasePath: string): 
 		}
 	}
 
-	return Array.from(sessionsById.values()).sort((a, b) => b.ts - a.ts)
+	return Array.from(sessionsById.values()).sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 }

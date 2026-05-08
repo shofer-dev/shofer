@@ -52,6 +52,7 @@ export async function taskMetadata({
 
 	// Pre-calculate all values based on availability
 	let timestamp: number
+	let createdAt: number
 	let tokenUsage: ReturnType<typeof getApiMetrics>
 	let taskDirSize: number
 	let taskMessage: ClineMessage | undefined
@@ -59,6 +60,7 @@ export async function taskMetadata({
 	if (!hasMessages) {
 		// Handle no messages case
 		timestamp = Date.now()
+		createdAt = timestamp
 		tokenUsage = {
 			totalTokensIn: 0,
 			totalTokensOut: 0,
@@ -71,6 +73,9 @@ export async function taskMetadata({
 	} else {
 		// Handle messages case
 		taskMessage = messages[0] // First message is always the task say.
+
+		// createdAt captures the moment the task was created (first message timestamp).
+		createdAt = taskMessage.ts
 
 		const lastRelevantMessage =
 			messages[findLastIndex(messages, (m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"))] ||
@@ -105,6 +110,7 @@ export async function taskMetadata({
 		parentTaskId,
 		number: taskNumber,
 		ts: timestamp,
+		createdAt,
 		task: hasMessages
 			? taskMessage!.text?.trim() || t("common:tasks.incomplete", { taskNumber })
 			: t("common:tasks.no_messages", { taskNumber }),

@@ -139,7 +139,7 @@ export class TaskHistoryStore {
 	 * Get all history items, sorted by timestamp descending (newest first).
 	 */
 	getAll(): HistoryItem[] {
-		return Array.from(this.cache.values()).sort((a, b) => b.ts - a.ts)
+		return Array.from(this.cache.values()).sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 	}
 
 	/**

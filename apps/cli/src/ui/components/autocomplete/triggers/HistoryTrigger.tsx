@@ -12,8 +12,10 @@ export interface HistoryResult extends AutocompleteItem {
 	id: string
 	/** Task prompt/description */
 	task: string
-	/** Timestamp when task was created */
+	/** Timestamp of last activity */
 	ts: number
+	/** Timestamp when task was created */
+	createdAt?: number
 	/** Total cost of the task */
 	totalCost?: number
 	/** Workspace path where task was run */
@@ -118,7 +120,7 @@ export function createHistoryTrigger(config: HistoryTriggerConfig): Autocomplete
 
 			if (query.length === 0) {
 				// Show most recent items when just "#" is typed (sorted by timestamp, newest first)
-				return allHistory.sort((a, b) => b.ts - a.ts).slice(0, maxResults)
+				return allHistory.sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts)).slice(0, maxResults)
 			}
 
 			// Fuzzy search by task description
@@ -175,6 +177,7 @@ export function toHistoryResult(item: {
 	id: string
 	task: string
 	ts: number
+	createdAt?: number
 	totalCost?: number
 	workspace?: string
 	mode?: string
@@ -185,6 +188,7 @@ export function toHistoryResult(item: {
 		id: item.id,
 		task: item.task,
 		ts: item.ts,
+		createdAt: item.createdAt,
 		totalCost: item.totalCost,
 		workspace: item.workspace,
 		mode: item.mode,
