@@ -899,7 +899,7 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "showTaskWithId":
-			provider.showTaskWithId(message.text!)
+			await provider.focusTask(message.text!)
 			break
 		case "condenseTaskContextRequest":
 			provider.condenseTaskContext(message.text!)

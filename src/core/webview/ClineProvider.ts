@@ -3816,14 +3816,16 @@ export class ClineProvider
 				}
 				// Load task from history (without killing the currently running task)
 				await this.showTaskWithId(taskId, { keepCurrentTask: true })
-				// Re-register the freshly rehydrated task instance with TaskManager
-				// (if this was a managed task) so that state-change events
-				// (running / waiting_input / idle) are forwarded correctly from
-				// this point on. Without this, the state stays "paused" permanently
-				// and no event listeners exist on the new instance.
+				// Register the freshly rehydrated task instance with TaskManager
+				// so that it can be found by getManagedTaskInstance on subsequent
+				// focus switches (LIVE path in focusTask), avoiding the need to
+				// re-rehydrate and re-present the resume_task ask every time.
+				// Use registerBackgroundTask (not updateTaskInstance) because the
+				// task may not yet exist in TaskManager's managedTasks map, and
+				// updateTaskInstance early-returns in that case.
 				const resumedTask = this.getCurrentTask()
 				if (resumedTask && resumedTask.taskId === taskId) {
-					this.taskManager.updateTaskInstance(taskId, resumedTask)
+					this.taskManager.registerBackgroundTask(resumedTask)
 				}
 			}
 		} catch (error) {
