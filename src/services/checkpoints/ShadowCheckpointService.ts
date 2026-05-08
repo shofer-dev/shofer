@@ -6,12 +6,10 @@ import EventEmitter from "events"
 
 import simpleGit, { SimpleGit, SimpleGitOptions } from "simple-git"
 import pWaitFor from "p-wait-for"
-import * as vscode from "vscode"
 
 import { fileExistsAtPath } from "../../utils/fs"
 import { arePathsEqual } from "../../utils/path"
 import { executeRipgrep } from "../../services/search/file-search"
-import { t } from "../../i18n"
 
 import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types"
 import { getExcludePatterns } from "./excludes"
@@ -21,10 +19,20 @@ import { getExcludePatterns } from "./excludes"
  * interference from inherited git environment variables like GIT_DIR and GIT_WORK_TREE.
  * This ensures checkpoint operations always target the intended shadow repository.
  *
+ * GIT_DIR is explicitly set to the shadow repo's `.git` directory so git does NOT
+ * scan the workspace tree for nested `.git` directories.  Without this, git would
+ * treat nested repos as submodules and record gitlinks (mode 160000) instead of the
+ * actual file contents.  GIT_WORK_TREE is intentionally NOT set — `core.worktree`
+ * (set during init) provides the working tree, and leaving GIT_WORK_TREE unset
+ * ensures deleteBranch's temporary core.worktree-unset window falls back to CWD
+ * (the shadow dir) rather than the workspace.
+ *
  * @param baseDir - The directory where git operations should be executed
  * @returns A SimpleGit instance with sanitized environment
  */
 function createSanitizedGit(baseDir: string): SimpleGit {
+	const dotGitPath = path.join(baseDir, ".git")
+
 	// Create a clean environment by explicitly unsetting git-related environment variables
 	// that could interfere with checkpoint operations
 	const sanitizedEnv: Record<string, string> = {}
@@ -51,6 +59,11 @@ function createSanitizedGit(baseDir: string): SimpleGit {
 			sanitizedEnv[key] = value
 		}
 	}
+
+	// Explicitly set GIT_DIR to the shadow repo's .git directory.  This prevents
+	// submodule discovery in the workspace (core.worktree) by telling git to use
+	// only this specific directory as the repository.
+	sanitizedEnv["GIT_DIR"] = dotGitPath
 
 	// Log which git env vars were removed (helps with debugging Dev Container issues)
 	if (removedVars.length > 0) {
@@ -131,17 +144,17 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 			throw new Error("Shadow git repo already initialized")
 		}
 
+		// Nested .git repos are no longer a hard blocker.  GIT_DIR is set
+		// to the shadow repo's .git directory in createSanitizedGit, which
+		// prevents git from discovering nested .git dirs as submodules.
+		// Source files inside nested repos are tracked directly.
 		const nestedGitPath = await this.getNestedGitRepository()
 
 		if (nestedGitPath) {
-			// Show persistent error message with the offending path
 			const relativePath = path.relative(this.workspaceDir, nestedGitPath)
-			const message = t("common:errors.nested_git_repos_warning", { path: relativePath })
-			vscode.window.showErrorMessage(message)
-
-			throw new Error(
-				`Checkpoints are disabled because a nested git repository was detected at: ${relativePath}. ` +
-					"Please remove or relocate nested git repositories to use the checkpoints feature.",
+			this.log(
+				`[${this.constructor.name}#initShadowGit] nested git repo detected at ${relativePath} — ` +
+					"GIT_DIR prevents submodule detection; source files are tracked directly",
 			)
 		}
 
