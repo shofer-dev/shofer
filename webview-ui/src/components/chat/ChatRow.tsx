@@ -387,6 +387,15 @@ export const ChatRowContent = ({
 						style={{ color: successColor, marginBottom: "-1.5px" }}></span>,
 					<span style={{ color: successColor, fontWeight: "bold" }}>{t("chat:taskCompleted")}</span>,
 				]
+			case "tool_preparing": {
+				const preparingInfo = safeJsonParse<{ toolName: string; byteCount: number }>(message.text)
+				return [
+					<ProgressIndicator />,
+					<span style={{ color: normalColor }}>
+						{t("chat:toolPreparing.preparing", { toolName: preparingInfo?.toolName ?? "" })}
+					</span>,
+				]
+			}
 			case "api_req_rate_limit_wait":
 				return []
 			case "api_req_retry_delayed":
@@ -1196,6 +1205,49 @@ export const ChatRowContent = ({
 							isLast={isLast}
 						/>
 					)
+				case "tool_preparing": {
+					// Inline progress row shown while tool call arguments stream in.
+					// Replaces the old thinking-bubble noise ("Preparing…" + dots).
+					// Multiple markers for the same tool_name are kv-updated in-place
+					// via the partial-message mechanism (say(…, true)).
+					const isPreparing = message.partial === true
+					const preparingInfo = safeJsonParse<{ toolName: string; byteCount: number }>(message.text)
+
+					if (!isPreparing || !preparingInfo) {
+						return null // superseded by tool_call_start
+					}
+
+					const formatBytes = (bytes: number): string => {
+						if (bytes >= 1024) {
+							return `${(bytes / 1024).toFixed(1)} KB`
+						}
+						return `${bytes} B`
+					}
+
+					return (
+						<div
+							className="group text-sm transition-opacity opacity-100"
+							style={{
+								...headerStyle,
+								marginBottom: 0,
+								justifyContent: "space-between",
+							}}>
+							<div style={{ display: "flex", alignItems: "center", gap: "10px", flexGrow: 1 }}>
+								<ProgressIndicator />
+								<span style={{ color: normalColor }}>
+									Preparing{" "}
+									<span style={{ fontWeight: 500, fontFamily: "var(--vscode-editor-font-family)" }}>
+										{preparingInfo.toolName}
+									</span>
+									…
+								</span>
+							</div>
+							<span className="text-xs font-light text-vscode-descriptionForeground">
+								{formatBytes(preparingInfo.byteCount)}
+							</span>
+						</div>
+					)
+				}
 				case "api_req_started":
 					// Determine if the API request is in progress
 					const isApiRequestInProgress =

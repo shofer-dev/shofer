@@ -621,9 +621,22 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				} else if (chunk instanceof vscode.LanguageModelThinkingPart) {
 					// Handle thinking/reasoning content from models like mimo-v2-pro
 					if (typeof chunk.value === "string" && chunk.value.trim()) {
-						yield {
-							type: "reasoning",
-							text: chunk.value,
+						// Detect structured tool_preparing marker emitted by llm-provider.
+						// Format: \x00tool_preparing\x00<toolName>\x00<byteCount>\x00
+						// Null-byte delimiter prevents false positives from real thinking text.
+						// eslint-disable-next-line no-control-regex
+						const preparingMatch = chunk.value.match(/^\x00tool_preparing\x00([^\x00]+)\x00(\d+)\x00$/)
+						if (preparingMatch) {
+							yield {
+								type: "tool_preparing",
+								toolName: preparingMatch[1],
+								byteCount: parseInt(preparingMatch[2], 10),
+							}
+						} else {
+							yield {
+								type: "reasoning",
+								text: chunk.value,
+							}
 						}
 					}
 				} else if (chunk instanceof vscode.LanguageModelToolCallPart) {

@@ -3444,6 +3444,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									pendingGroundingSources.push(...chunk.sources)
 								}
 								break
+							case "tool_preparing": {
+								// Inline progress row from llm-provider while tool
+								// call arguments stream in. Replaces the old
+								// thinking-bubble noise ("Preparing…" + dots).
+								// partial=true makes repeated markers for the same
+								// tool_name kv-update the same row in-place.
+								await this.say(
+									"tool_preparing",
+									JSON.stringify({
+										toolName: chunk.toolName,
+										byteCount: chunk.byteCount,
+									}),
+									undefined,
+									true, // partial
+								)
+								break
+							}
 							case "tool_call_partial": {
 								// Process raw tool call chunk through NativeToolCallParser
 								// which handles tracking, buffering, and emits events
