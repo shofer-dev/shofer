@@ -11,6 +11,7 @@ export type ApiStreamChunk =
 	| ApiStreamToolCallDeltaChunk
 	| ApiStreamToolCallEndChunk
 	| ApiStreamToolCallPartialChunk
+	| ApiStreamToolPreparingChunk
 	| ApiStreamError
 
 export interface ApiStreamError {
@@ -105,6 +106,18 @@ export interface ApiStreamToolCallPartialChunk {
 	id?: string
 	name?: string
 	arguments?: string
+}
+
+/**
+ * Progress update on an in-progress tool call argument stream.
+ * Carries the tool name and bytes received so far so the UI can show
+ * an inline row with a spinner and byte count rather than polluting
+ * the thinking bubble.
+ */
+export interface ApiStreamToolPreparingChunk {
+	type: "tool_preparing"
+	toolName: string
+	byteCount: number
 }
 
 export interface GroundingSource {
