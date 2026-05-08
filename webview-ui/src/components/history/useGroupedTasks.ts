@@ -16,7 +16,9 @@ export function buildSubtree(
 	childrenMap: Map<string, HistoryItem[]>,
 	expandedIds: Set<string>,
 ): SubtaskTreeNode {
-	const directChildren = (childrenMap.get(task.id) || []).slice().sort((a, b) => b.ts - a.ts)
+	const directChildren = (childrenMap.get(task.id) || [])
+		.slice()
+		.sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 
 	return {
 		item: task as DisplayHistoryItem,
@@ -72,7 +74,9 @@ export function useGroupedTasks(tasks: HistoryItem[], searchQuery: string): Grou
 
 		// Build groups from root tasks with recursively nested subtask trees
 		const taskGroups: TaskGroup[] = rootTasks.map((parent) => {
-			const directChildren = (childrenMap.get(parent.id) || []).slice().sort((a, b) => b.ts - a.ts)
+			const directChildren = (childrenMap.get(parent.id) || [])
+				.slice()
+				.sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 
 			return {
 				parent: parent as DisplayHistoryItem,
@@ -82,7 +86,7 @@ export function useGroupedTasks(tasks: HistoryItem[], searchQuery: string): Grou
 		})
 
 		// Sort groups by parent timestamp (newest first)
-		taskGroups.sort((a, b) => b.parent.ts - a.parent.ts)
+		taskGroups.sort((a, b) => (b.parent.createdAt ?? b.parent.ts) - (a.parent.createdAt ?? a.parent.ts))
 
 		return taskGroups
 	}, [tasks, taskMap, isSearchMode, expandedIds])

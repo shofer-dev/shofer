@@ -43,14 +43,16 @@ interface TaskTreeNode {
 function buildFlatTree(taskHistory: HistoryItem[]): TaskTreeNode[] {
 	const byId = new Map(taskHistory.map((i) => [i.id, i]))
 
-	const roots = taskHistory.filter((i) => !i.parentTaskId || !byId.has(i.parentTaskId)).sort((a, b) => b.ts - a.ts)
+	const sortDesc = (a: HistoryItem, b: HistoryItem) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts)
+
+	const roots = taskHistory.filter((i) => !i.parentTaskId || !byId.has(i.parentTaskId)).sort(sortDesc)
 
 	const result: TaskTreeNode[] = []
 
 	function visit(item: HistoryItem, depth: number, isLastSibling: boolean, ancestorIsLast: boolean[]) {
 		result.push({ item, depth, isLastSibling, ancestorIsLast })
 
-		const children = taskHistory.filter((i) => i.parentTaskId === item.id).sort((a, b) => b.ts - a.ts)
+		const children = taskHistory.filter((i) => i.parentTaskId === item.id).sort(sortDesc)
 
 		children.forEach((child, ci) => {
 			visit(child, depth + 1, ci === children.length - 1, [...ancestorIsLast, isLastSibling])

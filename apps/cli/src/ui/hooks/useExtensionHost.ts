@@ -32,7 +32,7 @@ function getMostRecentTaskId(taskHistory: HistoryItem[], workspacePath: string):
 		return undefined
 	}
 
-	const sorted = [...workspaceTasks].sort((a, b) => b.ts - a.ts)
+	const sorted = [...workspaceTasks].sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
 	return sorted[0]?.id
 }
 

@@ -41,6 +41,7 @@ export const historyItemSchema = z.object({
 	parentTaskId: z.string().optional(),
 	number: z.number(),
 	ts: z.number(),
+	createdAt: z.number().optional(),
 	task: z.string(),
 	tokensIn: z.number(),
 	tokensOut: z.number(),
