@@ -1732,7 +1732,7 @@ export const webviewMessageHandler = async (
 					await provider.postMessageToWebview({
 						type: "vsCodeSetting",
 						setting,
-						error: `Failed to get setting: ${error.message}`,
+						error: `Failed to get setting: ${error instanceof Error ? error.message : String(error)}`,
 						value: undefined,
 					})
 				}
@@ -2821,11 +2821,13 @@ export const webviewMessageHandler = async (
 					})
 				}
 			} catch (error) {
-				provider.log(`Error saving code index settings: ${error.message || error}`)
+				provider.log(
+					`Error saving code index settings: ${error instanceof Error ? error.message : String(error)}`,
+				)
 				await provider.postMessageToWebview({
 					type: "codeIndexSettingsSaved",
 					success: false,
-					error: error.message || "Failed to save settings",
+					error: error instanceof Error ? error.message : "Failed to save settings",
 				})
 			}
 			break

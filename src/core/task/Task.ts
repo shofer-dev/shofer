@@ -3863,7 +3863,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						// Determine cancellation reason
 						const cancelReason: ClineApiReqCancelReason = this.abort ? "user_cancelled" : "streaming_failed"
 
-						const rawErrorMessage = error.message ?? JSON.stringify(serializeError(error), null, 2)
+						const rawErrorMessage =
+							error instanceof Error ? error.message : JSON.stringify(serializeError(error), null, 2)
 						const streamingFailedMessage = this.abort
 							? undefined
 							: `${t("common:interruption.streamTerminatedByProvider")}: ${rawErrorMessage}`
@@ -5006,7 +5007,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			} else {
 				const { response } = await this.ask(
 					"api_req_failed",
-					error.message ?? JSON.stringify(serializeError(error), null, 2),
+					error instanceof Error ? error.message : JSON.stringify(serializeError(error), null, 2),
 				)
 
 				if (response !== "yesButtonClicked") {

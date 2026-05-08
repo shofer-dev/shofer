@@ -227,7 +227,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				return
 			}
 		} catch (error) {
-			await handleError("creating new task", error)
+			await handleError("creating new task", error instanceof Error ? error : new Error(String(error)))
 			return
 		}
 	}
