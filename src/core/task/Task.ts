@@ -3181,7 +3181,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					const state = await provider.getState()
 					const targetMode = getModeBySlug(slashCommandMode, state?.customModes)
 					if (targetMode) {
-						await provider.handleModeSwitch(slashCommandMode)
+						// Scope the mode switch to this task so it doesn't leak
+						// to the currently focused task.
+						await provider.handleModeSwitch(slashCommandMode, this)
 					}
 				}
 			}
@@ -4463,7 +4465,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				false,
 				mcpHub,
 				this.diffStrategy,
-				mode ?? defaultModeSlug,
+				// Use the task's own mode, not the provider-global mode which
+				// reflects the currently focused task.  Without this, a mode
+				// switch in Task A would change the system prompt that Task B
+				// sees when it generates its next API request, even though
+				// the UI still shows Task B's original mode.
+				this._taskMode || (mode ?? defaultModeSlug),
 				customModePrompts,
 				customModes,
 				customInstructions,

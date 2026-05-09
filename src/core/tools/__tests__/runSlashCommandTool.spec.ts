@@ -471,7 +471,7 @@ Deploy application to production`,
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
-		expect(mockHandleModeSwitch).toHaveBeenCalledWith("debug")
+		expect(mockHandleModeSwitch).toHaveBeenCalledWith("debug", mockTask)
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith(
 			`Command: /debug-app
 Description: Debug the application

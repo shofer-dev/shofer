@@ -56,8 +56,9 @@ export class SwitchModeTool extends BaseTool<"switch_mode"> {
 				return
 			}
 
-			// Switch the mode using shared handler
-			await task.providerRef.deref()?.handleModeSwitch(mode_slug)
+			// Switch the mode using shared handler, scoped to this task
+			// so background task A switching modes doesn't affect task B.
+			await task.providerRef.deref()?.handleModeSwitch(mode_slug, task)
 
 			pushToolResult(
 				`Successfully switched from ${getModeBySlug(currentMode)?.name ?? currentMode} mode to ${

@@ -1582,9 +1582,13 @@ export class ClineProvider
 	/**
 	 * Handle switching to a new mode, including updating the associated API configuration
 	 * @param newMode The mode to switch to
+	 * @param sourceTask The task that initiated the mode switch. When provided,
+	 * the mode change is scoped to this task instead of the currently focused task.
+	 * This prevents a mode switch in background Task A from silently updating the
+	 * mode of Task B (which the user is currently viewing).
 	 */
-	public async handleModeSwitch(newMode: Mode) {
-		const task = this.getCurrentTask()
+	public async handleModeSwitch(newMode: Mode, sourceTask?: Task) {
+		const task = sourceTask ?? this.getCurrentTask()
 
 		if (task) {
 			TelemetryService.instance.captureModeSwitch(task.taskId, newMode)
@@ -1612,6 +1616,13 @@ export class ClineProvider
 				// This ensures the in-memory state remains consistent with persisted state.
 				throw error
 			}
+		} else {
+			// No current task — this is the initial "new task" screen (plus button
+			// clicked, or the first mode selection after extension activation). In
+			// this state the mode represents the mode for the *next* task to be
+			// created, so it belongs in global state. Tasks that are created from
+			// this screen will inherit it via createTaskWithHistoryItem().
+			await this.updateGlobalState("mode", newMode)
 		}
 
 		// Mode is task-scoped — do NOT update the global "mode" state here, as that
@@ -1619,6 +1630,10 @@ export class ClineProvider
 		// The webview's mode display is driven by the current task's _taskMode via
 		// getStateToPostToWebview(). restoreTaskMode() handles the global-state update
 		// when the user switches focus between tasks.
+		//
+		// EXCEPTION: when there is no current task (handled above), we DO update the
+		// global "mode" so that the initial "new task" screen and the task-creation
+		// flow see the user's chosen mode.
 		//
 		// We still propagate the mode change to the webview so the UI updates immediately,
 		// and emit ModeChanged for any downstream listeners that care about mode transitions.
@@ -2799,7 +2814,7 @@ export class ClineProvider
 			terminalZshOhMy: stateValues.terminalZshOhMy ?? false,
 			terminalZshP10k: stateValues.terminalZshP10k ?? false,
 			terminalZdotdir: stateValues.terminalZdotdir ?? false,
-			mode: stateValues.mode ?? defaultModeSlug,
+			mode: (this.getCurrentTask() as any)?._taskMode || stateValues.mode || defaultModeSlug,
 			language: stateValues.language ?? formatLanguage(vscode.env.language),
 			mcpEnabled: stateValues.mcpEnabled ?? true,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
