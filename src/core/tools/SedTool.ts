@@ -110,13 +110,6 @@ export class SedTool extends BaseTool<"sed"> {
 
 			task.consecutiveMistakeCount = 0
 
-			// Capture original content before mutation for FileChangesPanel.
-			try {
-				await task.fileContextTracker?.captureOriginal(relPath, originalContent)
-			} catch (err) {
-				console.warn(`[SedTool] captureOriginal failed for ${relPath}:`, err)
-			}
-
 			// Count matches
 			const matchCount = (originalContent.match(regex) || []).length
 
