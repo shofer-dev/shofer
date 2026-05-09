@@ -575,7 +575,6 @@ export interface WebviewMessage {
 		| "changedFiles/showDiff"
 		| "changedFiles/revert"
 		| "changedFiles/revertAll"
-		| "changedFiles/redo"
 		| "changedFiles/accept"
 		| "changedFiles/acceptAll"
 		| "deleteMcpServer"

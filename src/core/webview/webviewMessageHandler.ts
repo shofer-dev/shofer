@@ -1484,25 +1484,6 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
-		case "changedFiles/redo": {
-			const relPath = message.text || ""
-			if (!relPath) break
-			const task = provider.getCurrentTask()
-			if (!task) break
-			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
-				break
-			}
-			try {
-				const { redoFile } = await import("../file-changes/ChangedFilesService")
-				await redoFile(task, relPath)
-				await provider.pushChangedFilesUpdate()
-			} catch (err) {
-				const errorMsg = err instanceof Error ? err.message : String(err)
-				vscode.window.showErrorMessage(`Redo failed: ${errorMsg}`)
-			}
-			break
-		}
 		case "changedFiles/accept": {
 			const relPath = message.text || ""
 			if (!relPath) break

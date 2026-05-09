@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, ChevronDown, ChevronRight, FileDiff, RotateCcw, RotateCw, Undo2 } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, FileDiff, RotateCcw, Undo2 } from "lucide-react"
 
 import type { ChangedFileEntry, ChangedFilesPayload, ExtensionMessage } from "@roo-code/types"
 
@@ -67,10 +67,6 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 
 	const handleRevert = useCallback((entry: ChangedFileEntry) => {
 		vscode.postMessage({ type: "changedFiles/revert", text: entry.path })
-	}, [])
-
-	const handleRedo = useCallback((entry: ChangedFileEntry) => {
-		vscode.postMessage({ type: "changedFiles/redo", text: entry.path })
 	}, [])
 
 	const handleAccept = useCallback((entry: ChangedFileEntry) => {
@@ -147,7 +143,6 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 							entry={entry}
 							onShowDiff={handleShowDiff}
 							onRevert={handleRevert}
-							onRedo={handleRedo}
 							onAccept={handleAccept}
 						/>
 					))}
@@ -161,11 +156,10 @@ interface FileRowProps {
 	entry: ChangedFileEntry
 	onShowDiff: (entry: ChangedFileEntry) => void
 	onRevert: (entry: ChangedFileEntry) => void
-	onRedo: (entry: ChangedFileEntry) => void
 	onAccept: (entry: ChangedFileEntry) => void
 }
 
-const FileRow = memo(({ entry, onShowDiff, onRevert, onRedo, onAccept }: FileRowProps) => {
+const FileRow = memo(({ entry, onShowDiff, onRevert, onAccept }: FileRowProps) => {
 	const { t } = useTranslation()
 	const canDiff = entry.hasOriginalContent
 	const reverted = entry.state === "reverted"
@@ -194,23 +188,13 @@ const FileRow = memo(({ entry, onShowDiff, onRevert, onRedo, onAccept }: FileRow
 				<span className="text-xs text-vscode-descriptionForeground shrink-0">(binary)</span>
 			)}
 			<div className="flex items-center gap-0.5 shrink-0">
-				{reverted ? (
-					<button
-						type="button"
-						className="px-1 py-0.5 rounded hover:bg-vscode-toolbar-hoverBackground"
-						title={t("chat:fileChanges.redo") ?? ""}
-						onClick={() => onRedo(entry)}>
-						<RotateCw className="size-3.5" aria-label={t("chat:fileChanges.redo") ?? ""} />
-					</button>
-				) : (
-					<button
-						type="button"
-						className="px-1 py-0.5 rounded hover:bg-vscode-toolbar-hoverBackground"
-						title={t("chat:fileChanges.revert") ?? ""}
-						onClick={() => onRevert(entry)}>
-						<RotateCcw className="size-3.5" aria-label={t("chat:fileChanges.revert") ?? ""} />
-					</button>
-				)}
+				<button
+					type="button"
+					className="px-1 py-0.5 rounded hover:bg-vscode-toolbar-hoverBackground"
+					title={t("chat:fileChanges.revert") ?? ""}
+					onClick={() => onRevert(entry)}>
+					<RotateCcw className="size-3.5" aria-label={t("chat:fileChanges.revert") ?? ""} />
+				</button>
 				<button
 					type="button"
 					className="px-1 py-0.5 rounded hover:bg-vscode-toolbar-hoverBackground"

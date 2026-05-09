@@ -45,9 +45,9 @@ Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/p
 
 | File                                                                             | Role                                                                                                                                                            |
 | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts)      | Public API: `getChangedFiles`, `getOriginalContent`, `getFinalContent`, `restoreFile`, `restoreAll`, `redoFile`, `acceptFile`, `acceptAll`                      |
+| [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts)      | Public API: `getChangedFiles`, `getOriginalContent`, `getFinalContent`, `restoreFile`, `restoreAll`, `acceptFile`, `acceptAll`                                  |
 | [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts)    | Snapshot capture: `captureOriginal`, `captureFinal`, `getBaseContent`, `getFinalContent`, `overwriteOriginalBase`, `removeFinalSnapshot`, `getFilesEditedByRoo` |
-| [`FileChangesPanel.tsx`](../webview-ui/src/components/chat/FileChangesPanel.tsx) | Webview UI: scrollable file list with diff/revert/redo/accept buttons                                                                                           |
+| [`FileChangesPanel.tsx`](../webview-ui/src/components/chat/FileChangesPanel.tsx) | Webview UI: scrollable file list with diff/revert/accept buttons                                                                                                |
 | [`DiffViewProvider.ts`](../src/integrations/editor/DiffViewProvider.ts)          | Edit infrastructure: `open()` and `saveDirectly()` both call `captureOriginal` before mutation                                                                  |
 | [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)     | Types: `ChangedFileEntry`, `ChangedFilesPayload`                                                                                                                |
 
@@ -60,7 +60,6 @@ Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/p
 | `getFinalContent`    | Read `final/<relPath>`                                                                                                    |
 | `restoreFile`        | Copy `base/<relPath>` → workspace (or delete if absent)                                                                   |
 | `restoreAll`         | Iterate `restoreFile` over all candidates                                                                                 |
-| `redoFile`           | Copy `final/<relPath>` → workspace (or delete if absent)                                                                  |
 | `acceptFile`         | Copy `final/<relPath>` → `base/<relPath>`, update originals hash, then `removeFinalSnapshot` — file disappears from panel |
 | `acceptAll`          | Iterate `acceptFile` over all candidates                                                                                  |
 
@@ -74,12 +73,11 @@ Single bidirectional channel between webview and extension host:
 | Webview → host | `changedFiles/showDiff`  | `text: relPath`       |
 | Webview → host | `changedFiles/revert`    | `text: relPath`       |
 | Webview → host | `changedFiles/revertAll` | –                     |
-| Webview → host | `changedFiles/redo`      | `text: relPath`       |
 | Webview → host | `changedFiles/accept`    | `text: relPath`       |
 | Webview → host | `changedFiles/acceptAll` | –                     |
 | Host → webview | `changedFiles/update`    | `ChangedFilesPayload` |
 
-The host pushes `changedFiles/update` debounced 500 ms after each `roo_edited` event and after every revert/redo/accept. The panel also pulls on mount and on task switch via `changedFiles/get`.
+The host pushes `changedFiles/update` debounced 500 ms after each `roo_edited` event and after every revert/accept. The panel also pulls on mount and on task switch via `changedFiles/get`.
 
 ## Capture points
 
