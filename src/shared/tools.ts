@@ -107,6 +107,10 @@ export const toolParamNames = [
 	"destination",
 	// give_feedback parameter
 	"feedback",
+	// sed tool parameters
+	"pattern",
+	"replacement",
+	"global",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -180,6 +184,7 @@ export type NativeToolArgs = {
 	view_image: { filePath: string }
 	codebase_search_with_lsp: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
+	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }
 	// Add more tools as they are migrated to native protocol
 }
 

@@ -830,6 +830,17 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "sed":
+				if (partialArgs.path !== undefined) {
+					nativeArgs = {
+						path: partialArgs.path,
+						pattern: partialArgs.pattern,
+						replacement: partialArgs.replacement,
+						global: this.coerceOptionalBoolean(partialArgs.global),
+					}
+				}
+				break
+
 			case "sleep":
 				if (partialArgs.seconds !== undefined) {
 					nativeArgs = {
@@ -1400,6 +1411,17 @@ export class NativeToolCallParser {
 					if (args.seconds !== undefined) {
 						nativeArgs = {
 							seconds: this.coerceOptionalNumber(args.seconds)!,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "sed":
+					if (args.path !== undefined && args.pattern !== undefined && args.replacement !== undefined) {
+						nativeArgs = {
+							path: args.path,
+							pattern: args.pattern,
+							replacement: args.replacement,
+							global: this.coerceOptionalBoolean(args.global),
 						} as NativeArgsFor<TName>
 					}
 					break
