@@ -423,10 +423,10 @@ export class FileContextTracker {
 			if (existing) return
 
 			const snap = this.buildSnapshotFromContent(content)
-			await this.writeSnapshot(dirs.originals, relPath, snap)
 
-			// Also write a verbatim copy to base/<relPath> so ChangedFilesService
-			// can diff against it and serve original content without JSON decoding.
+			// Write the verbatim base copy FIRST. If it fails the snapshot is
+			// never persisted, keeping the capture atomic. The reverse order
+			// could leave a dangling snapshot with no corresponding base file.
 			if (snap.kind === "text" && content !== undefined) {
 				const wdirs = await this.getWorkingDirs()
 				if (wdirs) {
@@ -435,6 +435,8 @@ export class FileContextTracker {
 					await fs.writeFile(dest, content, "utf8")
 				}
 			}
+
+			await this.writeSnapshot(dirs.originals, relPath, snap)
 		} catch (err) {
 			console.error(`[FileContextTracker] captureOriginal failed for ${relPath}:`, err)
 		}

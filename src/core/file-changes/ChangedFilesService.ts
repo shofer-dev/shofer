@@ -208,6 +208,10 @@ export async function getOriginalContent(task: Task, relPath: string): Promise<s
 			if (baseText !== undefined) return baseText
 		}
 	}
+	// Fallback: snapshot missing but base copy may exist (e.g. captureOriginal
+	// wrote the file copy before the snapshot write failed).
+	const baseText = await task.fileContextTracker.getBaseContent(posix)
+	if (baseText !== undefined) return baseText
 	return null
 }
 
