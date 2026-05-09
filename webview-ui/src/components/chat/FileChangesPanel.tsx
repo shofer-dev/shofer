@@ -19,7 +19,8 @@ interface FileChangesPanelProps {
  *
  * Source of truth is the extension-host `ChangedFilesService` (single
  * unified backend), pushed via `changedFiles/update` and pulled on mount via
- * `changedFiles/get`. Per-task accept (review) state is local UI only.
+ * `changedFiles/get`. Accept promotes the final state to the new baseline;
+ * accepted files disappear from the panel on the next update.
  */
 const MAX_VISIBLE_ROWS = 5
 const ROW_HEIGHT_PX = 28 // matches py-1 + text-sm height; used for max-height
@@ -28,12 +29,9 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 	const { t } = useTranslation()
 	const [panelExpanded, setPanelExpanded] = useState(false)
 	const [payload, setPayload] = useState<ChangedFilesPayload | undefined>(undefined)
-	// Per-task accepted (reviewed) paths. Session-only — not persisted.
-	const [acceptedPaths, setAcceptedPaths] = useState<Set<string>>(new Set())
 
-	// On task switch, drop UI-only accept state and re-pull payload.
+	// On task switch, re-pull payload.
 	useEffect(() => {
-		setAcceptedPaths(new Set())
 		setPayload(undefined)
 		vscode.postMessage({ type: "changedFiles/get" })
 	}, [taskId])
@@ -76,17 +74,12 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 	}, [])
 
 	const handleAccept = useCallback((entry: ChangedFileEntry) => {
-		setAcceptedPaths((prev) => {
-			const next = new Set(prev)
-			if (next.has(entry.path)) next.delete(entry.path)
-			else next.add(entry.path)
-			return next
-		})
+		vscode.postMessage({ type: "changedFiles/accept", text: entry.path })
 	}, [])
 
 	const handleAcceptAll = useCallback(() => {
-		setAcceptedPaths(new Set(entries.map((e) => e.path)))
-	}, [entries])
+		vscode.postMessage({ type: "changedFiles/acceptAll" })
+	}, [])
 
 	const handleRevertAll = useCallback(() => {
 		vscode.postMessage({ type: "changedFiles/revertAll" })
@@ -95,9 +88,6 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 	if (!hasEntries) return null
 
 	const fileCount = entries.length
-
-	const activeEntries = entries.filter((e) => !acceptedPaths.has(e.path))
-	const reviewedEntries = entries.filter((e) => acceptedPaths.has(e.path))
 
 	return (
 		<Collapsible open={panelExpanded} onOpenChange={setPanelExpanded} className={cn("px-3", className)}>
@@ -151,7 +141,7 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 				<div
 					className="flex flex-col pb-2 pl-6 overflow-y-auto"
 					style={{ maxHeight: `${MAX_VISIBLE_ROWS * ROW_HEIGHT_PX}px` }}>
-					{activeEntries.map((entry) => (
+					{entries.map((entry) => (
 						<FileRow
 							key={entry.path}
 							entry={entry}
@@ -162,11 +152,6 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 						/>
 					))}
 				</div>
-				{reviewedEntries.length > 0 ? (
-					<div className="pl-6 pb-2 text-xs text-vscode-descriptionForeground">
-						{t("chat:fileChanges.reviewedSection", { count: reviewedEntries.length })}
-					</div>
-				) : null}
 			</CollapsibleContent>
 		</Collapsible>
 	)
