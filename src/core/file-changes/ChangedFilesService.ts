@@ -315,6 +315,9 @@ export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	const content = snap.kind === "text" ? await task.fileContextTracker.getFinalContent(posix) : undefined
 
 	await task.fileContextTracker.overwriteOriginalBase(posix, content)
+	// Clear the final snapshot so the file disappears from the panel
+	// (it now matches the updated baseline and there's nothing to redo).
+	await task.fileContextTracker.removeFinalSnapshot(posix)
 }
 
 /** Accepts all files Roo edited in the current Task. */

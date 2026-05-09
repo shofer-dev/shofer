@@ -528,6 +528,31 @@ export class FileContextTracker {
 	}
 
 	/**
+	 * Removes the final-state snapshot for a file — both the metadata JSON
+	 * and the verbatim copy in final/<relPath>. Used by acceptFile after
+	 * promoting the final state to the new baseline.
+	 */
+	async removeFinalSnapshot(relPath: string): Promise<void> {
+		const snapDirs = await this.getSnapshotDirs()
+		const wdirs = await this.getWorkingDirs()
+		if (!snapDirs || !wdirs) return
+
+		const meta = path.join(snapDirs.finals, this.snapshotFileName(relPath))
+		try {
+			await fs.unlink(meta)
+		} catch {
+			/* ok if missing */
+		}
+
+		const dest = path.join(wdirs.final, relPath)
+		try {
+			await fs.unlink(dest)
+		} catch {
+			/* ok if missing */
+		}
+	}
+
+	/**
 	 * Reads the verbatim base file copy from `<taskDir>/base/<relPath>`.
 	 * Returns undefined when the file copy does not exist.
 	 */
