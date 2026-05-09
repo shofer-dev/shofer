@@ -124,17 +124,10 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 			}
 		}
 		if (matchesBase) {
-			if (!final) continue
-			entries.push({
-				path: relPath,
-				insertions: 0,
-				deletions: 0,
-				binary: false,
-				state: "reverted",
-				source: "working",
-				hasOriginalContent: original !== undefined,
-				hasFinalContent: true,
-			})
+			// Drop entries where the file matches the original base — regardless
+			// of whether a final snapshot exists. A file with zero net change
+			// (e.g. a tool added a line then removed it) has no effective diff
+			// and should not appear in the change list.
 			continue
 		}
 
@@ -182,7 +175,12 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 		})
 	}
 
-	return { taskId: task.taskId, entries, backend: "working" }
+	// Drop entries with no effective change (0 insertions and 0 deletions).
+	// This covers files where Roo's net effect was zero — e.g. a tool added a
+	// line then removed it, or a file was created then deleted within the same
+	// task. Such files have no meaningful diff to show.
+	const effective = entries.filter((e) => e.insertions > 0 || e.deletions > 0)
+	return { taskId: task.taskId, entries: effective, backend: "working" }
 }
 
 function deriveState(original: FileSnapshot | undefined, currentExists: boolean): "modified" | "added" | "deleted" {

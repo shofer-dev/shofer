@@ -26,9 +26,9 @@ Consequences:
   candidate paths — it answers "is this file currently different from task
   start?", not "which files changed?".
 - A file Roo edited but whose disk content currently matches the task's
-  base is **kept** in the list as `state: "reverted"` whenever a final
-  snapshot still exists (so Redo remains reachable). It is dropped only
-  when no final snapshot exists.
+  base is **dropped** from the list regardless of whether a final
+  snapshot exists. Files with zero net change (+0/−0) have no effective
+  diff to surface and are filtered out.
 - A file Roo edited that the user _also_ edited stays in the list (Roo
   touched it); the per-file revert flow surfaces a user-edits warning.
 
@@ -139,9 +139,9 @@ mount and on task switch to recover from missed pushes.
 ### Net-change accounting
 
 A file Roo created and later deleted (or whose lines were added then
-removed) collapses to either `state: "reverted"` (if a final snapshot
-exists for Redo) or is dropped entirely. A file Roo edited that the user
-later restored by hand drops out automatically.
+removed) is **always dropped** from the list — zero net change means no
+effective diff to show. A file Roo edited that the user later restored by
+hand also drops out automatically.
 
 ### Click-to-diff
 
@@ -227,7 +227,7 @@ tracker backend.
 | Per-file revert               | per-file checkout from `baseHash` + workspace unlink for "did not exist at base" | overwrite file with snapshot, or unlink if snapshot says "absent"          |
 | Per-file redo                 | re-apply `final` snapshot                                                        | identical                                                                  |
 | Revert-all                    | single `restoreCheckpoint(baseHash)`                                             | iterate `restoreFile`                                                      |
-| `state: "reverted"` retention | yes (final snapshot drives it)                                                   | yes                                                                        |
+| `state: "reverted"` retention | no (zero-net-change files are dropped)                                           | no                                                                         |
 
 The only meaningfully degraded feature is rename tracking. The UI shows a
 small "limited mode" badge when `backend === "tracker"`.
