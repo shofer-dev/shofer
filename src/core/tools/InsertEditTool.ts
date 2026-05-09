@@ -7,6 +7,7 @@
 
 import * as path from "path"
 import * as vscode from "vscode"
+import * as fs from "fs/promises"
 
 import { type ClineSayTool } from "@roo-code/types"
 
@@ -84,6 +85,19 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				return
 			}
 
+			// Capture original content before mutation for FileChangesPanel.
+			try {
+				let original: string | undefined
+				try {
+					original = await fs.readFile(absolutePath, "utf8")
+				} catch {
+					// File may not exist yet.
+				}
+				await task.fileContextTracker?.captureOriginal(filePath, original)
+			} catch (err) {
+				console.warn(`[InsertEditTool] captureOriginal failed for ${filePath}:`, err)
+			}
+
 			const uri = vscode.Uri.file(absolutePath)
 			// Convert 1-indexed to 0-indexed
 			const position = new vscode.Position(line - 1, column - 1)
@@ -95,6 +109,10 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 			if (!success) {
 				throw new Error("Failed to apply edit")
 			}
+
+			// Track as a Roo edit so it appears in the FileChangesPanel.
+			await task.fileContextTracker?.trackFileContext(filePath, "roo_edited")
+			task.didEditFile = true
 
 			pushToolResult(`Inserted text at ${filePath}:${line}:${column}`)
 		} catch (error) {
