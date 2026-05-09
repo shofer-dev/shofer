@@ -53,6 +53,7 @@ import { getErrorsTool } from "../tools/GetErrorsTool"
 import { getProjectSetupInfoTool } from "../tools/GetProjectSetupInfoTool"
 import { getSearchResultsTool } from "../tools/GetSearchResultsTool"
 import { insertEditTool } from "../tools/InsertEditTool"
+import { sedTool } from "../tools/SedTool"
 import { listCodeUsagesTool } from "../tools/ListCodeUsagesTool"
 import { readProjectStructureTool } from "../tools/ReadProjectStructureTool"
 import { renameSymbolTool } from "../tools/RenameSymbolTool"
@@ -1064,6 +1065,14 @@ export async function presentAssistantMessage(cline: Task) {
 				case "insert_edit":
 					await checkpointSaveAndMark(cline)
 					await insertEditTool.handle(cline, block as ToolUse<"insert_edit">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "sed":
+					await checkpointSaveAndMark(cline)
+					await sedTool.handle(cline, block as ToolUse<"sed">, {
 						askApproval,
 						handleError,
 						pushToolResult,

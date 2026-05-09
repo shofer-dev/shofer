@@ -40,6 +40,7 @@ import giveFeedback from "./give_feedback"
 import checkTaskStatus from "./check_task_status"
 import waitForTask from "./wait_for_task"
 import listBackgroundTasks from "./list_background_tasks"
+import sed from "./sed"
 import sleep from "./sleep"
 import viewImage from "./view_image"
 import writeToFile from "./write_to_file"
@@ -111,6 +112,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		waitForTask,
 		listBackgroundTasks,
 		updateTodoList,
+		sed,
 		sleep,
 		viewImage,
 		writeToFile,

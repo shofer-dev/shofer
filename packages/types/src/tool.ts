@@ -94,6 +94,7 @@ export const toolNames = [
 	"wait_for_task",
 	"list_background_tasks",
 	"sleep",
+	"sed",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -163,6 +164,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	wait_for_task: "wait for background task",
 	list_background_tasks: "list background tasks",
 	sleep: "wait / sleep",
+	sed: "regex find-and-replace on files",
 } as const
 
 /**
@@ -200,6 +202,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"create_directory",
 			"create_new_workspace",
 			"file",
+			"sed",
 		],
 		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
 	},

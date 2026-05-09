@@ -46,6 +46,7 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | `insert_edit`          | 🆕 WS  | write |        –         |   ✅   | Insert text at a specific line:column position |
 | `list_files`           | 🔵 RC  | read  |        –         |   ✅   | List files and directories at a path           |
 | `create_new_workspace` | 🆕 WS  | write |        –         |   ✅   | Create new workspace directory structure       |
+| `sed`                  | 🟣 AW  | write |        –         |   ✅   | Regex find-and-replace on a workspace file     |
 
 ### `read_file`
 
@@ -111,6 +112,17 @@ Inserts text at a specific position in a file using VS Code's WorkspaceEdit API.
 | `line`     | number |    ✅    | 1-based line number             |
 | `column`   | number |    ✅    | 1-based column number           |
 | `text`     | string |    ✅    | Text to insert                  |
+
+### `sed`
+
+Performs regex find-and-replace on a workspace file, similar to `sed 's/pattern/replacement/g'`. Uses JavaScript RegExp syntax. Supports capture group backreferences ($1, $2, etc.).
+
+| Param | Type          |    Required     | Description |
+| ----- | ------------- | :-------------: | ----------- | ------------------------------------------ |
+|       | `path`        |     string      | ✅          | File path relative to workspace            |
+|       | `pattern`     |     string      | ✅          | Regex pattern (JavaScript RegExp syntax)   |
+|       | `replacement` |     string      | ✅          | Replacement string (supports $1, $2, etc.) |
+|       | `global`      | boolean \| null | ✅          | Replace all occurrences (default: true)    |
 
 ### `create_new_workspace`
 
@@ -454,6 +466,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `rename_symbol`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `create_directory`         |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `create_new_workspace`     |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `sed`                      |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `generate_image`           |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
 | **Execute group**          |
 | `execute_command`          |              |    ✓    |        |    ✓     |        |
