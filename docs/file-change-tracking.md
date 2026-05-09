@@ -112,3 +112,11 @@ The old shadow-git checkpoint backend and its dual-backend architecture:
 - `restoreCheckpoint()` call path in `restoreAll()`
 
 The shadow-git checkpoint service itself is **preserved** — it still powers user-initiated "restore to checkpoint" from the chat UI. Only `ChangedFilesService`'s dependency on it was removed.
+
+## Checkpoint restore interaction
+
+When the user restores a checkpoint via the chat UI, the workspace files are reverted to the shadow-git commit at that point in the conversation. The `base/` and `final/` working directories for the current task are **not** automatically cleared — they still reflect the pre-restore state.
+
+**Known gap:** After a checkpoint restore, the FileChangesPanel may show stale diffs (comparing current workspace files against old `base/` copies that no longer represent the actual pre-edit baseline). Revert would restore to the wrong baseline. New edits after restore will also skip `captureOriginal` because the snapshot for the path already exists.
+
+**Mitigation:** Checkpoint restore rewinds the entire task — messages are deleted or replayed — so the user is typically working in a restarted conversation context where the stale `base/`/`final/` state is less visible. A future improvement would be to clear `<taskDir>/base/`, `<taskDir>/final/`, `<taskDir>/originals/`, and `<taskDir>/finals/` after a successful checkpoint restore, so the next edits start with fresh baselines.
