@@ -103,7 +103,9 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 				const provider = task.providerRef.deref()
 				const targetMode = getModeBySlug(command.mode, (await provider?.getState())?.customModes)
 				if (targetMode) {
-					await provider?.handleModeSwitch(command.mode)
+					// Scope the mode switch to this task so it doesn't leak
+					// to the currently focused task.
+					await provider?.handleModeSwitch(command.mode, task)
 				}
 			}
 
