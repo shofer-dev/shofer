@@ -223,10 +223,7 @@ Analyzes workspace root for config files and detects languages, frameworks, buil
 
 ### `get_changed_files`
 
-Returns the files changed during the current task. Reports two **independent** sources in a single response so the model can detect conflicts between cumulative state and recent activity:
-
-- **Cumulative changes since task start** — shadow git checkpoint diff (`git diff --numstat` against the task's base commit). Lists every modified file with insertions/deletions and binary detection, regardless of which actor (Roo, the user, or external tools) made the change.
-- **Files Roo edited in this session** — entries from `FileContextTracker` with source `roo_edited` or `user_edited`. Available even when checkpoints are disabled. Files present here but missing from the cumulative diff are annotated `(not in checkpoint diff)` — typically indicating a Roo edit that was undone, externally reverted, or not yet committed to the shadow repo.
+Returns the files Roo edited in the current task with per-file net-state annotations (+insertions / −deletions). Backed by the working-directory `ChangedFilesService` — each edited file has a `base/` copy captured at first edit and a `final/` copy captured after every `roo_edited`. Diff stats are computed via unified diff against the base content. No git dependency.
 
 No approval prompt — read-only meta-operation.
 
