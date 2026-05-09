@@ -462,9 +462,9 @@ export type EditQueuedMessagePayload = Pick<QueuedMessage, "id" | "text" | "imag
  * Per-file entry describing a file Roo edited in the current Task.
  *
  * The list is scoped to files Roo touched at least once. Net state is
- * computed against the task's base (checkpoint base commit when checkpoints
- * are enabled, otherwise the per-task original-content snapshot taken at
- * first edit). Files whose net state matches the base are excluded.
+ * computed against the per-task working-directory base copy captured at
+ * first edit. Files whose net state matches the base are excluded unless a
+ * final snapshot exists (preserving the Redo action).
  */
 export interface ChangedFileEntry {
 	/** Workspace-relative POSIX path. */
@@ -473,21 +473,19 @@ export interface ChangedFileEntry {
 	deletions: number
 	binary: boolean
 	state: "modified" | "added" | "deleted" | "reverted"
-	/** Backend that produced this entry. */
-	source: "checkpoint" | "tracker"
-	/** Whether an original-content snapshot is available for diff/revert. */
+	/** Always "working" — the sole backend. */
+	source: "working"
+	/** Whether an original-content base copy is available for diff/revert. */
 	hasOriginalContent: boolean
-	/** Whether a final-content snapshot is available for redo. */
+	/** Whether a final-content copy is available for redo. */
 	hasFinalContent: boolean
 }
 
 export interface ChangedFilesPayload {
 	taskId: string
 	entries: ChangedFileEntry[]
-	backend: "checkpoint" | "tracker" | "none"
-	/** True when the preferred (checkpoint) backend was unavailable. */
-	degraded: boolean
-	reason?: string
+	/** Always "working" when entries exist, "none" when no files were edited. */
+	backend: "working" | "none"
 }
 
 export interface WebviewMessage {

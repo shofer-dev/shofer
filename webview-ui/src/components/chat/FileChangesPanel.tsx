@@ -95,7 +95,6 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 	if (!hasEntries) return null
 
 	const fileCount = entries.length
-	const isLimited = payload?.backend === "tracker" || payload?.degraded === true
 
 	const activeEntries = entries.filter((e) => !acceptedPaths.has(e.path))
 	const reviewedEntries = entries.filter((e) => acceptedPaths.has(e.path))
@@ -116,13 +115,6 @@ const FileChangesPanel = memo(({ taskId, className }: FileChangesPanelProps) => 
 				<span className="text-sm font-medium">
 					{t("chat:fileChangesInConversation.header", { count: fileCount })}
 				</span>
-				{isLimited ? (
-					<span
-						className="text-[10px] px-1.5 py-0.5 rounded bg-vscode-badge-background text-vscode-badge-foreground shrink-0"
-						title={t("chat:fileChanges.limitedModeTooltip") ?? ""}>
-						{t("chat:fileChanges.limitedMode")}
-					</span>
-				) : null}
 				{totalStats.added > 0 || totalStats.removed > 0 ? (
 					<div
 						className="flex items-center gap-2 ml-auto shrink-0"
