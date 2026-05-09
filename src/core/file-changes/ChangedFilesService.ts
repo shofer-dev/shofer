@@ -147,13 +147,27 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 			insertions = stats.inserted
 			deletions = stats.deleted
 		} else if (baseText === undefined && currentContent !== undefined) {
-			// New file — all lines are insertions (exclude trailing newline).
-			const lines = currentContent.split("\n").length - 1
-			insertions = Math.max(0, lines)
+			// Only treat as new file when the snapshot confirms it was absent.
+			// If the snapshot says the file existed but the base copy is missing
+			// (e.g. captureOriginal skipped writing base/), report 0/0 rather
+			// than falsely counting every line as an insertion.
+			const wasAbsent = !original || original.kind === "absent"
+			if (wasAbsent) {
+				const lines = currentContent.split("\n").length - 1
+				insertions = Math.max(0, lines)
+			} else {
+				console.warn(
+					`[ChangedFilesService] base copy missing for ${relPath} (snapshot says text), diff stats unavailable`,
+				)
+			}
 		} else if (baseText !== undefined && currentContent === undefined) {
-			// File deleted — all lines are deletions (exclude trailing newline).
-			const lines = baseText.split("\n").length - 1
-			deletions = Math.max(0, lines)
+			const wasNew = original?.kind === "absent"
+			if (!wasNew) {
+				// File existed at base but is now gone — genuine deletion.
+				const lines = baseText.split("\n").length - 1
+				deletions = Math.max(0, lines)
+			}
+			// If wasNew: file was created then deleted → net zero, already 0/0.
 		}
 
 		entries.push({
