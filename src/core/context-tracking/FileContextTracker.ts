@@ -499,6 +499,33 @@ export class FileContextTracker {
 	}
 
 	/**
+	 * Overwrites the original baseline for a file — both the metadata snapshot
+	 * in originals/ and the verbatim copy in base/<relPath>. Used by acceptFile
+	 * to promote the final state as the new baseline. Pass content === undefined
+	 * to mark the file as absent at baseline.
+	 */
+	async overwriteOriginalBase(relPath: string, content: string | undefined): Promise<void> {
+		const snapDirs = await this.getSnapshotDirs()
+		const wdirs = await this.getWorkingDirs()
+		if (!snapDirs || !wdirs) return
+
+		const snap = this.buildSnapshotFromContent(content)
+		await this.writeSnapshot(snapDirs.originals, relPath, snap)
+
+		const dest = path.join(wdirs.base, relPath)
+		if (snap.kind === "absent") {
+			try {
+				await fs.unlink(dest)
+			} catch {
+				/* ok if missing */
+			}
+		} else if (content !== undefined) {
+			await fs.mkdir(path.dirname(dest), { recursive: true })
+			await fs.writeFile(dest, content, "utf8")
+		}
+	}
+
+	/**
 	 * Reads the verbatim base file copy from `<taskDir>/base/<relPath>`.
 	 * Returns undefined when the file copy does not exist.
 	 */

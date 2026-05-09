@@ -280,3 +280,33 @@ export async function redoFile(task: Task, relPath: string): Promise<void> {
 		await fs.writeFile(abs, content, "utf8")
 	}
 }
+
+/**
+ * Promotes the current final state of a file to the new baseline.
+ * Overwrites base/<relPath> and the originals snapshot with the final
+ * content (or marks absent). After accept, the file disappears from
+ * the change panel since it matches the updated baseline.
+ *
+ * No-op when the file has no final snapshot (nothing to accept).
+ */
+export async function acceptFile(task: Task, relPath: string): Promise<void> {
+	const posix = toPosix(relPath)
+	const snap = await task.fileContextTracker.getFinalSnapshot(posix)
+	if (!snap) return // nothing to accept
+
+	const content = snap.kind === "text" ? await task.fileContextTracker.getFinalContent(posix) : undefined
+
+	await task.fileContextTracker.overwriteOriginalBase(posix, content)
+}
+
+/** Accepts all files Roo edited in the current Task. */
+export async function acceptAll(task: Task): Promise<void> {
+	const candidates = await task.fileContextTracker.getFilesEditedByRoo()
+	for (const p of candidates) {
+		try {
+			await acceptFile(task, p)
+		} catch (err) {
+			console.error(`[ChangedFilesService] acceptFile(${p}) failed:`, err)
+		}
+	}
+}

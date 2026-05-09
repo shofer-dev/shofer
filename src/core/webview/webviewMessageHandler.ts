@@ -1503,6 +1503,42 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
+		case "changedFiles/accept": {
+			const relPath = message.text || ""
+			if (!relPath) break
+			const task = provider.getCurrentTask()
+			if (!task) break
+			if (task.isStreaming) {
+				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
+				break
+			}
+			try {
+				const { acceptFile } = await import("../file-changes/ChangedFilesService")
+				await acceptFile(task, relPath)
+				await provider.pushChangedFilesUpdate()
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err)
+				vscode.window.showErrorMessage(`Accept failed: ${errorMsg}`)
+			}
+			break
+		}
+		case "changedFiles/acceptAll": {
+			const task = provider.getCurrentTask()
+			if (!task) break
+			if (task.isStreaming) {
+				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
+				break
+			}
+			try {
+				const { acceptAll } = await import("../file-changes/ChangedFilesService")
+				await acceptAll(task)
+				await provider.pushChangedFilesUpdate()
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err)
+				vscode.window.showErrorMessage(`Accept all failed: ${errorMsg}`)
+			}
+			break
+		}
 		case "cancelAutoApproval":
 			// Cancel any pending auto-approval timeout for the current task
 			provider.getCurrentTask()?.cancelAutoApprovalTimeout()

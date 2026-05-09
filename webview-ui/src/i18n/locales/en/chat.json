@@ -44,8 +44,7 @@
 		"revertConfirmUserEdits": "{{path}} appears to have been modified outside of Roo. Reverting will discard those changes. Continue?",
 		"revertConfirmYes": "Revert",
 		"revertAllConfirm": "Revert ALL files Roo edited in this task back to their state at task start? This cannot be undone.",
-		"blockedTaskRunning": "Cannot modify files while Roo is running. Pause or cancel the task first.",
-		"reviewedSection": "Reviewed ({{count}})"
+		"blockedTaskRunning": "Cannot modify files while Roo is running. Pause or cancel the task first."
 	},
 	"retry": {
 		"title": "Retry",
