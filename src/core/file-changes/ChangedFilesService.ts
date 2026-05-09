@@ -273,31 +273,6 @@ export async function restoreAll(task: Task): Promise<void> {
 }
 
 /**
- * Re-applies the last captured final content for a file. Used by per-file
- * Redo after a Revert. If no final snapshot is available, throws.
- */
-export async function redoFile(task: Task, relPath: string): Promise<void> {
-	const posix = toPosix(relPath)
-	const abs = path.resolve(task.cwd, posix)
-	const snap = await task.fileContextTracker.getFinalSnapshot(posix)
-	if (!snap) {
-		throw new Error(`No final snapshot available for ${relPath}; cannot redo.`)
-	}
-	if (snap.kind === "absent") {
-		try {
-			await fs.unlink(abs)
-		} catch (err: any) {
-			if (err?.code !== "ENOENT") throw err
-		}
-	} else {
-		const finalText = await task.fileContextTracker.getFinalContent(posix)
-		const content = finalText ?? ""
-		await fs.mkdir(path.dirname(abs), { recursive: true })
-		await fs.writeFile(abs, content, "utf8")
-	}
-}
-
-/**
  * Promotes the current final state of a file to the new baseline.
  * Overwrites base/<relPath> and the originals snapshot with the final
  * content (or marks absent). After accept, the file disappears from

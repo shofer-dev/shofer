@@ -1341,7 +1341,7 @@ export class ClineProvider
 
 	/**
 	 * Computes and pushes the ChangedFiles payload immediately. Used by the
-	 * debounced scheduler and by IPC handlers (e.g. after revert/redo).
+	 * debounced scheduler and by IPC handlers (e.g. after revert).
 	 */
 	public async pushChangedFilesUpdate(taskId?: string): Promise<void> {
 		const task = this.getCurrentTask()
