@@ -2,32 +2,29 @@
  * ChangedFilesService — single source of truth for "files Roo edited in the
  * current Task and their net state".
  *
- * Backends:
- *   1. Checkpoint backend (preferred): uses the shadow-git checkpoint
- *      service's `getDiffStat({ from: baseHash })` to compute net state for
- *      the candidate paths Roo edited.
- *   2. Tracker backend (fallback, used when checkpoints are unavailable):
- *      compares current on-disk content of each candidate path against the
- *      per-task original-content snapshot stored by FileContextTracker.
+ * Uses a per-task working-directory approach:
+ *   - base/<relPath>  : verbatim copy of each file at the moment Roo first
+ *                       edited it in this task (idempotent).
+ *   - final/<relPath>  : last Roo-produced state, overwritten after every
+ *                       roo_edited (used for Redo).
  *
- * The candidate set always comes from
- * `FileContextTracker.getFilesEditedByRoo()`. The checkpoint diff alone is
- * NOT used to derive the file list: pre-existing diffs / external user
- * edits must not appear in the panel, only files Roo touched.
+ * Snapshots are stored under `<taskDir>/originals/` and `<taskDir>/finals/`
+ * as lightweight JSON metadata (hash only, no inline content). The actual
+ * file content lives in `<taskDir>/base/<relPath>` and
+ * `<taskDir>/final/<relPath>`, accessed via FileContextTracker methods.
  *
- * The same module also provides revert/redo/diff primitives used by the
- * panel and by IPC handlers.
+ * This backend has NO git dependency — no shadow git, no checkpoints, no
+ * binary-on-PATH requirement. It works identically in every workspace type.
  */
 
 import * as path from "path"
 import * as crypto from "crypto"
 import fs from "fs/promises"
+import { createTwoFilesPatch, parsePatch } from "diff"
 
 import type { ChangedFileEntry, ChangedFilesPayload } from "@roo-code/types"
 
 import { Task } from "../task/Task"
-import { getCheckpointService } from "../checkpoints"
-import type { CheckpointDiffStat } from "../../services/checkpoints/types"
 import type { FileSnapshot } from "../context-tracking/FileContextTracker"
 
 /** Normalize to POSIX-style workspace-relative path for stable webview keys. */
@@ -39,85 +36,82 @@ function sha256(s: string): string {
 	return crypto.createHash("sha256").update(s).digest("hex")
 }
 
+// ---------------------------------------------------------------------------
+// Diff computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Exact insertions/deletions count via unified-diff parsing.
+ * This replaces the old `countLineDelta` heuristic.
+ */
+function computeUnifiedDiffStats(
+	oldContent: string,
+	newContent: string,
+	filePath: string,
+): { inserted: number; deleted: number } {
+	const patch = createTwoFilesPatch(filePath, filePath, oldContent, newContent, undefined, undefined, {
+		context: 0,
+	})
+	const parsed = parsePatch(patch)
+	let inserted = 0
+	let deleted = 0
+	for (const p of parsed) {
+		for (const h of (p as any).hunks ?? []) {
+			for (const line of h.lines ?? []) {
+				const ch = (line as string)[0]
+				if (ch === "+") inserted++
+				else if (ch === "-") deleted++
+			}
+		}
+	}
+	return { inserted, deleted }
+}
+
+// ---------------------------------------------------------------------------
+// Disk helpers (workspace reads only; base/final reads go through tracker)
+// ---------------------------------------------------------------------------
+
+async function readDiskExists(cwd: string, relPath: string): Promise<boolean> {
+	try {
+		await fs.access(path.resolve(cwd, relPath))
+		return true
+	} catch {
+		return false
+	}
+}
+
+async function readDiskText(cwd: string, relPath: string): Promise<string | undefined> {
+	try {
+		return await fs.readFile(path.resolve(cwd, relPath), "utf8")
+	} catch {
+		return undefined
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
  * Returns the unified set of files Roo edited in the current Task, with net
- * state computed by whichever backend is currently available.
+ * state computed against the per-task working-directory base copies.
  */
 export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> {
 	const candidates = (await task.fileContextTracker.getFilesEditedByRoo()).map(toPosix)
 
 	if (candidates.length === 0) {
-		return { taskId: task.taskId, entries: [], backend: "none", degraded: false }
+		return { taskId: task.taskId, entries: [], backend: "none" }
 	}
 
-	// Try the checkpoint backend first.
-	let checkpointDiff: CheckpointDiffStat[] | undefined
-	let checkpointReason: string | undefined
-	try {
-		const service = await getCheckpointService(task)
-		if (service?.isInitialized && service.baseHash) {
-			checkpointDiff = await service.getDiffStat({ from: service.baseHash })
-		} else {
-			checkpointReason = "checkpoints not initialized"
-		}
-	} catch (err) {
-		checkpointReason = err instanceof Error ? err.message : String(err)
-	}
-
-	if (checkpointDiff) {
-		const byPath = new Map<string, CheckpointDiffStat>()
-		for (const d of checkpointDiff) byPath.set(toPosix(d.relative), d)
-
-		const entries: ChangedFileEntry[] = []
-		for (const relPath of candidates) {
-			const stat = byPath.get(relPath)
-			const original = await task.fileContextTracker.getOriginalSnapshot(relPath)
-			const final = await task.fileContextTracker.getFinalSnapshot(relPath)
-			const currentExists = await readDiskExists(task.cwd, relPath)
-			// File Roo edited but currently matches base. Keep it visible as
-			// "reverted" if a final snapshot exists (so the user can Redo);
-			// otherwise drop entirely.
-			if (!stat) {
-				if (!final) continue
-				entries.push({
-					path: relPath,
-					insertions: 0,
-					deletions: 0,
-					binary: false,
-					state: "reverted",
-					source: "checkpoint",
-					hasOriginalContent: true, // checkpoint backend can always serve base
-					hasFinalContent: true,
-				})
-				continue
-			}
-			entries.push({
-				path: relPath,
-				insertions: stat.insertions,
-				deletions: stat.deletions,
-				binary: stat.binary,
-				state: deriveState(original, currentExists),
-				source: "checkpoint",
-				// In checkpoint mode the diff base is always available via shadow
-				// git, even when the per-task snapshot was not captured (e.g. the
-				// file was edited via a tool path that bypassed DiffViewProvider).
-				hasOriginalContent: true,
-				hasFinalContent: final !== undefined,
-			})
-		}
-		return { taskId: task.taskId, entries, backend: "checkpoint", degraded: false }
-	}
-
-	// Fallback — tracker backend.
 	const entries: ChangedFileEntry[] = []
 	for (const relPath of candidates) {
 		const original = await task.fileContextTracker.getOriginalSnapshot(relPath)
+		const final = await task.fileContextTracker.getFinalSnapshot(relPath)
 		const currentExists = await readDiskExists(task.cwd, relPath)
 		const currentContent = currentExists ? await readDiskText(task.cwd, relPath) : undefined
-		const final = await task.fileContextTracker.getFinalSnapshot(relPath)
 
-		// Net-state filter: if disk matches the captured original, keep the
-		// entry only as "reverted" when a final snapshot exists (for Redo).
+		// If disk matches the captured original, keep the entry as "reverted"
+		// only when a final snapshot exists (for Redo); otherwise drop it.
 		let matchesBase = false
 		if (original) {
 			if (original.kind === "absent" && !currentExists) matchesBase = true
@@ -137,32 +131,44 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 				deletions: 0,
 				binary: false,
 				state: "reverted",
-				source: "tracker",
+				source: "working",
 				hasOriginalContent: original !== undefined,
 				hasFinalContent: true,
 			})
 			continue
 		}
 
+		// Compute exact diff stats: unified diff of base content vs. current disk.
+		let insertions = 0
+		let deletions = 0
+		const baseText = await task.fileContextTracker.getBaseContent(relPath)
+		if (baseText !== undefined && currentContent !== undefined) {
+			const stats = computeUnifiedDiffStats(baseText, currentContent, relPath)
+			insertions = stats.inserted
+			deletions = stats.deleted
+		} else if (baseText === undefined && currentContent !== undefined) {
+			// New file — all lines are insertions (exclude trailing newline).
+			const lines = currentContent.split("\n").length - 1
+			insertions = Math.max(0, lines)
+		} else if (baseText !== undefined && currentContent === undefined) {
+			// File deleted — all lines are deletions (exclude trailing newline).
+			const lines = baseText.split("\n").length - 1
+			deletions = Math.max(0, lines)
+		}
+
 		entries.push({
 			path: relPath,
-			insertions: countLineDelta(original, currentContent).inserted,
-			deletions: countLineDelta(original, currentContent).deleted,
-			binary: false, // tracker backend does not detect binary
+			insertions,
+			deletions,
+			binary: false,
 			state: deriveState(original, currentExists),
-			source: "tracker",
+			source: "working",
 			hasOriginalContent: original !== undefined,
 			hasFinalContent: final !== undefined,
 		})
 	}
 
-	return {
-		taskId: task.taskId,
-		entries,
-		backend: "tracker",
-		degraded: true,
-		reason: checkpointReason,
-	}
+	return { taskId: task.taskId, entries, backend: "working" }
 }
 
 function deriveState(original: FileSnapshot | undefined, currentExists: boolean): "modified" | "added" | "deleted" {
@@ -172,115 +178,45 @@ function deriveState(original: FileSnapshot | undefined, currentExists: boolean)
 	return "modified"
 }
 
-function countLineDelta(
-	original: FileSnapshot | undefined,
-	currentContent: string | undefined,
-): { inserted: number; deleted: number } {
-	// Without a real diff library we approximate: report total lines changed
-	// as max(currentLines, originalLines) - common-prefix-or-suffix lines.
-	// For a simple, cheap heuristic that's "good enough" for the panel header
-	// in tracker mode, just compare line counts.
-	const origText = original?.kind === "text" ? (original.content ?? "") : ""
-	const currText = currentContent ?? ""
-	const origLines = origText ? origText.split("\n").length : 0
-	const currLines = currText ? currText.split("\n").length : 0
-	if (origText === currText) return { inserted: 0, deleted: 0 }
-	return {
-		inserted: Math.max(0, currLines - origLines),
-		deleted: Math.max(0, origLines - currLines),
-	}
-}
-
-async function readDiskExists(cwd: string, relPath: string): Promise<boolean> {
-	try {
-		await fs.access(path.resolve(cwd, relPath))
-		return true
-	} catch {
-		return false
-	}
-}
-
-async function readDiskText(cwd: string, relPath: string): Promise<string | undefined> {
-	try {
-		return await fs.readFile(path.resolve(cwd, relPath), "utf8")
-	} catch {
-		return undefined
-	}
-}
-
 /**
- * Returns the original-content snapshot for the given file in the current
- * Task. Falls back to the checkpoint backend (`git show baseHash:<path>`)
- * when no per-task snapshot exists, so the diff view still works for files
- * Roo edited via tool paths that bypassed DiffViewProvider's snapshot hook.
- * Returns null only when neither source has any base content for the file.
+ * Returns the original content for a file in the current task.
+ * Reads from the per-task base/<relPath> copy via FileContextTracker.
+ * Returns "" for absent files (so the diff editor can show all additions),
+ * null when no base content is available at all.
  */
 export async function getOriginalContent(task: Task, relPath: string): Promise<string | null> {
 	const posix = toPosix(relPath)
 	const snap = await task.fileContextTracker.getOriginalSnapshot(posix)
 	if (snap) {
-		if (snap.kind === "text") return snap.content ?? ""
-		// "absent" -> empty document, so the diff editor can show the additions.
 		if (snap.kind === "absent") return ""
-	}
-	try {
-		const service = await getCheckpointService(task)
-		if (service?.isInitialized && service.baseHash) {
-			const svc = service as any
-			if (svc.git) {
-				try {
-					return await svc.git.show([`${service.baseHash}:${posix}`])
-				} catch {
-					// File did not exist at base.
-					return ""
-				}
-			}
+		if (snap.kind === "text") {
+			const baseText = await task.fileContextTracker.getBaseContent(posix)
+			if (baseText !== undefined) return baseText
 		}
-	} catch {
-		// fall through
 	}
 	return null
 }
 
 /** Like {@link getOriginalContent}, but for the last captured final state. */
 export async function getFinalContent(task: Task, relPath: string): Promise<string | null> {
-	const snap = await task.fileContextTracker.getFinalSnapshot(toPosix(relPath))
+	const posix = toPosix(relPath)
+	const snap = await task.fileContextTracker.getFinalSnapshot(posix)
 	if (!snap) return null
-	if (snap.kind === "text") return snap.content ?? ""
 	if (snap.kind === "absent") return ""
+	if (snap.kind === "text") {
+		return (await task.fileContextTracker.getFinalContent(posix)) ?? null
+	}
 	return null
 }
 
 /**
- * Reverts a single file in the current Task back to its original state.
- *
- * Strategy:
- *  - If the checkpoint backend is available, use `git checkout baseHash --
- *    <path>` against the shadow worktree (the workspace itself).
- *  - Otherwise fall back to the per-task original-content snapshot:
- *      - kind === "text"  -> overwrite the file
- *      - kind === "absent" -> delete the file (if it exists)
+ * Reverts a single file back to its original state as captured at the
+ * start of the task. Copies base/<relPath> to the workspace (or deletes
+ * the file if the base snapshot indicates it was absent).
  */
 export async function restoreFile(task: Task, relPath: string): Promise<void> {
 	const posix = toPosix(relPath)
 	const abs = path.resolve(task.cwd, posix)
-
-	// Try checkpoint backend first.
-	try {
-		const service = await getCheckpointService(task)
-		if (service?.isInitialized && service.baseHash) {
-			// Use the shadow git directly via its public restore API on a single path.
-			// `restoreCheckpoint` resets the entire worktree, which is wrong here;
-			// we want a per-file checkout instead. Drive the underlying simple-git
-			// instance through its `raw` interface via a small helper exposed below.
-			await checkoutSingleFileFromBase(service as any, posix)
-			return
-		}
-	} catch (err) {
-		console.warn(`[ChangedFilesService] checkpoint restoreFile failed for ${relPath}, falling back:`, err)
-	}
-
-	// Fallback — tracker backend.
 	const snap = await task.fileContextTracker.getOriginalSnapshot(posix)
 	if (!snap) {
 		throw new Error(`No original snapshot available for ${relPath}; cannot revert.`)
@@ -291,9 +227,13 @@ export async function restoreFile(task: Task, relPath: string): Promise<void> {
 		} catch (err: any) {
 			if (err?.code !== "ENOENT") throw err
 		}
-	} else if (snap.kind === "text") {
+	} else {
+		const baseText = await task.fileContextTracker.getBaseContent(posix)
+		if (baseText === undefined) {
+			throw new Error(`No base file copy for ${relPath}; the snapshot exists but the working copy is missing.`)
+		}
 		await fs.mkdir(path.dirname(abs), { recursive: true })
-		await fs.writeFile(abs, snap.content ?? "", "utf8")
+		await fs.writeFile(abs, baseText, "utf8")
 	}
 	// NOTE: deliberately do NOT recapture the final snapshot here. The final
 	// snapshot represents the last "Roo-produced" state and is what Redo will
@@ -302,21 +242,10 @@ export async function restoreFile(task: Task, relPath: string): Promise<void> {
 }
 
 /**
- * Reverts every file Roo edited in the current Task. Prefers the checkpoint
- * backend's atomic `restoreCheckpoint(baseHash)` when available; otherwise
- * iterates `restoreFile` over the tracker candidate set.
+ * Reverts every file Roo edited in the current Task. Iterates restoreFile
+ * over the tracker candidate set.
  */
 export async function restoreAll(task: Task): Promise<void> {
-	try {
-		const service = await getCheckpointService(task)
-		if (service?.isInitialized && service.baseHash) {
-			await service.restoreCheckpoint(service.baseHash)
-			// NOTE: do not recapture finals — see restoreFile().
-			return
-		}
-	} catch (err) {
-		console.warn(`[ChangedFilesService] checkpoint restoreAll failed, falling back:`, err)
-	}
 	const candidates = await task.fileContextTracker.getFilesEditedByRoo()
 	for (const p of candidates) {
 		try {
@@ -345,41 +274,9 @@ export async function redoFile(task: Task, relPath: string): Promise<void> {
 			if (err?.code !== "ENOENT") throw err
 		}
 	} else {
+		const finalText = await task.fileContextTracker.getFinalContent(posix)
+		const content = finalText ?? ""
 		await fs.mkdir(path.dirname(abs), { recursive: true })
-		await fs.writeFile(abs, snap.content ?? "", "utf8")
+		await fs.writeFile(abs, content, "utf8")
 	}
-}
-
-/**
- * Per-file checkout from the shadow-git base commit. Implemented by reading
- * the file content from `<baseHash>:<relPath>` and writing it to disk (or
- * deleting the file when it did not exist at base). This is equivalent to
- * `git checkout baseHash -- <relPath>` against the shadow worktree but
- * avoids touching the shadow index for paths the user might want to keep.
- */
-async function checkoutSingleFileFromBase(service: any, relPath: string): Promise<void> {
-	const git = service.git
-	const baseHash: string = service.baseHash
-	const workspaceDir: string = service.workspaceDir
-	if (!git || !baseHash || !workspaceDir) {
-		throw new Error("Shadow git service not in usable state for per-file restore")
-	}
-	const abs = path.resolve(workspaceDir, relPath)
-	let originalContent: string | null = null
-	try {
-		originalContent = await git.show([`${baseHash}:${relPath}`])
-	} catch {
-		// File did not exist at base.
-		originalContent = null
-	}
-	if (originalContent === null) {
-		try {
-			await fs.unlink(abs)
-		} catch (err: any) {
-			if (err?.code !== "ENOENT") throw err
-		}
-		return
-	}
-	await fs.mkdir(path.dirname(abs), { recursive: true })
-	await fs.writeFile(abs, originalContent, "utf8")
 }

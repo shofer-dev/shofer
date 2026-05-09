@@ -35,8 +35,6 @@
 		"header": "{{count}} file(s) changed in this conversation"
 	},
 	"fileChanges": {
-		"limitedMode": "limited mode",
-		"limitedModeTooltip": "Checkpoints unavailable; revert/diff use per-task snapshots and may not detect renames or binary files.",
 		"diffUnavailable": "Original content not available for this file.",
 		"revert": "Revert",
 		"redo": "Redo",

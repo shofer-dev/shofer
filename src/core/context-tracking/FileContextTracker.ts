@@ -13,15 +13,14 @@ import { ClineProvider } from "../webview/ClineProvider"
 /**
  * Snapshot kind written to the per-task originals/finals stores.
  *  - "absent" : the file did not exist on disk at the moment of capture.
- *  - "text"   : the file existed and its content is captured verbatim.
- *  - "binary" : the file existed but content is not retained (see notes).
+ *  - "text"   : the file existed. Actual content lives in base/<relPath>
+ *               (originals) or final/<relPath> (finals).
+ *  - "binary" : the file existed but content is not retained.
  */
 export type SnapshotKind = "absent" | "text" | "binary"
 
 export interface FileSnapshot {
 	kind: SnapshotKind
-	/** Captured text content when kind === "text". */
-	content?: string
 	/** sha256 of captured bytes (only meaningful when kind === "text"). */
 	hash?: string
 }
@@ -386,8 +385,21 @@ export class FileContextTracker {
 		if (content === undefined) return { kind: "absent" }
 		return {
 			kind: "text",
-			content,
 			hash: crypto.createHash("sha256").update(content).digest("hex"),
+		}
+	}
+
+	/**
+	 * Returns absolute paths to the per-task working-directory `base/` and
+	 * `final/` directories (for file copies, not metadata).
+	 */
+	private async getWorkingDirs(): Promise<{ base: string; final: string } | undefined> {
+		const storage = this.getContextProxy()?.globalStorageUri.fsPath
+		if (!storage) return undefined
+		const taskDir = await getTaskDirectoryPath(storage, this.taskId)
+		return {
+			base: path.join(taskDir, "base"),
+			final: path.join(taskDir, "final"),
 		}
 	}
 
@@ -399,6 +411,9 @@ export class FileContextTracker {
 	 * Should be called from edit infrastructure (e.g. DiffViewProvider.open)
 	 * after the original content has been read but before the file is mutated.
 	 * Pass `content === undefined` to indicate the file did not exist on disk.
+	 *
+	 * Writes a lightweight metadata snapshot to `originals/` and a verbatim
+	 * file copy to `base/<relPath>`.
 	 */
 	async captureOriginal(relPath: string, content: string | undefined): Promise<void> {
 		try {
@@ -406,7 +421,20 @@ export class FileContextTracker {
 			if (!dirs) return
 			const existing = await this.readSnapshot(dirs.originals, relPath)
 			if (existing) return
-			await this.writeSnapshot(dirs.originals, relPath, this.buildSnapshotFromContent(content))
+
+			const snap = this.buildSnapshotFromContent(content)
+			await this.writeSnapshot(dirs.originals, relPath, snap)
+
+			// Also write a verbatim copy to base/<relPath> so ChangedFilesService
+			// can diff against it and serve original content without JSON decoding.
+			if (snap.kind === "text" && content !== undefined) {
+				const wdirs = await this.getWorkingDirs()
+				if (wdirs) {
+					const dest = path.join(wdirs.base, relPath)
+					await fs.mkdir(path.dirname(dest), { recursive: true })
+					await fs.writeFile(dest, content, "utf8")
+				}
+			}
 		} catch (err) {
 			console.error(`[FileContextTracker] captureOriginal failed for ${relPath}:`, err)
 		}
@@ -416,6 +444,9 @@ export class FileContextTracker {
 	 * Captures the file's current on-disk content as the latest "final" state
 	 * produced by Roo. Overwrites any prior final snapshot. Used to power Redo
 	 * after a per-file Revert.
+	 *
+	 * Writes a lightweight metadata snapshot to `finals/` and a verbatim
+	 * file copy to `final/<relPath>`.
 	 */
 	async captureFinal(relPath: string): Promise<void> {
 		try {
@@ -430,7 +461,26 @@ export class FileContextTracker {
 			} catch {
 				content = undefined
 			}
-			await this.writeSnapshot(dirs.finals, relPath, this.buildSnapshotFromContent(content))
+			const snap = this.buildSnapshotFromContent(content)
+			await this.writeSnapshot(dirs.finals, relPath, snap)
+
+			// Also write a verbatim copy to final/<relPath>.
+			const wdirs = await this.getWorkingDirs()
+			if (wdirs) {
+				if (snap.kind === "absent") {
+					// Remove any stale final copy when the file was deleted.
+					const dest = path.join(wdirs.final, relPath)
+					try {
+						await fs.unlink(dest)
+					} catch {
+						/* ok if missing */
+					}
+				} else if (content !== undefined) {
+					const dest = path.join(wdirs.final, relPath)
+					await fs.mkdir(path.dirname(dest), { recursive: true })
+					await fs.writeFile(dest, content, "utf8")
+				}
+			}
 		} catch (err) {
 			console.error(`[FileContextTracker] captureFinal failed for ${relPath}:`, err)
 		}
@@ -446,6 +496,34 @@ export class FileContextTracker {
 		const dirs = await this.getSnapshotDirs()
 		if (!dirs) return undefined
 		return this.readSnapshot(dirs.finals, relPath)
+	}
+
+	/**
+	 * Reads the verbatim base file copy from `<taskDir>/base/<relPath>`.
+	 * Returns undefined when the file copy does not exist.
+	 */
+	async getBaseContent(relPath: string): Promise<string | undefined> {
+		const wdirs = await this.getWorkingDirs()
+		if (!wdirs) return undefined
+		try {
+			return await fs.readFile(path.join(wdirs.base, relPath), "utf8")
+		} catch {
+			return undefined
+		}
+	}
+
+	/**
+	 * Reads the verbatim final file copy from `<taskDir>/final/<relPath>`.
+	 * Returns undefined when the file copy does not exist.
+	 */
+	async getFinalContent(relPath: string): Promise<string | undefined> {
+		const wdirs = await this.getWorkingDirs()
+		if (!wdirs) return undefined
+		try {
+			return await fs.readFile(path.join(wdirs.final, relPath), "utf8")
+		} catch {
+			return undefined
+		}
 	}
 
 	// Disposes all file watchers
