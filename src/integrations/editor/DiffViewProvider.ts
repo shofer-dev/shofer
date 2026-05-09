@@ -663,6 +663,25 @@ export class DiffViewProvider {
 	}> {
 		const absolutePath = path.resolve(this.cwd, relPath)
 
+		// Capture the original content before writing, so the FileChangesPanel
+		// can diff and revert. Unlike open(), saveDirectly bypasses the diff
+		// view entirely — we must explicitly snapshot here.
+		try {
+			const task = this.taskRef.deref()
+			let fileExists = false
+			let original: string | undefined
+			try {
+				await fs.access(absolutePath)
+				fileExists = true
+				original = await fs.readFile(absolutePath, "utf-8")
+			} catch {
+				fileExists = false
+			}
+			await task?.fileContextTracker?.captureOriginal(relPath, fileExists ? original : undefined)
+		} catch (err) {
+			console.warn(`[DiffViewProvider] saveDirectly captureOriginal failed for ${relPath}:`, err)
+		}
+
 		// Get diagnostics before editing the file
 		this.preDiagnostics = vscode.languages.getDiagnostics()
 
