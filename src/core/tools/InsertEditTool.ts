@@ -21,7 +21,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 interface InsertEditParams {
 	filePath: string
 	line: number
-	column: number
+	column?: number | null
 	text: string
 }
 
@@ -47,13 +47,8 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				pushToolResult(await task.sayAndCreateMissingParamError("insert_edit", "line"))
 				return
 			}
-			if (column == null) {
-				task.consecutiveMistakeCount++
-				task.recordToolError("insert_edit")
-				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("insert_edit", "column"))
-				return
-			}
+			// column is optional; default to 1 (start of line) when not provided.
+			const resolvedColumn = column ?? 1
 			if (text == null) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("insert_edit")
@@ -76,7 +71,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 			const preview = text.length > 100 ? text.slice(0, 100) + "..." : text
 			const completeMessage = JSON.stringify({
 				...sharedMessageProps,
-				content: `Inserting at ${filePath}:${line}:${column}\n${preview}`,
+				content: `Inserting at ${filePath}:${line}:${resolvedColumn}\n${preview}`,
 			} satisfies ClineSayTool)
 
 			const didApprove = await askApproval("tool", completeMessage)
@@ -98,12 +93,25 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				console.warn(`[InsertEditTool] captureOriginal failed for ${filePath}:`, err)
 			}
 
+			// Decode HTML entities that may have leaked into the text parameter
+			// (e.g. > → >, < → <, & → &). This is a safety net; native
+			// JSON tool calls should never produce encoded text, but earlier XML
+			// protocol versions did pass encoded payloads.
+			// & must be decoded first so that other entities (which begin with &)
+			// aren't broken by a partial decode.
+			const safeText = text
+				.replace(/&amp;/g, "&")
+				.replace(/&gt;/g, ">")
+				.replace(/&lt;/g, "<")
+				.replace(/&quot;/g, '"')
+				.replace(/&#39;/g, "'")
+
 			const uri = vscode.Uri.file(absolutePath)
 			// Convert 1-indexed to 0-indexed
-			const position = new vscode.Position(line - 1, column - 1)
+			const position = new vscode.Position(line - 1, resolvedColumn - 1)
 
 			const edit = new vscode.WorkspaceEdit()
-			edit.insert(uri, position, text)
+			edit.insert(uri, position, safeText)
 			const success = await vscode.workspace.applyEdit(edit)
 
 			if (!success) {
@@ -114,7 +122,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 			await task.fileContextTracker?.trackFileContext(filePath, "roo_edited")
 			task.didEditFile = true
 
-			pushToolResult(`Inserted text at ${filePath}:${line}:${column}`)
+			pushToolResult(`Inserted text at ${filePath}:${line}:${resolvedColumn}`)
 		} catch (error) {
 			await handleError("inserting edit", error instanceof Error ? error : new Error(String(error)))
 		}

@@ -48,7 +48,7 @@ export default {
 					description: TEXT_PARAMETER_DESCRIPTION,
 				},
 			},
-			required: ["filePath", "line", "column", "text"],
+			required: ["filePath", "line", "text"],
 			additionalProperties: false,
 		},
 	},
