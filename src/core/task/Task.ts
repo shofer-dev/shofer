@@ -3023,6 +3023,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.diagLog(
 				`[DIAG initiateTaskLoop] Loop iteration START taskId=${this.taskId}.${this.instanceId}, nextUserContent blocks=${nextUserContent.length}`,
 			)
+			// Defensive: scan the full API history for orphaned tool_use blocks
+			// before every request. The primary caller (cancelAndProcessQueuedMessages)
+			// already calls this, but history may have been corrupted through other
+			// code paths (resumeTaskFromHistory, stored-history load, condensation).
+			this._cleanupOrphanedToolUses()
 			const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
 			includeFileDetails = false // We only need file details the first time.
 			this.diagLog(
@@ -5526,46 +5531,106 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	/**
 	 * Clean up orphaned tool_use blocks in the API conversation history.
 	 *
-	 * If the last assistant message contains tool_use blocks that have no
-	 * corresponding tool_result blocks in the following user message, this
-	 * method adds a synthetic user message with placeholder tool_results.
-	 * This prevents API errors caused by incomplete tool call sequences
-	 * after an abort.
+	 * Scans the ENTIRE conversation history (not just the last message) for any
+	 * assistant message whose tool_use blocks lack matching tool_result blocks in
+	 * the immediately following messages. This prevents API errors caused by:
+	 *
+	 * 1. Aborts mid-tool-execution: the assistant was saved to history before
+	 *    tools ran; on restart a new text-only assistant turn pushes the orphaned
+	 *    tool_uses deeper in history where a last-message-only check misses them.
+	 * 2. Context condensation: tool_use/tool_result pairs may be restructured.
+	 * 3. History replay bugs: duplicate tool_call_ids can appear across turns.
+	 *
+	 * When orphaned tool_uses are found, synthetic tool_results with placeholder
+	 * content ("Tool execution was interrupted before completion.") are injected
+	 * as a user message immediately after the offending assistant turn. This
+	 * rebuilds the history array in-place.
 	 */
 	private _cleanupOrphanedToolUses(): void {
 		if (this.apiConversationHistory.length === 0) {
 			return
 		}
 
-		const lastMessage = this.apiConversationHistory[this.apiConversationHistory.length - 1]
-
-		// Only need to clean up if the last message is from the assistant with tool_use blocks
-		if (lastMessage.role !== "assistant" || !Array.isArray(lastMessage.content)) {
-			return
+		type HistoryMessage = {
+			role: "user" | "assistant"
+			content: Anthropic.Messages.ContentBlockParam[]
 		}
 
-		const toolUseBlocks = lastMessage.content.filter(
-			(block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-		)
+		const history = this.apiConversationHistory as HistoryMessage[]
+		const cleaned: typeof history = []
+		let orphansFixed = 0
 
-		if (toolUseBlocks.length === 0) {
-			return
+		for (let i = 0; i < history.length; i++) {
+			const msg = history[i]
+			cleaned.push(msg)
+
+			// Process assistant messages that carry tool_use blocks.
+			if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
+				continue
+			}
+
+			const toolUseIds = new Set(
+				(msg.content as Anthropic.Messages.ContentBlockParam[])
+					.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")
+					.map((b) => b.id),
+			)
+			if (toolUseIds.size === 0) {
+				continue
+			}
+
+			// Consume subsequent tool_result blocks until we hit a non-tool
+			// user message, the next assistant, or end of history.
+			const covered = new Set<string>()
+			let j = i + 1
+			while (j < history.length) {
+				const next = history[j]
+				if (next.role === "assistant") {
+					break // Next assistant turn — stop consuming.
+				}
+				if (!Array.isArray(next.content)) {
+					break
+				}
+				const toolResults = next.content.filter(
+					(b): b is Anthropic.ToolResultBlockParam => b.type === "tool_result",
+				)
+				if (toolResults.length === 0) {
+					// User message with no tool_results (plain text) — stop.
+					break
+				}
+				for (const tr of toolResults) {
+					covered.add(tr.tool_use_id)
+				}
+				j++
+			}
+
+			// Collect any tool_use IDs that lack a matching tool_result.
+			const missing: string[] = []
+			for (const id of toolUseIds) {
+				if (!covered.has(id)) {
+					missing.push(id)
+				}
+			}
+
+			if (missing.length > 0) {
+				orphansFixed += missing.length
+				this.diagLog(
+					`[Task] Orphaned tool_use(s) at history index ${i}: ${missing.join(", ")}. Injecting placeholder tool_results.`,
+				)
+				const placeholders: Anthropic.ToolResultBlockParam[] = missing.map((id) => ({
+					type: "tool_result" as const,
+					tool_use_id: id,
+					content: "Tool execution was interrupted before completion.",
+				}))
+				cleaned.push({
+					role: "user",
+					content: placeholders,
+				})
+			}
 		}
 
-		// Found orphaned tool_use blocks — add placeholder tool_results
-		const placeholderResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((toolUse) => ({
-			type: "tool_result" as const,
-			tool_use_id: toolUse.id,
-			content: "Tool execution was interrupted before completion.",
-		}))
-
-		this.diagLog(
-			`[Task] Adding ${placeholderResults.length} placeholder tool_result block(s) for orphaned tool_use(s): ${toolUseBlocks.map((b) => b.id).join(", ")}`,
-		)
-
-		this.apiConversationHistory.push({
-			role: "user",
-			content: placeholderResults,
-		})
+		if (orphansFixed > 0) {
+			this.apiConversationHistory = cleaned as ApiMessage[]
+			this.diagLog(`[Task] Fixed ${orphansFixed} orphaned tool_use(s) across conversation history.`)
+		}
 	}
 }
