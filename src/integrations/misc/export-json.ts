@@ -105,6 +105,55 @@ interface UiApiReqStartedPayload {
 	streamingFailedMessage?: string
 }
 
+// ── Token estimation fallback ─────────────────────────────────
+
+/**
+ * Rough token count from raw text.  Uses the character/4 heuristic
+ * common for English prose; close enough for trace diagnostics when
+ * the provider does not emit `usage` chunks in streaming mode.
+ *
+ * @param text - Input text to estimate
+ * @returns Approximate token count
+ */
+function estimateTokens(text: string): number {
+	if (!text) return 0
+	return Math.ceil(text.length / 4)
+}
+
+/**
+ * Estimate tokens for a content block.
+ */
+function estimateBlockTokens(block: Record<string, unknown>): number {
+	if (typeof block.text === "string") return estimateTokens(block.text)
+	if (typeof block.content === "string") return estimateTokens(block.content)
+	// tool_use: count the JSON-serialized input
+	if (block.type === "tool_use" && block.input) {
+		return estimateTokens(JSON.stringify(block.input))
+	}
+	return 0
+}
+
+/**
+ * Estimate total input + output tokens for an array of `MessageParam`
+ * messages using the char/4 heuristic.
+ */
+function estimateMessageTokens(messages: Anthropic.Messages.MessageParam[]): {
+	input: number
+	output: number
+} {
+	let input = 0
+	let output = 0
+	for (const msg of messages) {
+		const blocks = Array.isArray(msg.content) ? msg.content : [{ text: String(msg.content ?? "") }]
+		for (const block of blocks) {
+			const tokens = estimateBlockTokens(block as Record<string, unknown>)
+			if (msg.role === "user") input += tokens
+			else output += tokens
+		}
+	}
+	return { input, output }
+}
+
 // ── Public API ────────────────────────────────────────────────
 
 /**
@@ -237,6 +286,20 @@ export function buildJsonTrace(
 
 			callIndex++
 			currentCallStart = i + 1
+		}
+	}
+
+	// If the provider did not emit `usage` chunks (common with
+	// streaming-only providers), fall back to char/4 heuristic so the
+	// trace still carries useful token estimates.
+	const allZeroTokens = calls.length > 0 && calls.every((c) => c.inputTokens === 0 && c.outputTokens === 0)
+	if (allZeroTokens) {
+		for (const call of calls) {
+			const est = estimateMessageTokens(call.messages)
+			call.inputTokens = est.input
+			call.outputTokens = est.output
+			// Mark as estimated so consumers can distinguish from real values.
+			;(call as Record<string, unknown>)._tokensEstimated = true
 		}
 	}
 
