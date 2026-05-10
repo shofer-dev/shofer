@@ -471,6 +471,7 @@
 		"url": "URLを貼り付けてコンテンツを取得"
 	},
 	"queuedMessages": {
+		"header": "キューされたメッセージ ({{count}})",
 		"title": "キューメッセージ",
 		"clickToEdit": "クリックしてメッセージを編集"
 	},

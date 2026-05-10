@@ -471,6 +471,7 @@
 		"url": "Coller l'URL pour récupérer le contenu"
 	},
 	"queuedMessages": {
+		"header": "Messages en attente ({{count}})",
 		"title": "Messages en file d'attente",
 		"clickToEdit": "Cliquez pour modifier le message"
 	},

@@ -472,6 +472,7 @@
 		"url": "粘贴URL以获取内容"
 	},
 	"queuedMessages": {
+		"header": "队列消息 ({{count}})",
 		"title": "队列消息",
 		"clickToEdit": "点击编辑消息"
 	},

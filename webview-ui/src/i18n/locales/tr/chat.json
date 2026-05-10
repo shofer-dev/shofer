@@ -472,6 +472,7 @@
 		"url": "İçeriği getirmek için URL'yi yapıştırın"
 	},
 	"queuedMessages": {
+		"header": "Sıradaki Mesajlar ({{count}})",
 		"title": "Sıradaki Mesajlar",
 		"clickToEdit": "Mesajı düzenlemek için tıkla"
 	},

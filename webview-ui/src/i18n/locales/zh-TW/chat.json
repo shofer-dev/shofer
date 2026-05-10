@@ -460,6 +460,7 @@
 		"didRun": "Roo 執行了斜線指令"
 	},
 	"queuedMessages": {
+		"header": "佇列中的訊息 ({{count}})",
 		"title": "佇列中的訊息",
 		"clickToEdit": "點選以編輯訊息"
 	},

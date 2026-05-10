@@ -471,6 +471,7 @@
 		"url": "URL einfügen, um Inhalte abzurufen"
 	},
 	"queuedMessages": {
+		"header": "Warteschlange ({{count}})",
 		"title": "Warteschlange Nachrichten",
 		"clickToEdit": "Klicken zum Bearbeiten der Nachricht"
 	},

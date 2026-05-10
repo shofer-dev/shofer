@@ -471,6 +471,7 @@
 		"url": "Cole o URL para buscar o conteúdo"
 	},
 	"queuedMessages": {
+		"header": "Mensagens na fila ({{count}})",
 		"title": "Mensagens na fila",
 		"clickToEdit": "Clique para editar a mensagem"
 	},
