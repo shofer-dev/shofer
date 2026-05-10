@@ -1,0 +1,307 @@
+import { Anthropic } from "@anthropic-ai/sdk"
+import os from "os"
+import * as path from "path"
+import * as vscode from "vscode"
+
+import type { ExtendedContentBlock } from "./export-markdown"
+
+/**
+ * JSON task trace export — produces a structured, machine-readable trace
+ * of the entire LLM conversation enriched with per-request token usage,
+ * cost, and tool call metadata.
+ */
+
+// ── Types ─────────────────────────────────────────────────────
+
+export interface JsonExportCall {
+	/** 1-based index of this API call within the task. */
+	index: number
+	/** Provider (e.g. "anthropic", "openai-native"). */
+	apiProtocol?: string
+	/** Model ID used for this request. */
+	model?: string
+	/** Input tokens consumed. */
+	inputTokens: number
+	/** Output tokens produced. */
+	outputTokens: number
+	/** Cache write tokens (prompt caching). */
+	cacheWriteTokens: number
+	/** Cache read tokens (prompt caching). */
+	cacheReadTokens: number
+	/** Estimated cost in USD. */
+	costUsd: number
+	/** Whether the request was cancelled mid-stream. */
+	cancelled?: boolean
+	/** Reason for cancellation if cancelled. */
+	cancelReason?: string
+	/** Error message if the stream failed. */
+	streamingFailedMessage?: string
+	/** The messages sent in this API request (user → assistant). */
+	messages: Anthropic.Messages.MessageParam[]
+	/** Tool calls extracted from the assistant response. */
+	toolCalls: JsonExportToolCall[]
+	/** Extended thinking / chain-of-thought content if present. */
+	reasoning?: string
+}
+
+export interface JsonExportToolCall {
+	name: string
+	id: string
+	input: Record<string, unknown>
+	result?: {
+		content: unknown
+		isError: boolean
+	}
+}
+
+export interface JsonExportTrace {
+	/** Export format version for forward compatibility. */
+	version: 1
+	/** Task identifier. */
+	taskId: string
+	/** Human-readable task description. */
+	task: string
+	/** Mode slug (e.g. "code", "architect"). */
+	mode?: string
+	/** Timestamp when the task was created (ISO 8601). */
+	createdAt: string
+	/** Individual API calls in chronological order. */
+	calls: JsonExportCall[]
+	/** Aggregate token usage across all calls. */
+	totalTokens: {
+		input: number
+		output: number
+		cacheWrite: number
+		cacheRead: number
+	}
+	/** Total estimated cost in USD. */
+	totalCostUsd: number
+	/** Number of API calls. */
+	totalCalls: number
+	/** Number of tool calls across all API calls. */
+	totalToolCalls: number
+}
+
+/**
+ * Parsed ui_messages.json entry for `api_req_started`.
+ * Initially contains only `{apiProtocol}`; enriched later with cost/tokens.
+ */
+interface UiApiReqStarted {
+	say: "api_req_started"
+	ts: number
+	text: string // JSON string — see UiApiReqStartedPayload
+}
+
+interface UiApiReqStartedPayload {
+	apiProtocol?: string
+	model?: string
+	inputTokens?: number
+	outputTokens?: number
+	cacheWriteTokens?: number
+	cacheReadTokens?: number
+	totalCost?: number
+	cancelled?: boolean
+	cancelReason?: string
+	streamingFailedMessage?: string
+}
+
+// ── Public API ────────────────────────────────────────────────
+
+/**
+ * Build a filename for the JSON export.
+ */
+export function getJsonExportFileName(dateTs: number): string {
+	const date = new Date(dateTs)
+	const month = date.toLocaleString("en-US", { month: "short" }).toLowerCase()
+	const day = date.getDate()
+	const year = date.getFullYear()
+	let hours = date.getHours()
+	const minutes = date.getMinutes().toString().padStart(2, "0")
+	const seconds = date.getSeconds().toString().padStart(2, "0")
+	const ampm = hours >= 12 ? "pm" : "am"
+	hours = hours % 12
+	hours = hours ? hours : 12
+	return `roo_task_${month}-${day}-${year}_${hours}-${minutes}-${seconds}-${ampm}.json`
+}
+
+/**
+ * Build a complete JSON trace from the task's persisted files.
+ *
+ * @param taskId - The task identifier.
+ * @param taskText - Human-readable task description.
+ * @param mode - Mode slug (e.g. "code").
+ * @param createdAt - ISO 8601 creation timestamp.
+ * @param apiConversationHistory - The full API conversation (Anthropic format).
+ * @param uiMessages - Parsed ui_messages.json array.
+ */
+export function buildJsonTrace(
+	taskId: string,
+	taskText: string,
+	mode: string | undefined,
+	createdAt: string,
+	apiConversationHistory: Anthropic.Messages.MessageParam[],
+	uiMessages: Array<{ type: string; say?: string; ts: number; text?: string }>,
+): JsonExportTrace {
+	const calls: JsonExportCall[] = []
+
+	// Index the api_req_started entries by their position in the UI message stream.
+	const apiReqStartedEntries = uiMessages.filter(
+		(m) => m.type === "say" && m.say === "api_req_started",
+	) as UiApiReqStarted[]
+
+	// Walk the API conversation history and partition it by API call.
+	// An API call is: user message(s) → assistant message.
+	// The user messages carry tool_results from the previous turn; the
+	// assistant message carries text + tool_uses for the current turn.
+	let currentCallStart = 0
+	let callIndex = 0
+
+	for (let i = 0; i < apiConversationHistory.length; i++) {
+		const msg = apiConversationHistory[i]
+
+		if (msg.role === "assistant") {
+			// An assistant message closes an API call.
+			// Collect all messages from currentCallStart through this assistant message.
+			const callMessages = apiConversationHistory.slice(currentCallStart, i + 1)
+
+			// Find the matching api_req_started entry.
+			const reqMeta = apiReqStartedEntries[callIndex]
+			let payload: UiApiReqStartedPayload = {}
+			if (reqMeta?.text) {
+				try {
+					payload = JSON.parse(reqMeta.text)
+				} catch {
+					/* best effort */
+				}
+			}
+
+			// Extract tool calls and reasoning from the assistant content.
+			const toolCalls: JsonExportToolCall[] = []
+			let reasoning: string | undefined
+
+			if (Array.isArray(msg.content)) {
+				for (const rawBlock of msg.content) {
+					const block = rawBlock as ExtendedContentBlock
+					if (block.type === "tool_use") {
+						const resultMsg = apiConversationHistory[i + 1]
+						let result: { content: unknown; isError: boolean } | undefined
+
+						if (resultMsg?.role === "user" && Array.isArray(resultMsg.content)) {
+							const matchingResult = resultMsg.content.find(
+								(b) => b.type === "tool_result" && b.tool_use_id === block.id,
+							)
+							if (matchingResult && matchingResult.type === "tool_result") {
+								result = {
+									content: matchingResult.content,
+									isError: matchingResult.is_error ?? false,
+								}
+							}
+						}
+
+						toolCalls.push({
+							name: block.name,
+							id: block.id,
+							input: (block.input as Record<string, unknown>) || {},
+							result,
+						})
+					} else if (block.type === "reasoning") {
+						if ("text" in block && typeof block.text === "string") {
+							reasoning = (reasoning || "") + block.text
+						}
+					} else if (block.type === "thinking") {
+						// Anthropic extended thinking format
+						const thinkingBlock = block as { thinking: string }
+						if (typeof thinkingBlock.thinking === "string") {
+							reasoning = (reasoning || "") + thinkingBlock.thinking
+						}
+					}
+				}
+			}
+
+			calls.push({
+				index: callIndex + 1,
+				apiProtocol: payload.apiProtocol,
+				model: payload.model,
+				inputTokens: payload.inputTokens ?? 0,
+				outputTokens: payload.outputTokens ?? 0,
+				cacheWriteTokens: payload.cacheWriteTokens ?? 0,
+				cacheReadTokens: payload.cacheReadTokens ?? 0,
+				costUsd: payload.totalCost ?? 0,
+				cancelled: payload.cancelled,
+				cancelReason: payload.cancelReason,
+				streamingFailedMessage: payload.streamingFailedMessage,
+				messages: callMessages,
+				toolCalls,
+				reasoning: reasoning || undefined,
+			})
+
+			callIndex++
+			currentCallStart = i + 1
+		}
+	}
+
+	// Compute aggregates.
+	let totalInput = 0
+	let totalOutput = 0
+	let totalCacheWrite = 0
+	let totalCacheRead = 0
+	let totalCost = 0
+	let totalToolCalls = 0
+
+	for (const call of calls) {
+		totalInput += call.inputTokens
+		totalOutput += call.outputTokens
+		totalCacheWrite += call.cacheWriteTokens
+		totalCacheRead += call.cacheReadTokens
+		totalCost += call.costUsd
+		totalToolCalls += call.toolCalls.length
+	}
+
+	return {
+		version: 1,
+		taskId,
+		task: taskText,
+		mode,
+		createdAt,
+		calls,
+		totalTokens: {
+			input: totalInput,
+			output: totalOutput,
+			cacheWrite: totalCacheWrite,
+			cacheRead: totalCacheRead,
+		},
+		totalCostUsd: totalCost,
+		totalCalls: calls.length,
+		totalToolCalls,
+	}
+}
+
+/**
+ * Prompt the user for a save location and write the JSON trace to disk.
+ *
+ * @param dateTs - Task creation timestamp (for filename).
+ * @param trace - The built JSON export trace.
+ * @param defaultUri - Default save URI.
+ * @returns The URI of the saved file, or undefined if the user cancelled.
+ */
+export async function downloadJsonTask(
+	dateTs: number,
+	trace: JsonExportTrace,
+	defaultUri: vscode.Uri,
+): Promise<vscode.Uri | undefined> {
+	const fileName = getJsonExportFileName(dateTs)
+
+	const jsonContent = JSON.stringify(trace, null, 2)
+
+	const saveUri = await vscode.window.showSaveDialog({
+		filters: { JSON: ["json"] },
+		defaultUri,
+	})
+
+	if (saveUri) {
+		await vscode.workspace.fs.writeFile(saveUri, Buffer.from(jsonContent))
+		vscode.window.showTextDocument(saveUri, { preview: true })
+		return saveUri
+	}
+	return undefined
+}
