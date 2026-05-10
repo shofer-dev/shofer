@@ -716,37 +716,29 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// Reset user response flag for new message
 		userRespondedRef.current = false
 
-		// Snapshot the unsent draft for the OUTGOING task before we wipe the
-		// textarea state. The task-id-change effect cannot do this on its own,
-		// because the "newChat" invoke that triggers a reset can race ahead of
-		// the state push that flips currentTaskItem.id, and by the time the
-		// effect runs, inputValue is already "".
-		const outgoingTaskId = previousTaskIdRef.current
-		if (outgoingTaskId) {
-			const draftText = inputValueRef.current
-			if (draftText || selectedImages.length > 0 || droppedContextFiles.length > 0) {
-				taskDraftsRef.current.set(outgoingTaskId, {
-					inputValue: draftText,
-					selectedImages,
-					droppedContextFiles,
-				})
-			} else {
-				// No draft worth keeping — drop any stale entry.
-				taskDraftsRef.current.delete(outgoingTaskId)
-			}
-		}
-
-		// Only reset message-specific state, preserving mode.
-		setInputValue("")
-		setSendingDisabled(true)
-		setSelectedImages([])
-		setDroppedContextFiles([])
+		// IMPORTANT: do NOT clear inputValue / selectedImages / droppedContextFiles here.
+		//
+		// handleChatReset runs in two distinct scenarios:
+		//   1. "newChat" invoke (toolbar Pencil / createParallelTask): the active
+		//      task is being moved to background and currentTaskItem.id is about to
+		//      flip. The task-id-change effect below is the single source of truth
+		//      for snapshotting the outgoing task's draft into `taskDraftsRef` and
+		//      restoring the incoming task's draft. If we cleared input here, the
+		//      effect would later see an empty inputValueRef and persist an empty
+		//      draft for the outgoing task, destroying the user's typed text.
+		//   2. handleSendMessage (after a send): the task id does NOT change, so
+		//      the effect won't fire. handleSendMessage clears the input fields
+		//      itself so the textarea is ready for the next message.
+		//
+		// Likewise, do NOT touch sendingDisabled here — the welcome screen needs
+		// sending enabled, and handleSendMessage sets sendingDisabled itself when
+		// it needs to lock until backend ack.
 		setClineAsk(undefined)
 		setEnableButtons(false)
 		// Do not reset mode here as it should persist.
 		// setPrimaryButtonText(undefined)
 		// setSecondaryButtonText(undefined)
-	}, [selectedImages, droppedContextFiles])
+	}, [])
 
 	/**
 	 * Remove a single file from the dropped-context list.
@@ -928,7 +920,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					vscode.postMessage({ type: "askResponse", askResponse: "messageResponse", text, images })
 				}
 
+				// Lock further sends until the backend acks (state effects above
+				// will re-enable based on the resulting clineAsk / streaming state).
+				setSendingDisabled(true)
 				handleChatReset()
+				// The task id does not change on a send, so the task-id-change
+				// effect won't fire to clear these for us — do it explicitly.
+				setInputValue("")
+				setSelectedImages([])
+				setDroppedContextFiles([])
 			}
 		},
 		[
