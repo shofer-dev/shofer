@@ -112,6 +112,9 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		await visibleProvider.refreshWorkspace()
 		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+		// Notify the UI to reset the chat input and save the outgoing task's
+		// draft, so text typed in the previous task stays with that task.
+		await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 		// Send focusInput action immediately after chatButtonClicked
 		// This ensures the focus happens after the view has switched
 		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
