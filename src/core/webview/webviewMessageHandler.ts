@@ -3872,8 +3872,13 @@ export const webviewMessageHandler = async (
 		case "createParallelTask": {
 			try {
 				await provider.createManagedTask(message.taskName, message.text, message.images)
+				// Notify the UI to reset the chat input and save the outgoing
+				// task's draft, matching the "newTask" handler behaviour.
+				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 			} catch (error) {
 				provider.log(`Error creating managed task: ${error}`)
+				// Reset the UI even on failure so the user isn't stuck.
+				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 			}
 			break
 		}
