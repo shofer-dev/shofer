@@ -299,7 +299,7 @@ export function buildJsonTrace(
 			call.inputTokens = est.input
 			call.outputTokens = est.output
 			// Mark as estimated so consumers can distinguish from real values.
-			;(call as Record<string, unknown>)._tokensEstimated = true
+			;(call as unknown as Record<string, unknown>)._tokensEstimated = true
 		}
 	}
 
