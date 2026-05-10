@@ -479,6 +479,7 @@
 		"didRun": "Roo ran a slash command"
 	},
 	"queuedMessages": {
+		"header": "Queued Messages ({{count}})",
 		"title": "Queued Messages",
 		"clickToEdit": "Click to edit message",
 		"forceSend": "Cancel current operation and send now",

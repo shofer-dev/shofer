@@ -472,6 +472,7 @@
 		"url": "Dán URL để lấy nội dung"
 	},
 	"queuedMessages": {
+		"header": "Tin nhắn đang chờ ({{count}})",
 		"title": "Tin nhắn trong hàng đợi",
 		"clickToEdit": "Nhấp để chỉnh sửa tin nhắn"
 	},

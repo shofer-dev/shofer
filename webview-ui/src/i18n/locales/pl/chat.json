@@ -471,6 +471,7 @@
 		"url": "Wklej adres URL, aby pobrać zawartość"
 	},
 	"queuedMessages": {
+		"header": "Wiadomości w kolejce ({{count}})",
 		"title": "Wiadomości w kolejce",
 		"clickToEdit": "Kliknij, aby edytować wiadomość"
 	},

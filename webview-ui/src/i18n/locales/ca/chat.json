@@ -465,6 +465,7 @@
 		}
 	},
 	"queuedMessages": {
+		"header": "({{count}}) missatges en cua",
 		"title": "Missatges en cua",
 		"clickToEdit": "Feu clic per editar el missatge"
 	},

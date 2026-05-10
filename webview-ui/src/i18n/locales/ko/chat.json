@@ -471,6 +471,7 @@
 		"url": "콘텐츠를 가져올 URL 붙여넣기"
 	},
 	"queuedMessages": {
+		"header": "대기 중인 메시지 ({{count}})",
 		"title": "대기열 메시지",
 		"clickToEdit": "클릭하여 메시지 편집"
 	},

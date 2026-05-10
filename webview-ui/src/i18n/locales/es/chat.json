@@ -471,6 +471,7 @@
 		"url": "Pega la URL para obtener el contenido"
 	},
 	"queuedMessages": {
+		"header": "({{count}}) mensajes en cola",
 		"title": "Mensajes en cola",
 		"clickToEdit": "Haz clic para editar el mensaje"
 	},

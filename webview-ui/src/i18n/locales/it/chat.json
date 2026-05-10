@@ -471,6 +471,7 @@
 		"url": "Incolla l'URL per recuperare i contenuti"
 	},
 	"queuedMessages": {
+		"header": "Messaggi in coda ({{count}})",
 		"title": "Messaggi in coda",
 		"clickToEdit": "Clicca per modificare il messaggio"
 	},

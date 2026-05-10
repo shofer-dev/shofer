@@ -477,6 +477,7 @@
 		"url": "Tempel URL untuk mengambil konten"
 	},
 	"queuedMessages": {
+		"header": "Pesan Antrian ({{count}})",
 		"title": "Pesan Antrian",
 		"clickToEdit": "Klik untuk mengedit pesan"
 	},
