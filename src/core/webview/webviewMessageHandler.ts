@@ -1489,10 +1489,9 @@ export const webviewMessageHandler = async (
 			if (!relPath) break
 			const task = provider.getCurrentTask()
 			if (!task) break
-			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
-				break
-			}
+			// LLM hint: accept only updates internal tracking metadata
+			// (copies final → base, removes final snapshot); it does NOT
+			// modify workspace files, so it's safe to allow while streaming.
 			try {
 				const { acceptFile } = await import("../file-changes/ChangedFilesService")
 				await acceptFile(task, relPath)
@@ -1506,10 +1505,8 @@ export const webviewMessageHandler = async (
 		case "changedFiles/acceptAll": {
 			const task = provider.getCurrentTask()
 			if (!task) break
-			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
-				break
-			}
+			// LLM hint: acceptAll only updates internal tracking metadata;
+			// it's safe to allow while streaming (see acceptFile comment above).
 			try {
 				const { acceptAll } = await import("../file-changes/ChangedFilesService")
 				await acceptAll(task)
