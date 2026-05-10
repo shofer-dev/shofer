@@ -64,6 +64,7 @@ import { ProfileValidator } from "../../shared/ProfileValidator"
 
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { downloadTask, getTaskFileName } from "../../integrations/misc/export-markdown"
+import { buildJsonTrace, downloadJsonTask, getJsonExportFileName } from "../../integrations/misc/export-json"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
 import { getTheme } from "../../integrations/theme/getTheme"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
@@ -2133,6 +2134,53 @@ export class ClineProvider
 			fallbackDir: path.join(os.homedir(), "Downloads"),
 		})
 		const saveUri = await downloadTask(historyItem.ts, apiConversationHistory, defaultUri)
+
+		if (saveUri) {
+			await saveLastExportPath(this.contextProxy, "lastTaskExportPath", saveUri)
+		}
+	}
+
+	/**
+	 * Export a task as a structured JSON trace enriched with per-call
+	 * token usage, cost, and tool call metadata.  Reads
+	 * ui_messages.json alongside api_conversation_history.json so the
+	 * trace captures the same granularity the chrome-extension exporter
+	 * provides.
+	 */
+	async exportTaskWithIdJson(id: string) {
+		const { historyItem, apiConversationHistory, uiMessagesFilePath } = await this.getTaskWithId(id)
+
+		// Read ui_messages.json for per-request metadata.
+		let uiMessages: Array<{ type: string; say?: string; ts: number; text?: string }> = []
+		try {
+			const exists = await fs
+				.stat(uiMessagesFilePath)
+				.then(() => true)
+				.catch(() => false)
+			if (exists) {
+				uiMessages = JSON.parse(await fs.readFile(uiMessagesFilePath, "utf8"))
+			}
+		} catch (err) {
+			console.warn(
+				`[exportTaskWithIdJson] Could not read ui_messages.json for task ${id}: ${err instanceof Error ? err.message : String(err)}`,
+			)
+		}
+
+		const trace = buildJsonTrace(
+			id,
+			historyItem.task || historyItem.ts?.toString() || "",
+			historyItem.mode,
+			historyItem.ts ? new Date(historyItem.ts).toISOString() : new Date().toISOString(),
+			apiConversationHistory,
+			uiMessages,
+		)
+
+		const fileName = getJsonExportFileName(historyItem.ts)
+		const defaultUri = await resolveDefaultSaveUri(this.contextProxy, "lastTaskExportPath", fileName, {
+			useWorkspace: false,
+			fallbackDir: path.join(os.homedir(), "Downloads"),
+		})
+		const saveUri = await downloadJsonTask(historyItem.ts, trace, defaultUri)
 
 		if (saveUri) {
 			await saveLastExportPath(this.contextProxy, "lastTaskExportPath", saveUri)

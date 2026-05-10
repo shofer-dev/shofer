@@ -853,6 +853,12 @@ export const webviewMessageHandler = async (
 				provider.exportTaskWithId(currentTaskId)
 			}
 			break
+		case "exportCurrentTaskJson":
+			const currentTaskIdJson = provider.getCurrentTask()?.taskId
+			if (currentTaskIdJson) {
+				provider.exportTaskWithIdJson(currentTaskIdJson)
+			}
+			break
 		case "shareCurrentTask":
 			const shareTaskId = provider.getCurrentTask()?.taskId
 			const clineMessages = provider.getCurrentTask()?.clineMessages
@@ -953,6 +959,9 @@ export const webviewMessageHandler = async (
 		}
 		case "exportTaskWithId":
 			provider.exportTaskWithId(message.text!)
+			break
+		case "exportTaskWithIdJson":
+			provider.exportTaskWithIdJson(message.text!)
 			break
 		case "getTaskWithAggregatedCosts": {
 			try {

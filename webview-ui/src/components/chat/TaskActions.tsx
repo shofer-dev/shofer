@@ -30,6 +30,11 @@ export const TaskActions = ({ item, buttonsDisabled }: TaskActionsProps) => {
 				title={t("chat:task.export")}
 				onClick={() => vscode.postMessage({ type: "exportCurrentTask" })}
 			/>
+			<LucideIconButton
+				icon={FileJsonIcon}
+				title={t("chat:task.exportJson")}
+				onClick={() => vscode.postMessage({ type: "exportCurrentTaskJson" })}
+			/>
 
 			{item?.task && (
 				<LucideIconButton
