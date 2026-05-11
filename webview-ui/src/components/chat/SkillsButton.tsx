@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check, RefreshCw } from "lucide-react"
 
 import type { SkillMetadata } from "@roo-code/types"
@@ -33,12 +33,13 @@ export const SkillsButton = () => {
 	const [open, setOpen] = useState(false)
 	const portalContainer = useRooPortal("roo-portal")
 
-	// Request skills from the extension on mount (follows WorktreeStatusIndicator pattern)
-	useEffect(() => {
-		vscode.postMessage({ type: "requestSkills" })
-	}, [])
+	// Re-request skills from the extension every time the popover opens
+	// to reflect loaded/unloaded state changes from skill_load invocations.
 	const handleOpenChange = useCallback((isOpen: boolean) => {
 		setOpen(isOpen)
+		if (isOpen) {
+			vscode.postMessage({ type: "requestSkills" })
+		}
 	}, [])
 
 	// Build a mode name lookup from customModes
