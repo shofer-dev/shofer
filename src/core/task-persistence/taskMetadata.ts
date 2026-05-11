@@ -29,6 +29,8 @@ export type TaskMetadataOptions = {
 	isBackground?: boolean
 	/** Per-root-task cost limit (only set on root tasks). */
 	costLimit?: import("@roo-code/types").CostLimit
+	/** Names of skills loaded via skill_load for this task. */
+	loadedSkills?: string[]
 }
 
 export async function taskMetadata({
@@ -44,6 +46,7 @@ export async function taskMetadata({
 	initialStatus,
 	isBackground,
 	costLimit,
+	loadedSkills,
 }: TaskMetadataOptions) {
 	const taskDir = await getTaskDirectoryPath(globalStoragePath, id)
 
@@ -126,6 +129,7 @@ export async function taskMetadata({
 		...(initialStatus && { status: initialStatus }),
 		...(isBackground ? { isBackground: true } : {}),
 		...(costLimit ? { costLimit } : {}),
+		...(loadedSkills && loadedSkills.length > 0 ? { loadedSkills } : {}),
 	}
 
 	return { historyItem, tokenUsage }

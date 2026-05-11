@@ -66,6 +66,8 @@ export const historyItemSchema = z.object({
 	// Async task fields
 	backgroundChildIds: z.array(z.string()).optional(),
 	isBackground: z.boolean().optional(),
+	// Skills that have been loaded via skill_load and should survive rehydration
+	loadedSkills: z.array(z.string()).optional(),
 })
 
 export type HistoryItem = z.infer<typeof historyItemSchema>

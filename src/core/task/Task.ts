@@ -652,6 +652,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._taskMode = historyItem.mode || defaultModeSlug
 			this._taskApiConfigName = historyItem.apiConfigName
 			this.taskModeReady = Promise.resolve()
+
+			// Restore loaded skills from history item (survives rehydration)
+			if (historyItem.loadedSkills) {
+				for (const skillName of historyItem.loadedSkills) {
+					this.loadedSkills.set(skillName, "")
+				}
+			}
 			this.taskApiConfigReady = Promise.resolve()
 			TelemetryService.instance.captureTaskRestarted(this.taskId)
 		} else if (initialMode) {
@@ -1397,6 +1404,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				initialStatus: this.initialStatus,
 				isBackground: this.isBackground,
 				costLimit: this.costLimit,
+				loadedSkills: this.loadedSkills.size > 0 ? Array.from(this.loadedSkills.keys()) : undefined,
 			})
 
 			// Emit token/tool usage updates using debounced function
