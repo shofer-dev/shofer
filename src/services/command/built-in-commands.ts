@@ -308,49 +308,6 @@ Please analyze this codebase and create an AGENTS.md file containing:
 
 Remember: The goal is to create documentation that enables AI assistants to be immediately productive in this codebase, focusing on project-specific knowledge that isn't obvious from the code structure alone.`,
 	},
-	loaded: {
-		name: "loaded",
-		description: "List currently loaded skills for this task (name and path)",
-		content: `<task>
-List the skills that are currently loaded for this task.
-
-To do this, use the information in the conversation history:
-- Every time the skill_load tool was successfully invoked, the skill's instructions were added to the conversation.
-- Look for "Skill:" headers in tool_result blocks to identify loaded skills.
-- List each loaded skill's name and the description line immediately below it.
-
-If no skills have been loaded yet, respond: "No skills are currently loaded for this task."
-</task>`,
-	},
-	search: {
-		name: "search",
-		description:
-			"Search skill SKILL.md files for keywords (RAG semantic search in .roo/skills, falling back to grep)",
-		argumentHint: "<keywords>",
-		content: `<task>
-Search all skill SKILL.md files in the .roo/skills/ directories for the provided keywords.
-
-Step 1: Try RAG semantic search first.
-Use the codebase_search tool with:
-- query: the user's keywords
-- path: ".roo/skills"
-This performs a semantic search limited to the skills directories. If codebase_search returns results, report them.
-
-Step 2: Fall back to grep if RAG is not available.
-If codebase_search returns no results or is unavailable (RAG not enabled), use the search_files tool:
-- Search in the .roo/skills/ directory
-- Use case-insensitive matching for the keywords
-- Only search in SKILL.md files (use file_pattern: "SKILL.md")
-If needed, also search in ~/.roo/skills/ for global skills.
-
-For each matching skill, report:
-1. The skill name (derived from the parent directory of SKILL.md)
-2. The file path to SKILL.md
-3. The matching lines or semantically relevant excerpts (up to 120 chars each)
-
-If no matches are found, report that no skills matched the search keywords.
-</task>`,
-	},
 }
 
 /**

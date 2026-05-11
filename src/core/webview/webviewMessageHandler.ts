@@ -39,8 +39,6 @@ import {
 	handleMoveSkill,
 	handleUpdateSkillModes,
 	handleOpenSkillFile,
-	handleRequestLoadedSkills,
-	handleSearchSkills,
 } from "./skillsMessageHandler"
 import { changeLanguage, t } from "../../i18n"
 import { Package } from "../../shared/package"
@@ -3230,14 +3228,6 @@ export const webviewMessageHandler = async (
 		}
 		case "requestSkills": {
 			await handleRequestSkills(provider)
-			break
-		}
-		case "requestLoadedSkills": {
-			await handleRequestLoadedSkills(provider)
-			break
-		}
-		case "searchSkills": {
-			await handleSearchSkills(provider, message.query ?? "")
 			break
 		}
 		case "createSkill": {
