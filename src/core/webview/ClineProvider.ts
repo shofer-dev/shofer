@@ -1326,6 +1326,18 @@ export class ClineProvider
 	private changedFilesPushPendingTaskId?: string
 	private static readonly CHANGED_FILES_PUSH_DEBOUNCE_MS = 500
 
+	// Serialization state for pushChangedFilesUpdate. Concurrent invocations
+	// (e.g. rapid Accept clicks each calling pushChangedFilesUpdate after
+	// their acceptFile completes) used to race: each push computed its
+	// payload independently and the LAST message to arrive at the webview
+	// won — which could be a stale snapshot taken before later accepts had
+	// finished mutating base/final, leaving "accepted" files visible in the
+	// panel. The in-flight + queued flags coalesce overlapping pushes so the
+	// final message sent always reflects the post-accept state.
+	private changedFilesPushInFlight = false
+	private changedFilesPushQueued = false
+	private changedFilesPushQueuedTaskId?: string
+
 	/**
 	 * Schedules a debounced push of the unified ChangedFiles payload for the
 	 * given task. Called by FileContextTracker after each `roo_edited`. Safe
@@ -1342,21 +1354,54 @@ export class ClineProvider
 
 	/**
 	 * Computes and pushes the ChangedFiles payload immediately. Used by the
-	 * debounced scheduler and by IPC handlers (e.g. after revert).
+	 * debounced scheduler and by IPC handlers (e.g. after accept/revert).
+	 *
+	 * Serialized: if a push is already in flight when this is called, the
+	 * request is coalesced and a fresh recomputation is run after the
+	 * current one finishes. This guarantees the LAST message sent to the
+	 * webview reflects all preceding state mutations, even when the caller
+	 * issues many rapid invocations (e.g. clicking Accept on multiple
+	 * files in quick succession).
 	 */
 	public async pushChangedFilesUpdate(taskId?: string): Promise<void> {
-		const task = this.getCurrentTask()
-		if (!task) return
-		// If the caller specified a taskId for which the update was queued,
-		// drop it when the current foreground task has changed (we don't want
-		// to surface a stale background-task panel).
-		if (taskId && task.taskId !== taskId) return
+		if (this.changedFilesPushInFlight) {
+			this.changedFilesPushQueued = true
+			// Remember the most recent caller-supplied taskId for the queued run.
+			this.changedFilesPushQueuedTaskId = taskId
+			return
+		}
+		this.changedFilesPushInFlight = true
 		try {
-			const { getChangedFiles } = await import("../file-changes/ChangedFilesService")
-			const payload = await getChangedFiles(task)
-			await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
-		} catch (err) {
-			this.log(`[ClineProvider#pushChangedFilesUpdate] failed: ${err}`)
+			let nextTaskId = taskId
+			do {
+				this.changedFilesPushQueued = false
+				const queuedTaskId = this.changedFilesPushQueuedTaskId
+				this.changedFilesPushQueuedTaskId = undefined
+
+				const task = this.getCurrentTask()
+				if (!task) return
+				// If the caller specified a taskId for which the update was queued,
+				// drop it when the current foreground task has changed (we don't want
+				// to surface a stale background-task panel).
+				if (nextTaskId && task.taskId !== nextTaskId) return
+
+				try {
+					const { getChangedFiles } = await import("../file-changes/ChangedFilesService")
+					const payload = await getChangedFiles(task)
+					this.log(
+						`[ClineProvider#pushChangedFilesUpdate] task=${task.taskId} entries=${payload.entries.length} backend=${payload.backend}`,
+					)
+					await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
+				} catch (err) {
+					this.log(`[ClineProvider#pushChangedFilesUpdate] failed: ${err}`)
+				}
+
+				// If another push was requested while we were running, loop
+				// again so the final message reflects post-mutation state.
+				nextTaskId = queuedTaskId
+			} while (this.changedFilesPushQueued)
+		} finally {
+			this.changedFilesPushInFlight = false
 		}
 	}
 
