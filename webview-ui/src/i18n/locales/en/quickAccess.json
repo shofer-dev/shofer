@@ -13,6 +13,7 @@
 		"tooltip": "Skills — click to browse and insert",
 		"title": "Skills",
 		"allModes": "All Modes",
+		"loaded": "Loaded",
 		"noSkills": "No skills available",
 		"settings": "Manage skills in Settings",
 		"openFile": "Open SKILL.md"
