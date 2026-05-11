@@ -23,6 +23,8 @@ export async function handleRequestSkills(provider: ClineProvider): Promise<Skil
 			}
 		}
 		if (skillsManager) {
+			// Re-discover skills from disk so the UI picks up newly added/removed skills
+			await skillsManager.discoverSkills()
 			const skills = skillsManager.getSkillsMetadata()
 			await provider.postMessageToWebview({ type: "skills", skills, loadedSkills })
 			return skills
