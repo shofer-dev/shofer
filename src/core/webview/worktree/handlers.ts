@@ -8,7 +8,6 @@
 import { exec } from "child_process"
 import * as vscode from "vscode"
 import * as path from "path"
-import * as os from "os"
 import { promisify } from "util"
 
 const execAsync = promisify(exec)
@@ -154,6 +153,18 @@ export async function handleCreateWorktree(
 		}
 	}
 
+	// Enforce embedded worktree convention: all worktrees MUST live under
+	// .roo/worktrees/ inside the workspace. If the caller passes a path
+	// outside that prefix, normalize it by prepending the convention path.
+	const conventionPrefix = path.join(cwd, ".roo", "worktrees")
+	const normalizedAbs = path.resolve(cwd, options.path)
+	if (!normalizedAbs.startsWith(conventionPrefix + path.sep) && normalizedAbs !== conventionPrefix) {
+		// Extract the last path component (directory name) and place it
+		// under the convention prefix.
+		const dirName = path.basename(options.path)
+		options = { ...options, path: path.join(conventionPrefix, dirName) }
+	}
+
 	const result = await worktreeService.createWorktree(cwd, options)
 
 	// If successful and .worktreeinclude exists, copy the files.
@@ -230,9 +241,14 @@ export async function handleGetWorktreeDefaults(provider: ClineProvider): Promis
 	const suffix = generateRandomSuffix()
 	const workspaceFolders = vscode.workspace.workspaceFolders
 	const projectName = workspaceFolders?.[0]?.name || "project"
+	const cwd = provider.cwd
 
-	const dotRooPath = path.join(os.homedir(), ".roo")
-	const suggestedPath = path.join(dotRooPath, "worktrees", `${projectName}-${suffix}`)
+	// Embedded worktree convention: all worktrees MUST live under
+	// .roo/worktrees/ inside the workspace. The path is auto-generated,
+	// not user-configurable (folder picker removed from CreateWorktreeModal),
+	// and enforced in handleCreateWorktree by normalizing any path outside
+	// the convention prefix.
+	const suggestedPath = path.join(cwd, ".roo", "worktrees", `${projectName}-${suffix}`)
 
 	return {
 		suggestedBranch: `worktree/roo-${suffix}`,
