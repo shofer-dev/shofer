@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { GraduationCap, ChevronDown, Globe, FolderGit2 } from "lucide-react"
+import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink } from "lucide-react"
 
 import type { SkillMetadata } from "@roo-code/types"
 
@@ -93,6 +93,11 @@ export const SkillsButton = () => {
 		setOpen(false)
 	}, [])
 
+	const handleOpenFile = useCallback((e: React.MouseEvent, path: string) => {
+		e.stopPropagation()
+		vscode.postMessage({ type: "openFile", text: path })
+	}, [])
+
 	// Open settings when gear icon is clicked
 	const handleOpenSettings = useCallback(() => {
 		vscode.postMessage({
@@ -127,7 +132,7 @@ export const SkillsButton = () => {
 				align="start"
 				sideOffset={4}
 				container={portalContainer}
-				className="p-0 overflow-hidden min-w-56 max-w-72">
+				className="p-0 overflow-hidden min-w-72 max-w-96">
 				<div className="flex flex-col w-full max-h-[400px]">
 					{/* Header */}
 					<div className="flex items-center justify-between px-3 pt-3 pb-2">
@@ -168,7 +173,7 @@ export const SkillsButton = () => {
 											data-testid={`skill-item-${skill.name}`}
 											onClick={() => handleSkillClick(skill)}
 											className={cn(
-												"w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-sm",
+												"w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-sm group",
 												"text-sm text-vscode-foreground",
 												"hover:bg-vscode-list-activeSelectionBackground hover:text-vscode-list-activeSelectionForeground",
 												"focus:bg-vscode-list-activeSelectionBackground focus:text-vscode-list-activeSelectionForeground focus:outline-none",
@@ -178,15 +183,37 @@ export const SkillsButton = () => {
 											{(() => {
 												const SrcIcon = SOURCE_ICONS[skill.source]
 												return (
-													<SrcIcon className="w-3 h-3 shrink-0 text-vscode-descriptionForeground" />
+													<SrcIcon className="w-3 h-3 shrink-0 mt-0.5 text-vscode-descriptionForeground" />
 												)
 											})()}
-											<span className="font-medium truncate">{skill.name}</span>
-											{skill.description && (
-												<span className="text-xs text-vscode-descriptionForeground truncate ml-auto">
-													{skill.description}
-												</span>
-											)}
+											<div className="flex-1 min-w-0">
+												<span className="font-medium truncate block">{skill.name}</span>
+												{skill.description && (
+													<span className="text-xs text-vscode-descriptionForeground truncate block mt-0.5">
+														{skill.description}
+													</span>
+												)}
+											</div>
+											<span
+												data-testid={`skill-open-file-${skill.name}`}
+												role="button"
+												tabIndex={0}
+												aria-label={t("quickAccess:skills.openFile")}
+												onClick={(e) => handleOpenFile(e, skill.path)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") {
+														e.preventDefault()
+														handleOpenFile(e as any, skill.path)
+													}
+												}}
+												className={cn(
+													"shrink-0 p-0.5 rounded-sm opacity-0 group-hover:opacity-100",
+													"text-vscode-descriptionForeground hover:text-vscode-foreground",
+													"hover:bg-[rgba(255,255,255,0.1)] transition-all",
+													"cursor-pointer mt-0.5",
+												)}>
+												<ExternalLink className="w-3 h-3" />
+											</span>
 										</button>
 									))}
 								</div>

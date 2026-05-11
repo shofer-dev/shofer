@@ -206,4 +206,42 @@ describe("SkillsButton", () => {
 		expect(screen.getByText("quickAccess:skills.allModes")).toBeInTheDocument()
 		expect(screen.queryByText("Code")).not.toBeInTheDocument()
 	})
+
+	it("shows open-file button for each skill", () => {
+		setSkills([mockAllModesSkill, mockCodeModeSkill], mockCustomModes)
+		render(<SkillsButton />)
+
+		fireEvent.click(screen.getByTestId("skills-button-trigger"))
+
+		expect(screen.getByTestId("skill-open-file-eauction-search")).toBeInTheDocument()
+		expect(screen.getByTestId("skill-open-file-test")).toBeInTheDocument()
+	})
+
+	it("sends openFile message when open-file button is clicked", () => {
+		setSkills([mockAllModesSkill])
+		render(<SkillsButton />)
+
+		fireEvent.click(screen.getByTestId("skills-button-trigger"))
+
+		const openFileBtn = screen.getByTestId("skill-open-file-eauction-search")
+		fireEvent.click(openFileBtn)
+
+		expect(mockPostMessage).toHaveBeenCalledWith({
+			type: "openFile",
+			text: "/test/eauction/SKILL.md",
+		})
+	})
+
+	it("open-file button click does not close the popover", () => {
+		setSkills([mockAllModesSkill])
+		render(<SkillsButton />)
+
+		fireEvent.click(screen.getByTestId("skills-button-trigger"))
+
+		const openFileBtn = screen.getByTestId("skill-open-file-eauction-search")
+		fireEvent.click(openFileBtn)
+
+		// Popover should still be open
+		expect(screen.getByTestId("skill-item-eauction-search")).toBeInTheDocument()
+	})
 })

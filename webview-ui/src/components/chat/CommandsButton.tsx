@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { Zap, ChevronDown, FolderGit2, Globe, Wrench } from "lucide-react"
+import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink } from "lucide-react"
 
 import type { Command } from "@roo-code/types"
 
@@ -70,6 +70,11 @@ export const CommandsButton = () => {
 		const text = command.argumentHint ? `/${command.name} ${command.argumentHint}` : `/${command.name} `
 		vscode.postMessage({ type: "insertTextIntoTextarea", text })
 		setOpen(false)
+	}, [])
+
+	const handleOpenFile = useCallback((e: React.MouseEvent, filePath: string) => {
+		e.stopPropagation()
+		vscode.postMessage({ type: "openFile", text: filePath })
 	}, [])
 
 	// Open settings when gear icon is clicked
@@ -145,7 +150,7 @@ export const CommandsButton = () => {
 											data-testid={`command-item-${cmd.name}`}
 											onClick={() => handleCommandClick(cmd)}
 											className={cn(
-												"w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-sm",
+												"w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-sm group",
 												"text-sm text-vscode-foreground",
 												"hover:bg-vscode-list-activeSelectionBackground hover:text-vscode-list-activeSelectionForeground",
 												"focus:bg-vscode-list-activeSelectionBackground focus:text-vscode-list-activeSelectionForeground focus:outline-none",
@@ -155,8 +160,30 @@ export const CommandsButton = () => {
 												/{cmd.name}
 											</span>
 											{cmd.description && (
-												<span className="text-xs text-vscode-descriptionForeground truncate">
+												<span className="text-xs text-vscode-descriptionForeground truncate flex-1 min-w-0">
 													{cmd.description}
+												</span>
+											)}
+											{cmd.filePath && (
+												<span
+													data-testid={`command-open-file-${cmd.name}`}
+													role="button"
+													tabIndex={0}
+													aria-label={t("quickAccess:commands.openFile")}
+													onClick={(e) => handleOpenFile(e, cmd.filePath!)}
+													onKeyDown={(e) => {
+														if (e.key === "Enter" || e.key === " ") {
+															e.preventDefault()
+															handleOpenFile(e as any, cmd.filePath!)
+														}
+													}}
+													className={cn(
+														"shrink-0 p-0.5 rounded-sm opacity-0 group-hover:opacity-100",
+														"text-vscode-descriptionForeground hover:text-vscode-foreground",
+														"hover:bg-[rgba(255,255,255,0.1)] transition-all",
+														"cursor-pointer",
+													)}>
+													<ExternalLink className="w-3 h-3" />
 												</span>
 											)}
 										</button>
