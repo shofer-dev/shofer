@@ -18,7 +18,7 @@ Tests:
 [`skillsMessageHandler.spec.ts`](src/core/webview/__tests__/skillsMessageHandler.spec.ts)
 
 i18n: [`quickAccess.json`](webview-ui/src/i18n/locales/en/quickAccess.json)
-Docs: [`RooCode-skills.md`](RooCode-skills.md), [`native_tools.md`](native_tools.md)
+Docs: [`skills.md`](skills.md), [`native_tools.md`](native_tools.md)
 
 ## Problem
 
