@@ -270,6 +270,30 @@ Please analyze this codebase and create an AGENTS.md file containing:
   </mode_specific_files>
 </output_structure>
 
+<worktree_conventions>
+  Ensure the project follows the embedded worktree convention:
+  
+  1. **Check .gitignore**: Verify that .roo/worktrees/ is listed in .gitignore.
+     If not, append .roo/worktrees/ to .gitignore. This prevents worktree
+     directories from being accidentally committed to the main repository.
+     (Note: do NOT add .roo/ itself to .gitignore — only .roo/worktrees/.)
+  
+  2. **Worktree location convention**: All worktrees created via Roo Code's
+     worktree UI or the \`worktree\` tool (available in Orchestrator mode) are
+     placed under workspaceroot/.roo/worktrees/projectname-randomid/. This is
+     auto-generated and not user-configurable.
+  
+  3. **Available slash commands**: The project has worktree management slash
+     commands in .roo/commands/ that assist with merging and cleanup:
+     - merge-worktree-cleanup — merge a worktree branch + delete branch + remove worktree
+     - rebase-worktree — rebase a worktree branch onto base
+     - rebase-worktree-cleanup — rebase + fast-forward + delete branch + remove worktree
+  
+  4. **Orchestrator mode**: The built-in orchestrator mode has access to
+     the \`worktree\` native tool for creating, listing, merging, and destroying
+     worktrees programmatically. It does NOT have execute_command access.
+</worktree_conventions>
+
 <quality_criteria>
   - ONLY include non-obvious information discovered by reading files
   - Exclude anything that could be guessed from standard practices

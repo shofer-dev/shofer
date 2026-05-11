@@ -98,6 +98,13 @@ describe("Built-in Commands", () => {
 			expect(content).toContain("rules-debug")
 			expect(content).toContain("rules-ask")
 			expect(content).toContain("rules-architect")
+
+			// Should mention worktree conventions
+			expect(content).toContain(".roo/worktrees/")
+			expect(content).toContain("worktree")
+			expect(content).toContain("merge-worktree-cleanup")
+			expect(content).toContain("rebase-worktree")
+			expect(content).toContain("rebase-worktree-cleanup")
 		})
 	})
 })
