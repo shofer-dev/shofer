@@ -283,7 +283,7 @@ export async function handleSearchSkills(
 			}
 		}
 
-		await provider.postMessageToWebview({ type: "skillSearchResults", results })
+		await provider.postMessageToWebview({ type: "skillSearchResults", skillSearchResults: results })
 		return results
 	} catch (error) {
 		provider.log(`Error searching skills: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
