@@ -1,0 +1,18 @@
+{
+	"commands": {
+		"tooltip": "Slash Commands — click to browse and insert",
+		"title": "Slash Commands",
+		"projectCommands": "Project Commands",
+		"globalCommands": "Global Commands",
+		"builtInCommands": "Built-in Commands",
+		"noCommands": "No commands available",
+		"settings": "Manage commands in Settings"
+	},
+	"skills": {
+		"tooltip": "Skills — click to browse and insert",
+		"title": "Skills",
+		"allModes": "All Modes",
+		"noSkills": "No skills available",
+		"settings": "Manage skills in Settings"
+	}
+}
