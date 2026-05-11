@@ -108,6 +108,8 @@ export interface ExtensionMessage {
 		| "worktreeStatus"
 		| "folderSelected"
 		| "skills"
+		| "loadedSkills"
+		| "skillSearchResults"
 		| "fileContent"
 		| "addContextFiles"
 		| "changedFiles/update"
@@ -192,6 +194,8 @@ export interface ExtensionMessage {
 	organizationId?: string | null // For organizationSwitchResult
 	tools?: SerializedCustomToolDefinition[] // For customToolsResult
 	skills?: SkillMetadata[] // For skills response
+	loadedSkills?: Record<string, string> // For loadedSkills response (name → path)
+	skillSearchResults?: { name: string; path: string; matches: string[] }[] // For skillSearchResults response
 	modes?: { slug: string; name: string }[] // For modes response
 	aggregatedCosts?: {
 		// For taskWithAggregatedCosts response
@@ -673,6 +677,8 @@ export interface WebviewMessage {
 		| "moveSkill"
 		| "updateSkillModes"
 		| "openSkillFile"
+		| "requestLoadedSkills"
+		| "searchSkills"
 		// Parallel task messages
 		| "createParallelTask"
 		| "focusParallelTask"
