@@ -6,13 +6,15 @@
 		"globalCommands": "Global Commands",
 		"builtInCommands": "Built-in Commands",
 		"noCommands": "No commands available",
-		"settings": "Manage commands in Settings"
+		"settings": "Manage commands in Settings",
+		"openFile": "Open file"
 	},
 	"skills": {
 		"tooltip": "Skills — click to browse and insert",
 		"title": "Skills",
 		"allModes": "All Modes",
 		"noSkills": "No skills available",
-		"settings": "Manage skills in Settings"
+		"settings": "Manage skills in Settings",
+		"openFile": "Open SKILL.md"
 	}
 }

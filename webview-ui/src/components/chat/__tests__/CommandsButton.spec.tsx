@@ -163,4 +163,44 @@ describe("CommandsButton", () => {
 		expect(screen.queryByText("quickAccess:commands.globalCommands")).not.toBeInTheDocument()
 		expect(screen.queryByText("quickAccess:commands.builtInCommands")).not.toBeInTheDocument()
 	})
+
+	it("shows open-file button when command has filePath", () => {
+		setCommands(mockProjectCommands)
+		render(<CommandsButton />)
+
+		fireEvent.click(screen.getByTestId("commands-button-trigger"))
+
+		// commit has filePath, so open-file button should exist
+		expect(screen.getByTestId("command-open-file-commit")).toBeInTheDocument()
+		// use_skill has no filePath, so no open-file button
+		expect(screen.queryByTestId("command-open-file-use_skill")).not.toBeInTheDocument()
+	})
+
+	it("sends openFile message when open-file button is clicked", () => {
+		setCommands(mockProjectCommands)
+		render(<CommandsButton />)
+
+		fireEvent.click(screen.getByTestId("commands-button-trigger"))
+
+		const openFileBtn = screen.getByTestId("command-open-file-commit")
+		fireEvent.click(openFileBtn)
+
+		expect(mockPostMessage).toHaveBeenCalledWith({
+			type: "openFile",
+			text: "/test/commit.md",
+		})
+	})
+
+	it("open-file button click does not close the popover", () => {
+		setCommands(mockProjectCommands)
+		render(<CommandsButton />)
+
+		fireEvent.click(screen.getByTestId("commands-button-trigger"))
+
+		const openFileBtn = screen.getByTestId("command-open-file-commit")
+		fireEvent.click(openFileBtn)
+
+		// Popover should still be open
+		expect(screen.getByTestId("command-item-commit")).toBeInTheDocument()
+	})
 })
