@@ -386,6 +386,22 @@ Send feedback to the Arkware developers. The feedback message is appended to the
 
 No approval prompt needed — non-destructive, written only to the extension output channel.
 
+### `skill_load`
+
+Load and execute a skill by name. Skills provide specialized instructions for common tasks.
+
+| Param   | Type           | Required | Description                                                                      |
+| ------- | -------------- | :------: | -------------------------------------------------------------------------------- |
+| `skill` | string         |    ✅    | Name of the skill to load (matches names in `available_skills` in system prompt) |
+| `args`  | string \| null |    ✅    | Optional context or arguments to pass to the skill                               |
+
+**Behavior:**
+
+- Reads the full `SKILL.md` body from disk, parses YAML frontmatter, and returns formatted instructions.
+- **Loaded skill tracking**: Each successfully loaded skill is recorded on the `Task` object (`loadedSkills: Map<name, path>`).
+- **Reload is a no-op**: Calling `skill_load` for an already-loaded skill returns a no-op message without re-reading the file.
+- **Cleared on condense**: All loaded skills are cleared when context summarization/truncation triggers (see [`RooCode-skills.md`](RooCode-skills.md#loaded-skill-tracking)).
+
 ### `skill_update`
 
 Update the SKILL.md body of an existing project skill at `.roo/skills/<slug>/SKILL.md`. Skill creation is deliberately out of scope — use the workspace skill-authoring UI or `browser_observe` to create skills.

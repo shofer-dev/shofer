@@ -101,6 +101,34 @@ The model invokes the native `skill` tool (`src/core/prompts/tools/native-tools/
 
 Users can reference skills via `/skill-name` in messages. This triggers immediate loading.
 
+### Via Skills Button (🎓)
+
+The Skills button in the chat input bar (next to the ⚡ Commands button) opens a popover listing all available skills:
+
+- **Loaded skills** are shown first with a green ✓ checkmark
+- **Available (not loaded) skills** are shown below, grouped by mode restriction, sorted alphabetically
+- Clicking a skill appends `"Use the <skill-name> skill"` to the chat input
+- The button auto-refreshes via `requestSkills` IPC on each open
+
+### Loaded Skill Tracking
+
+Each task maintains a `loadedSkills` map (skill name → SKILL.md path) on the `Task` class:
+
+- **On load**: When [`skill_load`](extensions/Roo-Code/src/core/tools/SkillLoadTool.ts:82) succeeds, the skill is recorded.
+- **Reload is a no-op**: Calling `skill_load` for an already-loaded skill returns `"Skill 'X' is already loaded (no-op)."` without re-reading the file.
+- **Cleared on condense**: All loaded skills are cleared when context summarization/truncation occurs (three code paths: [`condenseContext()`](extensions/Roo-Code/src/core/task/Task.ts:2036), [`handleContextWindowExceededError()`](extensions/Roo-Code/src/core/task/Task.ts:4638), and the [`manageContext`](extensions/Roo-Code/src/core/task/Task.ts:4876) pass in `attemptApiRequest()`).
+
+### `/loaded` Slash Command
+
+Built-in slash command that lists currently loaded skills for the task. The model inspects the conversation history for `skill_load` tool results to report which skills have been loaded, including name and description.
+
+### `/search <keywords>` Slash Command
+
+Built-in slash command to search skill SKILL.md files:
+
+1. **RAG semantic search** (preferred): Uses [`codebase_search`](extensions/Roo-Code/docs/native_tools.md) with `path: ".roo/skills"` for semantic matching.
+2. **Grep fallback**: If RAG is not enabled, uses [`search_files`](extensions/Roo-Code/docs/native_tools.md#search_files) for case-insensitive keyword matching in `SKILL.md` files.
+
 ### Loaded Content Format
 
 `getSkillContent()` returns (`src/services/skills/skillInvocation.ts`):
