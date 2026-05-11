@@ -69,6 +69,7 @@ describe("skillsMessageHandler", () => {
 			log: mockLog,
 			postMessageToWebview: mockPostMessageToWebview,
 			getSkillsManager: () => skillsManager,
+			getCurrentTask: () => undefined,
 		} as unknown as ClineProvider
 	}
 
@@ -100,7 +101,11 @@ describe("skillsMessageHandler", () => {
 			const result = await handleRequestSkills(provider)
 
 			expect(result).toEqual(mockSkills)
-			expect(mockPostMessageToWebview).toHaveBeenCalledWith({ type: "skills", skills: mockSkills })
+			expect(mockPostMessageToWebview).toHaveBeenCalledWith({
+				type: "skills",
+				skills: mockSkills,
+				loadedSkills: {},
+			})
 		})
 
 		it("returns empty skills when skills manager is not available", async () => {
@@ -109,7 +114,11 @@ describe("skillsMessageHandler", () => {
 			const result = await handleRequestSkills(provider)
 
 			expect(result).toEqual([])
-			expect(mockPostMessageToWebview).toHaveBeenCalledWith({ type: "skills", skills: [] })
+			expect(mockPostMessageToWebview).toHaveBeenCalledWith({
+				type: "skills",
+				skills: [],
+				loadedSkills: {},
+			})
 		})
 
 		it("handles errors and returns empty skills", async () => {
@@ -122,7 +131,11 @@ describe("skillsMessageHandler", () => {
 
 			expect(result).toEqual([])
 			expect(mockLog).toHaveBeenCalled()
-			expect(mockPostMessageToWebview).toHaveBeenCalledWith({ type: "skills", skills: [] })
+			expect(mockPostMessageToWebview).toHaveBeenCalledWith({
+				type: "skills",
+				skills: [],
+				loadedSkills: {},
+			})
 		})
 	})
 

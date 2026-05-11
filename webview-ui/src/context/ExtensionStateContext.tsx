@@ -170,6 +170,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	showWorktreesInHomeScreen: boolean
 	setShowWorktreesInHomeScreen: (value: boolean) => void
 	skills?: SkillMetadata[]
+	loadedSkills?: Record<string, string>
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -313,6 +314,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		global: {},
 	})
 	const [skills, setSkills] = useState<SkillMetadata[]>([])
+	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
 	const [includeTaskHistoryInEnhance, setIncludeTaskHistoryInEnhance] = useState(true)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
 	const [includeCurrentTime, setIncludeCurrentTime] = useState(true)
@@ -426,6 +428,9 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				case "skills": {
 					if (message.skills) {
 						setSkills(message.skills)
+					}
+					if (message.loadedSkills) {
+						setLoadedSkills(message.loadedSkills)
 					}
 					break
 				}
@@ -697,6 +702,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		includeCurrentCost,
 		setIncludeCurrentCost,
 		skills,
+		loadedSkills,
 		showWorktreesInHomeScreen: state.showWorktreesInHomeScreen ?? true,
 		setShowWorktreesInHomeScreen: (value) =>
 			setState((prevState) => ({ ...prevState, showWorktreesInHomeScreen: value })),

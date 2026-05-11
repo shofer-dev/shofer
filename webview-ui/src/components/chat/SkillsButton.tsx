@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink } from "lucide-react"
+import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check } from "lucide-react"
 
 import type { SkillMetadata } from "@roo-code/types"
 
@@ -29,7 +29,7 @@ const SOURCE_ICONS: Record<SkillMetadata["source"], React.ElementType> = {
  */
 export const SkillsButton = () => {
 	const { t } = useAppTranslation()
-	const { skills, customModes } = useExtensionState()
+	const { skills, customModes, loadedSkills } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const portalContainer = useRooPortal("roo-portal")
 
@@ -50,14 +50,25 @@ export const SkillsButton = () => {
 		return map
 	}, [customModes])
 
-	// Group skills by mode restriction
-	const grouped = useMemo(() => {
+	// Resolve loaded skills from metadata — only show loaded skills that still exist
+	const loadedSkillsSet = useMemo(() => new Set(Object.keys(loadedSkills ?? {})), [loadedSkills])
+
+	// Split skills into loaded and unloaded
+	const loadedSkillsList = useMemo(() => {
 		const items = skills ?? []
+		return items.filter((s) => loadedSkillsSet.has(s.name)).sort((a, b) => a.name.localeCompare(b.name))
+	}, [skills, loadedSkillsSet])
 
-		// "All Modes" skills: no modeSlugs or empty array
-		const allModesSkills = items.filter((s) => !s.modeSlugs || s.modeSlugs.length === 0)
+	// Group unloaded skills by mode restriction, sorted alphabetically
+	const grouped = useMemo(() => {
+		const items = (skills ?? []).filter((s) => !loadedSkillsSet.has(s.name))
 
-		// Per-mode skills: group by each modeSlug
+		// "All Modes" unloaded skills: no modeSlugs or empty array
+		const allModesSkills = items
+			.filter((s) => !s.modeSlugs || s.modeSlugs.length === 0)
+			.sort((a, b) => a.name.localeCompare(b.name))
+
+		// Per-mode unloaded skills: group by each modeSlug, sorted alphabetically
 		const modeMap = new Map<string, SkillMetadata[]>()
 		for (const skill of items) {
 			if (skill.modeSlugs && skill.modeSlugs.length > 0) {
@@ -68,6 +79,11 @@ export const SkillsButton = () => {
 					modeMap.get(slug)!.push(skill)
 				}
 			}
+		}
+
+		// Sort each mode's items alphabetically
+		for (const [, modeItems] of modeMap) {
+			modeItems.sort((a, b) => a.name.localeCompare(b.name))
 		}
 
 		const groups: { key: string; label: string; items: SkillMetadata[] }[] = []
@@ -83,7 +99,7 @@ export const SkillsButton = () => {
 		}
 
 		return groups
-	}, [skills, t, modeNameMap])
+	}, [skills, t, modeNameMap, loadedSkillsSet])
 
 	const handleSkillClick = useCallback((skill: SkillMetadata) => {
 		// Fallback: no `use_skill` slash command exists, so insert
@@ -155,6 +171,59 @@ export const SkillsButton = () => {
 
 					{/* Scrollable list */}
 					<div className="overflow-y-auto px-1 pb-1">
+						{/* Loaded skills section */}
+						{loadedSkillsList.length > 0 && (
+							<div className="mb-1">
+								<div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-vscode-descriptionForeground uppercase tracking-wide">
+									<Check className="w-3 h-3 shrink-0" />
+									{t("quickAccess:skills.loaded")}
+								</div>
+								{loadedSkillsList.map((skill) => (
+									<button
+										key={`loaded:${skill.source}:${skill.name}`}
+										data-testid={`skill-item-${skill.name}`}
+										onClick={() => handleSkillClick(skill)}
+										className={cn(
+											"w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-sm group",
+											"text-sm text-vscode-foreground",
+											"hover:bg-vscode-list-activeSelectionBackground hover:text-vscode-list-activeSelectionForeground",
+											"focus:bg-vscode-list-activeSelectionBackground focus:text-vscode-list-activeSelectionForeground focus:outline-none",
+											"cursor-pointer transition-colors",
+										)}>
+										<Check className="w-3 h-3 shrink-0 mt-0.5 text-green-400" />
+										<div className="flex-1 min-w-0">
+											<span className="font-medium truncate block">{skill.name}</span>
+											{skill.description && (
+												<span className="text-xs text-vscode-descriptionForeground truncate block mt-0.5">
+													{skill.description}
+												</span>
+											)}
+										</div>
+										<span
+											data-testid={`skill-open-file-${skill.name}`}
+											role="button"
+											tabIndex={0}
+											aria-label={t("quickAccess:skills.openFile")}
+											onClick={(e) => handleOpenFile(e, skill.path)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") {
+													e.preventDefault()
+													handleOpenFile(e as any, skill.path)
+												}
+											}}
+											className={cn(
+												"shrink-0 p-0.5 rounded-sm opacity-0 group-hover:opacity-100",
+												"text-vscode-descriptionForeground hover:text-vscode-foreground",
+												"hover:bg-[rgba(255,255,255,0.1)] transition-all",
+												"cursor-pointer mt-0.5",
+											)}>
+											<ExternalLink className="w-3 h-3" />
+										</span>
+									</button>
+								))}
+							</div>
+						)}
+						{/* Available (not loaded) skills — grouped by mode */}
 						{grouped.map((group) => {
 							// Use Globe for "All Modes", FolderGit2 for mode-specific
 							const IconComponent = group.key === "all" ? Globe : FolderGit2
