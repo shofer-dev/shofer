@@ -9,8 +9,7 @@ Components:
 Backend:
 [`Task.ts:449`](src/core/task/Task.ts:449) — loadedSkills tracking,
 [`SkillLoadTool.ts`](src/core/tools/SkillLoadTool.ts) — reload no-op,
-[`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts) — IPC,
-[`built-in-commands.ts`](src/services/command/built-in-commands.ts) — /loaded & /search
+[`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts) — IPC
 
 Tests:
 [`CommandsButton.spec.tsx`](webview-ui/src/components/chat/__tests__/CommandsButton.spec.tsx),
@@ -317,8 +316,6 @@ Keys in [`quickAccess.json`](extensions/Roo-Code/webview-ui/src/i18n/locales/en/
 
 - [x] **Loaded skills tracking**: `loadedSkills` Map on Task, reload no-op, auto-clear on condense
 - [x] **Loaded/Unloaded split in SkillsButton**: Loaded skills shown first with ✓, unloaded sorted alphabetically
-- [x] **`/loaded` slash command**: Lists currently loaded skills for the task
-- [x] **`/search <keywords>` slash command**: RAG semantic search + grep fallback in `.roo/skills`
 - [x] **`loadedSkills` in IPC**: Included in skills message response from `handleRequestSkills`
 
 ### Future Enhancements
