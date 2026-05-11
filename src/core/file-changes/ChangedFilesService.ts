@@ -283,7 +283,10 @@ export async function restoreAll(task: Task): Promise<void> {
 export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	const posix = toPosix(relPath)
 	const snap = await task.fileContextTracker.getFinalSnapshot(posix)
-	if (!snap) return // nothing to accept
+	if (!snap) {
+		console.log(`[ChangedFilesService] acceptFile(${posix}): no final snapshot — nothing to accept`)
+		return // nothing to accept
+	}
 
 	const content = snap.kind === "text" ? await task.fileContextTracker.getFinalContent(posix) : undefined
 
@@ -291,11 +294,13 @@ export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	// Clear the final snapshot so the file disappears from the panel
 	// (it now matches the updated baseline and there's nothing to redo).
 	await task.fileContextTracker.removeFinalSnapshot(posix)
+	console.log(`[ChangedFilesService] acceptFile(${posix}): promoted final → base, kind=${snap.kind}`)
 }
 
 /** Accepts all files Roo edited in the current Task. */
 export async function acceptAll(task: Task): Promise<void> {
 	const candidates = await task.fileContextTracker.getFilesEditedByRoo()
+	console.log(`[ChangedFilesService] acceptAll: ${candidates.length} candidate(s)`)
 	for (const p of candidates) {
 		try {
 			await acceptFile(task, p)
