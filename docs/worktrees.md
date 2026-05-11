@@ -62,12 +62,13 @@ When a worktree is opened (either same-window or new-window), the stored [`workt
 
 ## UI Components
 
-| Component                                                                               | Location             | Purpose                                                                                                    |
-| --------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [`WorktreeSelector`](../webview-ui/src/components/chat/WorktreeSelector.tsx)            | Chat header dropdown | Quick-switch between worktrees; shows branch name and path; hidden when ≤1 worktree exists                 |
-| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)             | Settings page        | Full CRUD management with 3-second polling; `.worktreeinclude` status footer; "show in home screen" toggle |
-| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx) | Modal                | Searchable base-branch selector, auto-generated branch/path defaults, progress tracking during file copy   |
-| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx) | Confirmation dialog  | Branch and filesystem deletion warnings                                                                    |
+| Component                                                                                  | Location             | Purpose                                                                                                    |
+| ------------------------------------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [`WorktreeSelector`](../webview-ui/src/components/chat/WorktreeSelector.tsx)               | Chat header dropdown | Quick-switch between worktrees; shows branch name and path; hidden when ≤1 worktree exists                 |
+| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                | Settings page        | Full CRUD management with 3-second polling; `.worktreeinclude` status footer; "show in home screen" toggle |
+| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx)    | Modal                | Searchable base-branch selector, auto-generated branch/path defaults, progress tracking during file copy   |
+| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx)    | Confirmation dialog  | Branch and filesystem deletion warnings                                                                    |
+| [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) | Chat input bar chip  | Shows current worktree branch name; click to see commits ahead/behind, files changed, merge readiness      |
 
 ## `.worktreeinclude` Mechanism
 
@@ -164,6 +165,69 @@ Core types are defined in [`packages/types/src/worktree.ts`](../packages/types/s
 - `CreateWorktreeOptions` — path, branch?, baseBranch?, createNewBranch?
 - `WorktreeIncludeStatus` — exists, hasGitignore, gitignoreContent?
 - `WorktreeListResponse` — worktrees[], isGitRepo, isMultiRoot, isSubfolder, gitRootPath, error?
+- `WorktreeStatus` — branch, path, baseBranch, commitsAhead, commitsBehind, filesChanged, insertions, deletions, hasUncommittedChanges, uncommittedCount, lastCommit, mergeReadiness, isBaseBranch, otherWorktrees
+
+## Worktree Status Indicator
+
+The [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) provides at-a-glance visibility of the current worktree's state directly in the chat input bar.
+
+### Display
+
+- **When hidden**: ≤1 worktree exists (only the primary/bare worktree)
+- **When visible**: Shows the current branch name as a compact chip (e.g., `🌿 worktree/roo-hl911`)
+- **Tooltip**: "Worktree status — click for details"
+
+### Popover Contents
+
+On click, the indicator requests status via the `getWorktreeStatus` IPC message. The backend handler ([`handleGetWorktreeStatus`](../src/core/webview/worktree/handlers.ts)) collects:
+
+| Metric              | Source                                  | Example                                               |
+| ------------------- | --------------------------------------- | ----------------------------------------------------- |
+| Last commit         | `git log -1 --format`                   | `abc1234 Fix checkpoint race (3 hours ago) by Hannes` |
+| Ahead/Behind        | `git rev-list --count`                  | ▲ 5 ahead ▼ 0 behind                                  |
+| Files changed       | `git diff --shortstat`                  | 12 files changed (243+/87-)                           |
+| Uncommitted changes | `git status --short`                    | ⚠ 3 uncommitted change(s)                            |
+| Merge readiness     | Dry-run `git merge --no-commit --no-ff` | ✅ Safe to merge / ⚠ 2 conflicted file(s)            |
+| Other worktrees     | `git worktree list`                     | Lists all other worktrees with branch names           |
+
+### Technical Details
+
+**Backend** ([`handlers.ts`](../src/core/webview/worktree/handlers.ts)):
+
+- Detects base branch (`main` or `master`) automatically
+- Runs 5+ git queries in parallel for performance
+- Performs a dry-run merge (`git merge --no-commit --no-ff` then `git merge --abort`) to check conflicts
+- Returns `WorktreeStatus` with all fields populated
+
+**Frontend** ([`WorktreeStatusIndicator.tsx`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx)):
+
+- Separate popover with loading spinner, error state, and detailed status display
+- Color-coded indicators: green for clean/ahead/safe, amber for behind/uncommitted, red for conflicts
+- Integrates into the chat input bar alongside Mode, API Configuration, and Auto-approve controls
+
+**IPC messages**:
+
+| Direction           | Type                | Payload                          |
+| ------------------- | ------------------- | -------------------------------- |
+| Webview → Extension | `getWorktreeStatus` | (none)                           |
+| Extension → Webview | `worktreeStatus`    | `worktreeStatus: WorktreeStatus` |
+
+### i18n
+
+Translations in [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../webview-ui/src/i18n/locales/en/worktreeStatus.json):
+
+| Key                  | Value                                 |
+| -------------------- | ------------------------------------- |
+| `tooltip`            | "Worktree status — click for details" |
+| `lastCommit`         | "Last commit"                         |
+| `ahead` / `behind`   | "ahead" / "behind"                    |
+| `upToDate`           | "Up to date with base"                |
+| `filesChanged`       | "files changed"                       |
+| `uncommittedChanges` | "uncommitted change(s)"               |
+| `safeToMerge`        | "Safe to merge"                       |
+| `conflictsDetected`  | "{{count}} conflicted file(s)"        |
+| `otherWorktrees`     | "Other worktrees"                     |
+| `noData`             | "No status data available"            |
 
 ## Known Limitations
 
