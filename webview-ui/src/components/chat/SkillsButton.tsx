@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check, RefreshCw } from "lucide-react"
 
 import type { SkillMetadata } from "@roo-code/types"
@@ -32,6 +32,11 @@ export const SkillsButton = () => {
 	const { skills, customModes, loadedSkills } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const portalContainer = useRooPortal("roo-portal")
+
+	// Fetch skills on mount so the button appears
+	useEffect(() => {
+		vscode.postMessage({ type: "requestSkills" })
+	}, [])
 
 	// Re-request skills from the extension every time the popover opens
 	// to reflect loaded/unloaded state changes from skill_load invocations.
