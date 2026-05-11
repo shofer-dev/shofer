@@ -109,7 +109,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		// after creation. The TaskStarted event will confirm this once the API call begins.
 		const managedTask: ManagedTask = {
 			id: task.taskId,
-			name: name || `Task ${this.managedTasks.size + 1}`,
+			name: name || "New Task",
 			taskId: task.taskId,
 			workspace: task.cwd || "",
 			createdAt: Date.now(),
@@ -146,8 +146,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		const taskText = task.clineMessages.find((m) => m.type === "say" && m.say === "text")?.text || ""
 		const autoName =
-			name ||
-			(taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : `Task ${Date.now()}`)
+			name || (taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : "New Task")
 
 		const managedTask: ManagedTask = {
 			id: task.taskId,
