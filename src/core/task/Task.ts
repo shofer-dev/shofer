@@ -448,6 +448,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	consecutiveNoAssistantMessagesCount: number = 0
 	toolUsage: ToolUsage = {}
 
+	// Skill tracking — maps skill name to SKILL.md absolute path
+	loadedSkills: Map<string, string> = new Map()
+
 	// Checkpoints
 	enableCheckpoints: boolean
 	checkpointTimeout: number
@@ -2028,6 +2031,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			{ isNonInteractive: true } /* options */,
 			contextCondense,
 		)
+
+		// Clear loaded skills — summarization invalidates previously loaded skill instructions
+		this.loadedSkills.clear()
 
 		// Process any queued messages after condensing completes
 		this.processQueuedMessages()
@@ -4622,6 +4628,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					contextTruncation,
 				)
 			}
+
+			// Clear loaded skills — context truncation/summarization invalidates previously loaded skill instructions
+			this.loadedSkills.clear()
 		} finally {
 			// Notify webview that context management is complete (removes in-progress spinner)
 			// IMPORTANT: Must always be sent to dismiss the spinner, even on error
@@ -4861,6 +4870,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						contextTruncation,
 					)
 				}
+
+				// Clear loaded skills — context truncation/summarization invalidates previously loaded skill instructions
+				this.loadedSkills.clear()
 			} finally {
 				// Notify webview that context management is complete (sets isCondensing = false)
 				// This removes the in-progress spinner and allows the completed result to show

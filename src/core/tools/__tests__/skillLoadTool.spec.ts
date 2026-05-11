@@ -23,6 +23,7 @@ describe("skillLoadTool", () => {
 			didToolFailInCurrentTurn: false,
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("Missing parameter error"),
 			ask: vi.fn().mockResolvedValue({}),
+			loadedSkills: new Map<string, string>(),
 			providerRef: {
 				deref: vi.fn().mockReturnValue({
 					getState: vi.fn().mockResolvedValue({ mode: "code" }),
@@ -341,5 +342,27 @@ Source: project
 
 Follow these project-specific instructions...`,
 		)
+	})
+
+	it("should return no-op when skill is already loaded", async () => {
+		// Pre-populate loadedSkills to simulate a previously loaded skill
+		mockTask.loadedSkills.set("my-project-skill", "/path/to/SKILL.md")
+
+		const block: ToolUse<"skill_load"> = {
+			type: "tool_use" as const,
+			name: "skill_load" as const,
+			params: {},
+			partial: false,
+			nativeArgs: {
+				skill: "my-project-skill",
+			},
+		}
+
+		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+
+		// Should return no-op without calling SkillsManager or asking approval
+		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith("Skill 'my-project-skill' is already loaded (no-op).")
+		expect(mockSkillsManager.getSkillContent).not.toHaveBeenCalled()
+		expect(mockCallbacks.askApproval).not.toHaveBeenCalled()
 	})
 })

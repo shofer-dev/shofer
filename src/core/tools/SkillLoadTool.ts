@@ -32,6 +32,12 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 
 			task.consecutiveMistakeCount = 0
 
+			// Check if skill is already loaded — reloading is a no-op
+			if (task.loadedSkills.has(skillName)) {
+				pushToolResult(`Skill '${skillName}' is already loaded (no-op).`)
+				return
+			}
+
 			// Get SkillsManager from provider
 			const provider = task.providerRef.deref()
 			const skillsManager = provider?.getSkillsManager()
@@ -73,6 +79,9 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 			if (!didApprove) {
 				return
 			}
+
+			// Record that this skill has been loaded for this task
+			task.loadedSkills.set(skillName, skillContent.path)
 
 			pushToolResult(buildSkillResult(skillName, args, skillContent))
 		} catch (error) {
