@@ -3771,8 +3771,8 @@ export class ClineProvider
 				this.taskManager.registerBackgroundTask(poppedTask)
 			}
 
-			// Auto-generate task name from first message if provided, otherwise use timestamp
-			const taskName = name || (text ? this.generateTaskNameFromText(text) : `Task ${Date.now()}`)
+			// Auto-generate task name from first message if provided, otherwise use fallback
+			const taskName = name || (text ? this.generateTaskNameFromText(text) : "New Task")
 
 			// Create a new task with keepCurrentTask=true so createTask won't abort any remaining tasks
 			const task = await this.createTask(text, images, undefined, { keepCurrentTask: true }, {})
@@ -3844,6 +3844,9 @@ export class ClineProvider
 				// Update TaskManager focus state
 				try {
 					await this.taskManager.focusTask(taskId)
+					// Clear any pending notifications for this task so the
+					// webview dismisses toast banners for the now-focused task.
+					this.clearTaskNotification(taskId)
 				} catch {
 					// Task might not be in managedTasks map, that's OK
 				}
@@ -3877,6 +3880,8 @@ export class ClineProvider
 					this.taskManager.removeManagedTaskInstance(taskId)
 					this.log(`[focusTask] Removed stale task instance ${taskId} from activeTasks`)
 				}
+				// Dismiss any stale notifications for the task being focused
+				this.clearTaskNotification(taskId)
 				// Load task from history (without killing the currently running task)
 				await this.showTaskWithId(taskId, { keepCurrentTask: true })
 				// Register the freshly rehydrated task instance with TaskManager
