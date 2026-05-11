@@ -87,6 +87,7 @@ import {
 	handleCheckBranchWorktreeInclude,
 	handleCreateWorktreeInclude,
 	handleCheckoutBranch,
+	handleGetWorktreeStatus,
 } from "./worktree"
 
 export const webviewMessageHandler = async (
@@ -3869,6 +3870,37 @@ export const webviewMessageHandler = async (
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
 				provider.log(`Error opening folder picker: ${errorMessage}`)
+			}
+
+			break
+		}
+
+		case "getWorktreeStatus": {
+			try {
+				const status = await handleGetWorktreeStatus(provider)
+				await provider.postMessageToWebview({ type: "worktreeStatus", worktreeStatus: status })
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error)
+				provider.log(`Error getting worktree status: ${errorMessage}`)
+				await provider.postMessageToWebview({
+					type: "worktreeStatus",
+					worktreeStatus: {
+						branch: "",
+						path: "",
+						baseBranch: "",
+						commitsAhead: 0,
+						commitsBehind: 0,
+						filesChanged: 0,
+						insertions: 0,
+						deletions: 0,
+						hasUncommittedChanges: false,
+						uncommittedCount: 0,
+						lastCommit: null,
+						mergeReadiness: { hasConflicts: null, conflictedFiles: [] },
+						isBaseBranch: false,
+						otherWorktrees: [],
+					},
+				})
 			}
 
 			break
