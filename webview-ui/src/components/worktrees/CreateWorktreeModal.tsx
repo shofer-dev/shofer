@@ -7,7 +7,7 @@ import { vscode } from "@/utils/vscode"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Button, Input } from "@/components/ui"
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select"
-import { CornerDownRight, Folder, FolderSearch, Info } from "lucide-react"
+import { CornerDownRight, Folder, Info } from "lucide-react"
 
 interface CreateWorktreeModalProps {
 	open: boolean
@@ -73,12 +73,9 @@ export const CreateWorktreeModal = ({
 					setIncludeStatus(message.worktreeIncludeStatus)
 					break
 				}
-				case "folderSelected": {
-					if (message.path) {
-						setWorktreePath(message.path)
-					}
-					break
-				}
+				// Removed "folderSelected" handler — worktree paths are
+				// auto-generated under .roo/worktrees/ (embedded convention).
+				// The user cannot choose an arbitrary path.
 				case "worktreeCopyProgress": {
 					setCopyProgress({
 						bytesCopied: message.copyProgressBytesCopied ?? 0,
@@ -199,19 +196,15 @@ export const CreateWorktreeModal = ({
 						/>
 					</div>
 
-					{/* Worktree path */}
-					<div className="flex items-center gap-2 relative">
+					{/* Worktree path (auto-generated under .roo/worktrees/, not user-editable) */}
+					<div className="flex items-center gap-2">
 						<Folder className="size-4 ml-2 shrink-0" />
 						<label className="text-sm text-vscode-foreground shrink-0">{t("worktrees:worktreePath")}</label>
 						<Input
 							value={worktreePath}
-							onChange={(e) => setWorktreePath(e.target.value)}
-							placeholder={defaults?.suggestedPath || "/path/to/worktree"}
-							className="rounded-full flex-1 pr-9"
-						/>
-						<FolderSearch
-							className="size-4 shrink-0 absolute right-3 cursor-pointer hover:opacity-75 transition-opacity"
-							onClick={() => vscode.postMessage({ type: "browseForWorktreePath" })}
+							readOnly
+							className="rounded-full flex-1 bg-vscode-input-background opacity-80 cursor-default"
+							tabIndex={-1}
 						/>
 					</div>
 
