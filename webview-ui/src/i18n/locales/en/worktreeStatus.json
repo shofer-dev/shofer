@@ -1,0 +1,13 @@
+{
+	"tooltip": "Worktree status — click for details",
+	"lastCommit": "Last commit",
+	"ahead": "ahead",
+	"behind": "behind",
+	"upToDate": "Up to date with base",
+	"filesChanged": "files changed",
+	"uncommittedChanges": "uncommitted change(s)",
+	"safeToMerge": "Safe to merge",
+	"conflictsDetected": "{{count}} conflicted file(s)",
+	"otherWorktrees": "Other worktrees",
+	"noData": "No status data available"
+}

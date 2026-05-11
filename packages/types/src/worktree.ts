@@ -97,3 +97,46 @@ export interface WorktreeDefaultsResponse {
 	suggestedPath: string
 	error?: string
 }
+
+/**
+ * Detailed status for a worktree branch.
+ */
+export interface WorktreeStatus {
+	/** Current branch name */
+	branch: string
+	/** Filesystem path of the worktree */
+	path: string
+	/** Target base branch (main or master) */
+	baseBranch: string
+	/** Number of commits this branch is ahead of base */
+	commitsAhead: number
+	/** Number of commits this branch is behind base */
+	commitsBehind: number
+	/** Number of files changed vs base */
+	filesChanged: number
+	/** Total insertions vs base */
+	insertions: number
+	/** Total deletions vs base */
+	deletions: number
+	/** Whether the working tree has uncommitted changes */
+	hasUncommittedChanges: boolean
+	/** Count of uncommitted changes (tracked files) */
+	uncommittedCount: number
+	/** Last commit info, or null if no commits */
+	lastCommit: {
+		hash: string
+		subject: string
+		relativeTime: string
+		author: string
+	} | null
+	/** Merge readiness check result */
+	mergeReadiness: {
+		/** null = not yet checked, true/false = result */
+		hasConflicts: boolean | null
+		conflictedFiles: string[]
+	}
+	/** Whether the current branch is the base branch */
+	isBaseBranch: boolean
+	/** List of other worktrees with their branch names */
+	otherWorktrees: Array<{ branch: string; path: string }>
+}

@@ -21,7 +21,7 @@ import type { McpServer } from "./mcp.js"
 import type { ModelRecord, RouterModels } from "./model.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
 import type { SkillMetadata } from "./skills.js"
-import type { WorktreeIncludeStatus } from "./worktree.js"
+import type { WorktreeIncludeStatus, WorktreeStatus } from "./worktree.js"
 
 /**
  * ExtensionMessage
@@ -105,6 +105,7 @@ export interface ExtensionMessage {
 		| "worktreeDefaults"
 		| "worktreeIncludeStatus"
 		| "branchWorktreeIncludeResult"
+		| "worktreeStatus"
 		| "folderSelected"
 		| "skills"
 		| "fileContent"
@@ -267,6 +268,8 @@ export interface ExtensionMessage {
 	copyProgressItemName?: string
 	// folderSelected
 	path?: string
+	// worktreeStatus
+	worktreeStatus?: WorktreeStatus
 }
 
 export interface OpenAiCodexRateLimitsMessage {
@@ -662,6 +665,7 @@ export interface WebviewMessage {
 		| "createWorktreeInclude"
 		| "checkoutBranch"
 		| "browseForWorktreePath"
+		| "getWorktreeStatus"
 		// Skills messages
 		| "requestSkills"
 		| "createSkill"
