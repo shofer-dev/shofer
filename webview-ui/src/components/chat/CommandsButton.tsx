@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink } from "lucide-react"
+import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink, RefreshCw } from "lucide-react"
 
 import type { Command } from "@roo-code/types"
 
@@ -77,6 +77,11 @@ export const CommandsButton = () => {
 		vscode.postMessage({ type: "openFile", text: filePath })
 	}, [])
 
+	// Trigger a re-read of .roo/commands directories
+	const handleRefresh = useCallback(() => {
+		vscode.postMessage({ type: "requestCommands" })
+	}, [])
+
 	// Open settings when gear icon is clicked
 	const handleOpenSettings = useCallback(() => {
 		vscode.postMessage({
@@ -119,17 +124,30 @@ export const CommandsButton = () => {
 							<Zap className="w-3.5 h-3.5" />
 							{t("quickAccess:commands.title")}
 						</h4>
-						<button
-							aria-label={t("quickAccess:commands.settings")}
-							onClick={handleOpenSettings}
-							className={cn(
-								"inline-flex items-center justify-center size-5 rounded-sm",
-								"text-vscode-descriptionForeground hover:text-vscode-foreground",
-								"hover:bg-[rgba(255,255,255,0.05)] transition-colors",
-								"cursor-pointer",
-							)}>
-							<span className="codicon codicon-settings-gear text-xs" />
-						</button>
+						<div className="flex items-center gap-1">
+							<button
+								aria-label={t("quickAccess:commands.refresh")}
+								onClick={handleRefresh}
+								className={cn(
+									"inline-flex items-center justify-center size-5 rounded-sm",
+									"text-vscode-descriptionForeground hover:text-vscode-foreground",
+									"hover:bg-[rgba(255,255,255,0.05)] transition-colors",
+									"cursor-pointer",
+								)}>
+								<RefreshCw className="w-3 h-3" />
+							</button>
+							<button
+								aria-label={t("quickAccess:commands.settings")}
+								onClick={handleOpenSettings}
+								className={cn(
+									"inline-flex items-center justify-center size-5 rounded-sm",
+									"text-vscode-descriptionForeground hover:text-vscode-foreground",
+									"hover:bg-[rgba(255,255,255,0.05)] transition-colors",
+									"cursor-pointer",
+								)}>
+								<span className="codicon codicon-settings-gear text-xs" />
+							</button>
+						</div>
 					</div>
 
 					{/* Scrollable list */}
