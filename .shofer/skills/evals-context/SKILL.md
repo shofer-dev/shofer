@@ -27,12 +27,12 @@ Do NOT use this skill when:
 
 This monorepo has **two distinct evals-related locations** that can cause confusion:
 
-| Component                   | Path                                                    | Purpose                                                        |
-| --------------------------- | ------------------------------------------------------- | -------------------------------------------------------------- |
-| **Evals Execution System**  | `packages/evals/`                                       | Core eval infrastructure: CLI, DB schema, Docker configs       |
-| **Evals Management UI**     | `apps/web-evals/`                                       | Next.js app for creating/monitoring eval runs (localhost:3446) |
-| **Website Evals Page**      | `apps/web-shofer-code/src/app/evals/`                   | Public shofer.com page displaying eval results                 |
-| **External Exercises Repo** | [Shofer-Evals](https://github.com/Arkware/Shofer-Evals) | Actual coding exercises (NOT in this monorepo)                 |
+| Component                   | Path                                                        | Purpose                                                        |
+| --------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
+| **Evals Execution System**  | `packages/evals/`                                           | Core eval infrastructure: CLI, DB schema, Docker configs       |
+| **Evals Management UI**     | `apps/web-evals/`                                           | Next.js app for creating/monitoring eval runs (localhost:3446) |
+| **Website Evals Page**      | `apps/web-shofer-code/src/app/evals/`                       | Public shofer.com page displaying eval results                 |
+| **External Exercises Repo** | [Shofer-Evals](https://github.com/alsterg/shofer.dev-Evals) | Actual coding exercises (NOT in this monorepo)                 |
 
 ## Directory Structure Reference
 
@@ -123,7 +123,7 @@ The evals system is a distributed evaluation platform that runs AI coding tasks 
 
 ### Adding a New Eval Exercise
 
-1. Add exercise to [Shofer-Evals](https://github.com/Arkware/Shofer-Evals) repo (external)
+1. Add exercise to [Shofer-Evals](https://github.com/alsterg/shofer.dev-Evals) repo (external)
 2. See [`packages/evals/ADDING-EVALS.md`](packages/evals/ADDING-EVALS.md) for structure
 
 ### Modifying Eval CLI Behavior

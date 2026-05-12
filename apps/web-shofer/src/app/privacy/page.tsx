@@ -70,7 +70,7 @@ export default function Privacy() {
 							If you run the Shofer extension <strong>without</strong> connecting to a Cloud account, your
 							data is governed by the standalone{" "}
 							<a
-								href="https://github.com/Arkware/Shofer/blob/main/PRIVACY.md"
+								href="https://github.com/alsterg/shofer.dev/blob/main/PRIVACY.md"
 								target="_blank"
 								rel="noopener noreferrer"
 								className="text-primary hover:underline">

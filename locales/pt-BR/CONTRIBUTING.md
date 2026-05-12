@@ -69,7 +69,7 @@ Mencione o alinhamento com essas áreas em seus PRs.
 
 Todas as contribuições começam com uma Issue do GitHub usando nossos modelos simplificados.
 
-- **Verifique as issues existentes**: Pesquise nas [Issues do GitHub](https://github.com/Arkware/Shofer/issues).
+- **Verifique as issues existentes**: Pesquise nas [Issues do GitHub](https://github.com/alsterg/shofer.dev/issues).
 - **Crie uma issue** usando:
     - **Melhorias:** modelo "Solicitação de melhoria" (linguagem simples focada no benefício do usuário).
     - **Bugs:** modelo "Relatório de bug" (reprodução mínima + esperado vs. real + versão).
@@ -79,16 +79,16 @@ Todas as contribuições começam com uma Issue do GitHub usando nossos modelos 
 ### Decidindo no que trabalhar
 
 - Verifique o [Projeto do GitHub](https://github.com/orgs/Arkware/projects/1) para issues "Issue [Não atribuída]".
-- Para documentação, visite [Documentação do Shofer](https://github.com/Arkware/Shofer-Docs).
+- Para documentação, visite [Documentação do Shofer](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Relatando bugs
 
 - Verifique primeiro os relatórios existentes.
-- Crie um novo bug usando o [modelo "Relatório de bug"](https://github.com/Arkware/Shofer/issues/new/choose) com:
+- Crie um novo bug usando o [modelo "Relatório de bug"](https://github.com/alsterg/shofer.dev/issues/new/choose) com:
     - Passos de reprodução claros e numerados
     - Resultado esperado vs. real
     - Versão do Shofer (obrigatório); provedor/modelo de IA, se relevante
-- **Problemas de segurança**: Relate em particular através de [avisos de segurança](https://github.com/Arkware/Shofer/security/advisories/new).
+- **Problemas de segurança**: Relate em particular através de [avisos de segurança](https://github.com/alsterg/shofer.dev/security/advisories/new).
 
 ## Processo de desenvolvimento e envio
 

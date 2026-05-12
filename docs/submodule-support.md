@@ -3,7 +3,7 @@
 ## Symptom
 
 ```
-Checkpoints are disabled because a nested git repository was detected at: arkware.ai.
+Checkpoints are disabled because a nested git repository was detected at: shofer.dev.
 To use checkpoints, please remove or relocate this nested git repository.
 ```
 

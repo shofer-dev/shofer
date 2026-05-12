@@ -69,7 +69,7 @@ PRでこれらの分野との連携について言及してください。
 
 すべての貢献は、私たちのスキニーテンプレートを使用してGitHubの課題から始まります。
 
-- **既存の課題を確認する**：[GitHubの課題](https://github.com/Arkware/Shofer/issues)で検索します。
+- **既存の課題を確認する**：[GitHubの課題](https://github.com/alsterg/shofer.dev/issues)で検索します。
 - **課題を作成する**：
     - **機能強化：** 「機能強化リクエスト」テンプレート（ユーザーの利益に焦点を当てた平易な言葉）。
     - **バグ：** 「バグレポート」テンプレート（最小限の再現+期待値と実際値+バージョン）。
@@ -79,16 +79,16 @@ PRでこれらの分野との連携について言及してください。
 ### 何に取り組むかを決める
 
 - 「課題[未割り当て]」の課題については、[GitHubプロジェクト](https://github.com/orgs/Arkware/projects/1)を確認してください。
-- ドキュメントについては、[Shoferドキュメント](https://github.com/Arkware/Shofer-Docs)をご覧ください。
+- ドキュメントについては、[Shoferドキュメント](https://github.com/alsterg/shofer.dev-Docs)をご覧ください。
 
 ### バグの報告
 
 - 最初に既存のレポートを確認してください。
-- 次の情報を含む[「バグレポート」テンプレート](https://github.com/Arkware/Shofer/issues/new/choose)を使用して新しいバグを作成します。
+- 次の情報を含む[「バグレポート」テンプレート](https://github.com/alsterg/shofer.dev/issues/new/choose)を使用して新しいバグを作成します。
     - 明確で番号付きの再現手順
     - 期待される結果と実際の結果
     - Shoferのバージョン（必須）。関連する場合はAPIプロバイダー/モデル
-- **セキュリティの問題**：[セキュリティアドバイザリ](https://github.com/Arkware/Shofer/security/advisories/new)を介して非公開で報告してください。
+- **セキュリティの問題**：[セキュリティアドバイザリ](https://github.com/alsterg/shofer.dev/security/advisories/new)を介して非公開で報告してください。
 
 ## 開発と提出のプロセス
 

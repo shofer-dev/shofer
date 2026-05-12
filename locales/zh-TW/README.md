@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-    </details>
+      </details>
 
 ---
 
@@ -87,8 +87,8 @@ Shofer 會配合您的工作方式，而非要您配合它：
 - **[YouTube 頻道](https://youtube.com/@shoferyt?feature=shared):** 觀看教學和功能實際操作。
 - **[Discord 伺服器](https://discord.gg/shofer):** 加入社群以獲得即時協助和討論。
 - **[Reddit 社群](https://www.reddit.com/r/Shofer):** 分享您的經驗，看看其他人正在建立什麼。
-- **[GitHub Issues](https://github.com/Arkware/Shofer/issues):** 回報問題並追蹤開發進度。
-- **[功能請求](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法嗎？與開發人員分享。
+- **[GitHub Issues](https://github.com/alsterg/shofer.dev/issues):** 回報問題並追蹤開發進度。
+- **[功能請求](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法嗎？與開發人員分享。
 
 ---
 
@@ -97,7 +97,7 @@ Shofer 會配合您的工作方式，而非要您配合它：
 1. **複製**儲存庫：
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **安裝相依套件**:

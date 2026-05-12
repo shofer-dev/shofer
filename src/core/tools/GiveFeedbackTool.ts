@@ -1,5 +1,5 @@
 /**
- * GiveFeedbackTool — allows the LLM to send feedback to the Arkware developers.
+ * GiveFeedbackTool — allows the LLM to send feedback to the Shofer.Dev developers.
  *
  * Always-available, harmless meta-operation. The feedback message is appended
  * to the Shofer extension output channel (per project policy: extensions must
@@ -47,7 +47,7 @@ export class GiveFeedbackTool extends BaseTool<"give_feedback"> {
 			const preview = trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed
 			const didApprove = await this.askToolApproval(callbacks, {
 				tool: "giveFeedback",
-				content: `Feedback to Arkware developers:\n${preview}`,
+				content: `Feedback to Shofer.Dev developers:\n${preview}`,
 			})
 			if (!didApprove) {
 				return

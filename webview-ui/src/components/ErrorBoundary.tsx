@@ -71,7 +71,7 @@ class ErrorBoundary extends Component<ErrorProps, ErrorState> {
 				</h2>
 				<p className="mb-4">
 					{t("errorBoundary.reportText")}{" "}
-					<a href="https://github.com/Arkware/Shofer/issues" target="_blank" rel="noreferrer">
+					<a href="https://github.com/alsterg/shofer.dev/issues" target="_blank" rel="noreferrer">
 						{t("errorBoundary.githubText")}
 					</a>
 				</p>

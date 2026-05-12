@@ -50,7 +50,7 @@ export function generateRoomodesJsonSchema(): Record<string, unknown> {
 		target: "jsonSchema7",
 	}) as Record<string, unknown>
 
-	jsonSchema["$id"] = "https://github.com/Arkware/Shofer/blob/main/schemas/shofermodes.json"
+	jsonSchema["$id"] = "https://github.com/alsterg/shofer.dev/blob/main/schemas/shofermodes.json"
 	jsonSchema["title"] = "Shofer Custom Modes"
 	jsonSchema["description"] = "Schema for .shofermodes configuration files used by Shofer to define custom modes."
 
