@@ -284,8 +284,19 @@ export async function handleCheckoutBranch(provider: ClineProvider, branch: stri
  * Get detailed status for the current worktree: ahead/behind, files changed,
  * last commit, merge readiness.
  */
-export async function handleGetWorktreeStatus(provider: ClineProvider): Promise<WorktreeStatus> {
-	const cwd = provider.cwd
+/**
+ * Get worktree status: ahead/behind, uncommitted changes, file changes,
+ * last commit, merge readiness.
+ *
+ * @param provider Webview provider; used to fall back to the workspace cwd
+ *                 when the caller does not specify one.
+ * @param cwdOverride Explicit working directory to inspect. Pass the active
+ *                    task's cwd here so the status reflects the worktree the
+ *                    task is actually running in (in the embedded model the
+ *                    workspace cwd is always the main worktree).
+ */
+export async function handleGetWorktreeStatus(provider: ClineProvider, cwdOverride?: string): Promise<WorktreeStatus> {
+	const cwd = cwdOverride && cwdOverride.length > 0 ? cwdOverride : provider.cwd
 
 	const isGitRepo = await worktreeService.checkGitRepo(cwd)
 	if (!isGitRepo) {

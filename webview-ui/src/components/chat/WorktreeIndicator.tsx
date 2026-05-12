@@ -27,12 +27,21 @@ import { CreateWorktreeModal } from "@/components/worktrees/CreateWorktreeModal"
  */
 export const WorktreeIndicator = () => {
 	const { t } = useAppTranslation()
-	const { clineMessages, pendingWorktreeDir, setPendingWorktreeDir } = useExtensionState()
+	const { clineMessages, currentTaskItem, pendingWorktreeDir, setPendingWorktreeDir } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [modalOpen, setModalOpen] = useState(false)
 	const [worktrees, setWorktrees] = useState<Worktree[]>([])
 	const [status, setStatus] = useState<WorktreeStatus | null>(null)
 	const [loading, setLoading] = useState(false)
+	// Backend reports why worktrees may be unavailable (no folder open, not a
+	// git repo, multi-root, subfolder of a repo). We capture it so the chip
+	// can render in a disabled state instead of opening an empty popover.
+	const [availability, setAvailability] = useState<{
+		isGitRepo: boolean
+		isMultiRoot: boolean
+		isSubfolder: boolean
+		hasWorkspaceFolder: boolean
+	}>({ isGitRepo: true, isMultiRoot: false, isSubfolder: false, hasWorkspaceFolder: true })
 	const portalContainer = useRooPortal("roo-portal")
 
 	// A task is active once the backend has pushed any clineMessages for it.
@@ -41,21 +50,19 @@ export const WorktreeIndicator = () => {
 
 	// The "current" worktree from the list reflects the workspace's git
 	// checkout (always master in the embedded model). Once a task is active,
-	// derive what to display from the task's cwd. Pre-task, prefer the user's
-	// pending selection.
+	// derive what to display from the task's cwd (currentTaskItem.cwd) so the
+	// chip names the worktree the task is actually running in. Pre-task,
+	// prefer the user's pending selection.
 	const workspaceCurrent = worktrees.find((w) => w.isCurrent)
 	const selectedWorktree = useMemo<Worktree | undefined>(() => {
-		if (hasActiveTask) {
-			// TODO: when backend exposes the active task's cwd to the webview,
-			// match it here to surface the actual worktree. Until then fall
-			// back to the workspace's current.
-			return workspaceCurrent
+		if (hasActiveTask && currentTaskItem?.cwd) {
+			return worktrees.find((w) => w.path === currentTaskItem.cwd) ?? workspaceCurrent
 		}
 		if (pendingWorktreeDir) {
 			return worktrees.find((w) => w.path === pendingWorktreeDir) ?? workspaceCurrent
 		}
 		return workspaceCurrent
-	}, [hasActiveTask, pendingWorktreeDir, worktrees, workspaceCurrent])
+	}, [hasActiveTask, currentTaskItem?.cwd, pendingWorktreeDir, worktrees, workspaceCurrent])
 
 	const selectableWorktrees = worktrees.filter((w) => !w.isBare)
 
@@ -64,6 +71,13 @@ export const WorktreeIndicator = () => {
 			const message = event.data
 			if (message.type === "worktreeList") {
 				setWorktrees(message.worktrees || [])
+				setAvailability({
+					isGitRepo: message.isGitRepo !== false,
+					isMultiRoot: message.isMultiRoot === true,
+					isSubfolder: message.isSubfolder === true,
+					// gitRootPath is empty only when no workspace folder was open.
+					hasWorkspaceFolder: !(message.gitRootPath === "" && message.isGitRepo === false),
+				})
 			}
 			if (message.type === "worktreeStatus") {
 				setStatus(message.worktreeStatus)
@@ -82,16 +96,44 @@ export const WorktreeIndicator = () => {
 		refresh()
 	}, [refresh])
 
+	// Worktrees are usable only in a single-root, non-subfolder git repo.
+	const isAvailable =
+		availability.hasWorkspaceFolder &&
+		availability.isGitRepo &&
+		!availability.isMultiRoot &&
+		!availability.isSubfolder
+
+	const disabledTooltip = !availability.hasWorkspaceFolder
+		? t("worktreeStatus:disabledNoFolder")
+		: availability.isMultiRoot
+			? t("worktreeStatus:disabledMultiRoot")
+			: !availability.isGitRepo
+				? t("worktreeStatus:disabledNotGitRepo")
+				: availability.isSubfolder
+					? t("worktreeStatus:disabledSubfolder")
+					: ""
+
 	const handleOpenChange = useCallback(
 		(isOpen: boolean) => {
+			if (isOpen && !isAvailable) {
+				// Defensive: trigger is disabled in this state, but suppress just
+				// in case Radix surfaces an open via keyboard.
+				return
+			}
 			setOpen(isOpen)
 			if (isOpen) {
 				refresh()
 				setLoading(true)
-				vscode.postMessage({ type: "getWorktreeStatus" })
+				// Scope the status to the worktree the chip is currently
+				// surfacing (active task's cwd or the user's pending pick),
+				// not the workspace cwd which is always the main worktree.
+				vscode.postMessage({
+					type: "getWorktreeStatus",
+					worktreeDir: selectedWorktree?.path,
+				})
 			}
 		},
-		[refresh],
+		[refresh, selectedWorktree?.path, isAvailable],
 	)
 
 	const handleSelect = useCallback(
@@ -120,14 +162,18 @@ export const WorktreeIndicator = () => {
 	return (
 		<>
 			<Popover open={open} onOpenChange={handleOpenChange}>
-				<StandardTooltip content={t("worktreeStatus:tooltip")}>
+				<StandardTooltip content={isAvailable ? t("worktreeStatus:tooltip") : disabledTooltip}>
 					<PopoverTrigger
+						disabled={!isAvailable}
+						aria-disabled={!isAvailable}
 						className={cn(
 							"inline-flex items-center gap-1 relative whitespace-nowrap px-1.5 py-1 text-xs",
 							"bg-transparent border border-[rgba(255,255,255,0.08)] rounded-md text-vscode-foreground",
 							"transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder focus-visible:ring-inset",
-							"opacity-90 hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)] cursor-pointer",
 							"max-w-[160px]",
+							isAvailable
+								? "opacity-90 hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)] cursor-pointer"
+								: "opacity-40 cursor-not-allowed",
 						)}>
 						<GitBranch className="w-3 h-3 shrink-0" />
 						<span className="truncate">{selectedWorktree?.branch || t("worktrees:noBranch")}</span>
