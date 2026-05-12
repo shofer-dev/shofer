@@ -237,7 +237,7 @@ describe("TaskActions", () => {
 			fireEvent.click(connectOption)
 
 			expect(mockPostMessage).toHaveBeenCalledWith({
-				type: "rooCloudSignIn",
+				type: "shoferCloudSignIn",
 			})
 		})
 	})
@@ -310,7 +310,7 @@ describe("TaskActions", () => {
 
 			// Verify rooCloudSignIn message was sent
 			expect(mockPostMessage).toHaveBeenCalledWith({
-				type: "rooCloudSignIn",
+				type: "shoferCloudSignIn",
 			})
 
 			// Simulate user becoming authenticated after clicking connect from share button

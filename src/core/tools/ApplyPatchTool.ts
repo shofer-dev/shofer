@@ -110,13 +110,13 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 				// Check access permissions
 				const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 				if (!accessAllowed) {
-					await task.say("rooignore_error", relPath)
+					await task.say("shoferignore_error", relPath)
 					pushToolResult(formatResponse.shoferIgnoreError(relPath))
 					return
 				}
 
 				// Check if file is write-protected
-				const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+				const isWriteProtected = task.shoferProtectedController?.isWriteProtected(relPath) || false
 
 				if (change.type === "add") {
 					// Create new file
@@ -221,7 +221,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 		}
 
 		// Track file edit operation
-		await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+		await task.fileContextTracker.trackFileContext(relPath, "shofer_edited" as RecordSource)
 		task.didEditFile = true
 
 		const message = await task.diffViewProvider.pushToolWriteResult(task, task.cwd, true)
@@ -377,14 +377,14 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			// Validate destination path access permissions
 			const moveAccessAllowed = task.shoferIgnoreController?.validateAccess(change.movePath)
 			if (!moveAccessAllowed) {
-				await task.say("rooignore_error", change.movePath)
+				await task.say("shoferignore_error", change.movePath)
 				pushToolResult(formatResponse.shoferIgnoreError(change.movePath))
 				await task.diffViewProvider.reset()
 				return
 			}
 
 			// Check if destination path is write-protected
-			const isMovePathWriteProtected = task.rooProtectedController?.isWriteProtected(change.movePath) || false
+			const isMovePathWriteProtected = task.shoferProtectedController?.isWriteProtected(change.movePath) || false
 			if (isMovePathWriteProtected) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("apply_patch")
@@ -430,7 +430,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 				console.error(`Failed to delete original file after move: ${error}`)
 			}
 
-			await task.fileContextTracker.trackFileContext(change.movePath, "roo_edited" as RecordSource)
+			await task.fileContextTracker.trackFileContext(change.movePath, "shofer_edited" as RecordSource)
 		} else {
 			// Save changes to the same file
 			if (isPreventFocusDisruptionEnabled) {
@@ -439,7 +439,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 				await task.diffViewProvider.saveChanges(diagnosticsEnabled, writeDelayMs)
 			}
 
-			await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+			await task.fileContextTracker.trackFileContext(relPath, "shofer_edited" as RecordSource)
 		}
 
 		task.didEditFile = true

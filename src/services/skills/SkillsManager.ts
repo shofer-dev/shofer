@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 import matter from "gray-matter"
 
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
-import { getGlobalRooDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "../shofer-config"
+import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "../shofer-config"
 import { directoryExists, fileExists } from "../shofer-config"
 import { SkillMetadata, SkillContent } from "../../shared/skills"
 import { modes, getAllModes } from "../../shared/modes"
@@ -366,7 +366,7 @@ export class SkillsManager {
 		// Determine base directory
 		let baseDir: string
 		if (source === "global") {
-			baseDir = getGlobalRooDirectory()
+			baseDir = getGlobalShoferDirectory()
 		} else {
 			const provider = this.providerRef.deref()
 			if (!provider?.cwd) {
@@ -475,7 +475,7 @@ Add your skill instructions here.
 		// Determine base directory
 		let baseDir: string
 		if (source === "global") {
-			baseDir = getGlobalRooDirectory()
+			baseDir = getGlobalShoferDirectory()
 		} else {
 			const provider = this.providerRef.deref()
 			if (!provider?.cwd) {
@@ -572,7 +572,7 @@ Add your skill instructions here.
 		}>
 	> {
 		const dirs: Array<{ dir: string; source: "global" | "project"; mode?: string }> = []
-		const globalRooDir = getGlobalRooDirectory()
+		const globalShoferDir = getGlobalShoferDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
 		const provider = this.providerRef.deref()
 		const projectRooDir = provider?.cwd ? path.join(provider.cwd, ".shofer") : null
@@ -605,9 +605,9 @@ Add your skill instructions here.
 		}
 
 		// Global .shofer directories (Shofer-specific, higher priority than .agents)
-		dirs.push({ dir: path.join(globalRooDir, "skills"), source: "global" })
+		dirs.push({ dir: path.join(globalShoferDir, "skills"), source: "global" })
 		for (const mode of modesList) {
-			dirs.push({ dir: path.join(globalRooDir, `skills-${mode}`), source: "global", mode })
+			dirs.push({ dir: path.join(globalShoferDir, `skills-${mode}`), source: "global", mode })
 		}
 
 		// Project .shofer directories (highest priority)
@@ -655,13 +655,13 @@ Add your skill instructions here.
 		if (!provider?.cwd) return
 
 		// Watch for changes in skills directories
-		const globalRooDir = getGlobalRooDirectory()
+		const globalShoferDir = getGlobalShoferDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
 		const projectRooDir = path.join(provider.cwd, ".shofer")
 		const projectAgentsDir = getProjectAgentsDirectoryForCwd(provider.cwd)
 
 		// Watch global .shofer skills directory
-		this.watchDirectory(path.join(globalRooDir, "skills"))
+		this.watchDirectory(path.join(globalShoferDir, "skills"))
 
 		// Watch global .agents skills directory
 		this.watchDirectory(path.join(globalAgentsDir, "skills"))
@@ -676,7 +676,7 @@ Add your skill instructions here.
 		const modesList = await this.getAvailableModes()
 		for (const mode of modesList) {
 			// .shofer mode-specific
-			this.watchDirectory(path.join(globalRooDir, `skills-${mode}`))
+			this.watchDirectory(path.join(globalShoferDir, `skills-${mode}`))
 			this.watchDirectory(path.join(projectRooDir, `skills-${mode}`))
 			// .agents mode-specific
 			this.watchDirectory(path.join(globalAgentsDir, `skills-${mode}`))

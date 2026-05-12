@@ -46,7 +46,7 @@ describe("webviewMessageHandler - requestRooCreditBalance", () => {
 		)
 
 		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
-			type: "rooCreditBalance",
+			type: "shoferCreditBalance",
 			requestId,
 			values: { balance: mockBalance },
 		})
@@ -68,7 +68,7 @@ describe("webviewMessageHandler - requestRooCreditBalance", () => {
 		)
 
 		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
-			type: "rooCreditBalance",
+			type: "shoferCreditBalance",
 			requestId,
 			values: { error: errorMessage },
 		})
@@ -88,7 +88,7 @@ describe("webviewMessageHandler - requestRooCreditBalance", () => {
 		)
 
 		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
-			type: "rooCreditBalance",
+			type: "shoferCreditBalance",
 			requestId,
 			values: { error: "Cloud service not available" },
 		})
@@ -109,7 +109,7 @@ describe("webviewMessageHandler - requestRooCreditBalance", () => {
 		)
 
 		expect(mockProvider.postMessageToWebview).toHaveBeenCalledWith({
-			type: "rooCreditBalance",
+			type: "shoferCreditBalance",
 			requestId,
 			values: { error: "Cloud service not available" },
 		})

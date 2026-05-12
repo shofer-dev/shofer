@@ -120,7 +120,7 @@ Otherwise, if you have not completed the task and do not need additional informa
 		didHitLimit: boolean,
 		shoferIgnoreController: ShoferIgnoreController | undefined,
 		showShoferIgnoredFiles: boolean,
-		rooProtectedController?: ShoferProtectedController,
+		shoferProtectedController?: ShoferProtectedController,
 	): string => {
 		const sorted = files
 			.map((file) => {
@@ -170,7 +170,7 @@ Otherwise, if you have not completed the task and do not need additional informa
 					shoferIgnoreParsed.push(LOCK_TEXT_SYMBOL + " " + filePath)
 				} else {
 					// Check if file is write-protected (only for non-ignored files)
-					const isWriteProtected = rooProtectedController?.isWriteProtected(absoluteFilePath) || false
+					const isWriteProtected = shoferProtectedController?.isWriteProtected(absoluteFilePath) || false
 					if (isWriteProtected) {
 						shoferIgnoreParsed.push("🛡️ " + filePath)
 					} else {

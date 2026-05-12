@@ -1,34 +1,34 @@
 import EventEmitter from "events"
 
-export type RooTerminalProvider = "vscode" | "execa"
+export type ShoferTerminalProvider = "vscode" | "execa"
 
-export interface RooTerminal {
-	provider: RooTerminalProvider
+export interface ShoferTerminal {
+	provider: ShoferTerminalProvider
 	id: number
 	busy: boolean
 	running: boolean
 	taskId?: string
-	process?: RooTerminalProcess
+	process?: ShoferTerminalProcess
 	getCurrentWorkingDirectory(): string
 	isClosed: () => boolean
-	runCommand: (command: string, callbacks: RooTerminalCallbacks) => RooTerminalProcessResultPromise
+	runCommand: (command: string, callbacks: ShoferTerminalCallbacks) => ShoferTerminalProcessResultPromise
 	setActiveStream(stream: AsyncIterable<string> | undefined, pid?: number): void
 	shellExecutionComplete(exitDetails: ExitCodeDetails): void
-	getProcessesWithOutput(): RooTerminalProcess[]
+	getProcessesWithOutput(): ShoferTerminalProcess[]
 	getUnretrievedOutput(): string
 	getLastCommand(): string
 	cleanCompletedProcessQueue(): void
 }
 
-export interface RooTerminalCallbacks {
-	onLine: (line: string, process: RooTerminalProcess) => void
-	onCompleted: (output: string | undefined, process: RooTerminalProcess) => void | Promise<void>
-	onShellExecutionStarted: (pid: number | undefined, process: RooTerminalProcess) => void
-	onShellExecutionComplete: (details: ExitCodeDetails, process: RooTerminalProcess) => void
-	onNoShellIntegration?: (message: string, process: RooTerminalProcess) => void
+export interface ShoferTerminalCallbacks {
+	onLine: (line: string, process: ShoferTerminalProcess) => void
+	onCompleted: (output: string | undefined, process: ShoferTerminalProcess) => void | Promise<void>
+	onShellExecutionStarted: (pid: number | undefined, process: ShoferTerminalProcess) => void
+	onShellExecutionComplete: (details: ExitCodeDetails, process: ShoferTerminalProcess) => void
+	onNoShellIntegration?: (message: string, process: ShoferTerminalProcess) => void
 }
 
-export interface RooTerminalProcess extends EventEmitter<RooTerminalProcessEvents> {
+export interface ShoferTerminalProcess extends EventEmitter<ShoferTerminalProcessEvents> {
 	command: string
 	isHot: boolean
 	run: (command: string) => Promise<void>
@@ -39,9 +39,9 @@ export interface RooTerminalProcess extends EventEmitter<RooTerminalProcessEvent
 	trimRetrievedOutput: () => void
 }
 
-export type RooTerminalProcessResultPromise = RooTerminalProcess & Promise<void>
+export type ShoferTerminalProcessResultPromise = ShoferTerminalProcess & Promise<void>
 
-export interface RooTerminalProcessEvents {
+export interface ShoferTerminalProcessEvents {
 	line: [line: string]
 	continue: []
 	completed: [output?: string]

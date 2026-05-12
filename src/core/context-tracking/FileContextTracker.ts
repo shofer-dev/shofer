@@ -181,8 +181,8 @@ export class FileContextTracker {
 				path: filePath,
 				record_state: "active",
 				record_source: source,
-				roo_read_date: getLatestDateForField(filePath, "roo_read_date"),
-				roo_edit_date: getLatestDateForField(filePath, "roo_edit_date"),
+				shofer_read_date: getLatestDateForField(filePath, "shofer_read_date"),
+				shofer_edit_date: getLatestDateForField(filePath, "shofer_edit_date"),
 				user_edit_date: getLatestDateForField(filePath, "user_edit_date"),
 			}
 
@@ -193,10 +193,10 @@ export class FileContextTracker {
 					this.recentlyModifiedFiles.add(filePath)
 					break
 
-				// roo_edited: Shofer has edited the file
-				case "roo_edited":
-					newEntry.roo_read_date = now
-					newEntry.roo_edit_date = now
+				// shofer_edited: Shofer has edited the file
+				case "shofer_edited":
+					newEntry.shofer_read_date = now
+					newEntry.shofer_edit_date = now
 					this.checkpointPossibleFiles.add(filePath)
 					this.markFileAsEditedByRoo(filePath)
 					break
@@ -204,7 +204,7 @@ export class FileContextTracker {
 				// read_tool/file_mentioned: Shofer has read the file via a tool or file mention
 				case "read_tool":
 				case "file_mentioned":
-					newEntry.roo_read_date = now
+					newEntry.shofer_read_date = now
 					break
 			}
 
@@ -215,7 +215,7 @@ export class FileContextTracker {
 			// re-apply Shofer's last produced state after a Revert. Also notify the
 			// provider so the FileChangesPanel updates promptly. These are
 			// best-effort and must never propagate errors back to tools.
-			if (source === "roo_edited") {
+			if (source === "shofer_edited") {
 				this.captureFinal(filePath).catch((err) =>
 					console.error(`[FileContextTracker] captureFinal failed:`, err),
 				)
@@ -255,18 +255,18 @@ export class FileContextTracker {
 				}
 
 				// If sinceTimestamp is provided, only include files read after that time
-				if (sinceTimestamp && entry.roo_read_date) {
-					return entry.roo_read_date >= sinceTimestamp
+				if (sinceTimestamp && entry.shofer_read_date) {
+					return entry.shofer_read_date >= sinceTimestamp
 				}
 
 				return true
 			})
 
-			// Sort by roo_read_date descending (most recent first)
+			// Sort by shofer_read_date descending (most recent first)
 			// Entries without a date go to the end
 			readEntries.sort((a, b) => {
-				const dateA = a.roo_read_date ?? 0
-				const dateB = b.roo_read_date ?? 0
+				const dateA = a.shofer_read_date ?? 0
+				const dateB = b.shofer_read_date ?? 0
 				return dateB - dateA
 			})
 
@@ -299,7 +299,7 @@ export class FileContextTracker {
 	 *
 	 * Source of truth is the persisted task metadata (`files_in_context`),
 	 * which is appended to whenever {@link addFileToFileContextTracker} is
-	 * invoked with `roo_edited`. This is independent of the shadow-git
+	 * invoked with `shofer_edited`. This is independent of the shadow-git
 	 * checkpoint service and works even when checkpoints are disabled.
 	 *
 	 * @param sinceTimestamp - Optional epoch ms; only include files edited at/after this time.
@@ -309,16 +309,16 @@ export class FileContextTracker {
 			const metadata = await this.getTaskMetadata(this.taskId)
 
 			const editEntries = metadata.files_in_context.filter((entry) => {
-				if (entry.record_source !== "roo_edited" || !entry.roo_edit_date) {
+				if (entry.record_source !== "shofer_edited" || !entry.shofer_edit_date) {
 					return false
 				}
-				if (sinceTimestamp && entry.roo_edit_date < sinceTimestamp) {
+				if (sinceTimestamp && entry.shofer_edit_date < sinceTimestamp) {
 					return false
 				}
 				return true
 			})
 
-			editEntries.sort((a, b) => (b.roo_edit_date ?? 0) - (a.roo_edit_date ?? 0))
+			editEntries.sort((a, b) => (b.shofer_edit_date ?? 0) - (a.shofer_edit_date ?? 0))
 
 			const seen = new Set<string>()
 			const uniquePaths: string[] = []

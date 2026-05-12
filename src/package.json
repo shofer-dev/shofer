@@ -237,7 +237,7 @@
 			"explorer/context": [
 				{
 					"command": "shofer.addFilesToContext",
-					"group": "9_roo@1"
+					"group": "9_shofer@1"
 				}
 			],
 			"shofer.contextMenu": [

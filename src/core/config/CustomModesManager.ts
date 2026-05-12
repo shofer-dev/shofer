@@ -10,13 +10,13 @@ import { type ModeConfig, type PromptComponent, customModesSettingsSchema, modeC
 
 import { fileExistsAtPath } from "../../utils/fs"
 import { getWorkspacePath } from "../../utils/path"
-import { getGlobalRooDirectory } from "../../services/shofer-config"
+import { getGlobalShoferDirectory } from "../../services/shofer-config"
 import { logger } from "../../utils/logging"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "../../i18n"
 
-const ROOMODES_FILENAME = ".shofermodes"
+const SHOFERMODES_FILENAME = ".shofermodes"
 
 // Type definitions for import/export functionality
 interface RuleFile {
@@ -98,9 +98,9 @@ export class CustomModesManager {
 		}
 
 		const workspaceRoot = getWorkspacePath()
-		const roomodesPath = path.join(workspaceRoot, ROOMODES_FILENAME)
-		const exists = await fileExistsAtPath(roomodesPath)
-		return exists ? roomodesPath : undefined
+		const shofermodesPath = path.join(workspaceRoot, SHOFERMODES_FILENAME)
+		const exists = await fileExistsAtPath(shofermodesPath)
+		return exists ? shofermodesPath : undefined
 	}
 
 	/**
@@ -155,7 +155,7 @@ export class CustomModesManager {
 			return parsed ?? {}
 		} catch (yamlError) {
 			// For .shofermodes files, try JSON as fallback
-			if (filePath.endsWith(ROOMODES_FILENAME)) {
+			if (filePath.endsWith(SHOFERMODES_FILENAME)) {
 				try {
 					// Try parsing the original content as JSON (not the cleaned content)
 					return JSON.parse(content)
@@ -215,8 +215,8 @@ export class CustomModesManager {
 			}
 
 			// Determine source based on file path
-			const isRoomodes = filePath.endsWith(ROOMODES_FILENAME)
-			const source = isRoomodes ? ("project" as const) : ("global" as const)
+			const isShofermodes = filePath.endsWith(SHOFERMODES_FILENAME)
+			const source = isShofermodes ? ("project" as const) : ("global" as const)
 
 			// Add source to each mode
 			return result.data.customModes.map((mode) => ({ ...mode, source }))
@@ -302,8 +302,8 @@ export class CustomModesManager {
 				}
 
 				// Get modes from .shofermodes if it exists (takes precedence)
-				const roomodesPath = await this.getWorkspaceRoomodes()
-				const shofermodesModes = roomodesPath ? await this.loadModesFromFile(roomodesPath) : []
+				const shofermodesPath = await this.getWorkspaceRoomodes()
+				const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
 
 				// Merge modes from both sources (.shofermodes takes precedence)
 				const mergedModes = await this.mergeCustomModes(shofermodesModes, result.data.customModes)
@@ -324,13 +324,13 @@ export class CustomModesManager {
 		const workspaceFolders = vscode.workspace.workspaceFolders
 		if (workspaceFolders && workspaceFolders.length > 0) {
 			const workspaceRoot = getWorkspacePath()
-			const roomodesPath = path.join(workspaceRoot, ROOMODES_FILENAME)
-			const roomodesWatcher = vscode.workspace.createFileSystemWatcher(roomodesPath)
+			const shofermodesPath = path.join(workspaceRoot, SHOFERMODES_FILENAME)
+			const shofermodesWatcher = vscode.workspace.createFileSystemWatcher(shofermodesPath)
 
-			const handleRoomodesChange = async () => {
+			const handleShofermodesChange = async () => {
 				try {
 					const settingsModes = await this.loadModesFromFile(settingsPath)
-					const shofermodesModes = await this.loadModesFromFile(roomodesPath)
+					const shofermodesModes = await this.loadModesFromFile(shofermodesPath)
 					// .shofermodes takes precedence
 					const mergedModes = await this.mergeCustomModes(shofermodesModes, settingsModes)
 					await this.context.globalState.update("customModes", mergedModes)
@@ -341,10 +341,10 @@ export class CustomModesManager {
 				}
 			}
 
-			this.disposables.push(roomodesWatcher.onDidChange(handleRoomodesChange))
-			this.disposables.push(roomodesWatcher.onDidCreate(handleRoomodesChange))
+			this.disposables.push(shofermodesWatcher.onDidChange(handleShofermodesChange))
+			this.disposables.push(shofermodesWatcher.onDidCreate(handleShofermodesChange))
 			this.disposables.push(
-				roomodesWatcher.onDidDelete(async () => {
+				shofermodesWatcher.onDidDelete(async () => {
 					// When .shofermodes is deleted, refresh with only settings modes
 					try {
 						const settingsModes = await this.loadModesFromFile(settingsPath)
@@ -356,7 +356,7 @@ export class CustomModesManager {
 					}
 				}),
 			)
-			this.disposables.push(roomodesWatcher)
+			this.disposables.push(shofermodesWatcher)
 		}
 	}
 
@@ -373,8 +373,8 @@ export class CustomModesManager {
 		const settingsModes = await this.loadModesFromFile(settingsPath)
 
 		// Get modes from .shofermodes if it exists.
-		const roomodesPath = await this.getWorkspaceRoomodes()
-		const shofermodesModes = roomodesPath ? await this.loadModesFromFile(roomodesPath) : []
+		const shofermodesPath = await this.getWorkspaceRoomodes()
+		const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
 
 		// Create maps to store modes by source.
 		const projectModes = new Map<string, ModeConfig>()
@@ -434,10 +434,10 @@ export class CustomModesManager {
 				}
 
 				const workspaceRoot = getWorkspacePath()
-				targetPath = path.join(workspaceRoot, ROOMODES_FILENAME)
+				targetPath = path.join(workspaceRoot, SHOFERMODES_FILENAME)
 				const exists = await fileExistsAtPath(targetPath)
 
-				logger.info(`${exists ? "Updating" : "Creating"} project mode in ${ROOMODES_FILENAME}`, {
+				logger.info(`${exists ? "Updating" : "Creating"} project mode in ${SHOFERMODES_FILENAME}`, {
 					slug,
 					workspace: workspaceRoot,
 				})
@@ -502,10 +502,10 @@ export class CustomModesManager {
 
 	private async refreshMergedState(): Promise<void> {
 		const settingsPath = await this.getCustomModesFilePath()
-		const roomodesPath = await this.getWorkspaceRoomodes()
+		const shofermodesPath = await this.getWorkspaceRoomodes()
 
 		const settingsModes = await this.loadModesFromFile(settingsPath)
-		const shofermodesModes = roomodesPath ? await this.loadModesFromFile(roomodesPath) : []
+		const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
 		const mergedModes = await this.mergeCustomModes(shofermodesModes, settingsModes)
 
 		await this.context.globalState.update("customModes", mergedModes)
@@ -518,10 +518,10 @@ export class CustomModesManager {
 	public async deleteCustomMode(slug: string, fromMarketplace = false): Promise<void> {
 		try {
 			const settingsPath = await this.getCustomModesFilePath()
-			const roomodesPath = await this.getWorkspaceRoomodes()
+			const shofermodesPath = await this.getWorkspaceRoomodes()
 
 			const settingsModes = await this.loadModesFromFile(settingsPath)
-			const shofermodesModes = roomodesPath ? await this.loadModesFromFile(roomodesPath) : []
+			const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
 
 			// Find the mode in either file
 			const projectMode = shofermodesModes.find((m) => m.slug === slug)
@@ -536,8 +536,8 @@ export class CustomModesManager {
 
 			await this.queueWrite(async () => {
 				// Delete from project first if it exists there
-				if (projectMode && roomodesPath) {
-					await this.updateModesInFile(roomodesPath, (modes) => modes.filter((m) => m.slug !== slug))
+				if (projectMode && shofermodesPath) {
+					await this.updateModesInFile(shofermodesPath, (modes) => modes.filter((m) => m.slug !== slug))
 				}
 
 				// Delete from global settings if it exists there
@@ -639,13 +639,13 @@ export class CustomModesManager {
 					return false
 				}
 
-				const roomodesPath = path.join(workspacePath, ROOMODES_FILENAME)
+				const shofermodesPath = path.join(workspacePath, SHOFERMODES_FILENAME)
 				try {
-					const roomodesExists = await fileExistsAtPath(roomodesPath)
+					const roomodesExists = await fileExistsAtPath(shofermodesPath)
 					if (roomodesExists) {
-						const shofermodesContent = await fs.readFile(roomodesPath, "utf-8")
-						const roomodesData = yaml.parse(shofermodesContent)
-						const shofermodesModes = roomodesData?.customModes || []
+						const shofermodesContent = await fs.readFile(shofermodesPath, "utf-8")
+						const shofermodesData = yaml.parse(shofermodesContent)
+						const shofermodesModes = shofermodesData?.customModes || []
 
 						// Check if this specific mode exists in .shofermodes
 						const modeInRoomodes = shofermodesModes.find((m: any) => m.slug === slug)
@@ -666,8 +666,8 @@ export class CustomModesManager {
 
 			if (isGlobalMode) {
 				// For global modes, check in global .shofer directory
-				const globalRooDir = getGlobalRooDirectory()
-				modeRulesDir = path.join(globalRooDir, `rules-${slug}`)
+				const globalShoferDir = getGlobalShoferDirectory()
+				modeRulesDir = path.join(globalShoferDir, `rules-${slug}`)
 			} else {
 				// For project modes, check in workspace .shofer directory
 				const workspacePath = getWorkspacePath()
@@ -734,13 +734,13 @@ export class CustomModesManager {
 				// Only check workspace-based modes if workspace is available
 				const workspacePath = getWorkspacePath()
 				if (workspacePath) {
-					const roomodesPath = path.join(workspacePath, ROOMODES_FILENAME)
+					const shofermodesPath = path.join(workspacePath, SHOFERMODES_FILENAME)
 					try {
-						const roomodesExists = await fileExistsAtPath(roomodesPath)
+						const roomodesExists = await fileExistsAtPath(shofermodesPath)
 						if (roomodesExists) {
-							const shofermodesContent = await fs.readFile(roomodesPath, "utf-8")
-							const roomodesData = yaml.parse(shofermodesContent)
-							const shofermodesModes = roomodesData?.customModes || []
+							const shofermodesContent = await fs.readFile(shofermodesPath, "utf-8")
+							const shofermodesData = yaml.parse(shofermodesContent)
+							const shofermodesModes = shofermodesData?.customModes || []
 
 							// Find the mode in .shofermodes
 							mode = shofermodesModes.find((m: any) => m.slug === slug)
@@ -767,7 +767,7 @@ export class CustomModesManager {
 			let baseDir: string
 			if (isGlobalMode) {
 				// For global modes, use the global .shofer directory
-				baseDir = getGlobalRooDirectory()
+				baseDir = getGlobalShoferDirectory()
 			} else {
 				// For project modes, use the workspace directory
 				const workspacePath = getWorkspacePath()
@@ -860,7 +860,7 @@ export class CustomModesManager {
 		let rulesFolderPath: string
 
 		if (source === "global") {
-			baseDir = getGlobalRooDirectory()
+			baseDir = getGlobalShoferDirectory()
 			rulesFolderPath = path.join(baseDir, `rules-${importMode.slug}`)
 		} else {
 			const workspacePath = getWorkspacePath()

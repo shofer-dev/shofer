@@ -27,9 +27,9 @@ vi.mock("../../search/file-search", () => ({
 }))
 
 import {
-	getGlobalRooDirectory,
+	getGlobalShoferDirectory,
 	getGlobalAgentsDirectory,
-	getProjectRooDirectoryForCwd,
+	getProjectShoferDirectoryForCwd,
 	getProjectAgentsDirectoryForCwd,
 	directoryExists,
 	fileExists,
@@ -51,23 +51,23 @@ describe("ShoferConfigService", () => {
 		vi.restoreAllMocks()
 	})
 
-	describe("getGlobalRooDirectory", () => {
+	describe("getGlobalShoferDirectory", () => {
 		it("should return correct path for global .shofer directory", () => {
-			const result = getGlobalRooDirectory()
+			const result = getGlobalShoferDirectory()
 			expect(result).toBe(path.join("/mock/home", ".shofer"))
 		})
 
 		it("should handle different home directories", () => {
 			mockHomedir.mockReturnValue("/different/home")
-			const result = getGlobalRooDirectory()
+			const result = getGlobalShoferDirectory()
 			expect(result).toBe(path.join("/different/home", ".shofer"))
 		})
 	})
 
-	describe("getProjectRooDirectoryForCwd", () => {
+	describe("getProjectShoferDirectoryForCwd", () => {
 		it("should return correct path for given cwd", () => {
 			const cwd = "/custom/project/path"
-			const result = getProjectRooDirectoryForCwd(cwd)
+			const result = getProjectShoferDirectoryForCwd(cwd)
 			expect(result).toBe(path.join(cwd, ".shofer"))
 		})
 	})

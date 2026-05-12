@@ -6,8 +6,8 @@ import { getCommand, getCommands } from "../commands"
 // Mock fs and path modules
 vi.mock("fs/promises")
 vi.mock("../shofer-config", () => ({
-	getGlobalRooDirectory: vi.fn(() => "/mock/global/.shofer"),
-	getProjectRooDirectoryForCwd: vi.fn(() => "/mock/project/.shofer"),
+	getGlobalShoferDirectory: vi.fn(() => "/mock/global/.shofer"),
+	getProjectShoferDirectoryForCwd: vi.fn(() => "/mock/project/.shofer"),
 }))
 vi.mock("../built-in-commands", () => ({
 	getBuiltInCommands: vi.fn(() => Promise.resolve([])),

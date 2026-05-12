@@ -365,7 +365,7 @@ describe("writeToFileTool", () => {
 			expect(mockShofer.diffViewProvider.update).toHaveBeenCalledWith(testContent, true)
 			expect(mockAskApproval).toHaveBeenCalled()
 			expect(mockShofer.diffViewProvider.saveChanges).toHaveBeenCalled()
-			expect(mockShofer.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "roo_edited")
+			expect(mockShofer.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "shofer_edited")
 			expect(mockShofer.didEditFile).toBe(true)
 		})
 

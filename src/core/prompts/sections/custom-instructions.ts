@@ -12,7 +12,7 @@ import {
 	getRooDirectoriesForCwd,
 	getAllRooDirectoriesForCwd,
 	getAgentsDirectoriesForCwd,
-	getGlobalRooDirectory,
+	getGlobalShoferDirectory,
 } from "../../../services/shofer-config"
 
 /**
@@ -206,11 +206,11 @@ function formatDirectoryContent(files: Array<{ filename: string; content: string
 export async function loadRuleFiles(cwd: string, enableSubfolderRules: boolean = false): Promise<string> {
 	const rules: string[] = []
 	// Use recursive discovery only if enableSubfolderRules is true
-	const rooDirectories = enableSubfolderRules ? await getAllRooDirectoriesForCwd(cwd) : getRooDirectoriesForCwd(cwd)
+	const shoferDirectories = enableSubfolderRules ? await getAllRooDirectoriesForCwd(cwd) : getRooDirectoriesForCwd(cwd)
 
 	// Check for .shofer/rules/ directories in order (global, project-local, and optionally subfolders)
-	for (const rooDir of rooDirectories) {
-		const rulesDir = path.join(rooDir, "rules")
+	for (const shoferDir of shoferDirectories) {
+		const rulesDir = path.join(shoferDir, "rules")
 		if (await directoryExists(rulesDir)) {
 			const files = await readTextFilesFromDirectory(rulesDir)
 			if (files.length > 0) {
@@ -402,13 +402,13 @@ export async function addCustomInstructions(
 	if (mode) {
 		const modeRules: string[] = []
 		// Use recursive discovery only if enableSubfolderRules is true
-		const rooDirectories = enableSubfolderRules
+		const shoferDirectories = enableSubfolderRules
 			? await getAllRooDirectoriesForCwd(cwd)
 			: getRooDirectoriesForCwd(cwd)
 
 		// Check for .shofer/rules-${mode}/ directories in order (global, project-local, and optionally subfolders)
-		for (const rooDir of rooDirectories) {
-			const modeRulesDir = path.join(rooDir, `rules-${mode}`)
+		for (const shoferDir of shoferDirectories) {
+			const modeRulesDir = path.join(shoferDir, `rules-${mode}`)
 			if (await directoryExists(modeRulesDir)) {
 				const files = await readTextFilesFromDirectory(modeRulesDir)
 				if (files.length > 0) {

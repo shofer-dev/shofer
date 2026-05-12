@@ -119,7 +119,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 			}
 
 			// Track as a Shofer edit so it appears in the FileChangesPanel.
-			await task.fileContextTracker?.trackFileContext(filePath, "roo_edited")
+			await task.fileContextTracker?.trackFileContext(filePath, "shofer_edited")
 			task.didEditFile = true
 
 			pushToolResult(`Inserted text at ${filePath}:${line}:${resolvedColumn}`)

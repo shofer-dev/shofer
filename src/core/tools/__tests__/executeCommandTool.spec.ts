@@ -48,7 +48,7 @@ describe("executeCommandTool", () => {
 	let mockHandleError: any
 	let mockPushToolResult: any
 	let mockToolUse: ToolUse<"execute_command">
-	const originalCliRuntime = process.env.ROO_CLI_RUNTIME
+	const originalCliRuntime = process.env.SHOFER_CLI_RUNTIME
 
 	beforeEach(() => {
 		// Reset mocks
@@ -108,7 +108,7 @@ describe("executeCommandTool", () => {
 	})
 
 	afterEach(() => {
-		process.env.ROO_CLI_RUNTIME = originalCliRuntime
+		process.env.SHOFER_CLI_RUNTIME = originalCliRuntime
 	})
 
 	/**
@@ -248,7 +248,7 @@ describe("executeCommandTool", () => {
 
 			// Verify
 			expect(validateCommandMock).toHaveBeenCalledWith("cat .env")
-			expect(mockShofer.say).toHaveBeenCalledWith("rooignore_error", ".env")
+			expect(mockShofer.say).toHaveBeenCalledWith("shoferignore_error", ".env")
 			expect(formatResponse.shoferIgnoreError).toHaveBeenCalledWith(".env")
 			expect(mockPushToolResult).toHaveBeenCalledWith(mockShoferIgnoreError)
 			expect(mockAskApproval).not.toHaveBeenCalled()
@@ -292,12 +292,12 @@ describe("executeCommandTool", () => {
 		})
 
 		it("should ignore model timeout in CLI runtime", () => {
-			process.env.ROO_CLI_RUNTIME = "1"
+			process.env.SHOFER_CLI_RUNTIME = "1"
 			expect(executeCommandModule.resolveAgentTimeoutMs(30)).toBe(0)
 		})
 
 		it("should honor model timeout outside CLI runtime", () => {
-			delete process.env.ROO_CLI_RUNTIME
+			delete process.env.SHOFER_CLI_RUNTIME
 			expect(executeCommandModule.resolveAgentTimeoutMs(30)).toBe(30_000)
 		})
 	})

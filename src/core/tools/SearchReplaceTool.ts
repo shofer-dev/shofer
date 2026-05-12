@@ -72,13 +72,13 @@ export class SearchReplaceTool extends BaseTool<"search_replace"> {
 			const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 
 			if (!accessAllowed) {
-				await task.say("rooignore_error", relPath)
+				await task.say("shoferignore_error", relPath)
 				pushToolResult(formatResponse.shoferIgnoreError(relPath))
 				return
 			}
 
 			// Check if file is write-protected
-			const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+			const isWriteProtected = task.shoferProtectedController?.isWriteProtected(relPath) || false
 
 			const absolutePath = path.resolve(task.cwd, relPath)
 
@@ -216,7 +216,7 @@ export class SearchReplaceTool extends BaseTool<"search_replace"> {
 
 			// Track file edit operation
 			if (relPath) {
-				await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+				await task.fileContextTracker.trackFileContext(relPath, "shofer_edited" as RecordSource)
 			}
 
 			task.didEditFile = true

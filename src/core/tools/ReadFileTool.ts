@@ -149,7 +149,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				// ShoferIgnore validation
 				const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 				if (!accessAllowed) {
-					await task.say("rooignore_error", relPath)
+					await task.say("shoferignore_error", relPath)
 					const errorMsg = formatResponse.shoferIgnoreError(relPath)
 					updateFileResult(relPath, {
 						status: "blocked",
@@ -691,7 +691,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 			// ShoferIgnore validation
 			const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 			if (!accessAllowed) {
-				await task.say("rooignore_error", relPath)
+				await task.say("shoferignore_error", relPath)
 				const errorMsg = formatResponse.shoferIgnoreError(relPath)
 				results.push(`File: ${relPath}\nError: ${errorMsg}`)
 				continue

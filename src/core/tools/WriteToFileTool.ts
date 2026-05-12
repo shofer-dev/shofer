@@ -50,12 +50,12 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 		const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 
 		if (!accessAllowed) {
-			await task.say("rooignore_error", relPath)
+			await task.say("shoferignore_error", relPath)
 			pushToolResult(formatResponse.shoferIgnoreError(relPath))
 			return
 		}
 
-		const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+		const isWriteProtected = task.shoferProtectedController?.isWriteProtected(relPath) || false
 
 		let fileExists: boolean
 		const absolutePath = path.resolve(task.cwd, relPath)
@@ -170,7 +170,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 			}
 
 			if (relPath) {
-				await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+				await task.fileContextTracker.trackFileContext(relPath, "shofer_edited" as RecordSource)
 			}
 
 			task.didEditFile = true
@@ -230,7 +230,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 			await createDirectoriesForFile(absolutePath)
 		}
 
-		const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath!) || false
+		const isWriteProtected = task.shoferProtectedController?.isWriteProtected(relPath!) || false
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
 		const sharedMessageProps: ShoferSayTool = {

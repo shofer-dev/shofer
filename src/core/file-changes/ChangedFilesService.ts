@@ -6,7 +6,7 @@
  *   - base/<relPath>  : verbatim copy of each file at the moment Shofer first
  *                       edited it in this task (idempotent).
  *   - final/<relPath>  : last Shofer-produced state, overwritten after every
- *                       roo_edited (used for Redo).
+ *                       shofer_edited (used for Redo).
  *
  * Snapshots are stored under `<taskDir>/originals/` and `<taskDir>/finals/`
  * as lightweight JSON metadata (hash only, no inline content). The actual

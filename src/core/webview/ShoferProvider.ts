@@ -1037,7 +1037,7 @@ export class ShoferProvider
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
 		options?: { startTask?: boolean; keepCurrentTask?: boolean },
 	) {
-		const isCliRuntime = process.env.ROO_CLI_RUNTIME === "1"
+		const isCliRuntime = process.env.SHOFER_CLI_RUNTIME === "1"
 		// CLI injects runtime provider settings from command flags/env at startup.
 		// Restoring provider profiles from task history can overwrite those
 		// runtime settings with stale/incomplete persisted profiles.
@@ -1342,7 +1342,7 @@ export class ShoferProvider
 
 	/**
 	 * Schedules a debounced push of the unified ChangedFiles payload for the
-	 * given task. Called by FileContextTracker after each `roo_edited`. Safe
+	 * given task. Called by FileContextTracker after each `shofer_edited`. Safe
 	 * to call frequently — coalesces into one push per debounce window.
 	 */
 	public scheduleChangedFilesUpdate(taskId: string): void {

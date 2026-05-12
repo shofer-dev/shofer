@@ -15,12 +15,12 @@ export class ShoferProtectedController {
 	private static readonly PROTECTED_PATTERNS = [
 		".shoferignore",
 		".shofermodes",
-		".roorules*",
-		".clinerules*",
+		".shoferrules*",
+		".shoferrules*",
 		".shofer/**",
 		".vscode/**",
 		"*.code-workspace",
-		".rooprotected", // For future use
+		".shoferprotected", // For future use
 		"AGENTS.md",
 		"AGENT.md",
 	]

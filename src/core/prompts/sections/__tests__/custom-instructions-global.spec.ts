@@ -46,7 +46,7 @@ vi.mock("../../../../services/shofer-config", () => ({
 	getRooDirectoriesForCwd: mockGetRooDirectoriesForCwd,
 	getAllRooDirectoriesForCwd: mockGetAllRooDirectoriesForCwd,
 	getAgentsDirectoriesForCwd: mockGetAgentsDirectoriesForCwd,
-	getGlobalRooDirectory: mockGetGlobalRooDirectory,
+	getGlobalShoferDirectory: mockGetGlobalRooDirectory,
 }))
 
 import { loadRuleFiles, addCustomInstructions } from "../custom-instructions"
@@ -54,18 +54,18 @@ import { loadRuleFiles, addCustomInstructions } from "../custom-instructions"
 describe("custom-instructions global .shofer support", () => {
 	const mockCwd = "/mock/project"
 	const mockHomeDir = "/mock/home"
-	const globalRooDir = path.join(mockHomeDir, ".shofer")
+	const globalShoferDir = path.join(mockHomeDir, ".shofer")
 	const projectRooDir = path.join(mockCwd, ".shofer")
 
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockHomedir.mockReturnValue(mockHomeDir)
-		mockGetRooDirectoriesForCwd.mockReturnValue([globalRooDir, projectRooDir])
+		mockGetRooDirectoriesForCwd.mockReturnValue([globalShoferDir, projectRooDir])
 		// getAllRooDirectoriesForCwd is now async and returns the same directories by default
-		mockGetAllRooDirectoriesForCwd.mockResolvedValue([globalRooDir, projectRooDir])
+		mockGetAllRooDirectoriesForCwd.mockResolvedValue([globalShoferDir, projectRooDir])
 		// getAgentsDirectoriesForCwd returns parent directories (without .shofer)
 		mockGetAgentsDirectoriesForCwd.mockResolvedValue([mockCwd])
-		mockGetGlobalRooDirectory.mockReturnValue(globalRooDir)
+		mockGetGlobalRooDirectory.mockReturnValue(globalShoferDir)
 		// Default lstat to reject (file not found)
 		mockLstat.mockRejectedValue(new Error("ENOENT"))
 	})

@@ -170,7 +170,7 @@ export function getJsonExportFileName(dateTs: number): string {
 	const ampm = hours >= 12 ? "pm" : "am"
 	hours = hours % 12
 	hours = hours ? hours : 12
-	return `roo_task_${month}-${day}-${year}_${hours}-${minutes}-${seconds}-${ampm}.json`
+	return `shofer_task_${month}-${day}-${year}_${hours}-${minutes}-${seconds}-${ampm}.json`
 }
 
 /**

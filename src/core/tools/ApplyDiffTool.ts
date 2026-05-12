@@ -50,7 +50,7 @@ export class ApplyDiffTool extends BaseTool<"apply_diff"> {
 			const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 
 			if (!accessAllowed) {
-				await task.say("rooignore_error", relPath)
+				await task.say("shoferignore_error", relPath)
 				pushToolResult(formatResponse.shoferIgnoreError(relPath))
 				return
 			}
@@ -136,7 +136,7 @@ export class ApplyDiffTool extends BaseTool<"apply_diff"> {
 			)
 
 			// Check if file is write-protected
-			const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+			const isWriteProtected = task.shoferProtectedController?.isWriteProtected(relPath) || false
 
 			const sharedMessageProps: ShoferSayTool = {
 				tool: "appliedDiff",
@@ -226,7 +226,7 @@ export class ApplyDiffTool extends BaseTool<"apply_diff"> {
 
 			// Track file edit operation
 			if (relPath) {
-				await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+				await task.fileContextTracker.trackFileContext(relPath, "shofer_edited" as RecordSource)
 			}
 
 			// Used to determine if we should wait for busy terminal to update before sending api request

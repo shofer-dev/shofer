@@ -86,7 +86,7 @@ const GLOBAL_AGENTS_DIR = p(HOME_DIR, ".agents")
 
 // Mock shofer-config
 vi.mock("../../shofer-config", () => ({
-	getGlobalRooDirectory: () => GLOBAL_ROO_DIR,
+	getGlobalShoferDirectory: () => GLOBAL_ROO_DIR,
 	getGlobalAgentsDirectory: () => GLOBAL_AGENTS_DIR,
 	getProjectAgentsDirectoryForCwd: (cwd: string) => p(cwd, ".agents"),
 	directoryExists: mockDirectoryExists,

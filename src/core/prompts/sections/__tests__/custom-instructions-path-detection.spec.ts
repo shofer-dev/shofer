@@ -4,26 +4,26 @@ describe("custom-instructions path detection", () => {
 	it("should use exact path comparison instead of string includes", () => {
 		// Test the logic that our fix implements
 		const fakeHomeDir = "/Users/john.shofer.smith"
-		const globalRooDir = path.join(fakeHomeDir, ".shofer") // "/Users/john.shofer.smith/.shofer"
+		const globalShoferDir = path.join(fakeHomeDir, ".shofer") // "/Users/john.shofer.smith/.shofer"
 		const projectRooDir = "/projects/my-project/.shofer"
 
 		// Old implementation (fragile):
-		// const isGlobal = rooDir.includes(path.join(os.homedir(), ".shofer"))
+		// const isGlobal = shoferDir.includes(path.join(os.homedir(), ".shofer"))
 		// This could fail if the home directory path contains ".shofer" elsewhere
 
 		// New implementation (robust):
-		// const isGlobal = path.resolve(rooDir) === path.resolve(getGlobalRooDirectory())
+		// const isGlobal = path.resolve(shoferDir) === path.resolve(getGlobalShoferDirectory())
 
 		// Test the new logic
-		const isGlobalForGlobalDir = path.resolve(globalRooDir) === path.resolve(globalRooDir)
-		const isGlobalForProjectDir = path.resolve(projectRooDir) === path.resolve(globalRooDir)
+		const isGlobalForGlobalDir = path.resolve(globalShoferDir) === path.resolve(globalShoferDir)
+		const isGlobalForProjectDir = path.resolve(projectRooDir) === path.resolve(globalShoferDir)
 
 		expect(isGlobalForGlobalDir).toBe(true)
 		expect(isGlobalForProjectDir).toBe(false)
 
 		// Verify that the old implementation would have been problematic
 		// if the home directory contained ".shofer" in the path
-		const oldLogicGlobal = globalRooDir.includes(path.join(fakeHomeDir, ".shofer"))
+		const oldLogicGlobal = globalShoferDir.includes(path.join(fakeHomeDir, ".shofer"))
 		const oldLogicProject = projectRooDir.includes(path.join(fakeHomeDir, ".shofer"))
 
 		expect(oldLogicGlobal).toBe(true) // This works
