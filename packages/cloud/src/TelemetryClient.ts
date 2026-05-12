@@ -261,14 +261,19 @@ export class CloudTelemetryClient extends BaseTelemetryClient {
 		}
 	}
 
-	public override updateTelemetryState(_didUserOptIn: boolean) {}
+	public override updateTelemetryState(_didUserOptIn: boolean) {
+		if (process.env.TELEMETRY_ENABLED !== "true") {
+			this.telemetryEnabled = false
+			return
+		}
+	}
 
 	public override isTelemetryEnabled(): boolean {
-		if (process.env.SHOFER_DISABLE_TELEMETRY === "1") {
+		if (process.env.TELEMETRY_ENABLED !== "true") {
 			return false
 		}
 
-		return true
+		return this.telemetryEnabled
 	}
 
 	protected override isEventCapturable(eventName: TelemetryEventName): boolean {

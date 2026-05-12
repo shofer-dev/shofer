@@ -8,6 +8,15 @@ import {
 } from "@shofer/types"
 
 /**
+ * Environment variable to globally enable/disable all telemetry.
+ * Set TELEMETRY_ENABLED=true to send telemetry data to backends
+ * (PostHog, Shofer Cloud, etc.). Defaults to false — no telemetry
+ * is sent unless explicitly enabled. No server-side infrastructure
+ * is required when telemetry is disabled (the default).
+ */
+const TELEMETRY_ENABLED = process.env.TELEMETRY_ENABLED === "true"
+
+/**
  * TelemetryService wrapper class that defers initialization.
  * This ensures that we only create the various clients after environment
  * variables are loaded.
@@ -16,6 +25,9 @@ export class TelemetryService {
 	constructor(private clients: TelemetryClient[]) {}
 
 	public register(client: TelemetryClient): void {
+		if (!TELEMETRY_ENABLED) {
+			return
+		}
 		this.clients.push(client)
 	}
 
@@ -24,6 +36,9 @@ export class TelemetryService {
 	 * @param provider A ShoferProvider instance to use
 	 */
 	public setProvider(provider: TelemetryPropertiesProvider): void {
+		if (!TELEMETRY_ENABLED) {
+			return
+		}
 		// If client is initialized, pass the provider reference.
 		if (this.isReady) {
 			this.clients.forEach((client) => client.setProvider(provider))
@@ -36,7 +51,7 @@ export class TelemetryService {
 	 * @returns Whether the service is ready to use
 	 */
 	private get isReady(): boolean {
-		return this.clients.length > 0
+		return TELEMETRY_ENABLED && this.clients.length > 0
 	}
 
 	/**
@@ -272,7 +287,18 @@ export class TelemetryService {
 	 * @returns Whether telemetry is enabled
 	 */
 	public isTelemetryEnabled(): boolean {
+		if (!TELEMETRY_ENABLED) {
+			return false
+		}
 		return this.isReady && this.clients.some((client) => client.isTelemetryEnabled())
+	}
+
+	/**
+	 * Returns whether telemetry has been globally enabled via the
+	 * TELEMETRY_ENABLED environment variable.
+	 */
+	public static isGloballyEnabled(): boolean {
+		return TELEMETRY_ENABLED
 	}
 
 	public async shutdown(): Promise<void> {
@@ -290,7 +316,7 @@ export class TelemetryService {
 			throw new Error("TelemetryService instance already created")
 		}
 
-		this._instance = new TelemetryService(clients)
+		this._instance = new TelemetryService(TELEMETRY_ENABLED ? clients : [])
 		return this._instance
 	}
 
