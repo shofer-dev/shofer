@@ -1,4 +1,4 @@
-import type { Command } from "@shofer/types"
+import type { Command } from "@shofer/shared/types"
 
 import { render, screen, fireEvent } from "@/utils/test-utils"
 

@@ -1,4 +1,4 @@
-import type { ModelInfo, OrganizationAllowList } from "@shofer/types"
+import type { ModelInfo, OrganizationAllowList } from "@shofer/shared/types"
 
 import { filterProviders, filterModels } from "../organizationFilters"
 

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { type ModelRecord, type ExtensionMessage } from "@shofer/types"
+import { type ModelRecord, type ExtensionMessage } from "@shofer/shared/types"
 
 import { vscode } from "@src/utils/vscode"
 

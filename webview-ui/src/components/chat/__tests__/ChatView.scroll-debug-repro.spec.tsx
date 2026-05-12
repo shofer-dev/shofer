@@ -2,7 +2,7 @@ import React, { useEffect, useImperativeHandle, useRef } from "react"
 import { act, fireEvent, render, waitFor } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage } from "@shofer/shared/types"
 
 import { ExtensionStateContextProvider } from "@src/context/ExtensionStateContext"
 

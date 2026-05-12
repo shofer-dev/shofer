@@ -2,7 +2,7 @@
 
 import { render, screen, fireEvent } from "@/utils/test-utils"
 
-import type { ModelInfo } from "@shofer/types"
+import type { ModelInfo } from "@shofer/shared/types"
 
 import { ThinkingBudget } from "../ThinkingBudget"
 

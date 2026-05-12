@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import prettyBytes from "pretty-bytes"
 
-import type { WorktreeDefaultsResponse, BranchInfo, WorktreeIncludeStatus } from "@shofer/types"
+import type { WorktreeDefaultsResponse, BranchInfo, WorktreeIncludeStatus } from "@shofer/shared/types"
 
 import { vscode } from "@/utils/vscode"
 import { useAppTranslation } from "@/i18n/TranslationContext"

@@ -11,7 +11,7 @@ import {
 	isDynamicProvider,
 	isFauxProvider,
 	isCustomProvider,
-} from "@shofer/types"
+} from "@shofer/shared/types"
 
 export function validateApiConfiguration(
 	apiConfiguration: ProviderSettings,

@@ -1,4 +1,4 @@
-import type { Command } from "@shofer/types"
+import type { Command } from "@shofer/shared/types"
 
 import { getContextMenuOptions, ContextMenuOptionType } from "../utils/context-mentions"
 

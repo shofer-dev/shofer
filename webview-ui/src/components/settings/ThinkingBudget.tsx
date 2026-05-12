@@ -35,13 +35,18 @@ Notes:
 import { useEffect } from "react"
 import { Checkbox } from "vscrui"
 
-import { type ProviderSettings, type ModelInfo, type ReasoningEffortWithMinimal, reasoningEfforts } from "@shofer/types"
+import {
+	type ProviderSettings,
+	type ModelInfo,
+	type ReasoningEffortWithMinimal,
+	reasoningEfforts,
+} from "@shofer/shared/types"
 
 import {
 	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
 	DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS,
 	GEMINI_25_PRO_MIN_THINKING_TOKENS,
-} from "@shofer/api"
+} from "@shofer/shared/api"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Slider, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@src/components/ui"

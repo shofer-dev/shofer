@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check, RefreshCw } from "lucide-react"
 
-import type { SkillMetadata } from "@shofer/types"
+import type { SkillMetadata } from "@shofer/shared/types"
 
 import { cn } from "@/lib/utils"
 import { useShoferPortal } from "@/components/ui/hooks/useShoferPortal"

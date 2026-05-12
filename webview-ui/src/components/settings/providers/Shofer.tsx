@@ -3,7 +3,7 @@ import {
 	type OrganizationAllowList,
 	type RouterModels,
 	shoferDefaultModelId,
-} from "@shofer/types"
+} from "@shofer/shared/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { vscode } from "@src/utils/vscode"

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from "react"
-import { validateSkillName as validateSkillNameShared, SkillNameValidationError } from "@shofer/types"
+import { validateSkillName as validateSkillNameShared, SkillNameValidationError } from "@shofer/shared/types"
 
-import { getAllModes } from "@shofer/modes"
+import { getAllModes } from "@shofer/shared/modes"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"

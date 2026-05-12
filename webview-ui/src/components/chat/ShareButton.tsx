@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Share2Icon } from "lucide-react"
 
-import { type HistoryItem, type ShareVisibility, TelemetryEventName } from "@shofer/types"
+import { type HistoryItem, type ShareVisibility, TelemetryEventName } from "@shofer/shared/types"
 
 import { vscode } from "@/utils/vscode"
 import { telemetryClient } from "@/utils/TelemetryClient"

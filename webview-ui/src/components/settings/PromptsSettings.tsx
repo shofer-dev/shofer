@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from "react"
 import { VSCodeTextArea, VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 
-import { supportPrompt, SupportPromptType } from "@shofer/support-prompt"
+import { supportPrompt, SupportPromptType } from "@shofer/shared/support-prompt"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"

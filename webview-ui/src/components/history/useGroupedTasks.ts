@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react"
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem } from "@shofer/shared/types"
 import type { DisplayHistoryItem, SubtaskTreeNode, TaskGroup, GroupedTasksResult } from "./types"
 
 /**

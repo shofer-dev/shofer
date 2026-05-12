@@ -4,7 +4,7 @@ import { Trans } from "react-i18next"
 import { t } from "i18next"
 import { Settings } from "lucide-react"
 
-import type { ModeConfig, Command } from "@shofer/types"
+import type { ModeConfig, Command } from "@shofer/shared/types"
 
 import {
 	ContextMenuOptionType,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 
-import type { Worktree, WorktreeListResponse, WorktreeIncludeStatus } from "@shofer/types"
+import type { Worktree, WorktreeListResponse, WorktreeIncludeStatus } from "@shofer/shared/types"
 
 import { Badge, Button, StandardTooltip } from "@/components/ui"
 import { useAppTranslation } from "@/i18n/TranslationContext"

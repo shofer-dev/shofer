@@ -11,12 +11,12 @@ import type {
 	ShoferApiReqInfo,
 	ShoferAskUseMcpServer,
 	ShoferSayTool,
-} from "@shofer/types"
+} from "@shofer/shared/types"
 
-import { Mode } from "@shofer/modes"
+import { Mode } from "@shofer/shared/modes"
 
-import { COMMAND_OUTPUT_STRING } from "@shofer/combineCommandSequences"
-import { safeJsonParse } from "@shofer/core"
+import { COMMAND_OUTPUT_STRING } from "@shofer/shared/combineCommandSequences"
+import { safeJsonParse } from "@shofer/shared/core"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { findMatchingResourceOrTemplate } from "@src/utils/mcp"

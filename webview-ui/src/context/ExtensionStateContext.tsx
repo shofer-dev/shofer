@@ -20,14 +20,14 @@ import {
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-} from "@shofer/types"
+} from "@shofer/shared/types"
 
-import { findLastIndex } from "@shofer/array"
+import { findLastIndex } from "@shofer/shared/array"
 
-import { checkExistKey } from "@shofer/checkExistApiConfig"
-import { Mode, defaultModeSlug, defaultPrompts } from "@shofer/modes"
-import { CustomSupportPrompts } from "@shofer/support-prompt"
-import { experimentDefault } from "@shofer/experiments"
+import { checkExistKey } from "@shofer/shared/checkExistApiConfig"
+import { Mode, defaultModeSlug, defaultPrompts } from "@shofer/shared/modes"
+import { CustomSupportPrompts } from "@shofer/shared/support-prompt"
+import { experimentDefault } from "@shofer/shared/experiments"
 
 import { vscode } from "@src/utils/vscode"
 import { webviewLog } from "@src/utils/webviewLog"

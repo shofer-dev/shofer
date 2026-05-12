@@ -1,4 +1,4 @@
-import { DEFAULT_CONSECUTIVE_MISTAKE_LIMIT } from "@shofer/types"
+import { DEFAULT_CONSECUTIVE_MISTAKE_LIMIT } from "@shofer/shared/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 

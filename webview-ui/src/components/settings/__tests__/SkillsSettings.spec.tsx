@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import type { SkillMetadata } from "@shofer/types"
+import type { SkillMetadata } from "@shofer/shared/types"
 
 import { ExtensionStateContextProvider } from "@/context/ExtensionStateContext"
 import { vscode } from "@/utils/vscode"
@@ -33,7 +33,7 @@ vi.mock("@/utils/docLinks", () => ({
 }))
 
 // Mock modes
-vi.mock("@shofer/modes", () => ({
+vi.mock("@shofer/shared/modes", () => ({
 	getAllModes: () => [
 		{ slug: "code", name: "Code" },
 		{ slug: "architect", name: "Architect" },

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import type { ProviderSettings, OrganizationAllowList } from "@shofer/types"
+import type { ProviderSettings, OrganizationAllowList } from "@shofer/shared/types"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"

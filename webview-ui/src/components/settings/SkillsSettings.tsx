@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from "react"
 import { Plus, Globe, Folder, Edit, Trash2, Settings } from "lucide-react"
 import { Trans } from "react-i18next"
 
-import type { SkillMetadata } from "@shofer/types"
+import type { SkillMetadata } from "@shofer/shared/types"
 
-import { getAllModes } from "@shofer/modes"
+import { getAllModes } from "@shofer/shared/modes"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"

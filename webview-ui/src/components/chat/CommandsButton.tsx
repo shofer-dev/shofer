@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink, RefreshCw } from "lucide-react"
 
-import type { Command } from "@shofer/types"
+import type { Command } from "@shofer/shared/types"
 
 import { cn } from "@/lib/utils"
 import { useShoferPortal } from "@/components/ui/hooks/useShoferPortal"
