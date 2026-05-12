@@ -9,7 +9,6 @@ import {
 	type TodoItem,
 	type TelemetrySetting,
 	type OrganizationAllowList,
-	type CloudOrganizationMembership,
 	type ExtensionMessage,
 	type ExtensionState,
 	type MarketplaceInstalledMetadata,
@@ -64,7 +63,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	organizationAllowList: OrganizationAllowList
 	organizationSettingsVersion: number
 	cloudIsAuthenticated: boolean
-	cloudOrganizations?: CloudOrganizationMembership[]
+	cloudOrganizations?: any[]
 	sharingEnabled: boolean
 	publicSharingEnabled: boolean
 	mdmCompliant?: boolean

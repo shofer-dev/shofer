@@ -179,14 +179,13 @@ export class ShoferProvider
 		private readonly outputChannel: vscode.OutputChannel,
 		private readonly renderContext: "sidebar" | "editor" = "sidebar",
 		public readonly contextProxy: ContextProxy,
-		mdmService?: MdmService,
+		_mdmService?: any,
 	) {
 		super()
 		this.currentWorkspacePath = getWorkspacePath()
 
 		ShoferProvider.activeInstances.add(this)
 
-		this.mdmService = mdmService
 		this.updateGlobalState("codebaseIndexModels", EMBEDDING_MODEL_PROFILES)
 
 		// Initialize the per-task file-based history store.
