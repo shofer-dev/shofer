@@ -55,7 +55,7 @@ Menziona l'allineamento con queste aree nelle tue PR.
 ### 3. Unisciti alla community di Shofer
 
 - **Principale:** Unisciti al nostro [Discord](https://discord.gg/shofer) e invia un DM a **Hannes Rudolph (`hrudolph`)**.
-- **Alternativa:** I contributori esperti possono interagire direttamente tramite i [progetti GitHub](https://github.com/orgs/Arkware/projects/1).
+- **Alternativa:** I contributori esperti possono interagire direttamente tramite i [progetti GitHub](https://github.com/orgs/shofer/projects/1).
 
 ## Trovare e pianificare il tuo contributo
 
@@ -78,7 +78,7 @@ Tutti i contributi iniziano con un'issue di GitHub utilizzando i nostri modelli 
 
 ### Decidere su cosa lavorare
 
-- Controlla il [progetto GitHub](https://github.com/orgs/Arkware/projects/1) per le issue "Issue [Non assegnata]".
+- Controlla il [progetto GitHub](https://github.com/orgs/shofer/projects/1) per le issue "Issue [Non assegnata]".
 - Per la documentazione, visita [Shofer Docs](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Segnalazione di bug

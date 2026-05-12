@@ -315,15 +315,15 @@ function getSelectedModel({
 				staticInfo?.contextWindow ??
 				(typeof dynamicModel?.maxInputTokens === "number" ? dynamicModel.maxInputTokens : undefined) ??
 				openAiModelInfoSaneDefaults.contextWindow
-			// Capability flags must come from llm-router (via the Arkware
+			// Capability flags must come from llm-router (via the Shofer
 			// side-channel commands) rather than being hardcoded. We prefer
-			// the full `arkwareCapabilities` set; for `imageInput` only, we
+			// the full `shoferCapabilities` set; for `imageInput` only, we
 			// also accept VS Code's native `capabilities.imageInput` as a
-			// fallback for non-Arkware providers (e.g. bundled Copilot).
+			// fallback for non-Shofer providers (e.g. bundled Copilot).
 			const supportsImages =
-				dynamicModel?.arkwareCapabilities?.imageInput ?? dynamicModel?.capabilities?.imageInput ?? false
-			const supportsPromptCache = dynamicModel?.arkwareCapabilities?.promptCache ?? false
-			const pricing = dynamicModel?.arkwarePricing
+				dynamicModel?.shoferCapabilities?.imageInput ?? dynamicModel?.capabilities?.imageInput ?? false
+			const supportsPromptCache = dynamicModel?.shoferCapabilities?.promptCache ?? false
+			const pricing = dynamicModel?.shoferPricing
 			return {
 				id,
 				info: {

@@ -47,13 +47,13 @@ Extensions that register language model tools via `vscode.lm.registerTool()` dec
 
 | Extension               | Config namespace                  | Tool prefix |
 | ----------------------- | --------------------------------- | ----------- |
-| `arkware-vscode-tools`  | `arkware.vscodeTools.toolGroups`  | `ide_`      |
-| `arkware-browser-tools` | `arkware.browserTools.toolGroups` | `browser_`  |
+| `shofer-vscode-tools`  | `shofer.vscodeTools.toolGroups`  | `ide_`      |
+| `shofer-browser-tools` | `shofer.browserTools.toolGroups` | `browser_`  |
 
 **Example — vscode-tools** (`extensions/vscode-tools/package.json`):
 
 ```json
-"arkware.vscodeTools.toolGroups": {
+"shofer.vscodeTools.toolGroups": {
     "ide_file_read": "read",
     "ide_file_open": "execute",
     "ide_panel_focus": "execute",
@@ -64,7 +64,7 @@ Extensions that register language model tools via `vscode.lm.registerTool()` dec
 **Example — browser-tools** (`extensions/browser-tools/package.json`):
 
 ```json
-"arkware.browserTools.toolGroups": {
+"shofer.browserTools.toolGroups": {
     "browser_navigate": "browser",
     "browser_click": "browser",
     "browser_screenshot": "browser",

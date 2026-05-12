@@ -12,5 +12,5 @@ export default defineConfig({
 		ui: "tdd",
 		timeout: 60000,
 	},
-	launchArgs: ["--enable-proposed-api=Arkware.shofer", "--disable-extensions"],
+	launchArgs: ["--enable-proposed-api=Shofer.dev", "--disable-extensions"],
 })

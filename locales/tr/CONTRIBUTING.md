@@ -55,7 +55,7 @@ PR'lerinizde bu alanlarla uyumu belirtin.
 ### 3. Shofer Topluluğuna Katılın
 
 - **Birincil:** [Discord](https://discord.gg/shofer) sunucumuza katılın ve **Hannes Rudolph (`hrudolph`)**'a DM gönderin.
-- **Alternatif:** Deneyimli katkıda bulunanlar doğrudan [GitHub Projeleri](https://github.com/orgs/Arkware/projects/1) aracılığıyla etkileşimde bulunabilirler.
+- **Alternatif:** Deneyimli katkıda bulunanlar doğrudan [GitHub Projeleri](https://github.com/orgs/shofer/projects/1) aracılığıyla etkileşimde bulunabilirler.
 
 ## Katkınızı Bulma ve Planlama
 
@@ -78,7 +78,7 @@ Tüm katkılar, basit şablonlarımızı kullanarak bir GitHub Sorunu ile başla
 
 ### Ne Üzerinde Çalışılacağına Karar Verme
 
-- "Sorun [Atanmamış]" sorunları için [GitHub Projesi](https://github.com/orgs/Arkware/projects/1)'ni kontrol edin.
+- "Sorun [Atanmamış]" sorunları için [GitHub Projesi](https://github.com/orgs/shofer/projects/1)'ni kontrol edin.
 - Belgeler için [Shofer Belgeleri](https://github.com/alsterg/shofer.dev-Docs)ni ziyaret edin.
 
 ### Hataları Bildirme

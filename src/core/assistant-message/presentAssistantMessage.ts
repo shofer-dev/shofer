@@ -1150,7 +1150,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					}
 
 					// Check if this is a tool from a private provider
-					// (registered via arkware.privateToolProviders config).
+					// (registered via shofer.privateToolProviders config).
 					if (isPrivateLmTool(block.name)) {
 						const invokeCommand = getPrivateToolInvokeCommand(block.name)
 						if (!invokeCommand) {

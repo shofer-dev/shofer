@@ -286,8 +286,8 @@ code --install-extension redhat.java &>/dev/null || exit 1
 code --install-extension ms-python.python&>/dev/null || exit 1
 code --install-extension rust-lang.rust-analyzer &>/dev/null || exit 1
 
-if ! code --list-extensions 2>/dev/null | grep -q "Arkware.shofer"; then
-  code --install-extension Arkware.shofer &>/dev/null || exit 1
+if ! code --list-extensions 2>/dev/null | grep -q "Shofer.dev"; then
+  code --install-extension Shofer.dev &>/dev/null || exit 1
 fi
 
 echo "✅ Done"

@@ -55,7 +55,7 @@ Mencione la alineación con estas áreas en sus solicitudes de extracción.
 ### 3. Únase a la comunidad de Shofer
 
 - **Principal:** Únase a nuestro [Discord](https://discord.gg/shofer) y envíe un mensaje directo a **Hannes Rudolph (`hrudolph`)**.
-- **Alternativa:** Los colaboradores experimentados pueden participar directamente a través de [Proyectos de GitHub](https://github.com/orgs/Arkware/projects/1).
+- **Alternativa:** Los colaboradores experimentados pueden participar directamente a través de [Proyectos de GitHub](https://github.com/orgs/shofer/projects/1).
 
 ## Encontrar y planificar su contribución
 
@@ -78,7 +78,7 @@ Todas las contribuciones comienzan con una incidencia de GitHub utilizando nuest
 
 ### Decidir en qué trabajar
 
-- Consulte el [Proyecto de GitHub](https://github.com/orgs/Arkware/projects/1) para ver las incidencias "Incidencia [Sin asignar]".
+- Consulte el [Proyecto de GitHub](https://github.com/orgs/shofer/projects/1) para ver las incidencias "Incidencia [Sin asignar]".
 - Para la documentación, visite [Documentos de Shofer](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Informar de errores

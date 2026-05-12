@@ -62,7 +62,7 @@ function getToolName(tool: OpenAI.Chat.ChatCompletionTool): string {
 // Private Tool Provider system
 // ──────────────────────────────────────────────
 //
-// Extensions register tools via the `arkware.privateToolProviders` VS Code
+// Extensions register tools via the `shofer.privateToolProviders` VS Code
 // configuration, not via `vscode.lm.tools` (which is Copilot's interface).
 // Each provider exposes two commands:
 //
@@ -101,10 +101,10 @@ interface PrivateToolMeta {
  * their tools. Returns a combined list with group assignments and
  * invocation commands.
  *
- * Config key: `arkware.privateToolProviders`
+ * Config key: `shofer.privateToolProviders`
  */
 async function getPrivateLmToolMeta(): Promise<PrivateToolMeta[]> {
-	const config = vscode.workspace.getConfiguration("arkware")
+	const config = vscode.workspace.getConfiguration("shofer")
 	const providers = config.get<Record<string, PrivateToolProviderConfig>>("privateToolProviders", {})
 
 	const allMeta: PrivateToolMeta[] = []
@@ -148,7 +148,7 @@ async function getPrivateLmToolMeta(): Promise<PrivateToolMeta[]> {
 /**
  * Resolve the ToolGroup for a private tool:
  *  1. If the tool definition has an explicit `group`, validate and use it.
- *  2. Fall back to the provider's `arkware.<providerId>.toolGroups` config.
+ *  2. Fall back to the provider's `shofer.<providerId>.toolGroups` config.
  *  3. Default to "uncategorized".
  */
 function resolvePrivateToolGroup(providerId: string, def: PrivateToolDef): ToolGroup {
@@ -159,7 +159,7 @@ function resolvePrivateToolGroup(providerId: string, def: PrivateToolDef): ToolG
 
 	// 2. Provider-level config
 	try {
-		const config = vscode.workspace.getConfiguration(`arkware.${providerId}`)
+		const config = vscode.workspace.getConfiguration(`shofer.${providerId}`)
 		const toolGroups = config.get<Record<string, string>>("toolGroups")
 		if (toolGroups && typeof toolGroups[def.name] === "string") {
 			const declared = toolGroups[def.name]
@@ -293,7 +293,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	}
 
 	// Discover all tools from private providers (extensions using the
-	// arkware.privateToolProviders config convention).
+	// shofer.privateToolProviders config convention).
 	const privateMeta = await getPrivateLmToolMeta()
 	const allPrivateTools = privateMeta.map((m) => m.tool)
 	const filteredPrivateTools = filterPrivateToolsForMode(privateMeta, mode, customModes)

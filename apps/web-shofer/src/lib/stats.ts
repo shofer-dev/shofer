@@ -1,6 +1,6 @@
 export async function getGitHubStars() {
 	try {
-		const res = await fetch("https://api.github.com/repos/Arkware/Shofer")
+		const res = await fetch("https://api.github.com/repos/alsterg/shofer.dev")
 		const data = await res.json()
 
 		if (typeof data.stargazers_count !== "number") {
@@ -28,7 +28,7 @@ export async function getVSCodeReviews() {
 					criteria: [
 						{
 							filterType: 7,
-							value: "Arkware.shofer",
+							value: "Shofer.dev",
 						},
 					],
 				},
@@ -72,7 +72,7 @@ export async function getVSCodeDownloads() {
 					criteria: [
 						{
 							filterType: 7,
-							value: "Arkware.shofer",
+							value: "Shofer.dev",
 						},
 					],
 				},

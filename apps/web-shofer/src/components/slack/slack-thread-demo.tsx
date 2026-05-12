@@ -198,7 +198,7 @@ export function SlackThreadDemo({ className }: SlackThreadDemoProps): JSX.Elemen
 							Calling <span className="font-semibold text-[#F8F8F9]">Planneroo</span> to get started on
 							your task on{" "}
 							<code className="rounded bg-white/10 px-1.5 py-0.5 text-[12px] text-[#F8F8F9]">
-								Arkware/Shofer
+								alsterg/shofer.dev
 							</code>
 						</div>
 						<div>

@@ -5,7 +5,7 @@ import * as vscode from "vscode"
 vi.mock("../../../shared/package", () => ({
 	Package: {
 		name: "shofer",
-		publisher: "Arkware",
+		publisher: "shofer",
 		version: "1.0.0",
 		outputChannel: "Shofer",
 	},

@@ -5593,8 +5593,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Replace the task-lifetime abort controller so the fresh run does
 		// not see the already-aborted signal from the cancellation above.
 		this._taskAbortController = new AbortController()
-		// Start a new task loop with the queued message
-		this._runTaskLoop([{ type: "text", text: queued.text }]).catch((err) => {
+		// Start a new task loop with the queued message.
+		// Wrap in <user_message> so that processUserContentMentions /
+		// parseMentions can resolve slash-style skill mentions and track
+		// them in Task.loadedSkills for the SkillsButton popover.
+		this._runTaskLoop([{ type: "text", text: `<user_message>\n${queued.text}\n</user_message>` }]).catch((err) => {
 			console.error(`[Task] Failed to restart task loop:`, err)
 		})
 	}

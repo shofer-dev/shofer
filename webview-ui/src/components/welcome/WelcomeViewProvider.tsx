@@ -239,7 +239,7 @@ const WelcomeViewProvider = () => {
 												ref={manualUrlInputRef as any}
 												value={manualUrl}
 												onKeyUp={handleManualUrlChange}
-												placeholder="vscode://Arkware.shofer/auth/clerk/callback?state=..."
+												placeholder="vscode://Shofer.dev/auth/clerk/callback?state=..."
 												className="flex-1"
 											/>
 											<Button

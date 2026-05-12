@@ -9,14 +9,14 @@ extension tools invisible to Copilot while remaining fully available to Shofer.
 ## Provider Registration
 
 An extension registers as a tool provider by adding an entry to the VS Code
-configuration `arkware.privateToolProviders` in its `package.json`:
+configuration `shofer.privateToolProviders` in its `package.json`:
 
 ```jsonc
 {
 	"contributes": {
 		"configuration": {
 			"properties": {
-				"arkware.privateToolProviders": {
+				"shofer.privateToolProviders": {
 					"type": "object",
 					"default": {},
 					"description": "Private tool providers for Shofer.",
@@ -44,14 +44,14 @@ Alternatively, providers can be set in `settings.json`:
 
 ```json
 {
-	"arkware.privateToolProviders": {
+	"shofer.privateToolProviders": {
 		"vscode-tools": {
-			"getDefinitionsCommand": "arkware.vscodeTools.getDefinitions",
-			"invokeToolCommand": "arkware.vscodeTools.invokeTool"
+			"getDefinitionsCommand": "shofer.vscodeTools.getDefinitions",
+			"invokeToolCommand": "shofer.vscodeTools.invokeTool"
 		},
 		"browser-tools": {
-			"getDefinitionsCommand": "arkware.browserTools.getDefinitions",
-			"invokeToolCommand": "arkware.browserTools.invokeTool"
+			"getDefinitionsCommand": "shofer.browserTools.getDefinitions",
+			"invokeToolCommand": "shofer.browserTools.invokeTool"
 		}
 	}
 }
@@ -96,14 +96,14 @@ interface ToolResult {
 Tools are assigned a group for mode filtering. Resolution order:
 
 1. **Tool-level `group`** — if the definition has a valid group, use it.
-2. **Provider-level config** — `arkware.<providerId>.toolGroups.<toolName>` maps tool names to groups.
+2. **Provider-level config** — `shofer.<providerId>.toolGroups.<toolName>` maps tool names to groups.
 3. **Default** — `"uncategorized"`.
 
 Example provider config in `settings.json`:
 
 ```json
 {
-	"arkware.vscodeTools.toolGroups": {
+	"shofer.vscodeTools.toolGroups": {
 		"ide_file_read": "read",
 		"ide_file_open": "read",
 		"ide_file_reveal_in_explorer": "read"
@@ -118,8 +118,8 @@ for the reference implementation.
 
 1. Tools are stored in a private registry (`registerIdeTool()`).
 2. Two VS Code commands expose them:
-    - `arkware.vscodeTools.getDefinitions` → returns `getAllDefinitions()`
-    - `arkware.vscodeTools.invokeTool` → calls `invokeTool(name, input)` and returns `{ content, is_error? }`
+    - `shofer.vscodeTools.getDefinitions` → returns `getAllDefinitions()`
+    - `shofer.vscodeTools.invokeTool` → calls `invokeTool(name, input)` and returns `{ content, is_error? }`
 3. The provider is registered via config.
 
 ## Migration: vscode.lm.tools → Private Channel
@@ -130,4 +130,4 @@ channel:
 1. **Do NOT call `vscode.lm.registerTool()`** — this publishes to Copilot.
 2. Store tools in a private registry.
 3. Expose two commands: `getDefinitions` and `invokeTool`.
-4. Register the provider in `arkware.privateToolProviders` config.
+4. Register the provider in `shofer.privateToolProviders` config.

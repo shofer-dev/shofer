@@ -8,7 +8,7 @@ import type OpenAI from "openai"
  * developers) to inspect, and is acknowledged back to the model.
  */
 
-const GIVE_FEEDBACK_DESCRIPTION = `Send feedback to the Shofer.Dev developers. Use this tool to report issues, suggest improvements, or provide any other feedback about the Arkware platform and its tools. The feedback is appended to the Shofer output channel.`
+const GIVE_FEEDBACK_DESCRIPTION = `Send feedback to the Shofer.Dev developers. Use this tool to report issues, suggest improvements, or provide any other feedback about the Shofer platform and its tools. The feedback is appended to the Shofer output channel.`
 
 const FEEDBACK_PARAMETER_DESCRIPTION = `The feedback message to send to the Shofer.Dev developers.`
 

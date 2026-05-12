@@ -229,7 +229,7 @@ spentUsd, action, modelId})` emits the
   cancels the in-flight HTTP request as soon as the running spend
   crosses the cap.
 - **3.54.7** — Fixed cumulative-vs-per-request cost mismatch in the
-  `vscode-lm` provider. `arkware.llm.getRequestCost` returns the
+  `vscode-lm` provider. `shofer.llm.getRequestCost` returns the
   running ledger total for the whole conversation, but Shofer's pipeline
   expects each `usage` chunk's `totalCost` to be the cost of THIS
   request only (it gets stored on the `apiReqInfo` message and
@@ -244,7 +244,7 @@ spentUsd, action, modelId})` emits the
   "exceeded without stopping" reports are debuggable from the
   output channel.
 - **3.54.8 – 3.54.10** — Iterated on the composite-cost path end-to-end
-  to confirm the in-stream gate fires for `arkware/*` models. Validated
+  to confirm the in-stream gate fires for `shofer/*` models. Validated
   in production logs: `[vscode-lm] cost ledger: before=0.005237
 after=0.015193 perRequest=0.009956` followed immediately by
   `[DIAG cost-limit] in-flight: prior=0.005237 + thisReq=0.009956 =
@@ -254,7 +254,7 @@ limit=0.01`. Pairs with `llm-router` 0.8.9 (forces
   `stream_options.include_usage=true` so OpenAI-compatible upstreams
   emit the final usage chunk that carries the stamped `usage.cost`)
   and `llm-provider` 0.6.1 (per-conversation cost ledger and
-  `arkware.llm.getRequestCost` command).
+  `shofer.llm.getRequestCost` command).
 
 ## What was deferred
 
@@ -281,10 +281,10 @@ follow-ups:
       `abortTask` matters in practice but the behaviour is not
       formally specified).
 - [x] ~~AGENTS.md / `extensions/llm-provider/README.md` doc updates
-      mentioning the dependency on `arkware.llm.getModelPricing`.~~
+      mentioning the dependency on `shofer.llm.getModelPricing`.~~
       → Done: [Dependencies](#dependencies) section documents both cost
-      paths end-to-end, covering `arkware.llm.getModelPricing`,
-      `arkware.llm.getRequestCost`, and the llm-router cost-stamping
+      paths end-to-end, covering `shofer.llm.getModelPricing`,
+      `shofer.llm.getRequestCost`, and the llm-router cost-stamping
       pipeline.
 
 ## Dependencies
@@ -296,7 +296,7 @@ sums.
 
 ### Path 1 — static per-token pricing (direct models)
 
-`arkware.llm.getModelPricing` → `vscode-lm.getModel().info`
+`shofer.llm.getModelPricing` → `vscode-lm.getModel().info`
 (`inputPrice` / `outputPrice` / `cacheReadsPrice`) →
 `calculateApiCostOpenAI` → `shoferMessages[lastApiReqIndex].cost`.
 
@@ -316,7 +316,7 @@ in [`provider.go`](../llm-router/internal/services/provider.go) →
 ledger → `vscode-lm` snapshots the ledger before and after the stream,
 yielding the **delta** as `totalCost` in the usage chunk.
 
-Originally added for composite (`arkware/*`) models where the
+Originally added for composite (`shofer/*`) models where the
 underlying is selected per-attempt. Now applied **universally** to
 every provider whose upstream returns a `usage` object in the
 streaming response (OpenAI, Google, Zhipu, Xiaomi, Moonshot, MiniMax,

@@ -8,7 +8,7 @@ import type { ShoferAPI } from "@shofer/types"
 import { waitFor } from "./utils"
 
 export async function run() {
-	const extension = vscode.extensions.getExtension<ShoferAPI>("Arkware.shofer")
+	const extension = vscode.extensions.getExtension<ShoferAPI>("Shofer.dev")
 
 	if (!extension) {
 		throw new Error("Extension not found")

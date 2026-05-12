@@ -17,7 +17,7 @@ export default async function StatsDisplay() {
 				{stars !== null && <span>{stars}</span>}
 			</Link>
 			<Link
-				href="https://marketplace.visualstudio.com/items?itemName=Arkware.shofer"
+				href="https://marketplace.visualstudio.com/items?itemName=Shofer.dev"
 				target="_blank"
 				className="hidden md:flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
 				<VscVscode className="h-4 w-4" />

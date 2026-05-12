@@ -90,7 +90,7 @@ The full list of secret keys is defined in
 ### 1c. Non-Secret Provider Settings — VS Code `globalState`
 
 Non-sensitive provider settings are stored in VS Code's `globalState` API (backed by
-a SQLite database at `~/.config/Code/User/globalStorage/arkware.shofer/state.vscdb`
+a SQLite database at `~/.config/Code/User/globalStorage/shofer.dev/state.vscdb`
 on Linux). These include:
 
 - `apiProvider`, `apiModelId` — selected provider and model
@@ -187,7 +187,7 @@ customModes:
 | **Editable**   | Via Settings UI (not recommended to edit directly)                   |
 
 Where `<globalStorage>` is `context.globalStorageUri.fsPath` (e.g.,
-`~/.config/Code/User/globalStorage/arkware.shofer/` on Linux), overridable
+`~/.config/Code/User/globalStorage/shofer.dev/` on Linux), overridable
 via the `shofer.customStoragePath` setting.
 
 > **This file is NOT part of the Shofer source tree.** It is a runtime artifact created

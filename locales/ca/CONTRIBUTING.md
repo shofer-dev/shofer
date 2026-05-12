@@ -55,7 +55,7 @@ Mencioneu l'alineació amb aquestes àrees a les vostres sol·licituds d'extracc
 ### 3. Uniu-vos a la comunitat de Shofer
 
 - **Principal:** Uniu-vos al nostre [Discord](https://discord.gg/shofer) i envieu un missatge directe a **Hannes Rudolph (`hrudolph`)**.
-- **Alternativa:** Els col·laboradors experimentats poden participar directament a través de [Projectes de GitHub](https://github.com/orgs/Arkware/projects/1).
+- **Alternativa:** Els col·laboradors experimentats poden participar directament a través de [Projectes de GitHub](https://github.com/orgs/shofer/projects/1).
 
 ## Trobar i planificar la vostra contribució
 
@@ -78,7 +78,7 @@ Totes les contribucions comencen amb una incidència de GitHub utilitzant les no
 
 ### Decidir en què treballar
 
-- Consulteu el [Projecte de GitHub](https://github.com/orgs/Arkware/projects/1) per a incidències "Incidència [No assignada]".
+- Consulteu el [Projecte de GitHub](https://github.com/orgs/shofer/projects/1) per a incidències "Incidència [No assignada]".
 - Per a documents, visiteu [Documents de Shofer](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Informar d'errors

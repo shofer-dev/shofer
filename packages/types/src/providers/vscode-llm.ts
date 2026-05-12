@@ -7,11 +7,11 @@ export const vscodeLlmDefaultModelId = ""
 /**
  * Capability flags sourced from llm-router's `/v1/models` `capabilities`
  * block and forwarded to the webview by the extension host (which fetches
- * them from llm-provider's `arkware.llm.getModelCapabilities` side-channel
+ * them from llm-provider's `shofer.llm.getModelCapabilities` side-channel
  * command). Single source of truth for capability assertions in the UI;
  * `undefined` means "not available" and must not be treated as false.
  */
-export interface ArkwareLmCapabilities {
+export interface shoferLmCapabilities {
 	imageInput: boolean
 	toolCalling: boolean
 	promptCache: boolean
@@ -19,9 +19,9 @@ export interface ArkwareLmCapabilities {
 
 /**
  * Pricing information sourced from llm-router via llm-provider's
- * `arkware.llm.getModelPricing` side-channel command. USD per 1M tokens.
+ * `shofer.llm.getModelPricing` side-channel command. USD per 1M tokens.
  */
-export interface ArkwareLmPricing {
+export interface shoferLmPricing {
 	inputPrice: number
 	outputPrice: number
 	cacheReadsPrice?: number
@@ -34,7 +34,7 @@ export interface ArkwareLmPricing {
  * plain JSON-serializable shapes, so we define the subset we depend on
  * rather than importing vscode types directly into the webview bundle.
  *
- * The `arkwareCapabilities` and `arkwarePricing` fields carry data that
+ * The `shoferCapabilities` and `shoferPricing` fields carry data that
  * VS Code's own `LanguageModelChatProviderCapabilities` cannot represent
  * (notably prompt-cache support and per-token pricing); the extension
  * host enriches each entry from llm-provider's side-channel commands
@@ -51,10 +51,10 @@ export interface VsCodeLmChatInfo {
 	maxInputTokens?: number
 	/** VS Code's native capability surface (limited to imageInput + toolCalling). */
 	capabilities?: { imageInput?: boolean; toolCalling?: boolean }
-	/** Full Arkware capability set, including promptCache. */
-	arkwareCapabilities?: ArkwareLmCapabilities
+	/** Full Shofer capability set, including promptCache. */
+	shoferCapabilities?: shoferLmCapabilities
 	/** Per-token pricing from llm-router. */
-	arkwarePricing?: ArkwareLmPricing
+	shoferPricing?: shoferLmPricing
 }
 
 // Static map kept for type compatibility. All model info (including
