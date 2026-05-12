@@ -52,7 +52,8 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 	console.log("[Task#getCheckpointService] initializing checkpoints service")
 
 	try {
-		const workspaceDir = task.cwd || getWorkspacePath()
+		const workspaceDir = task.workspacePath || getWorkspacePath()
+		const taskCwd = task.cwd
 
 		if (!workspaceDir) {
 			log("[Task#getCheckpointService] workspace folder not found, disabling checkpoints")
@@ -68,10 +69,16 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 			return undefined
 		}
 
+		// For embedded worktree tasks, pass the scoped worktree directory
+		// so the shadow git's core.worktree is confined to the worktree
+		// subdirectory instead of the full workspace root.
+		const scopedWorktreeDir = taskCwd && taskCwd !== workspaceDir ? taskCwd : undefined
+
 		const options: CheckpointServiceOptions = {
 			taskId: task.taskId,
 			workspaceDir,
 			shadowDir: globalStorageDir,
+			scopedWorktreeDir,
 			log,
 		}
 

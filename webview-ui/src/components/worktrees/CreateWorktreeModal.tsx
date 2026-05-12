@@ -87,11 +87,18 @@ export const CreateWorktreeModal = ({
 					setIsCreating(false)
 					setCopyProgress(null)
 					if (message.success) {
+						// Embedded worktree: spawn an empty parallel task scoped to
+						// the worktree directory instead of opening a separate VS
+						// Code window.  The task's cwd is the worktree path; the
+						// branch context is communicated via the task name (and
+						// surfaced in TaskHeader/TaskSelector via the worktree
+						// badge), not as a synthesized "user" message — that would
+						// pollute the conversation history.
 						if (openAfterCreate) {
 							vscode.postMessage({
-								type: "switchWorktree",
-								worktreePath: worktreePath,
-								worktreeNewWindow: true,
+								type: "createParallelTask",
+								worktreeDir: worktreePath,
+								taskName: `worktree: ${branchName}`,
 							})
 						}
 						onSuccess?.()
@@ -106,7 +113,7 @@ export const CreateWorktreeModal = ({
 
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
-	}, [openAfterCreate, worktreePath, onSuccess, onClose])
+	}, [openAfterCreate, worktreePath, branchName, onSuccess, onClose])
 
 	const handleCreate = useCallback(() => {
 		setError(null)

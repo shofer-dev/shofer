@@ -43,6 +43,7 @@ import listBackgroundTasks from "./list_background_tasks"
 import sed from "./sed"
 import sleep from "./sleep"
 import viewImage from "./view_image"
+import worktree from "./worktree"
 import writeToFile from "./write_to_file"
 
 export { getMcpServerTools } from "./mcp_server"
@@ -115,6 +116,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		sed,
 		sleep,
 		viewImage,
+		worktree,
 		writeToFile,
 	] satisfies OpenAI.Chat.ChatCompletionTool[]
 }

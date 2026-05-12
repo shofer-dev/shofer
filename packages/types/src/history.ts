@@ -50,6 +50,9 @@ export const historyItemSchema = z.object({
 	totalCost: z.number(),
 	size: z.number().optional(),
 	workspace: z.string().optional(),
+	/** Per-task working directory (e.g., embedded worktree subdirectory).
+	 *  When set, the task operates in this directory instead of the workspace root. */
+	cwd: z.string().optional(),
 	mode: z.string().optional(),
 	apiConfigName: z.string().optional(), // Provider profile name for sticky profile feature
 	costLimit: costLimitSchema.optional(), // Per-root-task budget cap

@@ -20,6 +20,9 @@ export type TaskMetadataOptions = {
 	messages: ClineMessage[]
 	globalStoragePath: string
 	workspace: string
+	/** Per-task working directory (e.g., embedded worktree subdirectory).
+	 *  Stored on HistoryItem for correct rehydration. */
+	cwd?: string
 	mode?: string
 	/** Provider profile name for the task (sticky profile feature) */
 	apiConfigName?: string
@@ -41,6 +44,7 @@ export async function taskMetadata({
 	messages,
 	globalStoragePath,
 	workspace,
+	cwd,
 	mode,
 	apiConfigName,
 	initialStatus,
@@ -125,6 +129,7 @@ export async function taskMetadata({
 		size: taskDirSize,
 		workspace,
 		mode,
+		...(cwd ? { cwd } : {}),
 		...(typeof apiConfigName === "string" && apiConfigName.length > 0 ? { apiConfigName } : {}),
 		...(initialStatus && { status: initialStatus }),
 		...(isBackground ? { isBackground: true } : {}),

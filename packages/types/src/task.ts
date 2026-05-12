@@ -121,6 +121,14 @@ export interface CreateTaskOptions {
 	 * Used for parallel task creation where multiple tasks run simultaneously.
 	 */
 	keepCurrentTask?: boolean
+	/**
+	 * Working directory for the new task. When set (e.g., for embedded worktree
+	 * tasks), overrides the default workspace root as the task's CWD for tool
+	 * invocations, file path resolution, and git operations.
+	 *
+	 * Defaults to the workspace root.
+	 */
+	cwd?: string
 }
 
 export enum TaskStatus {

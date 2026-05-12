@@ -676,6 +676,20 @@ export class NativeToolCallParser {
 						message: partialArgs.message,
 						todos: partialArgs.todos,
 						is_background: this.coerceOptionalBoolean(partialArgs.is_background),
+						worktreeDir: partialArgs.worktreeDir,
+					}
+				}
+				break
+
+			case "worktree":
+				if (partialArgs.subcommand !== undefined) {
+					nativeArgs = {
+						subcommand: partialArgs.subcommand,
+						path: partialArgs.path,
+						branch: partialArgs.branch,
+						base_branch: partialArgs.base_branch,
+						target_branch: partialArgs.target_branch,
+						force: this.coerceOptionalBoolean(partialArgs.force),
 					}
 				}
 				break
@@ -1247,6 +1261,20 @@ export class NativeToolCallParser {
 							message: args.message,
 							todos: args.todos,
 							is_background: this.coerceOptionalBoolean(args.is_background),
+							worktreeDir: args.worktreeDir,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "worktree":
+					if (args.subcommand !== undefined) {
+						nativeArgs = {
+							subcommand: args.subcommand,
+							path: args.path,
+							branch: args.branch,
+							base_branch: args.base_branch,
+							target_branch: args.target_branch,
+							force: args.force === true || args.force === "true",
 						} as NativeArgsFor<TName>
 					}
 					break

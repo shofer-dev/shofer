@@ -97,7 +97,23 @@ export async function handleListWorktrees(provider: ClineProvider): Promise<Work
 	const isSubfolder = await isWorkspaceSubfolder(cwd)
 	const gitRootPath = (await worktreeService.getGitRootPath(cwd)) || ""
 
-	if (isSubfolder) {
+	// Embedded worktree exception: when the workspace IS a subfolder, but
+	// that subfolder lives directly under `<gitRoot>/.roo/worktrees/`
+	// (i.e. this is an embedded worktree task created by the new model),
+	// allow it.  The embedded model runs all tasks in a single VS Code
+	// window so the subfolder restriction is not necessary.
+	//
+	// Path check is anchored to the resolved git root + path.relative to
+	// avoid false matches against unrelated directories whose name happens
+	// to contain `.roo/worktrees/` as a substring.
+	let isEmbeddedWorktree = false
+	if (isSubfolder && gitRootPath) {
+		const rel = path.relative(path.resolve(gitRootPath), path.resolve(cwd))
+		const embeddedPrefix = path.join(".roo", "worktrees") + path.sep
+		isEmbeddedWorktree = !rel.startsWith("..") && !path.isAbsolute(rel) && rel.startsWith(embeddedPrefix)
+	}
+
+	if (isSubfolder && !isEmbeddedWorktree) {
 		return {
 			worktrees: [],
 			isGitRepo: true,

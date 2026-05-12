@@ -45,6 +45,7 @@ export type ToolGroup = z.infer<typeof toolGroupsSchema>
  */
 
 export const toolNames = [
+	"worktree",
 	"execute_command",
 	"read_file",
 	"read_command_output",
@@ -116,6 +117,7 @@ export type ToolGroupConfig = {
  * Human-readable display names for each tool.
  */
 export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
+	worktree: "manage git worktrees",
 	execute_command: "run commands",
 	read_file: "read files",
 	read_command_output: "read command output",
@@ -213,7 +215,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["use_mcp_tool", "access_mcp_resource"],
 	},
 	mode: {
-		tools: ["switch_mode", "new_task"],
+		tools: ["switch_mode", "new_task", "worktree"],
 		alwaysAvailable: true,
 	},
 	subtasks: {

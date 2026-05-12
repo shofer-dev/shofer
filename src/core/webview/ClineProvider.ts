@@ -3292,6 +3292,7 @@ export class ClineProvider
 		parentTask?: Task,
 		options: CreateTaskOptions = {},
 		configuration: RooCodeSettings = {},
+		cwd?: string,
 	): Promise<Task> {
 		const openInStack = options.openInStack ?? true
 		if (configuration) {
@@ -3372,6 +3373,10 @@ export class ClineProvider
 			// Ensure this task is present in clineStack before startTask() emits
 			// its initial state update, so state.currentTaskId is available ASAP.
 			startTask: false,
+			// Per-task CWD: for embedded worktree tasks, this is the worktree
+			// subdirectory. Merged from options first, then overridden by the
+			// explicit cwd parameter if provided.
+			cwd: cwd ?? options.cwd,
 			...options,
 		})
 
@@ -3804,7 +3809,12 @@ export class ClineProvider
 	 * @param text Initial task text
 	 * @param images Optional images
 	 */
-	public async createManagedTask(name?: string, text?: string, images?: string[]): Promise<void> {
+	public async createManagedTask(
+		name?: string,
+		text?: string,
+		images?: string[],
+		worktreeDir?: string,
+	): Promise<void> {
 		// Pop the current task from the stack WITHOUT aborting it — it continues in background
 		// Save reference so we can restore it if task creation fails
 		const poppedTask = this.popFromStackWithoutAborting()
@@ -3819,8 +3829,9 @@ export class ClineProvider
 			// Auto-generate task name from first message if provided, otherwise use fallback
 			const taskName = name || (text ? this.generateTaskNameFromText(text) : "New Task")
 
-			// Create a new task with keepCurrentTask=true so createTask won't abort any remaining tasks
-			const task = await this.createTask(text, images, undefined, { keepCurrentTask: true }, {})
+			// Create a new task with keepCurrentTask=true so createTask won't abort any remaining tasks.
+			// Pass worktreeDir as the task's cwd for embedded worktree tasks.
+			const task = await this.createTask(text, images, undefined, { keepCurrentTask: true }, {}, worktreeDir)
 
 			if (!task) {
 				throw new Error("Failed to create task")
@@ -3839,7 +3850,10 @@ export class ClineProvider
 				tokensIn: 0,
 				tokensOut: 0,
 				totalCost: 0,
-				workspace: task.cwd || "",
+				// workspace is the VS Code workspace root (for history filtering);
+				// cwd is the per-task working directory (for worktree badge display).
+				workspace: task.workspacePath || "",
+				cwd: task.cwd !== task.workspacePath ? task.cwd : undefined,
 				name: managedTask.name,
 
 				lastActiveTs: managedTask.lastActiveAt,

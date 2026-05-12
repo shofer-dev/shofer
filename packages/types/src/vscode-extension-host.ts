@@ -800,6 +800,8 @@ export interface WebviewMessage {
 	taskName?: string
 	// Worktree properties
 	worktreePath?: string
+	/** Embedded worktree directory for new tasks scoped to a git worktree subdirectory. */
+	worktreeDir?: string
 	worktreeBranch?: string
 	worktreeBaseBranch?: string
 	worktreeCreateNewBranch?: boolean
