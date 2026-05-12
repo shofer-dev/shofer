@@ -17,7 +17,7 @@ vi.mock("../../../utils/safeWriteJson")
 vi.mock("../../../api/providers/openrouter")
 
 describe("generateImageTool", () => {
-	let mockCline: any
+	let mockShofer: any
 	let mockAskApproval: any
 	let mockHandleError: any
 	let mockPushToolResult: any
@@ -25,15 +25,15 @@ describe("generateImageTool", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 
-		// Setup mock Cline instance
-		mockCline = {
+		// Setup mock Shofer instance
+		mockShofer = {
 			cwd: "/test/workspace",
 			consecutiveMistakeCount: 0,
 			recordToolError: vi.fn(),
 			recordToolUsage: vi.fn(),
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("Missing parameter error"),
 			say: vi.fn(),
-			rooIgnoreController: {
+			shoferIgnoreController: {
 				validateAccess: vi.fn().mockReturnValue(true),
 			},
 			rooProtectedController: {
@@ -84,7 +84,7 @@ describe("generateImageTool", () => {
 				partial: true,
 			}
 
-			await generateImageTool.handle(mockCline as Task, partialBlock as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, partialBlock as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
@@ -93,7 +93,7 @@ describe("generateImageTool", () => {
 			// Should not process anything when partial
 			expect(mockAskApproval).not.toHaveBeenCalled()
 			expect(mockPushToolResult).not.toHaveBeenCalled()
-			expect(mockCline.say).not.toHaveBeenCalled()
+			expect(mockShofer.say).not.toHaveBeenCalled()
 		})
 
 		it("should return early when block is partial even with image parameter", async () => {
@@ -113,7 +113,7 @@ describe("generateImageTool", () => {
 				partial: true,
 			}
 
-			await generateImageTool.handle(mockCline as Task, partialBlock as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, partialBlock as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
@@ -122,7 +122,7 @@ describe("generateImageTool", () => {
 			// Should not process anything when partial
 			expect(mockAskApproval).not.toHaveBeenCalled()
 			expect(mockPushToolResult).not.toHaveBeenCalled()
-			expect(mockCline.say).not.toHaveBeenCalled()
+			expect(mockShofer.say).not.toHaveBeenCalled()
 			expect(fs.readFile).not.toHaveBeenCalled()
 		})
 
@@ -154,7 +154,7 @@ describe("generateImageTool", () => {
 					}) as any,
 			)
 
-			await generateImageTool.handle(mockCline as Task, completeBlock as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, completeBlock as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
@@ -183,7 +183,7 @@ describe("generateImageTool", () => {
 
 			// Mock convertToWebviewUri to return a test URI
 			const mockWebviewUri = "https://file+.vscode-resource.vscode-cdn.net/test/workspace/test-image.png"
-			mockCline.providerRef.deref().convertToWebviewUri = vi.fn().mockReturnValue(mockWebviewUri)
+			mockShofer.providerRef.deref().convertToWebviewUri = vi.fn().mockReturnValue(mockWebviewUri)
 
 			// Mock the OpenRouterHandler generateImage method
 			const mockGenerateImage = vi.fn().mockResolvedValue({
@@ -198,17 +198,17 @@ describe("generateImageTool", () => {
 					}) as any,
 			)
 
-			await generateImageTool.handle(mockCline as Task, completeBlock as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, completeBlock as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
-			// Check that cline.say was called with image data containing cache-busting parameter
-			expect(mockCline.say).toHaveBeenCalledWith("image", expect.stringMatching(/"imageUri":"[^"]+\?t=\d+"/))
+			// Check that shofer.say was called with image data containing cache-busting parameter
+			expect(mockShofer.say).toHaveBeenCalledWith("image", expect.stringMatching(/"imageUri":"[^"]+\?t=\d+"/))
 
 			// Verify the imageUri contains the cache-busting parameter
-			const sayCall = mockCline.say.mock.calls.find((call: any[]) => call[0] === "image")
+			const sayCall = mockShofer.say.mock.calls.find((call: any[]) => call[0] === "image")
 			if (sayCall) {
 				const imageData = JSON.parse(sayCall[1])
 				expect(imageData.imageUri).toMatch(/\?t=\d+$/)
@@ -236,15 +236,15 @@ describe("generateImageTool", () => {
 				partial: false,
 			}
 
-			await generateImageTool.handle(mockCline as Task, block as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, block as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.consecutiveMistakeCount).toBe(1)
-			expect(mockCline.recordToolError).toHaveBeenCalledWith("generate_image")
-			expect(mockCline.sayAndCreateMissingParamError).toHaveBeenCalledWith("generate_image", "prompt")
+			expect(mockShofer.consecutiveMistakeCount).toBe(1)
+			expect(mockShofer.recordToolError).toHaveBeenCalledWith("generate_image")
+			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("generate_image", "prompt")
 			expect(mockPushToolResult).toHaveBeenCalledWith("Missing parameter error")
 		})
 
@@ -261,15 +261,15 @@ describe("generateImageTool", () => {
 				partial: false,
 			}
 
-			await generateImageTool.handle(mockCline as Task, block as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, block as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.consecutiveMistakeCount).toBe(1)
-			expect(mockCline.recordToolError).toHaveBeenCalledWith("generate_image")
-			expect(mockCline.sayAndCreateMissingParamError).toHaveBeenCalledWith("generate_image", "path")
+			expect(mockShofer.consecutiveMistakeCount).toBe(1)
+			expect(mockShofer.recordToolError).toHaveBeenCalledWith("generate_image")
+			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("generate_image", "path")
 			expect(mockPushToolResult).toHaveBeenCalledWith("Missing parameter error")
 		})
 	})
@@ -277,7 +277,7 @@ describe("generateImageTool", () => {
 	describe("experiment validation", () => {
 		it("should error when image generation experiment is disabled", async () => {
 			// Disable the experiment
-			mockCline.providerRef.deref().getState.mockResolvedValue({
+			mockShofer.providerRef.deref().getState.mockResolvedValue({
 				experiments: {
 					[EXPERIMENT_IDS.IMAGE_GENERATION]: false,
 				},
@@ -297,7 +297,7 @@ describe("generateImageTool", () => {
 				partial: false,
 			}
 
-			await generateImageTool.handle(mockCline as Task, block as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, block as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
@@ -331,13 +331,13 @@ describe("generateImageTool", () => {
 				partial: false,
 			}
 
-			await generateImageTool.handle(mockCline as Task, block as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, block as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.say).toHaveBeenCalledWith("error", expect.stringContaining("Input image not found"))
+			expect(mockShofer.say).toHaveBeenCalledWith("error", expect.stringContaining("Input image not found"))
 			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Input image not found"))
 		})
 
@@ -358,13 +358,13 @@ describe("generateImageTool", () => {
 				partial: false,
 			}
 
-			await generateImageTool.handle(mockCline as Task, block as ToolUse<"generate_image">, {
+			await generateImageTool.handle(mockShofer as Task, block as ToolUse<"generate_image">, {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.say).toHaveBeenCalledWith("error", expect.stringContaining("Unsupported image format"))
+			expect(mockShofer.say).toHaveBeenCalledWith("error", expect.stringContaining("Unsupported image format"))
 			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Unsupported image format"))
 		})
 	})

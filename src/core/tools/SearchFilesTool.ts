@@ -1,6 +1,6 @@
 import path from "path"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -47,7 +47,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		const absolutePath = path.resolve(task.cwd, relDirPath)
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "searchFiles",
 			path: getReadablePath(task.cwd, relDirPath),
 			regex: regex,
@@ -56,9 +56,15 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		}
 
 		try {
-			const results = await regexSearchFiles(task.cwd, absolutePath, regex, filePattern, task.rooIgnoreController)
+			const results = await regexSearchFiles(
+				task.cwd,
+				absolutePath,
+				regex,
+				filePattern,
+				task.shoferIgnoreController,
+			)
 
-			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: results } satisfies ClineSayTool)
+			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: results } satisfies ShoferSayTool)
 			const didApprove = await askApproval("tool", completeMessage)
 
 			if (!didApprove) {
@@ -79,7 +85,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		const absolutePath = relDirPath ? path.resolve(task.cwd, relDirPath) : task.cwd
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "searchFiles",
 			path: getReadablePath(task.cwd, relDirPath ?? ""),
 			regex: regex ?? "",
@@ -87,7 +93,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 			isOutsideWorkspace,
 		}
 
-		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

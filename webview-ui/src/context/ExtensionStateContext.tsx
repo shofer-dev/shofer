@@ -20,14 +20,14 @@ import {
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-} from "@roo-code/types"
+} from "@shofer/types"
 
-import { findLastIndex } from "@roo/array"
+import { findLastIndex } from "@shofer/array"
 
-import { checkExistKey } from "@roo/checkExistApiConfig"
-import { Mode, defaultModeSlug, defaultPrompts } from "@roo/modes"
-import { CustomSupportPrompts } from "@roo/support-prompt"
-import { experimentDefault } from "@roo/experiments"
+import { checkExistKey } from "@shofer/checkExistApiConfig"
+import { Mode, defaultModeSlug, defaultPrompts } from "@shofer/modes"
+import { CustomSupportPrompts } from "@shofer/support-prompt"
+import { experimentDefault } from "@shofer/experiments"
 
 import { vscode } from "@src/utils/vscode"
 import { webviewLog } from "@src/utils/webviewLog"
@@ -94,7 +94,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setAlwaysAllowUncategorized: (value: boolean) => void
 	setAlwaysAllowModeSwitch: (value: boolean) => void
 	setAlwaysAllowSubtasks: (value: boolean) => void
-	setShowRooIgnoredFiles: (value: boolean) => void
+	setShowShoferIgnoredFiles: (value: boolean) => void
 	setEnableSubfolderRules: (value: boolean) => void
 	setShowAnnouncement: (value: boolean) => void
 	setAllowedCommands: (value: string[]) => void
@@ -194,19 +194,19 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Partial
 	const experiments = { ...prevExperiments, ...(newExperiments ?? {}) }
 	const rest = { ...prevRest, ...newRest }
 
-	// Protect clineMessages from stale state pushes using sequence numbering.
+	// Protect shoferMessages from stale state pushes using sequence numbering.
 	// Multiple async event sources (cloud auth, settings, task streaming) can trigger
-	// concurrent state pushes. If a stale push arrives after a newer one, its clineMessages
+	// concurrent state pushes. If a stale push arrives after a newer one, its shoferMessages
 	// would overwrite the newer messages. The sequence number prevents this by only applying
-	// clineMessages when the incoming seq is strictly greater than the last applied seq.
+	// shoferMessages when the incoming seq is strictly greater than the last applied seq.
 	if (
-		newState.clineMessagesSeq !== undefined &&
-		prevState.clineMessagesSeq !== undefined &&
-		newState.clineMessagesSeq <= prevState.clineMessagesSeq &&
-		newState.clineMessages !== undefined
+		newState.shoferMessagesSeq !== undefined &&
+		prevState.shoferMessagesSeq !== undefined &&
+		newState.shoferMessagesSeq <= prevState.shoferMessagesSeq &&
+		newState.shoferMessages !== undefined
 	) {
-		rest.clineMessages = prevState.clineMessages
-		rest.clineMessagesSeq = prevState.clineMessagesSeq
+		rest.shoferMessages = prevState.shoferMessages
+		rest.shoferMessagesSeq = prevState.shoferMessagesSeq
 	}
 
 	// Note that we completely replace the previous apiConfiguration and customSupportPrompts objects
@@ -224,7 +224,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [state, setState] = useState<ExtensionState>({
 		apiConfiguration: {},
 		version: "",
-		clineMessages: [],
+		shoferMessages: [],
 		taskHistory: [],
 		shouldShowAnnouncement: false,
 		allowedCommands: [],
@@ -254,7 +254,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		maxWorkspaceFiles: 200,
 		cwd: "",
 		telemetrySetting: "unset",
-		showRooIgnoredFiles: true, // Default to showing .rooignore'd files with lock symbol (current behavior).
+		showShoferIgnoredFiles: true, // Default to showing .shoferignore'd files with lock symbol (current behavior).
 		enableSubfolderRules: false, // Default to disabled - must be enabled to load rules from subdirectories
 		renderContext: "sidebar",
 		maxReadFileLine: -1, // Default max line limit for read_file tool (-1 for default)
@@ -409,28 +409,32 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					break
 				}
 				case "messageUpdated": {
-					const clineMessage = message.clineMessage!
+					const shoferMessage = message.shoferMessage!
 					setState((prevState) => {
 						// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-						const lastIndex = findLastIndex(prevState.clineMessages, (msg) => msg.ts === clineMessage.ts)
+						const lastIndex = findLastIndex(prevState.shoferMessages, (msg) => msg.ts === shoferMessage.ts)
 						if (lastIndex !== -1) {
-							const newClineMessages = [...prevState.clineMessages]
-							newClineMessages[lastIndex] = clineMessage
-							return { ...prevState, clineMessages: newClineMessages }
+							const newShoferMessages = [...prevState.shoferMessages]
+							newShoferMessages[lastIndex] = shoferMessage
+							return { ...prevState, shoferMessages: newShoferMessages }
 						}
 						// Log a warning if messageUpdated arrives for a timestamp not in the
-						// frontend's clineMessages. With the seq guard and cloud event isolation
+						// frontend's shoferMessages. With the seq guard and cloud event isolation
 						// (layers 1+2), this should not happen under normal conditions. If it
 						// does, it signals a state synchronization issue worth investigating.
 						console.warn(
-							`[messageUpdated] Received update for unknown message ts=${clineMessage.ts}, dropping. ` +
-								`Frontend has ${prevState.clineMessages.length} messages.`,
+							`[messageUpdated] Received update for unknown message ts=${shoferMessage.ts}, dropping. ` +
+								`Frontend has ${prevState.shoferMessages.length} messages.`,
 						)
 						return prevState
 					})
 					break
 				}
 				case "skills": {
+					console.log(
+						"[ExtensionStateContext] received 'skills' message. loadedSkills:",
+						message.loadedSkills,
+					)
 					if (message.skills) {
 						setSkills(message.skills)
 					}
@@ -571,12 +575,12 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		}
 	}, [state.apiConfiguration?.apiProvider])
 
-	// Watch for authentication state changes and refresh Roo models
+	// Watch for authentication state changes and refresh Shofer models
 	useEffect(() => {
 		const currentAuth = state.cloudIsAuthenticated ?? false
 		const currentProvider = state.apiConfiguration?.apiProvider
-		if (!prevCloudIsAuthenticated && currentAuth && currentProvider === "roo") {
-			// User just authenticated and Roo is the active provider - refresh Roo models
+		if (!prevCloudIsAuthenticated && currentAuth && currentProvider === "shofer") {
+			// User just authenticated and Shofer is the active provider - refresh Shofer models
 			vscode.postMessage({ type: "requestRooModels" })
 		}
 		setPrevCloudIsAuthenticated(currentAuth)
@@ -660,7 +664,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setMaxOpenTabsContext: (value) => setState((prevState) => ({ ...prevState, maxOpenTabsContext: value })),
 		setMaxWorkspaceFiles: (value) => setState((prevState) => ({ ...prevState, maxWorkspaceFiles: value })),
 		setTelemetrySetting: (value) => setState((prevState) => ({ ...prevState, telemetrySetting: value })),
-		setShowRooIgnoredFiles: (value) => setState((prevState) => ({ ...prevState, showRooIgnoredFiles: value })),
+		setShowShoferIgnoredFiles: (value) =>
+			setState((prevState) => ({ ...prevState, showShoferIgnoredFiles: value })),
 		setEnableSubfolderRules: (value) => setState((prevState) => ({ ...prevState, enableSubfolderRules: value })),
 		setAwsUsePromptCache: (value) => setState((prevState) => ({ ...prevState, awsUsePromptCache: value })),
 		setMaxImageFileSize: (value) => setState((prevState) => ({ ...prevState, maxImageFileSize: value })),

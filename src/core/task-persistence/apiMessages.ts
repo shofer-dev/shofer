@@ -59,7 +59,7 @@ export async function readApiMessages({
 			}
 			if (parsedData.length === 0) {
 				console.error(
-					`[Roo-Debug] readApiMessages: Found API conversation history file, but it's empty (parsed as []). TaskId: ${taskId}, Path: ${filePath}`,
+					`[Shofer-Debug] readApiMessages: Found API conversation history file, but it's empty (parsed as []). TaskId: ${taskId}, Path: ${filePath}`,
 				)
 			}
 			return parsedData
@@ -84,7 +84,7 @@ export async function readApiMessages({
 				}
 				if (parsedData.length === 0) {
 					console.error(
-						`[Roo-Debug] readApiMessages: Found OLD API conversation history file (claude_messages.json), but it's empty (parsed as []). TaskId: ${taskId}, Path: ${oldPath}`,
+						`[Shofer-Debug] readApiMessages: Found OLD API conversation history file (claude_messages.json), but it's empty (parsed as []). TaskId: ${taskId}, Path: ${oldPath}`,
 					)
 				}
 				await fs.unlink(oldPath)
@@ -101,7 +101,7 @@ export async function readApiMessages({
 
 	// If we reach here, neither the new nor the old history file was found.
 	console.error(
-		`[Roo-Debug] readApiMessages: API conversation history file not found for taskId: ${taskId}. Expected at: ${filePath}`,
+		`[Shofer-Debug] readApiMessages: API conversation history file not found for taskId: ${taskId}. Expected at: ${filePath}`,
 	)
 	return []
 }

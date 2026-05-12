@@ -13,8 +13,8 @@ import {
 	type ProviderName,
 	isProviderName,
 	isRetiredProvider,
-} from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+} from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { Mode, modes } from "../../shared/modes"
 import { buildApiHandler } from "../../api"
@@ -25,8 +25,8 @@ type ModelMigrations = {
 }
 
 const MODEL_MIGRATIONS: ModelMigrations = {
-	roo: {
-		"roo/code-supernova": "roo/code-supernova-1-million",
+	shofer: {
+		"shofer/code-supernova": "shofer/code-supernova-1-million",
 	},
 } as const satisfies ModelMigrations
 

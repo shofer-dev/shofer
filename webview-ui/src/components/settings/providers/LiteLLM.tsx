@@ -6,9 +6,9 @@ import {
 	type OrganizationAllowList,
 	type ExtensionMessage,
 	litellmDefaultModelId,
-} from "@roo-code/types"
+} from "@shofer/types"
 
-import { RouterName } from "@roo/api"
+import { RouterName } from "@shofer/api"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from "react"
-import { validateSkillName as validateSkillNameShared, SkillNameValidationError } from "@roo-code/types"
+import { validateSkillName as validateSkillNameShared, SkillNameValidationError } from "@shofer/types"
 
-import { getAllModes } from "@roo/modes"
+import { getAllModes } from "@shofer/modes"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -46,7 +46,7 @@ const getSkillNameErrorTranslationKey = (error: SkillNameValidationError): strin
 }
 
 /**
- * Validate skill name using shared validation from @roo-code/types.
+ * Validate skill name using shared validation from @shofer/types.
  * Returns a translation key for the error, or null if valid.
  */
 const validateSkillName = (name: string): string | null => {

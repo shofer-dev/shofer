@@ -1,3 +1,3 @@
-export type { WebviewMessage, WebViewMessagePayload } from "@roo-code/types"
+export type { WebviewMessage, WebViewMessagePayload } from "@shofer/types"
 
-export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse" | "objectResponse"
+export type ShoferAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse" | "objectResponse"

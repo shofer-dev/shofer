@@ -25,7 +25,7 @@ describe("Settings Migration", () => {
 
 	// Legacy file names
 	const legacyCustomModesJson = path.join(mockSettingsDir, "custom_modes.json")
-	const legacyClineCustomModesPath = path.join(mockSettingsDir, "cline_custom_modes.json")
+	const legacyShoferCustomModesPath = path.join(mockSettingsDir, "cline_custom_modes.json")
 	const legacyMcpSettingsPath = path.join(mockSettingsDir, "cline_mcp_settings.json")
 
 	// New file names
@@ -64,7 +64,7 @@ describe("Settings Migration", () => {
 		// Mock file existence checks - only return true for paths we want to exist
 		vitest.mocked(fileExistsAtPath).mockImplementation(async (path: string) => {
 			if (path === mockSettingsDir) return true
-			if (path === legacyClineCustomModesPath) return true
+			if (path === legacyShoferCustomModesPath) return true
 			return false // All other paths don't exist, including destination files
 		})
 
@@ -72,7 +72,7 @@ describe("Settings Migration", () => {
 		await migrateSettings(mockContext, mockOutputChannel)
 
 		// Verify expected rename call - cline_custom_modes.json should be renamed to custom_modes.json
-		expect(mockRename).toHaveBeenCalledWith(legacyClineCustomModesPath, legacyCustomModesJson)
+		expect(mockRename).toHaveBeenCalledWith(legacyShoferCustomModesPath, legacyCustomModesJson)
 	})
 
 	it("should migrate MCP settings file if old file exists and new file doesn't", async () => {
@@ -86,7 +86,7 @@ describe("Settings Migration", () => {
 		vitest.mocked(fileExistsAtPath).mockImplementation(async (path: string) => {
 			if (path === mockSettingsDir) return true
 			if (path === legacyMcpSettingsPath) return true
-			if (path === legacyClineCustomModesPath) return false // Ensure this file doesn't exist
+			if (path === legacyShoferCustomModesPath) return false // Ensure this file doesn't exist
 			if (path === legacyCustomModesJson) return false // Ensure this file doesn't exist
 			return false // All other paths don't exist, including destination files
 		})
@@ -108,7 +108,7 @@ describe("Settings Migration", () => {
 		// Mock file existence checks - both source and destination exist
 		vitest.mocked(fileExistsAtPath).mockImplementation(async (path: string) => {
 			if (path === mockSettingsDir) return true
-			if (path === legacyClineCustomModesPath) return true
+			if (path === legacyShoferCustomModesPath) return true
 			if (path === legacyCustomModesJson) return true // Destination already exists
 			if (path === legacyMcpSettingsPath) return true
 			if (path === newMcpSettingsPath) return true
@@ -158,7 +158,7 @@ describe("Settings Migration", () => {
 		vitest.mocked(fileExistsAtPath).mockImplementation(async (path: string) => {
 			if (path === mockSettingsDir) return true
 			if (path === legacyCustomModesJson) return true
-			if (path === legacyClineCustomModesPath) return false
+			if (path === legacyShoferCustomModesPath) return false
 			if (path === legacyMcpSettingsPath) return false
 			return false
 		})
@@ -196,7 +196,7 @@ describe("Settings Migration", () => {
 		vitest.mocked(fileExistsAtPath).mockImplementation(async (path: string) => {
 			if (path === mockSettingsDir) return true
 			if (path === legacyCustomModesJson) return true
-			if (path === legacyClineCustomModesPath) return false
+			if (path === legacyShoferCustomModesPath) return false
 			if (path === legacyMcpSettingsPath) return false
 			return false
 		})
@@ -234,7 +234,7 @@ describe("Settings Migration", () => {
 			if (path === mockSettingsDir) return true
 			if (path === legacyCustomModesJson) return true
 			if (path === newCustomModesYaml) return true // YAML already exists
-			if (path === legacyClineCustomModesPath) return false
+			if (path === legacyShoferCustomModesPath) return false
 			if (path === legacyMcpSettingsPath) return false
 			return false
 		})

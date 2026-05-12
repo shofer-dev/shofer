@@ -68,7 +68,7 @@ ulteriormente definita e chiarita dai manutentori del progetto.
 ## Applicazione
 
 Casi di comportamento abusivo, molesto o altrimenti inaccettabile possono essere
-segnalati contattando il team del progetto all'indirizzo support@roocode.com. Tutti i reclami
+segnalati contattando il team del progetto all'indirizzo support@shofer.com. Tutti i reclami
 saranno esaminati e indagati e risulteranno in una risposta che
 è ritenuta necessaria e appropriata alle circostanze. Il team del progetto è
 obbligato a mantenere la riservatezza nei confronti di chi segnala un incidente.
@@ -80,10 +80,10 @@ membri della leadership del progetto.
 
 ## Attribuzione
 
-Questo Codice di Condotta è adattato dalla [versione di Cline][cline_coc] del [Patto del Contributore][homepage], versione 1.4,
+Questo Codice di Condotta è adattato dalla [versione di Shofer][cline_coc] del [Patto del Contributore][homepage], versione 1.4,
 disponibile su https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
 
-[cline_coc]: https://github.com/cline/cline/blob/main/CODE_OF_CONDUCT.md
+[cline_coc]: https://github.com/shofer/shofer/blob/main/CODE_OF_CONDUCT.md
 [homepage]: https://www.contributor-covenant.org
 
 Per risposte alle domande comuni su questo codice di condotta, vedi

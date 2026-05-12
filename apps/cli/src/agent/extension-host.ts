@@ -1,5 +1,5 @@
 /**
- * ExtensionHost - Loads and runs the Roo Code extension in CLI mode
+ * ExtensionHost - Loads and runs the Shofer extension in CLI mode
  *
  * This class is a thin coordination layer responsible for:
  * 1. Creating the vscode-shim mock
@@ -17,14 +17,14 @@ import { EventEmitter } from "events"
 import pWaitFor from "p-wait-for"
 
 import type {
-	ClineMessage,
+	ShoferMessage,
 	ExtensionMessage,
 	ReasoningEffortExtended,
-	RooCodeSettings,
+	ShoferSettings,
 	WebviewMessage,
-} from "@roo-code/types"
-import { createVSCodeAPI, IExtensionHost, ExtensionHostEventMap, setRuntimeConfigValues } from "@roo-code/vscode-shim"
-import { DebugLogger, setDebugLogEnabled } from "@roo-code/core/cli"
+} from "@shofer/types"
+import { createVSCodeAPI, IExtensionHost, ExtensionHostEventMap, setRuntimeConfigValues } from "@shofer/vscode-shim"
+import { DebugLogger, setDebugLogEnabled } from "@shofer/core/cli"
 
 import { DEFAULT_FLAGS, type SupportedProvider } from "@/types/index.js"
 import type { User } from "@/lib/sdk/index.js"
@@ -109,7 +109,7 @@ interface WebviewViewProvider {
 export interface ExtensionHostInterface extends IExtensionHost<ExtensionHostEventMap> {
 	client: ExtensionClient
 	activate(): Promise<void>
-	runTask(prompt: string, taskId?: string, configuration?: RooCodeSettings, images?: string[]): Promise<void>
+	runTask(prompt: string, taskId?: string, configuration?: ShoferSettings, images?: string[]): Promise<void>
 	resumeTask(taskId: string): Promise<void>
 	sendToExtension(message: WebviewMessage): void
 	dispose(): Promise<void>
@@ -123,7 +123,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	private options: ExtensionHostOptions
 	private isReady = false
 	private messageListener: ((message: ExtensionMessage) => void) | null = null
-	private initialSettings: RooCodeSettings
+	private initialSettings: ShoferSettings
 
 	// Console suppression.
 	private originalConsole: {
@@ -219,7 +219,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		this.setupClientEventHandlers()
 
 		// Populate initial settings.
-		const baseSettings: RooCodeSettings = {
+		const baseSettings: ShoferSettings = {
 			mode: this.options.mode,
 			consecutiveMistakeLimit: this.options.consecutiveMistakeLimit ?? DEFAULT_FLAGS.consecutiveMistakeLimit,
 			commandExecutionTimeout: 300,
@@ -275,13 +275,13 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	 */
 	private setupClientEventHandlers(): void {
 		// Handle new messages - delegate to OutputManager.
-		this.client.on("message", (msg: ClineMessage) => {
+		this.client.on("message", (msg: ShoferMessage) => {
 			this.logMessageDebug(msg, "new")
 			this.outputManager.outputMessage(msg)
 		})
 
 		// Handle message updates - delegate to OutputManager.
-		this.client.on("messageUpdated", (msg: ClineMessage) => {
+		this.client.on("messageUpdated", (msg: ShoferMessage) => {
 			this.logMessageDebug(msg, "updated")
 			this.outputManager.outputMessage(msg)
 		})
@@ -349,7 +349,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		}
 	}
 
-	private logMessageDebug(msg: ClineMessage, type: "new" | "updated"): void {
+	private logMessageDebug(msg: ShoferMessage, type: "new" | "updated"): void {
 		if (msg.partial) {
 			if (!this.outputManager.hasLoggedFirstPartial(msg.ts)) {
 				this.outputManager.setLoggedFirstPartial(msg.ts)
@@ -447,7 +447,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		// sending webviewDidLaunch. This prevents a race condition where the
 		// webviewDidLaunch handler's first-time init sync reads default state
 		// (apiProvider: "anthropic") instead of the CLI-provided settings.
-		setRuntimeConfigValues("roo-cline", this.initialSettings as Record<string, unknown>)
+		setRuntimeConfigValues("shofer", this.initialSettings as Record<string, unknown>)
 		this.sendToExtension({ type: "updateSettings", updatedSettings: this.initialSettings })
 
 		// Now trigger extension initialization. The context proxy should already
@@ -498,10 +498,10 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 			// When exitOnError is enabled, listen for api_req_retry_delayed messages
 			// (sent by Task.ts during auto-approval retry backoff) and exit immediately.
-			let messageHandler: ((msg: ClineMessage) => void) | null = null
+			let messageHandler: ((msg: ShoferMessage) => void) | null = null
 
 			if (this.options.exitOnError) {
-				messageHandler = (msg: ClineMessage) => {
+				messageHandler = (msg: ShoferMessage) => {
 					if (msg.type === "say" && msg.say === "api_req_retry_delayed") {
 						cleanup()
 						reject(new Error(msg.text?.split("\n")[0] || "API request failed"))
@@ -519,7 +519,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	public async runTask(
 		prompt: string,
 		taskId?: string,
-		configuration?: RooCodeSettings,
+		configuration?: ShoferSettings,
 		images?: string[],
 	): Promise<void> {
 		this.sendToExtension({

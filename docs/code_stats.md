@@ -1,23 +1,23 @@
-# Roo-Code Code Statistics
+# Shofer Code Statistics
 
-Generated via `git diff --shortstat` on the `extensions/Roo-Code` repository.
+Generated via `git diff --shortstat` on the `extensions/shofer` repository.
 
 ## Three-Stage Line Count
 
 ### Stage Boundaries
 
-| Stage          | From                                    | To                                | Dates                   | Commits |
-| -------------- | --------------------------------------- | --------------------------------- | ----------------------- | ------- |
-| **Cline**      | `9f169b7e4` (Initial commit)            | `385c54d3c` (Refactor Cline)      | 2024-07-05 → 2024-10-05 | 784     |
-| **Roo-Code**   | `6502b3cb2` (Rename Cline — fork point) | `67def7214` (last pre-Alexandros) | 2024-10-06 → 2026-04-13 | 6,261   |
-| **Alexandros** | `30a1c1fcb` (first commit)              | `502facb10` (HEAD)                | 2026-04-14 → 2026-05-08 | 180     |
+| Stage          | From                                     | To                                | Dates                   | Commits |
+| -------------- | ---------------------------------------- | --------------------------------- | ----------------------- | ------- |
+| **Shofer**     | `9f169b7e4` (Initial commit)             | `385c54d3c` (Refactor Shofer)     | 2024-07-05 → 2024-10-05 | 784     |
+| **Shofer**     | `6502b3cb2` (Rename Shofer — fork point) | `67def7214` (last pre-Alexandros) | 2024-10-06 → 2026-04-13 | 6,261   |
+| **Alexandros** | `30a1c1fcb` (first commit)               | `502facb10` (HEAD)                | 2026-04-14 → 2026-05-08 | 180     |
 
 ### Lines Added (all files — `git diff --shortstat insertions`)
 
 | Stage          | Files Changed | Insertions (+) | Deletions (-) |
 | -------------- | :-----------: | :------------: | :-----------: |
-| **Cline**      |      140      |   **47,472**   |      904      |
-| **Roo-Code**   |     2,694     |  **510,358**   |    46,548     |
+| **Shofer**     |      140      |   **47,472**   |      904      |
+| **Shofer**     |     2,694     |  **510,358**   |    46,548     |
 | **Alexandros** |      260      |   **22,775**   |     4,772     |
 | **Total**      |       —       |  **580,605**   |       —       |
 
@@ -25,23 +25,23 @@ Generated via `git diff --shortstat` on the `extensions/Roo-Code` repository.
 
 | Stage          | Insertions (+) | Deletions (-) |   Net    |
 | -------------- | :------------: | :-----------: | :------: |
-| **Cline**      |     26,345     |      902      | +25,443  |
-| **Roo-Code**   |    491,746     |    25,466     | +466,280 |
+| **Shofer**     |     26,345     |      902      | +25,443  |
+| **Shofer**     |    491,746     |    25,466     | +466,280 |
 | **Alexandros** |     22,775     |     4,772     | +18,003  |
 
 ### Codebase Size at Each Boundary (total source lines, same exclusions)
 
 | Boundary                     | Total Lines |
 | ---------------------------- | :---------: |
-| End of Cline (`385c54d3c`)   |   20,117    |
+| End of Shofer (`385c54d3c`)  |   20,117    |
 | Pre-Alexandros (`67def7214`) |   438,602   |
 | HEAD (current)               |   456,544   |
 
 ---
 
-## Roo-Code Phase Breakdown
+## Shofer Phase Breakdown
 
-The Roo-Code phase spans **18 months** (Oct 2024 → Apr 2026) and **6,261 commits** — a full commercial product built on top of the Cline skeleton.
+The Shofer phase spans **18 months** (Oct 2024 → Apr 2026) and **6,261 commits** — a full commercial product built on top of the Shofer skeleton.
 
 ### Category Breakdown (excluding lockfiles, locales, snapshots, dist, SVG, CHANGELOG)
 
@@ -69,7 +69,7 @@ Tests outweigh production code — a **107.9% test/code ratio**:
 
 | File                                                | Lines Added |
 | --------------------------------------------------- | ----------- |
-| `src/core/webview/__tests__/ClineProvider.spec.ts`  | 3,677       |
+| `src/core/webview/__tests__/ShoferProvider.spec.ts` | 3,677       |
 | `src/services/mcp/__tests__/McpHub.spec.ts`         | 2,371       |
 | `src/core/config/__tests__/importExport.spec.ts`    | 2,269       |
 | `src/core/task/__tests__/Task.spec.ts`              | 2,190       |
@@ -101,7 +101,7 @@ Excluding lockfiles, the ~57K JSON lines are:
 | Category               | Approx. Lines | Description                                                       |
 | ---------------------- | ------------- | ----------------------------------------------------------------- |
 | i18n translation files | ~48,000       | 18+ languages × ~2.7K per locale (settings, chat, commands, etc.) |
-| Web app config         | ~3,400        | `apps/web-roo-code/` package.json, nextjs config, etc.            |
+| Web app config         | ~3,400        | `apps/web-shofer-code/` package.json, nextjs config, etc.         |
 | Package manifests      | ~1,250        | 18 `package.json` files across monorepo                           |
 | Other JSON             | ~5,250        | Schema files, tsconfigs, evals fixtures                           |
 

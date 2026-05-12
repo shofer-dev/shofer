@@ -16,7 +16,7 @@ export interface ResolveImageMentionsOptions {
 	text: string
 	images?: string[]
 	cwd: string
-	rooIgnoreController?: { validateAccess: (filePath: string) => boolean }
+	shoferIgnoreController?: { validateAccess: (filePath: string) => boolean }
 	/** Whether the current model supports images. Defaults to true. */
 	supportsImages?: boolean
 	/** Maximum size per image file in MB. Defaults to 5MB. */
@@ -55,13 +55,13 @@ function dedupePreserveOrder(values: string[]): string[] {
  * - Respects per-file size limits (default 5MB)
  * - Respects total memory limits (default 20MB)
  * - Skips images if model doesn't support them
- * - Respects `.rooignore` via `rooIgnoreController.validateAccess` when provided
+ * - Respects `.shoferignore` via `shoferIgnoreController.validateAccess` when provided
  */
 export async function resolveImageMentions({
 	text,
 	images,
 	cwd,
-	rooIgnoreController,
+	shoferIgnoreController,
 	supportsImages = true,
 	maxImageFileSize = DEFAULT_MAX_IMAGE_FILE_SIZE_MB,
 	maxTotalImageSize = DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB,
@@ -108,7 +108,7 @@ export async function resolveImageMentions({
 			continue
 		}
 
-		if (rooIgnoreController && !rooIgnoreController.validateAccess(relPath)) {
+		if (shoferIgnoreController && !shoferIgnoreController.validateAccess(relPath)) {
 			continue
 		}
 

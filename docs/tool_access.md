@@ -1,4 +1,4 @@
-# Tool Access Control in Roo Code Modes
+# Tool Access Control in Shofer Modes
 
 This document describes how a mode's available toolset is computed at runtime
 from its configuration. It is the authoritative reference for the three
@@ -116,7 +116,7 @@ group membership. Use this when:
 
 A mode may declare access purely through `tools_allowed` and omit `groups`
 entirely — this is what project-level read-only modes such as `reviewer` and
-`search` in `.roomodes` do.
+`search` in `.shofermodes` do.
 
 ### `tools_denied`
 
@@ -195,7 +195,7 @@ short-circuits.
 - **Schema validation:**
   [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) and the
   exported JSON schema in
-  [`schemas/roomodes.json`](../schemas/roomodes.json).
+  [`schemas/shofermodes.json`](../schemas/shofermodes.json).
 
 ## Related tests
 

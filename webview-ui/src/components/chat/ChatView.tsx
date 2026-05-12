@@ -12,17 +12,17 @@ import { appendImages } from "@src/utils/imageUtils"
 import { getCostBreakdownIfNeeded } from "@src/utils/costFormatting"
 import { batchConsecutive } from "@src/utils/batchConsecutive"
 
-import type { ClineAsk, ClineSayTool, ClineMessage, ExtensionMessage, AudioType } from "@roo-code/types"
-import { isRetiredProvider } from "@roo-code/types"
+import type { ShoferAsk, ShoferSayTool, ShoferMessage, ExtensionMessage, AudioType } from "@shofer/types"
+import { isRetiredProvider } from "@shofer/types"
 
-import { findLast } from "@roo/array"
-import { SuggestionItem } from "@roo-code/types"
-import { combineApiRequests } from "@roo/combineApiRequests"
-import { combineCommandSequences } from "@roo/combineCommandSequences"
-import { getApiMetrics } from "@roo/getApiMetrics"
-import { getAllModes } from "@roo/modes"
-import { ProfileValidator } from "@roo/ProfileValidator"
-import { getLatestTodo } from "@roo/todo"
+import { findLast } from "@shofer/array"
+import { SuggestionItem } from "@shofer/types"
+import { combineApiRequests } from "@shofer/combineApiRequests"
+import { combineCommandSequences } from "@shofer/combineCommandSequences"
+import { getApiMetrics } from "@shofer/getApiMetrics"
+import { getAllModes } from "@shofer/modes"
+import { ProfileValidator } from "@shofer/ProfileValidator"
+import { getLatestTodo } from "@shofer/todo"
 import { escapeSpaces } from "@src/utils/path-mentions"
 
 import { vscode } from "@src/utils/vscode"
@@ -30,8 +30,8 @@ import { type DroppedContextFile, extractUriPayload, parseDroppedUris } from "@s
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"
-import RooHero from "@src/components/welcome/RooHero"
-import RooTips from "@src/components/welcome/RooTips"
+import ShoferHero from "@src/components/welcome/ShoferHero"
+import ShoferTips from "@src/components/welcome/ShoferTips"
 import { StandardTooltip, Button } from "@src/components/ui"
 import { CloudUpsellDialog } from "@src/components/cloud/CloudUpsellDialog"
 
@@ -81,7 +81,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const modeShortcutText = `${isMac ? "⌘" : "Ctrl"} + . ${t("chat:forNextMode")}, ${isMac ? "⌘" : "Ctrl"} + Shift + . ${t("chat:forPreviousMode")}`
 
 	const {
-		clineMessages: messages,
+		shoferMessages: messages,
 		currentTaskItem,
 		currentTaskTodos,
 		taskHistory,
@@ -119,7 +119,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	// Leaving this less safe version here since if the first message is not a
 	// task, then the extension is in a bad state and needs to be debugged (see
-	// Cline.abort).
+	// Shofer.abort).
 	const task = useMemo(() => messages.at(0), [messages])
 
 	const latestTodos = useMemo(() => {
@@ -157,7 +157,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// let us know when an ask comes in and handle it, but by the time
 	// handleMessage is called, the last message might not be the ask anymore
 	// (it could be a say that followed).
-	const [clineAsk, setClineAsk] = useState<ClineAsk | undefined>(undefined)
+	const [shoferAsk, setShoferAsk] = useState<ShoferAsk | undefined>(undefined)
 	const [enableButtons, setEnableButtons] = useState<boolean>(false)
 	const [primaryButtonText, setPrimaryButtonText] = useState<string | undefined>(undefined)
 	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>(undefined)
@@ -195,10 +195,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		>
 	>(new Map())
 
-	const clineAskRef = useRef(clineAsk)
+	const shoferAskRef = useRef(shoferAsk)
 	useEffect(() => {
-		clineAskRef.current = clineAsk
-	}, [clineAsk])
+		shoferAskRef.current = shoferAsk
+	}, [shoferAsk])
 
 	const {
 		isOpen: isUpsellOpen,
@@ -273,8 +273,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	// Compute whether auto-approval is paused (user is typing in a followup)
 	const isFollowUpAutoApprovalPaused = useMemo(() => {
-		return !!(inputValue && inputValue.trim().length > 0 && clineAsk === "followup")
-	}, [inputValue, clineAsk])
+		return !!(inputValue && inputValue.trim().length > 0 && shoferAsk === "followup")
+	}, [inputValue, shoferAsk])
 
 	// Cancel auto-approval timeout when user starts typing
 	useEffect(() => {
@@ -353,7 +353,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					// re-enable sending so the chat doesn't appear blocked.
 					if (lastMessage.autoApproved) {
 						setSendingDisabled(false)
-						setClineAsk(undefined)
+						setShoferAsk(undefined)
 						setEnableButtons(false)
 						setPrimaryButtonText(undefined)
 						setSecondaryButtonText(undefined)
@@ -363,7 +363,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "api_req_failed":
 							playSound("progress_loop")
 							setSendingDisabled(true)
-							setClineAsk("api_req_failed")
+							setShoferAsk("api_req_failed")
 							setEnableButtons(true)
 							setPrimaryButtonText(t("chat:retry.title"))
 							setSecondaryButtonText(t("chat:startNewTask.title"))
@@ -371,7 +371,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "mistake_limit_reached":
 							playSound("progress_loop")
 							setSendingDisabled(false)
-							setClineAsk("mistake_limit_reached")
+							setShoferAsk("mistake_limit_reached")
 							setEnableButtons(true)
 							setPrimaryButtonText(t("chat:proceedAnyways.title"))
 							setSecondaryButtonText(t("chat:startNewTask.title"))
@@ -385,14 +385,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							//   * Text input → user-specified new dollar limit
 							//     (messageResponse with parsable number).
 							setSendingDisabled(false)
-							setClineAsk("budget_limit")
+							setShoferAsk("budget_limit")
 							setEnableButtons(true)
 							setPrimaryButtonText("Continue without limit")
 							setSecondaryButtonText("Abort task")
 							break
 						case "followup":
 							setSendingDisabled(isPartial)
-							setClineAsk("followup")
+							setShoferAsk("followup")
 							// setting enable buttons to `false` would trigger a focus grab when
 							// the text area is enabled which is undesirable.
 							// We have no buttons for this tool, so no problem having them "enabled"
@@ -403,9 +403,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							break
 						case "tool":
 							setSendingDisabled(isPartial)
-							setClineAsk("tool")
+							setShoferAsk("tool")
 							setEnableButtons(!isPartial)
-							const tool = JSON.parse(lastMessage.text || "{}") as ClineSayTool
+							const tool = JSON.parse(lastMessage.text || "{}") as ShoferSayTool
 							switch (tool.tool) {
 								case "editedExistingFile":
 								case "appliedDiff":
@@ -453,21 +453,21 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							break
 						case "command":
 							setSendingDisabled(isPartial)
-							setClineAsk("command")
+							setShoferAsk("command")
 							setEnableButtons(!isPartial)
 							setPrimaryButtonText(t("chat:runCommand.title"))
 							setSecondaryButtonText(t("chat:reject.title"))
 							break
 						case "command_output":
 							setSendingDisabled(false)
-							setClineAsk("command_output")
+							setShoferAsk("command_output")
 							setEnableButtons(true)
 							setPrimaryButtonText(t("chat:proceedWhileRunning.title"))
 							setSecondaryButtonText(t("chat:killCommand.title"))
 							break
 						case "use_mcp_server":
 							setSendingDisabled(isPartial)
-							setClineAsk("use_mcp_server")
+							setShoferAsk("use_mcp_server")
 							setEnableButtons(!isPartial)
 							setPrimaryButtonText(t("chat:approve.title"))
 							setSecondaryButtonText(t("chat:reject.title"))
@@ -479,14 +479,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								playSound("celebration")
 							}
 							setSendingDisabled(isPartial)
-							setClineAsk("completion_result")
+							setShoferAsk("completion_result")
 							setEnableButtons(!isPartial)
 							setPrimaryButtonText(t("chat:startNewTask.title"))
 							setSecondaryButtonText(undefined)
 							break
 						case "resume_task":
 							setSendingDisabled(false)
-							setClineAsk("resume_task")
+							setShoferAsk("resume_task")
 							setEnableButtons(true)
 							// For completed subtasks, show "Start New Task" instead of "Resume"
 							// A subtask is considered completed if:
@@ -508,7 +508,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							break
 						case "resume_completed_task":
 							setSendingDisabled(false)
-							setClineAsk("resume_completed_task")
+							setShoferAsk("resume_completed_task")
 							setEnableButtons(true)
 							setPrimaryButtonText(t("chat:startNewTask.title"))
 							setSecondaryButtonText(undefined)
@@ -533,7 +533,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							// images the user has pasted while the chat is in progress.
 							// Images are already cleared in the appropriate user-action
 							// handlers (handleSendMessage, handlePrimaryButtonClick, etc.).
-							setClineAsk(undefined)
+							setShoferAsk(undefined)
 							setEnableButtons(false)
 							setPrimaryButtonText(undefined)
 							setSecondaryButtonText(undefined)
@@ -554,7 +554,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	// Update button text when messages change (e.g., completion_result is added) for subtasks in resume_task state
 	useEffect(() => {
-		if (clineAsk === "resume_task" && currentTaskItem?.parentTaskId) {
+		if (shoferAsk === "resume_task" && currentTaskItem?.parentTaskId) {
 			const hasCompletionResult = messages.some(
 				(msg) => msg.ask === "completion_result" || msg.say === "completion_result",
 			)
@@ -563,12 +563,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				setSecondaryButtonText(undefined)
 			}
 		}
-	}, [clineAsk, currentTaskItem?.parentTaskId, messages, t])
+	}, [shoferAsk, currentTaskItem?.parentTaskId, messages, t])
 
 	useEffect(() => {
 		if (messages.length === 0) {
 			setSendingDisabled(false)
-			setClineAsk(undefined)
+			setShoferAsk(undefined)
 			setEnableButtons(false)
 			setPrimaryButtonText(undefined)
 			setSecondaryButtonText(undefined)
@@ -616,8 +616,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [])
 
 	const isStreaming = useMemo(() => {
-		// Checking clineAsk isn't enough since messages effect may be called
-		// again for a tool for example, set clineAsk to its value, and if the
+		// Checking shoferAsk isn't enough since messages effect may be called
+		// again for a tool for example, set shoferAsk to its value, and if the
 		// next message is not an ask then it doesn't reset. This is likely due
 		// to how much more often we're updating messages as compared to before,
 		// and should be resolved with optimizations as it's likely a rendering
@@ -626,7 +626,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		const isLastAsk = !!modifiedMessages.at(-1)?.ask
 
 		const isToolCurrentlyAsking =
-			isLastAsk && clineAsk !== undefined && enableButtons && primaryButtonText !== undefined
+			isLastAsk && shoferAsk !== undefined && enableButtons && primaryButtonText !== undefined
 
 		if (isToolCurrentlyAsking) {
 			return false
@@ -639,7 +639,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		} else {
 			const lastApiReqStarted = findLast(
 				modifiedMessages,
-				(message: ClineMessage) => message.say === "api_req_started",
+				(message: ShoferMessage) => message.say === "api_req_started",
 			)
 
 			if (
@@ -657,7 +657,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 
 		return false
-	}, [modifiedMessages, clineAsk, enableButtons, primaryButtonText])
+	}, [modifiedMessages, shoferAsk, enableButtons, primaryButtonText])
 
 	// Runtime execution state of the current task as published by TaskManager
 	// (running | waiting_input | paused | idle). Available even when there is no
@@ -685,7 +685,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const canStop = useMemo(() => {
 		if (isStreaming) return true
 		if (task === undefined) return false
-		if (clineAsk === "completion_result" || clineAsk === "resume_task" || clineAsk === "resume_completed_task") {
+		if (shoferAsk === "completion_result" || shoferAsk === "resume_task" || shoferAsk === "resume_completed_task") {
 			return false
 		}
 		// Task loop is actively executing (e.g. running an auto-approved tool
@@ -697,11 +697,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// followup, api_req_failed, mistake_limit_reached, budget_limit) is
 		// considered stoppable: the user may want to abort the task instead
 		// of answering the prompt.
-		return clineAsk !== undefined
-	}, [isStreaming, task, clineAsk, currentTaskRuntimeState])
+		return shoferAsk !== undefined
+	}, [isStreaming, task, shoferAsk, currentTaskRuntimeState])
 
 	const markFollowUpAsAnswered = useCallback(() => {
-		const lastFollowUpMessage = messagesRef.current.findLast((msg: ClineMessage) => msg.ask === "followup")
+		const lastFollowUpMessage = messagesRef.current.findLast((msg: ShoferMessage) => msg.ask === "followup")
 		if (lastFollowUpMessage) {
 			setCurrentFollowUpTs(lastFollowUpMessage.ts)
 		}
@@ -733,7 +733,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// Likewise, do NOT touch sendingDisabled here — the welcome screen needs
 		// sending enabled, and handleSendMessage sets sendingDisabled itself when
 		// it needs to lock until backend ack.
-		setClineAsk(undefined)
+		setShoferAsk(undefined)
 		setEnableButtons(false)
 		// Do not reset mode here as it should persist.
 		// setPrimaryButtonText(undefined)
@@ -866,7 +866,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					sendingDisabled ||
 					isStreaming ||
 					messageQueue.length > 0 ||
-					clineAskRef.current === "command_output"
+					shoferAskRef.current === "command_output"
 				) {
 					try {
 						console.log("queueMessage", text, images)
@@ -897,14 +897,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						worktreeDir: pendingWorktreeDir ?? undefined,
 					})
 					if (pendingWorktreeDir) setPendingWorktreeDir(null)
-				} else if (clineAskRef.current) {
-					if (clineAskRef.current === "followup") {
+				} else if (shoferAskRef.current) {
+					if (shoferAskRef.current === "followup") {
 						markFollowUpAsAnswered()
 					}
 
-					// Use clineAskRef.current
+					// Use shoferAskRef.current
 					switch (
-						clineAskRef.current // Use clineAskRef.current
+						shoferAskRef.current // Use shoferAskRef.current
 					) {
 						case "followup":
 						case "tool":
@@ -930,7 +930,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				}
 
 				// Lock further sends until the backend acks (state effects above
-				// will re-enable based on the resulting clineAsk / streaming state).
+				// will re-enable based on the resulting shoferAsk / streaming state).
 				setSendingDisabled(true)
 				handleChatReset()
 				// The task id does not change on a send, so the task-id-change
@@ -950,7 +950,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			apiConfiguration?.apiProvider,
 			pendingWorktreeDir,
 			setPendingWorktreeDir,
-		], // messagesRef and clineAskRef are stable
+		], // messagesRef and shoferAskRef are stable
 	)
 
 	const handleSetChatBoxMessage = useCallback(
@@ -995,7 +995,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 	}, [inputValue, selectedImages])
 
-	// This logic depends on the useEffect[messages] above to set clineAsk,
+	// This logic depends on the useEffect[messages] above to set shoferAsk,
 	// after which buttons are shown and we then send an askResponse to the
 	// extension.
 	const handlePrimaryButtonClick = useCallback(
@@ -1005,7 +1005,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 			const trimmedInput = text?.trim()
 
-			switch (clineAsk) {
+			switch (shoferAsk) {
 				case "api_req_failed":
 				case "command":
 				case "tool":
@@ -1065,12 +1065,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			}
 
 			setSendingDisabled(true)
-			setClineAsk(undefined)
+			setShoferAsk(undefined)
 			setEnableButtons(false)
 			setPrimaryButtonText(undefined)
 			setSecondaryButtonText(undefined)
 		},
-		[clineAsk, startNewTask, currentTaskItem?.parentTaskId],
+		[shoferAsk, startNewTask, currentTaskItem?.parentTaskId],
 	)
 
 	const handleSecondaryButtonClick = useCallback(
@@ -1086,7 +1086,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				return
 			}
 
-			switch (clineAsk) {
+			switch (shoferAsk) {
 				case "api_req_failed":
 				case "mistake_limit_reached":
 				case "resume_task":
@@ -1121,10 +1121,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					break
 			}
 			setSendingDisabled(true)
-			setClineAsk(undefined)
+			setShoferAsk(undefined)
 			setEnableButtons(false)
 		},
-		[clineAsk, startNewTask, isStreaming, setDidClickCancel],
+		[shoferAsk, startNewTask, isStreaming, setDidClickCancel],
 	)
 
 	const { info: model } = useSelectedModel(apiConfiguration)
@@ -1216,7 +1216,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					break
 				case "addContextFiles":
 					// Files dropped onto the native ContextDropZone TreeView in
-					// the Roo Code sidebar.  Merge into the existing tag list,
+					// the Shofer sidebar.  Merge into the existing tag list,
 					// deduping by path so dragging the same file twice is a no-op.
 					if (message.contextFiles && message.contextFiles.length > 0) {
 						setDroppedContextFiles((prev) => {
@@ -1289,7 +1289,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			}
 
 			if (everVisibleMessagesTsRef.current.has(message.ts)) {
-				const alwaysHiddenOnceProcessedAsk: ClineAsk[] = [
+				const alwaysHiddenOnceProcessedAsk: ShoferAsk[] = [
 					"api_req_failed",
 					"resume_task",
 					"resume_completed_task",
@@ -1344,7 +1344,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		const viewportStart = Math.max(0, newVisibleMessages.length - 100)
 		newVisibleMessages
 			.slice(viewportStart)
-			.forEach((msg: ClineMessage) => everVisibleMessagesTsRef.current.set(msg.ts, true))
+			.forEach((msg: ShoferMessage) => everVisibleMessagesTsRef.current.set(msg.ts, true))
 
 		return newVisibleMessages
 	}, [modifiedMessages])
@@ -1352,9 +1352,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	useEffect(() => {
 		const cleanupInterval = setInterval(() => {
 			const cache = everVisibleMessagesTsRef.current
-			const currentMessageIds = new Set(modifiedMessages.map((m: ClineMessage) => m.ts))
+			const currentMessageIds = new Set(modifiedMessages.map((m: ShoferMessage) => m.ts))
 			const viewportMessages = visibleMessages.slice(Math.max(0, visibleMessages.length - 100))
-			const viewportMessageIds = new Set(viewportMessages.map((m: ClineMessage) => m.ts))
+			const viewportMessageIds = new Set(viewportMessages.map((m: ShoferMessage) => m.ts))
 
 			cache.forEach((_value: boolean, key: number) => {
 				if (!currentMessageIds.has(key) && !viewportMessageIds.has(key)) {
@@ -1410,10 +1410,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [isStreaming, lastMessage, wasStreaming, messages.length])
 
 	const groupedMessages = useMemo(() => {
-		const filtered: ClineMessage[] = visibleMessages
+		const filtered: ShoferMessage[] = visibleMessages
 
 		// Helper to check if a message is a read_file ask that should be batched
-		const isReadFileAsk = (msg: ClineMessage): boolean => {
+		const isReadFileAsk = (msg: ShoferMessage): boolean => {
 			if (msg.type !== "ask" || msg.ask !== "tool") return false
 			try {
 				const tool = JSON.parse(msg.text || "{}")
@@ -1424,7 +1424,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 
 		// Helper to check if a message is a list_files ask that should be batched
-		const isListFilesAsk = (msg: ClineMessage): boolean => {
+		const isListFilesAsk = (msg: ShoferMessage): boolean => {
 			if (msg.type !== "ask" || msg.ask !== "tool") return false
 			try {
 				const tool = JSON.parse(msg.text || "{}")
@@ -1446,7 +1446,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		])
 
 		// Helper to check if a message is a file-edit ask that should be batched
-		const isEditFileAsk = (msg: ClineMessage): boolean => {
+		const isEditFileAsk = (msg: ShoferMessage): boolean => {
 			if (msg.type !== "ask" || msg.ask !== "tool") return false
 			try {
 				const tool = JSON.parse(msg.text || "{}")
@@ -1457,7 +1457,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 
 		// Synthesize a batch of consecutive read_file asks into a single message
-		const synthesizeReadFileBatch = (batch: ClineMessage[]): ClineMessage => {
+		const synthesizeReadFileBatch = (batch: ShoferMessage[]): ShoferMessage => {
 			const batchFiles = batch.map((batchMsg) => {
 				try {
 					const tool = JSON.parse(batchMsg.text || "{}")
@@ -1486,7 +1486,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 
 		// Synthesize a batch of consecutive list_files asks into a single message
-		const synthesizeListFilesBatch = (batch: ClineMessage[]): ClineMessage => {
+		const synthesizeListFilesBatch = (batch: ShoferMessage[]): ShoferMessage => {
 			const batchDirs = batch.map((batchMsg) => {
 				try {
 					const tool = JSON.parse(batchMsg.text || "{}")
@@ -1514,7 +1514,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 
 		// Synthesize a batch of consecutive file-edit asks into a single message
-		const synthesizeEditFileBatch = (batch: ClineMessage[]): ClineMessage => {
+		const synthesizeEditFileBatch = (batch: ShoferMessage[]): ShoferMessage => {
 			const batchDiffs = batch.map((batchMsg) => {
 				try {
 					const tool = JSON.parse(batchMsg.text || "{}")
@@ -1553,7 +1553,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				say: "condense_context",
 				ts: Date.now(),
 				partial: true,
-			} as ClineMessage)
+			} as ShoferMessage)
 		}
 		return result
 	}, [isCondensing, visibleMessages])
@@ -1649,7 +1649,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			}
 
 			// Mark the current follow-up question as answered when a suggestion is clicked
-			if (clineAsk === "followup" && !event?.shiftKey) {
+			if (shoferAsk === "followup" && !event?.shiftKey) {
 				markFollowUpAsAnswered()
 			}
 
@@ -1677,7 +1677,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				setInputValue(preservedInput)
 			}
 		},
-		[handleSendMessage, setInputValue, switchToMode, alwaysAllowModeSwitch, clineAsk, markFollowUpAsAnswered],
+		[handleSendMessage, setInputValue, switchToMode, alwaysAllowModeSwitch, shoferAsk, markFollowUpAsAnswered],
 	)
 
 	const handleBatchFileResponse = useCallback((response: { [key: string]: boolean }) => {
@@ -1692,7 +1692,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [])
 
 	const itemContent = useCallback(
-		(index: number, messageOrGroup: ClineMessage) => {
+		(index: number, messageOrGroup: ShoferMessage) => {
 			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
 
 			// regular message
@@ -1788,7 +1788,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				// while a task is loaded (otherwise let the platform default win).
 				// Modifier combos like Ctrl+Shift+F (workspace search) and
 				// Ctrl+Alt+F must fall through to VS Code so they keep working
-				// when the Roo webview happens to hold focus.
+				// when the Shofer webview happens to hold focus.
 				if (!task) return
 				// CRITICAL: VS Code's webview iframe wrapper installs its own
 				// bubble-phase keydown listener (`handleInnerKeydown` in
@@ -1829,7 +1829,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 			// Special case: during command_output, queue the message instead of
 			// triggering the primary button action (which would lose the message)
-			if (clineAskRef.current === "command_output" && hasInput) {
+			if (shoferAskRef.current === "command_output" && hasInput) {
 				vscode.postMessage({ type: "queueMessage", text: inputValue.trim(), images: selectedImages })
 				setInputValue("")
 				setSelectedImages([])
@@ -1963,9 +1963,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								className="absolute top-2 right-3 z-10"
 							/>
 							<div className="flex flex-col gap-4 w-full">
-								<RooHero />
-								{/* Show RooTips when authenticated or when user is new */}
-								{taskHistory.length < 6 && <RooTips />}
+								<ShoferHero />
+								{/* Show ShoferTips when authenticated or when user is new */}
+								{taskHistory.length < 6 && <ShoferTips />}
 								{/* Everyone should see their task history if any */}
 								{taskHistory.length > 0 && <HistoryPreview />}
 							</div>
@@ -2179,7 +2179,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				inputValue={inputValue}
 				setInputValue={setInputValue}
 				sendingDisabled={sendingDisabled || isProfileDisabled}
-				selectApiConfigDisabled={sendingDisabled && clineAsk !== "api_req_failed"}
+				selectApiConfigDisabled={sendingDisabled && shoferAsk !== "api_req_failed"}
 				placeholderText={placeholderText}
 				selectedImages={selectedImages}
 				setSelectedImages={setSelectedImages}
@@ -2219,7 +2219,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				</div>
 			)}
 
-			<div id="roo-portal" />
+			<div id="shofer-portal" />
 			<CloudUpsellDialog open={isUpsellOpen} onOpenChange={closeUpsell} onConnect={handleConnect} />
 			{/* Task notifications for background tasks */}
 			<TaskNotificationContainer

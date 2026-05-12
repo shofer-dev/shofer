@@ -2,12 +2,12 @@ import EventEmitter from "events"
 
 import { z } from "zod"
 
-import { RooCodeEventName } from "./events.js"
+import { ShoferEventName } from "./events.js"
 import { TaskStatus, taskMetadataSchema } from "./task.js"
 import { globalSettingsSchema } from "./global-settings.js"
 import { providerSettingsWithIdSchema } from "./provider-settings.js"
 import { mcpMarketplaceItemSchema } from "./marketplace.js"
-import { clineMessageSchema, queuedMessageSchema, tokenUsageSchema } from "./message.js"
+import { shoferMessageSchema, queuedMessageSchema, tokenUsageSchema } from "./message.js"
 import { staticAppPropertiesSchema, gitPropertiesSchema } from "./telemetry.js"
 
 /**
@@ -95,7 +95,7 @@ export const organizationDefaultSettingsSchema = globalSettingsSchema
 		enableCheckpoints: true,
 		maxOpenTabsContext: true,
 		maxWorkspaceFiles: true,
-		showRooIgnoredFiles: true,
+		showShoferIgnoredFiles: true,
 		terminalCommandDelay: true,
 		terminalShellIntegrationDisabled: true,
 		terminalShellIntegrationTimeout: true,
@@ -391,7 +391,7 @@ export const INSTANCE_TTL_SECONDS = 60
 const extensionTaskSchema = z.object({
 	taskId: z.string(),
 	taskStatus: z.nativeEnum(TaskStatus),
-	taskAsk: clineMessageSchema.optional(),
+	taskAsk: shoferMessageSchema.optional(),
 	queuedMessages: z.array(queuedMessageSchema).optional(),
 	parentTaskId: z.string().optional(),
 	childTaskId: z.string().optional(),
@@ -413,7 +413,7 @@ export const extensionInstanceSchema = z.object({
 	gitProperties: gitPropertiesSchema.optional(),
 	lastHeartbeat: z.coerce.number(),
 	task: extensionTaskSchema,
-	taskAsk: clineMessageSchema.optional(),
+	taskAsk: shoferMessageSchema.optional(),
 	taskHistory: z.array(z.string()),
 	mode: z.string().optional(),
 	modes: z.array(z.object({ slug: z.string(), name: z.string() })).optional(),
@@ -429,9 +429,9 @@ export type ExtensionInstance = z.infer<typeof extensionInstanceSchema>
  */
 
 export enum TaskBridgeEventName {
-	Message = RooCodeEventName.Message,
-	TaskModeSwitched = RooCodeEventName.TaskModeSwitched,
-	TaskInteractive = RooCodeEventName.TaskInteractive,
+	Message = ShoferEventName.Message,
+	TaskModeSwitched = ShoferEventName.TaskModeSwitched,
+	TaskInteractive = ShoferEventName.TaskInteractive,
 }
 
 export const taskBridgeEventSchema = z.discriminatedUnion("type", [
@@ -439,7 +439,7 @@ export const taskBridgeEventSchema = z.discriminatedUnion("type", [
 		type: z.literal(TaskBridgeEventName.Message),
 		taskId: z.string(),
 		action: z.string(),
-		message: clineMessageSchema,
+		message: shoferMessageSchema,
 	}),
 	z.object({
 		type: z.literal(TaskBridgeEventName.TaskModeSwitched),

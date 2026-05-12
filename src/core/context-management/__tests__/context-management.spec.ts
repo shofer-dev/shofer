@@ -2,8 +2,8 @@
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ModelInfo } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import type { ModelInfo } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { BaseProvider } from "../../../api/providers/base-provider"
 import { ApiMessage } from "../../task-persistence/apiMessages"
@@ -866,7 +866,7 @@ describe("Context Management", () => {
 			{ role: "user", content: "Fifth message" },
 		]
 
-		it("should pass filesReadByRoo, cwd, and rooIgnoreController to summarizeConversation when provided", async () => {
+		it("should pass filesReadByRoo, cwd, and shoferIgnoreController to summarizeConversation when provided", async () => {
 			// Mock the summarizeConversation function
 			const mockSummary = "Summary with folded context"
 			const mockCost = 0.05
@@ -894,9 +894,9 @@ describe("Context Management", () => {
 
 			const filesReadByRoo = ["src/test.ts", "src/utils.ts"]
 			const cwd = "/test/project"
-			const mockRooIgnoreController = {
+			const mockShoferIgnoreController = {
 				filterPaths: vi.fn(),
-			} as unknown as import("../../ignore/RooIgnoreController").RooIgnoreController
+			} as unknown as import("../../ignore/ShoferIgnoreController").ShoferIgnoreController
 
 			const result = await manageContext({
 				messages: messagesWithSmallContent,
@@ -912,10 +912,10 @@ describe("Context Management", () => {
 				currentProfileId: "default",
 				filesReadByRoo,
 				cwd,
-				rooIgnoreController: mockRooIgnoreController,
+				shoferIgnoreController: mockShoferIgnoreController,
 			})
 
-			// Verify summarizeConversation was called with filesReadByRoo, cwd, and rooIgnoreController
+			// Verify summarizeConversation was called with filesReadByRoo, cwd, and shoferIgnoreController
 			expect(summarizeSpy).toHaveBeenCalledWith({
 				messages: messagesWithSmallContent,
 				apiHandler: mockApiHandler,
@@ -924,7 +924,7 @@ describe("Context Management", () => {
 				isAutomaticTrigger: true,
 				filesReadByRoo,
 				cwd,
-				rooIgnoreController: mockRooIgnoreController,
+				shoferIgnoreController: mockShoferIgnoreController,
 			})
 
 			// Verify the result contains the summary information
@@ -977,7 +977,7 @@ describe("Context Management", () => {
 				taskId,
 				profileThresholds: {},
 				currentProfileId: "default",
-				// filesReadByRoo, cwd, rooIgnoreController are NOT provided
+				// filesReadByRoo, cwd, shoferIgnoreController are NOT provided
 			})
 
 			// Verify summarizeConversation was called with undefined parameters

@@ -1,7 +1,7 @@
 /**
  * JsonEventEmitter - Handles structured JSON output for the CLI
  *
- * This class transforms internal CLI events (ClineMessage, state changes, etc.)
+ * This class transforms internal CLI events (ShoferMessage, state changes, etc.)
  * into structured JSON events and outputs them to stdout.
  *
  * Supports two output modes:
@@ -14,7 +14,7 @@
  * - `done` flag instead of partial:false
  */
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import type { JsonEvent, JsonEventCost, JsonEventQueueItem, JsonFinalOutput } from "@/types/json-events.js"
 
@@ -41,7 +41,7 @@ export interface JsonEventEmitterOptions {
 }
 
 /**
- * Parse tool information from a ClineMessage text field.
+ * Parse tool information from a ShoferMessage text field.
  * Tool messages are JSON with a `tool` field containing the tool name.
  */
 function parseToolInfo(text: string | undefined): { name: string; input: Record<string, unknown> } | null {
@@ -131,7 +131,7 @@ export class JsonEventEmitter {
 		this.stdout = options.stdout ?? process.stdout
 		this.requestIdProvider = options.requestIdProvider ?? (() => undefined)
 		this.schemaVersion = options.schemaVersion ?? 1
-		this.protocol = options.protocol ?? "roo-cli-stream"
+		this.protocol = options.protocol ?? "shofer-cli-stream"
 		this.capabilities = options.capabilities ?? [
 			"stdin:start",
 			"stdin:message",
@@ -471,9 +471,9 @@ export class JsonEventEmitter {
 	}
 
 	/**
-	 * Handle a ClineMessage and emit the appropriate JSON event.
+	 * Handle a ShoferMessage and emit the appropriate JSON event.
 	 */
-	private handleMessage(msg: ClineMessage, _isUpdate: boolean): void {
+	private handleMessage(msg: ShoferMessage, _isUpdate: boolean): void {
 		const isDone = !msg.partial
 
 		// In json mode, only emit complete (non-partial) messages
@@ -511,7 +511,7 @@ export class JsonEventEmitter {
 	/**
 	 * Handle "say" type messages.
 	 */
-	private handleSayMessage(msg: ClineMessage, contentToSend: string | null, isDone: boolean): void {
+	private handleSayMessage(msg: ShoferMessage, contentToSend: string | null, isDone: boolean): void {
 		switch (msg.say) {
 			case "text":
 				if (this.expectPromptEchoAsUser) {
@@ -583,7 +583,7 @@ export class JsonEventEmitter {
 	/**
 	 * Handle reasoning/thinking messages with separate delta tracking.
 	 */
-	private handleReasoningMessage(msg: ClineMessage, isDone: boolean): void {
+	private handleReasoningMessage(msg: ShoferMessage, isDone: boolean): void {
 		const reasoningContent = msg.reasoning || msg.text
 		const reasoningKey = msg.ts + REASONING_KEY_OFFSET
 		const reasoningDelta = this.getContentToSend(reasoningKey, reasoningContent, msg.partial ?? false)
@@ -602,7 +602,7 @@ export class JsonEventEmitter {
 	/**
 	 * Handle "ask" type messages.
 	 */
-	private handleAskMessage(msg: ClineMessage, isDone: boolean): void {
+	private handleAskMessage(msg: ShoferMessage, isDone: boolean): void {
 		switch (msg.ask) {
 			case "tool":
 				this.handleToolUseAsk(msg, "tool", isDone)
@@ -653,7 +653,7 @@ export class JsonEventEmitter {
 		}
 	}
 
-	private handleToolUseAsk(msg: ClineMessage, subtype: "tool" | "command" | "mcp", isDone: boolean): void {
+	private handleToolUseAsk(msg: ShoferMessage, subtype: "tool" | "command" | "mcp", isDone: boolean): void {
 		const isStreamingPartial = this.mode === "stream-json" && msg.partial === true
 		const toolInfo = parseToolInfo(msg.text)
 
@@ -750,7 +750,7 @@ export class JsonEventEmitter {
 		})
 	}
 
-	private handleCommandOutputMessage(msg: ClineMessage, isDone: boolean): void {
+	private handleCommandOutputMessage(msg: ShoferMessage, isDone: boolean): void {
 		const commandId = this.activeCommandToolUseId ?? msg.ts
 		if (this.completedCommandOutputIds.has(commandId)) {
 			return

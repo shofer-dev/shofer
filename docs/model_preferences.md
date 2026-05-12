@@ -78,9 +78,9 @@ Applied in [`src/api/providers/vertex.ts`](../src/api/providers/vertex.ts:29):
 
 ---
 
-## Roo Code Cloud (API-Configured)
+## Shofer Cloud (API-Configured)
 
-Settings are fetched from the Roo Code Cloud API and applied per model. The API supports two configuration mechanisms:
+Settings are fetched from the Shofer Cloud API and applied per model. The API supports two configuration mechanisms:
 
 ### Plain Settings
 
@@ -128,7 +128,7 @@ Version-keyed settings for client-specific behavior:
 | **OpenAI (router)** | `apply_diff`, `write_to_file` | `apply_patch`   | Uses codex-style patching |
 | **Gemini**          | `apply_diff`                  | `edit`          | Uses string replacement   |
 | **Vertex**          | `apply_diff`                  | `edit`          | Uses string replacement   |
-| **Roo Cloud**       | Varies by model               | Varies by model | API-configured per model  |
+| **Shofer Cloud**    | Varies by model               | Varies by model | API-configured per model  |
 
 ---
 

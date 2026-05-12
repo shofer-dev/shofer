@@ -9,7 +9,7 @@ import { ExtensionStateContextProvider } from "@src/context/ExtensionStateContex
 import ChatView, { ChatViewProps } from "../ChatView"
 
 // Define minimal types needed for testing
-interface ClineMessage {
+interface ShoferMessage {
 	type: "say" | "ask"
 	say?: string
 	ask?: string
@@ -26,7 +26,7 @@ interface QueuedMessage {
 
 interface ExtensionState {
 	version: string
-	clineMessages: ClineMessage[]
+	shoferMessages: ShoferMessage[]
 	taskHistory: any[]
 	shouldShowAnnouncement: boolean
 	messageQueue?: QueuedMessage[]
@@ -50,7 +50,7 @@ vi.mock("use-sound", () => ({
 
 // Mock components that use ESM dependencies
 vi.mock("../ChatRow", () => ({
-	default: function MockChatRow({ message }: { message: ClineMessage }) {
+	default: function MockChatRow({ message }: { message: ShoferMessage }) {
 		return <div data-testid="chat-row">{JSON.stringify(message)}</div>
 	},
 }))
@@ -112,17 +112,17 @@ vi.mock("../QueuedMessages", () => ({
 	},
 }))
 
-// Mock RooTips component
-vi.mock("@src/components/welcome/RooTips", () => ({
-	default: function MockRooTips() {
-		return <div data-testid="roo-tips">Tips content</div>
+// Mock ShoferTips component
+vi.mock("@src/components/welcome/ShoferTips", () => ({
+	default: function MockShoferTips() {
+		return <div data-testid="shofer-tips">Tips content</div>
 	},
 }))
 
-// Mock RooHero component
-vi.mock("@src/components/welcome/RooHero", () => ({
-	default: function MockRooHero() {
-		return <div data-testid="roo-hero">Hero content</div>
+// Mock ShoferHero component
+vi.mock("@src/components/welcome/ShoferHero", () => ({
+	default: function MockShoferHero() {
+		return <div data-testid="shofer-hero">Hero content</div>
 	},
 }))
 
@@ -245,7 +245,7 @@ const mockPostMessage = (state: Partial<ExtensionState>) => {
 			type: "state",
 			state: {
 				version: "1.0.0",
-				clineMessages: [],
+				shoferMessages: [],
 				taskHistory: [],
 				shouldShowAnnouncement: false,
 				cloudIsAuthenticated: false,
@@ -292,7 +292,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 					images: [],
 				},
 			],
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -315,7 +315,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 					images: [],
 				},
 			],
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -349,7 +349,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 		mockPostMessage({
 			soundEnabled: true, // Enable sound
 			messageQueue: [], // Empty queue
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -366,7 +366,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 		mockPostMessage({
 			soundEnabled: true, // Enable sound
 			messageQueue: [], // Empty queue
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -408,7 +408,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 					images: [],
 				},
 			],
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -436,7 +436,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 					images: [],
 				},
 			],
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -470,7 +470,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 		mockPostMessage({
 			soundEnabled: true, // Enable sound
 			messageQueue: [], // Empty queue
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -487,7 +487,7 @@ describe("ChatView - Notification Sound with Queued Messages", () => {
 		mockPostMessage({
 			soundEnabled: true, // Enable sound
 			messageQueue: [], // Empty queue
-			clineMessages: [
+			shoferMessages: [
 				{
 					type: "say",
 					say: "task",
@@ -528,7 +528,7 @@ describe("ChatView - Sound Debounce", () => {
 		mockPostMessage({
 			soundEnabled: true,
 			messageQueue: [],
-			clineMessages: [{ type: "say", say: "task", ts: now - 2000, text: "Initial task" }],
+			shoferMessages: [{ type: "say", say: "task", ts: now - 2000, text: "Initial task" }],
 		})
 
 		// Clear any setup calls
@@ -538,7 +538,7 @@ describe("ChatView - Sound Debounce", () => {
 		mockPostMessage({
 			soundEnabled: true,
 			messageQueue: [],
-			clineMessages: [
+			shoferMessages: [
 				{ type: "say", say: "task", ts: now - 2000, text: "Initial task" },
 				{ type: "ask", ask: "completion_result", ts: now, text: "Task completed", partial: false },
 			],
@@ -555,7 +555,7 @@ describe("ChatView - Sound Debounce", () => {
 		mockPostMessage({
 			soundEnabled: true,
 			messageQueue: [],
-			clineMessages: [
+			shoferMessages: [
 				{ type: "say", say: "task", ts: now - 2000, text: "Initial task" },
 				{ type: "ask", ask: "completion_result", ts: now + 50, text: "Task completed again", partial: false },
 			],
@@ -580,7 +580,7 @@ describe("ChatView - Sound Debounce", () => {
 		mockPostMessage({
 			soundEnabled: true,
 			messageQueue: [],
-			clineMessages: [{ type: "say", say: "task", ts: now - 2000, text: "Initial task" }],
+			shoferMessages: [{ type: "say", say: "task", ts: now - 2000, text: "Initial task" }],
 		})
 
 		// Clear any setup calls
@@ -590,7 +590,7 @@ describe("ChatView - Sound Debounce", () => {
 		mockPostMessage({
 			soundEnabled: true,
 			messageQueue: [],
-			clineMessages: [
+			shoferMessages: [
 				{ type: "say", say: "task", ts: now - 2000, text: "Initial task" },
 				{ type: "ask", ask: "completion_result", ts: now, text: "Task completed", partial: false },
 			],
@@ -607,7 +607,7 @@ describe("ChatView - Sound Debounce", () => {
 		mockPostMessage({
 			soundEnabled: true,
 			messageQueue: [],
-			clineMessages: [
+			shoferMessages: [
 				{ type: "say", say: "task", ts: now - 2000, text: "Initial task" },
 				{ type: "ask", ask: "completion_result", ts: now + 101, text: "Second task completed", partial: false },
 			],

@@ -51,9 +51,9 @@ vi.mock("../../common/Tab", () => ({
 	TabContent: ({ children }: any) => <div data-testid="tab-content">{children}</div>,
 }))
 
-// Mock RooHero
-vi.mock("../RooHero", () => ({
-	default: () => <div data-testid="roo-hero">Roo Hero</div>,
+// Mock ShoferHero
+vi.mock("../ShoferHero", () => ({
+	default: () => <div data-testid="shofer-hero">Shofer Hero</div>,
 }))
 
 // Mock lucide-react icons
@@ -90,7 +90,7 @@ vi.mock("@src/i18n/TranslationContext", () => ({
 
 // Mock buildDocLink
 vi.mock("@/utils/docLinks", () => ({
-	buildDocLink: (path: string, source: string) => `https://docs.roocode.com/${path}?utm_source=${source}`,
+	buildDocLink: (path: string, source: string) => `https://docs.shofer.com/${path}?utm_source=${source}`,
 }))
 
 const renderWelcomeViewProvider = (extensionState = {}) => {
@@ -177,7 +177,7 @@ describe("WelcomeViewProvider", () => {
 
 			// Should now show provider selection screen with radio buttons
 			expect(screen.getByTestId("radio-group")).toBeInTheDocument()
-			expect(screen.getByTestId("radio-roo")).toBeInTheDocument()
+			expect(screen.getByTestId("radio-shofer")).toBeInTheDocument()
 			expect(screen.getByTestId("radio-custom")).toBeInTheDocument()
 			expect(screen.getByTestId("trans-welcome:providerSignup.chooseProvider")).toBeInTheDocument()
 		})
@@ -191,7 +191,7 @@ describe("WelcomeViewProvider", () => {
 			fireEvent.click(noAccountLink!)
 		}
 
-		it("shows radio buttons for Roo and Custom providers", () => {
+		it("shows radio buttons for Shofer and Custom providers", () => {
 			renderWelcomeViewProvider()
 			navigateToProviderSelection()
 
@@ -199,25 +199,25 @@ describe("WelcomeViewProvider", () => {
 			expect(screen.getByTestId("radio-group")).toBeInTheDocument()
 
 			// Should show both radio options
-			expect(screen.getByTestId("radio-roo")).toBeInTheDocument()
+			expect(screen.getByTestId("radio-shofer")).toBeInTheDocument()
 			expect(screen.getByTestId("radio-custom")).toBeInTheDocument()
 
-			// Should show Roo provider description
+			// Should show Shofer provider description
 			expect(screen.getByText(/welcome:providerSignup.rooCloudDescription/)).toBeInTheDocument()
 
 			// Should show custom provider description
 			expect(screen.getByText(/welcome:providerSignup.useAnotherProviderDescription/)).toBeInTheDocument()
 		})
 
-		it("Roo provider is selected by default", () => {
+		it("Shofer provider is selected by default", () => {
 			renderWelcomeViewProvider()
 			navigateToProviderSelection()
 
 			const radioGroup = screen.getByTestId("radio-group")
-			expect(radioGroup).toHaveAttribute("data-value", "roo")
+			expect(radioGroup).toHaveAttribute("data-value", "shofer")
 		})
 
-		it("does not show API options when Roo provider is selected", () => {
+		it("does not show API options when Shofer provider is selected", () => {
 			renderWelcomeViewProvider()
 			navigateToProviderSelection()
 
@@ -228,7 +228,7 @@ describe("WelcomeViewProvider", () => {
 			expect(apiOptions).toBeInTheDocument()
 		})
 
-		it("triggers auth when Get Started is clicked on Roo provider (not authenticated)", () => {
+		it("triggers auth when Get Started is clicked on Shofer provider (not authenticated)", () => {
 			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
 			navigateToProviderSelection()
 
@@ -241,7 +241,7 @@ describe("WelcomeViewProvider", () => {
 			})
 		})
 
-		it("saves config immediately when Get Started is clicked on Roo provider (already authenticated)", () => {
+		it("saves config immediately when Get Started is clicked on Shofer provider (already authenticated)", () => {
 			renderWelcomeViewProvider({ cloudIsAuthenticated: true })
 			navigateToProviderSelection()
 
@@ -252,7 +252,7 @@ describe("WelcomeViewProvider", () => {
 				type: "upsertApiConfiguration",
 				text: "default",
 				apiConfiguration: {
-					apiProvider: "roo",
+					apiProvider: "shofer",
 				},
 			})
 		})
@@ -331,7 +331,7 @@ describe("WelcomeViewProvider", () => {
 				.find((link) => link.textContent?.includes("welcome:landing.noAccount"))
 			fireEvent.click(noAccountLink!)
 
-			// Start auth from provider selection (Roo is selected by default)
+			// Start auth from provider selection (Shofer is selected by default)
 			const getStartedButton = screen.getByTestId("button-primary")
 			fireEvent.click(getStartedButton)
 

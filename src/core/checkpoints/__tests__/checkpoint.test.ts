@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest"
 import { Task } from "../../task/Task"
-import { ClineProvider } from "../../webview/ClineProvider"
+import { ShoferProvider } from "../../webview/ShoferProvider"
 import { checkpointSave, checkpointRestore, checkpointDiff, getCheckpointService } from "../index"
 import { MessageManager } from "../../message-manager"
 import * as vscode from "vscode"
@@ -22,7 +22,7 @@ vi.mock("vscode", () => ({
 }))
 
 // Mock other dependencies
-vi.mock("@roo-code/telemetry", () => ({
+vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
 		instance: {
 			captureCheckpointCreated: vi.fn(),
@@ -95,11 +95,11 @@ describe("Checkpoint functionality", () => {
 			providerRef: {
 				deref: () => mockProvider,
 			},
-			clineMessages: [],
+			shoferMessages: [],
 			apiConversationHistory: [],
 			pendingUserMessageCheckpoint: undefined,
 			say: vi.fn().mockResolvedValue(undefined),
-			overwriteClineMessages: vi.fn(),
+			overwriteShoferMessages: vi.fn(),
 			overwriteApiConversationHistory: vi.fn(),
 			combineMessages: vi.fn().mockReturnValue([]),
 		}
@@ -187,7 +187,7 @@ describe("Checkpoint functionality", () => {
 			expect(mockTask.pendingUserMessageCheckpoint.hash).toBe("test-commit-hash")
 
 			// Simulate message deletion and reinitialization
-			mockTask.clineMessages = []
+			mockTask.shoferMessages = []
 			mockTask.checkpointService = mockCheckpointService // Keep service available
 			mockTask.checkpointServiceInitializing = false
 
@@ -211,7 +211,7 @@ describe("Checkpoint functionality", () => {
 
 	describe("checkpointRestore", () => {
 		beforeEach(() => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 1, say: "user", text: "Message 1" },
 				{ ts: 2, say: "assistant", text: "Message 2" },
 				{ ts: 3, say: "user", text: "Message 3" },
@@ -235,7 +235,7 @@ describe("Checkpoint functionality", () => {
 			expect(mockTask.overwriteApiConversationHistory).toHaveBeenCalledWith([
 				{ ts: 1, role: "user", content: [{ type: "text", text: "Message 1" }] },
 			])
-			expect(mockTask.overwriteClineMessages).toHaveBeenCalledWith([{ ts: 1, say: "user", text: "Message 1" }])
+			expect(mockTask.overwriteShoferMessages).toHaveBeenCalledWith([{ ts: 1, say: "user", text: "Message 1" }])
 			expect(mockProvider.cancelTask).toHaveBeenCalled()
 		})
 
@@ -252,7 +252,7 @@ describe("Checkpoint functionality", () => {
 				{ ts: 1, role: "user", content: [{ type: "text", text: "Message 1" }] },
 			])
 			// For edit operation, should include the message being edited
-			expect(mockTask.overwriteClineMessages).toHaveBeenCalledWith([
+			expect(mockTask.overwriteShoferMessages).toHaveBeenCalledWith([
 				{ ts: 1, say: "user", text: "Message 1" },
 				{ ts: 2, say: "assistant", text: "Message 2" },
 			])
@@ -268,7 +268,7 @@ describe("Checkpoint functionality", () => {
 
 			expect(mockCheckpointService.restoreCheckpoint).toHaveBeenCalledWith("abc123")
 			expect(mockTask.overwriteApiConversationHistory).not.toHaveBeenCalled()
-			expect(mockTask.overwriteClineMessages).not.toHaveBeenCalled()
+			expect(mockTask.overwriteShoferMessages).not.toHaveBeenCalled()
 			expect(mockProvider.cancelTask).toHaveBeenCalled()
 		})
 
@@ -298,7 +298,7 @@ describe("Checkpoint functionality", () => {
 
 	describe("checkpointDiff", () => {
 		beforeEach(() => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 1, say: "user", text: "Message 1" },
 				{ ts: 2, say: "checkpoint_saved", text: "commit1" },
 				{ ts: 3, say: "user", text: "Message 2" },

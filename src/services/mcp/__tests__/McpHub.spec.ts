@@ -3,7 +3,7 @@ import fs from "fs/promises"
 import type { Mock } from "vitest"
 import type { ExtensionContext, Uri } from "vscode"
 
-import type { ClineProvider } from "../../../core/webview/ClineProvider"
+import type { ShoferProvider } from "../../../core/webview/ShoferProvider"
 
 import type { McpHub as McpHubType, McpConnection, ConnectedMcpConnection, DisconnectedMcpConnection } from "../McpHub"
 import { ServerConfigSchema, McpHub } from "../McpHub"
@@ -74,7 +74,7 @@ vi.mock("vscode", () => ({
 	},
 }))
 vi.mock("fs/promises")
-vi.mock("../../../core/webview/ClineProvider")
+vi.mock("../../../core/webview/ShoferProvider")
 
 // Mock the MCP SDK modules
 vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
@@ -98,7 +98,7 @@ vi.mock("chokidar", () => ({
 
 describe("McpHub", () => {
 	let mcpHub: McpHubType
-	let mockProvider: Partial<ClineProvider>
+	let mockProvider: Partial<ShoferProvider>
 
 	// Store original console methods
 	const originalConsoleError = console.error
@@ -172,7 +172,7 @@ describe("McpHub", () => {
 			}),
 		)
 
-		mcpHub = new McpHub(mockProvider as ClineProvider)
+		mcpHub = new McpHub(mockProvider as ShoferProvider)
 	})
 
 	afterEach(() => {
@@ -228,7 +228,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub and let it initialize
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -260,7 +260,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub and let it initialize
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -287,7 +287,7 @@ describe("McpHub", () => {
 			)
 
 			// Create a mock McpHub instance
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -396,7 +396,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify watcher was created
@@ -469,7 +469,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify watchers were created
@@ -503,7 +503,7 @@ describe("McpHub", () => {
 
 			vi.mocked(chokidar.watch).mockClear()
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify no watcher was created for disabled server
@@ -527,7 +527,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -553,7 +553,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -580,7 +580,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -609,7 +609,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -677,7 +677,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Get the connection
@@ -695,7 +695,7 @@ describe("McpHub", () => {
 		})
 
 		it("should handle missing connections safely", async () => {
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Try operations on non-existent server
@@ -749,7 +749,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Delete the connection
@@ -1083,7 +1083,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1114,7 +1114,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1498,7 +1498,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub and let it initialize with MCP enabled
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify server is connected
@@ -1554,7 +1554,7 @@ describe("McpHub", () => {
 			)
 
 			// Create a new McpHub instance with disabled MCP
-			const mcpHub = new McpHub(disabledMockProvider as unknown as ClineProvider)
+			const mcpHub = new McpHub(disabledMockProvider as unknown as ShoferProvider)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1622,7 +1622,7 @@ describe("McpHub", () => {
 			)
 
 			// Create a new McpHub instance with enabled MCP
-			const mcpHub = new McpHub(enabledMockProvider as unknown as ClineProvider)
+			const mcpHub = new McpHub(enabledMockProvider as unknown as ShoferProvider)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1663,7 +1663,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub with disabled MCP
-			const mcpHub = new McpHub(disabledMockProvider as unknown as ClineProvider)
+			const mcpHub = new McpHub(disabledMockProvider as unknown as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Clear previous calls
@@ -1710,7 +1710,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub with disabled MCP
-			const mcpHub = new McpHub(disabledMockProvider as unknown as ClineProvider)
+			const mcpHub = new McpHub(disabledMockProvider as unknown as ShoferProvider)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Set isConnecting to false to ensure it's properly reset
@@ -1788,7 +1788,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Mock the config file read
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -1850,7 +1850,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Mock the config file read
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -1912,7 +1912,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Mock the config file read with cmd.exe already as command
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -1981,7 +1981,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Mock the config file read - simulating fnm/nvm-windows scenario
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -2054,7 +2054,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ClineProvider)
+			const mcpHub = new McpHub(mockProvider as ShoferProvider)
 
 			// Mock the config file read with CMD (uppercase) as command
 			vi.mocked(fs.readFile).mockResolvedValue(

@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 import { parseJSON } from "partial-json"
 
-import { type ToolName, toolNames, type FileEntry } from "@roo-code/types"
-import { customToolRegistry } from "@roo-code/core"
+import { type ToolName, toolNames, type FileEntry } from "@shofer/types"
+import { customToolRegistry } from "@shofer/core"
 
 import {
 	type ToolUse,

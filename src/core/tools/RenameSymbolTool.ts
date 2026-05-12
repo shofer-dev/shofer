@@ -9,7 +9,7 @@
 import * as path from "path"
 import * as vscode from "vscode"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -67,7 +67,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 			const absolutePath = path.resolve(task.cwd, filePath)
 			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "editedExistingFile",
 				path: getReadablePath(task.cwd, filePath),
 				isOutsideWorkspace,
@@ -76,7 +76,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 			const completeMessage = JSON.stringify({
 				...sharedMessageProps,
 				content: `Renaming symbol at ${filePath}:${line}:${column} to "${newName}"`,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const didApprove = await askApproval("tool", completeMessage)
 			if (!didApprove) {
@@ -146,13 +146,13 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 		const absolutePath = filePath ? path.resolve(task.cwd, filePath) : task.cwd
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "editedExistingFile",
 			path: getReadablePath(task.cwd, filePath ?? ""),
 			isOutsideWorkspace,
 		}
 
-		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

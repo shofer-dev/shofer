@@ -1,10 +1,10 @@
-# Git Worktree Support in Roo Code
+# Git Worktree Support in Shofer
 
 ## Overview
 
-Roo Code supports git worktrees with an **embedded model**: each worktree lives at `<workspace>/.roo/worktrees/<name>/`, and worktree-scoped tasks run concurrently inside the same VS Code window. This enables orchestrated parallel work, in-window task switching, and merge-back without window juggling.
+Shofer supports git worktrees with an **embedded model**: each worktree lives at `<workspace>/.shofer/worktrees/<name>/`, and worktree-scoped tasks run concurrently inside the same VS Code window. This enables orchestrated parallel work, in-window task switching, and merge-back without window juggling.
 
-Manually-created worktrees outside the workspace (e.g. `git worktree add ../foo` opened with `code ../foo`) are still detected and listed by the Worktrees view; they simply behave as normal Roo Code workspaces in their own window.
+Manually-created worktrees outside the workspace (e.g. `git worktree add ../foo` opened with `code ../foo`) are still detected and listed by the Worktrees view; they simply behave as normal Shofer workspaces in their own window.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ Manually-created worktrees outside the workspace (e.g. `git worktree add ../foo`
 │  handleDeleteWorktree · handleGetWorktreeDefaults                  │
 │  handleGetWorktreeStatus                                           │
 ├──────────────────────────────────────────────────────────────────┤
-│  Platform-Agnostic Core (@roo-code/core)                          │
+│  Platform-Agnostic Core (@shofer/core)                          │
 │  WorktreeService · WorktreeIncludeService                          │
 │  (no VSCode dependencies — pure git CLI wrappers)                  │
 └──────────────────────────────────────────────────────────────────┘
@@ -49,18 +49,18 @@ Manually-created worktrees outside the workspace (e.g. `git worktree add ../foo`
 
 Handlers translate webview IPC messages to core service calls:
 
-- `handleListWorktrees` — Enforces constraints (no multi-root; subfolder workspaces allowed only when the subfolder lives under `<gitRoot>/.roo/worktrees/` — i.e., it is itself an embedded worktree)
+- `handleListWorktrees` — Enforces constraints (no multi-root; subfolder workspaces allowed only when the subfolder lives under `<gitRoot>/.shofer/worktrees/` — i.e., it is itself an embedded worktree)
 - `handleCreateWorktree` — Creates worktree then auto-copies `.worktreeinclude` files with progress
 - `handleDeleteWorktree` — Delegates to core service
-- `handleGetWorktreeDefaults` — Generates suggested path (`<workspace>/.roo/worktrees/<project>-<random>`) and branch name (`worktree/roo-<random>`)
+- `handleGetWorktreeDefaults` — Generates suggested path (`<workspace>/.shofer/worktrees/<project>-<random>`) and branch name (`worktree/shofer-<random>`)
 
 ### 3. Per-Task `cwd`
 
-Each `Task` instance has a `cwd` property (defaults to the workspace root). For embedded worktree tasks, `cwd` is set to the worktree subdirectory (e.g., `<workspace>/.roo/worktrees/repo-hl911/`).
+Each `Task` instance has a `cwd` property (defaults to the workspace root). For embedded worktree tasks, `cwd` is set to the worktree subdirectory (e.g., `<workspace>/.shofer/worktrees/repo-hl911/`).
 
 - All tools operate relative to `task.cwd`
 - `HistoryItem.cwd` is persisted in task metadata so worktree tasks rehydrate correctly
-- `ClineProvider.createTask(…, cwd?)` accepts an optional `cwd` override
+- `ShoferProvider.createTask(…, cwd?)` accepts an optional `cwd` override
 - `createManagedTask(name, text, images, worktreeDir?)` creates an in-window task scoped to a worktree directory
 - Webview messages `newTask` and `createParallelTask` both accept a `worktreeDir` field
 
@@ -68,12 +68,12 @@ Each `Task` instance has a `cwd` property (defaults to the workspace root). For 
 
 Two parallel tasks running against the same workspace would interfere if their shadow gits both pointed `core.worktree` at the workspace root. The solution uses scoped shadow gits:
 
-| Instance                   | `core.worktree`                      | Excludes                                    |
-| -------------------------- | ------------------------------------ | ------------------------------------------- |
-| Main task (workspace root) | `<workspace>/`                       | `/.roo/worktrees/` appended to exclude file |
-| Worktree task              | `<workspace>/.roo/worktrees/<name>/` | (already scoped — no exclude needed)        |
+| Instance                   | `core.worktree`                         | Excludes                                       |
+| -------------------------- | --------------------------------------- | ---------------------------------------------- |
+| Main task (workspace root) | `<workspace>/`                          | `/.shofer/worktrees/` appended to exclude file |
+| Worktree task              | `<workspace>/.shofer/worktrees/<name>/` | (already scoped — no exclude needed)           |
 
-`ShadowCheckpointService` accepts an optional `scopedWorktreeDir` constructor argument. When set, the shadow git's `core.worktree` is set to the worktree subdirectory. Non-scoped instances exclude `.roo/worktrees/` to prevent cross-contamination. `core.worktree` validation accepts the scoped path (not just `workspaceDir`).
+`ShadowCheckpointService` accepts an optional `scopedWorktreeDir` constructor argument. When set, the shadow git's `core.worktree` is set to the worktree subdirectory. Non-scoped instances exclude `.shofer/worktrees/` to prevent cross-contamination. `core.worktree` validation accepts the scoped path (not just `workspaceDir`).
 
 ### 5. Embedded Worktree Detection (`isEmbeddedWorktree`)
 
@@ -81,11 +81,11 @@ Two parallel tasks running against the same workspace would interfere if their s
 
 ```typescript
 const rel = path.relative(gitRootPath, cwd)
-const embeddedPrefix = path.join(".roo", "worktrees") + path.sep
+const embeddedPrefix = path.join(".shofer", "worktrees") + path.sep
 isEmbeddedWorktree = !rel.startsWith("..") && !path.isAbsolute(rel) && rel.startsWith(embeddedPrefix)
 ```
 
-This is a containment check anchored to the git root — not a substring match — so it cannot be confused by unrelated directories that happen to contain the string `.roo/worktrees`.
+This is a containment check anchored to the git root — not a substring match — so it cannot be confused by unrelated directories that happen to contain the string `.shofer/worktrees`.
 
 ## UI Components
 
@@ -122,16 +122,16 @@ The intersection ensures only **untracked/ignored** files are copied (e.g., `nod
 
 ## Subfolder Workspace Restriction
 
-Worktrees are disabled when the VS Code workspace root is a subdirectory of the git repository root, **unless** that subdirectory is itself an embedded worktree (i.e. lives under `<gitRoot>/.roo/worktrees/`).
+Worktrees are disabled when the VS Code workspace root is a subdirectory of the git repository root, **unless** that subdirectory is itself an embedded worktree (i.e. lives under `<gitRoot>/.shofer/worktrees/`).
 
 ### Submodule Interaction
 
-| Workspace                                              | Git Root         | Worktrees? |
-| ------------------------------------------------------ | ---------------- | ---------- |
-| Parent repo root (`/repo/`)                            | `/repo/`         | ✅         |
-| Submodule root (`/repo/ext/sub/`)                      | `/repo/ext/sub/` | ✅         |
-| Subdirectory of parent repo (`/repo/ext/`)             | `/repo/`         | ❌         |
-| Embedded worktree (`/repo/.roo/worktrees/repo-hl911/`) | `/repo/`         | ✅         |
+| Workspace                                                 | Git Root         | Worktrees? |
+| --------------------------------------------------------- | ---------------- | ---------- |
+| Parent repo root (`/repo/`)                               | `/repo/`         | ✅         |
+| Submodule root (`/repo/ext/sub/`)                         | `/repo/ext/sub/` | ✅         |
+| Subdirectory of parent repo (`/repo/ext/`)                | `/repo/`         | ❌         |
+| Embedded worktree (`/repo/.shofer/worktrees/repo-hl911/`) | `/repo/`         | ✅         |
 
 ### Caveats with Submodules
 

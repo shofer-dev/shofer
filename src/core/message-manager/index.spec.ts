@@ -8,9 +8,9 @@ describe("MessageManager", () => {
 
 	beforeEach(() => {
 		mockTask = {
-			clineMessages: [],
+			shoferMessages: [],
 			apiConversationHistory: [],
-			overwriteClineMessages: vi.fn(),
+			overwriteShoferMessages: vi.fn(),
 			overwriteApiConversationHistory: vi.fn(),
 		}
 		manager = new MessageManager(mockTask)
@@ -26,7 +26,7 @@ describe("MessageManager", () => {
 
 	describe("Basic rewind operations", () => {
 		it("should remove messages at and after the target timestamp", async () => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 				{ ts: 300, say: "user", text: "Second" },
@@ -43,7 +43,7 @@ describe("MessageManager", () => {
 			await manager.rewindToTimestamp(300)
 
 			// Should keep messages before ts=300
-			expect(mockTask.overwriteClineMessages).toHaveBeenCalledWith([
+			expect(mockTask.overwriteShoferMessages).toHaveBeenCalledWith([
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 			])
@@ -56,7 +56,7 @@ describe("MessageManager", () => {
 		})
 
 		it("should keep target message when includeTargetMessage is true", async () => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 				{ ts: 300, say: "user", text: "Second" },
@@ -70,8 +70,8 @@ describe("MessageManager", () => {
 
 			await manager.rewindToTimestamp(300, { includeTargetMessage: true })
 
-			// Should keep messages up to and including ts=300 in clineMessages
-			expect(mockTask.overwriteClineMessages).toHaveBeenCalledWith([
+			// Should keep messages up to and including ts=300 in shoferMessages
+			expect(mockTask.overwriteShoferMessages).toHaveBeenCalledWith([
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 				{ ts: 300, say: "user", text: "Second" },
@@ -86,18 +86,18 @@ describe("MessageManager", () => {
 		})
 
 		it("should throw error when timestamp not found", async () => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 			]
 
 			await expect(manager.rewindToTimestamp(999)).rejects.toThrow(
-				"Message with timestamp 999 not found in clineMessages",
+				"Message with timestamp 999 not found in shoferMessages",
 			)
 		})
 
 		it("should remove messages at and after the target index", async () => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 				{ ts: 300, say: "user", text: "Second" },
@@ -114,7 +114,7 @@ describe("MessageManager", () => {
 			await manager.rewindToIndex(2)
 
 			// Should keep messages [0, 2) - index 0 and 1
-			expect(mockTask.overwriteClineMessages).toHaveBeenCalledWith([
+			expect(mockTask.overwriteShoferMessages).toHaveBeenCalledWith([
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 			])
@@ -129,7 +129,7 @@ describe("MessageManager", () => {
 		it("should preserve Summary when condense_context is preserved", async () => {
 			const condenseId = "summary-123"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 				{ ts: 300, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
@@ -166,7 +166,7 @@ describe("MessageManager", () => {
 		it("should remove Summary when condense_context is removed", async () => {
 			const condenseId = "summary-123"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 				{ ts: 300, say: "user", text: "Second" },
@@ -205,7 +205,7 @@ describe("MessageManager", () => {
 		it("should clear orphaned condenseParent tags via cleanup", async () => {
 			const condenseId = "summary-123"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
 			]
@@ -238,7 +238,7 @@ describe("MessageManager", () => {
 			const condenseId1 = "summary-1"
 			const condenseId2 = "summary-2"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{
 					ts: 200,
@@ -290,7 +290,7 @@ describe("MessageManager", () => {
 		it("should preserve truncation marker when sliding_window_truncation is preserved", async () => {
 			const truncationId = "trunc-123"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
 				{ ts: 300, say: "user", text: "After truncation" },
@@ -320,7 +320,7 @@ describe("MessageManager", () => {
 		it("should remove truncation marker when sliding_window_truncation is removed", async () => {
 			const truncationId = "trunc-123"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "user", text: "Second" },
 				{ ts: 300, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
@@ -352,7 +352,7 @@ describe("MessageManager", () => {
 		it("should clear orphaned truncationParent tags via cleanup", async () => {
 			const truncationId = "trunc-123"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
 			]
@@ -379,7 +379,7 @@ describe("MessageManager", () => {
 			const truncationId1 = "trunc-1"
 			const truncationId2 = "trunc-2"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{
 					ts: 200,
@@ -431,7 +431,7 @@ describe("MessageManager", () => {
 		it("should preserve Summary when checkpoint restore is BEFORE condense", async () => {
 			const condenseId = "summary-abc"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
 				{ ts: 500, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
 				{ ts: 600, say: "checkpoint_saved", text: "checkpoint-hash" },
@@ -460,7 +460,7 @@ describe("MessageManager", () => {
 			await manager.rewindToTimestamp(600, { includeTargetMessage: true })
 
 			// Since condense_context (ts=500) is BEFORE checkpoint, it should be preserved
-			const clineCall = mockTask.overwriteClineMessages.mock.calls[0][0]
+			const clineCall = mockTask.overwriteShoferMessages.mock.calls[0][0]
 			const hasCondenseContext = clineCall.some((m: any) => m.say === "condense_context")
 			expect(hasCondenseContext).toBe(true)
 
@@ -473,7 +473,7 @@ describe("MessageManager", () => {
 		it("should remove Summary when checkpoint restore is AFTER condense", async () => {
 			const condenseId = "summary-xyz"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
 				{ ts: 200, say: "checkpoint_saved", text: "checkpoint-hash" },
 				{ ts: 300, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
@@ -502,7 +502,7 @@ describe("MessageManager", () => {
 			await manager.rewindToTimestamp(200, { includeTargetMessage: true })
 
 			// condense_context (ts=300) is AFTER checkpoint, so it should be removed
-			const clineCall = mockTask.overwriteClineMessages.mock.calls[0][0]
+			const clineCall = mockTask.overwriteShoferMessages.mock.calls[0][0]
 			const hasCondenseContext = clineCall.some((m: any) => m.say === "condense_context")
 			expect(hasCondenseContext).toBe(false)
 
@@ -515,7 +515,7 @@ describe("MessageManager", () => {
 		it("should preserve truncation marker when checkpoint restore is BEFORE truncation", async () => {
 			const truncationId = "trunc-abc"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
 				{ ts: 500, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
 				{ ts: 600, say: "checkpoint_saved", text: "checkpoint-hash" },
@@ -538,7 +538,7 @@ describe("MessageManager", () => {
 			await manager.rewindToTimestamp(600, { includeTargetMessage: true })
 
 			// Truncation should be preserved
-			const clineCall = mockTask.overwriteClineMessages.mock.calls[0][0]
+			const clineCall = mockTask.overwriteShoferMessages.mock.calls[0][0]
 			const hasTruncation = clineCall.some((m: any) => m.say === "sliding_window_truncation")
 			expect(hasTruncation).toBe(true)
 
@@ -551,7 +551,7 @@ describe("MessageManager", () => {
 		it("should remove truncation marker when checkpoint restore is AFTER truncation", async () => {
 			const truncationId = "trunc-xyz"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
 				{ ts: 200, say: "checkpoint_saved", text: "checkpoint-hash" },
 				{ ts: 300, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
@@ -574,7 +574,7 @@ describe("MessageManager", () => {
 			await manager.rewindToTimestamp(200, { includeTargetMessage: true })
 
 			// Truncation should be removed
-			const clineCall = mockTask.overwriteClineMessages.mock.calls[0][0]
+			const clineCall = mockTask.overwriteShoferMessages.mock.calls[0][0]
 			const hasTruncation = clineCall.some((m: any) => m.say === "sliding_window_truncation")
 			expect(hasTruncation).toBe(false)
 
@@ -589,7 +589,7 @@ describe("MessageManager", () => {
 		it("should NOT call cleanupAfterTruncation when skipCleanup is true", async () => {
 			const condenseId = "summary-123"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
 			]
@@ -619,7 +619,7 @@ describe("MessageManager", () => {
 		})
 
 		it("should call cleanupAfterTruncation by default", async () => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "user", text: "Second" },
 			]
@@ -637,7 +637,7 @@ describe("MessageManager", () => {
 		})
 
 		it("should call cleanupAfterTruncation when skipCleanup is explicitly false", async () => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "user", text: "Second" },
 			]
@@ -660,7 +660,7 @@ describe("MessageManager", () => {
 			const condenseId = "summary-123"
 			const truncationId = "trunc-456"
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
 				{ ts: 300, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
@@ -697,19 +697,19 @@ describe("MessageManager", () => {
 			expect(hasMarker).toBe(false)
 		})
 
-		it("should handle empty clineMessages array", async () => {
-			mockTask.clineMessages = []
+		it("should handle empty shoferMessages array", async () => {
+			mockTask.shoferMessages = []
 			mockTask.apiConversationHistory = []
 
 			await manager.rewindToIndex(0)
 
-			expect(mockTask.overwriteClineMessages).toHaveBeenCalledWith([])
+			expect(mockTask.overwriteShoferMessages).toHaveBeenCalledWith([])
 			// API history write is skipped when nothing changed (optimization)
 			expect(mockTask.overwriteApiConversationHistory).not.toHaveBeenCalled()
 		})
 
 		it("should handle messages without timestamps in API history", async () => {
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "user", text: "Second" },
 			]
@@ -730,21 +730,21 @@ describe("MessageManager", () => {
 	})
 
 	describe("Race condition handling", () => {
-		it("should preserve assistant message when clineMessage timestamp is earlier due to async execution", async () => {
-			// This test reproduces the bug where deleting a user_feedback clineMessage
+		it("should preserve assistant message when shoferMessage timestamp is earlier due to async execution", async () => {
+			// This test reproduces the bug where deleting a user_feedback shoferMessage
 			// incorrectly removes an assistant API message that was added AFTER the
-			// clineMessage (due to async tool execution during streaming).
+			// shoferMessage (due to async tool execution during streaming).
 			//
 			// Timeline (race condition scenario):
-			// - T1 (100): clineMessage "user_feedback" created during tool execution
+			// - T1 (100): shoferMessage "user_feedback" created during tool execution
 			// - T2 (200): assistant API message added when stream completes
 			// - T3 (300): user API message (tool_result) added after pWaitFor
 			//
-			// When deleting the clineMessage at T1, we should:
+			// When deleting the shoferMessage at T1, we should:
 			// - Keep the assistant message at T2
 			// - Remove the user message at T3
 
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 50, say: "user", text: "Initial request" },
 				{ ts: 100, say: "user_feedback", text: "tell me a joke 3" }, // Race: created BEFORE assistant API msg
 			]
@@ -752,7 +752,7 @@ describe("MessageManager", () => {
 			mockTask.apiConversationHistory = [
 				{ ts: 50, role: "user", content: [{ type: "text", text: "Initial request" }] },
 				{
-					ts: 200, // Race: added AFTER clineMessage at ts=100
+					ts: 200, // Race: added AFTER shoferMessage at ts=100
 					role: "assistant",
 					content: [{ type: "tool_use", id: "tool_1", name: "attempt_completion", input: {} }],
 				},
@@ -763,7 +763,7 @@ describe("MessageManager", () => {
 				},
 			]
 
-			// Delete the user_feedback clineMessage at ts=100
+			// Delete the user_feedback shoferMessage at ts=100
 			await manager.rewindToTimestamp(100)
 
 			// The fix ensures we find the first API user message at or after cutoff (ts=300)
@@ -776,8 +776,8 @@ describe("MessageManager", () => {
 		})
 
 		it("should handle normal case where timestamps are properly ordered", async () => {
-			// Normal case: clineMessage timestamp aligns with API message timestamp
-			mockTask.clineMessages = [
+			// Normal case: shoferMessage timestamp aligns with API message timestamp
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "user_feedback", text: "Feedback" },
 			]
@@ -799,7 +799,7 @@ describe("MessageManager", () => {
 
 		it("should fall back to original cutoff when no user message found at or after cutoff", async () => {
 			// Edge case: no API user message at or after the cutoff timestamp
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "First" },
 				{ ts: 200, say: "assistant", text: "Response" },
 				{ ts: 300, say: "assistant", text: "Another response" },
@@ -824,15 +824,15 @@ describe("MessageManager", () => {
 
 		it("should handle multiple assistant messages before the user message in race condition", async () => {
 			// Complex race scenario: multiple assistant messages added before user message
-			mockTask.clineMessages = [
+			mockTask.shoferMessages = [
 				{ ts: 50, say: "user", text: "Initial" },
 				{ ts: 100, say: "user_feedback", text: "Feedback" }, // Race condition
 			]
 
 			mockTask.apiConversationHistory = [
 				{ ts: 50, role: "user", content: [{ type: "text", text: "Initial" }] },
-				{ ts: 150, role: "assistant", content: [{ type: "text", text: "First assistant msg" }] }, // After clineMessage
-				{ ts: 200, role: "assistant", content: [{ type: "text", text: "Second assistant msg" }] }, // After clineMessage
+				{ ts: 150, role: "assistant", content: [{ type: "text", text: "First assistant msg" }] }, // After shoferMessage
+				{ ts: 200, role: "assistant", content: [{ type: "text", text: "Second assistant msg" }] }, // After shoferMessage
 				{ ts: 250, role: "user", content: [{ type: "text", text: "Feedback" }] },
 			]
 

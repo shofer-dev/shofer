@@ -3,12 +3,12 @@ import * as vscode from "vscode"
 
 import type OpenAI from "openai"
 
-import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@roo-code/types"
-import { toolGroupsSchema } from "@roo-code/types"
-import { customToolRegistry, formatNative } from "@roo-code/core"
+import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@shofer/types"
+import { toolGroupsSchema } from "@shofer/types"
+import { customToolRegistry, formatNative } from "@shofer/core"
 
-import type { ClineProvider } from "../webview/ClineProvider"
-import { getRooDirectoriesForCwd } from "../../services/roo-config/index.js"
+import type { ShoferProvider } from "../webview/ShoferProvider"
+import { getRooDirectoriesForCwd } from "../../services/shofer-config/index.js"
 
 import { getNativeTools, getMcpServerTools } from "../prompts/tools/native-tools"
 import {
@@ -19,7 +19,7 @@ import {
 import { defaultModeSlug, getGroupName, getModeBySlug } from "../../shared/modes"
 
 interface BuildToolsOptions {
-	provider: ClineProvider
+	provider: ShoferProvider
 	cwd: string
 	mode: string | undefined
 	customModes: ModeConfig[] | undefined

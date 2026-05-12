@@ -2,10 +2,10 @@ import * as vscode from "vscode"
 import { serializeError } from "serialize-error"
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ToolName, ClineAsk, ToolProgressStatus } from "@roo-code/types"
-import { ConsecutiveMistakeError, TelemetryEventName } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
-import { customToolRegistry } from "@roo-code/core"
+import type { ToolName, ShoferAsk, ToolProgressStatus } from "@shofer/types"
+import { ConsecutiveMistakeError, TelemetryEventName } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
+import { customToolRegistry } from "@shofer/core"
 
 import { t } from "../../i18n"
 
@@ -81,29 +81,29 @@ import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tool
  * as it becomes available.
  */
 
-export async function presentAssistantMessage(cline: Task) {
-	if (cline.abort) {
-		throw new Error(`[Task#presentAssistantMessage] task ${cline.taskId}.${cline.instanceId} aborted`)
+export async function presentAssistantMessage(shofer: Task) {
+	if (shofer.abort) {
+		throw new Error(`[Task#presentAssistantMessage] task ${shofer.taskId}.${shofer.instanceId} aborted`)
 	}
 
-	if (cline.presentAssistantMessageLocked) {
-		cline.presentAssistantMessageHasPendingUpdates = true
+	if (shofer.presentAssistantMessageLocked) {
+		shofer.presentAssistantMessageHasPendingUpdates = true
 		return
 	}
 
-	cline.presentAssistantMessageLocked = true
-	cline.presentAssistantMessageHasPendingUpdates = false
+	shofer.presentAssistantMessageLocked = true
+	shofer.presentAssistantMessageHasPendingUpdates = false
 
-	if (cline.currentStreamingContentIndex >= cline.assistantMessageContent.length) {
+	if (shofer.currentStreamingContentIndex >= shofer.assistantMessageContent.length) {
 		// This may happen if the last content block was completed before
 		// streaming could finish. If streaming is finished, and we're out of
 		// bounds then this means we already  presented/executed the last
 		// content block and are ready to continue to next request.
-		if (cline.didCompleteReadingStream) {
-			cline.userMessageContentReady = true
+		if (shofer.didCompleteReadingStream) {
+			shofer.userMessageContentReady = true
 		}
 
-		cline.presentAssistantMessageLocked = false
+		shofer.presentAssistantMessageLocked = false
 		return
 	}
 
@@ -113,14 +113,14 @@ export async function presentAssistantMessage(cline: Task) {
 		// The block is used read-only throughout this function - we never mutate its properties.
 		// We only need to protect against the reference changing during streaming, not nested mutations.
 		// This provides 80-90% reduction in cloning overhead (5-100ms saved per block).
-		block = { ...cline.assistantMessageContent[cline.currentStreamingContentIndex] }
+		block = { ...shofer.assistantMessageContent[shofer.currentStreamingContentIndex] }
 	} catch (error) {
 		console.error(`ERROR cloning block:`, error)
 		console.error(
 			`Block content:`,
-			JSON.stringify(cline.assistantMessageContent[cline.currentStreamingContentIndex], null, 2),
+			JSON.stringify(shofer.assistantMessageContent[shofer.currentStreamingContentIndex], null, 2),
 		)
-		cline.presentAssistantMessageLocked = false
+		shofer.presentAssistantMessageLocked = false
 		return
 	}
 
@@ -131,7 +131,7 @@ export async function presentAssistantMessage(cline: Task) {
 			// their original name in API history
 			const mcpBlock = block as McpToolUse
 
-			if (cline.didRejectTool) {
+			if (shofer.didRejectTool) {
 				// For native protocol, we must send a tool_result for every tool_use to avoid API errors
 				const toolCallId = mcpBlock.id
 				const errorMessage = !mcpBlock.partial
@@ -139,7 +139,7 @@ export async function presentAssistantMessage(cline: Task) {
 					: `MCP tool ${mcpBlock.name} was interrupted and not executed due to user rejecting a previous tool.`
 
 				if (toolCallId) {
-					cline.pushToolResultToUserContent({
+					shofer.pushToolResultToUserContent({
 						type: "tool_result",
 						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: errorMessage,
@@ -190,14 +190,14 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 
 				if (toolCallId) {
-					cline.pushToolResultToUserContent({
+					shofer.pushToolResultToUserContent({
 						type: "tool_result",
 						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: resultContent,
 					})
 
 					if (imageBlocks.length > 0) {
-						cline.userMessageContent.push(...imageBlocks)
+						shofer.userMessageContent.push(...imageBlocks)
 					}
 				}
 
@@ -207,12 +207,12 @@ export async function presentAssistantMessage(cline: Task) {
 			const toolDescription = () => `[mcp_tool: ${mcpBlock.serverName}/${mcpBlock.toolName}]`
 
 			const askApproval = async (
-				type: ClineAsk,
+				type: ShoferAsk,
 				partialMessage?: string,
 				progressStatus?: ToolProgressStatus,
 				isProtected?: boolean,
 			) => {
-				const { response, text, images } = await cline.ask(
+				const { response, text, images } = await shofer.ask(
 					type,
 					partialMessage,
 					false,
@@ -222,12 +222,12 @@ export async function presentAssistantMessage(cline: Task) {
 
 				if (response !== "yesButtonClicked") {
 					if (text) {
-						await cline.say("user_feedback", text, images)
+						await shofer.say("user_feedback", text, images)
 						pushToolResult(formatResponse.toolResult(formatResponse.toolDeniedWithFeedback(text), images))
 					} else {
 						pushToolResult(formatResponse.toolDenied())
 					}
-					cline.didRejectTool = true
+					shofer.didRejectTool = true
 					return false
 				}
 
@@ -235,7 +235,7 @@ export async function presentAssistantMessage(cline: Task) {
 				// Don't push it as a separate tool_result here - that would create duplicates.
 				// The tool will call pushToolResult, which will merge the feedback into the actual result.
 				if (text) {
-					await cline.say("user_feedback", text, images)
+					await shofer.say("user_feedback", text, images)
 					approvalFeedback = { text, images }
 				}
 
@@ -249,7 +249,7 @@ export async function presentAssistantMessage(cline: Task) {
 					return
 				}
 				const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
-				await cline.say(
+				await shofer.say(
 					"error",
 					`Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`,
 				)
@@ -257,14 +257,14 @@ export async function presentAssistantMessage(cline: Task) {
 			}
 
 			if (!mcpBlock.partial) {
-				cline.recordToolUsage("use_mcp_tool") // Record as use_mcp_tool for analytics
-				TelemetryService.instance.captureToolUsage(cline.taskId, "use_mcp_tool")
+				shofer.recordToolUsage("use_mcp_tool") // Record as use_mcp_tool for analytics
+				TelemetryService.instance.captureToolUsage(shofer.taskId, "use_mcp_tool")
 			}
 
 			// Resolve sanitized server name back to original server name
 			// The serverName from parsing is sanitized (e.g., "my_server" from "my server")
 			// We need the original name to find the actual MCP connection
-			const mcpHub = cline.providerRef.deref()?.getMcpHub()
+			const mcpHub = shofer.providerRef.deref()?.getMcpHub()
 			let resolvedServerName = mcpBlock.serverName
 			if (mcpHub) {
 				const originalName = mcpHub.findServerNameBySanitizedName(mcpBlock.serverName)
@@ -292,7 +292,7 @@ export async function presentAssistantMessage(cline: Task) {
 				},
 			}
 
-			await useMcpToolTool.handle(cline, syntheticToolUse, {
+			await useMcpToolTool.handle(shofer, syntheticToolUse, {
 				askApproval,
 				handleError,
 				pushToolResult,
@@ -300,7 +300,7 @@ export async function presentAssistantMessage(cline: Task) {
 			break
 		}
 		case "text": {
-			if (cline.didRejectTool || cline.didAlreadyUseTool) {
+			if (shofer.didRejectTool || shofer.didAlreadyUseTool) {
 				break
 			}
 
@@ -315,7 +315,7 @@ export async function presentAssistantMessage(cline: Task) {
 				content = content.replace(/\s?<\/thinking>/g, "")
 			}
 
-			await cline.say("text", content, undefined, block.partial)
+			await shofer.say("text", content, undefined, block.partial)
 			break
 		}
 		case "tool_use": {
@@ -328,23 +328,23 @@ export async function presentAssistantMessage(cline: Task) {
 				// Record a tool error for visibility/telemetry. Use the reported tool name if present.
 				try {
 					if (
-						typeof (cline as any).recordToolError === "function" &&
+						typeof (shofer as any).recordToolError === "function" &&
 						typeof (block as any).name === "string"
 					) {
-						;(cline as any).recordToolError((block as any).name as ToolName, errorMessage)
+						;(shofer as any).recordToolError((block as any).name as ToolName, errorMessage)
 					}
 				} catch {
 					// Best-effort only
 				}
-				cline.consecutiveMistakeCount++
-				await cline.say("error", errorMessage)
-				cline.userMessageContent.push({ type: "text", text: errorMessage })
-				cline.didAlreadyUseTool = true
+				shofer.consecutiveMistakeCount++
+				await shofer.say("error", errorMessage)
+				shofer.userMessageContent.push({ type: "text", text: errorMessage })
+				shofer.didAlreadyUseTool = true
 				break
 			}
 
 			// Fetch state early so it's available for toolDescription and validation
-			const state = await cline.providerRef.deref()?.getState()
+			const state = await shofer.providerRef.deref()?.getState()
 			const { mode, customModes, experiments: stateExperiments, disabledTools } = state ?? {}
 
 			const toolDescription = (): string => {
@@ -453,14 +453,14 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 			}
 
-			if (cline.didRejectTool) {
+			if (shofer.didRejectTool) {
 				// Ignore any tool content after user has rejected tool once.
 				// For native tool calling, we must send a tool_result for every tool_use to avoid API errors
 				const errorMessage = !block.partial
 					? `Skipping tool ${toolDescription()} due to user rejecting a previous tool.`
 					: `Tool ${toolDescription()} was interrupted and not executed due to user rejecting a previous tool.`
 
-				cline.pushToolResultToUserContent({
+				shofer.pushToolResultToUserContent({
 					type: "tool_result",
 					tool_use_id: sanitizeToolUseId(toolCallId),
 					content: errorMessage,
@@ -488,16 +488,16 @@ export async function presentAssistantMessage(cline: Task) {
 						`Invalid tool call for '${block.name}': missing nativeArgs. ` +
 						`This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.`
 
-					cline.consecutiveMistakeCount++
+					shofer.consecutiveMistakeCount++
 					try {
-						cline.recordToolError(block.name as ToolName, errorMessage)
+						shofer.recordToolError(block.name as ToolName, errorMessage)
 					} catch {
 						// Best-effort only
 					}
 
 					// Push tool_result directly without setting didAlreadyUseTool so streaming can
 					// continue gracefully.
-					cline.pushToolResultToUserContent({
+					shofer.pushToolResultToUserContent({
 						type: "tool_result",
 						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: formatResponse.toolError(errorMessage),
@@ -543,26 +543,26 @@ export async function presentAssistantMessage(cline: Task) {
 					}
 				}
 
-				cline.pushToolResultToUserContent({
+				shofer.pushToolResultToUserContent({
 					type: "tool_result",
 					tool_use_id: sanitizeToolUseId(toolCallId),
 					content: resultContent,
 				})
 
 				if (imageBlocks.length > 0) {
-					cline.userMessageContent.push(...imageBlocks)
+					shofer.userMessageContent.push(...imageBlocks)
 				}
 
 				hasToolResult = true
 			}
 
 			const askApproval = async (
-				type: ClineAsk,
+				type: ShoferAsk,
 				partialMessage?: string,
 				progressStatus?: ToolProgressStatus,
 				isProtected?: boolean,
 			) => {
-				const { response, text, images } = await cline.ask(
+				const { response, text, images } = await shofer.ask(
 					type,
 					partialMessage,
 					false,
@@ -573,12 +573,12 @@ export async function presentAssistantMessage(cline: Task) {
 				if (response !== "yesButtonClicked") {
 					// Handle both messageResponse and noButtonClicked with text.
 					if (text) {
-						await cline.say("user_feedback", text, images)
+						await shofer.say("user_feedback", text, images)
 						pushToolResult(formatResponse.toolResult(formatResponse.toolDeniedWithFeedback(text), images))
 					} else {
 						pushToolResult(formatResponse.toolDenied())
 					}
-					cline.didRejectTool = true
+					shofer.didRejectTool = true
 					return false
 				}
 
@@ -586,7 +586,7 @@ export async function presentAssistantMessage(cline: Task) {
 				// Don't push it as a separate tool_result here - that would create duplicates.
 				// The tool will call pushToolResult, which will merge the feedback into the actual result.
 				if (text) {
-					await cline.say("user_feedback", text, images)
+					await shofer.say("user_feedback", text, images)
 					approvalFeedback = { text, images }
 				}
 
@@ -610,7 +610,7 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 				const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
 
-				await cline.say(
+				await shofer.say(
 					"error",
 					`Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`,
 				)
@@ -622,14 +622,14 @@ export async function presentAssistantMessage(cline: Task) {
 				// Check if this is a custom tool - if so, record as "custom_tool" (like MCP tools)
 				const isCustomTool = stateExperiments?.customTools && customToolRegistry.has(block.name)
 				const recordName = isCustomTool ? "custom_tool" : block.name
-				cline.recordToolUsage(recordName)
-				TelemetryService.instance.captureToolUsage(cline.taskId, recordName)
+				shofer.recordToolUsage(recordName)
+				TelemetryService.instance.captureToolUsage(shofer.taskId, recordName)
 
 				// Track legacy format usage for read_file tool (for migration monitoring)
 				if (block.name === "read_file" && block.usedLegacyFormat) {
-					const modelInfo = cline.api.getModel()
+					const modelInfo = shofer.api.getModel()
 					TelemetryService.instance.captureEvent(TelemetryEventName.READ_FILE_LEGACY_FORMAT_USED, {
-						taskId: cline.taskId,
+						taskId: shofer.taskId,
 						model: modelInfo?.id,
 					})
 				}
@@ -640,7 +640,7 @@ export async function presentAssistantMessage(cline: Task) {
 			// during streaming, pushing multiple tool_results for the same tool_use_id and
 			// potentially causing the stream to appear frozen.
 			if (!block.partial) {
-				const modelInfo = cline.api.getModel()
+				const modelInfo = shofer.api.getModel()
 				// Resolve aliases in includedTools before validation
 				// e.g., "edit_file" should resolve to "apply_diff"
 				const rawIncludedTools = modelInfo?.info?.includedTools
@@ -669,7 +669,7 @@ export async function presentAssistantMessage(cline: Task) {
 						includedTools,
 					)
 				} catch (error) {
-					cline.consecutiveMistakeCount++
+					shofer.consecutiveMistakeCount++
 					// For validation errors (unknown tool, tool not allowed for mode), we need to:
 					// 1. Send a tool_result with the error (required for native tool calling)
 					// 2. NOT set didAlreadyUseTool = true (the tool was never executed, just failed validation)
@@ -678,7 +678,7 @@ export async function presentAssistantMessage(cline: Task) {
 					const errMsg = error instanceof Error ? error.message : String(error)
 					const errorContent = formatResponse.toolError(errMsg)
 					// Push tool_result directly without setting didAlreadyUseTool
-					cline.pushToolResultToUserContent({
+					shofer.pushToolResultToUserContent({
 						type: "tool_result",
 						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: typeof errorContent === "string" ? errorContent : "(validation error)",
@@ -695,19 +695,19 @@ export async function presentAssistantMessage(cline: Task) {
 			if (!block.partial && block.name !== "new_task") {
 				// Use the detector to check for repetition, passing the ToolUse
 				// block directly.
-				const repetitionCheck = cline.toolRepetitionDetector.check(block)
+				const repetitionCheck = shofer.toolRepetitionDetector.check(block)
 
 				// If execution is not allowed, notify user and break.
 				if (!repetitionCheck.allowExecution && repetitionCheck.askUser) {
 					// Handle repetition similar to mistake_limit_reached pattern.
-					const { response, text, images } = await cline.ask(
-						repetitionCheck.askUser.messageKey as ClineAsk,
+					const { response, text, images } = await shofer.ask(
+						repetitionCheck.askUser.messageKey as ShoferAsk,
 						repetitionCheck.askUser.messageDetail.replace("{toolName}", block.name),
 					)
 
 					if (response === "messageResponse") {
 						// Add user feedback to userContent.
-						cline.userMessageContent.push(
+						shofer.userMessageContent.push(
 							{
 								type: "text" as const,
 								text: `Tool repetition limit reached. User feedback: ${text}`,
@@ -716,20 +716,20 @@ export async function presentAssistantMessage(cline: Task) {
 						)
 
 						// Add user feedback to chat.
-						await cline.say("user_feedback", text, images)
+						await shofer.say("user_feedback", text, images)
 					}
 
 					// Track tool repetition in telemetry via PostHog exception tracking and event.
-					TelemetryService.instance.captureConsecutiveMistakeError(cline.taskId)
+					TelemetryService.instance.captureConsecutiveMistakeError(shofer.taskId)
 					TelemetryService.instance.captureException(
 						new ConsecutiveMistakeError(
 							`Tool repetition limit reached for ${block.name}`,
-							cline.taskId,
-							cline.consecutiveMistakeCount,
-							cline.consecutiveMistakeLimit,
+							shofer.taskId,
+							shofer.consecutiveMistakeCount,
+							shofer.consecutiveMistakeLimit,
 							"tool_repetition",
-							cline.apiConfiguration.apiProvider,
-							cline.api.getModel().id,
+							shofer.apiConfiguration.apiProvider,
+							shofer.api.getModel().id,
 						),
 					)
 
@@ -745,23 +745,23 @@ export async function presentAssistantMessage(cline: Task) {
 
 			switch (block.name) {
 				case "write_to_file":
-					await checkpointSaveAndMark(cline)
-					await writeToFileTool.handle(cline, block as ToolUse<"write_to_file">, {
+					await checkpointSaveAndMark(shofer)
+					await writeToFileTool.handle(shofer, block as ToolUse<"write_to_file">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "update_todo_list":
-					await updateTodoListTool.handle(cline, block as ToolUse<"update_todo_list">, {
+					await updateTodoListTool.handle(shofer, block as ToolUse<"update_todo_list">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "apply_diff":
-					await checkpointSaveAndMark(cline)
-					await applyDiffToolClass.handle(cline, block as ToolUse<"apply_diff">, {
+					await checkpointSaveAndMark(shofer)
+					await applyDiffToolClass.handle(shofer, block as ToolUse<"apply_diff">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -769,32 +769,32 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "edit":
 				case "search_and_replace":
-					await checkpointSaveAndMark(cline)
-					await editTool.handle(cline, block as ToolUse<"edit">, {
+					await checkpointSaveAndMark(shofer)
+					await editTool.handle(shofer, block as ToolUse<"edit">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "search_replace":
-					await checkpointSaveAndMark(cline)
-					await searchReplaceTool.handle(cline, block as ToolUse<"search_replace">, {
+					await checkpointSaveAndMark(shofer)
+					await searchReplaceTool.handle(shofer, block as ToolUse<"search_replace">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "edit_file":
-					await checkpointSaveAndMark(cline)
-					await editFileTool.handle(cline, block as ToolUse<"edit_file">, {
+					await checkpointSaveAndMark(shofer)
+					await editFileTool.handle(shofer, block as ToolUse<"edit_file">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "apply_patch":
-					await checkpointSaveAndMark(cline)
-					await applyPatchTool.handle(cline, block as ToolUse<"apply_patch">, {
+					await checkpointSaveAndMark(shofer)
+					await applyPatchTool.handle(shofer, block as ToolUse<"apply_patch">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -802,99 +802,99 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "read_file":
 					// Type assertion is safe here because we're in the "read_file" case
-					await readFileTool.handle(cline, block as ToolUse<"read_file">, {
+					await readFileTool.handle(shofer, block as ToolUse<"read_file">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "list_files":
-					await listFilesTool.handle(cline, block as ToolUse<"list_files">, {
+					await listFilesTool.handle(shofer, block as ToolUse<"list_files">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "codebase_search":
-					await codebaseSearchTool.handle(cline, block as ToolUse<"codebase_search">, {
+					await codebaseSearchTool.handle(shofer, block as ToolUse<"codebase_search">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "codebase_search_with_lsp":
-					await codebaseSearchWithLspTool.handle(cline, block as ToolUse<"codebase_search_with_lsp">, {
+					await codebaseSearchWithLspTool.handle(shofer, block as ToolUse<"codebase_search_with_lsp">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "search_files":
-					await searchFilesTool.handle(cline, block as ToolUse<"search_files">, {
+					await searchFilesTool.handle(shofer, block as ToolUse<"search_files">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "execute_command":
-					await executeCommandTool.handle(cline, block as ToolUse<"execute_command">, {
+					await executeCommandTool.handle(shofer, block as ToolUse<"execute_command">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "read_command_output":
-					await readCommandOutputTool.handle(cline, block as ToolUse<"read_command_output">, {
+					await readCommandOutputTool.handle(shofer, block as ToolUse<"read_command_output">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "use_mcp_tool":
-					await useMcpToolTool.handle(cline, block as ToolUse<"use_mcp_tool">, {
+					await useMcpToolTool.handle(shofer, block as ToolUse<"use_mcp_tool">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "access_mcp_resource":
-					await accessMcpResourceTool.handle(cline, block as ToolUse<"access_mcp_resource">, {
+					await accessMcpResourceTool.handle(shofer, block as ToolUse<"access_mcp_resource">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "ask_followup_question":
-					await askFollowupQuestionTool.handle(cline, block as ToolUse<"ask_followup_question">, {
+					await askFollowupQuestionTool.handle(shofer, block as ToolUse<"ask_followup_question">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "switch_mode":
-					await switchModeTool.handle(cline, block as ToolUse<"switch_mode">, {
+					await switchModeTool.handle(shofer, block as ToolUse<"switch_mode">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "set_task_title":
-					await setTaskTitleTool.handle(cline, block as ToolUse<"set_task_title">, {
+					await setTaskTitleTool.handle(shofer, block as ToolUse<"set_task_title">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "give_feedback":
-					await giveFeedbackTool.handle(cline, block as ToolUse<"give_feedback">, {
+					await giveFeedbackTool.handle(shofer, block as ToolUse<"give_feedback">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "new_task":
-					await checkpointSaveAndMark(cline)
-					await newTaskTool.handle(cline, block as ToolUse<"new_task">, {
+					await checkpointSaveAndMark(shofer)
+					await newTaskTool.handle(shofer, block as ToolUse<"new_task">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -905,7 +905,7 @@ export async function presentAssistantMessage(cline: Task) {
 					// CRITICAL: Prevent duplicate attempt_completion execution when LLM generates
 					// multiple attempt_completion calls in a single response (common after delegation).
 					// Only execute the FIRST attempt_completion and skip subsequent ones.
-					if (cline.didExecuteAttemptCompletion) {
+					if (shofer.didExecuteAttemptCompletion) {
 						console.log(
 							`[presentAssistantMessage] Skipping duplicate attempt_completion (tool_use_id: ${toolCallId})`,
 						)
@@ -918,7 +918,7 @@ export async function presentAssistantMessage(cline: Task) {
 					}
 
 					// Mark that we're executing attempt_completion to prevent duplicates
-					cline.didExecuteAttemptCompletion = true
+					shofer.didExecuteAttemptCompletion = true
 
 					const completionCallbacks: AttemptCompletionCallbacks = {
 						askApproval,
@@ -928,167 +928,167 @@ export async function presentAssistantMessage(cline: Task) {
 						toolDescription,
 					}
 					await attemptCompletionTool.handle(
-						cline,
+						shofer,
 						block as ToolUse<"attempt_completion">,
 						completionCallbacks,
 					)
 					break
 				}
 				case "run_slash_command":
-					await runSlashCommandTool.handle(cline, block as ToolUse<"run_slash_command">, {
+					await runSlashCommandTool.handle(shofer, block as ToolUse<"run_slash_command">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "check_task_status":
-					await checkTaskStatusTool.handle(cline, block as ToolUse<"check_task_status">, {
+					await checkTaskStatusTool.handle(shofer, block as ToolUse<"check_task_status">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "wait_for_task":
-					await waitForTaskTool.handle(cline, block as ToolUse<"wait_for_task">, {
+					await waitForTaskTool.handle(shofer, block as ToolUse<"wait_for_task">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "list_background_tasks":
-					await listBackgroundTasksTool.handle(cline, block as ToolUse<"list_background_tasks">, {
+					await listBackgroundTasksTool.handle(shofer, block as ToolUse<"list_background_tasks">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "skill_load":
-					await skillLoadTool.handle(cline, block as ToolUse<"skill_load">, {
+					await skillLoadTool.handle(shofer, block as ToolUse<"skill_load">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "generate_image":
-					await checkpointSaveAndMark(cline)
-					await generateImageTool.handle(cline, block as ToolUse<"generate_image">, {
+					await checkpointSaveAndMark(shofer)
+					await generateImageTool.handle(shofer, block as ToolUse<"generate_image">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "create_directory":
-					await checkpointSaveAndMark(cline)
-					await createDirectoryTool.handle(cline, block as ToolUse<"create_directory">, {
+					await checkpointSaveAndMark(shofer)
+					await createDirectoryTool.handle(shofer, block as ToolUse<"create_directory">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "create_new_workspace":
-					await createNewWorkspaceTool.handle(cline, block as ToolUse<"create_new_workspace">, {
+					await createNewWorkspaceTool.handle(shofer, block as ToolUse<"create_new_workspace">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "file":
-					await checkpointSaveAndMark(cline)
-					await fileTool.handle(cline, block as ToolUse<"file">, {
+					await checkpointSaveAndMark(shofer)
+					await fileTool.handle(shofer, block as ToolUse<"file">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "fetch_web_page":
-					await fetchWebPageTool.handle(cline, block as ToolUse<"fetch_web_page">, {
+					await fetchWebPageTool.handle(shofer, block as ToolUse<"fetch_web_page">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "find_files":
-					await findFilesTool.handle(cline, block as ToolUse<"find_files">, {
+					await findFilesTool.handle(shofer, block as ToolUse<"find_files">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "get_errors":
-					await getErrorsTool.handle(cline, block as ToolUse<"get_errors">, {
+					await getErrorsTool.handle(shofer, block as ToolUse<"get_errors">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "get_changed_files":
-					await getChangedFilesTool.handle(cline, block as ToolUse<"get_changed_files">, {
+					await getChangedFilesTool.handle(shofer, block as ToolUse<"get_changed_files">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "get_project_setup_info":
-					await getProjectSetupInfoTool.handle(cline, block as ToolUse<"get_project_setup_info">, {
+					await getProjectSetupInfoTool.handle(shofer, block as ToolUse<"get_project_setup_info">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "get_search_results":
-					await getSearchResultsTool.handle(cline, block as ToolUse<"get_search_results">, {
+					await getSearchResultsTool.handle(shofer, block as ToolUse<"get_search_results">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "insert_edit":
-					await checkpointSaveAndMark(cline)
-					await insertEditTool.handle(cline, block as ToolUse<"insert_edit">, {
+					await checkpointSaveAndMark(shofer)
+					await insertEditTool.handle(shofer, block as ToolUse<"insert_edit">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "sed":
-					await checkpointSaveAndMark(cline)
-					await sedTool.handle(cline, block as ToolUse<"sed">, {
+					await checkpointSaveAndMark(shofer)
+					await sedTool.handle(shofer, block as ToolUse<"sed">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "list_code_usages":
-					await listCodeUsagesTool.handle(cline, block as ToolUse<"list_code_usages">, {
+					await listCodeUsagesTool.handle(shofer, block as ToolUse<"list_code_usages">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "read_project_structure":
-					await readProjectStructureTool.handle(cline, block as ToolUse<"read_project_structure">, {
+					await readProjectStructureTool.handle(shofer, block as ToolUse<"read_project_structure">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "rename_symbol":
-					await checkpointSaveAndMark(cline)
-					await renameSymbolTool.handle(cline, block as ToolUse<"rename_symbol">, {
+					await checkpointSaveAndMark(shofer)
+					await renameSymbolTool.handle(shofer, block as ToolUse<"rename_symbol">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "view_image":
-					await viewImageTool.handle(cline, block as ToolUse<"view_image">, {
+					await viewImageTool.handle(shofer, block as ToolUse<"view_image">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
 				case "sleep":
-					await sleepTool.handle(cline, block as ToolUse<"sleep">, {
+					await sleepTool.handle(shofer, block as ToolUse<"sleep">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -1121,8 +1121,8 @@ export async function presentAssistantMessage(cline: Task) {
 											: String(parseParamsError)
 									const message = `Custom tool "${block.name}" argument validation failed: ${errMsg}`
 									console.error(message)
-									cline.consecutiveMistakeCount++
-									await cline.say("error", message)
+									shofer.consecutiveMistakeCount++
+									await shofer.say("error", message)
 									pushToolResult(formatResponse.toolError(message))
 									break
 								}
@@ -1130,7 +1130,7 @@ export async function presentAssistantMessage(cline: Task) {
 
 							const result = await customTool.execute(customToolArgs, {
 								mode: mode ?? defaultModeSlug,
-								task: cline,
+								task: shofer,
 							})
 
 							console.log(
@@ -1138,11 +1138,11 @@ export async function presentAssistantMessage(cline: Task) {
 							)
 
 							pushToolResult(result)
-							cline.consecutiveMistakeCount = 0
+							shofer.consecutiveMistakeCount = 0
 						} catch (executionError: any) {
-							cline.consecutiveMistakeCount++
+							shofer.consecutiveMistakeCount++
 							// Record custom tool error with static name
-							cline.recordToolError("custom_tool", executionError.message)
+							shofer.recordToolError("custom_tool", executionError.message)
 							await handleError(`executing custom tool "${block.name}"`, executionError)
 						}
 
@@ -1171,8 +1171,8 @@ export async function presentAssistantMessage(cline: Task) {
 							}
 
 							try {
-								cline.consecutiveMistakeCount = 0
-								await cline.say("mcp_server_request_started")
+								shofer.consecutiveMistakeCount = 0
+								await shofer.say("mcp_server_request_started")
 
 								const result = await vscode.commands.executeCommand<{
 									content: string
@@ -1180,10 +1180,10 @@ export async function presentAssistantMessage(cline: Task) {
 								}>(invokeCommand, block.name, toolInput)
 
 								const resultText = result?.content ?? "(tool returned empty result)"
-								await cline.say("mcp_server_response", resultText)
+								await shofer.say("mcp_server_response", resultText)
 								pushToolResult(result.is_error ? formatResponse.toolError(resultText) : resultText)
 							} catch (execError: any) {
-								cline.consecutiveMistakeCount++
+								shofer.consecutiveMistakeCount++
 								await handleError(
 									`executing private tool "${block.name}"`,
 									execError instanceof Error ? execError : new Error(String(execError)),
@@ -1195,12 +1195,12 @@ export async function presentAssistantMessage(cline: Task) {
 
 					// Not a custom tool or private tool — handle as unknown tool error
 					const errorMessage = `Unknown tool "${block.name}". This tool does not exist. Please use one of the available tools.`
-					cline.consecutiveMistakeCount++
-					cline.recordToolError(block.name as ToolName, errorMessage)
-					await cline.say("error", t("tools:unknownToolError", { toolName: block.name }))
+					shofer.consecutiveMistakeCount++
+					shofer.recordToolError(block.name as ToolName, errorMessage)
+					await shofer.say("error", t("tools:unknownToolError", { toolName: block.name }))
 					// Push tool_result directly WITHOUT setting didAlreadyUseTool
 					// This prevents the stream from being interrupted with "Response interrupted by tool use result"
-					cline.pushToolResultToUserContent({
+					shofer.pushToolResultToUserContent({
 						type: "tool_result",
 						tool_use_id: sanitizeToolUseId(toolCallId),
 						content: formatResponse.toolError(errorMessage),
@@ -1221,18 +1221,18 @@ export async function presentAssistantMessage(cline: Task) {
 	// was breaking when relpath was undefined, and for invalid relpath it never
 	// presented UI.
 	// This needs to be placed here, if not then calling
-	// cline.presentAssistantMessage below would fail (sometimes) since it's
+	// shofer.presentAssistantMessage below would fail (sometimes) since it's
 	// locked.
-	cline.presentAssistantMessageLocked = false
+	shofer.presentAssistantMessageLocked = false
 
 	// NOTE: When tool is rejected, iterator stream is interrupted and it waits
 	// for `userMessageContentReady` to be true. Future calls to present will
 	// skip execution since `didRejectTool` and iterate until `contentIndex` is
 	// set to message length and it sets userMessageContentReady to true itself
 	// (instead of preemptively doing it in iterator).
-	if (!block.partial || cline.didRejectTool || cline.didAlreadyUseTool) {
+	if (!block.partial || shofer.didRejectTool || shofer.didAlreadyUseTool) {
 		// Block is finished streaming and executing.
-		if (cline.currentStreamingContentIndex === cline.assistantMessageContent.length - 1) {
+		if (shofer.currentStreamingContentIndex === shofer.assistantMessageContent.length - 1) {
 			// It's okay that we increment if !didCompleteReadingStream, it'll
 			// just return because out of bounds and as streaming continues it
 			// will call `presentAssitantMessage` if a new block is ready. If
@@ -1240,32 +1240,32 @@ export async function presentAssistantMessage(cline: Task) {
 			// true when out of bounds. This gracefully allows the stream to
 			// continue on and all potential content blocks be presented.
 			// Last block is complete and it is finished executing
-			cline.userMessageContentReady = true // Will allow `pWaitFor` to continue.
+			shofer.userMessageContentReady = true // Will allow `pWaitFor` to continue.
 		}
 
 		// Call next block if it exists (if not then read stream will call it
 		// when it's ready).
 		// Need to increment regardless, so when read stream calls this function
 		// again it will be streaming the next block.
-		cline.currentStreamingContentIndex++
+		shofer.currentStreamingContentIndex++
 
-		if (cline.currentStreamingContentIndex < cline.assistantMessageContent.length) {
+		if (shofer.currentStreamingContentIndex < shofer.assistantMessageContent.length) {
 			// There are already more content blocks to stream, so we'll call
 			// this function ourselves.
-			presentAssistantMessage(cline)
+			presentAssistantMessage(shofer)
 			return
 		} else {
 			// CRITICAL FIX: If we're out of bounds and the stream is complete, set userMessageContentReady
 			// This handles the case where assistantMessageContent is empty or becomes empty after processing
-			if (cline.didCompleteReadingStream) {
-				cline.userMessageContentReady = true
+			if (shofer.didCompleteReadingStream) {
+				shofer.userMessageContentReady = true
 			}
 		}
 	}
 
 	// Block is partial, but the read stream may have finished.
-	if (cline.presentAssistantMessageHasPendingUpdates) {
-		presentAssistantMessage(cline)
+	if (shofer.presentAssistantMessageHasPendingUpdates) {
+		presentAssistantMessage(shofer)
 	}
 }
 

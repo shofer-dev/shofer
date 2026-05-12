@@ -6,10 +6,10 @@ import DismissibleUpsell from "@src/components/common/DismissibleUpsell"
 import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
-import { getModelMaxOutputTokens } from "@roo/api"
-import { findLastIndex } from "@roo/array"
+import { getModelMaxOutputTokens } from "@shofer/api"
+import { findLastIndex } from "@shofer/array"
 
 import { formatLargeNumber } from "@src/utils/format"
 import { cn } from "@src/lib/utils"
@@ -29,7 +29,7 @@ import { TaskSelector, getTaskDisplayName, TASK_STATE_CONFIG } from "./TaskSelec
 import { BudgetLimitDialog } from "./BudgetLimitDialog"
 
 export interface TaskHeaderProps {
-	task: ClineMessage
+	task: ShoferMessage
 	tokensIn: number
 	tokensOut: number
 	cacheWrites?: number
@@ -68,7 +68,7 @@ const TaskHeader = ({
 	onUpdateCostLimit,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
-	const { apiConfiguration, currentTaskItem, clineMessages, taskHistory, parallelTasks } = useExtensionState()
+	const { apiConfiguration, currentTaskItem, shoferMessages, taskHistory, parallelTasks } = useExtensionState()
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 	const [showLongRunningTaskMessage, setShowLongRunningTaskMessage] = useState(false)
@@ -78,14 +78,14 @@ const TaskHeader = ({
 
 	// Check if the task is complete by looking at the last relevant message (skipping resume messages)
 	const isTaskComplete =
-		clineMessages && clineMessages.length > 0
+		shoferMessages && shoferMessages.length > 0
 			? (() => {
 					const lastRelevantIndex = findLastIndex(
-						clineMessages,
+						shoferMessages,
 						(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"),
 					)
 					return lastRelevantIndex !== -1
-						? clineMessages[lastRelevantIndex]?.ask === "completion_result"
+						? shoferMessages[lastRelevantIndex]?.ask === "completion_result"
 						: false
 				})()
 			: false
@@ -157,7 +157,7 @@ const TaskHeader = ({
 			 * Top strip: shows the current task's title + runtime-state dot in
 			 * the spot where the in-webview Tasks trigger used to live. The
 			 * actual trigger has been promoted to the VS Code view title bar
-			 * (`roo-cline.tasksButtonClicked`); the drawer is mounted below
+			 * (`shofer.tasksButtonClicked`); the drawer is mounted below
 			 * and listens for the global toggle event the action dispatches.
 			 */}
 			<div className="mb-2 flex items-center justify-between gap-2">

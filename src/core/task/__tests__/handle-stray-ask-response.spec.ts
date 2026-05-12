@@ -14,7 +14,7 @@ describe("Task.handleWebviewAskResponse stray response handling", () => {
 		const task = Object.create(Task.prototype) as Task
 		;(task as any).abort = false
 		;(task as any).abandoned = false
-		;(task as any).clineMessages = []
+		;(task as any).shoferMessages = []
 		;(task as any).askResponse = undefined
 		;(task as any).askResponseText = undefined
 		;(task as any).askResponseImages = undefined
@@ -22,8 +22,8 @@ describe("Task.handleWebviewAskResponse stray response handling", () => {
 		;(task as any).isAwaitingAskResponse = false
 		;(task as any).cancelAutoApprovalTimeout = vi.fn(() => {})
 		;(task as any).checkpointSave = vi.fn(async () => {})
-		;(task as any).updateClineMessage = vi.fn(async () => {})
-		;(task as any).saveClineMessages = vi.fn(async () => {})
+		;(task as any).updateShoferMessage = vi.fn(async () => {})
+		;(task as any).saveShoferMessages = vi.fn(async () => {})
 		;(task as any).diagLog = vi.fn(() => {})
 
 		const { MessageQueueService } = await import("../../message-queue/MessageQueueService")

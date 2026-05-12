@@ -2,7 +2,7 @@ import path from "path"
 import delay from "delay"
 import fs from "fs/promises"
 
-import { type ClineSayTool, DEFAULT_WRITE_DELAY_MS } from "@roo-code/types"
+import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
@@ -47,11 +47,11 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 			return
 		}
 
-		const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+		const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 
 		if (!accessAllowed) {
 			await task.say("rooignore_error", relPath)
-			pushToolResult(formatResponse.rooIgnoreError(relPath))
+			pushToolResult(formatResponse.shoferIgnoreError(relPath))
 			return
 		}
 
@@ -88,7 +88,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 		const fullPath = relPath ? path.resolve(task.cwd, relPath) : ""
 		const isOutsideWorkspace = isPathOutsideWorkspace(fullPath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: fileExists ? "editedExistingFile" : "newFileCreated",
 			path: getReadablePath(task.cwd, relPath),
 			content: newContent,
@@ -125,7 +125,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 					...sharedMessageProps,
 					content: unified,
 					diffStats: computeDiffStats(unified) || undefined,
-				} satisfies ClineSayTool)
+				} satisfies ShoferSayTool)
 
 				const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
 
@@ -157,7 +157,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 					...sharedMessageProps,
 					content: unified,
 					diffStats: computeDiffStats(unified) || undefined,
-				} satisfies ClineSayTool)
+				} satisfies ShoferSayTool)
 
 				const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
 
@@ -233,7 +233,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 		const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath!) || false
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: fileExists ? "editedExistingFile" : "newFileCreated",
 			path: getReadablePath(task.cwd, relPath!),
 			content: newContent || "",

@@ -1,9 +1,9 @@
-// pnpm --filter @roo-code/cli test src/agent/__tests__/extension-host.test.ts
+// pnpm --filter @shofer/cli test src/agent/__tests__/extension-host.test.ts
 
 import { EventEmitter } from "events"
 import fs from "fs"
 
-import type { ExtensionMessage, WebviewMessage } from "@roo-code/types"
+import type { ExtensionMessage, WebviewMessage } from "@shofer/types"
 
 import { DEFAULT_FLAGS } from "@/types/index.js"
 
@@ -11,7 +11,7 @@ import { type ExtensionHostOptions, ExtensionHost } from "../extension-host.js"
 import { ExtensionClient } from "../extension-client.js"
 import { AgentLoopState } from "../agent-state.js"
 
-vi.mock("@roo-code/vscode-shim", () => ({
+vi.mock("@shofer/vscode-shim", () => ({
 	createVSCodeAPI: vi.fn(() => ({
 		context: { extensionPath: "/test/extension" },
 	})),
@@ -19,7 +19,7 @@ vi.mock("@roo-code/vscode-shim", () => ({
 }))
 
 vi.mock("@/lib/storage/index.js", () => ({
-	createEphemeralStorageDir: vi.fn(() => Promise.resolve("/tmp/roo-cli-test-ephemeral")),
+	createEphemeralStorageDir: vi.fn(() => Promise.resolve("/tmp/shofer-cli-test-ephemeral")),
 }))
 
 /**
@@ -82,14 +82,14 @@ function spyOnPrivate(host: ExtensionHost, method: string) {
 }
 
 describe("ExtensionHost", () => {
-	const initialRooCliRuntimeEnv = process.env.ROO_CLI_RUNTIME
+	const initialShoferCliRuntimeEnv = process.env.ROO_CLI_RUNTIME
 
 	beforeEach(() => {
 		vi.resetAllMocks()
-		if (initialRooCliRuntimeEnv === undefined) {
+		if (initialShoferCliRuntimeEnv === undefined) {
 			delete process.env.ROO_CLI_RUNTIME
 		} else {
-			process.env.ROO_CLI_RUNTIME = initialRooCliRuntimeEnv
+			process.env.ROO_CLI_RUNTIME = initialShoferCliRuntimeEnv
 		}
 		// Clean up globals
 		delete (global as Record<string, unknown>).vscode
@@ -97,10 +97,10 @@ describe("ExtensionHost", () => {
 	})
 
 	afterAll(() => {
-		if (initialRooCliRuntimeEnv === undefined) {
+		if (initialShoferCliRuntimeEnv === undefined) {
 			delete process.env.ROO_CLI_RUNTIME
 		} else {
-			process.env.ROO_CLI_RUNTIME = initialRooCliRuntimeEnv
+			process.env.ROO_CLI_RUNTIME = initialShoferCliRuntimeEnv
 		}
 	})
 
@@ -318,7 +318,7 @@ describe("ExtensionHost", () => {
 			// Simulate extension message.
 			host.emit("extensionWebviewMessage", {
 				type: "state",
-				state: { clineMessages: [] },
+				state: { shoferMessages: [] },
 			} as unknown as ExtensionMessage)
 
 			// Message listener is set up in activate(), which we can't easily call in unit tests.
@@ -704,7 +704,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost({ ephemeral: true })
 
 			// Set up a mock ephemeral storage directory
-			const mockEphemeralDir = "/tmp/roo-cli-test-ephemeral-cleanup"
+			const mockEphemeralDir = "/tmp/shofer-cli-test-ephemeral-cleanup"
 			setPrivate(host, "ephemeralStorageDir", mockEphemeralDir)
 
 			// Mock fs.promises.rm
@@ -738,7 +738,7 @@ describe("ExtensionHost", () => {
 			const host = createTestHost({ ephemeral: true })
 
 			// Set up a mock ephemeral storage directory
-			setPrivate(host, "ephemeralStorageDir", "/tmp/roo-cli-test-ephemeral-error")
+			setPrivate(host, "ephemeralStorageDir", "/tmp/shofer-cli-test-ephemeral-error")
 
 			// Mock fs.promises.rm to throw an error
 			const rmMock = vi.spyOn(fs.promises, "rm").mockRejectedValue(new Error("Cleanup failed"))

@@ -3,7 +3,7 @@ import path from "path"
 import * as os from "os"
 import { Dirent } from "fs"
 
-import { isLanguage } from "@roo-code/types"
+import { isLanguage } from "@shofer/types"
 
 import type { SystemPromptSettings } from "../types"
 
@@ -13,7 +13,7 @@ import {
 	getAllRooDirectoriesForCwd,
 	getAgentsDirectoriesForCwd,
 	getGlobalRooDirectory,
-} from "../../../services/roo-config"
+} from "../../../services/shofer-config"
 
 /**
  * Safely read a file and return its trimmed content
@@ -208,7 +208,7 @@ export async function loadRuleFiles(cwd: string, enableSubfolderRules: boolean =
 	// Use recursive discovery only if enableSubfolderRules is true
 	const rooDirectories = enableSubfolderRules ? await getAllRooDirectoriesForCwd(cwd) : getRooDirectoriesForCwd(cwd)
 
-	// Check for .roo/rules/ directories in order (global, project-local, and optionally subfolders)
+	// Check for .shofer/rules/ directories in order (global, project-local, and optionally subfolders)
 	for (const rooDir of rooDirectories) {
 		const rulesDir = path.join(rooDir, "rules")
 		if (await directoryExists(rulesDir)) {
@@ -220,9 +220,9 @@ export async function loadRuleFiles(cwd: string, enableSubfolderRules: boolean =
 		}
 	}
 
-	// If we found rules in .roo/rules/ directories, return them
+	// If we found rules in .shofer/rules/ directories, return them
 	if (rules.length > 0) {
-		return "\n# Rules from .roo directories:\n\n" + rules.join("\n\n")
+		return "\n# Rules from .shofer directories:\n\n" + rules.join("\n\n")
 	}
 
 	// Fall back to existing behavior for legacy .roorules/.clinerules files
@@ -345,7 +345,7 @@ async function loadAgentRulesFile(cwd: string): Promise<string> {
 }
 
 /**
- * Load all AGENTS.md files from project root and optionally subdirectories with .roo folders
+ * Load all AGENTS.md files from project root and optionally subdirectories with .shofer folders
  * Returns combined content with clear path headers for each file
  *
  * @param cwd - Current working directory (project root)
@@ -364,7 +364,7 @@ async function loadAllAgentRulesFiles(cwd: string, enableSubfolderRules: boolean
 		return agentRules.join("\n\n")
 	}
 
-	// When enabled, load from root and all subdirectories with .roo folders
+	// When enabled, load from root and all subdirectories with .shofer folders
 	const directories = await getAgentsDirectoriesForCwd(cwd)
 
 	for (const directory of directories) {
@@ -386,7 +386,7 @@ export async function addCustomInstructions(
 	mode: string,
 	options: {
 		language?: string
-		rooIgnoreInstructions?: string
+		shoferIgnoreInstructions?: string
 		settings?: SystemPromptSettings
 	} = {},
 ): Promise<string> {
@@ -406,7 +406,7 @@ export async function addCustomInstructions(
 			? await getAllRooDirectoriesForCwd(cwd)
 			: getRooDirectoriesForCwd(cwd)
 
-		// Check for .roo/rules-${mode}/ directories in order (global, project-local, and optionally subfolders)
+		// Check for .shofer/rules-${mode}/ directories in order (global, project-local, and optionally subfolders)
 		for (const rooDir of rooDirectories) {
 			const modeRulesDir = path.join(rooDir, `rules-${mode}`)
 			if (await directoryExists(modeRulesDir)) {
@@ -418,7 +418,7 @@ export async function addCustomInstructions(
 			}
 		}
 
-		// If we found mode-specific rules in .roo/rules-${mode}/ directories, use them
+		// If we found mode-specific rules in .shofer/rules-${mode}/ directories, use them
 		if (modeRules.length > 0) {
 			modeRuleContent = "\n" + modeRules.join("\n\n")
 			usedRuleFile = `rules-${mode} directories`
@@ -461,19 +461,19 @@ export async function addCustomInstructions(
 
 	// Add mode-specific rules first if they exist
 	if (modeRuleContent && modeRuleContent.trim()) {
-		if (usedRuleFile.includes(path.join(".roo", `rules-${mode}`))) {
+		if (usedRuleFile.includes(path.join(".shofer", `rules-${mode}`))) {
 			rules.push(modeRuleContent.trim())
 		} else {
 			rules.push(`# Rules from ${usedRuleFile}:\n${modeRuleContent}`)
 		}
 	}
 
-	if (options.rooIgnoreInstructions) {
-		rules.push(options.rooIgnoreInstructions)
+	if (options.shoferIgnoreInstructions) {
+		rules.push(options.shoferIgnoreInstructions)
 	}
 
 	// Add AGENTS.md content if enabled (default: true)
-	// Load from root and optionally subdirectories with .roo folders based on enableSubfolderRules setting
+	// Load from root and optionally subdirectories with .shofer folders based on enableSubfolderRules setting
 	if (options.settings?.useAgentRules !== false) {
 		const agentRulesContent = await loadAllAgentRulesFiles(cwd, enableSubfolderRules)
 		if (agentRulesContent && agentRulesContent.trim()) {

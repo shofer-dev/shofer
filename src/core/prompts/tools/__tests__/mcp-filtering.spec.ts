@@ -3,7 +3,7 @@
 // which categories of MCP tools are exposed to the model.
 
 import type OpenAI from "openai"
-import type { McpTool, ModeConfig } from "@roo-code/types"
+import type { McpTool, ModeConfig } from "@shofer/types"
 import { filterMcpToolsForMode } from "../filter-tools-for-mode"
 import { buildMcpToolName } from "../../../../utils/mcp-name"
 

@@ -4,7 +4,7 @@ import React from "react"
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import type { ProviderSettings } from "@roo-code/types"
+import type { ProviderSettings } from "@shofer/types"
 
 import TaskHeader, { TaskHeaderProps } from "../TaskHeader"
 
@@ -39,7 +39,7 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 let mockExtensionState: {
 	apiConfiguration: ProviderSettings
 	currentTaskItem: { id: string } | null
-	clineMessages: any[]
+	shoferMessages: any[]
 } = {
 	apiConfiguration: {
 		apiProvider: "anthropic",
@@ -47,7 +47,7 @@ let mockExtensionState: {
 		apiModelId: "claude-3-opus-20240229",
 	} as ProviderSettings,
 	currentTaskItem: { id: "test-task-id" },
-	clineMessages: [],
+	shoferMessages: [],
 }
 
 // Mock the ExtensionStateContext
@@ -79,8 +79,8 @@ vi.mock("@src/components/cloud/CloudUpsellDialog", () => ({
 	CloudUpsellDialog: () => null,
 }))
 
-// Mock findLastIndex from @roo/array
-vi.mock("@roo/array", () => ({
+// Mock findLastIndex from @shofer/array
+vi.mock("@shofer/array", () => ({
 	findLastIndex: (array: any[], predicate: (item: any) => boolean) => {
 		for (let i = array.length - 1; i >= 0; i--) {
 			if (predicate(array[i])) {
@@ -105,9 +105,9 @@ vi.mock("@/components/ui/hooks/useSelectedModel", () => ({
 	}),
 }))
 
-// Mock getModelMaxOutputTokens from @roo/api
+// Mock getModelMaxOutputTokens from @shofer/api
 let mockMaxOutputTokens = 0
-vi.mock("@roo/api", () => ({
+vi.mock("@shofer/api", () => ({
 	getModelMaxOutputTokens: () => mockMaxOutputTokens,
 }))
 
@@ -214,7 +214,7 @@ describe("TaskHeader", () => {
 					apiModelId: "claude-3-opus-20240229",
 				} as ProviderSettings,
 				currentTaskItem: { id: "test-task-id" },
-				clineMessages: [],
+				shoferMessages: [],
 			}
 		})
 
@@ -240,7 +240,7 @@ describe("TaskHeader", () => {
 			// Set up mock state with a completion_result message
 			mockExtensionState = {
 				...mockExtensionState,
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "ask",
 						ask: "completion_result",
@@ -275,11 +275,11 @@ describe("TaskHeader", () => {
 			expect(screen.queryByTestId("dismissible-upsell")).not.toBeInTheDocument()
 		})
 
-		it("should not show DismissibleUpsell when task has completion_result in clineMessages", async () => {
+		it("should not show DismissibleUpsell when task has completion_result in shoferMessages", async () => {
 			// Set up mock state with a completion_result message from the start
 			mockExtensionState = {
 				...mockExtensionState,
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "say",
 						say: "text",
@@ -308,7 +308,7 @@ describe("TaskHeader", () => {
 			// Set up mock state with a completion_result message followed by resume messages
 			mockExtensionState = {
 				...mockExtensionState,
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "say",
 						say: "text",
@@ -349,7 +349,7 @@ describe("TaskHeader", () => {
 			// Set up mock state with a non-completion message followed by resume messages
 			mockExtensionState = {
 				...mockExtensionState,
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "say",
 						say: "text",

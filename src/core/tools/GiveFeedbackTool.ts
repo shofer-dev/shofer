@@ -2,7 +2,7 @@
  * GiveFeedbackTool — allows the LLM to send feedback to the Arkware developers.
  *
  * Always-available, harmless meta-operation. The feedback message is appended
- * to the Roo Code extension output channel (per project policy: extensions must
+ * to the Shofer extension output channel (per project policy: extensions must
  * use the output channel rather than `console.log`) and surfaced in the chat UI
  * via an auto-approved `task.ask("tool", ...)` entry.
  */

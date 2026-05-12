@@ -19,10 +19,10 @@ import type {
 	WorktreeListResponse,
 	WorktreeDefaultsResponse,
 	WorktreeStatus,
-} from "@roo-code/types"
-import { worktreeService, worktreeIncludeService, type CopyProgressCallback } from "@roo-code/core"
+} from "@shofer/types"
+import { worktreeService, worktreeIncludeService, type CopyProgressCallback } from "@shofer/core"
 
-import type { ClineProvider } from "../ClineProvider"
+import type { ShoferProvider } from "../ShoferProvider"
 
 /**
  * Generate a random alphanumeric suffix for branch/folder names.
@@ -53,7 +53,7 @@ async function isWorkspaceSubfolder(cwd: string): Promise<boolean> {
 	return normalizedCwd !== normalizedGitRoot && normalizedCwd.startsWith(normalizedGitRoot)
 }
 
-export async function handleListWorktrees(provider: ClineProvider): Promise<WorktreeListResponse> {
+export async function handleListWorktrees(provider: ShoferProvider): Promise<WorktreeListResponse> {
 	const workspaceFolders = vscode.workspace.workspaceFolders
 	const isMultiRoot = workspaceFolders ? workspaceFolders.length > 1 : false
 
@@ -98,18 +98,18 @@ export async function handleListWorktrees(provider: ClineProvider): Promise<Work
 	const gitRootPath = (await worktreeService.getGitRootPath(cwd)) || ""
 
 	// Embedded worktree exception: when the workspace IS a subfolder, but
-	// that subfolder lives directly under `<gitRoot>/.roo/worktrees/`
+	// that subfolder lives directly under `<gitRoot>/.shofer/worktrees/`
 	// (i.e. this is an embedded worktree task created by the new model),
 	// allow it.  The embedded model runs all tasks in a single VS Code
 	// window so the subfolder restriction is not necessary.
 	//
 	// Path check is anchored to the resolved git root + path.relative to
 	// avoid false matches against unrelated directories whose name happens
-	// to contain `.roo/worktrees/` as a substring.
+	// to contain `.shofer/worktrees/` as a substring.
 	let isEmbeddedWorktree = false
 	if (isSubfolder && gitRootPath) {
 		const rel = path.relative(path.resolve(gitRootPath), path.resolve(cwd))
-		const embeddedPrefix = path.join(".roo", "worktrees") + path.sep
+		const embeddedPrefix = path.join(".shofer", "worktrees") + path.sep
 		isEmbeddedWorktree = !rel.startsWith("..") && !path.isAbsolute(rel) && rel.startsWith(embeddedPrefix)
 	}
 
@@ -149,7 +149,7 @@ export async function handleListWorktrees(provider: ClineProvider): Promise<Work
 }
 
 export async function handleCreateWorktree(
-	provider: ClineProvider,
+	provider: ShoferProvider,
 	options: {
 		path: string
 		branch?: string
@@ -170,9 +170,9 @@ export async function handleCreateWorktree(
 	}
 
 	// Enforce embedded worktree convention: all worktrees MUST live under
-	// .roo/worktrees/ inside the workspace. If the caller passes a path
+	// .shofer/worktrees/ inside the workspace. If the caller passes a path
 	// outside that prefix, normalize it by prepending the convention path.
-	const conventionPrefix = path.join(cwd, ".roo", "worktrees")
+	const conventionPrefix = path.join(cwd, ".shofer", "worktrees")
 	const normalizedAbs = path.resolve(cwd, options.path)
 	if (!normalizedAbs.startsWith(conventionPrefix + path.sep) && normalizedAbs !== conventionPrefix) {
 		// Extract the last path component (directory name) and place it
@@ -204,7 +204,7 @@ export async function handleCreateWorktree(
 }
 
 export async function handleDeleteWorktree(
-	provider: ClineProvider,
+	provider: ShoferProvider,
 	worktreePath: string,
 	force = false,
 ): Promise<WorktreeResult> {
@@ -212,42 +212,42 @@ export async function handleDeleteWorktree(
 	return worktreeService.deleteWorktree(cwd, worktreePath, force)
 }
 
-export async function handleGetAvailableBranches(provider: ClineProvider): Promise<BranchInfo> {
+export async function handleGetAvailableBranches(provider: ShoferProvider): Promise<BranchInfo> {
 	const cwd = provider.cwd
 	// Include branches already in worktrees since we use this for base branch selection
 	return worktreeService.getAvailableBranches(cwd, true)
 }
 
-export async function handleGetWorktreeDefaults(provider: ClineProvider): Promise<WorktreeDefaultsResponse> {
+export async function handleGetWorktreeDefaults(provider: ShoferProvider): Promise<WorktreeDefaultsResponse> {
 	const suffix = generateRandomSuffix()
 	const workspaceFolders = vscode.workspace.workspaceFolders
 	const projectName = workspaceFolders?.[0]?.name || "project"
 	const cwd = provider.cwd
 
 	// Embedded worktree convention: all worktrees MUST live under
-	// .roo/worktrees/ inside the workspace. The path is auto-generated,
+	// .shofer/worktrees/ inside the workspace. The path is auto-generated,
 	// not user-configurable (folder picker removed from CreateWorktreeModal),
 	// and enforced in handleCreateWorktree by normalizing any path outside
 	// the convention prefix.
-	const suggestedPath = path.join(cwd, ".roo", "worktrees", `${projectName}-${suffix}`)
+	const suggestedPath = path.join(cwd, ".shofer", "worktrees", `${projectName}-${suffix}`)
 
 	return {
-		suggestedBranch: `worktree/roo-${suffix}`,
+		suggestedBranch: `worktree/shofer-${suffix}`,
 		suggestedPath,
 	}
 }
 
-export async function handleGetWorktreeIncludeStatus(provider: ClineProvider): Promise<WorktreeIncludeStatus> {
+export async function handleGetWorktreeIncludeStatus(provider: ShoferProvider): Promise<WorktreeIncludeStatus> {
 	const cwd = provider.cwd
 	return worktreeIncludeService.getStatus(cwd)
 }
 
-export async function handleCheckBranchWorktreeInclude(provider: ClineProvider, branch: string): Promise<boolean> {
+export async function handleCheckBranchWorktreeInclude(provider: ShoferProvider, branch: string): Promise<boolean> {
 	const cwd = provider.cwd
 	return worktreeIncludeService.branchHasWorktreeInclude(cwd, branch)
 }
 
-export async function handleCreateWorktreeInclude(provider: ClineProvider, content: string): Promise<WorktreeResult> {
+export async function handleCreateWorktreeInclude(provider: ShoferProvider, content: string): Promise<WorktreeResult> {
 	const cwd = provider.cwd
 
 	try {
@@ -275,7 +275,7 @@ export async function handleCreateWorktreeInclude(provider: ClineProvider, conte
 	}
 }
 
-export async function handleCheckoutBranch(provider: ClineProvider, branch: string): Promise<WorktreeResult> {
+export async function handleCheckoutBranch(provider: ShoferProvider, branch: string): Promise<WorktreeResult> {
 	const cwd = provider.cwd
 	return worktreeService.checkoutBranch(cwd, branch)
 }
@@ -295,7 +295,7 @@ export async function handleCheckoutBranch(provider: ClineProvider, branch: stri
  *                    task is actually running in (in the embedded model the
  *                    workspace cwd is always the main worktree).
  */
-export async function handleGetWorktreeStatus(provider: ClineProvider, cwdOverride?: string): Promise<WorktreeStatus> {
+export async function handleGetWorktreeStatus(provider: ShoferProvider, cwdOverride?: string): Promise<WorktreeStatus> {
 	const cwd = cwdOverride && cwdOverride.length > 0 ? cwdOverride : provider.cwd
 
 	const isGitRepo = await worktreeService.checkGitRepo(cwd)

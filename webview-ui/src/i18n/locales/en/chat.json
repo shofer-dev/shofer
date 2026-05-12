@@ -1,5 +1,5 @@
 {
-	"greeting": "Welcome to Roo Code!",
+	"greeting": "Welcome to Shofer!",
 	"task": {
 		"title": "Task",
 		"expand": "Expand task",
@@ -22,7 +22,7 @@
 		"sharePublicly": "Share Publicly",
 		"sharePubliclyDescription": "Anyone with the link can access",
 		"connectToCloud": "Connect to Cloud",
-		"connectToCloudDescription": "Sign in to Roo Code Cloud to share tasks",
+		"connectToCloudDescription": "Sign in to Shofer Cloud to share tasks",
 		"sharingDisabledByOrganization": "Sharing disabled by organization",
 		"shareSuccessOrganization": "Organization link copied to clipboard",
 		"shareSuccessPublic": "Public link copied to clipboard",
@@ -42,10 +42,10 @@
 		"accept": "Accept",
 		"acceptAll": "Accept all",
 		"revertAll": "Revert all",
-		"revertConfirmUserEdits": "{{path}} appears to have been modified outside of Roo. Reverting will discard those changes. Continue?",
+		"revertConfirmUserEdits": "{{path}} appears to have been modified outside of Shofer. Reverting will discard those changes. Continue?",
 		"revertConfirmYes": "Revert",
-		"revertAllConfirm": "Revert ALL files Roo edited in this task back to their state at task start? This cannot be undone.",
-		"blockedTaskRunning": "Cannot modify files while Roo is running. Pause or cancel the task first."
+		"revertAllConfirm": "Revert ALL files Shofer edited in this task back to their state at task start? This cannot be undone.",
+		"blockedTaskRunning": "Cannot modify files while Shofer is running. Pause or cancel the task first."
 	},
 	"retry": {
 		"title": "Retry",
@@ -137,7 +137,7 @@
 		"placeholder": "Edit your message..."
 	},
 	"scrollToBottom": "Scroll to bottom of chat",
-	"about": "Roo is a whole AI dev team in your editor",
+	"about": "Shofer is a whole AI dev team in your editor",
 	"docs": "Check our <DocsLink>docs</DocsLink> to get started",
 	"onboarding": "What would you like to do?",
 	"rooTips": {
@@ -147,7 +147,7 @@
 		},
 		"modelAgnostic": {
 			"title": "Bring your own model, no markup or lock-in",
-			"description": "Use your own provider key or even run local inference — Roo doesn't charge for it"
+			"description": "Use your own provider key or even run local inference — Shofer doesn't charge for it"
 		}
 	},
 	"selectMode": "Select mode for interaction",
@@ -159,7 +159,7 @@
 		"title": "Modes",
 		"marketplace": "Mode Marketplace",
 		"settings": "Mode Settings",
-		"description": "Specialized personas that tailor Roo's behavior.",
+		"description": "Specialized personas that tailor Shofer's behavior.",
 		"searchPlaceholder": "Search modes...",
 		"noResults": "No results found"
 	},
@@ -197,7 +197,7 @@
 			"docs": "Docs",
 			"goToSettings": "Settings",
 			"connection": "Connection error. Make sure you have a working internet connection.",
-			"unknown": "Unknown API error. Please contact Roo Code support.",
+			"unknown": "Unknown API error. Please contact Shofer support.",
 			"claudeCodeNotAuthenticated": "You need to sign in to use Claude Code. Go to Settings and click \"Sign in to Claude Code\" to authenticate."
 		}
 	},
@@ -236,46 +236,46 @@
 		}
 	},
 	"loadSkill": {
-		"wantsToLoad": "Roo wants to load a skill",
-		"didLoad": "Roo loaded a skill"
+		"wantsToLoad": "Shofer wants to load a skill",
+		"didLoad": "Shofer loaded a skill"
 	},
 	"fileOperations": {
-		"wantsToRead": "Roo wants to read this file",
-		"wantsToReadMultiple": "Roo wants to read multiple files",
-		"wantsToReadAndXMore": "Roo wants to read this file and {{count}} more",
-		"wantsToReadOutsideWorkspace": "Roo wants to read this file outside of the workspace",
-		"didRead": "Roo read this file",
-		"wantsToEdit": "Roo wants to edit this file",
-		"wantsToEditOutsideWorkspace": "Roo wants to edit this file outside of the workspace",
-		"wantsToEditProtected": "Roo wants to edit a protected configuration file",
-		"wantsToApplyBatchChanges": "Roo wants to apply changes to multiple files",
-		"wantsToGenerateImage": "Roo wants to generate an image",
-		"wantsToGenerateImageOutsideWorkspace": "Roo wants to generate an image outside of the workspace",
-		"wantsToGenerateImageProtected": "Roo wants to generate an image in a protected location",
-		"didGenerateImage": "Roo generated an image",
-		"wantsToCreate": "Roo wants to create a new file",
-		"wantsToInsert": "Roo wants to insert content into this file",
-		"wantsToInsertWithLineNumber": "Roo wants to insert content into this file at line {{lineNumber}}",
-		"wantsToInsertAtEnd": "Roo wants to append content to the end of this file"
+		"wantsToRead": "Shofer wants to read this file",
+		"wantsToReadMultiple": "Shofer wants to read multiple files",
+		"wantsToReadAndXMore": "Shofer wants to read this file and {{count}} more",
+		"wantsToReadOutsideWorkspace": "Shofer wants to read this file outside of the workspace",
+		"didRead": "Shofer read this file",
+		"wantsToEdit": "Shofer wants to edit this file",
+		"wantsToEditOutsideWorkspace": "Shofer wants to edit this file outside of the workspace",
+		"wantsToEditProtected": "Shofer wants to edit a protected configuration file",
+		"wantsToApplyBatchChanges": "Shofer wants to apply changes to multiple files",
+		"wantsToGenerateImage": "Shofer wants to generate an image",
+		"wantsToGenerateImageOutsideWorkspace": "Shofer wants to generate an image outside of the workspace",
+		"wantsToGenerateImageProtected": "Shofer wants to generate an image in a protected location",
+		"didGenerateImage": "Shofer generated an image",
+		"wantsToCreate": "Shofer wants to create a new file",
+		"wantsToInsert": "Shofer wants to insert content into this file",
+		"wantsToInsertWithLineNumber": "Shofer wants to insert content into this file at line {{lineNumber}}",
+		"wantsToInsertAtEnd": "Shofer wants to append content to the end of this file"
 	},
 	"directoryOperations": {
-		"wantsToViewTopLevel": "Roo wants to list the top level files in this directory",
-		"didViewTopLevel": "Roo listed the top level files in this directory",
-		"wantsToViewTopLevelOutsideWorkspace": "Roo wants to list the top level files in this directory (outside workspace)",
-		"didViewTopLevelOutsideWorkspace": "Roo listed the top level files in this directory (outside workspace)",
-		"wantsToViewRecursive": "Roo wants to recursively list all files in this directory",
-		"didViewRecursive": "Roo recursively listed all files in this directory",
-		"wantsToViewRecursiveOutsideWorkspace": "Roo wants to recursively list all files in this directory (outside workspace)",
-		"didViewRecursiveOutsideWorkspace": "Roo recursively listed all files in this directory (outside workspace)",
-		"wantsToViewMultipleDirectories": "Roo wants to list multiple directories",
-		"wantsToSearch": "Roo wants to search this directory for <code>{{regex}}</code>",
-		"didSearch": "Roo searched this directory for <code>{{regex}}</code>",
-		"wantsToSearchOutsideWorkspace": "Roo wants to search this directory (outside workspace) for <code>{{regex}}</code>",
-		"didSearchOutsideWorkspace": "Roo searched this directory (outside workspace) for <code>{{regex}}</code>"
+		"wantsToViewTopLevel": "Shofer wants to list the top level files in this directory",
+		"didViewTopLevel": "Shofer listed the top level files in this directory",
+		"wantsToViewTopLevelOutsideWorkspace": "Shofer wants to list the top level files in this directory (outside workspace)",
+		"didViewTopLevelOutsideWorkspace": "Shofer listed the top level files in this directory (outside workspace)",
+		"wantsToViewRecursive": "Shofer wants to recursively list all files in this directory",
+		"didViewRecursive": "Shofer recursively listed all files in this directory",
+		"wantsToViewRecursiveOutsideWorkspace": "Shofer wants to recursively list all files in this directory (outside workspace)",
+		"didViewRecursiveOutsideWorkspace": "Shofer recursively listed all files in this directory (outside workspace)",
+		"wantsToViewMultipleDirectories": "Shofer wants to list multiple directories",
+		"wantsToSearch": "Shofer wants to search this directory for <code>{{regex}}</code>",
+		"didSearch": "Shofer searched this directory for <code>{{regex}}</code>",
+		"wantsToSearchOutsideWorkspace": "Shofer wants to search this directory (outside workspace) for <code>{{regex}}</code>",
+		"didSearchOutsideWorkspace": "Shofer searched this directory (outside workspace) for <code>{{regex}}</code>"
 	},
 	"codebaseSearch": {
-		"wantsToSearch": "Roo wants to search the codebase for <code>{{query}}</code>",
-		"wantsToSearchWithPath": "Roo wants to search the codebase for <code>{{query}}</code> in <code>{{path}}</code>",
+		"wantsToSearch": "Shofer wants to search the codebase for <code>{{query}}</code>",
+		"wantsToSearchWithPath": "Shofer wants to search the codebase for <code>{{query}}</code> in <code>{{path}}</code>",
 		"didSearch_one": "Found 1 result",
 		"didSearch_other": "Found {{count}} results",
 		"resultTooltip": "Similarity score: {{score}} (click to open file)"
@@ -300,25 +300,25 @@
 	"response": "Response",
 	"arguments": "Arguments",
 	"text": {
-		"rooSaid": "Roo said"
+		"rooSaid": "Shofer said"
 	},
 	"feedback": {
 		"youSaid": "You said"
 	},
 	"mcp": {
-		"wantsToUseTool": "Roo wants to use a tool on the {{serverName}} MCP server",
-		"wantsToAccessResource": "Roo wants to access a resource on the {{serverName}} MCP server",
-		"wantsToUseExternalTool": "Roo wants to use the {{toolName}} tool from {{serverName}}"
+		"wantsToUseTool": "Shofer wants to use a tool on the {{serverName}} MCP server",
+		"wantsToAccessResource": "Shofer wants to access a resource on the {{serverName}} MCP server",
+		"wantsToUseExternalTool": "Shofer wants to use the {{toolName}} tool from {{serverName}}"
 	},
 	"modes": {
-		"wantsToSwitch": "Roo wants to switch to {{mode}} mode",
-		"wantsToSwitchWithReason": "Roo wants to switch to {{mode}} mode because: {{reason}}",
-		"didSwitch": "Roo switched to {{mode}} mode",
-		"didSwitchWithReason": "Roo switched to {{mode}} mode because: {{reason}}"
+		"wantsToSwitch": "Shofer wants to switch to {{mode}} mode",
+		"wantsToSwitchWithReason": "Shofer wants to switch to {{mode}} mode because: {{reason}}",
+		"didSwitch": "Shofer switched to {{mode}} mode",
+		"didSwitchWithReason": "Shofer switched to {{mode}} mode because: {{reason}}"
 	},
 	"subtasks": {
-		"wantsToCreate": "Roo wants to create a new subtask in {{mode}} mode",
-		"wantsToFinish": "Roo wants to mark this as completed",
+		"wantsToCreate": "Shofer wants to create a new subtask in {{mode}} mode",
+		"wantsToFinish": "Shofer wants to mark this as completed",
 		"newTaskContent": "Subtask Instructions",
 		"resultContent": "Subtask completed",
 		"defaultResult": "Please continue to the next task.",
@@ -326,16 +326,16 @@
 		"goToSubtask": "View task"
 	},
 	"backgroundTasks": {
-		"waitForTask": "Roo is waiting for background task",
-		"waitForTaskWithTimeout": "Roo is waiting for background task (timeout {{timeout}}s)",
-		"checkTaskStatus": "Roo is checking the status of background task",
-		"listBackgroundTasks": "Roo is listing background tasks",
+		"waitForTask": "Shofer is waiting for background task",
+		"waitForTaskWithTimeout": "Shofer is waiting for background task (timeout {{timeout}}s)",
+		"checkTaskStatus": "Shofer is checking the status of background task",
+		"listBackgroundTasks": "Shofer is listing background tasks",
 		"noTasks": "No background tasks",
 		"status": "Status",
 		"created": "Created"
 	},
 	"questions": {
-		"hasQuestion": "Roo has a question"
+		"hasQuestion": "Shofer has a question"
 	},
 	"taskCompleted": "Task Completed",
 	"error": "Error",
@@ -352,7 +352,7 @@
 		"copyToClipboard": "Copy basic error info",
 		"copied": "Copied!",
 		"diagnostics": "Get detailed error info",
-		"proxyProvider": "You seem to be using a proxy-based provider. Make sure to check its logs and to ensure it's not rewriting Roo's requests."
+		"proxyProvider": "You seem to be using a proxy-based provider. Make sure to check its logs and to ensure it's not rewriting Shofer's requests."
 	},
 	"diffError": {
 		"title": "Edit Unsuccessful"
@@ -360,7 +360,7 @@
 	"toolPreparing": {
 		"preparing": "Preparing {{toolName}}…"
 	},
-	"troubleMessage": "Roo is having trouble...",
+	"troubleMessage": "Shofer is having trouble...",
 	"powershell": {
 		"issues": "It seems like you're having Windows PowerShell issues, please see this"
 	},
@@ -382,18 +382,18 @@
 		"triggerLabelAll": "All"
 	},
 	"announcement": {
-		"title": "Roo Code {{version}} Released",
-		"support": "Please support Roo Code by starring us on <githubLink>GitHub</githubLink>.",
+		"title": "Shofer {{version}} Released",
+		"support": "Please support Shofer by starring us on <githubLink>GitHub</githubLink>.",
 		"stealthModel": {
-			"feature": "<bold>Limited-time FREE stealth model</bold> - Code Supernova: Now upgraded with a <bold>1M token context window</bold>! A versatile agentic coding model that supports image inputs, accessible through Roo Code Cloud.",
+			"feature": "<bold>Limited-time FREE stealth model</bold> - Code Supernova: Now upgraded with a <bold>1M token context window</bold>! A versatile agentic coding model that supports image inputs, accessible through Shofer Cloud.",
 			"note": "(Note: prompts and completions are logged by the model creator and used to improve the model)",
-			"connectButton": "Connect to Roo Code Cloud",
-			"selectModel": "Select <code>roo/code-supernova</code> from the Roo Code Cloud provider in Settings to get started.",
+			"connectButton": "Connect to Shofer Cloud",
+			"selectModel": "Select <code>shofer/code-supernova</code> from the Shofer Cloud provider in Settings to get started.",
 			"goToSettingsButton": "Go to Settings"
 		},
 		"release": {
 			"heading": "What's New:",
-			"gpt54": "Poe Provider: Added Poe as an AI provider so you can access Poe models directly in Roo Code.",
+			"gpt54": "Poe Provider: Added Poe as an AI provider so you can access Poe models directly in Shofer.",
 			"slashSkills": "xAI and MiniMax Improvements: Migrated the xAI provider to the Responses API, added Grok-4.20 defaults, and fixed MiniMax model listings and context window handling for a more reliable setup."
 		},
 		"cloudAgents": {
@@ -426,18 +426,18 @@
 	"profileViolationWarning": "The current profile isn't compatible with your organization's settings",
 	"shellIntegration": {
 		"title": "Command Execution Warning",
-		"description": "Your command is being executed without VSCode terminal shell integration. To suppress this warning you can disable shell integration in the <strong>Terminal</strong> section of the <settingsLink>Roo Code settings</settingsLink> or troubleshoot VSCode terminal integration using the link below.",
+		"description": "Your command is being executed without VSCode terminal shell integration. To suppress this warning you can disable shell integration in the <strong>Terminal</strong> section of the <settingsLink>Shofer settings</settingsLink> or troubleshoot VSCode terminal integration using the link below.",
 		"troubleshooting": "Click here for shell integration documentation."
 	},
 	"ask": {
 		"autoApprovedRequestLimitReached": {
 			"title": "Auto-Approved Request Limit Reached",
-			"description": "Roo has reached the auto-approved limit of {{count}} API request(s). Would you like to reset the count and proceed with the task?",
+			"description": "Shofer has reached the auto-approved limit of {{count}} API request(s). Would you like to reset the count and proceed with the task?",
 			"button": "Reset and Continue"
 		},
 		"autoApprovedCostLimitReached": {
 			"title": "Auto-Approved Cost Limit Reached",
-			"description": "Roo has reached the auto-approved cost limit of ${{count}}. Would you like to reset the cost and proceed with the task?",
+			"description": "Shofer has reached the auto-approved cost limit of ${{count}}. Would you like to reset the cost and proceed with the task?",
 			"button": "Reset and Continue"
 		}
 	},
@@ -476,8 +476,8 @@
 		}
 	},
 	"slashCommand": {
-		"wantsToRun": "Roo wants to run a slash command",
-		"didRun": "Roo ran a slash command"
+		"wantsToRun": "Shofer wants to run a slash command",
+		"didRun": "Shofer ran a slash command"
 	},
 	"queuedMessages": {
 		"header": "Queued Messages ({{count}})",
@@ -509,15 +509,15 @@
 		"openMcpSettings": "Open MCP Settings"
 	},
 	"readCommandOutput": {
-		"title": "Roo read command output"
+		"title": "Shofer read command output"
 	},
 	"genericTool": {
-		"wantsToUse": "Roo wants to use {{tool}}",
-		"didUse": "Roo used {{tool}}"
+		"wantsToUse": "Shofer wants to use {{tool}}",
+		"didUse": "Shofer used {{tool}}"
 	},
 	"retiredProvider": {
 		"title": "Provider no longer supported",
-		"message": "Sorry, this provider is no longer supported. We saw very few Roo users actually using it and we need to reduce the surface area of our codebase so we can keep shipping fast and serving our community well in this space. It was a really hard decision but it lets us focus on what matters most to you. It sucks, we know.",
+		"message": "Sorry, this provider is no longer supported. We saw very few Shofer users actually using it and we need to reduce the surface area of our codebase so we can keep shipping fast and serving our community well in this space. It was a really hard decision but it lets us focus on what matters most to you. It sucks, we know.",
 		"openSettings": "Open Settings"
 	}
 }

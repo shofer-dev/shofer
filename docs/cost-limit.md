@@ -10,7 +10,7 @@ descendant subtasks) reaches the configured limit.
 
 ## Why
 
-Roo-Code already surfaces a per-task `API Cost` and an `aggregatedCost`
+Shofer already surfaces a per-task `API Cost` and an `aggregatedCost`
 that rolls subtask spend into the root task (see
 [`aggregateTaskCosts.ts`](../src/core/webview/aggregateTaskCosts.ts) and
 the `getTaskWithAggregatedCosts` IPC path in
@@ -78,7 +78,7 @@ through real money with no upper bound.
 
 - Global setting `defaultCostLimit` in `globalSettingsSchema`
   (same shape). Applied to the root task at creation time in
-  `ClineProvider.createTask()` via
+  `ShoferProvider.createTask()` via
   `contextProxy.getValue("defaultCostLimit")`.
 
 ### Where the check fires
@@ -176,10 +176,10 @@ spentUsd, action, modelId})` emits the
 
 ## What's implemented
 
-- [x] Schema additions in `@roo-code/types`:
+- [x] Schema additions in `@shofer/types`:
       `budgetActionSchema`, `costLimitSchema`, `historyItem.costLimit`,
       `globalSettings.defaultCostLimit`,
-      `clineAsks.budget_limit` (also added to `interactiveAsks`),
+      `shoferAsks.budget_limit` (also added to `interactiveAsks`),
       `WebviewMessage.updateCostLimit` + `costLimit` field,
       `TelemetryEventName.BUDGET_EXCEEDED`.
 - [x] Core enforcement in `Task.ts`:
@@ -194,7 +194,7 @@ spentUsd, action, modelId})` emits the
       (yes = "Continue without limit" / no = "Abort task" /
       text = new positive USD limit).
 - [x] `new_task` tool guard.
-- [x] Default-limit seeding in `ClineProvider.createTask()`.
+- [x] Default-limit seeding in `ShoferProvider.createTask()`.
 - [x] `webviewMessageHandler.ts` `updateCostLimit` handler that
       walks to root, updates the live `Task`, invalidates the cache,
       and persists to history.
@@ -230,7 +230,7 @@ spentUsd, action, modelId})` emits the
   crosses the cap.
 - **3.54.7** — Fixed cumulative-vs-per-request cost mismatch in the
   `vscode-lm` provider. `arkware.llm.getRequestCost` returns the
-  running ledger total for the whole conversation, but Roo's pipeline
+  running ledger total for the whole conversation, but Shofer's pipeline
   expects each `usage` chunk's `totalCost` to be the cost of THIS
   request only (it gets stored on the `apiReqInfo` message and
   re-summed by `consolidateTokenUsage`). The provider now snapshots
@@ -298,9 +298,9 @@ sums.
 
 `arkware.llm.getModelPricing` → `vscode-lm.getModel().info`
 (`inputPrice` / `outputPrice` / `cacheReadsPrice`) →
-`calculateApiCostOpenAI` → `clineMessages[lastApiReqIndex].cost`.
+`calculateApiCostOpenAI` → `shoferMessages[lastApiReqIndex].cost`.
 
-Landed in `llm-provider` 0.6.0 / Roo-Code 3.52.87.
+Landed in `llm-provider` 0.6.0 / Shofer 3.52.87.
 
 Used as the **fallback** whenever the usage chunk carries no
 `totalCost` (Path 2 not available). Does not differentiate
@@ -367,7 +367,7 @@ limit firing?".
 
 ## Versioning
 
-Shipped as Roo-Code **3.53.0** (minor bump): new user-visible
+Shipped as Shofer **3.53.0** (minor bump): new user-visible
 setting, new `ask` type, new persisted field on `HistoryItem`. No
 backward-compat shims — missing `costLimit` is treated as "no limit".
 Hardened across **3.54.1** – **3.54.10** (see "Bug fixes since

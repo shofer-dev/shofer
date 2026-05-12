@@ -17,7 +17,7 @@ export interface McpServerUse {
 	toolName?: string
 	uri?: string
 	/**
-	 * When true, this `use_mcp_server` envelope was synthesised by Roo-Code to
+	 * When true, this `use_mcp_server` envelope was synthesised by Shofer to
 	 * visualise an external VS Code language-model tool call (registered via
 	 * `vscode.lm.tools`) — not a real MCP server invocation. The
 	 * auto-approval check uses this flag to bypass `alwaysAllowMcp` gating

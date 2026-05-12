@@ -2,7 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-import type { HistoryItem } from "@roo-code/types"
+import type { HistoryItem } from "@shofer/types"
 
 import { TaskManager } from "../TaskManager"
 

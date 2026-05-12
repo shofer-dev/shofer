@@ -2,16 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import * as vscode from "vscode"
 
 import { API } from "../api"
-import { ClineProvider } from "../../core/webview/ClineProvider"
-import { TaskCommandName } from "@roo-code/types"
+import { ShoferProvider } from "../../core/webview/ShoferProvider"
+import { TaskCommandName } from "@shofer/types"
 
 vi.mock("vscode")
-vi.mock("../../core/webview/ClineProvider")
+vi.mock("../../core/webview/ShoferProvider")
 
 describe("API - SendMessage Command", () => {
 	let api: API
 	let mockOutputChannel: vscode.OutputChannel
-	let mockProvider: ClineProvider
+	let mockProvider: ShoferProvider
 	let mockPostMessageToWebview: ReturnType<typeof vi.fn>
 	let mockLog: ReturnType<typeof vi.fn>
 
@@ -30,7 +30,7 @@ describe("API - SendMessage Command", () => {
 			getCurrentTaskStack: vi.fn().mockReturnValue([]),
 			getCurrentTask: vi.fn().mockReturnValue(undefined),
 			viewLaunched: true,
-		} as unknown as ClineProvider
+		} as unknown as ShoferProvider
 
 		mockLog = vi.fn()
 

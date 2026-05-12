@@ -1,9 +1,9 @@
-import { ProviderSettings, ClineMessage, GlobalState, TelemetryEventName } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import { ProviderSettings, ShoferMessage, GlobalState, TelemetryEventName } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 import { supportPrompt } from "../../shared/support-prompt"
 import { singleCompletionHandler } from "../../utils/single-completion-handler"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
-import { ClineProvider } from "./ClineProvider"
+import { ShoferProvider } from "./ShoferProvider"
 
 export interface MessageEnhancerOptions {
 	text: string
@@ -12,7 +12,7 @@ export interface MessageEnhancerOptions {
 	listApiConfigMeta: Array<{ id: string; name?: string }>
 	enhancementApiConfigId?: string
 	includeTaskHistoryInEnhance?: boolean
-	currentClineMessages?: ClineMessage[]
+	currentShoferMessages?: ShoferMessage[]
 	providerSettingsManager: ProviderSettingsManager
 }
 
@@ -40,7 +40,7 @@ export class MessageEnhancer {
 				listApiConfigMeta,
 				enhancementApiConfigId,
 				includeTaskHistoryInEnhance,
-				currentClineMessages,
+				currentShoferMessages,
 				providerSettingsManager,
 			} = options
 
@@ -62,8 +62,8 @@ export class MessageEnhancer {
 			let promptToEnhance = text
 
 			// Include task history if enabled and available
-			if (includeTaskHistoryInEnhance && currentClineMessages && currentClineMessages.length > 0) {
-				const taskHistory = this.extractTaskHistory(currentClineMessages)
+			if (includeTaskHistoryInEnhance && currentShoferMessages && currentShoferMessages.length > 0) {
+				const taskHistory = this.extractTaskHistory(currentShoferMessages)
 				if (taskHistory) {
 					promptToEnhance = `${text}\n\nUse the following previous conversation context as needed:\n${taskHistory}`
 				}
@@ -92,11 +92,11 @@ export class MessageEnhancer {
 	}
 
 	/**
-	 * Extracts relevant task history from Cline messages for context
-	 * @param messages Array of Cline messages
+	 * Extracts relevant task history from Shofer messages for context
+	 * @param messages Array of Shofer messages
 	 * @returns Formatted task history string
 	 */
-	private static extractTaskHistory(messages: ClineMessage[]): string {
+	private static extractTaskHistory(messages: ShoferMessage[]): string {
 		try {
 			const relevantMessages = messages
 				.filter((msg) => {

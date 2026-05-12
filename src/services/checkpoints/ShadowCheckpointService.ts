@@ -214,7 +214,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 			// Scoped core.worktree for embedded worktree tasks
 			await git.addConfig("core.worktree", worktreeTarget)
 			await git.addConfig("commit.gpgSign", "false") // Disable commit signing for shadow repo.
-			await git.addConfig("user.name", "Roo Code")
+			await git.addConfig("user.name", "Shofer")
 			await git.addConfig("user.email", "noreply@example.com")
 			await this.writeExcludeFile()
 			await this.stageAll(git)
@@ -257,7 +257,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		// embedded worktree directories so Task A's checkpoints don't
 		// contaminate Task B's worktree and vice-versa.
 		if (!this.scopedWorktreeDir) {
-			patterns.push("/.roo/worktrees/")
+			patterns.push("/.shofer/worktrees/")
 		}
 
 		await fs.writeFile(path.join(this.dotGitDir, "info", "exclude"), patterns.join("\n"))
@@ -549,7 +549,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		workspaceDir: string
 	}) {
 		const workspaceRepoDir = this.workspaceRepoDir({ globalStorageDir, workspaceDir })
-		const branchName = `roo-${taskId}`
+		const branchName = `shofer-${taskId}`
 		const git = createSanitizedGit(workspaceRepoDir)
 		const success = await this.deleteBranch(git, branchName)
 

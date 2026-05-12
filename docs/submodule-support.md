@@ -9,7 +9,7 @@ To use checkpoints, please remove or relocate this nested git repository.
 
 ## How Checkpoints Work
 
-Roo Code implements checkpoints via a **shadow git repository**
+Shofer implements checkpoints via a **shadow git repository**
 ([`ShadowCheckpointService`](../src/services/checkpoints/ShadowCheckpointService.ts)):
 
 1. A separate `.git` directory is created **outside** the workspace (in a checkpoints directory)
@@ -19,7 +19,7 @@ Roo Code implements checkpoints via a **shadow git repository**
 ```
 ┌─────────────────────────────────┐     ┌──────────────────────────────────┐
 │  User Workspace                 │     │  Shadow Git Repo                 │
-│  /home/user/project/            │     │  ~/.roo-code/checkpoints/        │
+│  /home/user/project/            │     │  ~/.shofer-code/checkpoints/        │
 │  ├── src/                       │     │  task-123/.git/                  │
 │  ├── .git/           ◄──────────│──── │  core.worktree = workspace dir   │
 │  └── extensions/                │     │                                  │
@@ -60,17 +60,17 @@ It does **not** detect:
 
 ### Our Specific Trigger
 
-The file [`extensions/Roo-Code/.git`](../../extensions/Roo-Code/.git) contains:
+The file [`extensions/shofer/.git`](../../extensions/shofer/.git) contains:
 
 ```
-gitdir: ../../.git/modules/Roo-Code
+gitdir: ../../.git/modules/Shofer
 ```
 
-This makes `extensions/Roo-Code` a **git submodule** of the parent repository.
-The actual git data lives at `.git/modules/Roo-Code/`.
+This makes `extensions/shofer` a **git submodule** of the parent repository.
+The actual git data lives at `.git/modules/Shofer/`.
 
 Since the submodule's `.git` is a **file** (not a directory), the `**/.git/HEAD` search
-wouldn't normally find it. However, the actual git data at `.git/modules/Roo-Code/HEAD`
+wouldn't normally find it. However, the actual git data at `.git/modules/Shofer/HEAD`
 may be matched depending on path structure.
 
 ## Investigation (2026-05-08)
@@ -183,4 +183,4 @@ The shadow git tracks submodule files as regular files (`.git` metadata excluded
 - [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts) — checkpoint implementation
 - [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts) — file changes panel backend selection
 - [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts) — per-task file snapshots
-- [`extensions/Roo-Code/.git`](../../extensions/Roo-Code/.git) — our submodule trigger (`gitdir: ../../.git/modules/Roo-Code`)
+- [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/Shofer`)

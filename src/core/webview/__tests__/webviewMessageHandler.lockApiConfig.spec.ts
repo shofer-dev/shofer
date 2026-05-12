@@ -1,7 +1,7 @@
 // npx vitest run core/webview/__tests__/webviewMessageHandler.lockApiConfig.spec.ts
 
 import { webviewMessageHandler } from "../webviewMessageHandler"
-import type { ClineProvider } from "../ClineProvider"
+import type { ShoferProvider } from "../ShoferProvider"
 
 describe("webviewMessageHandler - lockApiConfigAcrossModes", () => {
 	let mockProvider: {
@@ -45,7 +45,7 @@ describe("webviewMessageHandler - lockApiConfigAcrossModes", () => {
 	})
 
 	it("sets lockApiConfigAcrossModes to true and posts state without mode config fan-out", async () => {
-		await webviewMessageHandler(mockProvider as unknown as ClineProvider, {
+		await webviewMessageHandler(mockProvider as unknown as ShoferProvider, {
 			type: "lockApiConfigAcrossModes",
 			bool: true,
 		})
@@ -56,7 +56,7 @@ describe("webviewMessageHandler - lockApiConfigAcrossModes", () => {
 	})
 
 	it("sets lockApiConfigAcrossModes to false without applying to all modes", async () => {
-		await webviewMessageHandler(mockProvider as unknown as ClineProvider, {
+		await webviewMessageHandler(mockProvider as unknown as ShoferProvider, {
 			type: "lockApiConfigAcrossModes",
 			bool: false,
 		})

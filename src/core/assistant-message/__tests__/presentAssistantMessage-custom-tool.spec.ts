@@ -16,14 +16,14 @@ vi.mock("../../tools/validateToolUse", () => ({
 }))
 
 // Mock custom tool registry - must be done inline without external variable references
-vi.mock("@roo-code/core", () => ({
+vi.mock("@shofer/core", () => ({
 	customToolRegistry: {
 		has: vi.fn(),
 		get: vi.fn(),
 	},
 }))
 
-vi.mock("@roo-code/telemetry", () => ({
+vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
 		instance: {
 			captureToolUsage: vi.fn(),
@@ -32,8 +32,8 @@ vi.mock("@roo-code/telemetry", () => ({
 	},
 }))
 
-import { TelemetryService } from "@roo-code/telemetry"
-import { customToolRegistry } from "@roo-code/core"
+import { TelemetryService } from "@shofer/telemetry"
+import { customToolRegistry } from "@shofer/core"
 
 describe("presentAssistantMessage - Custom Tool Recording", () => {
 	let mockTask: any
@@ -56,7 +56,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			didRejectTool: false,
 			didAlreadyUseTool: false,
 			consecutiveMistakeCount: 0,
-			clineMessages: [],
+			shoferMessages: [],
 			api: {
 				getModel: () => ({ id: "test-model", info: {} }),
 			},

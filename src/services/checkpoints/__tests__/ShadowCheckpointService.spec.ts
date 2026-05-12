@@ -16,8 +16,8 @@ const tmpDir = path.join(os.tmpdir(), "CheckpointService")
 
 const initWorkspaceRepo = async ({
 	workspaceDir,
-	userName = "Roo Code",
-	userEmail = "support@roocode.com",
+	userName = "Shofer",
+	userEmail = "support@shofer.com",
 	testFileName = "test.txt",
 	textFileContent = "Hello, world!",
 }: {
@@ -388,16 +388,16 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				await fs.mkdir(workspaceDir, { recursive: true })
 				const mainGit = simpleGit(workspaceDir)
 				await mainGit.init()
-				await mainGit.addConfig("user.name", "Roo Code")
-				await mainGit.addConfig("user.email", "support@roocode.com")
+				await mainGit.addConfig("user.name", "Shofer")
+				await mainGit.addConfig("user.email", "support@shofer.com")
 
 				// Create a nested repo inside the workspace.
 				const nestedRepoPath = path.join(workspaceDir, "nested-project")
 				await fs.mkdir(nestedRepoPath, { recursive: true })
 				const nestedGit = simpleGit(nestedRepoPath)
 				await nestedGit.init()
-				await nestedGit.addConfig("user.name", "Roo Code")
-				await nestedGit.addConfig("user.email", "support@roocode.com")
+				await nestedGit.addConfig("user.name", "Shofer")
+				await nestedGit.addConfig("user.email", "support@shofer.com")
 
 				// Add a file to the nested repo.
 				const nestedFile = path.join(nestedRepoPath, "nested-file.txt")
@@ -456,8 +456,8 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				await fs.mkdir(workspaceDir, { recursive: true })
 				const mainGit = simpleGit(workspaceDir)
 				await mainGit.init()
-				await mainGit.addConfig("user.name", "Roo Code")
-				await mainGit.addConfig("user.email", "support@roocode.com")
+				await mainGit.addConfig("user.name", "Shofer")
+				await mainGit.addConfig("user.email", "support@shofer.com")
 
 				// Create a test file in the main workspace.
 				const mainFile = path.join(workspaceDir, "main-file.txt")
@@ -874,7 +874,7 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 			it("isolates checkpoint operations from GIT_DIR environment variable", async () => {
 				// This test verifies the fix for the issue where GIT_DIR environment variable
 				// causes checkpoint commits to go to the wrong repository.
-				// In the real-world Dev Container scenario, GIT_DIR is set BEFORE Roo starts,
+				// In the real-world Dev Container scenario, GIT_DIR is set BEFORE Shofer starts,
 				// so we need to set it BEFORE creating the checkpoint service.
 
 				// Create a separate git directory to simulate GIT_DIR pointing elsewhere
@@ -972,8 +972,8 @@ describe("worktree path comparison", () => {
 			await fs.mkdir(workspaceDir, { recursive: true })
 			const mainGit = simpleGit(workspaceDir)
 			await mainGit.init()
-			await mainGit.addConfig("user.name", "Roo Code")
-			await mainGit.addConfig("user.email", "support@roocode.com")
+			await mainGit.addConfig("user.name", "Shofer")
+			await mainGit.addConfig("user.email", "support@shofer.com")
 
 			await fs.writeFile(path.join(workspaceDir, "main.txt"), "main content")
 			await mainGit.add("main.txt")
@@ -1007,8 +1007,8 @@ describe("worktree path comparison", () => {
 			await fs.mkdir(workspaceDir, { recursive: true })
 			const mainGit = simpleGit(workspaceDir)
 			await mainGit.init()
-			await mainGit.addConfig("user.name", "Roo Code")
-			await mainGit.addConfig("user.email", "support@roocode.com")
+			await mainGit.addConfig("user.name", "Shofer")
+			await mainGit.addConfig("user.email", "support@shofer.com")
 
 			await fs.writeFile(path.join(workspaceDir, "main.txt"), "main content")
 			await mainGit.add("main.txt")
@@ -1043,15 +1043,15 @@ describe("worktree path comparison", () => {
 	it("scopes core.worktree to scopedWorktreeDir when provided", async () => {
 		const shadowDir = path.join(tmpDir, `scoped-${Date.now()}`)
 		const workspaceDir = path.join(tmpDir, `workspace-scoped-${Date.now()}`)
-		const scopedDir = path.join(workspaceDir, ".roo", "worktrees", "embedded-1")
+		const scopedDir = path.join(workspaceDir, ".shofer", "worktrees", "embedded-1")
 
 		try {
 			await fs.mkdir(workspaceDir, { recursive: true })
 			await fs.mkdir(scopedDir, { recursive: true })
 			const mainGit = simpleGit(workspaceDir)
 			await mainGit.init()
-			await mainGit.addConfig("user.name", "Roo Code")
-			await mainGit.addConfig("user.email", "support@roocode.com")
+			await mainGit.addConfig("user.name", "Shofer")
+			await mainGit.addConfig("user.email", "support@shofer.com")
 			await fs.writeFile(path.join(workspaceDir, "main.txt"), "main content")
 			await mainGit.add("main.txt")
 			await mainGit.commit("Initial commit")
@@ -1079,10 +1079,10 @@ describe("worktree path comparison", () => {
 		}
 	})
 
-	// Non-scoped (main) shadow git instances must add `/.roo/worktrees/` to
+	// Non-scoped (main) shadow git instances must add `/.shofer/worktrees/` to
 	// the exclude file so embedded worktree directories do not contaminate
 	// the main task's checkpoints.
-	it("excludes /.roo/worktrees/ for non-scoped shadow gits", async () => {
+	it("excludes /.shofer/worktrees/ for non-scoped shadow gits", async () => {
 		const shadowDir = path.join(tmpDir, `exclude-main-${Date.now()}`)
 		const workspaceDir = path.join(tmpDir, `workspace-exclude-${Date.now()}`)
 
@@ -1090,8 +1090,8 @@ describe("worktree path comparison", () => {
 			await fs.mkdir(workspaceDir, { recursive: true })
 			const mainGit = simpleGit(workspaceDir)
 			await mainGit.init()
-			await mainGit.addConfig("user.name", "Roo Code")
-			await mainGit.addConfig("user.email", "support@roocode.com")
+			await mainGit.addConfig("user.name", "Shofer")
+			await mainGit.addConfig("user.email", "support@shofer.com")
 			await fs.writeFile(path.join(workspaceDir, "main.txt"), "main content")
 			await mainGit.add("main.txt")
 			await mainGit.commit("Initial commit")
@@ -1103,7 +1103,7 @@ describe("worktree path comparison", () => {
 
 			const excludePath = path.join(shadowDir, ".git", "info", "exclude")
 			const excludeContent = await fs.readFile(excludePath, "utf-8")
-			expect(excludeContent).toContain("/.roo/worktrees/")
+			expect(excludeContent).toContain("/.shofer/worktrees/")
 		} finally {
 			vitest.restoreAllMocks()
 			await fs.rm(shadowDir, { recursive: true, force: true })

@@ -1,4 +1,4 @@
-import type { ToolName, ClineSayTool } from "@roo-code/types"
+import type { ToolName, ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
@@ -101,20 +101,20 @@ export abstract class BaseTool<TName extends ToolName> {
 	/**
 	 * Request user approval for this tool invocation and render a chat-UI entry.
 	 *
-	 * Encapsulates the boilerplate of building a `ClineSayTool` payload, JSON-stringifying
+	 * Encapsulates the boilerplate of building a `ShoferSayTool` payload, JSON-stringifying
 	 * it, and forwarding to `askApproval("tool", ...)`. Even read-only tools that are
 	 * auto-approved via `checkAutoApproval` should call this so the invocation is
 	 * visible in the chat UI (with the auto-approval pathway suppressing the prompt).
 	 *
 	 * @param callbacks - Tool execution callbacks
-	 * @param message - The `ClineSayTool` payload describing what is being done.
+	 * @param message - The `ShoferSayTool` payload describing what is being done.
 	 *                  Must include `tool` and typically `content`. Tool-specific fields
 	 *                  (`path`, `regex`, `filePattern`, ...) may also be set.
 	 * @returns true when the user (or auto-approval) approved; false on rejection.
 	 *          Callers should `return` early when false.
 	 */
-	protected async askToolApproval(callbacks: ToolCallbacks, message: ClineSayTool): Promise<boolean> {
-		return callbacks.askApproval("tool", JSON.stringify(message satisfies ClineSayTool))
+	protected async askToolApproval(callbacks: ToolCallbacks, message: ShoferSayTool): Promise<boolean> {
+		return callbacks.askApproval("tool", JSON.stringify(message satisfies ShoferSayTool))
 	}
 
 	/**

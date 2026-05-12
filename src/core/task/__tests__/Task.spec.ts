@@ -6,11 +6,11 @@ import * as path from "path"
 import * as vscode from "vscode"
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { GlobalState, ProviderSettings, ModelInfo } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import type { GlobalState, ProviderSettings, ModelInfo } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../Task"
-import { ClineProvider } from "../../webview/ClineProvider"
+import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ApiStreamChunk } from "../../../api/transform/stream"
 import { ContextProxy } from "../../config/ContextProxy"
 import { processUserContentMentions } from "../../mentions/processUserContentMentions"
@@ -154,7 +154,7 @@ vi.mock("../../environment/getEnvironmentDetails", () => ({
 	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
 }))
 
-vi.mock("../../ignore/RooIgnoreController")
+vi.mock("../../ignore/ShoferIgnoreController")
 
 vi.mock("../../condense", async (importOriginal) => {
 	const actual = (await importOriginal()) as any
@@ -193,7 +193,7 @@ const mockMessages = [
 	},
 ]
 
-describe("Cline", () => {
+describe("Shofer", () => {
 	let mockProvider: any
 	let mockApiConfig: ProviderSettings
 	let mockOutputChannel: any
@@ -265,7 +265,7 @@ describe("Cline", () => {
 		}
 
 		// Setup mock provider with output channel
-		mockProvider = new ClineProvider(
+		mockProvider = new ShoferProvider(
 			mockExtensionContext,
 			mockOutputChannel,
 			"sidebar",
@@ -314,7 +314,7 @@ describe("Cline", () => {
 
 	describe("constructor", () => {
 		it("should always have diff strategy defined", async () => {
-			const cline = new Task({
+			const shofer = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
@@ -322,22 +322,22 @@ describe("Cline", () => {
 			})
 
 			// Diff is always enabled - diffStrategy should be defined
-			expect(cline.diffStrategy).toBeDefined()
+			expect(shofer.diffStrategy).toBeDefined()
 		})
 
 		it("should use default consecutiveMistakeLimit when not provided", () => {
-			const cline = new Task({
+			const shofer = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
 			})
 
-			expect(cline.consecutiveMistakeLimit).toBe(3)
+			expect(shofer.consecutiveMistakeLimit).toBe(3)
 		})
 
 		it("should respect provided consecutiveMistakeLimit", () => {
-			const cline = new Task({
+			const shofer = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
 				consecutiveMistakeLimit: 5,
@@ -345,11 +345,11 @@ describe("Cline", () => {
 				startTask: false,
 			})
 
-			expect(cline.consecutiveMistakeLimit).toBe(5)
+			expect(shofer.consecutiveMistakeLimit).toBe(5)
 		})
 
 		it("should keep consecutiveMistakeLimit of 0 as 0 for unlimited", () => {
-			const cline = new Task({
+			const shofer = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
 				consecutiveMistakeLimit: 0,
@@ -357,11 +357,11 @@ describe("Cline", () => {
 				startTask: false,
 			})
 
-			expect(cline.consecutiveMistakeLimit).toBe(0)
+			expect(shofer.consecutiveMistakeLimit).toBe(0)
 		})
 
 		it("should pass 0 to ToolRepetitionDetector for unlimited mode", () => {
-			const cline = new Task({
+			const shofer = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
 				consecutiveMistakeLimit: 0,
@@ -370,13 +370,13 @@ describe("Cline", () => {
 			})
 
 			// The toolRepetitionDetector should be initialized with 0 for unlimited mode
-			expect(cline.toolRepetitionDetector).toBeDefined()
+			expect(shofer.toolRepetitionDetector).toBeDefined()
 			// Verify the limit remains as 0
-			expect(cline.consecutiveMistakeLimit).toBe(0)
+			expect(shofer.consecutiveMistakeLimit).toBe(0)
 		})
 
 		it("should pass consecutiveMistakeLimit to ToolRepetitionDetector", () => {
-			const cline = new Task({
+			const shofer = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
 				consecutiveMistakeLimit: 5,
@@ -385,8 +385,8 @@ describe("Cline", () => {
 			})
 
 			// The toolRepetitionDetector should be initialized with the same limit
-			expect(cline.toolRepetitionDetector).toBeDefined()
-			expect(cline.consecutiveMistakeLimit).toBe(5)
+			expect(shofer.toolRepetitionDetector).toBeDefined()
+			expect(shofer.consecutiveMistakeLimit).toBe(5)
 		})
 
 		it("should require either task or historyItem", () => {
@@ -399,14 +399,14 @@ describe("Cline", () => {
 	describe("getEnvironmentDetails", () => {
 		describe("API conversation handling", () => {
 			it.skip("should clean conversation history before sending to API", async () => {
-				// Cline.create will now use our mocked getEnvironmentDetails
-				const [cline, task] = Task.create({
+				// Shofer.create will now use our mocked getEnvironmentDetails
+				const [shofer, task] = Task.create({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
 					task: "test task",
 				})
 
-				cline.abandoned = true
+				shofer.abandoned = true
 				await task
 
 				// Set up mock stream.
@@ -416,10 +416,10 @@ describe("Cline", () => {
 
 				// Set up spy.
 				const cleanMessageSpy = vi.fn().mockReturnValue(mockStreamForClean)
-				vi.spyOn(cline.api, "createMessage").mockImplementation(cleanMessageSpy)
+				vi.spyOn(shofer.api, "createMessage").mockImplementation(cleanMessageSpy)
 
 				// Add test message to conversation history.
-				cline.apiConversationHistory = [
+				shofer.apiConversationHistory = [
 					{
 						role: "user" as const,
 						content: [{ type: "text" as const, text: "test message" }],
@@ -428,7 +428,7 @@ describe("Cline", () => {
 				]
 
 				// Mock abort state
-				Object.defineProperty(cline, "abort", {
+				Object.defineProperty(shofer, "abort", {
 					get: () => false,
 					set: () => {},
 					configurable: true,
@@ -442,10 +442,10 @@ describe("Cline", () => {
 					extraProp: "should be removed",
 				}
 
-				cline.apiConversationHistory = [messageWithExtra]
+				shofer.apiConversationHistory = [messageWithExtra]
 
 				// Trigger an API request
-				await cline.recursivelyMakeClineRequests([{ type: "text", text: "test request" }], false)
+				await shofer.recursivelyMakeShoferRequests([{ type: "text", text: "test request" }], false)
 
 				// Get the conversation history from the first API call
 				expect(cleanMessageSpy.mock.calls.length).toBeGreaterThan(0)
@@ -599,8 +599,8 @@ describe("Cline", () => {
 				await taskWithoutImages.catch(() => {})
 
 				// Trigger API requests
-				await clineWithImages.recursivelyMakeClineRequests([{ type: "text", text: "test request" }])
-				await clineWithoutImages.recursivelyMakeClineRequests([{ type: "text", text: "test request" }])
+				await clineWithImages.recursivelyMakeShoferRequests([{ type: "text", text: "test request" }])
+				await clineWithoutImages.recursivelyMakeShoferRequests([{ type: "text", text: "test request" }])
 
 				// Get the calls
 				const imagesCalls = imagesSpy.mock.calls
@@ -627,7 +627,7 @@ describe("Cline", () => {
 			})
 
 			it.skip("should handle API retry with countdown", async () => {
-				const [cline, task] = Task.create({
+				const [shofer, task] = Task.create({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
 					task: "test task",
@@ -638,7 +638,7 @@ describe("Cline", () => {
 				vi.spyOn(await import("delay"), "default").mockImplementation(mockDelay)
 
 				// Mock say to track messages
-				const saySpy = vi.spyOn(cline, "say")
+				const saySpy = vi.spyOn(shofer, "say")
 
 				// Create a stream that fails on first chunk
 				const mockError = new Error("API Error")
@@ -682,7 +682,7 @@ describe("Cline", () => {
 
 				// Mock createMessage to fail first then succeed
 				let firstAttempt = true
-				vi.spyOn(cline.api, "createMessage").mockImplementation(() => {
+				vi.spyOn(shofer.api, "createMessage").mockImplementation(() => {
 					if (firstAttempt) {
 						firstAttempt = false
 						return mockFailedStream
@@ -694,7 +694,7 @@ describe("Cline", () => {
 				mockProvider.getState = vi.fn().mockResolvedValue({})
 
 				// Mock previous API request message
-				cline.clineMessages = [
+				shofer.shoferMessages = [
 					{
 						ts: Date.now(),
 						type: "say",
@@ -709,7 +709,7 @@ describe("Cline", () => {
 				]
 
 				// Trigger API request
-				const iterator = cline.attemptApiRequest(0)
+				const iterator = shofer.attemptApiRequest(0)
 				await iterator.next()
 
 				// Calculate expected delay for first retry
@@ -743,12 +743,12 @@ describe("Cline", () => {
 					`${mockError.message}\n\nRetry attempt 1\nRetrying in ${baseDelay} seconds...`,
 				)
 
-				await cline.abortTask(true)
+				await shofer.abortTask(true)
 				await task.catch(() => {})
 			})
 
 			it.skip("should not apply retry delay twice", async () => {
-				const [cline, task] = Task.create({
+				const [shofer, task] = Task.create({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
 					task: "test task",
@@ -759,7 +759,7 @@ describe("Cline", () => {
 				vi.spyOn(await import("delay"), "default").mockImplementation(mockDelay)
 
 				// Mock say to track messages
-				const saySpy = vi.spyOn(cline, "say")
+				const saySpy = vi.spyOn(shofer, "say")
 
 				// Create a stream that fails on first chunk
 				const mockError = new Error("API Error")
@@ -803,7 +803,7 @@ describe("Cline", () => {
 
 				// Mock createMessage to fail first then succeed
 				let firstAttempt = true
-				vi.spyOn(cline.api, "createMessage").mockImplementation(() => {
+				vi.spyOn(shofer.api, "createMessage").mockImplementation(() => {
 					if (firstAttempt) {
 						firstAttempt = false
 						return mockFailedStream
@@ -815,7 +815,7 @@ describe("Cline", () => {
 				mockProvider.getState = vi.fn().mockResolvedValue({})
 
 				// Mock previous API request message
-				cline.clineMessages = [
+				shofer.shoferMessages = [
 					{
 						ts: Date.now(),
 						type: "say",
@@ -830,7 +830,7 @@ describe("Cline", () => {
 				]
 
 				// Trigger API request
-				const iterator = cline.attemptApiRequest(0)
+				const iterator = shofer.attemptApiRequest(0)
 				await iterator.next()
 
 				// Verify delay is only applied for the countdown
@@ -863,13 +863,13 @@ describe("Cline", () => {
 					false,
 				)
 
-				await cline.abortTask(true)
+				await shofer.abortTask(true)
 				await task.catch(() => {})
 			})
 
 			describe("processUserContentMentions", () => {
 				it("should process mentions in user_message tags", async () => {
-					const [cline, task] = Task.create({
+					const [shofer, task] = Task.create({
 						provider: mockProvider,
 						apiConfiguration: mockApiConfig,
 						task: "test task",
@@ -908,8 +908,8 @@ describe("Cline", () => {
 
 					const { content: processedContent } = await processUserContentMentions({
 						userContent,
-						cwd: cline.cwd,
-						fileContextTracker: cline.fileContextTracker,
+						cwd: shofer.cwd,
+						fileContextTracker: shofer.fileContextTracker,
 					})
 
 					// Regular text should not be processed
@@ -938,7 +938,7 @@ describe("Cline", () => {
 						"Regular tool result with 'path' (see below for file content)",
 					)
 
-					await cline.abortTask(true)
+					await shofer.abortTask(true)
 					await task.catch(() => {})
 				})
 			})
@@ -1490,7 +1490,7 @@ describe("Cline", () => {
 				const handleResponseSpy = vi.spyOn(task, "handleWebviewAskResponse")
 
 				// Set up some existing messages to simulate an ongoing conversation
-				task.clineMessages = [
+				task.shoferMessages = [
 					{
 						ts: Date.now(),
 						type: "say",
@@ -1542,7 +1542,7 @@ describe("Cline", () => {
 				const handleResponseSpy = vi.spyOn(task, "handleWebviewAskResponse")
 
 				// Test with no messages (new task scenario)
-				task.clineMessages = []
+				task.shoferMessages = []
 				task.submitUserMessage("new task", ["image1.png"])
 
 				expect(handleResponseSpy).toHaveBeenCalledWith("messageResponse", "new task", ["image1.png"])
@@ -1551,7 +1551,7 @@ describe("Cline", () => {
 				handleResponseSpy.mockClear()
 
 				// Test with existing messages (ongoing task scenario)
-				task.clineMessages = [
+				task.shoferMessages = [
 					{
 						ts: Date.now(),
 						type: "say",
@@ -1897,7 +1897,7 @@ describe("Queued message processing after condense", () => {
 			dispose: vi.fn(),
 		}
 
-		const provider = new ClineProvider(ctx, output as any, "sidebar", new ContextProxy(ctx)) as any
+		const provider = new ShoferProvider(ctx, output as any, "sidebar", new ContextProxy(ctx)) as any
 		provider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
 		provider.postStateToWebview = vi.fn().mockResolvedValue(undefined)
 		provider.postStateToWebviewWithoutTaskHistory = vi.fn().mockResolvedValue(undefined)
@@ -2030,7 +2030,7 @@ describe("pushToolResultToUserContent", () => {
 			dispose: vi.fn(),
 		}
 
-		mockProvider = new ClineProvider(
+		mockProvider = new ShoferProvider(
 			mockExtensionContext,
 			mockOutputChannel,
 			"sidebar",

@@ -1,12 +1,12 @@
 // npx vitest run packages/core/src/message-utils/__tests__/consolidateApiRequests.spec.ts
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { consolidateApiRequests } from "../consolidateApiRequests.js"
 
 describe("consolidateApiRequests", () => {
 	// Helper function to create a basic api_req_started message
-	const createApiReqStarted = (ts: number, data: Record<string, unknown> = {}): ClineMessage => ({
+	const createApiReqStarted = (ts: number, data: Record<string, unknown> = {}): ShoferMessage => ({
 		ts,
 		type: "say",
 		say: "api_req_started",
@@ -14,7 +14,7 @@ describe("consolidateApiRequests", () => {
 	})
 
 	// Helper function to create a basic api_req_finished message
-	const createApiReqFinished = (ts: number, data: Record<string, unknown> = {}): ClineMessage => ({
+	const createApiReqFinished = (ts: number, data: Record<string, unknown> = {}): ShoferMessage => ({
 		ts,
 		type: "say",
 		say: "api_req_finished",
@@ -22,7 +22,7 @@ describe("consolidateApiRequests", () => {
 	})
 
 	// Helper function to create a regular text message
-	const createTextMessage = (ts: number, text: string): ClineMessage => ({
+	const createTextMessage = (ts: number, text: string): ShoferMessage => ({
 		ts,
 		type: "say",
 		say: "text",
@@ -30,7 +30,7 @@ describe("consolidateApiRequests", () => {
 	})
 
 	it("should consolidate a matching pair of api_req_started and api_req_finished messages", () => {
-		const messages: ClineMessage[] = [
+		const messages: ShoferMessage[] = [
 			createApiReqStarted(1000, { request: "GET /api/data" }),
 			createApiReqFinished(1001, { cost: 0.005 }),
 		]
@@ -46,7 +46,7 @@ describe("consolidateApiRequests", () => {
 	})
 
 	it("should handle messages with no api_req pairs", () => {
-		const messages: ClineMessage[] = [createTextMessage(1000, "Hello"), createTextMessage(1001, "World")]
+		const messages: ShoferMessage[] = [createTextMessage(1000, "Hello"), createTextMessage(1001, "World")]
 
 		const result = consolidateApiRequests(messages)
 
@@ -59,13 +59,13 @@ describe("consolidateApiRequests", () => {
 	})
 
 	it("should handle single message array", () => {
-		const messages: ClineMessage[] = [createTextMessage(1000, "Hello")]
+		const messages: ShoferMessage[] = [createTextMessage(1000, "Hello")]
 		const result = consolidateApiRequests(messages)
 		expect(result).toEqual(messages)
 	})
 
 	it("should preserve non-api messages in the result", () => {
-		const messages: ClineMessage[] = [
+		const messages: ShoferMessage[] = [
 			createTextMessage(1000, "Before"),
 			createApiReqStarted(1001, { request: "test" }),
 			createApiReqFinished(1002, { cost: 0.01 }),
@@ -81,7 +81,7 @@ describe("consolidateApiRequests", () => {
 	})
 
 	it("should handle multiple api_req pairs", () => {
-		const messages: ClineMessage[] = [
+		const messages: ShoferMessage[] = [
 			createApiReqStarted(1000, { request: "first" }),
 			createApiReqFinished(1001, { cost: 0.01 }),
 			createApiReqStarted(1002, { request: "second" }),
@@ -96,7 +96,7 @@ describe("consolidateApiRequests", () => {
 	})
 
 	it("should handle orphan api_req_started without finish", () => {
-		const messages: ClineMessage[] = [
+		const messages: ShoferMessage[] = [
 			createApiReqStarted(1000, { request: "orphan" }),
 			createTextMessage(1001, "Text"),
 		]
@@ -109,7 +109,7 @@ describe("consolidateApiRequests", () => {
 	})
 
 	it("should handle invalid JSON in message text", () => {
-		const messages: ClineMessage[] = [
+		const messages: ShoferMessage[] = [
 			{ ts: 1000, type: "say", say: "api_req_started", text: "invalid json" },
 			createApiReqFinished(1001, { cost: 0.01 }),
 		]

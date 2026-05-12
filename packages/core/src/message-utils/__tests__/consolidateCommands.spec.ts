@@ -1,13 +1,13 @@
 // npx vitest run packages/core/src/message-utils/__tests__/consolidateCommands.spec.ts
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { consolidateCommands, COMMAND_OUTPUT_STRING } from "../consolidateCommands.js"
 
 describe("consolidateCommands", () => {
 	describe("command sequences", () => {
 		it("should consolidate command and command_output messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "ask", ask: "command", text: "ls", ts: 1000 },
 				{ type: "ask", ask: "command_output", text: "file1.txt", ts: 1001 },
 				{ type: "ask", ask: "command_output", text: "file2.txt", ts: 1002 },
@@ -21,7 +21,7 @@ describe("consolidateCommands", () => {
 		})
 
 		it("should handle multiple command sequences", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "ask", ask: "command", text: "ls", ts: 1000 },
 				{ type: "ask", ask: "command_output", text: "output1", ts: 1001 },
 				{ type: "ask", ask: "command", text: "pwd", ts: 1002 },
@@ -36,7 +36,7 @@ describe("consolidateCommands", () => {
 		})
 
 		it("should handle command without output", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "ask", ask: "command", text: "ls", ts: 1000 },
 				{ type: "say", say: "text", text: "some text", ts: 1001 },
 			]
@@ -50,7 +50,7 @@ describe("consolidateCommands", () => {
 		})
 
 		it("should handle duplicate outputs (ask and say with same text)", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "ask", ask: "command", text: "ls", ts: 1000 },
 				{ type: "ask", ask: "command_output", text: "same output", ts: 1001 },
 				{ type: "say", say: "command_output", text: "same output", ts: 1002 },
@@ -65,7 +65,7 @@ describe("consolidateCommands", () => {
 
 	describe("MCP server sequences", () => {
 		it("should consolidate use_mcp_server and mcp_server_response messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "ask",
 					ask: "use_mcp_server",
@@ -85,7 +85,7 @@ describe("consolidateCommands", () => {
 		})
 
 		it("should handle MCP request without response", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "ask",
 					ask: "use_mcp_server",
@@ -101,7 +101,7 @@ describe("consolidateCommands", () => {
 		})
 
 		it("should handle multiple MCP responses", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "ask",
 					ask: "use_mcp_server",
@@ -122,7 +122,7 @@ describe("consolidateCommands", () => {
 
 	describe("mixed messages", () => {
 		it("should preserve non-command, non-MCP messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "say", say: "text", text: "before", ts: 1000 },
 				{ type: "ask", ask: "command", text: "ls", ts: 1001 },
 				{ type: "ask", ask: "command_output", text: "output", ts: 1002 },

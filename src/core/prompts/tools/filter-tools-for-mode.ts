@@ -1,5 +1,5 @@
 import type OpenAI from "openai"
-import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@roo-code/types"
+import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@shofer/types"
 import { getGroupName, getModeBySlug, getToolsForMode } from "../../../shared/modes"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../../shared/tools"
 import { defaultModeSlug } from "../../../shared/modes"

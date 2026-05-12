@@ -10,9 +10,9 @@ import type {
 	AuthService,
 	AuthServiceEvents,
 	AuthState,
-} from "@roo-code/types"
+} from "@shofer/types"
 
-import { getClerkBaseUrl, getRooCodeApiUrl, PRODUCTION_CLERK_BASE_URL } from "./config.js"
+import { getClerkBaseUrl, getShoferApiUrl, PRODUCTION_CLERK_BASE_URL } from "./config.js"
 import { getUserAgent } from "./utils.js"
 import { importVscode } from "./importVscode.js"
 import { InvalidClientTokenError } from "./errors.js"
@@ -266,8 +266,8 @@ export class WebAuthService extends EventEmitter<AuthServiceEvents> implements A
 			const state = crypto.randomBytes(16).toString("hex")
 			await this.context.globalState.update(AUTH_STATE_KEY, state)
 			const packageJSON = this.context.extension?.packageJSON
-			const publisher = packageJSON?.publisher ?? "RooVeterinaryInc"
-			const name = packageJSON?.name ?? "roo-cline"
+			const publisher = packageJSON?.publisher ?? "Arkware"
+			const name = packageJSON?.name ?? "shofer"
 			const params = new URLSearchParams({
 				state,
 				auth_redirect: `${vscode.env.uriScheme}://${publisher}.${name}`,
@@ -275,24 +275,24 @@ export class WebAuthService extends EventEmitter<AuthServiceEvents> implements A
 
 			// Use landing page URL if slug is provided, otherwise use provider sign-up or sign-in URL based on parameter
 			const url = landingPageSlug
-				? `${getRooCodeApiUrl()}/l/${landingPageSlug}?${params.toString()}`
+				? `${getShoferApiUrl()}/l/${landingPageSlug}?${params.toString()}`
 				: useProviderSignup
-					? `${getRooCodeApiUrl()}/extension/provider-sign-up?${params.toString()}`
-					: `${getRooCodeApiUrl()}/extension/sign-in?${params.toString()}`
+					? `${getShoferApiUrl()}/extension/provider-sign-up?${params.toString()}`
+					: `${getShoferApiUrl()}/extension/sign-in?${params.toString()}`
 
 			await vscode.env.openExternal(vscode.Uri.parse(url))
 		} catch (error) {
 			const context = landingPageSlug ? ` (landing page: ${landingPageSlug})` : ""
-			this.log(`[auth] Error initiating Roo Code Cloud auth${context}: ${error}`)
-			throw new Error(`Failed to initiate Roo Code Cloud authentication${context}: ${error}`)
+			this.log(`[auth] Error initiating Shofer Cloud auth${context}: ${error}`)
+			throw new Error(`Failed to initiate Shofer Cloud authentication${context}: ${error}`)
 		}
 	}
 
 	/**
-	 * Handle the callback from Roo Code Cloud
+	 * Handle the callback from Shofer Cloud
 	 *
 	 * This method is called when the user is redirected back to the extension
-	 * after authenticating with Roo Code Cloud.
+	 * after authenticating with Shofer Cloud.
 	 *
 	 * @param code The authorization code from the callback
 	 * @param state The state parameter from the callback
@@ -309,7 +309,7 @@ export class WebAuthService extends EventEmitter<AuthServiceEvents> implements A
 			const vscode = await importVscode()
 
 			if (vscode) {
-				vscode.window.showInformationMessage("Invalid Roo Code Cloud sign in url")
+				vscode.window.showInformationMessage("Invalid Shofer Cloud sign in url")
 			}
 
 			return
@@ -333,26 +333,26 @@ export class WebAuthService extends EventEmitter<AuthServiceEvents> implements A
 
 			// Store the provider model if provided, or flag that no model was selected
 			if (providerModel) {
-				await this.context.globalState.update("roo-provider-model", providerModel)
-				await this.context.globalState.update("roo-auth-skip-model", undefined)
+				await this.context.globalState.update("shofer-provider-model", providerModel)
+				await this.context.globalState.update("shofer-auth-skip-model", undefined)
 				this.log(`[auth] Stored provider model: ${providerModel}`)
 			} else {
 				// No model was selected during signup - flag this for the webview
-				await this.context.globalState.update("roo-auth-skip-model", true)
+				await this.context.globalState.update("shofer-auth-skip-model", true)
 				this.log(`[auth] No provider model selected during signup`)
 			}
 
 			const vscode = await importVscode()
 
 			if (vscode) {
-				vscode.window.showInformationMessage("Successfully authenticated with Roo Code Cloud")
+				vscode.window.showInformationMessage("Successfully authenticated with Shofer Cloud")
 			}
 
-			this.log("[auth] Successfully authenticated with Roo Code Cloud")
+			this.log("[auth] Successfully authenticated with Shofer Cloud")
 		} catch (error) {
-			this.log(`[auth] Error handling Roo Code Cloud callback: ${error}`)
+			this.log(`[auth] Error handling Shofer Cloud callback: ${error}`)
 			this.changeState("logged-out")
-			throw new Error(`Failed to handle Roo Code Cloud callback: ${error}`)
+			throw new Error(`Failed to handle Shofer Cloud callback: ${error}`)
 		}
 	}
 
@@ -380,13 +380,13 @@ export class WebAuthService extends EventEmitter<AuthServiceEvents> implements A
 			const vscode = await importVscode()
 
 			if (vscode) {
-				vscode.window.showInformationMessage("Logged out from Roo Code Cloud")
+				vscode.window.showInformationMessage("Logged out from Shofer Cloud")
 			}
 
-			this.log("[auth] Logged out from Roo Code Cloud")
+			this.log("[auth] Logged out from Shofer Cloud")
 		} catch (error) {
-			this.log(`[auth] Error logging out from Roo Code Cloud: ${error}`)
-			throw new Error(`Failed to log out from Roo Code Cloud: ${error}`)
+			this.log(`[auth] Error logging out from Shofer Cloud: ${error}`)
+			throw new Error(`Failed to log out from Shofer Cloud: ${error}`)
 		}
 	}
 

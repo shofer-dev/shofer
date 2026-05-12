@@ -2,10 +2,10 @@
 	"$schema": "https://unpkg.com/@changesets/config@3.0.4/schema.json",
 	"changelog": "./changelog-config.js",
 	"commit": false,
-	"fixed": [["roo-cline"]],
+	"fixed": [["shofer"]],
 	"linked": [],
 	"access": "restricted",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
-	"ignore": ["@roo-code/cli"]
+	"ignore": ["@shofer/cli"]
 }

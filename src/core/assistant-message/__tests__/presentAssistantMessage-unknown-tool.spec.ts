@@ -9,7 +9,7 @@ vi.mock("../../tools/validateToolUse", () => ({
 	validateToolUse: vi.fn(),
 	isValidToolName: vi.fn(() => false),
 }))
-vi.mock("@roo-code/telemetry", () => ({
+vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
 		instance: {
 			captureToolUsage: vi.fn(),
@@ -36,7 +36,7 @@ describe("presentAssistantMessage - Unknown Tool Handling", () => {
 			didRejectTool: false,
 			didAlreadyUseTool: false,
 			consecutiveMistakeCount: 0,
-			clineMessages: [],
+			shoferMessages: [],
 			api: {
 				getModel: () => ({ id: "test-model", info: {} }),
 			},

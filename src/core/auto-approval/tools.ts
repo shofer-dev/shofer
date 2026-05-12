@@ -1,8 +1,8 @@
-import type { ClineSayTool } from "@roo-code/types"
+import type { ShoferSayTool } from "@shofer/types"
 import { TOOL_GROUPS } from "../../shared/tools"
 
 /**
- * Map of ClineSayTool.tool (camelCase) values to their snake_case tool names.
+ * Map of ShoferSayTool.tool (camelCase) values to their snake_case tool names.
  * Used to resolve a tool's ToolGroup from its UI-facing tool identifier.
  *
  * Only tools that use the `ask === "tool"` auto-approval path need entries here.
@@ -61,7 +61,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 }
 
 /**
- * Resolve the ToolGroup for a tool from its ClineSayTool identifier.
+ * Resolve the ToolGroup for a tool from its ShoferSayTool identifier.
  *
  * Resolution order:
  *  1. Native tools — look up snake_case name in TOOL_GROUPS
@@ -71,7 +71,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
  * @param tool - The tool metadata from the approval payload
  * @returns The ToolGroup this tool belongs to
  */
-export function getToolGroupForSayTool(tool: ClineSayTool): string {
+export function getToolGroupForSayTool(tool: ShoferSayTool): string {
 	const sayName = tool.tool
 
 	// Native tools: map camelCase → snake_case → group
@@ -103,13 +103,13 @@ export function getToolGroupForSayTool(tool: ClineSayTool): string {
 /**
  * @deprecated Use `getToolGroupForSayTool(tool) === "write"` instead.
  */
-export function isWriteToolAction(tool: ClineSayTool): boolean {
+export function isWriteToolAction(tool: ShoferSayTool): boolean {
 	return getToolGroupForSayTool(tool) === "write"
 }
 
 /**
  * @deprecated Use `getToolGroupForSayTool(tool) === "read"` instead.
  */
-export function isReadOnlyToolAction(tool: ClineSayTool): boolean {
+export function isReadOnlyToolAction(tool: ShoferSayTool): boolean {
 	return getToolGroupForSayTool(tool) === "read"
 }

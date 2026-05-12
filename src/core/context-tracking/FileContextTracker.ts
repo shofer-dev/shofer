@@ -8,7 +8,7 @@ import { fileExistsAtPath } from "../../utils/fs"
 import fs from "fs/promises"
 import { ContextProxy } from "../config/ContextProxy"
 import type { FileMetadataEntry, RecordSource, TaskMetadata } from "./FileContextTrackerTypes"
-import { ClineProvider } from "../webview/ClineProvider"
+import { ShoferProvider } from "../webview/ShoferProvider"
 
 /**
  * Snapshot kind written to the per-task originals/finals stores.
@@ -26,19 +26,19 @@ export interface FileSnapshot {
 }
 
 // This class is responsible for tracking file operations that may result in stale context.
-// If a user modifies a file outside of Roo, the context may become stale and need to be updated.
-// We do not want Roo to reload the context every time a file is modified, so we use this class merely
-// to inform Roo that the change has occurred, and tell Roo to reload the file before making
-// any changes to it. This fixes an issue with diff editing, where Roo was unable to complete a diff edit.
+// If a user modifies a file outside of Shofer, the context may become stale and need to be updated.
+// We do not want Shofer to reload the context every time a file is modified, so we use this class merely
+// to inform Shofer that the change has occurred, and tell Shofer to reload the file before making
+// any changes to it. This fixes an issue with diff editing, where Shofer was unable to complete a diff edit.
 
 // FileContextTracker
 //
 // This class is responsible for tracking file operations.
-// If the full contents of a file are passed to Roo via a tool, mention, or edit, the file is marked as active.
-// If a file is modified outside of Roo, we detect and track this change to prevent stale context.
+// If the full contents of a file are passed to Shofer via a tool, mention, or edit, the file is marked as active.
+// If a file is modified outside of Shofer, we detect and track this change to prevent stale context.
 export class FileContextTracker {
 	readonly taskId: string
-	private providerRef: WeakRef<ClineProvider>
+	private providerRef: WeakRef<ShoferProvider>
 
 	// File tracking and watching
 	private fileWatchers = new Map<string, vscode.FileSystemWatcher>()
@@ -46,7 +46,7 @@ export class FileContextTracker {
 	private recentlyEditedByRoo = new Set<string>()
 	private checkpointPossibleFiles = new Set<string>()
 
-	constructor(provider: ClineProvider, taskId: string) {
+	constructor(provider: ShoferProvider, taskId: string) {
 		this.providerRef = new WeakRef(provider)
 		this.taskId = taskId
 	}
@@ -81,9 +81,9 @@ export class FileContextTracker {
 		// Track file changes
 		watcher.onDidChange(() => {
 			if (this.recentlyEditedByRoo.has(filePath)) {
-				this.recentlyEditedByRoo.delete(filePath) // This was an edit by Roo, no need to inform Roo
+				this.recentlyEditedByRoo.delete(filePath) // This was an edit by Shofer, no need to inform Shofer
 			} else {
-				this.recentlyModifiedFiles.add(filePath) // This was a user edit, we will inform Roo
+				this.recentlyModifiedFiles.add(filePath) // This was a user edit, we will inform Shofer
 				this.trackFileContext(filePath, "user_edited") // Update the task metadata with file tracking
 			}
 		})
@@ -93,7 +93,7 @@ export class FileContextTracker {
 	}
 
 	// Tracks a file operation in metadata and sets up a watcher for the file
-	// This is the main entry point for FileContextTracker and is called when a file is passed to Roo via a tool, mention, or edit.
+	// This is the main entry point for FileContextTracker and is called when a file is passed to Shofer via a tool, mention, or edit.
 	async trackFileContext(filePath: string, operation: RecordSource) {
 		try {
 			const cwd = this.getCwd()
@@ -113,7 +113,7 @@ export class FileContextTracker {
 	public getContextProxy(): ContextProxy | undefined {
 		const provider = this.providerRef.deref()
 		if (!provider) {
-			console.error("ClineProvider reference is no longer valid")
+			console.error("ShoferProvider reference is no longer valid")
 			return undefined
 		}
 		const context = provider.contextProxy
@@ -193,7 +193,7 @@ export class FileContextTracker {
 					this.recentlyModifiedFiles.add(filePath)
 					break
 
-				// roo_edited: Roo has edited the file
+				// roo_edited: Shofer has edited the file
 				case "roo_edited":
 					newEntry.roo_read_date = now
 					newEntry.roo_edit_date = now
@@ -201,7 +201,7 @@ export class FileContextTracker {
 					this.markFileAsEditedByRoo(filePath)
 					break
 
-				// read_tool/file_mentioned: Roo has read the file via a tool or file mention
+				// read_tool/file_mentioned: Shofer has read the file via a tool or file mention
 				case "read_tool":
 				case "file_mentioned":
 					newEntry.roo_read_date = now
@@ -212,7 +212,7 @@ export class FileContextTracker {
 			await this.saveTaskMetadata(taskId, metadata)
 
 			// Capture the post-edit "final" content snapshot so per-file Redo can
-			// re-apply Roo's last produced state after a Revert. Also notify the
+			// re-apply Shofer's last produced state after a Revert. Also notify the
 			// provider so the FileChangesPanel updates promptly. These are
 			// best-effort and must never propagate errors back to tools.
 			if (source === "roo_edited") {
@@ -235,7 +235,7 @@ export class FileContextTracker {
 	}
 
 	/**
-	 * Gets a list of unique file paths that Roo has read during this task.
+	 * Gets a list of unique file paths that Shofer has read during this task.
 	 * Files are sorted by most recently read first, so if there's a character
 	 * budget during folded context generation, the most relevant (recent) files
 	 * are prioritized.
@@ -248,7 +248,7 @@ export class FileContextTracker {
 			const metadata = await this.getTaskMetadata(this.taskId)
 
 			const readEntries = metadata.files_in_context.filter((entry) => {
-				// Only include files that were read by Roo (not user edits)
+				// Only include files that were read by Shofer (not user edits)
 				const isReadByRoo = entry.record_source === "read_tool" || entry.record_source === "file_mentioned"
 				if (!isReadByRoo) {
 					return false
@@ -282,7 +282,7 @@ export class FileContextTracker {
 
 			return uniquePaths
 		} catch (error) {
-			console.error("Failed to get files read by Roo:", error)
+			console.error("Failed to get files read by Shofer:", error)
 			return []
 		}
 	}
@@ -294,7 +294,7 @@ export class FileContextTracker {
 	}
 
 	/**
-	 * Returns the unique file paths that Roo has edited during this task,
+	 * Returns the unique file paths that Shofer has edited during this task,
 	 * sorted by most-recent edit first.
 	 *
 	 * Source of truth is the persisted task metadata (`files_in_context`),
@@ -330,12 +330,12 @@ export class FileContextTracker {
 			}
 			return uniquePaths
 		} catch (error) {
-			console.error("Failed to get files edited by Roo:", error)
+			console.error("Failed to get files edited by Shofer:", error)
 			return []
 		}
 	}
 
-	// Marks a file as edited by Roo to prevent false positives in file watchers
+	// Marks a file as edited by Shofer to prevent false positives in file watchers
 	markFileAsEditedByRoo(filePath: string): void {
 		this.recentlyEditedByRoo.add(filePath)
 	}
@@ -404,9 +404,9 @@ export class FileContextTracker {
 	}
 
 	/**
-	 * Captures the file's content as it existed BEFORE Roo's first edit in this
+	 * Captures the file's content as it existed BEFORE Shofer's first edit in this
 	 * Task. Idempotent: subsequent calls for the same path are no-ops, so
-	 * intermediate Roo edits cannot overwrite the original.
+	 * intermediate Shofer edits cannot overwrite the original.
 	 *
 	 * Should be called from edit infrastructure (e.g. DiffViewProvider.open)
 	 * after the original content has been read but before the file is mutated.
@@ -444,7 +444,7 @@ export class FileContextTracker {
 
 	/**
 	 * Captures the file's current on-disk content as the latest "final" state
-	 * produced by Roo. Overwrites any prior final snapshot. Used to power Redo
+	 * produced by Shofer. Overwrites any prior final snapshot. Used to power Redo
 	 * after a per-file Revert.
 	 *
 	 * Writes a lightweight metadata snapshot to `finals/` and a verbatim

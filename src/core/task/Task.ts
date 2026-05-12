@@ -26,18 +26,18 @@ import {
 	type ToolName,
 	type ContextCondense,
 	type ContextTruncation,
-	type ClineMessage,
-	type ClineSay,
-	type ClineAsk,
+	type ShoferMessage,
+	type ShoferSay,
+	type ShoferAsk,
 	type ToolProgressStatus,
 	type HistoryItem,
 	type CreateTaskOptions,
 	type ModelInfo,
-	type ClineApiReqCancelReason,
-	type ClineApiReqInfo,
+	type ShoferApiReqCancelReason,
+	type ShoferApiReqInfo,
 	type TaskHandle,
 	type CostLimit,
-	RooCodeEventName,
+	ShoferEventName,
 	TelemetryEventName,
 	TaskStatus,
 	TodoItem,
@@ -55,9 +55,9 @@ import {
 	ConsecutiveMistakeError,
 	MAX_MCP_TOOLS_THRESHOLD,
 	countEnabledMcpTools,
-} from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
-import { CloudService } from "@roo-code/cloud"
+} from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
+import { CloudService } from "@shofer/cloud"
 
 // api
 import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "../../api"
@@ -70,7 +70,7 @@ import { combineApiRequests } from "../../shared/combineApiRequests"
 import { combineCommandSequences } from "../../shared/combineCommandSequences"
 import { t } from "../../i18n"
 import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "../../shared/getApiMetrics"
-import { ClineAskResponse } from "../../shared/WebviewMessage"
+import { ShoferAskResponse } from "../../shared/WebviewMessage"
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
 import { DiffStrategy, type ToolUse, type ToolParamName, toolParamNames } from "../../shared/tools"
 import { getModelMaxOutputTokens } from "../../shared/api"
@@ -102,13 +102,13 @@ import { buildNativeToolsArrayWithRestrictions } from "./build-tools"
 import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector"
 import { restoreTodoListForTask } from "../tools/UpdateTodoListTool"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
-import { RooIgnoreController } from "../ignore/RooIgnoreController"
-import { RooProtectedController } from "../protect/RooProtectedController"
+import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
+import { ShoferProtectedController } from "../protect/ShoferProtectedController"
 import { type AssistantMessageContent, presentAssistantMessage } from "../assistant-message"
 import { NativeToolCallParser } from "../assistant-message/NativeToolCallParser"
 import { manageContext, willManageContext } from "../context-management"
 import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
-import { ClineProvider } from "../webview/ClineProvider"
+import { ShoferProvider } from "../webview/ShoferProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import {
 	type ApiMessage,
@@ -142,7 +142,7 @@ const FORCED_CONTEXT_REDUCTION_PERCENT = 75 // Keep 75% of context (remove 25%) 
 const MAX_CONTEXT_WINDOW_RETRIES = 3 // Maximum retries for context window errors
 
 export interface TaskOptions extends CreateTaskOptions {
-	provider: ClineProvider
+	provider: ShoferProvider
 	apiConfiguration: ProviderSettings
 	enableCheckpoints?: boolean
 	checkpointTimeout?: number
@@ -189,7 +189,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	/**
 	 * Cached aggregated cost for the current API request, keyed by the
-	 * `clineMessages` index of the request. Avoids re-scanning history
+	 * `shoferMessages` index of the request. Avoids re-scanning history
 	 * on every chunk of a single streaming response.
 	 */
 	private _costLimitCheckCache?: { spent: number; requestIndex: number }
@@ -346,7 +346,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private taskApiConfigReady: Promise<void>
 
-	providerRef: WeakRef<ClineProvider>
+	providerRef: WeakRef<ShoferProvider>
 	private readonly globalStoragePath: string
 	abort: boolean = false
 
@@ -377,13 +377,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	skipPrevResponseIdOnce: boolean = false
 
 	// TaskStatus
-	idleAsk?: ClineMessage
-	resumableAsk?: ClineMessage
-	interactiveAsk?: ClineMessage
+	idleAsk?: ShoferMessage
+	resumableAsk?: ShoferMessage
+	interactiveAsk?: ShoferMessage
 
 	didFinishAbortingStream = false
 	abandoned = false
-	abortReason?: ClineApiReqCancelReason
+	abortReason?: ShoferApiReqCancelReason
 	isInitialized = false
 	isPaused: boolean = false
 
@@ -393,7 +393,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * When the user clicks Send Now while the task is mid-stream, we want to
 	 * interrupt the current API request and immediately restart the loop with
 	 * the queued message — WITHOUT tearing down the task. The default abort
-	 * path (recursivelyMakeClineRequests catch block) calls `abortTask()` on
+	 * path (recursivelyMakeShoferRequests catch block) calls `abortTask()` on
 	 * `this.abort === true`, which calls `dispose()`, which wipes the message
 	 * queue, removes the queue listener, and releases terminals. That would
 	 * silently delete the very message we are trying to send and leave the
@@ -420,8 +420,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	toolRepetitionDetector: ToolRepetitionDetector
-	rooIgnoreController?: RooIgnoreController
-	rooProtectedController?: RooProtectedController
+	shoferIgnoreController?: ShoferIgnoreController
+	rooProtectedController?: ShoferProtectedController
 	fileContextTracker: FileContextTracker
 	terminalProcess?: RooTerminalProcess
 
@@ -432,10 +432,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// LLM Messages & Chat Messages
 	apiConversationHistory: ApiMessage[] = []
-	clineMessages: ClineMessage[] = []
+	shoferMessages: ShoferMessage[] = []
 
 	// Ask
-	private askResponse?: ClineAskResponse
+	private askResponse?: ShoferAskResponse
 	private askResponseText?: string
 	private askResponseImages?: string[]
 	public lastMessageTs?: number
@@ -490,7 +490,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * appear BEFORE the assistant message with tool_uses, causing API errors.
 	 *
 	 * Reset to `false` at the start of each API request.
-	 * Set to `true` after the assistant message is saved in `recursivelyMakeClineRequests`.
+	 * Set to `true` after the assistant message is saved in `recursivelyMakeShoferRequests`.
 	 */
 	assistantMessageSavedToHistory = false
 
@@ -616,19 +616,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			: (workspacePath ?? getWorkspacePath(path.join(os.homedir(), "Desktop")))
 
 		// Per-task working directory. For embedded worktree tasks this is the
-		// worktree subdirectory (e.g. .roo/worktrees/repo-hl911/); for
+		// worktree subdirectory (e.g. .shofer/worktrees/repo-hl911/); for
 		// regular tasks it defaults to workspacePath.
 		this._cwd = cwd ?? historyItem?.cwd ?? this.workspacePath
 
 		this.instanceId = crypto.randomUUID().slice(0, 8)
 		this.taskNumber = -1
 
-		this.rooIgnoreController = new RooIgnoreController(this.cwd)
-		this.rooProtectedController = new RooProtectedController(this.cwd)
+		this.shoferIgnoreController = new ShoferIgnoreController(this.cwd)
+		this.rooProtectedController = new ShoferProtectedController(this.cwd)
 		this.fileContextTracker = new FileContextTracker(provider, this.taskId)
 
-		this.rooIgnoreController.initialize().catch((error) => {
-			console.error("Failed to initialize RooIgnoreController:", error)
+		this.shoferIgnoreController.initialize().catch((error) => {
+			console.error("Failed to initialize ShoferIgnoreController:", error)
 		})
 
 		this.apiConfiguration = apiConfiguration
@@ -696,8 +696,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.messageQueueService = new MessageQueueService()
 
 		this.messageQueueStateChangedHandler = () => {
-			this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
-			this.emit(RooCodeEventName.QueuedMessagesUpdated, this.taskId, this.messageQueueService.messages)
+			this.emit(ShoferEventName.TaskUserMessage, this.taskId)
+			this.emit(ShoferEventName.QueuedMessagesUpdated, this.taskId, this.messageQueueService.messages)
 			this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 		}
 
@@ -727,9 +727,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				const toolChanged = hasToolUsageChanged(toolUsage, this.toolUsageSnapshot)
 
 				if (tokenChanged || toolChanged) {
-					this.emit(RooCodeEventName.TaskTokenUsageUpdated, this.taskId, tokenUsage, toolUsage)
+					this.emit(ShoferEventName.TaskTokenUsageUpdated, this.taskId, tokenUsage, toolUsage)
 					this.tokenUsageSnapshot = tokenUsage
-					this.tokenUsageSnapshotAt = this.clineMessages.at(-1)?.ts
+					this.tokenUsageSnapshotAt = this.shoferMessages.at(-1)?.ts
 					// Deep copy tool usage for snapshot
 					this.toolUsageSnapshot = JSON.parse(JSON.stringify(toolUsage))
 				}
@@ -770,10 +770,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * All errors result in fallback to `defaultModeSlug` to ensure task can proceed.
 	 *
 	 * @private
-	 * @param provider - The ClineProvider instance to fetch state from
+	 * @param provider - The ShoferProvider instance to fetch state from
 	 * @returns Promise that resolves when initialization is complete
 	 */
-	private async initializeTaskMode(provider: ClineProvider): Promise<void> {
+	private async initializeTaskMode(provider: ShoferProvider): Promise<void> {
 		try {
 			const state = await provider.getState()
 			this._taskMode = state?.mode || defaultModeSlug
@@ -804,10 +804,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * All errors result in fallback to "default" to ensure task can proceed.
 	 *
 	 * @private
-	 * @param provider - The ClineProvider instance to fetch state from
+	 * @param provider - The ShoferProvider instance to fetch state from
 	 * @returns Promise that resolves when initialization is complete
 	 */
-	private async initializeTaskApiConfigName(provider: ClineProvider): Promise<void> {
+	private async initializeTaskApiConfigName(provider: ShoferProvider): Promise<void> {
 		try {
 			const state = await provider.getState()
 
@@ -831,9 +831,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * Sets up a listener for provider profile changes.
 	 *
 	 * @private
-	 * @param provider - The ClineProvider instance to listen to
+	 * @param provider - The ShoferProvider instance to listen to
 	 */
-	private setupProviderProfileChangeListener(provider: ClineProvider): void {
+	private setupProviderProfileChangeListener(provider: ShoferProvider): void {
 		// Only set up listener if provider has the on method (may not exist in test mocks)
 		if (typeof provider.on !== "function") {
 			return
@@ -853,7 +853,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 
-		provider.on(RooCodeEventName.ProviderProfileChanged, this.providerProfileChangeListener)
+		provider.on(ShoferEventName.ProviderProfileChanged, this.providerProfileChangeListener)
 	}
 
 	/**
@@ -1227,7 +1227,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * the parent resumes (missing tool_result for tool_use blocks).
 	 *
 	 * NOTE: The assistant message is typically already in history by the time
-	 * tools execute (added in recursivelyMakeClineRequests after streaming completes).
+	 * tools execute (added in recursivelyMakeShoferRequests after streaming completes).
 	 * So we usually only need to flush the pending user message with tool_results.
 	 */
 	public async flushPendingToolResultsToHistory(): Promise<boolean> {
@@ -1248,7 +1248,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		//
 		// The assistantMessageSavedToHistory flag is:
 		// - Reset to false at the start of each API request
-		// - Set to true after the assistant message is saved in recursivelyMakeClineRequests
+		// - Set to true after the assistant message is saved in recursivelyMakeShoferRequests
 		if (!this.assistantMessageSavedToHistory) {
 			await pWaitFor(() => this.assistantMessageSavedToHistory || this.abort, {
 				interval: 50,
@@ -1332,20 +1332,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return false
 	}
 
-	// Cline Messages
+	// Shofer Messages
 
-	private async getSavedClineMessages(): Promise<ClineMessage[]> {
+	private async getSavedShoferMessages(): Promise<ShoferMessage[]> {
 		return readTaskMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
 	}
 
-	private async addToClineMessages(message: ClineMessage) {
-		this.clineMessages.push(message)
+	private async addToShoferMessages(message: ShoferMessage) {
+		this.shoferMessages.push(message)
 		const provider = this.providerRef.deref()
 		// Avoid resending large, mostly-static fields (notably taskHistory) on every chat message update.
 		// taskHistory is maintained in-memory in the webview and updated via taskHistoryItemUpdated.
 		await provider?.postStateToWebviewWithoutTaskHistory()
-		this.emit(RooCodeEventName.Message, { action: "created", message })
-		await this.saveClineMessages()
+		this.emit(ShoferEventName.Message, { action: "created", message })
+		await this.saveShoferMessages()
 
 		const shouldCaptureMessage = message.partial !== true && CloudService.isEnabled()
 
@@ -1359,10 +1359,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
-	public async overwriteClineMessages(newMessages: ClineMessage[]) {
-		this.clineMessages = newMessages
+	public async overwriteShoferMessages(newMessages: ShoferMessage[]) {
+		this.shoferMessages = newMessages
 		restoreTodoListForTask(this)
-		await this.saveClineMessages()
+		await this.saveShoferMessages()
 
 		// When overwriting messages (e.g., during task resume), repopulate the cloud sync tracking Set
 		// with timestamps from all non-partial messages to prevent re-syncing previously synced messages
@@ -1374,10 +1374,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
-	private async updateClineMessage(message: ClineMessage) {
+	private async updateShoferMessage(message: ShoferMessage) {
 		const provider = this.providerRef.deref()
-		await provider?.postMessageToWebview({ type: "messageUpdated", clineMessage: message })
-		this.emit(RooCodeEventName.Message, { action: "updated", message })
+		await provider?.postMessageToWebview({ type: "messageUpdated", shoferMessage: message })
+		this.emit(ShoferEventName.Message, { action: "updated", message })
 
 		// Check if we should sync to cloud and haven't already synced this message
 		const shouldCaptureMessage = message.partial !== true && CloudService.isEnabled()
@@ -1393,10 +1393,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
-	private async saveClineMessages(): Promise<boolean> {
+	private async saveShoferMessages(): Promise<boolean> {
 		try {
 			await saveTaskMessages({
-				messages: structuredClone(this.clineMessages),
+				messages: structuredClone(this.shoferMessages),
 				taskId: this.taskId,
 				globalStoragePath: this.globalStoragePath,
 			})
@@ -1410,7 +1410,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				rootTaskId: this.rootTaskId,
 				parentTaskId: this.parentTaskId,
 				taskNumber: this.taskNumber,
-				messages: this.clineMessages,
+				messages: this.shoferMessages,
 				globalStoragePath: this.globalStoragePath,
 				// Use workspacePath (the VS Code workspace root) so all tasks
 				// within the same workspace — including embedded worktree tasks —
@@ -1437,15 +1437,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			await this.providerRef.deref()?.updateTaskHistory(historyItem)
 			return true
 		} catch (error) {
-			console.error("Failed to save Roo messages:", error)
+			console.error("Failed to save Shofer messages:", error)
 			return false
 		}
 	}
 
-	private findMessageByTimestamp(ts: number): ClineMessage | undefined {
-		for (let i = this.clineMessages.length - 1; i >= 0; i--) {
-			if (this.clineMessages[i].ts === ts) {
-				return this.clineMessages[i]
+	private findMessageByTimestamp(ts: number): ShoferMessage | undefined {
+		for (let i = this.shoferMessages.length - 1; i >= 0; i--) {
+			if (this.shoferMessages[i].ts === ts) {
+				return this.shoferMessages[i]
 			}
 		}
 
@@ -1456,28 +1456,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// false (completion of partial message), undefined (individual complete
 	// message).
 	async ask(
-		type: ClineAsk,
+		type: ShoferAsk,
 		text?: string,
 		partial?: boolean,
 		progressStatus?: ToolProgressStatus,
 		isProtected?: boolean,
-	): Promise<{ response: ClineAskResponse; text?: string; images?: string[] }> {
-		// If this Cline instance was aborted by the provider, then the only
+	): Promise<{ response: ShoferAskResponse; text?: string; images?: string[] }> {
+		// If this Shofer instance was aborted by the provider, then the only
 		// thing keeping us alive is a promise still running in the background,
 		// in which case we don't want to send its result to the webview as it
-		// is attached to a new instance of Cline now. So we can safely ignore
+		// is attached to a new instance of Shofer now. So we can safely ignore
 		// the result of any active promises, and this class will be
-		// deallocated. (Although we set Cline = undefined in provider, that
+		// deallocated. (Although we set Shofer = undefined in provider, that
 		// simply removes the reference to this instance, but the instance is
 		// still alive until this promise resolves or rejects.)
 		if (this.abort) {
-			throw new Error(`[RooCode#ask] task ${this.taskId}.${this.instanceId} aborted`)
+			throw new Error(`[Shofer#ask] task ${this.taskId}.${this.instanceId} aborted`)
 		}
 
 		let askTs: number
 
 		if (partial !== undefined) {
-			const lastMessage = this.clineMessages.at(-1)
+			const lastMessage = this.shoferMessages.at(-1)
 
 			const isUpdatingPreviousPartial =
 				lastMessage && lastMessage.partial && lastMessage.type === "ask" && lastMessage.ask === type
@@ -1493,7 +1493,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// data or one whole message at a time so ignore partial for
 					// saves, and only post parts of partial message instead of
 					// whole array in new listener.
-					this.updateClineMessage(lastMessage)
+					this.updateShoferMessage(lastMessage)
 					// console.log("Task#ask: current ask promise was ignored (#1)")
 					throw new AskIgnoredError("updating existing partial")
 				} else {
@@ -1501,7 +1501,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// state.
 					askTs = Date.now()
 					this.lastMessageTs = askTs
-					await this.addToClineMessages({ ts: askTs, type: "ask", ask: type, text, partial, isProtected })
+					await this.addToShoferMessages({ ts: askTs, type: "ask", ask: type, text, partial, isProtected })
 					// console.log("Task#ask: current ask promise was ignored (#2)")
 					throw new AskIgnoredError("new partial")
 				}
@@ -1530,8 +1530,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					lastMessage.partial = false
 					lastMessage.progressStatus = progressStatus
 					lastMessage.isProtected = isProtected
-					await this.saveClineMessages()
-					this.updateClineMessage(lastMessage)
+					await this.saveShoferMessages()
+					this.updateShoferMessage(lastMessage)
 				} else {
 					// This is a new and complete message, so add it like normal.
 					this.askResponse = undefined
@@ -1539,7 +1539,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					this.askResponseImages = undefined
 					askTs = Date.now()
 					this.lastMessageTs = askTs
-					await this.addToClineMessages({ ts: askTs, type: "ask", ask: type, text, isProtected })
+					await this.addToShoferMessages({ ts: askTs, type: "ask", ask: type, text, isProtected })
 				}
 			}
 		} else {
@@ -1549,7 +1549,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.askResponseImages = undefined
 			askTs = Date.now()
 			this.lastMessageTs = askTs
-			await this.addToClineMessages({ ts: askTs, type: "ask", ask: type, text, isProtected })
+			await this.addToShoferMessages({ ts: askTs, type: "ask", ask: type, text, isProtected })
 		}
 
 		let timeouts: NodeJS.Timeout[] = []
@@ -1587,11 +1587,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				if (approval.decision === "approve" && askMessage.type === "ask" && askMessage.ask === "tool") {
 					askMessage.isAnswered = true
 				}
-				await this.saveClineMessages()
-				this.updateClineMessage(askMessage)
+				await this.saveShoferMessages()
+				this.updateShoferMessage(askMessage)
 			}
-			this.emit(RooCodeEventName.TaskAskResponded)
-			const synthesized: ClineAskResponse =
+			this.emit(ShoferEventName.TaskAskResponded)
+			const synthesized: ShoferAskResponse =
 				approval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
 			return { response: synthesized, text: undefined, images: undefined }
 		}
@@ -1636,7 +1636,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						if (message) {
 							this.interactiveAsk = message
-							this.emit(RooCodeEventName.TaskInteractive, this.taskId)
+							this.emit(ShoferEventName.TaskInteractive, this.taskId)
 							provider?.postMessageToWebview({ type: "interactionRequired" })
 						}
 					}, statusMutationTimeout),
@@ -1648,7 +1648,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						if (message) {
 							this.resumableAsk = message
-							this.emit(RooCodeEventName.TaskResumable, this.taskId)
+							this.emit(ShoferEventName.TaskResumable, this.taskId)
 						}
 					}, statusMutationTimeout),
 				)
@@ -1659,7 +1659,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						if (message) {
 							this.idleAsk = message
-							this.emit(RooCodeEventName.TaskIdle, this.taskId)
+							this.emit(ShoferEventName.TaskIdle, this.taskId)
 
 							// Emit TaskError for error conditions so TaskManager can set error state
 							const errorAskTypes = [
@@ -1668,7 +1668,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								"auto_approval_max_req_reached",
 							]
 							if (errorAskTypes.includes(type)) {
-								this.emit(RooCodeEventName.TaskError, this.taskId, type)
+								this.emit(ShoferEventName.TaskError, this.taskId, type)
 							}
 						}
 					}, statusMutationTimeout),
@@ -1771,14 +1771,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.idleAsk = undefined
 			this.resumableAsk = undefined
 			this.interactiveAsk = undefined
-			this.emit(RooCodeEventName.TaskActive, this.taskId)
+			this.emit(ShoferEventName.TaskActive, this.taskId)
 		}
 
-		this.emit(RooCodeEventName.TaskAskResponded)
+		this.emit(ShoferEventName.TaskAskResponded)
 		return result
 	}
 
-	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
+	handleWebviewAskResponse(askResponse: ShoferAskResponse, text?: string, images?: string[]) {
 		this.diagLog(
 			`[DIAG handleWebviewAskResponse] taskId=${this.taskId}.${this.instanceId}, askResponse=${askResponse}, text=${text?.substring(0, 100)}, abort=${this.abort}, abandoned=${this.abandoned}, isAwaitingAskResponse=${this.isAwaitingAskResponse}`,
 		)
@@ -1825,15 +1825,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (askResponse === "messageResponse" || askResponse === "yesButtonClicked") {
 			// Find the last unanswered follow-up message using findLastIndex
 			const lastFollowUpIndex = findLastIndex(
-				this.clineMessages,
+				this.shoferMessages,
 				(msg) => msg.type === "ask" && msg.ask === "followup" && !msg.isAnswered,
 			)
 
 			if (lastFollowUpIndex !== -1) {
 				// Mark this follow-up as answered
-				this.clineMessages[lastFollowUpIndex].isAnswered = true
+				this.shoferMessages[lastFollowUpIndex].isAnswered = true
 				// Save the updated messages
-				this.saveClineMessages().catch((error) => {
+				this.saveShoferMessages().catch((error) => {
 					console.error("Failed to save answered follow-up state:", error)
 				})
 			}
@@ -1842,13 +1842,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Mark the last tool-approval ask as answered when user approves (or auto-approval)
 		if (askResponse === "yesButtonClicked") {
 			const lastToolAskIndex = findLastIndex(
-				this.clineMessages,
+				this.shoferMessages,
 				(msg) => msg.type === "ask" && msg.ask === "tool" && !msg.isAnswered,
 			)
 			if (lastToolAskIndex !== -1) {
-				this.clineMessages[lastToolAskIndex].isAnswered = true
-				void this.updateClineMessage(this.clineMessages[lastToolAskIndex])
-				this.saveClineMessages().catch((error) => {
+				this.shoferMessages[lastToolAskIndex].isAnswered = true
+				void this.updateShoferMessage(this.shoferMessages[lastToolAskIndex])
+				this.saveShoferMessages().catch((error) => {
 					console.error("Failed to save answered tool-ask state:", error)
 				})
 			}
@@ -1926,7 +1926,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					}
 				}
 
-				this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
+				this.emit(ShoferEventName.TaskUserMessage, this.taskId)
 
 				// Handle the message directly instead of routing through the webview.
 				// This avoids a race condition where the webview's message state hasn't
@@ -1952,7 +1952,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		try {
 			return await this.fileContextTracker.getFilesReadByRoo()
 		} catch (error) {
-			console.error(`[Task#${context}] Failed to get files read by Roo:`, error)
+			console.error(`[Task#${context}] Failed to get files read by Shofer:`, error)
 			return undefined
 		}
 	}
@@ -2026,7 +2026,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			environmentDetails,
 			filesReadByRoo,
 			cwd: this.cwd,
-			rooIgnoreController: this.rooIgnoreController,
+			shoferIgnoreController: this.shoferIgnoreController,
 		})
 		if (error) {
 			await this.say(
@@ -2068,7 +2068,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	async say(
-		type: ClineSay,
+		type: ShoferSay,
 		text?: string,
 		images?: string[],
 		partial?: boolean,
@@ -2081,11 +2081,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		contextTruncation?: ContextTruncation,
 	): Promise<undefined> {
 		if (this.abort) {
-			throw new Error(`[RooCode#say] task ${this.taskId}.${this.instanceId} aborted`)
+			throw new Error(`[Shofer#say] task ${this.taskId}.${this.instanceId} aborted`)
 		}
 
 		if (partial !== undefined) {
-			const lastMessage = this.clineMessages.at(-1)
+			const lastMessage = this.shoferMessages.at(-1)
 
 			const isUpdatingPreviousPartial =
 				lastMessage && lastMessage.partial && lastMessage.type === "say" && lastMessage.say === type
@@ -2097,7 +2097,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					lastMessage.images = images
 					lastMessage.partial = partial
 					lastMessage.progressStatus = progressStatus
-					this.updateClineMessage(lastMessage)
+					this.updateShoferMessage(lastMessage)
 				} else {
 					// This is a new partial message, so add it with partial state.
 					const sayTs = Date.now()
@@ -2106,7 +2106,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						this.lastMessageTs = sayTs
 					}
 
-					await this.addToClineMessages({
+					await this.addToShoferMessages({
 						ts: sayTs,
 						type: "say",
 						say: type,
@@ -2133,10 +2133,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 					// Instead of streaming partialMessage events, we do a save
 					// and post like normal to persist to disk.
-					await this.saveClineMessages()
+					await this.saveShoferMessages()
 
 					// More performant than an entire `postStateToWebview`.
-					this.updateClineMessage(lastMessage)
+					this.updateShoferMessage(lastMessage)
 				} else {
 					// This is a new and complete message, so add it like normal.
 					const sayTs = Date.now()
@@ -2145,7 +2145,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						this.lastMessageTs = sayTs
 					}
 
-					await this.addToClineMessages({
+					await this.addToShoferMessages({
 						ts: sayTs,
 						type: "say",
 						say: type,
@@ -2168,7 +2168,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.lastMessageTs = sayTs
 			}
 
-			await this.addToClineMessages({
+			await this.addToShoferMessages({
 				ts: sayTs,
 				type: "say",
 				say: type,
@@ -2188,19 +2188,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private async dismissToolPreparingRow(): Promise<void> {
 		const lastPreparingIndex = findLastIndex(
-			this.clineMessages,
+			this.shoferMessages,
 			(m) => m.type === "say" && m.say === "tool_preparing" && m.partial === true,
 		)
-		if (lastPreparingIndex !== -1 && this.clineMessages[lastPreparingIndex].partial) {
-			this.clineMessages[lastPreparingIndex].partial = false
-			await this.updateClineMessage(this.clineMessages[lastPreparingIndex])
+		if (lastPreparingIndex !== -1 && this.shoferMessages[lastPreparingIndex].partial) {
+			this.shoferMessages[lastPreparingIndex].partial = false
+			await this.updateShoferMessage(this.shoferMessages[lastPreparingIndex])
 		}
 	}
 
 	async sayAndCreateMissingParamError(toolName: ToolName, paramName: string, relPath?: string) {
 		await this.say(
 			"error",
-			`Roo tried to use ${toolName}${
+			`Shofer tried to use ${toolName}${
 				relPath ? ` for '${relPath.toPosix()}'` : ""
 			} without value for required parameter '${paramName}'. Retrying...`,
 		)
@@ -2280,13 +2280,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async startTask(task?: string, images?: string[]): Promise<void> {
 		try {
-			// `conversationHistory` (for API) and `clineMessages` (for webview)
+			// `conversationHistory` (for API) and `shoferMessages` (for webview)
 			// need to be in sync.
 			// If the extension process were killed, then on restart the
-			// `clineMessages` might not be empty, so we need to set it to [] when
-			// we create a new Cline client (otherwise webview would show stale
+			// `shoferMessages` might not be empty, so we need to set it to [] when
+			// we create a new Shofer client (otherwise webview would show stale
 			// messages from previous session).
-			this.clineMessages = []
+			this.shoferMessages = []
 			this.apiConversationHistory = []
 
 			// The todo list is already set in the constructor if initialTodos were provided
@@ -2344,23 +2344,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async resumeTaskFromHistory() {
 		try {
-			const modifiedClineMessages = await this.getSavedClineMessages()
+			const modifiedShoferMessages = await this.getSavedShoferMessages()
 
 			// Remove any resume messages that may have been added before.
 			const lastRelevantMessageIndex = findLastIndex(
-				modifiedClineMessages,
+				modifiedShoferMessages,
 				(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"),
 			)
 
 			if (lastRelevantMessageIndex !== -1) {
-				modifiedClineMessages.splice(lastRelevantMessageIndex + 1)
+				modifiedShoferMessages.splice(lastRelevantMessageIndex + 1)
 			}
 
 			// Remove any trailing reasoning-only UI messages that were not part of the persisted API conversation
-			while (modifiedClineMessages.length > 0) {
-				const last = modifiedClineMessages[modifiedClineMessages.length - 1]
+			while (modifiedShoferMessages.length > 0) {
+				const last = modifiedShoferMessages[modifiedShoferMessages.length - 1]
 				if (last.type === "say" && last.say === "reasoning") {
-					modifiedClineMessages.pop()
+					modifiedShoferMessages.pop()
 				} else {
 					break
 				}
@@ -2371,23 +2371,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// cancellation reason to present, then we remove it since it indicates
 			// an api request without any partial content streamed.
 			const lastApiReqStartedIndex = findLastIndex(
-				modifiedClineMessages,
+				modifiedShoferMessages,
 				(m) => m.type === "say" && m.say === "api_req_started",
 			)
 
 			if (lastApiReqStartedIndex !== -1) {
-				const lastApiReqStarted = modifiedClineMessages[lastApiReqStartedIndex]
-				const { cost, cancelReason }: ClineApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
+				const lastApiReqStarted = modifiedShoferMessages[lastApiReqStartedIndex]
+				const { cost, cancelReason }: ShoferApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
 
 				if (cost === undefined && cancelReason === undefined) {
-					modifiedClineMessages.splice(lastApiReqStartedIndex, 1)
+					modifiedShoferMessages.splice(lastApiReqStartedIndex, 1)
 				}
 			}
 
-			await this.overwriteClineMessages(modifiedClineMessages)
-			this.clineMessages = await this.getSavedClineMessages()
+			await this.overwriteShoferMessages(modifiedShoferMessages)
+			this.shoferMessages = await this.getSavedShoferMessages()
 
-			// Now present the cline messages to the user and ask if they want to
+			// Now present the shofer messages to the user and ask if they want to
 			// resume (NOTE: we ran into a bug before where the
 			// apiConversationHistory wouldn't be initialized when opening a old
 			// task, and it was because we were waiting for resume).
@@ -2395,13 +2395,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// the task first.
 			this.apiConversationHistory = await this.getSavedApiConversationHistory()
 
-			const lastClineMessage = this.clineMessages
+			const lastShoferMessage = this.shoferMessages
 				.slice()
 				.reverse()
 				.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // Could be multiple resume tasks.
 
-			let askType: ClineAsk
-			if (lastClineMessage?.ask === "completion_result") {
+			let askType: ShoferAsk
+			if (lastShoferMessage?.ask === "completion_result") {
 				askType = "resume_completed_task"
 			} else {
 				askType = "resume_task"
@@ -2433,7 +2433,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 
 			// Make sure that the api conversation history can be resumed by the API,
-			// even if it goes out of sync with cline messages.
+			// even if it goes out of sync with shofer messages.
 			let existingApiConversationHistory: ApiMessage[] = await this.getSavedApiConversationHistory()
 
 			// Tool blocks are always preserved; native tool calling only.
@@ -2456,7 +2456,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Removing or merging it would destroy this metadata, causing all condensed
 					// messages to become "orphaned" and restored to active status — effectively
 					// undoing the condensation and sending the full history to the API.
-					// See: https://github.com/RooCodeInc/Roo-Code/issues/11487
+					// See: https://github.com/Arkware/Shofer/issues/11487
 					modifiedApiConversationHistory = [...existingApiConversationHistory]
 					modifiedOldUserContent = []
 				} else if (lastMessage.role === "assistant") {
@@ -2558,7 +2558,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 
 				// 2. The user's actual text will be sent as its own role=user
-				//    message by initiateTaskLoop → recursivelyMakeClineRequests.
+				//    message by initiateTaskLoop → recursivelyMakeShoferRequests.
 				let userContent: Anthropic.Messages.ContentBlockParam[] = [
 					{
 						type: "text",
@@ -2680,7 +2680,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Force final token usage update before abort event
 		this.emitFinalTokenUsageUpdate()
 
-		this.emit(RooCodeEventName.TaskAborted)
+		this.emit(ShoferEventName.TaskAborted)
 
 		try {
 			this.dispose() // Call the centralized dispose method
@@ -2691,7 +2691,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Save the countdown message in the automatic retry or other content.
 		try {
 			// Save the countdown message in the automatic retry or other content.
-			await this.saveClineMessages()
+			await this.saveShoferMessages()
 		} catch (error) {
 			console.error(`Error saving messages during abort for task ${this.taskId}.${this.instanceId}:`, error)
 		}
@@ -2965,7 +2965,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (this.providerProfileChangeListener) {
 				const provider = this.providerRef.deref()
 				if (provider) {
-					provider.off(RooCodeEventName.ProviderProfileChanged, this.providerProfileChangeListener)
+					provider.off(ShoferEventName.ProviderProfileChanged, this.providerProfileChangeListener)
 				}
 				this.providerProfileChangeListener = undefined
 			}
@@ -3011,12 +3011,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 
 		try {
-			if (this.rooIgnoreController) {
-				this.rooIgnoreController.dispose()
-				this.rooIgnoreController = undefined
+			if (this.shoferIgnoreController) {
+				this.shoferIgnoreController.dispose()
+				this.shoferIgnoreController = undefined
 			}
 		} catch (error) {
-			console.error("Error disposing RooIgnoreController:", error)
+			console.error("Error disposing ShoferIgnoreController:", error)
 			// This is the critical one for the leak fix.
 		}
 
@@ -3051,7 +3051,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		let nextUserContent = userContent
 		let includeFileDetails = true
 
-		this.emit(RooCodeEventName.TaskStarted)
+		this.emit(ShoferEventName.TaskStarted)
 
 		while (!this.abort) {
 			this.diagLog(
@@ -3062,13 +3062,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// already calls this, but history may have been corrupted through other
 			// code paths (resumeTaskFromHistory, stored-history load, condensation).
 			this._cleanupOrphanedToolUses()
-			const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
+			const didEndLoop = await this.recursivelyMakeShoferRequests(nextUserContent, includeFileDetails)
 			includeFileDetails = false // We only need file details the first time.
 			this.diagLog(
 				`[DIAG initiateTaskLoop] Loop iteration END taskId=${this.taskId}.${this.instanceId}, didEndLoop=${didEndLoop}`,
 			)
 
-			// The way this agentic loop works is that cline will be given a
+			// The way this agentic loop works is that shofer will be given a
 			// task that he then calls tools to complete. Unless there's an
 			// attempt_completion call, we keep responding back to him with his
 			// tool's responses until he either attempt_completion or does not
@@ -3076,7 +3076,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// to consider if he's completed the task and then call
 			// attempt_completion, otherwise proceed with completing the task.
 			// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite
-			// requests, but Cline is prompted to finish the task as efficiently
+			// requests, but Shofer is prompted to finish the task as efficiently
 			// as he can.
 
 			if (didEndLoop) {
@@ -3104,7 +3104,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return promise
 	}
 
-	public async recursivelyMakeClineRequests(
+	public async recursivelyMakeShoferRequests(
 		userContent: Anthropic.Messages.ContentBlockParam[],
 		includeFileDetails: boolean = false,
 	): Promise<boolean> {
@@ -3123,7 +3123,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const currentIncludeFileDetails = currentItem.includeFileDetails
 
 			if (this.abort) {
-				throw new Error(`[RooCode#recursivelyMakeRooRequests] task ${this.taskId}.${this.instanceId} aborted`)
+				throw new Error(`[Shofer#recursivelyMakeRooRequests] task ${this.taskId}.${this.instanceId} aborted`)
 			}
 
 			if (this.consecutiveMistakeLimit > 0 && this.consecutiveMistakeCount >= this.consecutiveMistakeLimit) {
@@ -3196,22 +3196,41 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const provider = this.providerRef.deref()
 			const state = provider ? await provider.getState() : undefined
 
-			const showRooIgnoredFiles = state?.showRooIgnoredFiles ?? false
+			const showShoferIgnoredFiles = state?.showShoferIgnoredFiles ?? false
 			const includeDiagnosticMessages = state?.includeDiagnosticMessages ?? true
 			const maxDiagnosticMessages = state?.maxDiagnosticMessages ?? 50
 			const currentMode = state?.mode ?? defaultModeSlug
 
-			const { content: parsedUserContent, mode: slashCommandMode } = await processUserContentMentions({
+			const {
+				content: parsedUserContent,
+				mode: slashCommandMode,
+				loadedSkills: mentionLoadedSkills,
+			} = await processUserContentMentions({
 				userContent: currentUserContent,
 				cwd: this.cwd,
 				fileContextTracker: this.fileContextTracker,
-				rooIgnoreController: this.rooIgnoreController,
-				showRooIgnoredFiles,
+				shoferIgnoreController: this.shoferIgnoreController,
+				showShoferIgnoredFiles,
 				includeDiagnosticMessages,
 				maxDiagnosticMessages,
 				skillsManager: provider?.getSkillsManager(),
 				currentMode,
 			})
+
+			// Track skills resolved via slash-style mentions (e.g. `/skill-name`)
+			// so the SkillsButton popover reflects them as loaded — mirroring the
+			// behavior of the `skill_load` tool.
+			if (mentionLoadedSkills) {
+				for (const [name, path] of Object.entries(mentionLoadedSkills)) {
+					this.loadedSkills.set(name, path)
+				}
+				console.log(
+					`[Task] mention-loaded skills set on task. loadedSkills now:`,
+					Array.from(this.loadedSkills.entries()),
+				)
+			} else {
+				console.log(`[Task] mentionLoadedSkills was undefined/empty — no skills from mention flow`)
+			}
 
 			// Switch mode if specified in a slash command's frontmatter
 			if (slashCommandMode) {
@@ -3259,11 +3278,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const shouldAddUserMessage =
 				((currentItem.retryAttempt ?? 0) === 0 && !isEmptyUserContent) || currentItem.userMessageWasRemoved
 			this.diagLog(
-				`[DIAG recursivelyMakeClineRequests] shouldAddUserMessage=${shouldAddUserMessage}, retryAttempt=${currentItem.retryAttempt}, isEmptyUserContent=${isEmptyUserContent}, userMessageWasRemoved=${currentItem.userMessageWasRemoved}, totalApiHistory=${this.apiConversationHistory.length}, finalUserContentBlocks=${finalUserContent.length}`,
+				`[DIAG recursivelyMakeShoferRequests] shouldAddUserMessage=${shouldAddUserMessage}, retryAttempt=${currentItem.retryAttempt}, isEmptyUserContent=${isEmptyUserContent}, userMessageWasRemoved=${currentItem.userMessageWasRemoved}, totalApiHistory=${this.apiConversationHistory.length}, finalUserContentBlocks=${finalUserContent.length}`,
 			)
 			if (shouldAddUserMessage) {
 				this.diagLog(
-					`[DIAG recursivelyMakeClineRequests] ADDING user message to API history, texts=${finalUserContent
+					`[DIAG recursivelyMakeShoferRequests] ADDING user message to API history, texts=${finalUserContent
 						.filter((b: any) => b.type === "text")
 						.map((b: any) => b.text?.substring(0, 80))
 						.join(" | ")}`,
@@ -3276,13 +3295,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// webview while waiting to actually start the API request (to load
 			// potential details for example), we need to update the text of that
 			// message.
-			const lastApiReqIndex = findLastIndex(this.clineMessages, (m) => m.say === "api_req_started")
+			const lastApiReqIndex = findLastIndex(this.shoferMessages, (m) => m.say === "api_req_started")
 
-			this.clineMessages[lastApiReqIndex].text = JSON.stringify({
+			this.shoferMessages[lastApiReqIndex].text = JSON.stringify({
 				apiProtocol,
-			} satisfies ClineApiReqInfo)
+			} satisfies ShoferApiReqInfo)
 
-			await this.saveClineMessages()
+			await this.saveShoferMessages()
 			await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 
 			try {
@@ -3299,12 +3318,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// anyways, so it remains solely for legacy purposes to keep track
 				// of prices in tasks from history (it's worth removing a few months
 				// from now).
-				const updateApiReqMsg = (cancelReason?: ClineApiReqCancelReason, streamingFailedMessage?: string) => {
-					if (lastApiReqIndex < 0 || !this.clineMessages[lastApiReqIndex]) {
+				const updateApiReqMsg = (cancelReason?: ShoferApiReqCancelReason, streamingFailedMessage?: string) => {
+					if (lastApiReqIndex < 0 || !this.shoferMessages[lastApiReqIndex]) {
 						return
 					}
 
-					const existingData = JSON.parse(this.clineMessages[lastApiReqIndex].text || "{}")
+					const existingData = JSON.parse(this.shoferMessages[lastApiReqIndex].text || "{}")
 
 					// Calculate total tokens and cost using provider-aware function
 					const modelId = getModelId(this.apiConfiguration)
@@ -3331,7 +3350,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									cacheReadTokens,
 								)
 
-					this.clineMessages[lastApiReqIndex].text = JSON.stringify({
+					this.shoferMessages[lastApiReqIndex].text = JSON.stringify({
 						...existingData,
 						tokensIn: costResult.totalInputTokens,
 						tokensOut: costResult.totalOutputTokens,
@@ -3340,16 +3359,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						cost: totalCost ?? costResult.totalCost,
 						cancelReason,
 						streamingFailedMessage,
-					} satisfies ClineApiReqInfo)
+					} satisfies ShoferApiReqInfo)
 				}
 
-				const abortStream = async (cancelReason: ClineApiReqCancelReason, streamingFailedMessage?: string) => {
+				const abortStream = async (cancelReason: ShoferApiReqCancelReason, streamingFailedMessage?: string) => {
 					if (this.diffViewProvider.isEditing) {
 						await this.diffViewProvider.revertChanges() // closes diff view
 					}
 
 					// if last message is a partial we need to update and save it
-					const lastMessage = this.clineMessages.at(-1)
+					const lastMessage = this.shoferMessages.at(-1)
 
 					if (lastMessage && lastMessage.partial) {
 						// lastMessage.ts = Date.now() DO NOT update ts since it is used as a key for virtuoso list
@@ -3360,7 +3379,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Update `api_req_started` to have cancelled and cost, so that
 					// we can display the cost of the partial stream and the cancellation reason
 					updateApiReqMsg(cancelReason, streamingFailedMessage)
-					await this.saveClineMessages()
+					await this.saveShoferMessages()
 
 					// Signals to provider that it can retrieve the saved messages
 					// from disk, as abortTask can not be awaited on in nature.
@@ -3715,7 +3734,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								// Only need to gracefully abort if this instance
 								// isn't abandoned (sometimes OpenRouter stream
 								// hangs, in which case this would affect future
-								// instances of Cline).
+								// instances of Shofer).
 								await abortStream("user_cancelled")
 							}
 
@@ -3787,12 +3806,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 								// Update the API request message with the latest usage data
 								updateApiReqMsg()
-								await this.saveClineMessages()
+								await this.saveShoferMessages()
 
 								// Update the specific message in the webview
-								const apiReqMessage = this.clineMessages[messageIndex]
+								const apiReqMessage = this.shoferMessages[messageIndex]
 								if (apiReqMessage) {
-									await this.updateClineMessage(apiReqMessage)
+									await this.updateShoferMessage(apiReqMessage)
 								}
 
 								// Capture telemetry with provider-aware cost calculation
@@ -3921,11 +3940,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					})
 				} catch (error) {
 					// Abandoned happens when extension is no longer waiting for the
-					// Cline instance to finish aborting (error is thrown here when
+					// Shofer instance to finish aborting (error is thrown here when
 					// any function in the for loop throws due to this.abort).
 					if (!this.abandoned) {
 						// Determine cancellation reason
-						const cancelReason: ClineApiReqCancelReason = this.abort ? "user_cancelled" : "streaming_failed"
+						const cancelReason: ShoferApiReqCancelReason = this.abort
+							? "user_cancelled"
+							: "streaming_failed"
 
 						const rawErrorMessage =
 							error instanceof Error ? error.message : JSON.stringify(serializeError(error), null, 2)
@@ -3994,7 +4015,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// Need to call here in case the stream was aborted.
 				if (this.abort || this.abandoned) {
 					throw new Error(
-						`[RooCode#recursivelyMakeRooRequests] task ${this.taskId}.${this.instanceId} aborted`,
+						`[Shofer#recursivelyMakeRooRequests] task ${this.taskId}.${this.instanceId} aborted`,
 					)
 				}
 
@@ -4082,17 +4103,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// (other messages like text blocks or tool uses may have been added after it during streaming)
 				if (reasoningMessage) {
 					const lastReasoningIndex = findLastIndex(
-						this.clineMessages,
+						this.shoferMessages,
 						(m) => m.type === "say" && m.say === "reasoning",
 					)
 
-					if (lastReasoningIndex !== -1 && this.clineMessages[lastReasoningIndex].partial) {
-						this.clineMessages[lastReasoningIndex].partial = false
-						await this.updateClineMessage(this.clineMessages[lastReasoningIndex])
+					if (lastReasoningIndex !== -1 && this.shoferMessages[lastReasoningIndex].partial) {
+						this.shoferMessages[lastReasoningIndex].partial = false
+						await this.updateShoferMessage(this.shoferMessages[lastReasoningIndex])
 					}
 				}
 
-				await this.saveClineMessages()
+				await this.saveShoferMessages()
 				await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 
 				// No legacy text-stream tool parser state to reset.
@@ -4284,7 +4305,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					await pWaitFor(() => this.userMessageContentReady)
 
 					this.diagLog(
-						`[DIAG recursivelyMakeClineRequests] After tools executed: taskId=${this.taskId}.${this.instanceId}, abort=${this.abort}, userMessageContent length=${this.userMessageContent.length}`,
+						`[DIAG recursivelyMakeShoferRequests] After tools executed: taskId=${this.taskId}.${this.instanceId}, abort=${this.abort}, userMessageContent length=${this.userMessageContent.length}`,
 					)
 
 					// If the model did not tool use, then we need to tell it to
@@ -4294,7 +4315,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					)
 
 					this.diagLog(
-						`[DIAG recursivelyMakeClineRequests] Tool usage check: didToolUse=${didToolUse}, consecutiveNoToolUseCount=${this.consecutiveNoToolUseCount}`,
+						`[DIAG recursivelyMakeShoferRequests] Tool usage check: didToolUse=${didToolUse}, consecutiveNoToolUseCount=${this.consecutiveNoToolUseCount}`,
 					)
 
 					if (!didToolUse) {
@@ -4322,7 +4343,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// When paused, we push an empty item so the loop continues to the pause check.
 					if (this.userMessageContent.length > 0 || this.isPaused) {
 						this.diagLog(
-							`[DIAG recursivelyMakeClineRequests] Pushing to stack and continuing loop: userMessageContent length=${this.userMessageContent.length}, isPaused=${this.isPaused}`,
+							`[DIAG recursivelyMakeShoferRequests] Pushing to stack and continuing loop: userMessageContent length=${this.userMessageContent.length}, isPaused=${this.isPaused}`,
 						)
 						stack.push({
 							userContent: [...this.userMessageContent], // Create a copy to avoid mutation issues
@@ -4334,7 +4355,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					}
 
 					this.diagLog(
-						`[DIAG recursivelyMakeClineRequests] Continuing stack loop: stack length=${stack.length}`,
+						`[DIAG recursivelyMakeShoferRequests] Continuing stack loop: stack length=${stack.length}`,
 					)
 					continue
 				} else {
@@ -4474,7 +4495,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 		}
 
-		const rooIgnoreInstructions = this.rooIgnoreController?.getInstructions()
+		const shoferIgnoreInstructions = this.shoferIgnoreController?.getInstructions()
 
 		const state = await this.providerRef.deref()?.getState()
 
@@ -4515,7 +4536,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				customInstructions,
 				experiments,
 				language,
-				rooIgnoreInstructions,
+				shoferIgnoreInstructions,
 				{
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 					useAgentRules:
@@ -4728,7 +4749,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Update last request time right before making the request so that subsequent
 		// requests — even from new subtasks — will honour the provider's rate-limit.
 		//
-		// NOTE: When recursivelyMakeClineRequests handles rate limiting, it sets the
+		// NOTE: When recursivelyMakeShoferRequests handles rate limiting, it sets the
 		// timestamp earlier to include the environment details build. We still set it
 		// here for direct callers (tests) and for the case where we didn't rate-limit
 		// in the caller.
@@ -4827,7 +4848,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				? await getEnvironmentDetails(this, true)
 				: undefined
 
-			// Get files read by Roo for code folding - only when context management will run
+			// Get files read by Shofer for code folding - only when context management will run
 			const contextMgmtFilesReadByRoo =
 				contextManagementWillRun && autoCondenseContext
 					? await this.getFilesReadByRooSafely("attemptApiRequest")
@@ -4851,7 +4872,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					environmentDetails: contextMgmtEnvironmentDetails,
 					filesReadByRoo: contextMgmtFilesReadByRoo,
 					cwd: this.cwd,
-					rooIgnoreController: this.rooIgnoreController,
+					shoferIgnoreController: this.shoferIgnoreController,
 				})
 				if (truncateResult.messages !== this.apiConversationHistory) {
 					await this.overwriteApiConversationHistory(truncateResult.messages)
@@ -4927,7 +4948,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Check auto-approval limits
 		const approvalResult = await this.autoApprovalHandler.checkAutoApprovalLimits(
 			state,
-			this.combineMessages(this.clineMessages.slice(1)),
+			this.combineMessages(this.shoferMessages.slice(1)),
 			async (type, data) => this.ask(type, data),
 		)
 
@@ -5350,12 +5371,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// Metrics
 
-	public combineMessages(messages: ClineMessage[]) {
+	public combineMessages(messages: ShoferMessage[]) {
 		return combineApiRequests(combineCommandSequences(messages))
 	}
 
 	public getTokenUsage(): TokenUsage {
-		return getApiMetrics(this.combineMessages(this.clineMessages.slice(1)))
+		return getApiMetrics(this.combineMessages(this.shoferMessages.slice(1)))
 	}
 
 	public recordToolUsage(toolName: ToolName) {
@@ -5374,7 +5395,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.toolUsage[toolName].failures++
 
 		if (error) {
-			this.emit(RooCodeEventName.TaskToolFailed, this.taskId, toolName, error)
+			this.emit(ShoferEventName.TaskToolFailed, this.taskId, toolName, error)
 		}
 	}
 
@@ -5396,7 +5417,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return TaskStatus.Running
 	}
 
-	public get taskAsk(): ClineMessage | undefined {
+	public get taskAsk(): ShoferMessage | undefined {
 		return this.idleAsk || this.resumableAsk || this.interactiveAsk
 	}
 
@@ -5410,14 +5431,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		this.tokenUsageSnapshot = this.getTokenUsage()
-		this.tokenUsageSnapshotAt = this.clineMessages.at(-1)?.ts
+		this.tokenUsageSnapshotAt = this.shoferMessages.at(-1)?.ts
 
 		return this.tokenUsageSnapshot
 	}
 
 	/**
 	 * Working directory for this task. When this task is scoped to an
-	 * embedded worktree (e.g. `.roo/worktrees/repo-hl911/`), `_cwd` is the
+	 * embedded worktree (e.g. `.shofer/worktrees/repo-hl911/`), `_cwd` is the
 	 * worktree subdirectory. Otherwise it defaults to `workspacePath`.
 	 *
 	 * Tools resolve paths relative to this directory, git operations use it
@@ -5512,7 +5533,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		// Mark soft-cancel so the streaming catch block in
-		// recursivelyMakeClineRequests does NOT call abortTask() (which would
+		// recursivelyMakeShoferRequests does NOT call abortTask() (which would
 		// dispose this task and prevent us from restarting the loop).
 		this._softCancelForQueuedMessage = true
 
@@ -5559,7 +5580,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.idleAsk = undefined
 		this.resumableAsk = undefined
 		this.interactiveAsk = undefined
-		this.emit(RooCodeEventName.TaskActive, this.taskId)
+		this.emit(ShoferEventName.TaskActive, this.taskId)
 
 		// Step 6: Restart the task loop with the captured queued message.
 		// We dequeued at the top of this method (before triggering abort) to

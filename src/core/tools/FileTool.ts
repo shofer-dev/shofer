@@ -1,6 +1,6 @@
 /**
  * FileTool — performs filesystem mutations (`rm`, `mv`) on workspace files
- * and integrates them with Roo's change-tracking pipeline.
+ * and integrates them with Shofer's change-tracking pipeline.
  *
  * Background: when the model uses `execute_command` to invoke `rm` or `mv`,
  * the resulting file mutations bypass {@link DiffViewProvider} and
@@ -20,7 +20,7 @@
 import * as path from "path"
 import * as fs from "fs/promises"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -92,7 +92,7 @@ export class FileTool extends BaseTool<"file"> {
 				}
 			}
 
-			const sayTool: ClineSayTool = {
+			const sayTool: ShoferSayTool = {
 				tool: "fileOp",
 				fileOp: subcommand,
 				path: getReadablePath(task.cwd, relPath),
@@ -198,14 +198,14 @@ export class FileTool extends BaseTool<"file"> {
 		if (!this.hasPathStabilized(relPath)) {
 			return
 		}
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "fileOp",
 			fileOp: (subcommand as "rm" | "mv") ?? undefined,
 			path: getReadablePath(task.cwd, relPath ?? ""),
 			destination: block.params.destination ? getReadablePath(task.cwd, block.params.destination) : undefined,
 			content: "",
 		}
-		const partialMessage = JSON.stringify(sharedMessageProps satisfies ClineSayTool)
+		const partialMessage = JSON.stringify(sharedMessageProps satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

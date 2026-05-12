@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { Plus, Pause, Play, Square, Trash2, Pencil, Check, X } from "lucide-react"
 
-import type { HistoryItem } from "@roo-code/types"
+import type { HistoryItem } from "@shofer/types"
 
 import { cn } from "@src/lib/utils"
 import { StandardTooltip } from "@src/components/ui"
@@ -411,7 +411,7 @@ function renderTaskRow({
 /**
  * TaskSelector renders a right-side sidebar drawer for switching between all
  * tasks in history. The drawer is opened by the VS Code view-title-bar
- * `roo-cline.tasksButtonClicked` command, which the extension forwards to the
+ * `shofer.tasksButtonClicked` command, which the extension forwards to the
  * webview as an action message; the webview re-emits a DOM event
  * (`TASK_SIDEBAR_TOGGLE_EVENT`) that this component listens for.
  *
@@ -428,7 +428,7 @@ function renderTaskRow({
  * and a footer link to the full history view. Slides in from the right with
  * a transparent backdrop for click-outside dismissal; Escape also closes it.
  */
-export const TASK_SIDEBAR_TOGGLE_EVENT = "roo-cline.taskSidebarToggle"
+export const TASK_SIDEBAR_TOGGLE_EVENT = "shofer.taskSidebarToggle"
 
 export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }: TaskSelectorProps) => {
 	const { t } = useTranslation()

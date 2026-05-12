@@ -4,7 +4,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 import cloneDeep from "clone-deep"
 import crypto from "crypto"
-import { TodoItem, TodoStatus, todoStatusSchema } from "@roo-code/types"
+import { TodoItem, TodoStatus, todoStatusSchema } from "@shofer/types"
 import { getLatestTodo } from "../../shared/todo"
 
 interface UpdateTodoListParams {
@@ -106,56 +106,56 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 	}
 }
 
-export function addTodoToTask(cline: Task, content: string, status: TodoStatus = "pending", id?: string): TodoItem {
+export function addTodoToTask(shofer: Task, content: string, status: TodoStatus = "pending", id?: string): TodoItem {
 	const todo: TodoItem = {
 		id: id ?? crypto.randomUUID(),
 		content,
 		status,
 	}
-	if (!cline.todoList) cline.todoList = []
-	cline.todoList.push(todo)
+	if (!shofer.todoList) shofer.todoList = []
+	shofer.todoList.push(todo)
 	return todo
 }
 
-export function updateTodoStatusForTask(cline: Task, id: string, nextStatus: TodoStatus): boolean {
-	if (!cline.todoList) return false
-	const idx = cline.todoList.findIndex((t) => t.id === id)
+export function updateTodoStatusForTask(shofer: Task, id: string, nextStatus: TodoStatus): boolean {
+	if (!shofer.todoList) return false
+	const idx = shofer.todoList.findIndex((t) => t.id === id)
 	if (idx === -1) return false
-	const current = cline.todoList[idx]
+	const current = shofer.todoList[idx]
 	if (
 		(current.status === "pending" && nextStatus === "in_progress") ||
 		(current.status === "in_progress" && nextStatus === "completed") ||
 		current.status === nextStatus
 	) {
-		cline.todoList[idx] = { ...current, status: nextStatus }
+		shofer.todoList[idx] = { ...current, status: nextStatus }
 		return true
 	}
 	return false
 }
 
-export function removeTodoFromTask(cline: Task, id: string): boolean {
-	if (!cline.todoList) return false
-	const idx = cline.todoList.findIndex((t) => t.id === id)
+export function removeTodoFromTask(shofer: Task, id: string): boolean {
+	if (!shofer.todoList) return false
+	const idx = shofer.todoList.findIndex((t) => t.id === id)
 	if (idx === -1) return false
-	cline.todoList.splice(idx, 1)
+	shofer.todoList.splice(idx, 1)
 	return true
 }
 
-export function getTodoListForTask(cline: Task): TodoItem[] | undefined {
-	return cline.todoList?.slice()
+export function getTodoListForTask(shofer: Task): TodoItem[] | undefined {
+	return shofer.todoList?.slice()
 }
 
-export async function setTodoListForTask(cline?: Task, todos?: TodoItem[]) {
-	if (cline === undefined) return
-	cline.todoList = Array.isArray(todos) ? todos : []
+export async function setTodoListForTask(shofer?: Task, todos?: TodoItem[]) {
+	if (shofer === undefined) return
+	shofer.todoList = Array.isArray(todos) ? todos : []
 }
 
-export function restoreTodoListForTask(cline: Task, todoList?: TodoItem[]) {
+export function restoreTodoListForTask(shofer: Task, todoList?: TodoItem[]) {
 	if (todoList) {
-		cline.todoList = Array.isArray(todoList) ? todoList : []
+		shofer.todoList = Array.isArray(todoList) ? todoList : []
 		return
 	}
-	cline.todoList = getLatestTodo(cline.clineMessages)
+	shofer.todoList = getLatestTodo(shofer.shoferMessages)
 }
 
 function todoListToMarkdown(todos: TodoItem[]): string {

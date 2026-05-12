@@ -1,6 +1,6 @@
 // npx vitest run src/core/tools/__tests__/executeCommandTool.spec.ts
 
-import type { ToolUsage } from "@roo-code/types"
+import type { ToolUsage } from "@shofer/types"
 import * as vscode from "vscode"
 
 import { Task } from "../../task/Task"
@@ -43,7 +43,7 @@ const { executeCommandTool } = executeCommandModule
 
 describe("executeCommandTool", () => {
 	// Setup common test variables
-	let mockCline: any & { consecutiveMistakeCount: number; didRejectTool: boolean }
+	let mockShofer: any & { consecutiveMistakeCount: number; didRejectTool: boolean }
 	let mockAskApproval: any
 	let mockHandleError: any
 	let mockPushToolResult: any
@@ -58,13 +58,13 @@ describe("executeCommandTool", () => {
 		vitest.spyOn(executeCommandModule, "executeCommandInTerminal").mockResolvedValue([false, "Command executed"])
 
 		// Create mock implementations with eslint directives to handle the type issues
-		mockCline = {
+		mockShofer = {
 			ask: vitest.fn().mockResolvedValue(undefined),
 			say: vitest.fn().mockResolvedValue(undefined),
 			sayAndCreateMissingParamError: vitest.fn().mockResolvedValue("Missing parameter error"),
 			consecutiveMistakeCount: 0,
 			didRejectTool: false,
-			rooIgnoreController: {
+			shoferIgnoreController: {
 				validateCommand: vitest.fn().mockReturnValue(null),
 			},
 			recordToolUsage: vitest.fn().mockReturnValue({} as ToolUsage),
@@ -149,7 +149,7 @@ describe("executeCommandTool", () => {
 			mockToolUse.nativeArgs = { command: "echo test" }
 
 			// Execute using the class-based handle method
-			await executeCommandTool.handle(mockCline as unknown as Task, mockToolUse, {
+			await executeCommandTool.handle(mockShofer as unknown as Task, mockToolUse, {
 				askApproval: mockAskApproval as unknown as AskApproval,
 				handleError: mockHandleError as unknown as HandleError,
 				pushToolResult: mockPushToolResult as unknown as PushToolResult,
@@ -170,7 +170,7 @@ describe("executeCommandTool", () => {
 			mockToolUse.nativeArgs = { command: "echo test", cwd: "/custom/path" }
 
 			// Execute
-			await executeCommandTool.handle(mockCline as unknown as Task, mockToolUse, {
+			await executeCommandTool.handle(mockShofer as unknown as Task, mockToolUse, {
 				askApproval: mockAskApproval as unknown as AskApproval,
 				handleError: mockHandleError as unknown as HandleError,
 				pushToolResult: mockPushToolResult as unknown as PushToolResult,
@@ -193,15 +193,15 @@ describe("executeCommandTool", () => {
 			mockToolUse.nativeArgs = { command: "" }
 
 			// Execute
-			await executeCommandTool.handle(mockCline as unknown as Task, mockToolUse, {
+			await executeCommandTool.handle(mockShofer as unknown as Task, mockToolUse, {
 				askApproval: mockAskApproval as unknown as AskApproval,
 				handleError: mockHandleError as unknown as HandleError,
 				pushToolResult: mockPushToolResult as unknown as PushToolResult,
 			})
 
 			// Verify
-			expect(mockCline.consecutiveMistakeCount).toBe(1)
-			expect(mockCline.sayAndCreateMissingParamError).toHaveBeenCalledWith("execute_command", "command")
+			expect(mockShofer.consecutiveMistakeCount).toBe(1)
+			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("execute_command", "command")
 			expect(mockPushToolResult).toHaveBeenCalledWith("Missing parameter error")
 			expect(mockAskApproval).not.toHaveBeenCalled()
 			expect(executeCommandModule.executeCommandInTerminal).not.toHaveBeenCalled()
@@ -214,7 +214,7 @@ describe("executeCommandTool", () => {
 			mockToolUse.nativeArgs = { command: "echo test" }
 
 			// Execute
-			await executeCommandTool.handle(mockCline as unknown as Task, mockToolUse, {
+			await executeCommandTool.handle(mockShofer as unknown as Task, mockToolUse, {
 				askApproval: mockAskApproval as unknown as AskApproval,
 				handleError: mockHandleError as unknown as HandleError,
 				pushToolResult: mockPushToolResult as unknown as PushToolResult,
@@ -232,15 +232,15 @@ describe("executeCommandTool", () => {
 			mockToolUse.nativeArgs = { command: "cat .env" }
 			// Override the validateCommand mock to return a filename
 			const validateCommandMock = vitest.fn().mockReturnValue(".env")
-			mockCline.rooIgnoreController = {
+			mockShofer.shoferIgnoreController = {
 				validateCommand: validateCommandMock,
 			}
 
-			const mockRooIgnoreError = "RooIgnore error"
-			;(formatResponse.rooIgnoreError as any).mockReturnValue(mockRooIgnoreError)
+			const mockShoferIgnoreError = "ShoferIgnore error"
+			;(formatResponse.shoferIgnoreError as any).mockReturnValue(mockShoferIgnoreError)
 
 			// Execute
-			await executeCommandTool.handle(mockCline as unknown as Task, mockToolUse, {
+			await executeCommandTool.handle(mockShofer as unknown as Task, mockToolUse, {
 				askApproval: mockAskApproval as unknown as AskApproval,
 				handleError: mockHandleError as unknown as HandleError,
 				pushToolResult: mockPushToolResult as unknown as PushToolResult,
@@ -248,9 +248,9 @@ describe("executeCommandTool", () => {
 
 			// Verify
 			expect(validateCommandMock).toHaveBeenCalledWith("cat .env")
-			expect(mockCline.say).toHaveBeenCalledWith("rooignore_error", ".env")
-			expect(formatResponse.rooIgnoreError).toHaveBeenCalledWith(".env")
-			expect(mockPushToolResult).toHaveBeenCalledWith(mockRooIgnoreError)
+			expect(mockShofer.say).toHaveBeenCalledWith("rooignore_error", ".env")
+			expect(formatResponse.shoferIgnoreError).toHaveBeenCalledWith(".env")
+			expect(mockPushToolResult).toHaveBeenCalledWith(mockShoferIgnoreError)
 			expect(mockAskApproval).not.toHaveBeenCalled()
 			// executeCommandInTerminal should not be called since rooignore blocked it
 		})

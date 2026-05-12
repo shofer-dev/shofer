@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import { McpHub } from "./McpHub"
-import { ClineProvider } from "../../core/webview/ClineProvider"
+import { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { mcpLog } from "./mcpLogger"
 
 /**
@@ -10,7 +10,7 @@ import { mcpLog } from "./mcpLogger"
 export class McpServerManager {
 	private static instance: McpHub | null = null
 	private static readonly GLOBAL_STATE_KEY = "mcpHubInstanceId"
-	private static providers: Set<ClineProvider> = new Set()
+	private static providers: Set<ShoferProvider> = new Set()
 	private static initializationPromise: Promise<McpHub> | null = null
 
 	/**
@@ -18,7 +18,7 @@ export class McpServerManager {
 	 * Creates a new instance if one doesn't exist.
 	 * Thread-safe implementation using a promise-based lock.
 	 */
-	static async getInstance(context: vscode.ExtensionContext, provider: ClineProvider): Promise<McpHub> {
+	static async getInstance(context: vscode.ExtensionContext, provider: ShoferProvider): Promise<McpHub> {
 		// Register the provider
 		this.providers.add(provider)
 		mcpLog(
@@ -67,7 +67,7 @@ export class McpServerManager {
 	 * Remove a provider from the tracked set.
 	 * This is called when a webview is disposed.
 	 */
-	static unregisterProvider(provider: ClineProvider): void {
+	static unregisterProvider(provider: ShoferProvider): void {
 		this.providers.delete(provider)
 	}
 

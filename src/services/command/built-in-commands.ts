@@ -42,10 +42,10 @@ Please analyze this codebase and create an AGENTS.md file containing:
     1. Check for existing AGENTS.md files
        CRITICAL - Check these EXACT paths IN THE PROJECT ROOT:
        - AGENTS.md (in project root directory)
-       - .roo/rules-code/AGENTS.md (relative to project root)
-       - .roo/rules-debug/AGENTS.md (relative to project root)
-       - .roo/rules-ask/AGENTS.md (relative to project root)
-       - .roo/rules-architect/AGENTS.md (relative to project root)
+       - .shofer/rules-code/AGENTS.md (relative to project root)
+       - .shofer/rules-debug/AGENTS.md (relative to project root)
+       - .shofer/rules-ask/AGENTS.md (relative to project root)
+       - .shofer/rules-architect/AGENTS.md (relative to project root)
        
        IMPORTANT: All paths are relative to the project/workspace root, NOT system root!
        
@@ -95,7 +95,7 @@ Please analyze this codebase and create an AGENTS.md file containing:
          * Then add newly discovered non-obvious patterns
          * Result should be SHORTER and MORE FOCUSED than before
        - If creating new: Follow the non-obvious-only principle
-       - Create mode-specific files in .roo/rules-*/ directories (IN PROJECT ROOT)
+       - Create mode-specific files in .shofer/rules-*/ directories (IN PROJECT ROOT)
        
     Note: If update_todo_list is not available, proceed with the analysis workflow directly without creating a todo list.
   </todo_list_creation>
@@ -107,12 +107,12 @@ Please analyze this codebase and create an AGENTS.md file containing:
   1. **Discovery Phase**:
      CRITICAL - First check for existing AGENTS.md files at these EXACT locations IN PROJECT ROOT:
      - AGENTS.md (in project/workspace root)
-     - .roo/rules-code/AGENTS.md (relative to project root)
-     - .roo/rules-debug/AGENTS.md (relative to project root)
-     - .roo/rules-ask/AGENTS.md (relative to project root)
-     - .roo/rules-architect/AGENTS.md (relative to project root)
+     - .shofer/rules-code/AGENTS.md (relative to project root)
+     - .shofer/rules-debug/AGENTS.md (relative to project root)
+     - .shofer/rules-ask/AGENTS.md (relative to project root)
+     - .shofer/rules-architect/AGENTS.md (relative to project root)
      
-     IMPORTANT: The .roo folder should be created in the PROJECT ROOT, not system root!
+     IMPORTANT: The .shofer folder should be created in the PROJECT ROOT, not system root!
      
      If found, perform CRITICAL analysis:
      - What information is OBVIOUS and must be DELETED?
@@ -170,12 +170,12 @@ Please analyze this codebase and create an AGENTS.md file containing:
     Create or deeply improve mode-specific AGENTS.md files IN THE PROJECT ROOT.
     
     CRITICAL: For each of these paths (RELATIVE TO PROJECT ROOT), check if the file exists FIRST:
-    - .roo/rules-code/AGENTS.md (create .roo in project root, not system root!)
-    - .roo/rules-debug/AGENTS.md (relative to project root)
-    - .roo/rules-ask/AGENTS.md (relative to project root)
-    - .roo/rules-architect/AGENTS.md (relative to project root)
+    - .shofer/rules-code/AGENTS.md (create .shofer in project root, not system root!)
+    - .shofer/rules-debug/AGENTS.md (relative to project root)
+    - .shofer/rules-ask/AGENTS.md (relative to project root)
+    - .shofer/rules-architect/AGENTS.md (relative to project root)
     
-    IMPORTANT: The .roo directory must be created in the current project/workspace root directory,
+    IMPORTANT: The .shofer directory must be created in the current project/workspace root directory,
     NOT at the system root (/) or home directory. All paths are relative to where the project is located.
     
     If files exist:
@@ -190,7 +190,7 @@ Please analyze this codebase and create an AGENTS.md file containing:
     \`\`\`
     project-root/
     ├── AGENTS.md                    # General project guidance
-    ├── .roo/                        # IN PROJECT ROOT, NOT SYSTEM ROOT!
+    ├── .shofer/                        # IN PROJECT ROOT, NOT SYSTEM ROOT!
     │   ├── rules-code/
     │   │   └── AGENTS.md           # Code mode specific instructions
     │   ├── rules-debug/
@@ -204,7 +204,7 @@ Please analyze this codebase and create an AGENTS.md file containing:
     └── ... other project files
     \`\`\`
     
-    .roo/rules-code/AGENTS.md - ONLY non-obvious coding rules discovered by reading files:
+    .shofer/rules-code/AGENTS.md - ONLY non-obvious coding rules discovered by reading files:
     - Custom utilities that replace standard approaches
     - Non-standard patterns unique to this project
     - Hidden dependencies or coupling between components
@@ -220,7 +220,7 @@ Please analyze this codebase and create an AGENTS.md file containing:
     - Test files must be in same directory as source for vitest to work (not in separate test folder)
     \`\`\`
     
-    .roo/rules-debug/AGENTS.md - ONLY non-obvious debugging discoveries:
+    .shofer/rules-debug/AGENTS.md - ONLY non-obvious debugging discoveries:
     - Hidden log locations not mentioned in docs
     - Non-standard debugging tools or flags
     - Gotchas that cause silent failures
@@ -236,7 +236,7 @@ Please analyze this codebase and create an AGENTS.md file containing:
     - Extension logs only visible in "Extension Host" output channel, not Debug Console
     \`\`\`
     
-    .roo/rules-ask/AGENTS.md - ONLY non-obvious documentation context:
+    .shofer/rules-ask/AGENTS.md - ONLY non-obvious documentation context:
     - Hidden or misnamed documentation
     - Counterintuitive code organization
     - Misleading folder names or structures
@@ -252,7 +252,7 @@ Please analyze this codebase and create an AGENTS.md file containing:
     - Locales in root are for extension, webview-ui/src/i18n for UI (two separate systems)
     \`\`\`
     
-    .roo/rules-architect/AGENTS.md - ONLY non-obvious architectural constraints:
+    .shofer/rules-architect/AGENTS.md - ONLY non-obvious architectural constraints:
     - Hidden coupling between components
     - Undocumented architectural decisions
     - Non-standard patterns that must be followed
@@ -273,18 +273,18 @@ Please analyze this codebase and create an AGENTS.md file containing:
 <worktree_conventions>
   Ensure the project follows the embedded worktree convention:
   
-  1. **Check .gitignore**: Verify that .roo/worktrees/ is listed in .gitignore.
-     If not, append .roo/worktrees/ to .gitignore. This prevents worktree
+  1. **Check .gitignore**: Verify that .shofer/worktrees/ is listed in .gitignore.
+     If not, append .shofer/worktrees/ to .gitignore. This prevents worktree
      directories from being accidentally committed to the main repository.
-     (Note: do NOT add .roo/ itself to .gitignore — only .roo/worktrees/.)
+     (Note: do NOT add .shofer/ itself to .gitignore — only .shofer/worktrees/.)
   
-  2. **Worktree location convention**: All worktrees created via Roo Code's
+  2. **Worktree location convention**: All worktrees created via Shofer's
      worktree UI or the \`worktree\` tool (available in Orchestrator mode) are
-     placed under workspaceroot/.roo/worktrees/projectname-randomid/. This is
+     placed under workspaceroot/.shofer/worktrees/projectname-randomid/. This is
      auto-generated and not user-configurable.
   
   3. **Available slash commands**: The project has worktree management slash
-     commands in .roo/commands/ that assist with merging and cleanup:
+     commands in .shofer/commands/ that assist with merging and cleanup:
      - merge-worktree-cleanup — merge a worktree branch + delete branch + remove worktree
      - rebase-worktree — rebase a worktree branch onto base
      - rebase-worktree-cleanup — rebase + fast-forward + delete branch + remove worktree

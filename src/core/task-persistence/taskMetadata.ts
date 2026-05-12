@@ -1,7 +1,7 @@
 import NodeCache from "node-cache"
 import getFolderSize from "get-folder-size"
 
-import type { ClineMessage, HistoryItem } from "@roo-code/types"
+import type { ShoferMessage, HistoryItem } from "@shofer/types"
 
 import { combineApiRequests } from "../../shared/combineApiRequests"
 import { combineCommandSequences } from "../../shared/combineCommandSequences"
@@ -17,7 +17,7 @@ export type TaskMetadataOptions = {
 	rootTaskId?: string
 	parentTaskId?: string
 	taskNumber: number
-	messages: ClineMessage[]
+	messages: ShoferMessage[]
 	globalStoragePath: string
 	workspace: string
 	/** Per-task working directory (e.g., embedded worktree subdirectory).
@@ -31,7 +31,7 @@ export type TaskMetadataOptions = {
 	/** When true, persist `isBackground: true` on the history item. */
 	isBackground?: boolean
 	/** Per-root-task cost limit (only set on root tasks). */
-	costLimit?: import("@roo-code/types").CostLimit
+	costLimit?: import("@shofer/types").CostLimit
 	/** Names of skills loaded via skill_load for this task. */
 	loadedSkills?: string[]
 }
@@ -62,7 +62,7 @@ export async function taskMetadata({
 	let createdAt: number
 	let tokenUsage: ReturnType<typeof getApiMetrics>
 	let taskDirSize: number
-	let taskMessage: ClineMessage | undefined
+	let taskMessage: ShoferMessage | undefined
 
 	if (!hasMessages) {
 		// Handle no messages case

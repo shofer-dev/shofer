@@ -41,8 +41,8 @@ vi.mock("fs/promises", () => ({
 	},
 }))
 
-// Mock the roo-config service
-vi.mock("../../../../services/roo-config", () => ({
+// Mock the shofer-config service
+vi.mock("../../../../services/shofer-config", () => ({
 	getRooDirectoriesForCwd: mockGetRooDirectoriesForCwd,
 	getAllRooDirectoriesForCwd: mockGetAllRooDirectoriesForCwd,
 	getAgentsDirectoriesForCwd: mockGetAgentsDirectoriesForCwd,
@@ -51,11 +51,11 @@ vi.mock("../../../../services/roo-config", () => ({
 
 import { loadRuleFiles, addCustomInstructions } from "../custom-instructions"
 
-describe("custom-instructions global .roo support", () => {
+describe("custom-instructions global .shofer support", () => {
 	const mockCwd = "/mock/project"
 	const mockHomeDir = "/mock/home"
-	const globalRooDir = path.join(mockHomeDir, ".roo")
-	const projectRooDir = path.join(mockCwd, ".roo")
+	const globalRooDir = path.join(mockHomeDir, ".shofer")
+	const projectRooDir = path.join(mockCwd, ".shofer")
 
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -63,7 +63,7 @@ describe("custom-instructions global .roo support", () => {
 		mockGetRooDirectoriesForCwd.mockReturnValue([globalRooDir, projectRooDir])
 		// getAllRooDirectoriesForCwd is now async and returns the same directories by default
 		mockGetAllRooDirectoriesForCwd.mockResolvedValue([globalRooDir, projectRooDir])
-		// getAgentsDirectoriesForCwd returns parent directories (without .roo)
+		// getAgentsDirectoriesForCwd returns parent directories (without .shofer)
 		mockGetAgentsDirectoriesForCwd.mockResolvedValue([mockCwd])
 		mockGetGlobalRooDirectory.mockReturnValue(globalRooDir)
 		// Default lstat to reject (file not found)
@@ -173,7 +173,7 @@ describe("custom-instructions global .roo support", () => {
 			expect(globalIndex).toBeLessThan(projectIndex)
 		})
 
-		it("should fall back to legacy .roorules file when no .roo/rules directories exist", async () => {
+		it("should fall back to legacy .roorules file when no .shofer/rules directories exist", async () => {
 			// Mock directory existence - neither exist
 			mockStat
 				.mockRejectedValueOnce(new Error("ENOENT")) // global rules dir doesn't exist

@@ -1,6 +1,6 @@
 import type { Mock } from "vitest"
 import * as vscode from "vscode"
-import { ClineProvider } from "../../core/webview/ClineProvider"
+import { ShoferProvider } from "../../core/webview/ShoferProvider"
 
 import { getVisibleProviderOrLog } from "../registerCommands"
 
@@ -27,7 +27,7 @@ vi.mock("vscode", () => ({
 	},
 }))
 
-vi.mock("../../core/webview/ClineProvider")
+vi.mock("../../core/webview/ShoferProvider")
 
 describe("getVisibleProviderOrLog", () => {
 	let mockOutputChannel: vscode.OutputChannel
@@ -47,8 +47,8 @@ describe("getVisibleProviderOrLog", () => {
 	})
 
 	it("returns the visible provider if found", () => {
-		const mockProvider = {} as ClineProvider
-		;(ClineProvider.getVisibleInstance as Mock).mockReturnValue(mockProvider)
+		const mockProvider = {} as ShoferProvider
+		;(ShoferProvider.getVisibleInstance as Mock).mockReturnValue(mockProvider)
 
 		const result = getVisibleProviderOrLog(mockOutputChannel)
 
@@ -57,11 +57,11 @@ describe("getVisibleProviderOrLog", () => {
 	})
 
 	it("logs and returns undefined if no provider found", () => {
-		;(ClineProvider.getVisibleInstance as Mock).mockReturnValue(undefined)
+		;(ShoferProvider.getVisibleInstance as Mock).mockReturnValue(undefined)
 
 		const result = getVisibleProviderOrLog(mockOutputChannel)
 
 		expect(result).toBeUndefined()
-		expect(mockOutputChannel.appendLine).toHaveBeenCalledWith("Cannot find any visible Roo Code instances.")
+		expect(mockOutputChannel.appendLine).toHaveBeenCalledWith("Cannot find any visible Shofer instances.")
 	})
 })

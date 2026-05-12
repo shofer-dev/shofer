@@ -1,7 +1,7 @@
 // npx vitest run src/core/webview/__tests__/skillsMessageHandler.spec.ts
 
-import type { SkillMetadata, WebviewMessage } from "@roo-code/types"
-import type { ClineProvider } from "../ClineProvider"
+import type { SkillMetadata, WebviewMessage } from "@shofer/types"
+import type { ShoferProvider } from "../ShoferProvider"
 
 // Mock vscode first
 vi.mock("vscode", () => {
@@ -53,7 +53,7 @@ describe("skillsMessageHandler", () => {
 	const mockGetSkill = vi.fn()
 	const mockFindSkillByNameAndSource = vi.fn()
 
-	const createMockProvider = (hasSkillsManager: boolean = true): ClineProvider => {
+	const createMockProvider = (hasSkillsManager: boolean = true): ShoferProvider => {
 		const skillsManager = hasSkillsManager
 			? {
 					getSkillsMetadata: mockGetSkillsMetadata,
@@ -70,7 +70,7 @@ describe("skillsMessageHandler", () => {
 			postMessageToWebview: mockPostMessageToWebview,
 			getSkillsManager: () => skillsManager,
 			getCurrentTask: () => undefined,
-		} as unknown as ClineProvider
+		} as unknown as ShoferProvider
 	}
 
 	const mockSkills: SkillMetadata[] = [
@@ -83,7 +83,7 @@ describe("skillsMessageHandler", () => {
 		{
 			name: "project-skill",
 			description: "Project skill description",
-			path: "/project/.roo/skills/project-skill/SKILL.md",
+			path: "/project/.shofer/skills/project-skill/SKILL.md",
 			source: "project",
 			mode: "code",
 		},
@@ -374,7 +374,7 @@ describe("skillsMessageHandler", () => {
 			} as WebviewMessage)
 
 			expect(mockFindSkillByNameAndSource).toHaveBeenCalledWith("project-skill", "project")
-			expect(openFile).toHaveBeenCalledWith("/project/.roo/skills/project-skill/SKILL.md")
+			expect(openFile).toHaveBeenCalledWith("/project/.shofer/skills/project-skill/SKILL.md")
 		})
 
 		it("shows error when required fields are missing", async () => {

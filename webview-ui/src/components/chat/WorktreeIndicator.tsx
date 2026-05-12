@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { GitBranch, ChevronDown, Plus, Check } from "lucide-react"
 
-import type { Worktree, WorktreeStatus } from "@roo-code/types"
+import type { Worktree, WorktreeStatus } from "@shofer/types"
 
 import { cn } from "@/lib/utils"
-import { useRooPortal } from "@/components/ui/hooks/useRooPortal"
+import { useShoferPortal } from "@/components/ui/hooks/useShoferPortal"
 import { Popover, PopoverContent, PopoverTrigger, StandardTooltip } from "@/components/ui"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -27,7 +27,7 @@ import { CreateWorktreeModal } from "@/components/worktrees/CreateWorktreeModal"
  */
 export const WorktreeIndicator = () => {
 	const { t } = useAppTranslation()
-	const { clineMessages, currentTaskItem, pendingWorktreeDir, setPendingWorktreeDir } = useExtensionState()
+	const { shoferMessages, currentTaskItem, pendingWorktreeDir, setPendingWorktreeDir } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [modalOpen, setModalOpen] = useState(false)
 	const [worktrees, setWorktrees] = useState<Worktree[]>([])
@@ -42,11 +42,11 @@ export const WorktreeIndicator = () => {
 		isSubfolder: boolean
 		hasWorkspaceFolder: boolean
 	}>({ isGitRepo: true, isMultiRoot: false, isSubfolder: false, hasWorkspaceFolder: true })
-	const portalContainer = useRooPortal("roo-portal")
+	const portalContainer = useShoferPortal("shofer-portal")
 
-	// A task is active once the backend has pushed any clineMessages for it.
+	// A task is active once the backend has pushed any shoferMessages for it.
 	// Switching/creating worktrees is only allowed before that point.
-	const hasActiveTask = (clineMessages?.length ?? 0) > 0
+	const hasActiveTask = (shoferMessages?.length ?? 0) > 0
 
 	// The "current" worktree from the list reflects the workspace's git
 	// checkout (always master in the embedded model). Once a task is active,

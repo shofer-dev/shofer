@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 
-import { type ClineSayTool, DEFAULT_WRITE_DELAY_MS } from "@roo-code/types"
+import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
@@ -64,11 +64,11 @@ export class EditTool extends BaseTool<"edit"> {
 				return
 			}
 
-			const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+			const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 
 			if (!accessAllowed) {
 				await task.say("rooignore_error", relPath)
-				pushToolResult(formatResponse.rooIgnoreError(relPath))
+				pushToolResult(formatResponse.shoferIgnoreError(relPath))
 				return
 			}
 
@@ -176,7 +176,7 @@ export class EditTool extends BaseTool<"edit"> {
 			const diffStats = computeDiffStats(sanitizedDiff) || undefined
 			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "appliedDiff",
 				path: getReadablePath(task.cwd, relPath),
 				diff: sanitizedDiff,
@@ -188,7 +188,7 @@ export class EditTool extends BaseTool<"edit"> {
 				content: sanitizedDiff,
 				isProtected: isWriteProtected,
 				diffStats,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			// Show diff view if focus disruption prevention is disabled
 			if (!isPreventFocusDisruptionEnabled) {
@@ -255,7 +255,7 @@ export class EditTool extends BaseTool<"edit"> {
 		const absolutePath = path.resolve(task.cwd, relPath!)
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "appliedDiff",
 			path: getReadablePath(task.cwd, relPath!),
 			diff: block.params.old_string ? "1 edit operation" : undefined,

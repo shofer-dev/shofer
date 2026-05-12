@@ -57,7 +57,7 @@ jobs:
         run: pnpm bundle
 
       - name: Build CLI
-        run: pnpm --filter @roo-code/cli build
+        run: pnpm --filter @shofer/cli build
 
       - name: Create release tarball
         id: tarball
@@ -65,8 +65,8 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           PLATFORM: ${{ matrix.platform }}
         run: |
-          RELEASE_DIR="roo-cli-${PLATFORM}"
-          TARBALL="roo-cli-${PLATFORM}.tar.gz"
+          RELEASE_DIR="shofer-cli-${PLATFORM}"
+          TARBALL="shofer-cli-${PLATFORM}.tar.gz"
 
           # Clean up any previous build.
           rm -rf "$RELEASE_DIR"
@@ -86,7 +86,7 @@ jobs:
           node -e "
             const pkg = require('./apps/cli/package.json');
             const newPkg = {
-              name: '@roo-code/cli',
+              name: '@shofer/cli',
               version: '$VERSION',
               type: 'module',
               dependencies: {
@@ -143,9 +143,9 @@ jobs:
             '' \
             '// Import and run the actual CLI' \
             "await import(join(__dirname, '..', 'lib', 'index.js'));" \
-            > "$RELEASE_DIR/bin/roo"
+            > "$RELEASE_DIR/bin/shofer"
 
-          chmod +x "$RELEASE_DIR/bin/roo"
+          chmod +x "$RELEASE_DIR/bin/shofer"
 
           # Create empty .env file.
           touch "$RELEASE_DIR/.env"
@@ -172,7 +172,7 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
         run: |
-          TARBALL="roo-cli-${PLATFORM}.tar.gz"
+          TARBALL="shofer-cli-${PLATFORM}.tar.gz"
 
           # Create temp directory for verification.
           VERIFY_DIR=$(mktemp -d)
@@ -181,13 +181,13 @@ jobs:
           tar -xzf "$TARBALL" -C "$VERIFY_DIR"
 
           echo "Verifying tarball contents..."
-          ls -la "$VERIFY_DIR/roo-cli-${PLATFORM}/"
+          ls -la "$VERIFY_DIR/shofer-cli-${PLATFORM}/"
 
           # Check required files exist.
-          test -f "$VERIFY_DIR/roo-cli-${PLATFORM}/bin/roo" || { echo "Missing bin/roo"; exit 1; }
-          test -f "$VERIFY_DIR/roo-cli-${PLATFORM}/lib/index.js" || { echo "Missing lib/index.js"; exit 1; }
-          test -f "$VERIFY_DIR/roo-cli-${PLATFORM}/package.json" || { echo "Missing package.json"; exit 1; }
-          test -d "$VERIFY_DIR/roo-cli-${PLATFORM}/extension" || { echo "Missing extension directory"; exit 1; }
+          test -f "$VERIFY_DIR/shofer-cli-${PLATFORM}/bin/shofer" || { echo "Missing bin/shofer"; exit 1; }
+          test -f "$VERIFY_DIR/shofer-cli-${PLATFORM}/lib/index.js" || { echo "Missing lib/index.js"; exit 1; }
+          test -f "$VERIFY_DIR/shofer-cli-${PLATFORM}/package.json" || { echo "Missing package.json"; exit 1; }
+          test -d "$VERIFY_DIR/shofer-cli-${PLATFORM}/extension" || { echo "Missing extension directory"; exit 1; }
 
           echo "Tarball verification passed!"
 
@@ -199,8 +199,8 @@ jobs:
         with:
           name: cli-${{ matrix.platform }}
           path: |
-            roo-cli-${{ matrix.platform }}.tar.gz
-            roo-cli-${{ matrix.platform }}.tar.gz.sha256
+            shofer-cli-${{ matrix.platform }}.tar.gz
+            shofer-cli-${{ matrix.platform }}.tar.gz.sha256
           retention-days: 7
 
   # Create GitHub release with all platform artifacts.
@@ -320,12 +320,12 @@ jobs:
           echo "## Installation" >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
           echo '```bash' >> "$NOTES_FILE"
-          echo "curl -fsSL https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/apps/cli/install.sh | sh" >> "$NOTES_FILE"
+          echo "curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer/main/apps/cli/install.sh | sh" >> "$NOTES_FILE"
           echo '```' >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
           echo "Or install a specific version:" >> "$NOTES_FILE"
           echo '```bash' >> "$NOTES_FILE"
-          echo "ROO_VERSION=$VERSION curl -fsSL https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/apps/cli/install.sh | sh" >> "$NOTES_FILE"
+          echo "SHOFER_VERSION=$VERSION curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer/main/apps/cli/install.sh | sh" >> "$NOTES_FILE"
           echo '```' >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
           echo "## Requirements" >> "$NOTES_FILE"
@@ -337,18 +337,18 @@ jobs:
           echo "" >> "$NOTES_FILE"
           echo '```bash' >> "$NOTES_FILE"
           echo "# Run a task" >> "$NOTES_FILE"
-          echo 'roo "What is this project?"' >> "$NOTES_FILE"
+          echo 'shofer "What is this project?"' >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
           echo "# See all options" >> "$NOTES_FILE"
-          echo "roo --help" >> "$NOTES_FILE"
+          echo "shofer --help" >> "$NOTES_FILE"
           echo '```' >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
           echo "## Platform Support" >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
           echo "This release includes binaries for:" >> "$NOTES_FILE"
-          echo '- `roo-cli-darwin-arm64.tar.gz` - macOS Apple Silicon (M1/M2/M3)' >> "$NOTES_FILE"
-          echo '- `roo-cli-linux-x64.tar.gz` - Linux x64' >> "$NOTES_FILE"
-          echo '- `roo-cli-linux-arm64.tar.gz` - Linux ARM64' >> "$NOTES_FILE"
+          echo '- `shofer-cli-darwin-arm64.tar.gz` - macOS Apple Silicon (M1/M2/M3)' >> "$NOTES_FILE"
+          echo '- `shofer-cli-linux-x64.tar.gz` - Linux x64' >> "$NOTES_FILE"
+          echo '- `shofer-cli-linux-arm64.tar.gz` - Linux ARM64' >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
           echo "## Checksums" >> "$NOTES_FILE"
           echo "" >> "$NOTES_FILE"
@@ -357,7 +357,7 @@ jobs:
           echo '```' >> "$NOTES_FILE"
 
           gh release create "$TAG" \
-            --title "Roo Code CLI v$VERSION" \
+            --title "Shofer CLI v$VERSION" \
             --notes-file "$NOTES_FILE" \
             --prerelease \
             release/*

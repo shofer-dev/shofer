@@ -1,9 +1,9 @@
-import type { ProviderSettings } from "@roo-code/types"
+import type { ProviderSettings } from "@shofer/types"
 
 import { buildApiHandler, SingleCompletionHandler } from "../api"
 
 /**
- * Enhances a prompt using the configured API without creating a full Cline instance or task history.
+ * Enhances a prompt using the configured API without creating a full Shofer instance or task history.
  * This is a lightweight alternative that only uses the API's completion functionality.
  */
 export async function singleCompletionHandler(apiConfiguration: ProviderSettings, promptText: string): Promise<string> {

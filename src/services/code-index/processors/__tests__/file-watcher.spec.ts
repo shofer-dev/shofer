@@ -15,8 +15,8 @@ vi.mock("../../../../../packages/telemetry/src/TelemetryService", () => ({
 
 // Mock dependencies
 vi.mock("../../cache-manager")
-vi.mock("../../../core/ignore/RooIgnoreController", () => ({
-	RooIgnoreController: vi.fn().mockImplementation(() => ({
+vi.mock("../../../core/ignore/ShoferIgnoreController", () => ({
+	ShoferIgnoreController: vi.fn().mockImplementation(() => ({
 		validateAccess: vi.fn().mockReturnValue(true),
 	})),
 }))

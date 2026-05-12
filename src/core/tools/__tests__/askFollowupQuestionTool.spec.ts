@@ -3,14 +3,14 @@ import { ToolUse } from "../../../shared/tools"
 import { NativeToolCallParser } from "../../assistant-message/NativeToolCallParser"
 
 describe("askFollowupQuestionTool", () => {
-	let mockCline: any
+	let mockShofer: any
 	let mockPushToolResult: any
 	let toolResult: any
 
 	beforeEach(() => {
 		vi.clearAllMocks()
 
-		mockCline = {
+		mockShofer = {
 			ask: vi.fn().mockResolvedValue({ text: "Test response" }),
 			say: vi.fn().mockResolvedValue(undefined),
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("Missing parameter error"),
@@ -37,13 +37,13 @@ describe("askFollowupQuestionTool", () => {
 			partial: false,
 		}
 
-		await askFollowupQuestionTool.handle(mockCline, block as ToolUse<"ask_followup_question">, {
+		await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
 			askApproval: vi.fn(),
 			handleError: vi.fn(),
 			pushToolResult: mockPushToolResult,
 		})
 
-		expect(mockCline.ask).toHaveBeenCalledWith(
+		expect(mockShofer.ask).toHaveBeenCalledWith(
 			"followup",
 			expect.stringContaining('"suggest":[{"answer":"Option 1"},{"answer":"Option 2"}]'),
 			false,
@@ -67,13 +67,13 @@ describe("askFollowupQuestionTool", () => {
 			partial: false,
 		}
 
-		await askFollowupQuestionTool.handle(mockCline, block as ToolUse<"ask_followup_question">, {
+		await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
 			askApproval: vi.fn(),
 			handleError: vi.fn(),
 			pushToolResult: mockPushToolResult,
 		})
 
-		expect(mockCline.ask).toHaveBeenCalledWith(
+		expect(mockShofer.ask).toHaveBeenCalledWith(
 			"followup",
 			expect.stringContaining(
 				'"suggest":[{"answer":"Write code","mode":"code"},{"answer":"Debug issue","mode":"debug"}]',
@@ -96,13 +96,13 @@ describe("askFollowupQuestionTool", () => {
 			partial: false,
 		}
 
-		await askFollowupQuestionTool.handle(mockCline, block as ToolUse<"ask_followup_question">, {
+		await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
 			askApproval: vi.fn(),
 			handleError: vi.fn(),
 			pushToolResult: mockPushToolResult,
 		})
 
-		expect(mockCline.ask).toHaveBeenCalledWith(
+		expect(mockShofer.ask).toHaveBeenCalledWith(
 			"followup",
 			expect.stringContaining(
 				'"suggest":[{"answer":"Regular option"},{"answer":"Plan architecture","mode":"architect"}]',
@@ -126,17 +126,17 @@ describe("askFollowupQuestionTool", () => {
 				partial: false,
 			}
 
-			await askFollowupQuestionTool.handle(mockCline, block as ToolUse<"ask_followup_question">, {
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
 				askApproval: vi.fn(),
 				handleError: vi.fn(),
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
-			expect(mockCline.recordToolError).toHaveBeenCalledWith("ask_followup_question")
-			expect(mockCline.didToolFailInCurrentTurn).toBe(true)
-			expect(mockCline.consecutiveMistakeCount).toBe(1)
-			expect(mockCline.ask).not.toHaveBeenCalled()
+			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
+			expect(mockShofer.recordToolError).toHaveBeenCalledWith("ask_followup_question")
+			expect(mockShofer.didToolFailInCurrentTurn).toBe(true)
+			expect(mockShofer.consecutiveMistakeCount).toBe(1)
+			expect(mockShofer.ask).not.toHaveBeenCalled()
 		})
 
 		it("should handle null follow_up parameter", async () => {
@@ -153,17 +153,17 @@ describe("askFollowupQuestionTool", () => {
 				partial: false,
 			}
 
-			await askFollowupQuestionTool.handle(mockCline, block as ToolUse<"ask_followup_question">, {
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
 				askApproval: vi.fn(),
 				handleError: vi.fn(),
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
-			expect(mockCline.recordToolError).toHaveBeenCalledWith("ask_followup_question")
-			expect(mockCline.didToolFailInCurrentTurn).toBe(true)
-			expect(mockCline.consecutiveMistakeCount).toBe(1)
-			expect(mockCline.ask).not.toHaveBeenCalled()
+			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
+			expect(mockShofer.recordToolError).toHaveBeenCalledWith("ask_followup_question")
+			expect(mockShofer.didToolFailInCurrentTurn).toBe(true)
+			expect(mockShofer.consecutiveMistakeCount).toBe(1)
+			expect(mockShofer.ask).not.toHaveBeenCalled()
 		})
 
 		it("should handle non-array follow_up parameter", async () => {
@@ -180,17 +180,17 @@ describe("askFollowupQuestionTool", () => {
 				partial: false,
 			}
 
-			await askFollowupQuestionTool.handle(mockCline, block as ToolUse<"ask_followup_question">, {
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
 				askApproval: vi.fn(),
 				handleError: vi.fn(),
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
-			expect(mockCline.recordToolError).toHaveBeenCalledWith("ask_followup_question")
-			expect(mockCline.didToolFailInCurrentTurn).toBe(true)
-			expect(mockCline.consecutiveMistakeCount).toBe(1)
-			expect(mockCline.ask).not.toHaveBeenCalled()
+			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
+			expect(mockShofer.recordToolError).toHaveBeenCalledWith("ask_followup_question")
+			expect(mockShofer.didToolFailInCurrentTurn).toBe(true)
+			expect(mockShofer.consecutiveMistakeCount).toBe(1)
+			expect(mockShofer.ask).not.toHaveBeenCalled()
 		})
 	})
 
@@ -209,14 +209,14 @@ describe("askFollowupQuestionTool", () => {
 				},
 			}
 
-			await askFollowupQuestionTool.handle(mockCline, block, {
+			await askFollowupQuestionTool.handle(mockShofer, block, {
 				askApproval: vi.fn(),
 				handleError: vi.fn(),
 				pushToolResult: mockPushToolResult,
 			})
 
 			// During partial streaming, only the question should be sent (not JSON with suggestions)
-			expect(mockCline.ask).toHaveBeenCalledWith("followup", "What would you like to do?", true)
+			expect(mockShofer.ask).toHaveBeenCalledWith("followup", "What would you like to do?", true)
 		})
 
 		it("should handle partial with question from params", async () => {
@@ -229,13 +229,13 @@ describe("askFollowupQuestionTool", () => {
 				partial: true,
 			}
 
-			await askFollowupQuestionTool.handle(mockCline, block, {
+			await askFollowupQuestionTool.handle(mockShofer, block, {
 				askApproval: vi.fn(),
 				handleError: vi.fn(),
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockCline.ask).toHaveBeenCalledWith("followup", "Choose wisely", true)
+			expect(mockShofer.ask).toHaveBeenCalledWith("followup", "Choose wisely", true)
 		})
 	})
 

@@ -1,8 +1,8 @@
 /**
- * GetChangedFilesTool — reports the files Roo has edited in the current Task.
+ * GetChangedFilesTool — reports the files Shofer has edited in the current Task.
  *
  * Backed by the working-directory `ChangedFilesService`. The tool surfaces
- * only files Roo touched in this Task, with their current net state against
+ * only files Shofer touched in this Task, with their current net state against
  * the per-task base copy. Files reverted back to base state are intentionally
  * omitted.
  */
@@ -36,7 +36,7 @@ export class GetChangedFilesTool extends BaseTool<"get_changed_files"> {
 			const payload = await getChangedFiles(task)
 
 			if (payload.entries.length === 0) {
-				pushToolResult("No files have been changed by Roo in the current task.")
+				pushToolResult("No files have been changed by Shofer in the current task.")
 				return
 			}
 
@@ -54,7 +54,7 @@ export class GetChangedFilesTool extends BaseTool<"get_changed_files"> {
 				})
 
 			pushToolResult(
-				`Files Roo edited in this task: ${payload.entries.length} (+${totalIns} -${totalDel})\n${lines.join("\n")}`,
+				`Files Shofer edited in this task: ${payload.entries.length} (+${totalIns} -${totalDel})\n${lines.join("\n")}`,
 			)
 		} catch (error) {
 			await handleError("getting changed files", error instanceof Error ? error : new Error(String(error)))

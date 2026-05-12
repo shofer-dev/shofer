@@ -2,7 +2,7 @@
 
 ## Purpose
 
-When Roo Code makes MCP `tools/call` requests, it injects a `conversationId` into the MCP protocol's `_meta` field so that downstream services (mcp-server, tools-backend) can correlate tool calls with the originating conversation for logging, metrics, and distributed tracing.
+When Shofer makes MCP `tools/call` requests, it injects a `conversationId` into the MCP protocol's `_meta` field so that downstream services (mcp-server, tools-backend) can correlate tool calls with the originating conversation for logging, metrics, and distributed tracing.
 
 ## Architecture
 
@@ -71,7 +71,7 @@ Third-party MCP servers define their own input schemas with `additionalPropertie
 
 ### Why `task.taskId`?
 
-Roo Code does not use VS Code's chat participant API (it renders its own webview), so VS Code's native `request.sessionId` is not available. Instead, Roo Code uses [`task.taskId`](../src/core/task/Task.ts:543) — a UUID v7 generated per conversation — as the `conversationId`. This provides the same conversation-scoped correlation that VS Code's native MCP client would provide via `vscode.conversationId`.
+Shofer does not use VS Code's chat participant API (it renders its own webview), so VS Code's native `request.sessionId` is not available. Instead, Shofer uses [`task.taskId`](../src/core/task/Task.ts:543) — a UUID v7 generated per conversation — as the `conversationId`. This provides the same conversation-scoped correlation that VS Code's native MCP client would provide via `vscode.conversationId`.
 
 ### Key holding `vscode.conversationId`
 

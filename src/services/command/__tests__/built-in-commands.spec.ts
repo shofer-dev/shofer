@@ -27,7 +27,7 @@ describe("Built-in Commands", () => {
 			const initCommand = commands.find((cmd) => cmd.name === "init")
 			expect(initCommand).toBeDefined()
 			expect(initCommand!.content).toContain("AGENTS.md")
-			expect(initCommand!.content).toContain(".roo/rules-")
+			expect(initCommand!.content).toContain(".shofer/rules-")
 			expect(initCommand!.description).toBe(
 				"Analyze codebase and create concise AGENTS.md files for AI assistants",
 			)
@@ -93,14 +93,14 @@ describe("Built-in Commands", () => {
 
 			// Should mention important concepts
 			expect(content).toContain("AGENTS.md")
-			expect(content).toContain(".roo/rules-")
+			expect(content).toContain(".shofer/rules-")
 			expect(content).toContain("rules-code")
 			expect(content).toContain("rules-debug")
 			expect(content).toContain("rules-ask")
 			expect(content).toContain("rules-architect")
 
 			// Should mention worktree conventions
-			expect(content).toContain(".roo/worktrees/")
+			expect(content).toContain(".shofer/worktrees/")
 			expect(content).toContain("worktree")
 			expect(content).toContain("merge-worktree-cleanup")
 			expect(content).toContain("rebase-worktree")

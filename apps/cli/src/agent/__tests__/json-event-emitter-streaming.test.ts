@@ -1,4 +1,4 @@
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 import { Writable } from "stream"
 
 import { JsonEventEmitter } from "../json-event-emitter.js"
@@ -23,14 +23,14 @@ function createMockStdout(): { stdout: NodeJS.WriteStream; lines: () => Record<s
 	return { stdout: writable, lines }
 }
 
-function emitMessage(emitter: JsonEventEmitter, message: ClineMessage): void {
-	;(emitter as unknown as { handleMessage: (msg: ClineMessage, isUpdate: boolean) => void }).handleMessage(
+function emitMessage(emitter: JsonEventEmitter, message: ShoferMessage): void {
+	;(emitter as unknown as { handleMessage: (msg: ShoferMessage, isUpdate: boolean) => void }).handleMessage(
 		message,
 		false,
 	)
 }
 
-function createAskMessage(overrides: Partial<ClineMessage>): ClineMessage {
+function createAskMessage(overrides: Partial<ShoferMessage>): ShoferMessage {
 	return {
 		ts: 1,
 		type: "ask",
@@ -38,7 +38,7 @@ function createAskMessage(overrides: Partial<ClineMessage>): ClineMessage {
 		partial: true,
 		text: "",
 		...overrides,
-	} as ClineMessage
+	} as ShoferMessage
 }
 
 describe("JsonEventEmitter streaming deltas", () => {
@@ -238,21 +238,21 @@ describe("JsonEventEmitter streaming deltas", () => {
 			say: "command_output",
 			partial: true,
 			text: "line1\n",
-		} as ClineMessage)
+		} as ShoferMessage)
 		emitMessage(emitter, {
 			ts: outputTs,
 			type: "say",
 			say: "command_output",
 			partial: true,
 			text: "line1\nline2\n",
-		} as ClineMessage)
+		} as ShoferMessage)
 		emitMessage(emitter, {
 			ts: outputTs,
 			type: "say",
 			say: "command_output",
 			partial: false,
 			text: "line1\nline2\n",
-		} as ClineMessage)
+		} as ShoferMessage)
 
 		const output = lines()
 		expect(output).toHaveLength(4)
@@ -312,7 +312,7 @@ describe("JsonEventEmitter streaming deltas", () => {
 			say: "command_output",
 			partial: false,
 			text: "line1\nline2\n",
-		} as ClineMessage)
+		} as ShoferMessage)
 
 		const output = lines()
 		expect(output).toHaveLength(4)
@@ -368,7 +368,7 @@ describe("JsonEventEmitter streaming deltas", () => {
 			say: "command_output",
 			partial: false,
 			text: '{\n  "Account": "123"\n}\n',
-		} as ClineMessage)
+		} as ShoferMessage)
 
 		const output = lines()
 		expect(output).toHaveLength(3)

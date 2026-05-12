@@ -1,6 +1,6 @@
-# Roo Code Auto-Approval System
+# Shofer Auto-Approval System
 
-Complete reference for how tool auto-approval works in Roo Code. This document describes
+Complete reference for how tool auto-approval works in Shofer. This document describes
 the decision flow, the available categories/toggles, and which tools fall under each category.
 
 Source: [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)

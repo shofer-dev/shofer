@@ -1,4 +1,4 @@
-import type { McpTool } from "@roo-code/types"
+import type { McpTool } from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { StandardTooltip } from "@/components/ui"

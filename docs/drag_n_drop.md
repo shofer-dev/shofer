@@ -2,7 +2,7 @@
 
 ## Overview
 
-Roo Code allows users to attach files and folders from the Explorer panel to
+Shofer allows users to attach files and folders from the Explorer panel to
 the chat as `@mentions`. Dropped files appear as removable tags above the
 chat input and are prepended to the message text on Send.
 
@@ -20,7 +20,7 @@ operates outside the webview sandbox and is therefore reliable on both
 Desktop and code-server.
 
 The TreeView is registered with `"visibility": "collapsed"` so it appears
-as a single thin row at the bottom of the Roo Code sidebar — minimal
+as a single thin row at the bottom of the Shofer sidebar — minimal
 visual clutter. The user expands it (or simply drops onto its title bar
 — VSCode delivers drops to collapsed views as well) to attach files.
 
@@ -52,17 +52,17 @@ visual clutter. The user expands it (or simply drops onto its title bar
 
 ### Components
 
-| Component                 | File                                                                                           | Role                                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `ContextDropZoneProvider` | [src/core/webview/ContextDropZoneProvider.ts](../src/core/webview/ContextDropZoneProvider.ts)  | Native TreeView + `TreeDragAndDropController`. Stateless drop target — forwards files to webview. |
-| `ChatView`                | [webview-ui/src/components/chat/ChatView.tsx](../webview-ui/src/components/chat/ChatView.tsx)  | Owns the `droppedContextFiles` React state, renders tags, converts to `@mentions` on Send.        |
-| `addContextFiles` message | [packages/types/src/vscode-extension-host.ts](../packages/types/src/vscode-extension-host.ts)  | Host → webview message carrying `Array<{path, isFile}>`.                                          |
-| View contribution         | [src/package.json](../src/package.json) (`roo-cline.contextDropZone`, `visibility: collapsed`) | Registers the drop-zone TreeView in the Roo Code activity-bar container.                          |
+| Component                 | File                                                                                          | Role                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ContextDropZoneProvider` | [src/core/webview/ContextDropZoneProvider.ts](../src/core/webview/ContextDropZoneProvider.ts) | Native TreeView + `TreeDragAndDropController`. Stateless drop target — forwards files to webview. |
+| `ChatView`                | [webview-ui/src/components/chat/ChatView.tsx](../webview-ui/src/components/chat/ChatView.tsx) | Owns the `droppedContextFiles` React state, renders tags, converts to `@mentions` on Send.        |
+| `addContextFiles` message | [packages/types/src/vscode-extension-host.ts](../packages/types/src/vscode-extension-host.ts) | Host → webview message carrying `Array<{path, isFile}>`.                                          |
+| View contribution         | [src/package.json](../src/package.json) (`shofer.contextDropZone`, `visibility: collapsed`)   | Registers the drop-zone TreeView in the Shofer activity-bar container.                            |
 
 ## Data flow
 
 1. User drags files from the VSCode Explorer onto the **"Drop Files for
-   Context"** view in the Roo Code sidebar.
+   Context"** view in the Shofer sidebar.
 2. `ContextDropZoneProvider.handleDrop` parses the `text/uri-list`
    payload, converts each URI to a workspace-relative path, and posts an
    `addContextFiles` message to the webview.
@@ -74,7 +74,7 @@ visual clutter. The user expands it (or simply drops onto its title bar
 ## UI
 
 - **Drop Files for Context** — a native VSCode TreeView, registered
-  collapsed-by-default in the Roo Code sidebar. Contains a single hint
+  collapsed-by-default in the Shofer sidebar. Contains a single hint
   row ("Drag files here to add to chat context"). Holds no state.
 - **File tags** — rendered above the chat input. Each tag has a remove
   (×) button; a "clear all" button removes them all.

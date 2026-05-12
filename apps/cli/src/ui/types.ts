@@ -1,4 +1,4 @@
-import type { ClineAsk, ClineSay, TodoItem } from "@roo-code/types"
+import type { ShoferAsk, ShoferSay, TodoItem } from "@shofer/types"
 
 export type MessageRole = "system" | "user" | "assistant" | "tool" | "thinking"
 
@@ -84,7 +84,7 @@ export interface TUIMessage {
 	toolDisplayOutput?: string
 	hasPendingToolCalls?: boolean
 	partial?: boolean
-	originalType?: ClineAsk | ClineSay
+	originalType?: ShoferAsk | ShoferSay
 	/** TODO items for update_todo_list tool messages */
 	todos?: TodoItem[]
 	/** Previous TODO items for diff display */
@@ -95,7 +95,7 @@ export interface TUIMessage {
 
 export interface PendingAsk {
 	id: string
-	type: ClineAsk
+	type: ShoferAsk
 	content: string
 	suggestions?: Array<{ answer: string; mode?: string | null }>
 }

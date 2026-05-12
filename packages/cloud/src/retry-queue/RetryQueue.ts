@@ -11,7 +11,7 @@ export class RetryQueue extends EventEmitter<RetryQueueEvents> {
 	private log: (...args: unknown[]) => void
 	private isProcessing = false
 	private retryTimer?: NodeJS.Timeout
-	private readonly STORAGE_KEY = "roo.retryQueue"
+	private readonly STORAGE_KEY = "shofer.retryQueue"
 	private authHeaderProvider?: AuthHeaderProvider
 	private queuePausedUntil?: number // Timestamp when the queue can resume processing
 	private isPaused = false // Manual pause state (e.g., for auth state changes)

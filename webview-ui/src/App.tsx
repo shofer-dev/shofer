@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { useEvent } from "react-use"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { type ExtensionMessage, TelemetryEventName } from "@roo-code/types"
+import { type ExtensionMessage, TelemetryEventName } from "@shofer/types"
 
 import TranslationProvider from "./i18n/TranslationContext"
 import { MarketplaceViewStateManager } from "./components/marketplace/MarketplaceViewStateManager"
@@ -126,7 +126,7 @@ const App = () => {
 				// it as a window event so the (deeply nested) drawer can listen
 				// without us having to thread state through the component tree.
 				if (message.action === "tasksButtonClicked") {
-					window.dispatchEvent(new CustomEvent("roo-cline.taskSidebarToggle"))
+					window.dispatchEvent(new CustomEvent("shofer.taskSidebarToggle"))
 					return
 				}
 

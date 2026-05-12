@@ -1,7 +1,7 @@
-import { ClineMessage } from "@roo-code/types"
+import { ShoferMessage } from "@shofer/types"
 
-export function getLatestTodo(clineMessages: ClineMessage[]) {
-	const todos = clineMessages
+export function getLatestTodo(shoferMessages: ShoferMessage[]) {
+	const todos = shoferMessages
 		.filter(
 			(msg) =>
 				(msg.type === "ask" && msg.ask === "tool") || (msg.type === "say" && msg.say === "user_edit_todos"),

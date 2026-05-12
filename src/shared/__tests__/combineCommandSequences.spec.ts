@@ -1,13 +1,13 @@
 // npx vitest run src/shared/__tests__/combineCommandSequences.spec.ts
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { combineCommandSequences } from "../combineCommandSequences"
 
 describe("combineCommandSequences", () => {
 	describe("command sequences", () => {
 		it("should combine command and command_output messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "ask", ask: "command", text: "ls", ts: 1625097600000 },
 				{ type: "ask", ask: "command_output", text: "file1.txt", ts: 1625097601000 },
 				{ type: "ask", ask: "command_output", text: "file2.txt", ts: 1625097602000 },
@@ -27,7 +27,7 @@ describe("combineCommandSequences", () => {
 
 	describe("MCP server responses", () => {
 		it("should combine use_mcp_server and mcp_server_response messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "ask",
 					ask: "use_mcp_server",
@@ -58,7 +58,7 @@ describe("combineCommandSequences", () => {
 		})
 
 		it("should handle multiple mcp_server_response messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "ask",
 					ask: "use_mcp_server",
@@ -90,7 +90,7 @@ describe("combineCommandSequences", () => {
 		})
 
 		it("should handle multiple MCP server requests", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "ask",
 					ask: "use_mcp_server",
@@ -145,7 +145,7 @@ describe("combineCommandSequences", () => {
 
 	describe("mixed sequences", () => {
 		it("should handle both command and MCP server sequences", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "ask", ask: "command", text: "ls", ts: 1625097600000 },
 				{ type: "ask", ask: "command_output", text: "file1.txt", ts: 1625097601000 },
 				{

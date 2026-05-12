@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { type ModeConfig, type PromptComponent, type CustomModePrompts, type TodoItem } from "@roo-code/types"
+import { type ModeConfig, type PromptComponent, type CustomModePrompts, type TodoItem } from "@shofer/types"
 
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "../../shared/modes"
 import { DiffStrategy } from "../../shared/tools"
@@ -50,7 +50,7 @@ async function generatePrompt(
 	globalCustomInstructions?: string,
 	experiments?: Record<string, boolean>,
 	language?: string,
-	rooIgnoreInstructions?: string,
+	shoferIgnoreInstructions?: string,
 	settings?: SystemPromptSettings,
 	todoList?: TodoItem[],
 	modelId?: string,
@@ -102,7 +102,7 @@ ${getObjectiveSection()}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
 	language: language ?? formatLanguage(vscode.env.language),
-	rooIgnoreInstructions,
+	shoferIgnoreInstructions,
 	settings,
 })}`
 
@@ -121,7 +121,7 @@ export const SYSTEM_PROMPT = async (
 	globalCustomInstructions?: string,
 	experiments?: Record<string, boolean>,
 	language?: string,
-	rooIgnoreInstructions?: string,
+	shoferIgnoreInstructions?: string,
 	settings?: SystemPromptSettings,
 	todoList?: TodoItem[],
 	modelId?: string,
@@ -149,7 +149,7 @@ export const SYSTEM_PROMPT = async (
 		globalCustomInstructions,
 		experiments,
 		language,
-		rooIgnoreInstructions,
+		shoferIgnoreInstructions,
 		settings,
 		todoList,
 		modelId,

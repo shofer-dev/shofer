@@ -75,7 +75,7 @@ Same flow for the **🎓 Skills** button.
 
 | Property         | Value                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Component        | [`CommandsButton.tsx`](extensions/Roo-Code/webview-ui/src/components/chat/CommandsButton.tsx)                    |
+| Component        | [`CommandsButton.tsx`](extensions/shofer/webview-ui/src/components/chat/CommandsButton.tsx)                      |
 | Icon             | `Zap` (Lucide) + `ChevronDown` (Lucide)                                                                          |
 | Tooltip          | "Slash Commands — click to browse and insert"                                                                    |
 | Hidden when      | No commands available (`commands.length === 0`)                                                                  |
@@ -87,7 +87,7 @@ Same flow for the **🎓 Skills** button.
 | Open-file button | `ExternalLink` icon on hover, sends `{ type: "openFile", text: filePath }`                                       |
 | Max height       | 400px with scroll                                                                                                |
 
-**Command data** (from [`Command`](extensions/Roo-Code/packages/types/src/vscode-extension-host.ts:440)):
+**Command data** (from [`Command`](extensions/shofer/packages/types/src/vscode-extension-host.ts:440)):
 
 ```typescript
 interface Command {
@@ -130,12 +130,12 @@ Each `Task` maintains a `loadedSkills: Map<string,string>` (skill name → SKILL
 
 Two new built-in slash commands:
 
-| Command              | Description                                                                                                                      |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `/loaded`            | Lists currently loaded skills for the task (name + description)                                                                  |
-| `/search <keywords>` | Searches SKILL.md files — RAG semantic search via `codebase_search` scoped to `.roo/skills`, falling back to `search_files` grep |
+| Command              | Description                                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `/loaded`            | Lists currently loaded skills for the task (name + description)                                                                     |
+| `/search <keywords>` | Searches SKILL.md files — RAG semantic search via `codebase_search` scoped to `.shofer/skills`, falling back to `search_files` grep |
 
-**Skill data** (from [`SkillMetadata`](extensions/Roo-Code/packages/types/src/skills.ts:5)):
+**Skill data** (from [`SkillMetadata`](extensions/shofer/packages/types/src/skills.ts:5)):
 
 ```typescript
 interface SkillMetadata {
@@ -199,7 +199,7 @@ Both components call `vscode.postMessage({ type: "requestCommands" })` / `vscode
 
 #### Layout Integration
 
-In [`ChatTextArea.tsx`](extensions/Roo-Code/webview-ui/src/components/chat/ChatTextArea.tsx:1341-1342):
+In [`ChatTextArea.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatTextArea.tsx:1341-1342):
 
 ```tsx
 <div className="flex items-center gap-2">
@@ -233,7 +233,7 @@ When a command has an `argumentHint` field (e.g., `<phone>`):
 
 ### i18n
 
-Keys in [`quickAccess.json`](extensions/Roo-Code/webview-ui/src/i18n/locales/en/quickAccess.json):
+Keys in [`quickAccess.json`](extensions/shofer/webview-ui/src/i18n/locales/en/quickAccess.json):
 
 | Key                                    | Value                                         |
 | -------------------------------------- | --------------------------------------------- |

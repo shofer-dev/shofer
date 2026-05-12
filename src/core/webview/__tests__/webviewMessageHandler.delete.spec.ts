@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { webviewMessageHandler } from "../webviewMessageHandler"
 import * as vscode from "vscode"
-import { ClineProvider } from "../ClineProvider"
+import { ShoferProvider } from "../ShoferProvider"
 import { MessageManager } from "../../message-manager"
 
 // Mock the saveTaskMessages function
@@ -58,9 +58,9 @@ describe("webviewMessageHandler delete functionality", () => {
 
 		// Create mock task
 		getCurrentTaskMock = {
-			clineMessages: [],
+			shoferMessages: [],
 			apiConversationHistory: [],
-			overwriteClineMessages: vi.fn(async () => {}),
+			overwriteShoferMessages: vi.fn(async () => {}),
 			overwriteApiConversationHistory: vi.fn(async () => {}),
 			taskId: "test-task-id",
 		}
@@ -88,7 +88,7 @@ describe("webviewMessageHandler delete functionality", () => {
 			const userMessageTs = 1000
 			const assistantMessageTs = 1001
 
-			getCurrentTaskMock.clineMessages = [
+			getCurrentTaskMock.shoferMessages = [
 				{ ts: userMessageTs, say: "user", text: "Hello" },
 				{ ts: assistantMessageTs, say: "assistant", text: "Hi there" },
 			]
@@ -111,8 +111,8 @@ describe("webviewMessageHandler delete functionality", () => {
 				messageTs: userMessageTs,
 			})
 
-			// Verify that clineMessages was truncated at the correct index
-			expect(getCurrentTaskMock.overwriteClineMessages).toHaveBeenCalledWith([])
+			// Verify that shoferMessages was truncated at the correct index
+			expect(getCurrentTaskMock.overwriteShoferMessages).toHaveBeenCalledWith([])
 
 			// When message is not found in API history (index is -1),
 			// API history should be truncated from the first API message at/after the deleted timestamp (fallback)
@@ -123,7 +123,7 @@ describe("webviewMessageHandler delete functionality", () => {
 			// Setup test data where message exists in both arrays
 			const messageTs = 1000
 
-			getCurrentTaskMock.clineMessages = [
+			getCurrentTaskMock.shoferMessages = [
 				{ ts: 900, say: "user", text: "Previous message" },
 				{ ts: messageTs, say: "user", text: "Delete this" },
 				{ ts: 1100, say: "assistant", text: "Response" },
@@ -142,7 +142,7 @@ describe("webviewMessageHandler delete functionality", () => {
 			})
 
 			// Verify truncation at correct indices
-			expect(getCurrentTaskMock.overwriteClineMessages).toHaveBeenCalledWith([
+			expect(getCurrentTaskMock.overwriteShoferMessages).toHaveBeenCalledWith([
 				{ ts: 900, say: "user", text: "Previous message" },
 			])
 
@@ -151,8 +151,8 @@ describe("webviewMessageHandler delete functionality", () => {
 			])
 		})
 
-		it("should handle deletion when message not found in clineMessages", async () => {
-			getCurrentTaskMock.clineMessages = [{ ts: 1000, say: "user", text: "Some message" }]
+		it("should handle deletion when message not found in shoferMessages", async () => {
+			getCurrentTaskMock.shoferMessages = [{ ts: 1000, say: "user", text: "Some message" }]
 
 			getCurrentTaskMock.apiConversationHistory = []
 
@@ -166,7 +166,7 @@ describe("webviewMessageHandler delete functionality", () => {
 			expect(vscode.window.showErrorMessage).toHaveBeenCalledWith("common:errors.message.message_not_found")
 
 			// Verify no truncation occurred
-			expect(getCurrentTaskMock.overwriteClineMessages).not.toHaveBeenCalled()
+			expect(getCurrentTaskMock.overwriteShoferMessages).not.toHaveBeenCalled()
 			expect(getCurrentTaskMock.overwriteApiConversationHistory).not.toHaveBeenCalled()
 		})
 
@@ -175,7 +175,7 @@ describe("webviewMessageHandler delete functionality", () => {
 			const userMessageTs = 1000
 			const attemptCompletionTs = 1001
 
-			getCurrentTaskMock.clineMessages = [
+			getCurrentTaskMock.shoferMessages = [
 				{ ts: userMessageTs, say: "user", text: "Fix the bug" },
 				{ ts: attemptCompletionTs, say: "assistant", text: "I've fixed the bug" },
 			]
@@ -204,8 +204,8 @@ describe("webviewMessageHandler delete functionality", () => {
 				messageTs: userMessageTs,
 			})
 
-			// Verify that clineMessages was truncated
-			expect(getCurrentTaskMock.overwriteClineMessages).toHaveBeenCalledWith([])
+			// Verify that shoferMessages was truncated
+			expect(getCurrentTaskMock.overwriteShoferMessages).toHaveBeenCalledWith([])
 
 			// API history should be truncated from first message at/after deleted timestamp (fallback)
 			expect(getCurrentTaskMock.overwriteApiConversationHistory).toHaveBeenCalledWith([])
@@ -214,7 +214,7 @@ describe("webviewMessageHandler delete functionality", () => {
 		it("should preserve messages before the deleted one", async () => {
 			const messageTs = 2000
 
-			getCurrentTaskMock.clineMessages = [
+			getCurrentTaskMock.shoferMessages = [
 				{ ts: 1000, say: "user", text: "First message" },
 				{ ts: 1500, say: "assistant", text: "First response" },
 				{ ts: messageTs, say: "user", text: "Delete this" },
@@ -234,7 +234,7 @@ describe("webviewMessageHandler delete functionality", () => {
 			})
 
 			// Should preserve messages before the deleted one
-			expect(getCurrentTaskMock.overwriteClineMessages).toHaveBeenCalledWith([
+			expect(getCurrentTaskMock.overwriteShoferMessages).toHaveBeenCalledWith([
 				{ ts: 1000, say: "user", text: "First message" },
 				{ ts: 1500, say: "assistant", text: "First response" },
 			])
@@ -252,7 +252,7 @@ describe("webviewMessageHandler delete functionality", () => {
 				// Only summaries removed by truncation have their associated condenseParent tags cleared.
 				const condenseId = "summary-abc"
 
-				getCurrentTaskMock.clineMessages = [
+				getCurrentTaskMock.shoferMessages = [
 					{ ts: 100, say: "user", text: "First message" },
 					{ ts: 200, say: "assistant", text: "Response 1" },
 					{ ts: 300, say: "user", text: "Second message" },
@@ -301,7 +301,7 @@ describe("webviewMessageHandler delete functionality", () => {
 				// The orphaned condenseParent tags should be cleared
 				const condenseId = "summary-xyz"
 
-				getCurrentTaskMock.clineMessages = [
+				getCurrentTaskMock.shoferMessages = [
 					{ ts: 100, say: "user", text: "Task start" },
 					{ ts: 200, say: "assistant", text: "Response 1" },
 					{ ts: 300, say: "user", text: "Message 2" },
@@ -340,7 +340,7 @@ describe("webviewMessageHandler delete functionality", () => {
 				const condenseId1 = "summary-first"
 				const condenseId2 = "summary-second"
 
-				getCurrentTaskMock.clineMessages = [
+				getCurrentTaskMock.shoferMessages = [
 					{ ts: 100, say: "user", text: "First message" },
 					{ ts: 799, say: "assistant", text: "Summary1" },
 					{ ts: 1799, say: "assistant", text: "Summary2" },
@@ -398,7 +398,7 @@ describe("webviewMessageHandler delete functionality", () => {
 				// index-based truncation which would preserve earlier array indices.
 				const sharedTs = 1000
 
-				getCurrentTaskMock.clineMessages = [
+				getCurrentTaskMock.shoferMessages = [
 					{ ts: 900, say: "user", text: "Previous message" },
 					{ ts: sharedTs, say: "user", text: "First kept message" },
 					{ ts: 1100, say: "assistant", text: "Response" },
@@ -428,13 +428,13 @@ describe("webviewMessageHandler delete functionality", () => {
 				expect(result[0].content).toBe("Previous message")
 			})
 
-			it("should remove Summary when its condense_context clineMessage is deleted", async () => {
+			it("should remove Summary when its condense_context shoferMessage is deleted", async () => {
 				// Scenario: Summary has timestamp BEFORE the deletion point (so it survives truncation),
 				// BUT the condense_context UI message has timestamp AFTER the deletion point (so it gets removed).
 				// The fix links them via condenseId so the Summary is explicitly removed.
 				const condenseId = "summary-sync-test"
 
-				getCurrentTaskMock.clineMessages = [
+				getCurrentTaskMock.shoferMessages = [
 					{ ts: 100, say: "user", text: "Task start" },
 					{ ts: 200, say: "assistant", text: "Response 1" },
 					{ ts: 300, say: "user", text: "Message to delete this and after" },
@@ -480,7 +480,7 @@ describe("webviewMessageHandler delete functionality", () => {
 				const condenseId1 = "summary-first"
 				const condenseId2 = "summary-second"
 
-				getCurrentTaskMock.clineMessages = [
+				getCurrentTaskMock.shoferMessages = [
 					{ ts: 100, say: "user", text: "First message" },
 					{ ts: 200, say: "assistant", text: "Response 1" },
 					// First condense_context created after first condense

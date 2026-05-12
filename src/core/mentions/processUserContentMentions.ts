@@ -12,6 +12,8 @@ type ToolResultPart = Anthropic.Messages.ToolResultBlockParam
 export interface ProcessUserContentMentionsResult {
 	content: Anthropic.Messages.ContentBlockParam[]
 	mode?: string // Mode from the first slash command that has one
+	/** Skills resolved via slash-style mentions; map name → SKILL.md path. */
+	loadedSkills?: Record<string, string>
 }
 
 /**
@@ -37,8 +39,8 @@ export async function processUserContentMentions({
 	userContent,
 	cwd,
 	fileContextTracker,
-	rooIgnoreController,
-	showRooIgnoredFiles = false,
+	shoferIgnoreController,
+	showShoferIgnoredFiles = false,
 	includeDiagnosticMessages = true,
 	maxDiagnosticMessages = 50,
 	skillsManager,
@@ -47,8 +49,8 @@ export async function processUserContentMentions({
 	userContent: Anthropic.Messages.ContentBlockParam[]
 	cwd: string
 	fileContextTracker: FileContextTracker
-	rooIgnoreController?: any
-	showRooIgnoredFiles?: boolean
+	shoferIgnoreController?: any
+	showShoferIgnoredFiles?: boolean
 	includeDiagnosticMessages?: boolean
 	maxDiagnosticMessages?: number
 	skillsManager?: SkillLookup
@@ -56,6 +58,14 @@ export async function processUserContentMentions({
 }): Promise<ProcessUserContentMentionsResult> {
 	// Track the first mode found from slash commands
 	let commandMode: string | undefined
+	// Accumulate loaded skills across every parseMentions invocation below.
+	const loadedSkills: Record<string, string> = {}
+	const mergeLoadedSkills = (skills?: Record<string, string>) => {
+		if (!skills) return
+		for (const [name, path] of Object.entries(skills)) {
+			loadedSkills[name] = path
+		}
+	}
 
 	// Process userContent array, which contains text and image parts.
 	// We need to apply parseMentions() to TextPart's text that contains "<user_message>".
@@ -70,8 +80,8 @@ export async function processUserContentMentions({
 							block.text,
 							cwd,
 							fileContextTracker,
-							rooIgnoreController,
-							showRooIgnoredFiles,
+							shoferIgnoreController,
+							showShoferIgnoredFiles,
 							includeDiagnosticMessages,
 							maxDiagnosticMessages,
 							skillsManager,
@@ -81,6 +91,7 @@ export async function processUserContentMentions({
 						if (!commandMode && result.mode) {
 							commandMode = result.mode
 						}
+						mergeLoadedSkills(result.loadedSkills)
 
 						// Build the blocks array:
 						// 1. User's text (with @ mentions replaced by clean paths)
@@ -115,8 +126,8 @@ export async function processUserContentMentions({
 								block.content,
 								cwd,
 								fileContextTracker,
-								rooIgnoreController,
-								showRooIgnoredFiles,
+								shoferIgnoreController,
+								showShoferIgnoredFiles,
 								includeDiagnosticMessages,
 								maxDiagnosticMessages,
 								skillsManager,
@@ -126,6 +137,7 @@ export async function processUserContentMentions({
 							if (!commandMode && result.mode) {
 								commandMode = result.mode
 							}
+							mergeLoadedSkills(result.loadedSkills)
 
 							// Build content array with file blocks included
 							const contentParts: Array<{ type: "text"; text: string }> = [
@@ -166,8 +178,8 @@ export async function processUserContentMentions({
 											contentBlock.text,
 											cwd,
 											fileContextTracker,
-											rooIgnoreController,
-											showRooIgnoredFiles,
+											shoferIgnoreController,
+											showShoferIgnoredFiles,
 											includeDiagnosticMessages,
 											maxDiagnosticMessages,
 											skillsManager,
@@ -177,6 +189,7 @@ export async function processUserContentMentions({
 										if (!commandMode && result.mode) {
 											commandMode = result.mode
 										}
+										mergeLoadedSkills(result.loadedSkills)
 
 										// Build blocks array with file content
 										const blocks: Array<{ type: "text"; text: string }> = [
@@ -221,5 +234,9 @@ export async function processUserContentMentions({
 		)
 	).flat()
 
-	return { content: content as Anthropic.Messages.ContentBlockParam[], mode: commandMode }
+	return {
+		content: content as Anthropic.Messages.ContentBlockParam[],
+		mode: commandMode,
+		loadedSkills: Object.keys(loadedSkills).length > 0 ? loadedSkills : undefined,
+	}
 }

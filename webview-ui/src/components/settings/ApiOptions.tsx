@@ -29,11 +29,11 @@ import {
 	internationalZAiDefaultModelId,
 	mainlandZAiDefaultModelId,
 	fireworksDefaultModelId,
-	rooDefaultModelId,
+	shoferDefaultModelId,
 	vercelAiGatewayDefaultModelId,
 	minimaxDefaultModelId,
 	unboundDefaultModelId,
-} from "@roo-code/types"
+} from "@shofer/types"
 
 import {
 	getProviderServiceConfig,
@@ -84,7 +84,7 @@ import {
 	Poe,
 	QwenCode,
 	Requesty,
-	Roo,
+	Shofer,
 	SambaNova,
 	Unbound,
 	Vertex,
@@ -107,7 +107,7 @@ import { TemperatureControl } from "./TemperatureControl"
 import { RateLimitSecondsControl } from "./RateLimitSecondsControl"
 import { ConsecutiveMistakeLimitControl } from "./ConsecutiveMistakeLimitControl"
 import { BedrockCustomArn } from "./providers/BedrockCustomArn"
-import { RooBalanceDisplay } from "./providers/RooBalanceDisplay"
+import { ShoferBalanceDisplay } from "./providers/ShoferBalanceDisplay"
 import { buildDocLink } from "@src/utils/docLinks"
 import { BookOpenText } from "lucide-react"
 
@@ -240,7 +240,7 @@ const ApiOptions = ({
 				vscode.postMessage({ type: "requestLmStudioModels" })
 			} else if (selectedProvider === "vscode-lm") {
 				vscode.postMessage({ type: "requestVsCodeLmModels" })
-			} else if (selectedProvider === "litellm" || selectedProvider === "roo" || selectedProvider === "poe") {
+			} else if (selectedProvider === "litellm" || selectedProvider === "shofer" || selectedProvider === "poe") {
 				vscode.postMessage({ type: "requestRouterModels" })
 			}
 		},
@@ -361,7 +361,7 @@ const ApiOptions = ({
 				},
 				fireworks: { field: "apiModelId", default: fireworksDefaultModelId },
 				poe: { field: "apiModelId", default: poeDefaultModelId },
-				roo: { field: "apiModelId", default: rooDefaultModelId },
+				shofer: { field: "apiModelId", default: shoferDefaultModelId },
 				"vercel-ai-gateway": { field: "vercelAiGatewayModelId", default: vercelAiGatewayDefaultModelId },
 				openai: { field: "openAiModelId" },
 				ollama: { field: "ollamaModelId" },
@@ -439,16 +439,16 @@ const ApiOptions = ({
 			label,
 		}))
 
-		// Pin "roo" to the top if not on welcome screen
+		// Pin "shofer" to the top if not on welcome screen
 		if (!fromWelcomeView) {
-			const rooIndex = options.findIndex((opt) => opt.value === "roo")
-			if (rooIndex > 0) {
-				const [rooOption] = options.splice(rooIndex, 1)
+			const shoferIndex = options.findIndex((opt) => opt.value === "shofer")
+			if (shoferIndex > 0) {
+				const [rooOption] = options.splice(shoferIndex, 1)
 				options.unshift(rooOption)
 			}
 		} else {
-			// Filter out roo from the welcome view
-			const filteredOptions = options.filter((opt) => opt.value !== "roo")
+			// Filter out shofer from the welcome view
+			const filteredOptions = options.filter((opt) => opt.value !== "shofer")
 			options.length = 0
 			options.push(...filteredOptions)
 
@@ -467,8 +467,8 @@ const ApiOptions = ({
 			<div className="flex flex-col gap-1 relative">
 				<div className="flex justify-between items-center">
 					<label className="block font-medium">{t("settings:providers.apiProvider")}</label>
-					{selectedProvider === "roo" && cloudIsAuthenticated ? (
-						<RooBalanceDisplay />
+					{selectedProvider === "shofer" && cloudIsAuthenticated ? (
+						<ShoferBalanceDisplay />
 					) : (
 						docs && (
 							<VSCodeLink href={docs.url} target="_blank" className="flex gap-2">
@@ -718,8 +718,8 @@ const ApiOptions = ({
 						/>
 					)}
 
-					{selectedProvider === "roo" && (
-						<Roo
+					{selectedProvider === "shofer" && (
+						<Shofer
 							apiConfiguration={apiConfiguration}
 							setApiConfigurationField={setApiConfigurationField}
 							routerModels={routerModels}

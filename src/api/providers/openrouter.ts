@@ -10,8 +10,8 @@ import {
 	OPENROUTER_DEFAULT_PROVIDER_NAME,
 	OPEN_ROUTER_PROMPT_CACHING_MODELS,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
-} from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+} from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCallParser"
 
@@ -261,7 +261,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		//    - Set `id` to the FIRST tool call's ID from the tool_calls array
 		//    - Set `data` to "skip_thought_signature_validator" to bypass signature validation
 		//    - Set `index` to 0
-		// See: https://github.com/cline/cline/issues/8214
+		// See: https://github.com/shofer/shofer/issues/8214
 		if (isGemini) {
 			// Step 1: Sanitize messages - filter out tool calls with missing/mismatched reasoning_details
 			openAiMessages = sanitizeGeminiMessages(openAiMessages, modelId)

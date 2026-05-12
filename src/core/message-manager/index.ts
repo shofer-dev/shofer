@@ -1,6 +1,6 @@
 import * as path from "path"
 import { Task } from "../task/Task"
-import { ClineMessage } from "@roo-code/types"
+import { ShoferMessage } from "@shofer/types"
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { cleanupAfterTruncation } from "../condense"
 import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
@@ -43,15 +43,15 @@ export class MessageManager {
 	 *
 	 * @param ts - The timestamp to rewind to
 	 * @param options - Rewind options
-	 * @throws Error if timestamp not found in clineMessages
+	 * @throws Error if timestamp not found in shoferMessages
 	 */
 	async rewindToTimestamp(ts: number, options: RewindOptions = {}): Promise<void> {
 		const { includeTargetMessage = false, skipCleanup = false } = options
 
-		// Find the index in clineMessages
-		const clineIndex = this.task.clineMessages.findIndex((m) => m.ts === ts)
+		// Find the index in shoferMessages
+		const clineIndex = this.task.shoferMessages.findIndex((m) => m.ts === ts)
 		if (clineIndex === -1) {
-			throw new Error(`Message with timestamp ${ts} not found in clineMessages`)
+			throw new Error(`Message with timestamp ${ts} not found in shoferMessages`)
 		}
 
 		// Calculate the actual cutoff index
@@ -61,14 +61,14 @@ export class MessageManager {
 	}
 
 	/**
-	 * Rewind conversation to a specific index in clineMessages.
+	 * Rewind conversation to a specific index in shoferMessages.
 	 * Keeps messages [0, toIndex) and removes [toIndex, end].
 	 *
 	 * @param toIndex - The index to rewind to (exclusive)
 	 * @param options - Rewind options
 	 */
 	async rewindToIndex(toIndex: number, options: RewindOptions = {}): Promise<void> {
-		const cutoffTs = this.task.clineMessages[toIndex]?.ts ?? Date.now()
+		const cutoffTs = this.task.shoferMessages[toIndex]?.ts ?? Date.now()
 		await this.performRewind(toIndex, cutoffTs, options)
 	}
 
@@ -81,8 +81,8 @@ export class MessageManager {
 		// Step 1: Collect context event IDs from messages being removed
 		const removedIds = this.collectRemovedContextEventIds(toIndex)
 
-		// Step 2: Truncate clineMessages
-		await this.truncateClineMessages(toIndex)
+		// Step 2: Truncate shoferMessages
+		await this.truncateShoferMessages(toIndex)
 
 		// Step 3: Truncate and clean API history (combined with cleanup for efficiency)
 		await this.truncateApiHistoryWithCleanup(cutoffTs, removedIds, skipCleanup)
@@ -93,15 +93,15 @@ export class MessageManager {
 	 * that will be removed during the rewind.
 	 *
 	 * This is critical for maintaining the linkage between:
-	 * - condense_context (clineMessage) ↔ Summary (apiMessage)
-	 * - sliding_window_truncation (clineMessage) ↔ Truncation marker (apiMessage)
+	 * - condense_context (shoferMessage) ↔ Summary (apiMessage)
+	 * - sliding_window_truncation (shoferMessage) ↔ Truncation marker (apiMessage)
 	 */
 	private collectRemovedContextEventIds(fromIndex: number): ContextEventIds {
 		const condenseIds = new Set<string>()
 		const truncationIds = new Set<string>()
 
-		for (let i = fromIndex; i < this.task.clineMessages.length; i++) {
-			const msg = this.task.clineMessages[i]
+		for (let i = fromIndex; i < this.task.shoferMessages.length; i++) {
+			const msg = this.task.shoferMessages[i]
 
 			// Collect condenseIds from condense_context events
 			if (msg.say === "condense_context" && msg.contextCondense?.condenseId) {
@@ -122,10 +122,10 @@ export class MessageManager {
 	}
 
 	/**
-	 * Truncate clineMessages to the specified index.
+	 * Truncate shoferMessages to the specified index.
 	 */
-	private async truncateClineMessages(toIndex: number): Promise<void> {
-		await this.task.overwriteClineMessages(this.task.clineMessages.slice(0, toIndex))
+	private async truncateShoferMessages(toIndex: number): Promise<void> {
+		await this.task.overwriteShoferMessages(this.task.shoferMessages.slice(0, toIndex))
 	}
 
 	/**
@@ -138,9 +138,9 @@ export class MessageManager {
 	 * 3. Handles both truncation and cleanup atomically
 	 *
 	 * Note on timestamp handling:
-	 * Due to async execution during streaming, clineMessage timestamps may not
+	 * Due to async execution during streaming, shoferMessage timestamps may not
 	 * perfectly align with API message timestamps. Specifically, a "user_feedback"
-	 * clineMessage can have a timestamp BEFORE the assistant API message that
+	 * shoferMessage can have a timestamp BEFORE the assistant API message that
 	 * triggered it (because tool execution happens concurrently with stream
 	 * completion). To handle this race condition, we find the first API user
 	 * message at or after the cutoff and use its timestamp as the actual boundary.
@@ -163,7 +163,7 @@ export class MessageManager {
 
 		if (!hasExactMatch && hasMessageBeforeCutoff) {
 			// No exact match but there are earlier messages means we might have a race
-			// condition where the clineMessage timestamp is earlier than any API message
+			// condition where the shoferMessage timestamp is earlier than any API message
 			// due to async execution. In this case, look for the first API user message
 			// at or after the cutoff to use as the actual boundary.
 			// This ensures assistant messages that preceded the user's response are preserved.
@@ -216,8 +216,8 @@ export class MessageManager {
 		if (!skipCleanup) {
 			const validIds = new Set<string>()
 
-			// Collect timestamps from remaining clineMessages
-			for (const msg of this.task.clineMessages) {
+			// Collect timestamps from remaining shoferMessages
+			for (const msg of this.task.shoferMessages) {
 				if (msg.ts) {
 					validIds.add(String(msg.ts))
 				}

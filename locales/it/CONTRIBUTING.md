@@ -11,9 +11,9 @@
 </sub>
 </div>
 
-# Contribuire a Roo Code
+# Contribuire a Shofer
 
-Roo Code è un progetto guidato dalla comunità e apprezziamo profondamente ogni contributo. Per semplificare la collaborazione, operiamo su una base [Issue-First](#approccio-issue-first), il che significa che tutte le [Pull Request (PR)](#invio-di-una-pull-request) devono prima essere collegate a un'issue di GitHub. Si prega di leggere attentamente questa guida.
+Shofer è un progetto guidato dalla comunità e apprezziamo profondamente ogni contributo. Per semplificare la collaborazione, operiamo su una base [Issue-First](#approccio-issue-first), il che significa che tutte le [Pull Request (PR)](#invio-di-una-pull-request) devono prima essere collegate a un'issue di GitHub. Si prega di leggere attentamente questa guida.
 
 ## Sommario
 
@@ -52,10 +52,10 @@ La nostra roadmap guida la direzione del progetto. Allinea i tuoi contributi a q
 
 Menziona l'allineamento con queste aree nelle tue PR.
 
-### 3. Unisciti alla community di Roo Code
+### 3. Unisciti alla community di Shofer
 
-- **Principale:** Unisciti al nostro [Discord](https://discord.gg/roocode) e invia un DM a **Hannes Rudolph (`hrudolph`)**.
-- **Alternativa:** I contributori esperti possono interagire direttamente tramite i [progetti GitHub](https://github.com/orgs/RooCodeInc/projects/1).
+- **Principale:** Unisciti al nostro [Discord](https://discord.gg/shofer) e invia un DM a **Hannes Rudolph (`hrudolph`)**.
+- **Alternativa:** I contributori esperti possono interagire direttamente tramite i [progetti GitHub](https://github.com/orgs/Arkware/projects/1).
 
 ## Trovare e pianificare il tuo contributo
 
@@ -69,26 +69,26 @@ Menziona l'allineamento con queste aree nelle tue PR.
 
 Tutti i contributi iniziano con un'issue di GitHub utilizzando i nostri modelli snelli.
 
-- **Controlla le issue esistenti**: cerca nelle [issue di GitHub](https://github.com/RooCodeInc/Roo-Code/issues).
+- **Controlla le issue esistenti**: cerca nelle [issue di GitHub](https://github.com/Arkware/Shofer/issues).
 - **Crea un'issue** utilizzando:
     - **Miglioramenti:** modello "Richiesta di miglioramento" (linguaggio semplice incentrato sul vantaggio per l'utente).
     - **Bug:** modello "Segnalazione di bug" (riproduzione minima + previsto vs effettivo + versione).
-- **Vuoi lavorarci?** Commenta "Rivendico" sull'issue e invia un DM a **Hannes Rudolph (`hrudolph`)** su [Discord](https://discord.gg/roocode) per essere assegnato. L'assegnazione verrà confermata nel thread.
+- **Vuoi lavorarci?** Commenta "Rivendico" sull'issue e invia un DM a **Hannes Rudolph (`hrudolph`)** su [Discord](https://discord.gg/shofer) per essere assegnato. L'assegnazione verrà confermata nel thread.
 - **Le PR devono essere collegate all'issue.** Le PR non collegate possono essere chiuse.
 
 ### Decidere su cosa lavorare
 
-- Controlla il [progetto GitHub](https://github.com/orgs/RooCodeInc/projects/1) per le issue "Issue [Non assegnata]".
-- Per la documentazione, visita [Roo Code Docs](https://github.com/RooCodeInc/Roo-Code-Docs).
+- Controlla il [progetto GitHub](https://github.com/orgs/Arkware/projects/1) per le issue "Issue [Non assegnata]".
+- Per la documentazione, visita [Shofer Docs](https://github.com/Arkware/Shofer-Docs).
 
 ### Segnalazione di bug
 
 - Controlla prima le segnalazioni esistenti.
-- Crea un nuovo bug utilizzando il [modello "Segnalazione di bug"](https://github.com/RooCodeInc/Roo-Code/issues/new/choose) con:
+- Crea un nuovo bug utilizzando il [modello "Segnalazione di bug"](https://github.com/Arkware/Shofer/issues/new/choose) con:
     - Passaggi di riproduzione chiari e numerati
     - Risultato previsto vs effettivo
-    - Versione di Roo Code (obbligatoria); provider/modello di intelligenza artificiale se pertinente
-- **Problemi di sicurezza**: segnala in privato tramite [avvisi di sicurezza](https://github.com/RooCodeInc/Roo-Code/security/advisories/new).
+    - Versione di Shofer (obbligatoria); provider/modello di intelligenza artificiale se pertinente
+- **Problemi di sicurezza**: segnala in privato tramite [avvisi di sicurezza](https://github.com/Arkware/Shofer/security/advisories/new).
 
 ## Processo di sviluppo e invio
 
@@ -97,7 +97,7 @@ Tutti i contributi iniziano con un'issue di GitHub utilizzando i nostri modelli 
 1. **Esegui il fork e clona:**
 
 ```
-git clone https://github.com/TUO_NOME_UTENTE/Roo-Code.git
+git clone https://github.com/TUO_NOME_UTENTE/Shofer.git
 ```
 
 2. **Installa le dipendenze:**
@@ -126,7 +126,7 @@ pnpm install
 
 ### Politica sulle Pull Request
 
-- Deve fare riferimento a un'issue di GitHub assegnata. Per essere assegnato: commenta "Rivendico" sull'issue e invia un DM a **Hannes Rudolph (`hrudolph`)** su [Discord](https://discord.gg/roocode). L'assegnazione verrà confermata nel thread.
+- Deve fare riferimento a un'issue di GitHub assegnata. Per essere assegnato: commenta "Rivendico" sull'issue e invia un DM a **Hannes Rudolph (`hrudolph`)** su [Discord](https://discord.gg/shofer). L'assegnazione verrà confermata nel thread.
 - Le PR non collegate possono essere chiuse.
 - Le PR devono superare i test di integrazione continua, essere in linea con la roadmap e avere una documentazione chiara.
 
@@ -138,4 +138,4 @@ pnpm install
 
 ## Legale
 
-Contribuendo, accetti che i tuoi contributi siano concessi in licenza con la licenza Apache 2.0, in coerenza con la licenza di Roo Code.
+Contribuendo, accetti che i tuoi contributi siano concessi in licenza con la licenza Apache 2.0, in coerenza con la licenza di Shofer.

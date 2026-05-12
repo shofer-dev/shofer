@@ -17,10 +17,10 @@ if (fs.existsSync(envPath)) {
 	}
 }
 
-import type { CloudUserInfo, AuthState } from "@roo-code/types"
-import { CloudService } from "@roo-code/cloud"
-import { TelemetryService, PostHogTelemetryClient } from "@roo-code/telemetry"
-import { customToolRegistry } from "@roo-code/core"
+import type { CloudUserInfo, AuthState } from "@shofer/types"
+import { CloudService } from "@shofer/cloud"
+import { TelemetryService, PostHogTelemetryClient } from "@shofer/telemetry"
+import { customToolRegistry } from "@shofer/core"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
 import { createOutputChannelLogger, createDualLogger } from "./utils/outputChannelLogger"
@@ -29,7 +29,7 @@ import { initializeNetworkProxy } from "./utils/networkProxy"
 import { Package } from "./shared/package"
 import { formatLanguage } from "./shared/language"
 import { ContextProxy } from "./core/config/ContextProxy"
-import { ClineProvider } from "./core/webview/ClineProvider"
+import { ShoferProvider } from "./core/webview/ShoferProvider"
 import { ContextDropZoneProvider, addUrisToContext } from "./core/webview/ContextDropZoneProvider"
 import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
@@ -153,16 +153,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	// Initialize the provider *before* the Roo Code Cloud service.
-	const provider = new ClineProvider(context, outputChannel, "sidebar", contextProxy, mdmService)
+	// Initialize the provider *before* the Shofer Cloud service.
+	const provider = new ShoferProvider(context, outputChannel, "sidebar", contextProxy, mdmService)
 
-	// Initialize Roo Code Cloud service.
-	const postStateListener = () => ClineProvider.getVisibleInstance()?.postStateToWebviewWithoutClineMessages()
+	// Initialize Shofer Cloud service.
+	const postStateListener = () => ShoferProvider.getVisibleInstance()?.postStateToWebviewWithoutShoferMessages()
 
 	authStateChangedHandler = async (data: { state: AuthState; previousState: AuthState }) => {
 		postStateListener()
 
-		// Handle Roo models cache based on auth state (ROO-202)
+		// Handle Shofer models cache based on auth state (SHOFER-202)
 		const handleRooModelsCache = async () => {
 			try {
 				if (data.state === "active-session") {
@@ -171,17 +171,17 @@ export async function activate(context: vscode.ExtensionContext) {
 						? CloudService.instance.authService?.getSessionToken()
 						: undefined
 					await refreshModels({
-						provider: "roo",
-						baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
+						provider: "shofer",
+						baseUrl: process.env.SHOFER_PROVIDER_URL ?? "https://api.shofer.com/proxy",
 						apiKey: sessionToken,
 					})
 				} else {
 					// Flush without refresh on logout
-					await flushModels({ provider: "roo" }, false)
+					await flushModels({ provider: "shofer" }, false)
 				}
 			} catch (error) {
 				cloudLogger(
-					`[authStateChangedHandler] Failed to handle Roo models cache: ${error instanceof Error ? error.message : String(error)}`,
+					`[authStateChangedHandler] Failed to handle Shofer models cache: ${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
 		}
@@ -192,7 +192,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			// Apply stored provider model to API configuration if present
 			if (data.state === "active-session") {
 				try {
-					const storedModel = context.globalState.get<string>("roo-provider-model")
+					const storedModel = context.globalState.get<string>("shofer-provider-model")
 					if (storedModel) {
 						cloudLogger(`[authStateChangedHandler] Applying stored provider model: ${storedModel}`)
 						// Get the current API configuration name
@@ -200,11 +200,11 @@ export async function activate(context: vscode.ExtensionContext) {
 							provider.contextProxy.getGlobalState("currentApiConfigName") || "default"
 						// Update it with the stored model using upsertProviderProfile
 						await provider.upsertProviderProfile(currentConfigName, {
-							apiProvider: "roo",
+							apiProvider: "shofer",
 							apiModelId: storedModel,
 						})
 						// Clear the stored model after applying
-						await context.globalState.update("roo-provider-model", undefined)
+						await context.globalState.update("shofer-provider-model", undefined)
 						cloudLogger(`[authStateChangedHandler] Applied and cleared stored provider model`)
 					}
 				} catch (error) {
@@ -256,7 +256,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	TelemetryService.instance.setProvider(provider)
 
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(ClineProvider.sideBarId, provider, {
+		vscode.window.registerWebviewViewProvider(ShoferProvider.sideBarId, provider, {
 			webviewOptions: { retainContextWhenHidden: true },
 		}),
 	)
@@ -265,7 +265,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// ContextDropZoneProvider for rationale.  Registered collapsed-by-default
 	// via the view contribution in package.json so it stays out of the way.
 	const contextDropZoneProvider = new ContextDropZoneProvider()
-	contextDropZoneProvider.setClineProvider(provider)
+	contextDropZoneProvider.setShoferProvider(provider)
 	context.subscriptions.push(
 		vscode.window.createTreeView(ContextDropZoneProvider.viewId, {
 			treeDataProvider: contextDropZoneProvider,
@@ -273,14 +273,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
-	// Explorer context-menu command: "Add to Roo Code Context".  This is the
+	// Explorer context-menu command: "Add to Shofer Context".  This is the
 	// fallback for runtimes where HTML5 drag/drop into the webview iframe is
 	// blocked by the host (VSCode Desktop overlay, code-server browser tab).
 	// VSCode invokes this with (clickedUri, allSelectedUris) when triggered
 	// from the Explorer context menu.
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
-			"roo-cline.addFilesToContext",
+			"shofer.addFilesToContext",
 			async (clickedUri?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
 				const uris: vscode.Uri[] =
 					selectedUris && selectedUris.length > 0 ? selectedUris : clickedUri ? [clickedUri] : []
@@ -330,8 +330,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.registerTextDocumentContentProvider(DIFF_VIEW_URI_SCHEME, diffContentProvider),
 	)
 
-	// `roo-original:` virtual scheme used by the FileChangesPanel to display
-	// "original (Roo's start) ↔ current" diffs in the main editor area without
+	// `shofer-original:` virtual scheme used by the FileChangesPanel to display
+	// "original (Shofer's start) ↔ current" diffs in the main editor area without
 	// touching disk. Content is carried base64-encoded in the URI's `query` so
 	// each invocation is self-contained (no runtime registry to keep in sync
 	// with task lifecycle).
@@ -342,7 +342,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	})()
 
 	context.subscriptions.push(
-		vscode.workspace.registerTextDocumentContentProvider("roo-original", rooOriginalProvider),
+		vscode.workspace.registerTextDocumentContentProvider("shofer-original", rooOriginalProvider),
 	)
 
 	context.subscriptions.push(vscode.window.registerUriHandler({ handleUri }))
@@ -357,11 +357,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	registerCodeActions(context)
 	registerTerminalActions(context)
 
-	// Allows other extensions to activate once Roo is ready.
+	// Allows other extensions to activate once Shofer is ready.
 	vscode.commands.executeCommand(`${Package.name}.activationCompleted`)
 
-	// Implements the `RooCodeAPI` interface.
-	const socketPath = process.env.ROO_CODE_IPC_SOCKET_PATH
+	// Implements the `ShoferAPI` interface.
+	const socketPath = process.env.SHOFER_IPC_SOCKET_PATH
 	const enableLogging = typeof socketPath === "string"
 
 	// Watch the core files and automatically reload the extension host.
@@ -370,7 +370,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			{ path: context.extensionPath, pattern: "**/*.ts" },
 			{ path: path.join(context.extensionPath, "../packages/types"), pattern: "**/*.ts" },
 			{ path: path.join(context.extensionPath, "../packages/telemetry"), pattern: "**/*.ts" },
-			{ path: path.join(context.extensionPath, "node_modules/@roo-code/cloud"), pattern: "**/*" },
+			{ path: path.join(context.extensionPath, "node_modules/@shofer/cloud"), pattern: "**/*" },
 		]
 
 		console.log(

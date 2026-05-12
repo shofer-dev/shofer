@@ -1,7 +1,7 @@
-import { GlobalState, ClineMessage, ClineAsk } from "@roo-code/types"
+import { GlobalState, ShoferMessage, ShoferAsk } from "@shofer/types"
 
 import { getApiMetrics } from "../../shared/getApiMetrics"
-import { ClineAskResponse } from "../../shared/WebviewMessage"
+import { ShoferAskResponse } from "../../shared/WebviewMessage"
 
 export interface AutoApprovalResult {
 	shouldProceed: boolean
@@ -20,11 +20,11 @@ export class AutoApprovalHandler {
 	 */
 	async checkAutoApprovalLimits(
 		state: GlobalState | undefined,
-		messages: ClineMessage[],
+		messages: ShoferMessage[],
 		askForApproval: (
-			type: ClineAsk,
+			type: ShoferAsk,
 			data: string,
-		) => Promise<{ response: ClineAskResponse; text?: string; images?: string[] }>,
+		) => Promise<{ response: ShoferAskResponse; text?: string; images?: string[] }>,
 	): Promise<AutoApprovalResult> {
 		// Check request count limit
 		const requestResult = await this.checkRequestLimit(state, messages, askForApproval)
@@ -42,11 +42,11 @@ export class AutoApprovalHandler {
 	 */
 	private async checkRequestLimit(
 		state: GlobalState | undefined,
-		messages: ClineMessage[],
+		messages: ShoferMessage[],
 		askForApproval: (
-			type: ClineAsk,
+			type: ShoferAsk,
 			data: string,
-		) => Promise<{ response: ClineAskResponse; text?: string; images?: string[] }>,
+		) => Promise<{ response: ShoferAskResponse; text?: string; images?: string[] }>,
 	): Promise<AutoApprovalResult> {
 		const maxRequests = state?.allowedMaxRequests || Infinity
 
@@ -90,11 +90,11 @@ export class AutoApprovalHandler {
 	 */
 	private async checkCostLimit(
 		state: GlobalState | undefined,
-		messages: ClineMessage[],
+		messages: ShoferMessage[],
 		askForApproval: (
-			type: ClineAsk,
+			type: ShoferAsk,
 			data: string,
-		) => Promise<{ response: ClineAskResponse; text?: string; images?: string[] }>,
+		) => Promise<{ response: ShoferAskResponse; text?: string; images?: string[] }>,
 	): Promise<AutoApprovalResult> {
 		const maxCost = state?.allowedMaxCost || Infinity
 

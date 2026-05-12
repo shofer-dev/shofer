@@ -1,23 +1,23 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ClineAsk, ToolProgressStatus, ToolGroup, ToolName, GenerateImageParams } from "@roo-code/types"
+import type { ShoferAsk, ToolProgressStatus, ToolGroup, ToolName, GenerateImageParams } from "@shofer/types"
 
 // NOTE: When adding a new tool parameter name to toolParamNames, also add it
 // to NativeToolArgs if the tool uses native (typed) arguments.
 
-// Re-export tool metadata from @roo-code/types to avoid duplication
+// Re-export tool metadata from @shofer/types to avoid duplication
 export {
 	type ToolGroupConfig,
 	TOOL_DISPLAY_NAMES,
 	TOOL_GROUPS,
 	ALWAYS_AVAILABLE_TOOLS,
 	TOOL_ALIASES,
-} from "@roo-code/types"
+} from "@shofer/types"
 
 export type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
 
 export type AskApproval = (
-	type: ClineAsk,
+	type: ShoferAsk,
 	partialMessage?: string,
 	progressStatus?: ToolProgressStatus,
 	forceApproval?: boolean,
@@ -121,7 +121,7 @@ export type ToolParamName = (typeof toolParamNames)[number]
  */
 export type NativeToolArgs = {
 	access_mcp_resource: { server_name: string; uri: string }
-	read_file: import("@roo-code/types").ReadFileToolParams
+	read_file: import("@shofer/types").ReadFileToolParams
 	read_command_output: { artifact_id: string; search?: string; offset?: number; limit?: number }
 	attempt_completion: { result: string }
 	execute_command: { command: string; cwd?: string; timeout?: number | null }

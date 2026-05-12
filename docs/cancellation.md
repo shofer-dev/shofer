@@ -1,6 +1,6 @@
 # Cancellation Flow
 
-This document describes how a user-initiated **Stop** in the Roo-Code webview
+This document describes how a user-initiated **Stop** in the Shofer webview
 propagates all the way down to the upstream tool execution, so that long-running
 MCP tool calls and resource reads are aborted immediately instead of being left
 to run until their server-side timeout expires.
@@ -59,8 +59,8 @@ to run until their server-side timeout expires.
 ### 1. Webview — [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)
 
 The Stop button visibility is driven by `canStop`, which previously inspected
-only the local `clineAsk` state. That left a gap: when an auto-approved tool
-call (e.g. a long-running browser action) is executing, `clineAsk` is `undefined`
+only the local `shoferAsk` state. That left a gap: when an auto-approved tool
+call (e.g. a long-running browser action) is executing, `shoferAsk` is `undefined`
 but the Task is still actively working.
 
 `canStop` was extended with a `currentTaskRuntimeState` lookup against

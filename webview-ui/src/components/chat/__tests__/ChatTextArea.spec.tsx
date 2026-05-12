@@ -1,4 +1,4 @@
-import { defaultModeSlug } from "@roo/modes"
+import { defaultModeSlug } from "@shofer/modes"
 
 import { render, fireEvent, screen } from "@src/utils/test-utils"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
@@ -405,7 +405,7 @@ describe("ChatTextArea", () => {
 		})
 
 		describe("prompt history navigation", () => {
-			const mockClineMessages = [
+			const mockShoferMessages = [
 				{ type: "say", say: "user_feedback", text: "First prompt", ts: 1000 },
 				{ type: "say", say: "user_feedback", text: "Second prompt", ts: 2000 },
 				{ type: "say", say: "user_feedback", text: "Third prompt", ts: 3000 },
@@ -419,7 +419,7 @@ describe("ChatTextArea", () => {
 						apiProvider: "anthropic",
 					},
 					taskHistory: [],
-					clineMessages: mockClineMessages,
+					shoferMessages: mockShoferMessages,
 					cwd: "/test/workspace",
 				})
 			})
@@ -559,7 +559,7 @@ describe("ChatTextArea", () => {
 			})
 
 			it("should filter history by current workspace", () => {
-				const mixedClineMessages = [
+				const mixedShoferMessages = [
 					{ type: "say", say: "user_feedback", text: "Workspace 1 prompt", ts: 1000 },
 					{ type: "say", say: "user_feedback", text: "Other workspace prompt", ts: 2000 },
 					{ type: "say", say: "user_feedback", text: "Workspace 1 prompt 2", ts: 3000 },
@@ -572,7 +572,7 @@ describe("ChatTextArea", () => {
 						apiProvider: "anthropic",
 					},
 					taskHistory: [],
-					clineMessages: mixedClineMessages,
+					shoferMessages: mixedShoferMessages,
 					cwd: "/test/workspace",
 				})
 
@@ -600,7 +600,7 @@ describe("ChatTextArea", () => {
 						apiProvider: "anthropic",
 					},
 					taskHistory: [],
-					clineMessages: [],
+					shoferMessages: [],
 					cwd: "/test/workspace",
 				})
 
@@ -617,7 +617,7 @@ describe("ChatTextArea", () => {
 			})
 
 			it("should ignore empty or whitespace-only messages", () => {
-				const clineMessagesWithEmpty = [
+				const shoferMessagesWithEmpty = [
 					{ type: "say", say: "user_feedback", text: "Valid prompt", ts: 1000 },
 					{ type: "say", say: "user_feedback", text: "", ts: 2000 },
 					{ type: "say", say: "user_feedback", text: "   ", ts: 3000 },
@@ -631,7 +631,7 @@ describe("ChatTextArea", () => {
 						apiProvider: "anthropic",
 					},
 					taskHistory: [],
-					clineMessages: clineMessagesWithEmpty,
+					shoferMessages: shoferMessagesWithEmpty,
 					cwd: "/test/workspace",
 				})
 
@@ -665,7 +665,7 @@ describe("ChatTextArea", () => {
 						apiProvider: "anthropic",
 					},
 					taskHistory: mockTaskHistory,
-					clineMessages: [], // No conversation messages
+					shoferMessages: [], // No conversation messages
 					cwd: "/test/workspace",
 				})
 
@@ -702,7 +702,7 @@ describe("ChatTextArea", () => {
 						{ task: "Task 1", workspace: "/test/workspace" },
 						{ task: "Task 2", workspace: "/test/workspace" },
 					],
-					clineMessages: [],
+					shoferMessages: [],
 					cwd: "/test/workspace",
 				})
 
@@ -722,7 +722,7 @@ describe("ChatTextArea", () => {
 						apiProvider: "anthropic",
 					},
 					taskHistory: [],
-					clineMessages: [
+					shoferMessages: [
 						{ type: "say", say: "user_feedback", text: "Message 1", ts: 1000 },
 						{ type: "say", say: "user_feedback", text: "Message 2", ts: 2000 },
 					],

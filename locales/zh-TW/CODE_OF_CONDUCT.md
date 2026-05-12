@@ -47,16 +47,16 @@
 
 ## 執行
 
-如發生辱罵、騷擾或其他不可接受的行為，請透過 support@roocode.com 聯絡專案團隊回報。所有申訴都將被審查和調查，並做出必要且合適的回應。專案團隊有義務為事件回報者保密。具體執行政策的更多細節可能另行公佈。
+如發生辱罵、騷擾或其他不可接受的行為，請透過 support@shofer.com 聯絡專案團隊回報。所有申訴都將被審查和調查，並做出必要且合適的回應。專案團隊有義務為事件回報者保密。具體執行政策的更多細節可能另行公佈。
 
 未遵守或未切實執行本行為準則的專案維護者，可能會面臨由專案領導團隊其他成員所決定的暫時或永久處分。
 
 ## 來源說明
 
-本行為準則改編自 [貢獻者公約][homepage] 第 1.4 版的 [Cline 版本][cline_coc]，原文可參考：
+本行為準則改編自 [貢獻者公約][homepage] 第 1.4 版的 [Shofer 版本][cline_coc]，原文可參考：
 https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
 
-[cline_coc]: https://github.com/cline/cline/blob/main/CODE_OF_CONDUCT.md
+[cline_coc]: https://github.com/shofer/shofer/blob/main/CODE_OF_CONDUCT.md
 [homepage]: https://www.contributor-covenant.org
 
 關於本行為準則的常見問題解答，請參考：

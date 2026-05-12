@@ -47,15 +47,15 @@ Kode Etik ini berlaku baik di dalam ruang proyek maupun di ruang publik ketika s
 
 ## Penegakan
 
-Contoh perilaku kasar, melecehkan, atau perilaku lain yang tidak dapat diterima dapat dilaporkan dengan menghubungi tim proyek di support@roocode.com. Semua keluhan akan ditinjau dan diselidiki dan akan menghasilkan respons yang dianggap perlu dan sesuai dengan keadaan. Tim proyek wajib menjaga kerahasiaan sehubungan dengan pelapor insiden. Detail lebih lanjut tentang kebijakan penegakan spesifik dapat diposting secara terpisah.
+Contoh perilaku kasar, melecehkan, atau perilaku lain yang tidak dapat diterima dapat dilaporkan dengan menghubungi tim proyek di support@shofer.com. Semua keluhan akan ditinjau dan diselidiki dan akan menghasilkan respons yang dianggap perlu dan sesuai dengan keadaan. Tim proyek wajib menjaga kerahasiaan sehubungan dengan pelapor insiden. Detail lebih lanjut tentang kebijakan penegakan spesifik dapat diposting secara terpisah.
 
 Maintainer proyek yang tidak mengikuti atau menegakkan Kode Etik dengan itikad baik dapat menghadapi dampak sementara atau permanen sebagaimana ditentukan oleh anggota lain dari kepemimpinan proyek.
 
 ## Atribusi
 
-Kode Etik ini diadaptasi dari [versi Cline][cline_coc] dari [Contributor Covenant][homepage], versi 1.4, tersedia di https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
+Kode Etik ini diadaptasi dari [versi Shofer][cline_coc] dari [Contributor Covenant][homepage], versi 1.4, tersedia di https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
 
-[cline_coc]: https://github.com/cline/cline/blob/main/CODE_OF_CONDUCT.md
+[cline_coc]: https://github.com/shofer/shofer/blob/main/CODE_OF_CONDUCT.md
 [homepage]: https://www.contributor-covenant.org
 
 Untuk jawaban atas pertanyaan umum tentang kode etik ini, lihat

@@ -8,7 +8,7 @@ import {
 	toolGroups,
 	type ToolGroup,
 	type ToolName,
-} from "@roo-code/types"
+} from "@shofer/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { vscode } from "@/utils/vscode"
@@ -46,7 +46,7 @@ import { SearchableSetting } from "./SearchableSetting"
  * appended within each group.
  */
 
-import type { McpServer } from "@roo-code/types"
+import type { McpServer } from "@shofer/types"
 
 type ToolsSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	disabledTools?: ToolName[]

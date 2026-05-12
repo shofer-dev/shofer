@@ -5,12 +5,12 @@ import { useTranslation } from "react-i18next"
 
 import {
 	type ExtensionMessage,
-	type ClineAskUseMcpServer,
+	type ShoferAskUseMcpServer,
 	type McpExecutionStatus,
 	mcpExecutionStatusSchema,
-} from "@roo-code/types"
+} from "@shofer/types"
 
-import { safeJsonParse } from "@roo/core"
+import { safeJsonParse } from "@shofer/core"
 
 import { cn } from "@src/lib/utils"
 import { Button } from "@src/components/ui"
@@ -33,7 +33,7 @@ interface McpExecutionProps {
 		}>
 		source?: "global" | "project"
 	}
-	useMcpServer?: ClineAskUseMcpServer
+	useMcpServer?: ShoferAskUseMcpServer
 }
 
 export const McpExecution = ({

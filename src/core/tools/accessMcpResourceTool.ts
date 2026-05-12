@@ -1,4 +1,4 @@
-import type { ClineAskUseMcpServer } from "@roo-code/types"
+import type { ShoferAskUseMcpServer } from "@shofer/types"
 
 import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
@@ -39,7 +39,7 @@ export class AccessMcpResourceTool extends BaseTool<"access_mcp_resource"> {
 				type: "access_mcp_resource",
 				serverName: server_name,
 				uri,
-			} satisfies ClineAskUseMcpServer)
+			} satisfies ShoferAskUseMcpServer)
 
 			const didApprove = await askApproval("use_mcp_server", completeMessage)
 
@@ -94,7 +94,7 @@ export class AccessMcpResourceTool extends BaseTool<"access_mcp_resource"> {
 			type: "access_mcp_resource",
 			serverName: server_name,
 			uri: uri,
-		} satisfies ClineAskUseMcpServer)
+		} satisfies ShoferAskUseMcpServer)
 
 		await task.ask("use_mcp_server", partialMessage, block.partial).catch(() => {})
 	}

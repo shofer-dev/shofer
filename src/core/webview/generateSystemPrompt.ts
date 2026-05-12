@@ -7,9 +7,9 @@ import { SYSTEM_PROMPT } from "../prompts/system"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import { Package } from "../../shared/package"
 
-import { ClineProvider } from "./ClineProvider"
+import { ShoferProvider } from "./ShoferProvider"
 
-export const generateSystemPrompt = async (provider: ClineProvider, message: WebviewMessage) => {
+export const generateSystemPrompt = async (provider: ShoferProvider, message: WebviewMessage) => {
 	const {
 		apiConfiguration,
 		customModePrompts,
@@ -27,10 +27,10 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 	const mode = message.mode ?? defaultModeSlug
 	const customModes = await provider.customModesManager.getCustomModes()
 
-	const rooIgnoreInstructions = provider.getCurrentTask()?.rooIgnoreController?.getInstructions()
+	const shoferIgnoreInstructions = provider.getCurrentTask()?.shoferIgnoreController?.getInstructions()
 
 	// Create a temporary API handler to check model info for stealth mode.
-	// This avoids relying on an active Cline instance which might not exist during preview.
+	// This avoids relying on an active Shofer instance which might not exist during preview.
 	let modelInfo: { isStealthModel?: boolean } | undefined
 	try {
 		const tempApiHandler = buildApiHandler(apiConfiguration)
@@ -51,7 +51,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 		customInstructions,
 		experiments,
 		language,
-		rooIgnoreInstructions,
+		shoferIgnoreInstructions,
 		{
 			todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 			useAgentRules: vscode.workspace.getConfiguration(Package.name).get<boolean>("useAgentRules") ?? true,

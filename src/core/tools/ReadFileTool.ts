@@ -12,8 +12,8 @@ import path from "path"
 import * as fs from "fs/promises"
 import { isBinaryFile } from "isbinaryfile"
 
-import type { ReadFileParams, ReadFileMode, ReadFileToolParams, FileEntry, LineRange } from "@roo-code/types"
-import { isLegacyReadFileParams, type ClineSayTool } from "@roo-code/types"
+import type { ReadFileParams, ReadFileMode, ReadFileToolParams, FileEntry, LineRange } from "@shofer/types"
+import { isLegacyReadFileParams, type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
@@ -146,11 +146,11 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 			for (const fileResult of fileResults) {
 				const relPath = fileResult.path
 
-				// RooIgnore validation
-				const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+				// ShoferIgnore validation
+				const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 				if (!accessAllowed) {
 					await task.say("rooignore_error", relPath)
-					const errorMsg = formatResponse.rooIgnoreError(relPath)
+					const errorMsg = formatResponse.shoferIgnoreError(relPath)
 					updateFileResult(relPath, {
 						status: "blocked",
 						error: errorMsg,
@@ -445,7 +445,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				return { path: readablePath, lineSnippet, isOutsideWorkspace, key, content: fullPath }
 			})
 
-			const completeMessage = JSON.stringify({ tool: "readFile", batchFiles } satisfies ClineSayTool)
+			const completeMessage = JSON.stringify({ tool: "readFile", batchFiles } satisfies ShoferSayTool)
 			const { response, text, images } = await task.ask("tool", completeMessage, false)
 
 			if (response === "yesButtonClicked") {
@@ -513,7 +513,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				content: fullPath,
 				reason: lineSnippet,
 				startLine,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const { response, text, images } = await task.ask("tool", completeMessage, false)
 
@@ -648,7 +648,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 		}
 
 		const fullPath = filePath ? path.resolve(task.cwd, filePath) : ""
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "readFile",
 			path: getReadablePath(task.cwd, filePath),
 			isOutsideWorkspace: filePath ? isPathOutsideWorkspace(fullPath) : false,
@@ -656,7 +656,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 		const partialMessage = JSON.stringify({
 			...sharedMessageProps,
 			content: undefined,
-		} satisfies ClineSayTool)
+		} satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 
@@ -688,11 +688,11 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 			const relPath = entry.path
 			const fullPath = path.resolve(task.cwd, relPath)
 
-			// RooIgnore validation
-			const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+			// ShoferIgnore validation
+			const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 			if (!accessAllowed) {
 				await task.say("rooignore_error", relPath)
-				const errorMsg = formatResponse.rooIgnoreError(relPath)
+				const errorMsg = formatResponse.shoferIgnoreError(relPath)
 				results.push(`File: ${relPath}\nError: ${errorMsg}`)
 				continue
 			}
@@ -711,7 +711,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				isOutsideWorkspace,
 				content: fullPath,
 				reason: lineSnippet || undefined,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const { response, text, images } = await task.ask("tool", completeMessage, false)
 

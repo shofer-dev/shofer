@@ -1,4 +1,4 @@
-# @roo-code/types
+# @shofer/types
 
 ## 0.0.1
 

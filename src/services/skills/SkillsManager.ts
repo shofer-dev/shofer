@@ -3,16 +3,16 @@ import * as path from "path"
 import * as vscode from "vscode"
 import matter from "gray-matter"
 
-import type { ClineProvider } from "../../core/webview/ClineProvider"
-import { getGlobalRooDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "../roo-config"
-import { directoryExists, fileExists } from "../roo-config"
+import type { ShoferProvider } from "../../core/webview/ShoferProvider"
+import { getGlobalRooDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "../shofer-config"
+import { directoryExists, fileExists } from "../shofer-config"
 import { SkillMetadata, SkillContent } from "../../shared/skills"
 import { modes, getAllModes } from "../../shared/modes"
 import {
 	validateSkillName as validateSkillNameShared,
 	SkillNameValidationError,
 	SKILL_NAME_MAX_LENGTH,
-} from "@roo-code/types"
+} from "@shofer/types"
 import { t } from "../../i18n"
 
 // Re-export for convenience
@@ -20,11 +20,11 @@ export type { SkillMetadata, SkillContent }
 
 export class SkillsManager {
 	private skills: Map<string, SkillMetadata> = new Map()
-	private providerRef: WeakRef<ClineProvider>
+	private providerRef: WeakRef<ShoferProvider>
 	private disposables: vscode.Disposable[] = []
 	private isDisposed = false
 
-	constructor(provider: ClineProvider) {
+	constructor(provider: ShoferProvider) {
 		this.providerRef = new WeakRef(provider)
 	}
 
@@ -37,8 +37,8 @@ export class SkillsManager {
 	 * Discover all skills from global and project directories.
 	 * Supports both generic skills (skills/) and mode-specific skills (skills-{mode}/).
 	 * Also supports symlinks:
-	 * - .roo/skills can be a symlink to a directory containing skill subdirectories
-	 * - .roo/skills/[dirname] can be a symlink to a skill directory
+	 * - .shofer/skills can be a symlink to a directory containing skill subdirectories
+	 * - .shofer/skills/[dirname] can be a symlink to a skill directory
 	 */
 	async discoverSkills(): Promise<void> {
 		this.skills.clear()
@@ -372,7 +372,7 @@ export class SkillsManager {
 			if (!provider?.cwd) {
 				throw new Error(t("skills:errors.no_workspace"))
 			}
-			baseDir = path.join(provider.cwd, ".roo")
+			baseDir = path.join(provider.cwd, ".shofer")
 		}
 
 		// Always use the generic skills directory (mode info stored in frontmatter now)
@@ -481,7 +481,7 @@ Add your skill instructions here.
 			if (!provider?.cwd) {
 				throw new Error(t("skills:errors.no_workspace"))
 			}
-			baseDir = path.join(provider.cwd, ".roo")
+			baseDir = path.join(provider.cwd, ".shofer")
 		}
 
 		// Determine source and destination directories
@@ -575,7 +575,7 @@ Add your skill instructions here.
 		const globalRooDir = getGlobalRooDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
 		const provider = this.providerRef.deref()
-		const projectRooDir = provider?.cwd ? path.join(provider.cwd, ".roo") : null
+		const projectRooDir = provider?.cwd ? path.join(provider.cwd, ".shofer") : null
 		const projectAgentsDir = provider?.cwd ? getProjectAgentsDirectoryForCwd(provider.cwd) : null
 
 		// Get list of modes to check for mode-specific skills
@@ -587,8 +587,8 @@ Add your skill instructions here.
 		//    (via Map.set replacement during discovery - same source+mode+name key gets replaced)
 		//
 		// Processing order (later directories override earlier ones at the same source level):
-		// - Global: .agents/skills first, then .roo/skills (so .roo wins)
-		// - Project: .agents/skills first, then .roo/skills (so .roo wins)
+		// - Global: .agents/skills first, then .shofer/skills (so .shofer wins)
+		// - Project: .agents/skills first, then .shofer/skills (so .shofer wins)
 
 		// Global .agents directories (lowest priority - shared across agents)
 		dirs.push({ dir: path.join(globalAgentsDir, "skills"), source: "global" })
@@ -604,13 +604,13 @@ Add your skill instructions here.
 			}
 		}
 
-		// Global .roo directories (Roo-specific, higher priority than .agents)
+		// Global .shofer directories (Shofer-specific, higher priority than .agents)
 		dirs.push({ dir: path.join(globalRooDir, "skills"), source: "global" })
 		for (const mode of modesList) {
 			dirs.push({ dir: path.join(globalRooDir, `skills-${mode}`), source: "global", mode })
 		}
 
-		// Project .roo directories (highest priority)
+		// Project .shofer directories (highest priority)
 		if (projectRooDir) {
 			dirs.push({ dir: path.join(projectRooDir, "skills"), source: "project" })
 			for (const mode of modesList) {
@@ -657,16 +657,16 @@ Add your skill instructions here.
 		// Watch for changes in skills directories
 		const globalRooDir = getGlobalRooDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
-		const projectRooDir = path.join(provider.cwd, ".roo")
+		const projectRooDir = path.join(provider.cwd, ".shofer")
 		const projectAgentsDir = getProjectAgentsDirectoryForCwd(provider.cwd)
 
-		// Watch global .roo skills directory
+		// Watch global .shofer skills directory
 		this.watchDirectory(path.join(globalRooDir, "skills"))
 
 		// Watch global .agents skills directory
 		this.watchDirectory(path.join(globalAgentsDir, "skills"))
 
-		// Watch project .roo skills directory
+		// Watch project .shofer skills directory
 		this.watchDirectory(path.join(projectRooDir, "skills"))
 
 		// Watch project .agents skills directory
@@ -675,7 +675,7 @@ Add your skill instructions here.
 		// Watch mode-specific directories for all available modes
 		const modesList = await this.getAvailableModes()
 		for (const mode of modesList) {
-			// .roo mode-specific
+			// .shofer mode-specific
 			this.watchDirectory(path.join(globalRooDir, `skills-${mode}`))
 			this.watchDirectory(path.join(projectRooDir, `skills-${mode}`))
 			// .agents mode-specific

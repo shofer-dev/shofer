@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink, RefreshCw } from "lucide-react"
 
-import type { Command } from "@roo-code/types"
+import type { Command } from "@shofer/types"
 
 import { cn } from "@/lib/utils"
-import { useRooPortal } from "@/components/ui/hooks/useRooPortal"
+import { useShoferPortal } from "@/components/ui/hooks/useShoferPortal"
 import { Popover, PopoverContent, PopoverTrigger, StandardTooltip } from "@/components/ui"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -31,7 +31,7 @@ export const CommandsButton = () => {
 	const { t } = useAppTranslation()
 	const { commands } = useExtensionState()
 	const [open, setOpen] = useState(false)
-	const portalContainer = useRooPortal("roo-portal")
+	const portalContainer = useShoferPortal("shofer-portal")
 
 	// Request commands from the extension on mount (follows WorktreeStatusIndicator pattern)
 	useEffect(() => {
@@ -77,7 +77,7 @@ export const CommandsButton = () => {
 		vscode.postMessage({ type: "openFile", text: filePath })
 	}, [])
 
-	// Trigger a re-read of .roo/commands directories
+	// Trigger a re-read of .shofer/commands directories
 	const handleRefresh = useCallback(() => {
 		vscode.postMessage({ type: "requestCommands" })
 	}, [])

@@ -5,7 +5,7 @@ import {
 	type TelemetryPropertiesProvider,
 	TelemetryEventName,
 	type TelemetrySetting,
-} from "@roo-code/types"
+} from "@shofer/types"
 
 /**
  * TelemetryService wrapper class that defers initialization.
@@ -20,8 +20,8 @@ export class TelemetryService {
 	}
 
 	/**
-	 * Sets the ClineProvider reference to use for global properties
-	 * @param provider A ClineProvider instance to use
+	 * Sets the ShoferProvider reference to use for global properties
+	 * @param provider A ShoferProvider instance to use
 	 */
 	public setProvider(provider: TelemetryPropertiesProvider): void {
 		// If client is initialized, pass the provider reference.

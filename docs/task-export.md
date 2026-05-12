@@ -1,6 +1,6 @@
 # Task Export
 
-Roo-Code provides two export formats for task history: **Markdown** (conversation transcript) and **JSON** (structured trace). Both export the full raw message exchange between the user and the LLM, including tool calls, tool results, and reasoning blocks.
+Shofer provides two export formats for task history: **Markdown** (conversation transcript) and **JSON** (structured trace). Both export the full raw message exchange between the user and the LLM, including tool calls, tool results, and reasoning blocks.
 
 ## Quick Reference
 
@@ -20,7 +20,7 @@ Roo-Code provides two export formats for task history: **Markdown** (conversatio
 
 ## How to Export
 
-1. Start a task in Roo-Code
+1. Start a task in Shofer
 2. Click the task title bar at the top of the chat panel to expand it
 3. Use the buttons in the action row:
     - ⬇ **Download** — exports as Markdown (`.md`)
@@ -204,7 +204,7 @@ These files live in the task directory under VS Code's global storage path:
 
 The JSON export mirrors the chrome-extension's in-task trace format ([`sidepanel.js`](../../chrome-extension/sidepanel.js)). Key differences:
 
-|                       | Roo-Code JSON                                           | Chrome Extension JSON                        |
+|                       | Shofer JSON                                             | Chrome Extension JSON                        |
 | --------------------- | ------------------------------------------------------- | -------------------------------------------- |
 | **Trigger**           | Manual export from UI                                   | Manual button in task panel                  |
 | **Data source**       | Persisted files (offline-safe)                          | In-memory accumulation during task           |
@@ -217,6 +217,6 @@ The JSON export mirrors the chrome-extension's in-task trace format ([`sidepanel
 
 - [`export-markdown.ts`](../src/integrations/misc/export-markdown.ts) — Markdown formatter
 - [`export-json.ts`](../src/integrations/misc/export-json.ts) — JSON formatter and token estimation
-- [`ClineProvider.ts`](../src/core/webview/ClineProvider.ts) — `exportTaskWithId()` and `exportTaskWithIdJson()` methods
+- [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts) — `exportTaskWithId()` and `exportTaskWithIdJson()` methods
 - [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) — `exportCurrentTask`, `exportCurrentTaskJson`, `exportTaskWithId`, `exportTaskWithIdJson` handlers
 - [`TaskActions.tsx`](../webview-ui/src/components/chat/TaskActions.tsx) — Export buttons in the task header

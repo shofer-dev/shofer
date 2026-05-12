@@ -1,6 +1,6 @@
 import * as path from "path"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
@@ -38,24 +38,24 @@ export class ListFilesTool extends BaseTool<"list_files"> {
 			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
 			const [files, didHitLimit] = await listFiles(absolutePath, recursive || false, 200)
-			const { showRooIgnoredFiles = false } = (await task.providerRef.deref()?.getState()) ?? {}
+			const { showShoferIgnoredFiles = false } = (await task.providerRef.deref()?.getState()) ?? {}
 
 			const result = formatResponse.formatFilesList(
 				absolutePath,
 				files,
 				didHitLimit,
-				task.rooIgnoreController,
-				showRooIgnoredFiles,
+				task.shoferIgnoreController,
+				showShoferIgnoredFiles,
 				task.rooProtectedController,
 			)
 
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: !recursive ? "listFilesTopLevel" : "listFilesRecursive",
 				path: getReadablePath(task.cwd, relDirPath),
 				isOutsideWorkspace,
 			}
 
-			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: result } satisfies ClineSayTool)
+			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: result } satisfies ShoferSayTool)
 			const didApprove = await askApproval("tool", completeMessage)
 
 			if (!didApprove) {
@@ -76,13 +76,13 @@ export class ListFilesTool extends BaseTool<"list_files"> {
 		const absolutePath = relDirPath ? path.resolve(task.cwd, relDirPath) : task.cwd
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: !recursive ? "listFilesTopLevel" : "listFilesRecursive",
 			path: getReadablePath(task.cwd, relDirPath ?? ""),
 			isOutsideWorkspace,
 		}
 
-		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

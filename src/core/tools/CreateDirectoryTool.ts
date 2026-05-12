@@ -7,7 +7,7 @@
 import * as path from "path"
 import * as fs from "fs/promises"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -41,7 +41,7 @@ export class CreateDirectoryTool extends BaseTool<"create_directory"> {
 			const absolutePath = path.resolve(task.cwd, relDirPath)
 			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "createDirectory",
 				path: getReadablePath(task.cwd, relDirPath),
 				isOutsideWorkspace,
@@ -50,7 +50,7 @@ export class CreateDirectoryTool extends BaseTool<"create_directory"> {
 			const completeMessage = JSON.stringify({
 				...sharedMessageProps,
 				content: `Creating directory: ${relDirPath}`,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const didApprove = await askApproval("tool", completeMessage)
 
@@ -77,13 +77,13 @@ export class CreateDirectoryTool extends BaseTool<"create_directory"> {
 		const absolutePath = relDirPath ? path.resolve(task.cwd, relDirPath) : task.cwd
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "createDirectory",
 			path: getReadablePath(task.cwd, relDirPath ?? ""),
 			isOutsideWorkspace,
 		}
 
-		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

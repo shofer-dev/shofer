@@ -4,11 +4,11 @@ import * as os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 
-import type { GlobalState, ProviderSettings } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import type { GlobalState, ProviderSettings } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../Task"
-import { ClineProvider } from "../../webview/ClineProvider"
+import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ContextProxy } from "../../config/ContextProxy"
 
 // ─── Hoisted mocks ───────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ vi.mock("../../environment/getEnvironmentDetails", () => ({
 	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
 }))
 
-vi.mock("../../ignore/RooIgnoreController")
+vi.mock("../../ignore/ShoferIgnoreController")
 
 vi.mock("../../condense", async (importOriginal) => {
 	const actual = (await importOriginal()) as Record<string, unknown>
@@ -195,7 +195,7 @@ vi.mock("../../../utils/fs", () => ({
 // ─── Test suite ──────────────────────────────────────────────────────────────
 
 describe("Task persistence", () => {
-	let mockProvider: ClineProvider & Record<string, any>
+	let mockProvider: ShoferProvider & Record<string, any>
 	let mockApiConfig: ProviderSettings
 	let mockOutputChannel: vscode.OutputChannel
 	let mockExtensionContext: vscode.ExtensionContext
@@ -239,12 +239,12 @@ describe("Task persistence", () => {
 			dispose: vi.fn(),
 		} as unknown as vscode.OutputChannel
 
-		mockProvider = new ClineProvider(
+		mockProvider = new ShoferProvider(
 			mockExtensionContext,
 			mockOutputChannel,
 			"sidebar",
 			new ContextProxy(mockExtensionContext),
-		) as ClineProvider & Record<string, any>
+		) as ShoferProvider & Record<string, any>
 
 		mockApiConfig = {
 			apiProvider: "anthropic",
@@ -356,9 +356,9 @@ describe("Task persistence", () => {
 		})
 	})
 
-	// ── saveClineMessages ────────────────────────────────────────────────
+	// ── saveShoferMessages ────────────────────────────────────────────────
 
-	describe("saveClineMessages", () => {
+	describe("saveShoferMessages", () => {
 		it("returns true on success", async () => {
 			mockSaveTaskMessages.mockResolvedValueOnce(undefined)
 
@@ -369,7 +369,7 @@ describe("Task persistence", () => {
 				startTask: false,
 			})
 
-			const result = await (task as Record<string, any>).saveClineMessages()
+			const result = await (task as Record<string, any>).saveShoferMessages()
 			expect(result).toBe(true)
 		})
 
@@ -383,7 +383,7 @@ describe("Task persistence", () => {
 				startTask: false,
 			})
 
-			const result = await (task as Record<string, any>).saveClineMessages()
+			const result = await (task as Record<string, any>).saveShoferMessages()
 			expect(result).toBe(false)
 		})
 
@@ -397,22 +397,22 @@ describe("Task persistence", () => {
 				startTask: false,
 			})
 
-			task.clineMessages.push({
+			task.shoferMessages.push({
 				type: "say",
 				say: "text",
 				text: "snapshot test",
 				ts: Date.now(),
 			})
 
-			await (task as Record<string, any>).saveClineMessages()
+			await (task as Record<string, any>).saveShoferMessages()
 
 			expect(mockSaveTaskMessages).toHaveBeenCalledTimes(1)
 
 			const callArgs = mockSaveTaskMessages.mock.calls[0][0]
 			// The messages passed should be a COPY, not the live reference
-			expect(callArgs.messages).not.toBe(task.clineMessages)
+			expect(callArgs.messages).not.toBe(task.shoferMessages)
 			// But the content should be the same
-			expect(callArgs.messages).toEqual(task.clineMessages)
+			expect(callArgs.messages).toEqual(task.shoferMessages)
 		})
 	})
 
