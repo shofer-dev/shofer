@@ -136,15 +136,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 						break
 					case TaskCommandName.GetModels:
 						try {
-							const models = await getModels({
-								provider: "shofer" as const,
-								baseUrl: process.env.SHOFER_PROVIDER_URL ?? "https://api.shofer.com/proxy",
-								apiKey: CloudService.hasInstance()
-									? CloudService.instance.authService?.getSessionToken()
-									: undefined,
-							})
-
-							sendResponse(ShoferEventName.ModelsResponse, [models])
+							sendResponse(ShoferEventName.ModelsResponse, [{}])
 						} catch (error) {
 							sendResponse(ShoferEventName.ModelsResponse, [{}])
 						}
