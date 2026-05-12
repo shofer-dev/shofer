@@ -12,7 +12,7 @@ import * as fs from "fs"
 import * as path from "path"
 import { fileURLToPath } from "url"
 
-describe("roomodes JSON schema", () => {
+describe("shofermodes JSON schema", () => {
 	let schema: Record<string, unknown>
 	let validate: ValidateFunction
 
@@ -53,6 +53,7 @@ describe("roomodes JSON schema", () => {
 					name: "Tools Only",
 					roleDefinition: "A mode with only tools_allowed.",
 					tools_allowed: ["read_file", "search_files"],
+					groups: ["read"],
 				},
 			],
 		}
@@ -107,6 +108,7 @@ describe("roomodes JSON schema", () => {
 					roleDefinition: "A mode with all tool fields.",
 					tools_allowed: ["read_file", "execute_command"],
 					tools_denied: ["write_to_file"],
+					groups: ["read"],
 				},
 			],
 		}

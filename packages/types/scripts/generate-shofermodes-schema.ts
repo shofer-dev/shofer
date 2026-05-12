@@ -12,13 +12,13 @@ import * as fs from "fs"
 import * as path from "path"
 import { fileURLToPath } from "url"
 
-import { generateRoomodesJsonSchema } from "../src/shofermodes-schema.js"
+import { generateShofermodesJsonSchema } from "../src/shofermodes-schema.js"
 
-const jsonSchema = generateRoomodesJsonSchema()
+const jsonSchema = generateShofermodesJsonSchema()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, "../../..")
-const outPath = path.join(repoRoot, "schemas", "roomodes.json")
+const outPath = path.join(repoRoot, "schemas", "shofermodes.json")
 fs.mkdirSync(path.dirname(outPath), { recursive: true })
 fs.writeFileSync(outPath, JSON.stringify(jsonSchema, null, "\t") + "\n", "utf-8")
 

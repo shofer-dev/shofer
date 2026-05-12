@@ -1,7 +1,7 @@
 /**
  * Builds the Zod schema for .shofermodes configuration files and converts it
  * to JSON Schema (draft-07). This module is the single source of truth for
- * both the generator script (scripts/generate-roomodes-schema.ts) and the
+ * both the generator script (scripts/generate-shofermodes-schema.ts) and the
  * drift-detection test.
  */
 
@@ -44,7 +44,7 @@ const shofermodesZodSchema = z
  * Generates the JSON Schema object for .shofermodes configuration files.
  * Includes metadata fields ($id, title, description).
  */
-export function generateRoomodesJsonSchema(): Record<string, unknown> {
+export function generateShofermodesJsonSchema(): Record<string, unknown> {
 	const jsonSchema = zodToJsonSchema(shofermodesZodSchema, {
 		$refStrategy: "none",
 		target: "jsonSchema7",
