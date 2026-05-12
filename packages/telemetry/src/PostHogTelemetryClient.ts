@@ -16,14 +16,20 @@ import {
 
 import { BaseTelemetryClient } from "./BaseTelemetryClient"
 
+const TELEMETRY_ENABLED = process.env.TELEMETRY_ENABLED === "true"
+
 /**
  * PostHogTelemetryClient handles telemetry event tracking for the Shofer extension.
  * Uses PostHog analytics to track user interactions and system events.
  * Respects user privacy settings and VSCode's global telemetry configuration.
+ *
+ * Telemetry is disabled by default. Set TELEMETRY_ENABLED=true to enable it.
+ * When disabled, the PostHog client is never initialized and all telemetry
+ * operations are no-ops (no server-side required).
  */
 export class PostHogTelemetryClient extends BaseTelemetryClient {
-	private client: PostHog
-	private distinctId: string = vscode.env.machineId
+	private client: PostHog | null = null
+	private distinctId: string = TELEMETRY_ENABLED ? vscode.env.machineId : ""
 	// Git repository properties that should be filtered out
 	private readonly gitPropertyNames = ["repositoryUrl", "repositoryName", "defaultBranch"]
 
@@ -36,7 +42,9 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 			debug,
 		)
 
-		this.client = new PostHog(process.env.POSTHOG_API_KEY || "", { host: "https://ph.shofer.com" })
+		if (TELEMETRY_ENABLED) {
+			this.client = new PostHog(process.env.POSTHOG_API_KEY || "", { host: "https://ph.shofer.com" })
+		}
 	}
 
 	/**
@@ -53,7 +61,7 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 	}
 
 	public override async capture(event: TelemetryEvent): Promise<void> {
-		if (!this.isTelemetryEnabled() || !this.isEventCapturable(event.event)) {
+		if (!TELEMETRY_ENABLED || !this.isTelemetryEnabled() || !this.isEventCapturable(event.event)) {
 			if (this.debug) {
 				console.info(`[PostHogTelemetryClient#capture] Skipping event: ${event.event}`)
 			}
@@ -67,7 +75,7 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 
 		const properties = await this.getEventProperties(event)
 
-		this.client.capture({
+		this.client?.capture({
 			distinctId: this.distinctId,
 			event: event.event,
 			properties,
@@ -78,7 +86,7 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 		error: Error,
 		additionalProperties?: Record<string, unknown>,
 	): Promise<void> {
-		if (!this.isTelemetryEnabled()) {
+		if (!TELEMETRY_ENABLED || !this.isTelemetryEnabled()) {
 			if (this.debug) {
 				console.info(`[PostHogTelemetryClient#captureException] Skipping exception: ${error.message}`)
 			}
@@ -135,7 +143,7 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 			$app_version: telemetryProperties?.appVersion,
 		}
 
-		this.client.captureException(error, this.distinctId, exceptionProperties)
+		this.client?.captureException(error, this.distinctId, exceptionProperties)
 	}
 
 	/**
@@ -145,6 +153,11 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 	 * @param didUserOptIn Whether the user has explicitly opted into telemetry
 	 */
 	public override updateTelemetryState(didUserOptIn: boolean): void {
+		if (!TELEMETRY_ENABLED) {
+			this.telemetryEnabled = false
+			return
+		}
+
 		this.telemetryEnabled = false
 
 		// First check global telemetry level - telemetry should only be enabled when level is "all".
@@ -158,13 +171,13 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 
 		// Update PostHog client state based on telemetry preference.
 		if (this.telemetryEnabled) {
-			this.client.optIn()
+			this.client?.optIn()
 		} else {
-			this.client.optOut()
+			this.client?.optOut()
 		}
 	}
 
 	public override async shutdown(): Promise<void> {
-		await this.client.shutdown()
+		await this.client?.shutdown()
 	}
 }
