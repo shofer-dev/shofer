@@ -30,7 +30,6 @@ import {
 	SambaNovaHandler,
 	ZAiHandler,
 	FireworksHandler,
-	ShoferHandler,
 	VercelAiGatewayHandler,
 	MiniMaxHandler,
 	BasetenHandler,

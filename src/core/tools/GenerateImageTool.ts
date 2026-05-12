@@ -14,7 +14,6 @@ import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { OpenRouterHandler } from "../../api/providers/openrouter"
-import { ShoferHandler } from "../../api/providers/shofer"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"
@@ -190,10 +189,11 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 			}
 
 			let result
+			// Shofer provider removed; fall through to OpenRouter
 			if (modelProvider === "shofer") {
-				// Use Shofer Cloud provider (supports both chat completions and images API)
-				const rooHandler = new ShoferHandler({} as any)
-				result = await rooHandler.generateImage(prompt, selectedModel, inputImageData, apiMethod)
+				// Shofer provider no longer available; use OpenRouter fallback
+				const openRouterHandler = new OpenRouterHandler({} as any)
+				result = await openRouterHandler.generateImage(prompt, selectedModel, openRouterApiKey!, inputImageData)
 			} else {
 				// Use OpenRouter provider (only supports chat completions API)
 				const openRouterHandler = new OpenRouterHandler({} as any)
