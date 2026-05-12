@@ -296,7 +296,7 @@ export async function handleGetWorktreeStatus(provider: ClineProvider): Promise<
 	const [currentBranchResult, baseBranchResult, worktreesResult, lastCommitResult, uncommittedResult] =
 		await Promise.all([
 			worktreeService.getCurrentBranch(cwd),
-			detectBaseBranch(cwd),
+			worktreeService.detectBaseBranch(cwd),
 			worktreeService.listWorktrees(cwd),
 			execAsync('git log -1 --format="%h|%s|%ar|%an"', { cwd }).catch(() => ({ stdout: "" })),
 			execAsync("git status --short", { cwd }).catch(() => ({ stdout: "" })),
@@ -393,22 +393,6 @@ export async function handleGetWorktreeStatus(provider: ClineProvider): Promise<
 		isBaseBranch: currentBranch === baseBranch,
 		otherWorktrees,
 	}
-}
-
-async function detectBaseBranch(cwd: string): Promise<string> {
-	try {
-		const mainResult = await execAsync("git branch --list main", { cwd })
-		if (mainResult.stdout.includes("main")) return "main"
-	} catch {
-		// Continue
-	}
-	try {
-		const masterResult = await execAsync("git branch --list master", { cwd })
-		if (masterResult.stdout.includes("master")) return "master"
-	} catch {
-		// Continue
-	}
-	return "main"
 }
 
 async function countCommits(cwd: string, baseBranch: string, targetBranch: string): Promise<number> {
