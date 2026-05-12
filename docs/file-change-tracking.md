@@ -261,6 +261,14 @@ Single bidirectional channel between webview and extension host:
 | Webview → host | `changedFiles/acceptAll` | –                     |
 | Host → webview | `changedFiles/update`    | `ChangedFilesPayload` |
 
+### Robustness: Accept/Update Serialization and Logging (2026)
+
+**Race condition fix:** Previously, rapid Accept clicks could cause some files to remain in the panel due to race conditions between concurrent `pushChangedFilesUpdate` calls. Each Accept would trigger a state mutation and a push, but the pushes could overlap and the last one to finish (even if stale) would win, causing accepted files to reappear.
+
+**Current behavior:** `pushChangedFilesUpdate` is now serialized. If a push is in progress, further requests are queued and only the final state is sent to the webview after all mutations complete. This guarantees the panel always reflects the true post-accept state, even under rapid or concurrent Accept/AcceptAll actions.
+
+**Diagnostics:** Logging was added to `acceptFile`, `acceptAll`, and `pushChangedFilesUpdate` to trace candidate counts, mutation order, and backend state for troubleshooting. If you still see files not disappearing, check the logs for the sequence of accept and update events.
+
 The host pushes `changedFiles/update` debounced ~500 ms after each
 `roo_edited` event and after every revert/accept. The panel also pulls on
 mount and on task switch via `changedFiles/get`.
