@@ -3859,7 +3859,7 @@ export const webviewMessageHandler = async (
 
 		case "getWorktreeStatus": {
 			try {
-				const status = await handleGetWorktreeStatus(provider)
+				const status = await handleGetWorktreeStatus(provider, message.worktreeDir)
 				await provider.postMessageToWebview({ type: "worktreeStatus", worktreeStatus: status })
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
