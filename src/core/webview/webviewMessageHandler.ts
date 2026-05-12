@@ -80,7 +80,6 @@ import {
 	handleListWorktrees,
 	handleCreateWorktree,
 	handleDeleteWorktree,
-	handleSwitchWorktree,
 	handleGetAvailableBranches,
 	handleGetWorktreeDefaults,
 	handleGetWorktreeIncludeStatus,
@@ -3697,23 +3696,6 @@ export const webviewMessageHandler = async (
 					provider,
 					message.worktreePath!,
 					message.worktreeForce ?? false,
-				)
-
-				await provider.postMessageToWebview({ type: "worktreeResult", success, text })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				await provider.postMessageToWebview({ type: "worktreeResult", success: false, text: errorMessage })
-			}
-
-			break
-		}
-
-		case "switchWorktree": {
-			try {
-				const { success, message: text } = await handleSwitchWorktree(
-					provider,
-					message.worktreePath!,
-					message.worktreeNewWindow ?? true,
 				)
 
 				await provider.postMessageToWebview({ type: "worktreeResult", success, text })

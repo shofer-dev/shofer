@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 
 import type { Worktree, WorktreeListResponse, WorktreeIncludeStatus } from "@roo-code/types"
 
-import { Badge, Button, StandardTooltip, ToggleSwitch } from "@/components/ui"
-import { useExtensionState } from "@/context/ExtensionStateContext"
+import { Badge, Button, StandardTooltip } from "@/components/ui"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { vscode } from "@/utils/vscode"
 
@@ -11,11 +10,10 @@ import { SectionHeader } from "../settings/SectionHeader"
 
 import { CreateWorktreeModal } from "./CreateWorktreeModal"
 import { DeleteWorktreeModal } from "./DeleteWorktreeModal"
-import { Folder, GitBranch, Lock, Plus, SquareArrowOutUpRight, Trash } from "lucide-react"
+import { Folder, GitBranch, Lock, Plus, Trash } from "lucide-react"
 
 export const WorktreesView = () => {
 	const { t } = useAppTranslation()
-	const { showWorktreesInHomeScreen, setShowWorktreesInHomeScreen } = useExtensionState()
 
 	// State
 	const [worktrees, setWorktrees] = useState<Worktree[]>([])
@@ -113,25 +111,6 @@ export const WorktreesView = () => {
 		}, 500)
 	}, [includeStatus, fetchIncludeStatus])
 
-	// Handle switch worktree
-	const handleSwitchWorktree = useCallback((worktreePath: string, newWindow: boolean) => {
-		vscode.postMessage({
-			type: "switchWorktree",
-			worktreePath: worktreePath,
-			worktreeNewWindow: newWindow,
-		})
-	}, [])
-
-	// Handle toggle show in home screen
-	const handleToggleShowInHomeScreen = useCallback(() => {
-		const newValue = !showWorktreesInHomeScreen
-		setShowWorktreesInHomeScreen(newValue)
-		vscode.postMessage({
-			type: "updateSettings",
-			updatedSettings: { showWorktreesInHomeScreen: newValue },
-		})
-	}, [showWorktreesInHomeScreen, setShowWorktreesInHomeScreen])
-
 	// Render error states
 	if (!isGitRepo) {
 		return (
@@ -181,14 +160,6 @@ export const WorktreesView = () => {
 				<div className="flex flex-col gap-2 px-5 py-2">
 					<p className="text-vscode-descriptionForeground text-sm m-0">{t("worktrees:description")}</p>
 
-					{/* Show in Home Screen toggle */}
-					<label
-						className="flex cursor-pointer items-center gap-2 text-sm text-vscode-descriptionForeground"
-						onClick={handleToggleShowInHomeScreen}>
-						<ToggleSwitch checked={showWorktreesInHomeScreen} onChange={handleToggleShowInHomeScreen} />
-						<span>{t("worktrees:showInHomeScreen")}</span>
-					</label>
-
 					{/* New Worktree button */}
 					<Button variant="secondary" className="py-1" onClick={() => setShowCreateModal(true)}>
 						<Plus />
@@ -213,16 +184,13 @@ export const WorktreesView = () => {
 						{worktrees.map((worktree) => (
 							<div
 								key={worktree.path}
-								className={`p-2.5 px-3.5 rounded-xl hover:bg-vscode-list-hoverBackground border border-transparent ${
+								className={`p-2.5 px-3.5 rounded-xl border border-transparent ${
 									worktree.isCurrent
 										? " bg-vscode-list-activeSelectionBackground border-vscode-list-activeSelectionForeground/20"
-										: "cursor-pointer"
-								}`}
-								onClick={
-									worktree.isCurrent ? undefined : () => handleSwitchWorktree(worktree.path, false)
-								}>
+										: "hover:bg-vscode-list-hoverBackground"
+								}`}>
 								<div className="flex items-start min-[400px]:items-center justify-between gap-2 flex-col min-[400px]:flex-row overflow-hidden">
-									<div className={`flex-1 min-w-0 ${worktree.isCurrent && "cursor-default"}`}>
+									<div className="flex-1 min-w-0">
 										{/* Info */}
 										<div className="flex items-center gap-2 overflow-hidden">
 											<GitBranch className="size-3 shrink-0" />
@@ -251,19 +219,6 @@ export const WorktreesView = () => {
 
 									{/* Actions */}
 									<div className="flex items-center gap-1 ml-3 min-[400px]:ml-0 flex-shrink-0">
-										<StandardTooltip content={t("worktrees:openInNewWindow")}>
-											<Button
-												variant="ghost"
-												size="icon"
-												disabled={worktree.isCurrent}
-												onClick={(e) => {
-													e.stopPropagation()
-													handleSwitchWorktree(worktree.path, true)
-												}}>
-												<SquareArrowOutUpRight />
-											</Button>
-										</StandardTooltip>
-
 										<StandardTooltip content={t("worktrees:delete")}>
 											<Button
 												variant="ghost"

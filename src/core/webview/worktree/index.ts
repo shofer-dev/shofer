@@ -9,7 +9,6 @@ export {
 	handleListWorktrees,
 	handleCreateWorktree,
 	handleDeleteWorktree,
-	handleSwitchWorktree,
 	handleGetAvailableBranches,
 	handleGetWorktreeDefaults,
 	handleGetWorktreeIncludeStatus,

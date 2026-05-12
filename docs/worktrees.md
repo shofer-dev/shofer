@@ -2,28 +2,23 @@
 
 ## Overview
 
-Roo Code supports two worktree models:
+Roo Code supports git worktrees with an **embedded model**: each worktree lives at `<workspace>/.roo/worktrees/<name>/`, and worktree-scoped tasks run concurrently inside the same VS Code window. This enables orchestrated parallel work, in-window task switching, and merge-back without window juggling.
 
-| Model               | Introduced         | Worktree location                    | Tasks              | Windows          |
-| ------------------- | ------------------ | ------------------------------------ | ------------------ | ---------------- |
-| **Separate-window** | v3.44.0 (Jan 2026) | `~/.roo/worktrees/<project>-<rand>`  | One per window     | One per worktree |
-| **Embedded**        | v3.67.0 (May 2026) | `<workspace>/.roo/worktrees/<name>/` | All in same window | Single window    |
-
-The embedded model is preferred for new worktrees. It enables concurrent task execution, orchestrated merges, and task-selector visibility — all within the same VS Code window.
+Manually-created worktrees outside the workspace (e.g. `git worktree add ../foo` opened with `code ../foo`) are still detected and listed by the Worktrees view; they simply behave as normal Roo Code workspaces in their own window.
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  Webview UI (React)                                               │
-│  WorktreeSelector · WorktreesView · Create/Delete Modals          │
+│  WorktreesView · Create/Delete Modals                              │
 │  WorktreeStatusIndicator · NewWorktreeTaskButton                  │
 │  TaskHeader · TaskSelector (worktree badge)                        │
 ├──────────────────────────────────────────────────────────────────┤
 │  VSCode Bridge (handlers.ts)                                      │
 │  handleListWorktrees · handleCreateWorktree                        │
-│  handleSwitchWorktree · handleDeleteWorktree                       │
-│  handleGetWorktreeDefaults · handleGetWorktreeStatus               │
+│  handleDeleteWorktree · handleGetWorktreeDefaults                  │
+│  handleGetWorktreeStatus                                           │
 ├──────────────────────────────────────────────────────────────────┤
 │  Platform-Agnostic Core (@roo-code/core)                          │
 │  WorktreeService · WorktreeIncludeService                          │
@@ -56,7 +51,6 @@ Handlers translate webview IPC messages to core service calls:
 
 - `handleListWorktrees` — Enforces constraints (no multi-root; subfolder workspaces allowed only when the subfolder lives under `<gitRoot>/.roo/worktrees/` — i.e., it is itself an embedded worktree)
 - `handleCreateWorktree` — Creates worktree then auto-copies `.worktreeinclude` files with progress
-- `handleSwitchWorktree` — Opens `vscode.openFolder` (same or new window); stores `worktreeAutoOpenPath` in global state for auto-open behavior
 - `handleDeleteWorktree` — Delegates to core service
 - `handleGetWorktreeDefaults` — Generates suggested path (`<workspace>/.roo/worktrees/<project>-<random>`) and branch name (`worktree/roo-<random>`)
 
@@ -92,16 +86,6 @@ isEmbeddedWorktree = !rel.startsWith("..") && !path.isAbsolute(rel) && rel.start
 ```
 
 This is a containment check anchored to the git root — not a substring match — so it cannot be confused by unrelated directories that happen to contain the string `.roo/worktrees`.
-
-### 6. Extension Activation Flow (Separate-Window Model Only)
-
-When a worktree is opened in a new window, the stored [`worktreeAutoOpenPath`](../src/extension.ts:83) triggers:
-
-1. On activation, `checkWorktreeAutoOpen` reads the stored path from `globalState`
-2. If the current workspace path matches, it clears the stored path and auto-opens the Roo Code sidebar (500ms delay for UI readiness)
-3. This ensures Roo Code is immediately available in the new worktree window
-
-For embedded worktrees this mechanism is not used — tasks are spawned via `createManagedTask` and appear directly in the in-window task selector.
 
 ## Native `worktree` Tool
 
@@ -162,16 +146,15 @@ The `new_task` tool also accepts a `worktreeDir` parameter (nullable string, `st
 
 ## UI Components
 
-| Component                                                                                  | Location             | Purpose                                                                                                                                     |
-| ------------------------------------------------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`WorktreeSelector`](../webview-ui/src/components/chat/WorktreeSelector.tsx)               | Chat header dropdown | Quick-switch between worktrees; shows branch name and path; hidden when ≤1 worktree                                                         |
-| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                | Settings page        | Full CRUD management with 3-second polling; `.worktreeinclude` status footer                                                                |
-| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx)    | Modal                | Searchable base-branch selector; auto-generated branch/path (read-only); progress tracking; `openAfterCreate` flag spawns an in-window task |
-| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx)    | Confirmation dialog  | Branch and filesystem deletion warnings                                                                                                     |
-| [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) | Chat input bar chip  | Shows current worktree branch; click for ahead/behind, file stats, merge readiness                                                          |
-| [`NewWorktreeTaskButton`](../webview-ui/src/components/chat/NewWorktreeTaskButton.tsx)     | Chat input bar       | One-click entry to open `CreateWorktreeModal` with `openAfterCreate=true`                                                                   |
-| [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx)                           | Chat header          | Shows worktree badge (leaf dir name) when task `cwd` differs from workspace                                                                 |
-| [`TaskSelector`](../webview-ui/src/components/chat/TaskSelector.tsx)                       | Task switcher        | Badges worktree tasks with their branch/directory name                                                                                      |
+| Component                                                                                  | Location            | Purpose                                                                                                                                     |
+| ------------------------------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                | Settings page       | Full CRUD management with 3-second polling; `.worktreeinclude` status footer                                                                |
+| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx)    | Modal               | Searchable base-branch selector; auto-generated branch/path (read-only); progress tracking; `openAfterCreate` flag spawns an in-window task |
+| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx)    | Confirmation dialog | Branch and filesystem deletion warnings                                                                                                     |
+| [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) | Chat input bar chip | Shows current worktree branch; click for ahead/behind, file stats, merge readiness                                                          |
+| [`NewWorktreeTaskButton`](../webview-ui/src/components/chat/NewWorktreeTaskButton.tsx)     | Chat input bar      | One-click entry to open `CreateWorktreeModal` with `openAfterCreate=true`                                                                   |
+| [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx)                           | Chat header         | Shows worktree badge (leaf dir name) when task `cwd` differs from workspace                                                                 |
+| [`TaskSelector`](../webview-ui/src/components/chat/TaskSelector.tsx)                       | Task switcher       | Badges worktree tasks with their branch/directory name                                                                                      |
 
 ## `.worktreeinclude` Mechanism
 
@@ -223,7 +206,6 @@ Worktrees are disabled when the VS Code workspace root is a subdirectory of the 
 | `listWorktrees`            | (none)                                                                            |
 | `createWorktree`           | `worktreePath`, `worktreeBranch`, `worktreeBaseBranch`, `worktreeCreateNewBranch` |
 | `deleteWorktree`           | `worktreePath`, `worktreeForce`                                                   |
-| `switchWorktree`           | `worktreePath`, `worktreeNewWindow`                                               |
 | `getWorktreeDefaults`      | (none)                                                                            |
 | `getWorktreeIncludeStatus` | (none)                                                                            |
 | `getAvailableBranches`     | (none)                                                                            |
@@ -274,7 +256,6 @@ i18n translations: [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../web
 ## Known Limitations
 
 1. **No multi-root workspace support** — Workspaces with multiple folders cannot use worktrees
-2. **Separate-window worktrees are not task-selector-aware** — External worktrees (outside `.roo/worktrees/`) still open a new VS Code window and are not visible in the in-window task selector
-3. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
-4. **`.worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
-5. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC and the native `worktree` tool, but not through a public extension API
+2. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
+3. **`.worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
+4. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC and the native `worktree` tool, but not through a public extension API

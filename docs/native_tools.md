@@ -422,6 +422,37 @@ Three update modes:
 
 ---
 
+## Worktree Management
+
+| Tool       | Origin | Group | Always Available | Status | Description                                                     |
+| ---------- | :----: | ----- | :--------------: | :----: | --------------------------------------------------------------- |
+| `worktree` | 🟣 AW  | mode  |        –         |   ✅   | Manage git worktrees (create / list / merge / destroy / status) |
+
+### `worktree`
+
+Manage git worktrees for parallel task execution. Creates worktrees under `.roo/worktrees/` by default. The orchestrator uses this to create isolated worktrees, spawn subtasks on them, merge results, and clean up — all without `execute_command` access. Assigned to the `mode` group so Orchestrator tasks (which lack filesystem and command-execution access) can still drive the worktree lifecycle.
+
+| Param           | Type            | Required | Description                                                                                     |
+| --------------- | --------------- | :------: | ----------------------------------------------------------------------------------------------- |
+| `subcommand`    | enum            |    ✅    | One of `create`, `list`, `merge`, `destroy`, `status`                                           |
+| `path`          | string \| null  |    ✅    | Worktree path (absolute or relative to workspace root). Required for create/destroy/status      |
+| `branch`        | string \| null  |    ✅    | Branch name for `create`. Defaults to `worktree/roo-<random5>`                                  |
+| `base_branch`   | string \| null  |    ✅    | Base branch for `create`. Defaults to current branch (main/master)                              |
+| `target_branch` | string \| null  |    ✅    | (`merge` only) Branch to merge into. Defaults to detected base branch; refuses if HEAD ≠ target |
+| `force`         | boolean \| null |    ✅    | (`destroy` only) Force removal even if branch is unmerged. Default `false`                      |
+
+**Subcommand behaviours:**
+
+- `create`: `git worktree add <path> <branch>`, copies `.worktreeinclude` files, ensures `.roo/worktrees/` is gitignored.
+- `list`: `git worktree list --porcelain`, annotated with embedded-worktree flag.
+- `merge`: `git merge --no-ff <branch>` into `target_branch`. Refuses if main worktree has uncommitted changes or is not on `target_branch`. Reports conflicts.
+- `destroy`: `git worktree remove <path>` + `git branch -d <branch>`. Refuses unmerged branches unless `force=true`.
+- `status`: ahead/behind counts, uncommitted changes, dry-run merge readiness.
+
+All git operations run with `PAGER=cat`. Paths resolve relative to `task.cwd`. See [`worktrees.md`](worktrees.md) for the full embedded worktree model and orchestrated workflow.
+
+---
+
 ## MCP (Model Context Protocol)
 
 | Tool                  | Origin | Group | Always Available | Status | Description                                     |
@@ -490,6 +521,8 @@ Checkmark (✓) means the tool is available in that mode by default.
 | **MCP group**              |
 | `use_mcp_tool`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `access_mcp_resource`      |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
+| **Mode group**             |
+| `worktree`                 |      ✓       |    ✓    |        |    ✓     |        |
 | **Always available**       |
 | `ask_followup_question`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `attempt_completion`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |

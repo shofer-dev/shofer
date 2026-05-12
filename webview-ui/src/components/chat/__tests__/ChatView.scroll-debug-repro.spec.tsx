@@ -91,7 +91,6 @@ vi.mock("../common/DismissibleUpsell", nullDefaultModule)
 
 vi.mock("./CheckpointWarning", () => ({ CheckpointWarning: () => null }))
 vi.mock("./QueuedMessages", () => ({ QueuedMessages: () => null }))
-vi.mock("./WorktreeSelector", () => ({ WorktreeSelector: () => null }))
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeLink: ({ children }: { children: React.ReactNode }) => <>{children}</>,

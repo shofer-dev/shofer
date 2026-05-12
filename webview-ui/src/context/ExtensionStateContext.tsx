@@ -167,8 +167,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setIncludeCurrentTime: (value: boolean) => void
 	includeCurrentCost?: boolean
 	setIncludeCurrentCost: (value: boolean) => void
-	showWorktreesInHomeScreen: boolean
-	setShowWorktreesInHomeScreen: (value: boolean) => void
 	skills?: SkillMetadata[]
 	loadedSkills?: Record<string, string>
 }
@@ -703,9 +701,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setIncludeCurrentCost,
 		skills,
 		loadedSkills,
-		showWorktreesInHomeScreen: state.showWorktreesInHomeScreen ?? true,
-		setShowWorktreesInHomeScreen: (value) =>
-			setState((prevState) => ({ ...prevState, showWorktreesInHomeScreen: value })),
 		// Parallel task management
 		parallelTasks: state.parallelTasks ?? [],
 		focusedTaskId: state.focusedTaskId ?? null,
