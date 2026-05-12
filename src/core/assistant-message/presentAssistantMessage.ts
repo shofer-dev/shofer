@@ -62,6 +62,7 @@ import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool"
 import { waitForTaskTool } from "../tools/WaitForTaskTool"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
 import { sleepTool } from "../tools/SleepTool"
+import { worktreeToolInstance } from "../tools/WorktreeTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
@@ -407,6 +408,11 @@ export async function presentAssistantMessage(cline: Task) {
 						const message = block.params.message ?? "(no message)"
 						const modeName = getModeBySlug(mode, customModes)?.name ?? mode
 						return `[${block.name} in ${modeName} mode: '${message}']`
+					}
+					case "worktree": {
+						const sub = block.params.subcommand ?? "?"
+						const branch = block.params.branch ? ` on '${block.params.branch}'` : ""
+						return `[${block.name} ${sub}${branch}]`
 					}
 					case "run_slash_command":
 						return `[${block.name} for '${block.params.command}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
@@ -901,6 +907,15 @@ export async function presentAssistantMessage(cline: Task) {
 				case "new_task":
 					await checkpointSaveAndMark(cline)
 					await newTaskTool.handle(cline, block as ToolUse<"new_task">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+						toolCallId: block.id,
+					})
+					break
+				case "worktree":
+					await checkpointSaveAndMark(cline)
+					await worktreeToolInstance.handle(cline, block as ToolUse<"worktree">, {
 						askApproval,
 						handleError,
 						pushToolResult,

@@ -29,6 +29,7 @@ import { ModeSelector } from "./ModeSelector"
 import { ApiConfigSelector } from "./ApiConfigSelector"
 import { AutoApproveDropdown } from "./AutoApproveDropdown"
 import { WorktreeStatusIndicator } from "./WorktreeStatusIndicator"
+import { NewWorktreeTaskButton } from "./NewWorktreeTaskButton"
 import { CommandsButton } from "./CommandsButton"
 import { SkillsButton } from "./SkillsButton"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
@@ -1338,6 +1339,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						/>
 						<AutoApproveDropdown triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink" />
 						<WorktreeStatusIndicator />
+						<NewWorktreeTaskButton />
 						<CommandsButton />
 						<SkillsButton />
 					</div>

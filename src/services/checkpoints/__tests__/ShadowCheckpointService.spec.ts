@@ -1035,4 +1035,79 @@ describe("worktree path comparison", () => {
 			await fs.rm(workspaceDir, { recursive: true, force: true })
 		}
 	})
+
+	// Embedded-worktree (Phase 3) — verify that when a `scopedWorktreeDir` is
+	// passed, the shadow git's `core.worktree` is set to that subdirectory
+	// instead of the workspace root.  This is what isolates an embedded
+	// worktree task's checkpoints from sibling worktrees and the main tree.
+	it("scopes core.worktree to scopedWorktreeDir when provided", async () => {
+		const shadowDir = path.join(tmpDir, `scoped-${Date.now()}`)
+		const workspaceDir = path.join(tmpDir, `workspace-scoped-${Date.now()}`)
+		const scopedDir = path.join(workspaceDir, ".roo", "worktrees", "embedded-1")
+
+		try {
+			await fs.mkdir(workspaceDir, { recursive: true })
+			await fs.mkdir(scopedDir, { recursive: true })
+			const mainGit = simpleGit(workspaceDir)
+			await mainGit.init()
+			await mainGit.addConfig("user.name", "Roo Code")
+			await mainGit.addConfig("user.email", "support@roocode.com")
+			await fs.writeFile(path.join(workspaceDir, "main.txt"), "main content")
+			await mainGit.add("main.txt")
+			await mainGit.commit("Initial commit")
+
+			vitest.spyOn(fileSearch, "executeRipgrep").mockImplementation(() => Promise.resolve([]))
+
+			const service = new RepoPerTaskCheckpointService(
+				"scoped-test",
+				shadowDir,
+				workspaceDir,
+				() => {},
+				scopedDir,
+			)
+			await service.initShadowGit()
+
+			const shadowGit = simpleGit(shadowDir)
+			const configured = (await shadowGit.raw(["config", "--get", "core.worktree"])).trim()
+			expect(configured).toBe(scopedDir)
+
+			expect(service.scopedWorktreeDir).toBe(scopedDir)
+		} finally {
+			vitest.restoreAllMocks()
+			await fs.rm(shadowDir, { recursive: true, force: true })
+			await fs.rm(workspaceDir, { recursive: true, force: true })
+		}
+	})
+
+	// Non-scoped (main) shadow git instances must add `/.roo/worktrees/` to
+	// the exclude file so embedded worktree directories do not contaminate
+	// the main task's checkpoints.
+	it("excludes /.roo/worktrees/ for non-scoped shadow gits", async () => {
+		const shadowDir = path.join(tmpDir, `exclude-main-${Date.now()}`)
+		const workspaceDir = path.join(tmpDir, `workspace-exclude-${Date.now()}`)
+
+		try {
+			await fs.mkdir(workspaceDir, { recursive: true })
+			const mainGit = simpleGit(workspaceDir)
+			await mainGit.init()
+			await mainGit.addConfig("user.name", "Roo Code")
+			await mainGit.addConfig("user.email", "support@roocode.com")
+			await fs.writeFile(path.join(workspaceDir, "main.txt"), "main content")
+			await mainGit.add("main.txt")
+			await mainGit.commit("Initial commit")
+
+			vitest.spyOn(fileSearch, "executeRipgrep").mockImplementation(() => Promise.resolve([]))
+
+			const service = new RepoPerTaskCheckpointService("exclude-main-test", shadowDir, workspaceDir, () => {})
+			await service.initShadowGit()
+
+			const excludePath = path.join(shadowDir, ".git", "info", "exclude")
+			const excludeContent = await fs.readFile(excludePath, "utf-8")
+			expect(excludeContent).toContain("/.roo/worktrees/")
+		} finally {
+			vitest.restoreAllMocks()
+			await fs.rm(shadowDir, { recursive: true, force: true })
+			await fs.rm(workspaceDir, { recursive: true, force: true })
+		}
+	})
 })

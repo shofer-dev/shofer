@@ -667,7 +667,7 @@ export const webviewMessageHandler = async (
 
 				const messageText = resolved.text
 
-				await provider.createManagedTask(undefined, messageText, resolved.images)
+				await provider.createManagedTask(undefined, messageText, resolved.images, message.worktreeDir)
 				// Task created successfully - notify the UI to reset
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 			} catch (error) {
@@ -3909,10 +3909,12 @@ export const webviewMessageHandler = async (
 		// Parallel task management messages
 		case "createParallelTask": {
 			try {
-				await provider.createManagedTask(message.taskName, message.text, message.images)
+				await provider.createManagedTask(message.taskName, message.text, message.images, message.worktreeDir)
 				// Notify the UI to reset the chat input and save the outgoing
 				// task's draft, matching the "newTask" handler behaviour.
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+				// Send worktree status update so the UI can show badge info
+				await provider.postStateToWebview()
 			} catch (error) {
 				provider.log(`Error creating managed task: ${error}`)
 				// Reset the UI even on failure so the user isn't stuck.

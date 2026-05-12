@@ -158,6 +158,14 @@ export interface TaskOptions extends CreateTaskOptions {
 	onCreated?: (task: Task) => void
 	initialTodos?: TodoItem[]
 	workspacePath?: string
+	/**
+	 * Working directory for this task. When set (e.g., for embedded worktree
+	 * tasks), this overrides the default workspacePath as the task's CWD for
+	 * tool invocations, file path resolution, and git operations.
+	 *
+	 * If not set, cwd defaults to workspacePath.
+	 */
+	cwd?: string
 	/** Initial status for the task's history item (e.g., "active" for child tasks) */
 	initialStatus?: "active" | "delegated" | "completed"
 }
@@ -567,6 +575,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		onCreated,
 		initialTodos,
 		workspacePath,
+		cwd,
 		initialStatus,
 		initialMode,
 		isBackground,
@@ -605,6 +614,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.workspacePath = parentTask
 			? parentTask.workspacePath
 			: (workspacePath ?? getWorkspacePath(path.join(os.homedir(), "Desktop")))
+
+		// Per-task working directory. For embedded worktree tasks this is the
+		// worktree subdirectory (e.g. .roo/worktrees/repo-hl911/); for
+		// regular tasks it defaults to workspacePath.
+		this._cwd = cwd ?? historyItem?.cwd ?? this.workspacePath
 
 		this.instanceId = crypto.randomUUID().slice(0, 8)
 		this.taskNumber = -1
@@ -1398,7 +1412,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskNumber: this.taskNumber,
 				messages: this.clineMessages,
 				globalStoragePath: this.globalStoragePath,
-				workspace: this.cwd,
+				// Use workspacePath (the VS Code workspace root) so all tasks
+				// within the same workspace — including embedded worktree tasks —
+				// share the same workspace identifier for history filtering.
+				workspace: this.workspacePath,
+				// Persist the per-task cwd (e.g., worktree subdirectory) for
+				// correct rehydration when resuming from history.
+				cwd: this._cwd !== this.workspacePath ? this._cwd : undefined,
 				mode: this._taskMode || defaultModeSlug, // Use the task's own mode, not the current provider mode.
 				apiConfigName: this._taskApiConfigName, // Use the task's own provider profile, not the current provider profile.
 				initialStatus: this.initialStatus,
@@ -5395,8 +5415,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return this.tokenUsageSnapshot
 	}
 
+	/**
+	 * Working directory for this task. When this task is scoped to an
+	 * embedded worktree (e.g. `.roo/worktrees/repo-hl911/`), `_cwd` is the
+	 * worktree subdirectory. Otherwise it defaults to `workspacePath`.
+	 *
+	 * Tools resolve paths relative to this directory, git operations use it
+	 * as their working tree, and terminal processes are spawned here.
+	 */
+	private readonly _cwd: string
+
 	public get cwd() {
-		return this.workspacePath
+		return this._cwd
 	}
 
 	/**

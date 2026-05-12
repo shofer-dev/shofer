@@ -196,6 +196,8 @@ describe("newTaskTool", () => {
 				]),
 				initialMode: "code",
 			}),
+			undefined,
+			undefined,
 		)
 
 		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
@@ -225,6 +227,8 @@ describe("newTaskTool", () => {
 			undefined,
 			mockCline,
 			expect.objectContaining({ initialMode: "code" }),
+			undefined,
+			undefined,
 		)
 	})
 
@@ -252,6 +256,8 @@ describe("newTaskTool", () => {
 			undefined,
 			mockCline,
 			expect.objectContaining({ initialMode: "code" }),
+			undefined,
+			undefined,
 		)
 	})
 
@@ -279,6 +285,8 @@ describe("newTaskTool", () => {
 			undefined,
 			mockCline,
 			expect.objectContaining({ initialMode: "code" }),
+			undefined,
+			undefined,
 		)
 	})
 
@@ -310,6 +318,8 @@ describe("newTaskTool", () => {
 			undefined,
 			mockCline,
 			expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+			undefined,
+			undefined,
 		)
 
 		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
@@ -345,6 +355,8 @@ describe("newTaskTool", () => {
 				]),
 				initialMode: "code",
 			}),
+			undefined,
+			undefined,
 		)
 
 		expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
@@ -426,6 +438,8 @@ describe("newTaskTool", () => {
 					expect.objectContaining({ content: "In progress task", status: "in_progress" }),
 				]),
 			}),
+			undefined,
+			undefined,
 		)
 	})
 
@@ -463,6 +477,8 @@ describe("newTaskTool", () => {
 				undefined,
 				mockCline,
 				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+				undefined,
+				undefined,
 			)
 
 			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
@@ -537,6 +553,8 @@ describe("newTaskTool", () => {
 					]),
 					initialMode: "code",
 				}),
+				undefined,
+				undefined,
 			)
 
 			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
@@ -574,6 +592,8 @@ describe("newTaskTool", () => {
 				undefined,
 				mockCline,
 				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+				undefined,
+				undefined,
 			)
 
 			expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("Subtask child-1 completed"))
@@ -719,6 +739,8 @@ describe("newTaskTool delegation flow", () => {
 				initialStatus: "active",
 				openInStack: true,
 			}),
+			undefined,
+			undefined,
 		)
 
 		// Resolver registered for the child
@@ -733,5 +755,147 @@ describe("newTaskTool delegation flow", () => {
 			(c: any[]) => c[0] === "taskPaused" || c[0] === "taskUnpaused",
 		)
 		expect(pauseEvents.length).toBe(0)
+	})
+})
+
+// Embedded-worktree (Phase 7d) — verify that `worktreeDir` parameter is
+// resolved relative to the parent task's `cwd` and forwarded to
+// `provider.createTask` as the per-task working directory of the child.
+describe("newTaskTool worktreeDir plumbing", () => {
+	it("resolves a relative worktreeDir against parent task cwd and forwards it to createTask", async () => {
+		const localCreateTask = vi.fn().mockResolvedValue({ taskId: "wt-child-1" })
+		const localRegisterBlockingChildResolver = vi.fn((_childTaskId: string, resolver: (result: string) => void) => {
+			resolver("done")
+		})
+		const localGetTaskWithId = vi.fn().mockResolvedValue({
+			historyItem: { id: "wt-parent", status: "active", childIds: [] },
+		})
+
+		const localCline = {
+			ask: vi.fn(),
+			sayAndCreateMissingParamError: vi.fn(),
+			emit: vi.fn(),
+			recordToolError: vi.fn(),
+			consecutiveMistakeCount: 0,
+			didToolFailInCurrentTurn: false,
+			isPaused: false,
+			pausedModeSlug: "ask",
+			taskId: "wt-parent",
+			cwd: "/repo",
+			enableCheckpoints: false,
+			checkpointSave: vi.fn(),
+			getTaskMode: vi.fn().mockResolvedValue(undefined),
+			backgroundChildren: new Map<string, any>(),
+			providerRef: {
+				deref: vi.fn(() => ({
+					getState: vi.fn().mockResolvedValue({ customModes: [], mode: "ask" }),
+					createTask: localCreateTask,
+					registerBlockingChildResolver: localRegisterBlockingChildResolver,
+					getTaskWithId: localGetTaskWithId,
+					updateTaskHistory: vi.fn().mockResolvedValue([]),
+					taskManager: { registerBackgroundTask: vi.fn() },
+				})),
+			},
+		}
+
+		vi.mocked(getModeBySlug).mockReturnValue({
+			slug: "code",
+			name: "Code Mode",
+			roleDefinition: "Test role definition",
+			groups: ["execute", "read", "write"],
+		})
+		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+			get: vi.fn().mockReturnValue(false),
+		} as any)
+
+		const block: ToolUse<"new_task"> = {
+			type: "tool_use",
+			name: "new_task",
+			params: {
+				mode: "code",
+				message: "Implement feature X",
+				is_background: "false",
+				worktreeDir: ".roo/worktrees/repo-hl911",
+			},
+			nativeArgs: {
+				mode: "code",
+				message: "Implement feature X",
+				is_background: false,
+				worktreeDir: ".roo/worktrees/repo-hl911",
+			} as unknown as NativeToolArgs["new_task"],
+			partial: false,
+		}
+
+		await newTaskTool.handle(localCline as any, block, {
+			askApproval: vi.fn().mockResolvedValue(true),
+			handleError: vi.fn(),
+			pushToolResult: mockPushToolResult,
+		})
+
+		// 6th positional argument to createTask is the resolved cwd
+		expect(localCreateTask).toHaveBeenCalledTimes(1)
+		const callArgs = localCreateTask.mock.calls[0]
+		expect(callArgs[5]).toBe("/repo/.roo/worktrees/repo-hl911")
+	})
+
+	it("passes through an absolute worktreeDir unchanged", async () => {
+		const localCreateTask = vi.fn().mockResolvedValue({ taskId: "wt-child-2" })
+		const localCline = {
+			ask: vi.fn(),
+			sayAndCreateMissingParamError: vi.fn(),
+			emit: vi.fn(),
+			recordToolError: vi.fn(),
+			consecutiveMistakeCount: 0,
+			didToolFailInCurrentTurn: false,
+			isPaused: false,
+			pausedModeSlug: "ask",
+			taskId: "wt-parent-2",
+			cwd: "/repo",
+			enableCheckpoints: false,
+			checkpointSave: vi.fn(),
+			getTaskMode: vi.fn().mockResolvedValue(undefined),
+			backgroundChildren: new Map<string, any>(),
+			providerRef: {
+				deref: vi.fn(() => ({
+					getState: vi.fn().mockResolvedValue({ customModes: [], mode: "ask" }),
+					createTask: localCreateTask,
+					registerBlockingChildResolver: vi.fn((_id: string, resolver: (result: string) => void) =>
+						resolver("done"),
+					),
+					getTaskWithId: vi.fn().mockResolvedValue({
+						historyItem: { id: "wt-parent-2", status: "active", childIds: [] },
+					}),
+					updateTaskHistory: vi.fn().mockResolvedValue([]),
+					taskManager: { registerBackgroundTask: vi.fn() },
+				})),
+			},
+		}
+
+		const block: ToolUse<"new_task"> = {
+			type: "tool_use",
+			name: "new_task",
+			params: {
+				mode: "code",
+				message: "Run task",
+				is_background: "false",
+				worktreeDir: "/abs/path/to/worktree",
+			},
+			nativeArgs: {
+				mode: "code",
+				message: "Run task",
+				is_background: false,
+				worktreeDir: "/abs/path/to/worktree",
+			} as unknown as NativeToolArgs["new_task"],
+			partial: false,
+		}
+
+		await newTaskTool.handle(localCline as any, block, {
+			askApproval: vi.fn().mockResolvedValue(true),
+			handleError: vi.fn(),
+			pushToolResult: mockPushToolResult,
+		})
+
+		const callArgs = localCreateTask.mock.calls[0]
+		expect(callArgs[5]).toBe("/abs/path/to/worktree")
 	})
 })

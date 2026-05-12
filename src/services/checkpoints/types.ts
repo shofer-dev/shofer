@@ -32,6 +32,13 @@ export interface CheckpointServiceOptions {
 	workspaceDir: string
 	shadowDir: string // globalStorageUri.fsPath
 
+	/**
+	 * When set, the shadow git's core.worktree is scoped to this
+	 * subdirectory instead of workspaceDir.  Used by embedded worktree
+	 * tasks so checkpoints only track files within their worktree.
+	 */
+	scopedWorktreeDir?: string
+
 	log?: (message: string) => void
 }
 

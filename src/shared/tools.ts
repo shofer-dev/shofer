@@ -111,6 +111,13 @@ export const toolParamNames = [
 	"pattern",
 	"replacement",
 	"global",
+	// new_task embedded worktree parameter
+	"worktreeDir",
+	// worktree tool parameters
+	"branch",
+	"base_branch",
+	"target_branch",
+	"force",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -135,7 +142,14 @@ export type NativeToolArgs = {
 	// `is_background` is declared boolean in the JSON schema but some models serialize it
 	// as a string ("True"/"False") or number (1/0). The actual type is widened here to
 	// reflect that reality; NewTaskTool normalizes the value via parseToolBoolean().
-	new_task: { mode: string; message: string; todos?: string; is_background?: boolean | string | number | null }
+	new_task: {
+		mode: string
+		message: string
+		todos?: string
+		is_background?: boolean | string | number | null
+		/** Embedded worktree directory for the child task; scopes its cwd to the worktree subdirectory. */
+		worktreeDir?: string | null
+	}
 	check_task_status: { task_id: string }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
 	list_background_tasks: Record<string, never>
@@ -185,6 +199,14 @@ export type NativeToolArgs = {
 	codebase_search_with_lsp: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }
+	worktree: {
+		subcommand: "create" | "list" | "merge" | "destroy" | "status"
+		path?: string
+		branch?: string
+		base_branch?: string
+		target_branch?: string
+		force?: boolean
+	}
 	// Add more tools as they are migrated to native protocol
 }
 

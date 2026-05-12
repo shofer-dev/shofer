@@ -193,6 +193,18 @@ export function getTaskDisplayName(item: HistoryItem): string {
 }
 
 /**
+ * Extract a human-readable worktree label from the HistoryItem's cwd field.
+ * When cwd differs from workspace, the task is an embedded worktree task.
+ * Returns the leaf directory name (e.g., "repo-hl911") or null if not a
+ * worktree task.
+ */
+function getWorktreeLabel(item: HistoryItem): string | null {
+	if (!item.cwd || item.cwd === item.workspace) return null
+	const leaf = item.cwd.split("/").pop() || item.cwd.split("\\").pop()
+	return leaf || null
+}
+
+/**
  * Props for the row renderer factored out of the dropdown body.
  *
  * Keeping this as a free function (rather than a sub-component) lets each row
@@ -323,7 +335,15 @@ function renderTaskRow({
 				</div>
 			) : (
 				<div className="flex-1 min-w-0 flex flex-col">
-					<span className="truncate text-sm leading-tight">{displayName}</span>
+					<div className="flex items-center gap-1.5 min-w-0">
+						<span className="truncate text-sm leading-tight">{displayName}</span>
+						{getWorktreeLabel(item) && (
+							<span className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-px text-[10px] font-medium rounded-full bg-[var(--vscode-badge-background,#4d4d4d)] text-[var(--vscode-badge-foreground,#fff)]">
+								<span className="codicon codicon-git-branch scale-75" />
+								{getWorktreeLabel(item)}
+							</span>
+						)}
+					</div>
 					<span className="truncate text-[11px] leading-tight text-[var(--vscode-descriptionForeground)]">
 						{state !== "idle" && (
 							<>

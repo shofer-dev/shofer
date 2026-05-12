@@ -1,3 +1,4 @@
+import * as path from "path"
 import * as vscode from "vscode"
 
 import { TodoItem } from "@roo-code/types"
@@ -18,17 +19,32 @@ interface NewTaskParams {
 	todos?: string
 	is_background?: boolean | string | number | null
 	task_id?: string
+	/**
+	 * Working directory for the new task. When set (e.g., for embedded
+	 * worktree tasks), the child task operates in this directory instead
+	 * of the workspace root. Non-absolute paths are resolved relative to
+	 * the parent task's cwd.
+	 */
+	worktreeDir?: string
 }
 
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, todos } = params
+		const { mode, message, todos, worktreeDir } = params
 		// Normalize is_background across the various representations LLMs emit
 		// ("true"/"false", 0/1, native boolean, etc.). Absent/unrecognized → false.
 		const is_background = parseToolBoolean(params.is_background) ?? false
 		const { askApproval, handleError, pushToolResult } = callbacks
+
+		// Resolve worktree directory relative to parent task's cwd.
+		// Non-absolute paths become children of the parent's working directory.
+		const resolvedCwd = worktreeDir
+			? path.isAbsolute(worktreeDir)
+				? worktreeDir
+				: path.resolve(task.cwd, worktreeDir)
+			: undefined
 
 		try {
 			// Validate required parameters.
@@ -150,21 +166,28 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				// Async background path: create the child WITHOUT touching the parent's stack
 				// position. We call createTask() with openInStack=false so the child runs
 				// concurrently while the parent continues uninterrupted.
-				const child = await provider.createTask(unescapedMessage, undefined, task as any, {
-					initialTodos: todoItems,
-					initialStatus: "active",
-					// startTask is irrelevant here: createTask always calls task.start() internally.
-					initialMode: effectiveMode,
-					// openInStack=false: child is NOT pushed onto clineStack, so the parent
-					// remains the focused task and is never aborted.
-					openInStack: false,
-					// keepCurrentTask is only checked when parentTask is falsy, so it doesn't
-					// matter here, but set it for clarity.
-					keepCurrentTask: true,
-					// Mark the child as a background task so AttemptCompletionTool takes
-					// the background-completion path rather than the foreground-resume path.
-					isBackground: true,
-				})
+				const child = await provider.createTask(
+					unescapedMessage,
+					undefined,
+					task as any,
+					{
+						initialTodos: todoItems,
+						initialStatus: "active",
+						// startTask is irrelevant here: createTask always calls task.start() internally.
+						initialMode: effectiveMode,
+						// openInStack=false: child is NOT pushed onto clineStack, so the parent
+						// remains the focused task and is never aborted.
+						openInStack: false,
+						// keepCurrentTask is only checked when parentTask is falsy, so it doesn't
+						// matter here, but set it for clarity.
+						keepCurrentTask: true,
+						// Mark the child as a background task so AttemptCompletionTool takes
+						// the background-completion path rather than the foreground-resume path.
+						isBackground: true,
+					},
+					undefined, // configuration
+					resolvedCwd,
+				)
 
 				// Register the child with TaskManager so it is tracked as a managed background task.
 				provider.taskManager.registerBackgroundTask(child)
@@ -207,13 +230,20 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					resolveChildCompletion = resolve
 				})
 
-				const child = await provider.createTask(unescapedMessage, undefined, task as any, {
-					initialTodos: todoItems,
-					initialStatus: "active",
-					initialMode: effectiveMode,
-					// openInStack=true (default): child is pushed onto clineStack on top of parent.
-					openInStack: true,
-				})
+				const child = await provider.createTask(
+					unescapedMessage,
+					undefined,
+					task as any,
+					{
+						initialTodos: todoItems,
+						initialStatus: "active",
+						initialMode: effectiveMode,
+						// openInStack=true (default): child is pushed onto clineStack on top of parent.
+						openInStack: true,
+					},
+					undefined, // configuration
+					resolvedCwd,
+				)
 
 				// Register resolver after createTask so we have the child's taskId.
 				// The child runs asynchronously, so registration completes before any

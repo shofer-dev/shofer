@@ -94,6 +94,15 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 	public readonly checkpointsDir: string
 	public readonly workspaceDir: string
 
+	/**
+	 * When set, the shadow git's `core.worktree` is scoped to this
+	 * subdirectory instead of the full `workspaceDir`.  Used by
+	 * embedded worktree tasks so their checkpoints only track files
+	 * within their worktree — not sibling worktrees or the main
+	 * working tree.
+	 */
+	public readonly scopedWorktreeDir?: string
+
 	protected _checkpoints: string[] = []
 	protected _baseHash?: string
 
@@ -118,7 +127,13 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		return this._checkpoints.slice()
 	}
 
-	constructor(taskId: string, checkpointsDir: string, workspaceDir: string, log: (message: string) => void) {
+	constructor(
+		taskId: string,
+		checkpointsDir: string,
+		workspaceDir: string,
+		log: (message: string) => void,
+		scopedWorktreeDir?: string,
+	) {
 		super()
 
 		const homedir = os.homedir()
@@ -134,6 +149,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		this.taskId = taskId
 		this.checkpointsDir = checkpointsDir
 		this.workspaceDir = workspaceDir
+		this.scopedWorktreeDir = scopedWorktreeDir
 
 		this.dotGitDir = path.join(this.checkpointsDir, ".git")
 		this.log = log
@@ -166,6 +182,12 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		let created = false
 		const startTime = Date.now()
 
+		// The effective working tree for checkpoint tracking.  For embedded
+		// worktree tasks this is scoped to the worktree subdirectory so that
+		// checkpoints only capture files within the worktree — not sibling
+		// worktrees or the main working tree.
+		const worktreeTarget = this.scopedWorktreeDir ?? this.workspaceDir
+
 		if (await fileExistsAtPath(this.dotGitDir)) {
 			this.log(`[${this.constructor.name}#initShadowGit] shadow git repo already exists at ${this.dotGitDir}`)
 			const worktree = await this.getShadowGitConfigWorktree(git)
@@ -176,9 +198,11 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 
 			const worktreeTrimmed = worktree.trim()
 
-			if (!arePathsEqual(worktreeTrimmed, this.workspaceDir)) {
+			// Relaxed validation for scoped worktrees: the core.worktree must
+			// match the worktreeTarget (which may be a subdirectory of workspaceDir).
+			if (!arePathsEqual(worktreeTrimmed, worktreeTarget)) {
 				throw new Error(
-					`Checkpoints can only be used in the original workspace: ${worktreeTrimmed} !== ${this.workspaceDir}`,
+					`Checkpoints can only be used in the original workspace: ${worktreeTrimmed} !== ${worktreeTarget}`,
 				)
 			}
 
@@ -187,7 +211,8 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		} else {
 			this.log(`[${this.constructor.name}#initShadowGit] creating shadow git repo at ${this.checkpointsDir}`)
 			await git.init({ "--template": "" })
-			await git.addConfig("core.worktree", this.workspaceDir) // Sets the working tree to the current workspace.
+			// Scoped core.worktree for embedded worktree tasks
+			await git.addConfig("core.worktree", worktreeTarget)
 			await git.addConfig("commit.gpgSign", "false") // Disable commit signing for shadow repo.
 			await git.addConfig("user.name", "Roo Code")
 			await git.addConfig("user.email", "noreply@example.com")
@@ -227,6 +252,14 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 	protected async writeExcludeFile() {
 		await fs.mkdir(path.join(this.dotGitDir, "info"), { recursive: true })
 		const patterns = await getExcludePatterns(this.workspaceDir)
+
+		// For non-scoped shadow gits (main branch tasks), exclude sibling
+		// embedded worktree directories so Task A's checkpoints don't
+		// contaminate Task B's worktree and vice-versa.
+		if (!this.scopedWorktreeDir) {
+			patterns.push("/.roo/worktrees/")
+		}
+
 		await fs.writeFile(path.join(this.dotGitDir, "info", "exclude"), patterns.join("\n"))
 	}
 
