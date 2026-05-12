@@ -363,7 +363,7 @@ export function SlackThreadDemo({ className }: SlackThreadDemoProps): JSX.Elemen
 							<div className="mt-2">
 								<span className="font-semibold text-[#F8F8F9]">PR #10853</span>:{" "}
 								<FakeLink className="hover:text-violet-200">
-									https://github.com/Arkware/Shofer/pull/10853
+									https://github.com/alsterg/shofer.dev/pull/10853
 								</FakeLink>
 							</div>
 						</div>

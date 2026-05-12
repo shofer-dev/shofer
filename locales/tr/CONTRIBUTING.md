@@ -69,7 +69,7 @@ PR'lerinizde bu alanlarla uyumu belirtin.
 
 Tüm katkılar, basit şablonlarımızı kullanarak bir GitHub Sorunu ile başlar.
 
-- **Mevcut sorunları kontrol edin**: [GitHub Sorunları](https://github.com/Arkware/Shofer/issues)nda arama yapın.
+- **Mevcut sorunları kontrol edin**: [GitHub Sorunları](https://github.com/alsterg/shofer.dev/issues)nda arama yapın.
 - **Bir sorun oluşturun**:
     - **İyileştirmeler:** "İyileştirme İsteği" şablonu (kullanıcı yararına odaklanan sade bir dil).
     - **Hatalar:** "Hata Raporu" şablonu (minimum yeniden oluşturma + beklenen vs gerçek + sürüm).
@@ -79,16 +79,16 @@ Tüm katkılar, basit şablonlarımızı kullanarak bir GitHub Sorunu ile başla
 ### Ne Üzerinde Çalışılacağına Karar Verme
 
 - "Sorun [Atanmamış]" sorunları için [GitHub Projesi](https://github.com/orgs/Arkware/projects/1)'ni kontrol edin.
-- Belgeler için [Shofer Belgeleri](https://github.com/Arkware/Shofer-Docs)ni ziyaret edin.
+- Belgeler için [Shofer Belgeleri](https://github.com/alsterg/shofer.dev-Docs)ni ziyaret edin.
 
 ### Hataları Bildirme
 
 - Önce mevcut raporları kontrol edin.
-- Aşağıdakilerle ["Hata Raporu" şablonunu](https://github.com/Arkware/Shofer/issues/new/choose) kullanarak yeni bir hata oluşturun:
+- Aşağıdakilerle ["Hata Raporu" şablonunu](https://github.com/alsterg/shofer.dev/issues/new/choose) kullanarak yeni bir hata oluşturun:
     - Açık, numaralandırılmış yeniden oluşturma adımları
     - Beklenen vs gerçek sonuç
     - Shofer sürümü (gerekli); ilgiliyse API sağlayıcısı/modeli
-- **Güvenlik sorunları**: [Güvenlik tavsiyeleri](https://github.com/Arkware/Shofer/security/advisories/new) aracılığıyla özel olarak bildirin.
+- **Güvenlik sorunları**: [Güvenlik tavsiyeleri](https://github.com/alsterg/shofer.dev/security/advisories/new) aracılığıyla özel olarak bildirin.
 
 ## Geliştirme ve Gönderme Süreci
 

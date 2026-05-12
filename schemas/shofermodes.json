@@ -106,7 +106,7 @@
 	"required": ["customModes"],
 	"additionalProperties": false,
 	"$schema": "http://json-schema.org/draft-07/schema#",
-	"$id": "https://github.com/Arkware/Shofer/blob/main/schemas/shofermodes.json",
+	"$id": "https://github.com/alsterg/shofer.dev/blob/main/schemas/shofermodes.json",
 	"title": "Shofer Custom Modes",
 	"description": "Schema for .shofermodes configuration files used by Shofer to define custom modes."
 }

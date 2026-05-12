@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
@@ -87,8 +87,8 @@ Meer info: [Modi gebruiken](https://docs.shofer.com/basic-usage/using-modes) •
 - **[YouTube-kanaal](https://youtube.com/@shoferyt?feature=shared):** Bekijk tutorials en zie functies in actie.
 - **[Discord Server](https://discord.gg/shofer):** Word lid van de community voor realtime hulp en discussie.
 - **[Reddit Community](https://www.reddit.com/r/Shofer):** Deel je ervaringen en kijk wat anderen bouwen.
-- **[GitHub Issues](https://github.com/Arkware/Shofer/issues):** Meld bugs en volg de ontwikkeling.
-- **[Feature Requests](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Heb je een idee? Deel het met de ontwikkelaars.
+- **[GitHub Issues](https://github.com/alsterg/shofer.dev/issues):** Meld bugs en volg de ontwikkeling.
+- **[Feature Requests](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Heb je een idee? Deel het met de ontwikkelaars.
 
 ---
 
@@ -97,7 +97,7 @@ Meer info: [Modi gebruiken](https://docs.shofer.com/basic-usage/using-modes) •
 1. **Kloon** de repo:
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **Installeer afhankelijkheden**:

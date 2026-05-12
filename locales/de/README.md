@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
@@ -87,8 +87,8 @@ Mehr erfahren: [Modi verwenden](https://docs.shofer.com/basic-usage/using-modes)
 - **[YouTube-Kanal](https://youtube.com/@shoferyt?feature=shared):** Schau dir Tutorials an und sieh Features in Aktion.
 - **[Discord-Server](https://discord.gg/shofer):** Tritt der Community bei für Echtzeit-Hilfe und Diskussionen.
 - **[Reddit-Community](https://www.reddit.com/r/Shofer):** Teile deine Erfahrungen und sieh, was andere bauen.
-- **[GitHub Issues](https://github.com/Arkware/Shofer/issues):** Melde Fehler und verfolge die Entwicklung.
-- **[Feature-Anfragen](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Hast du eine Idee? Teile sie mit den Entwicklern.
+- **[GitHub Issues](https://github.com/alsterg/shofer.dev/issues):** Melde Fehler und verfolge die Entwicklung.
+- **[Feature-Anfragen](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Hast du eine Idee? Teile sie mit den Entwicklern.
 
 ---
 
@@ -97,7 +97,7 @@ Mehr erfahren: [Modi verwenden](https://docs.shofer.com/basic-usage/using-modes)
 1. **Klone** das Repo:
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **Installiere die Abhängigkeiten**:

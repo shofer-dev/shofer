@@ -69,7 +69,7 @@ Mencione la alineación con estas áreas en sus solicitudes de extracción.
 
 Todas las contribuciones comienzan con una incidencia de GitHub utilizando nuestras plantillas simplificadas.
 
-- **Compruebe las incidencias existentes**: busque en [Incidencias de GitHub](https://github.com/Arkware/Shofer/issues).
+- **Compruebe las incidencias existentes**: busque en [Incidencias de GitHub](https://github.com/alsterg/shofer.dev/issues).
 - **Cree una incidencia** utilizando:
     - **Mejoras:** plantilla "Solicitud de mejora" (lenguaje sencillo centrado en el beneficio del usuario).
     - **Errores:** plantilla "Informe de error" (reproducción mínima + esperado vs. real + versión).
@@ -79,16 +79,16 @@ Todas las contribuciones comienzan con una incidencia de GitHub utilizando nuest
 ### Decidir en qué trabajar
 
 - Consulte el [Proyecto de GitHub](https://github.com/orgs/Arkware/projects/1) para ver las incidencias "Incidencia [Sin asignar]".
-- Para la documentación, visite [Documentos de Shofer](https://github.com/Arkware/Shofer-Docs).
+- Para la documentación, visite [Documentos de Shofer](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Informar de errores
 
 - Compruebe primero si existen informes.
-- Cree un nuevo error utilizando la [plantilla "Informe de error"](https://github.com/Arkware/Shofer/issues/new/choose) con:
+- Cree un nuevo error utilizando la [plantilla "Informe de error"](https://github.com/alsterg/shofer.dev/issues/new/choose) con:
     - Pasos de reproducción claros y numerados
     - Resultado esperado vs. real
     - Versión de Shofer (obligatorio); proveedor/modelo de API si es relevante
-- **Problemas de seguridad**: informe de forma privada a través de [avisos de seguridad](https://github.com/Arkware/Shofer/security/advisories/new).
+- **Problemas de seguridad**: informe de forma privada a través de [avisos de seguridad](https://github.com/alsterg/shofer.dev/security/advisories/new).
 
 ## Proceso de desarrollo y envío
 

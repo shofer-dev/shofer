@@ -35,7 +35,7 @@ export function Evals({ runs }: { runs: EvalRun[] }) {
 			<div className="flex flex-col gap-4">
 				<div>
 					Shofer tests each frontier model against{" "}
-					<a href="https://github.com/Arkware/Shofer-Evals" className="underline">
+					<a href="https://github.com/alsterg/shofer.dev-Evals" className="underline">
 						a suite of hundreds of exercises
 					</a>{" "}
 					across 5 programming languages with varying difficulty. These results can help you find the right

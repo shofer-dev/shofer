@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
@@ -87,8 +87,8 @@ Shofer 适应您的工作方式，而不是相反：
 - **[YouTube 频道](https://youtube.com/@shoferyt?feature=shared):** 观看教程和功能演示。
 - **[Discord 服务器](https://discord.gg/shofer):** 加入社区以获得实时帮助和讨论。
 - **[Reddit 社区](https://www.reddit.com/r/Shofer):** 分享您的经验，看看别人在构建什么。
-- **[GitHub 问题](https://github.com/Arkware/Shofer/issues):** 报告错误并跟踪开发。
-- **[功能请求](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法吗？与开发人员分享。
+- **[GitHub 问题](https://github.com/alsterg/shofer.dev/issues):** 报告错误并跟踪开发。
+- **[功能请求](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法吗？与开发人员分享。
 
 ---
 
@@ -97,7 +97,7 @@ Shofer 适应您的工作方式，而不是相反：
 1. **克隆**仓库：
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **安装依赖项**:

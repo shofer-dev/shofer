@@ -93,10 +93,10 @@ const SocialLink = ({ icon, label, href }: { icon: ReactNode; label: string; hre
 
 const GitHubLink = ({ children }: { children?: ReactNode }) => (
 	<VSCodeLink
-		href="https://github.com/Arkware/Shofer"
+		href="https://github.com/alsterg/shofer.dev"
 		onClick={(e) => {
 			e.preventDefault()
-			vscode.postMessage({ type: "openExternal", url: "https://github.com/Arkware/Shofer" })
+			vscode.postMessage({ type: "openExternal", url: "https://github.com/alsterg/shofer.dev" })
 		}}>
 		{children}
 	</VSCodeLink>

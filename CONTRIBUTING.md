@@ -69,7 +69,7 @@ Mention alignment with these areas in your PRs.
 
 All contributions start with a GitHub Issue using our skinny templates.
 
-- **Check existing issues**: Search [GitHub Issues](https://github.com/Arkware/Shofer/issues).
+- **Check existing issues**: Search [GitHub Issues](https://github.com/alsterg/shofer.dev/issues).
 - **Create an issue** using:
     - **Enhancements:** "Enhancement Request" template (plain language focused on user benefit).
     - **Bugs:** "Bug Report" template (minimal repro + expected vs actual + version).
@@ -79,16 +79,16 @@ All contributions start with a GitHub Issue using our skinny templates.
 ### Deciding What to Work On
 
 - Check the [GitHub Project](https://github.com/orgs/Arkware/projects/1) for "Issue [Unassigned]" issues.
-- For docs, visit [Shofer Docs](https://github.com/Arkware/Shofer-Docs).
+- For docs, visit [Shofer Docs](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Reporting Bugs
 
 - Check for existing reports first.
-- Create a new bug using the ["Bug Report" template](https://github.com/Arkware/Shofer/issues/new/choose) with:
+- Create a new bug using the ["Bug Report" template](https://github.com/alsterg/shofer.dev/issues/new/choose) with:
     - Clear, numbered reproduction steps
     - Expected vs actual result
     - Shofer version (required); API provider/model if relevant
-- **Security issues**: Report privately via [security advisories](https://github.com/Arkware/Shofer/security/advisories/new).
+- **Security issues**: Report privately via [security advisories](https://github.com/alsterg/shofer.dev/security/advisories/new).
 
 ## Development & Submission Process
 

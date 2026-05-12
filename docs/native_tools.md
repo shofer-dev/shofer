@@ -30,7 +30,7 @@ Complete reference for all native tools available in Shofer, their mode availabi
 | ----- | ------------------------------------------------------- |
 | 🆕 WS | Ported from `workspace-tools` extension in this session |
 | 🔵 RC | Pre-existing Shofer tool                                |
-| 🟣 AW | New Arkware tool (custom addition)                      |
+| 🟣 AW | New Shofer.Dev tool (custom addition)                   |
 
 ---
 
@@ -323,7 +323,7 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 | `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                        |
 | `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
 | `set_task_title`        | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
-| `give_feedback`         | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Arkware developers                     |
+| `give_feedback`         | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                  |
 
 ### `new_task`
 
@@ -377,11 +377,11 @@ No approval prompt needed — this is a non-destructive meta-operation.
 
 ### `give_feedback`
 
-Send feedback to the Arkware developers. The feedback message is appended to the Shofer extension output channel (auto-approved, harmless meta-operation).
+Send feedback to the Shofer.Dev developers. The feedback message is appended to the Shofer extension output channel (auto-approved, harmless meta-operation).
 
-| Param      | Type   | Required | Description                                  |
-| ---------- | ------ | :------: | -------------------------------------------- |
-| `feedback` | string |    ✅    | The feedback message to send to Arkware devs |
+| Param      | Type   | Required | Description                                     |
+| ---------- | ------ | :------: | ----------------------------------------------- |
+| `feedback` | string |    ✅    | The feedback message to send to Shofer.Dev devs |
 
 No approval prompt needed — non-destructive, written only to the extension output channel.
 

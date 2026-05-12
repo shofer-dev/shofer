@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
@@ -87,8 +87,8 @@ En savoir plus : [Utiliser les Modes](https://docs.shofer.com/basic-usage/using-
 - **[Chaîne YouTube](https://youtube.com/@shoferyt?feature=shared):** Regardez des tutoriels et découvrez les fonctionnalités en action.
 - **[Serveur Discord](https://discord.gg/shofer):** Rejoignez la communauté pour obtenir de l'aide en temps réel et discuter.
 - **[Communauté Reddit](https://www.reddit.com/r/Shofer):** Partagez vos expériences et découvrez ce que les autres construisent.
-- **[Problèmes GitHub](https://github.com/Arkware/Shofer/issues):** Signalez des bugs et suivez le développement.
-- **[Demandes de fonctionnalités](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Vous avez une idée ? Partagez-la avec les développeurs.
+- **[Problèmes GitHub](https://github.com/alsterg/shofer.dev/issues):** Signalez des bugs et suivez le développement.
+- **[Demandes de fonctionnalités](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Vous avez une idée ? Partagez-la avec les développeurs.
 
 ---
 
@@ -97,7 +97,7 @@ En savoir plus : [Utiliser les Modes](https://docs.shofer.com/basic-usage/using-
 1. **Clonez** le dépôt :
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **Installez les dépendances** :

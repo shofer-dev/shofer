@@ -76,7 +76,7 @@ export class OpenRouterEmbedder implements IEmbedder {
 				baseURL: this.baseUrl,
 				apiKey: apiKey,
 				defaultHeaders: {
-					"HTTP-Referer": "https://github.com/Arkware/Shofer",
+					"HTTP-Referer": "https://github.com/alsterg/shofer.dev",
 					"X-Title": "Shofer",
 				},
 			})

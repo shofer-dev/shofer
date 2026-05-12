@@ -10,7 +10,7 @@ export default async function StatsDisplay() {
 	return (
 		<>
 			<Link
-				href="https://github.com/Arkware/Shofer"
+				href="https://github.com/alsterg/shofer.dev"
 				target="_blank"
 				className="hidden md:flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-gray-200">
 				<RxGithubLogo className="h-4 w-4" />

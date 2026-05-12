@@ -158,7 +158,7 @@ const faqs: FAQItem[] = [
 			<>
 				Yes, please do! Shofer is open-source on{" "}
 				<a
-					href="https://github.com/Arkware/Shofer"
+					href="https://github.com/alsterg/shofer.dev"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">

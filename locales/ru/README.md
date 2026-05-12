@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
@@ -87,8 +87,8 @@ Shofer адаптируется к вашему стилю работы, а не
 - **[Канал на YouTube](https://youtube.com/@shoferyt?feature=shared):** Смотрите обучающие видео и функции в действии.
 - **[Сервер Discord](https://discord.gg/shofer):** Присоединяйтесь к сообществу для получения помощи и обсуждений в реальном времени.
 - **[Сообщество Reddit](https://www.reddit.com/r/Shofer):** Делитесь своим опытом и смотрите, что создают другие.
-- **[Проблемы на GitHub](https://github.com/Arkware/Shofer/issues):** Сообщайте об ошибках и отслеживайте разработку.
-- **[Запросы на новые функции](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Есть идея? Поделитесь ею с разработчиками.
+- **[Проблемы на GitHub](https://github.com/alsterg/shofer.dev/issues):** Сообщайте об ошибках и отслеживайте разработку.
+- **[Запросы на новые функции](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Есть идея? Поделитесь ею с разработчиками.
 
 ---
 
@@ -97,7 +97,7 @@ Shofer адаптируется к вашему стилю работы, а не
 1. **Клонируйте** репозиторий:
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **Установите зависимости**:

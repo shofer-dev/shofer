@@ -11,10 +11,10 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Arkware/Shofer.git"
+		"url": "git+https://github.com/alsterg/shofer.dev.git"
 	},
 	"bugs": {
-		"url": "https://github.com/Arkware/Shofer/issues"
+		"url": "https://github.com/alsterg/shofer.dev/issues"
 	},
 	"homepage": "https://shofer.com",
 	"keywords": ["shofer", "shofer-code", "ai"],

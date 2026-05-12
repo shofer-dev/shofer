@@ -58,7 +58,7 @@ describe("RequestyHandler", () => {
 			baseURL: "https://router.requesty.ai/v1",
 			apiKey: mockOptions.requestyApiKey,
 			defaultHeaders: {
-				"HTTP-Referer": "https://github.com/Arkware/Shofer",
+				"HTTP-Referer": "https://github.com/alsterg/shofer.dev",
 				"X-Title": "Shofer",
 				"User-Agent": `Shofer/${Package.version}`,
 			},
@@ -73,7 +73,7 @@ describe("RequestyHandler", () => {
 			baseURL: "https://custom.requesty.ai/v1",
 			apiKey: mockOptions.requestyApiKey,
 			defaultHeaders: {
-				"HTTP-Referer": "https://github.com/Arkware/Shofer",
+				"HTTP-Referer": "https://github.com/alsterg/shofer.dev",
 				"X-Title": "Shofer",
 				"User-Agent": `Shofer/${Package.version}`,
 			},

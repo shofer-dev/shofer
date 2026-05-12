@@ -4,7 +4,7 @@
 
 Shofer is a VS Code extension (fork of Shofer/Shofer) that provides an AI coding assistant. It uses a pnpm monorepo structure with TypeScript for the extension and React for the webview UI.
 
-**Project root**: `/home/alsterg/Projects/arkware.ai/extensions/shofer/`
+**Project root**: `/home/alsterg/Projects/shofer.dev/extensions/shofer/`
 
 ## Directory Structure
 

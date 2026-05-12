@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
@@ -87,8 +87,8 @@ Pelajari lebih lanjut: [Menggunakan Mode](https://docs.shofer.com/basic-usage/us
 - **[Saluran YouTube](https://youtube.com/@shoferyt?feature=shared):** Tonton tutorial dan lihat fitur-fitur dalam aksi.
 - **[Server Discord](https://discord.gg/shofer):** Bergabunglah dengan komunitas untuk bantuan dan diskusi real-time.
 - **[Komunitas Reddit](https://www.reddit.com/r/Shofer):** Bagikan pengalaman Anda dan lihat apa yang sedang dibangun orang lain.
-- **[Masalah GitHub](https://github.com/Arkware/Shofer/issues):** Laporkan bug dan lacak pengembangan.
-- **[Permintaan Fitur](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Punya ide? Bagikan dengan para pengembang.
+- **[Masalah GitHub](https://github.com/alsterg/shofer.dev/issues):** Laporkan bug dan lacak pengembangan.
+- **[Permintaan Fitur](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Punya ide? Bagikan dengan para pengembang.
 
 ---
 
@@ -97,7 +97,7 @@ Pelajari lebih lanjut: [Menggunakan Mode](https://docs.shofer.com/basic-usage/us
 1. **Clone** repo:
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **Instal dependensi**:

@@ -41,7 +41,7 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
@@ -87,8 +87,8 @@ Daha fazla: [Modları kullanma](https://docs.shofer.com/basic-usage/using-modes)
 - **[YouTube Kanalı](https://youtube.com/@shoferyt?feature=shared):** Eğitimleri izleyin ve özellikleri çalışırken görün.
 - **[Discord Sunucusu](https://discord.gg/shofer):** Gerçek zamanlı yardım ve tartışma için topluluğa katılın.
 - **[Reddit Topluluğu](https://www.reddit.com/r/Shofer):** Deneyimlerinizi paylaşın ve başkalarının ne inşa ettiğini görün.
-- **[GitHub Sorunları](https://github.com/Arkware/Shofer/issues):** Hataları bildirin ve gelişimi takip edin.
-- **[Özellik İstekleri](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Bir fikriniz mi var? Geliştiricilerle paylaşın.
+- **[GitHub Sorunları](https://github.com/alsterg/shofer.dev/issues):** Hataları bildirin ve gelişimi takip edin.
+- **[Özellik İstekleri](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Bir fikriniz mi var? Geliştiricilerle paylaşın.
 
 ---
 
@@ -97,7 +97,7 @@ Daha fazla: [Modları kullanma](https://docs.shofer.com/basic-usage/using-modes)
 1. **Depoyu klonlayın**:
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 ```
 
 2. **Bağımlılıkları yükleyin**:

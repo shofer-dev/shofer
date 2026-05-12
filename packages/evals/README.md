@@ -11,7 +11,7 @@
 Clone the Shofer repo:
 
 ```sh
-git clone https://github.com/Arkware/Shofer.git
+git clone https://github.com/alsterg/shofer.dev.git
 cd Shofer
 ```
 
@@ -37,7 +37,7 @@ Additionally, you'll find in Docker Desktop that database and redis services are
 
 Navigate to [localhost:3446](http://localhost:3446/) in your browser and click the 🚀 button.
 
-By default an evals run will run all programming exercises in [Shofer Evals](https://github.com/Arkware/Shofer-Evals) repository with the Claude Sonnet 4 model and default settings. For basic configuration you can specify the LLM to use and any subset of the exercises you'd like. For advanced configuration you can import a Shofer settings file which will allow you to run the evals with Shofer configured any way you'd like (this includes custom modes, custom instructions, etc).
+By default an evals run will run all programming exercises in [Shofer Evals](https://github.com/alsterg/shofer.dev-Evals) repository with the Claude Sonnet 4 model and default settings. For basic configuration you can specify the LLM to use and any subset of the exercises you'd like. For advanced configuration you can import a Shofer settings file which will allow you to run the evals with Shofer configured any way you'd like (this includes custom modes, custom instructions, etc).
 
 <img width="1053" src="https://github.com/user-attachments/assets/2367eef4-6ae9-4ac2-8ee4-80f981046486" />
 
