@@ -1,8 +1,8 @@
 {
 	"name": "shofer",
-	"displayName": "%extension.displayName%",
+	"displayName": "Shofer.Dev",
 	"description": "%extension.description%",
-	"publisher": "Arkware",
+	"publisher": "shoferdev",
 	"version": "3.69.0",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
