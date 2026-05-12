@@ -111,13 +111,6 @@ export const toolParamNames = [
 	"pattern",
 	"replacement",
 	"global",
-	// new_task embedded worktree parameter
-	"worktreeDir",
-	// worktree tool parameters
-	"branch",
-	"base_branch",
-	"target_branch",
-	"force",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -147,8 +140,6 @@ export type NativeToolArgs = {
 		message: string
 		todos?: string
 		is_background?: boolean | string | number | null
-		/** Embedded worktree directory for the child task; scopes its cwd to the worktree subdirectory. */
-		worktreeDir?: string | null
 	}
 	check_task_status: { task_id: string }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
@@ -161,14 +152,6 @@ export type NativeToolArgs = {
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skill_load: { skill: string; args?: string }
-	skill_save: {
-		skill: string
-		mode: "replace" | "append" | "patch"
-		content?: string
-		old_string?: string
-		new_string?: string
-	}
-	skill_delete: { skill: string }
 	search_files: { path: string; regex: string; file_pattern?: string | null }
 	switch_mode: { mode_slug: string; reason: string }
 	set_task_title: { title: string }
@@ -199,14 +182,6 @@ export type NativeToolArgs = {
 	codebase_search_with_lsp: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }
-	worktree: {
-		subcommand: "create" | "list" | "merge" | "destroy" | "status"
-		path?: string
-		branch?: string
-		base_branch?: string
-		target_branch?: string
-		force?: boolean
-	}
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -342,16 +317,6 @@ export interface RunSlashCommandToolUse extends ToolUse<"run_slash_command"> {
 export interface SkillLoadToolUse extends ToolUse<"skill_load"> {
 	name: "skill_load"
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "args">>
-}
-
-export interface SkillSaveToolUse extends ToolUse<"skill_save"> {
-	name: "skill_save"
-	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "mode" | "content" | "old_string" | "new_string">>
-}
-
-export interface SkillDeleteToolUse extends ToolUse<"skill_delete"> {
-	name: "skill_delete"
-	params: Partial<Pick<Record<ToolParamName, string>, "skill">>
 }
 
 export interface GenerateImageToolUse extends ToolUse<"generate_image"> {

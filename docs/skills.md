@@ -103,13 +103,11 @@ The system prompt includes instructions telling the model to:
 
 ## Native Tools
 
-Three always-available native tools handle skill operations:
+The `skill_load` native tool loads skill instructions into context:
 
-| Tool                                                                  | Purpose                                                         |
-| --------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`skill_load`](src/core/prompts/tools/native-tools/skill_load.ts)     | Load a skill's full instructions into context                   |
-| [`skill_save`](src/core/prompts/tools/native-tools/skill_save.ts)     | Create/update a project skill's SKILL.md (replace/append/patch) |
-| [`skill_delete`](src/core/prompts/tools/native-tools/skill_delete.ts) | Remove a project skill directory                                |
+| Tool                                                              | Purpose                                       |
+| ----------------------------------------------------------------- | --------------------------------------------- |
+| [`skill_load`](src/core/prompts/tools/native-tools/skill_load.ts) | Load a skill's full instructions into context |
 
 ### `skill_load`
 
@@ -239,8 +237,6 @@ When multiple skills have the same name:
 | [`skills.ts`](src/shared/skills.ts)                                             | Type definitions (`SkillMetadata`, `SkillContent`) |
 | [`skills.ts` (prompt)](src/core/prompts/sections/skills.ts)                     | System prompt section generation                   |
 | [`skill_load.ts`](src/core/prompts/tools/native-tools/skill_load.ts)            | Native tool schema                                 |
-| [`skill_save.ts`](src/core/prompts/tools/native-tools/skill_save.ts)            | Save/update tool schema                            |
-| [`skill_delete.ts`](src/core/prompts/tools/native-tools/skill_delete.ts)        | Delete tool schema                                 |
 | [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts)           | IPC handlers (requestSkills, create, delete, move) |
 | [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)           | Popover UI with loaded/unloaded split + refresh    |
 | [`ExtensionStateContext.tsx`](webview-ui/src/context/ExtensionStateContext.tsx) | `loadedSkills` state management                    |

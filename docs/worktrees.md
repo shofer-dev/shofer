@@ -87,63 +87,6 @@ isEmbeddedWorktree = !rel.startsWith("..") && !path.isAbsolute(rel) && rel.start
 
 This is a containment check anchored to the git root — not a substring match — so it cannot be confused by unrelated directories that happen to contain the string `.roo/worktrees`.
 
-## Native `worktree` Tool
-
-The orchestrator can manage the full worktree lifecycle programmatically via the `worktree` native tool (registered in the `mode` tool group). This removes the need for `execute_command` access in worktree orchestration flows.
-
-### Parameters
-
-| Parameter       | Type          | Required | Description                                                                                               |
-| --------------- | ------------- | :------: | --------------------------------------------------------------------------------------------------------- |
-| `subcommand`    | string        |    ✅    | `create`, `list`, `merge`, `destroy`, or `status`                                                         |
-| `path`          | string\|null  |    ✅    | Worktree path (absolute or relative to workspace root). Required for create/destroy/status; null for list |
-| `branch`        | string\|null  |    ✅    | Branch name (create). Defaults to `worktree/roo-<random5>`                                                |
-| `base_branch`   | string\|null  |    ✅    | Base branch to create from (create). Defaults to main/master                                              |
-| `target_branch` | string\|null  |    ✅    | Target branch for merge. Defaults to detected base branch. Merge refuses if HEAD ≠ target                 |
-| `force`         | boolean\|null |    ✅    | Force destroy even if unmerged. Default false                                                             |
-
-All optional params use nullable types (`["string","null"]`/`["boolean","null"]`) to comply with OpenAI `strict: true` schema mode — all properties appear in the `required` array.
-
-### Subcommand Behaviours
-
-| Subcommand | Behavior                                                                                                     | Returns                                                 |
-| ---------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| `create`   | `git worktree add <path> <branch>`, copies `.worktreeinclude` files, ensures `.roo/worktrees/` is gitignored | `{ path, branch, message }`                             |
-| `list`     | `git worktree list --porcelain`, annotated with embedded-worktree flag                                       | `[{ path, branch, isCurrent, isRooWorktree }]`          |
-| `merge`    | Checks target branch, `git merge --no-ff <branch>`, reports conflicts                                        | `{ merged, conflicts?, conflictedFiles? }`              |
-| `destroy`  | `git worktree remove <path>` + `git branch -d <branch>`. Refuses unmerged unless `force=true`                | `{ removed, branchDeleted, message }`                   |
-| `status`   | ahead/behind counts, uncommitted changes, dry-run merge readiness                                            | `{ branch, ahead, behind, hasUncommitted, mergeReady }` |
-
-### Safety Invariants
-
-- `destroy` refuses if the branch is not fully merged into the current branch (unless `force=true`)
-- `merge` refuses if there are uncommitted changes in the main worktree
-- `merge` refuses if the main worktree HEAD is not on `target_branch`
-- `create` refuses if the path already exists or the branch name is taken
-- All git operations run with `PAGER=cat` to avoid interactive pagers
-- Paths are resolved relative to `task.cwd`
-
-### Orchestrated Workflow
-
-```
-Orchestrator task (mode=orchestrator, cwd=/repo/)
-  │
-  ├─ worktree create → .roo/worktrees/repo-hl911/ (branch: worktree/roo-hl911)
-  │
-  ├─ new_task(mode=code, worktreeDir=".roo/worktrees/repo-hl911", message="…")
-  │   └─ subtask runs with cwd=<worktreeDir>; works on branch worktree/roo-hl911
-  │
-  ├─ wait_for_task(task_id)
-  │
-  ├─ worktree merge path=.roo/worktrees/repo-hl911
-  │   └─ git merge --no-ff worktree/roo-hl911 into main/master
-  │
-  └─ worktree destroy path=.roo/worktrees/repo-hl911
-      └─ git worktree remove + git branch -d → cleanup complete
-```
-
-The `new_task` tool also accepts a `worktreeDir` parameter (nullable string, `strict: true` compatible). Relative paths are resolved against the parent task's `cwd`.
-
 ## UI Components
 
 | Component                                                                               | Location            | Purpose                                                                                                                                                                                                                                                       |
@@ -239,7 +182,7 @@ Core types are defined in [`packages/types/src/worktree.ts`](../packages/types/s
 - `WorktreeListResponse` — worktrees[], isGitRepo, isMultiRoot, isSubfolder, gitRootPath, error?
 - `WorktreeStatus` — branch, path, baseBranch, commitsAhead, commitsBehind, filesChanged, insertions, deletions, hasUncommittedChanges, uncommittedCount, lastCommit, mergeReadiness, isBaseBranch, otherWorktrees
 
-`HistoryItem` now includes a `cwd` field (persisted per task) and the `worktree` tool is listed in `toolNames` and `TOOL_GROUPS.mode`.
+`HistoryItem` now includes a `cwd` field (persisted per task).
 
 ## Worktree Indicator
 
@@ -258,4 +201,4 @@ i18n translations: [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../web
 1. **No multi-root workspace support** — Workspaces with multiple folders cannot use worktrees
 2. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
 3. **`.worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
-4. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC and the native `worktree` tool, but not through a public extension API
+4. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC, but not through a public extension API

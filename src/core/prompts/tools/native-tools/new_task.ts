@@ -16,8 +16,6 @@ const TODOS_PARAMETER_DESCRIPTION = `Optional initial todo list written as a mar
 
 const IS_BACKGROUND_PARAMETER_DESCRIPTION = `When true, start the child task in the background and return immediately without blocking the parent. Defaults to false (synchronous delegation).`
 
-const WORKTREE_DIR_PARAMETER_DESCRIPTION = `Optional embedded worktree directory for the new task. When set, the child task's working directory is scoped to this path (typically '.roo/worktrees/<name>' produced by the worktree tool) instead of the workspace root. All file paths, git operations and terminal commands in the child run relative to this directory. Use this when delegating work to an isolated worktree branch.`
-
 export default {
 	type: "function",
 	function: {
@@ -43,12 +41,8 @@ export default {
 					type: ["boolean", "null"],
 					description: IS_BACKGROUND_PARAMETER_DESCRIPTION,
 				},
-				worktreeDir: {
-					type: ["string", "null"],
-					description: WORKTREE_DIR_PARAMETER_DESCRIPTION,
-				},
 			},
-			required: ["mode", "message", "todos", "is_background", "worktreeDir"],
+			required: ["mode", "message", "todos", "is_background"],
 			additionalProperties: false,
 		},
 	},
