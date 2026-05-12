@@ -1,8 +1,8 @@
 {
-	"name": "shofer",
-	"displayName": "Shofer.Dev",
+	"name": "dev",
+	"displayName": "Shofer",
 	"description": "%extension.description%",
-	"publisher": "shoferdev",
+	"publisher": "shofer",
 	"version": "3.69.0",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
