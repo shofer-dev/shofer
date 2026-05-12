@@ -14,8 +14,13 @@ import {
 	marketplaceItemSchema,
 } from "./marketplace.js"
 import type { TodoItem } from "./todo.js"
-import type { CloudUserInfo, CloudOrganizationMembership, OrganizationAllowList, ShareVisibility } from "./cloud.js"
+import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
+
+// Types previously from cloud.ts, now defined inline
+type CloudUserInfo = { id?: string; name?: string; email?: string; picture?: string; organizationId?: string; organizationName?: string; organizationRole?: string; organizationImageUrl?: string }
+type CloudOrganizationMembership = { organization: { id: string; name: string; imageUrl?: string }; role: string }
+type ShareVisibility = "organization" | "public"
 import type { GitCommit } from "./git.js"
 import type { McpServer } from "./mcp.js"
 import type { ModelRecord, RouterModels } from "./model.js"
