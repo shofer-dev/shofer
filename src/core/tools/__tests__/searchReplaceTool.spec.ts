@@ -118,7 +118,7 @@ describe("searchReplaceTool", () => {
 		mockShofer.shoferIgnoreController = {
 			validateAccess: vi.fn().mockReturnValue(true),
 		}
-		mockShofer.rooProtectedController = {
+		mockShofer.shoferProtectedController = {
 			isWriteProtected: vi.fn().mockReturnValue(false),
 		}
 		mockShofer.diffViewProvider = {
@@ -388,7 +388,7 @@ describe("searchReplaceTool", () => {
 		it("tracks file context after successful edit", async () => {
 			await executeSearchReplaceTool()
 
-			expect(mockShofer.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "roo_edited")
+			expect(mockShofer.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "shofer_edited")
 		})
 	})
 

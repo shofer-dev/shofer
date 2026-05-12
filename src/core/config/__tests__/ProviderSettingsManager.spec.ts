@@ -450,7 +450,7 @@ describe("ProviderSettingsManager", () => {
 				},
 			}
 
-			expect(mockSecrets.store.mock.calls[0][0]).toEqual("roo_cline_config_api_config")
+			expect(mockSecrets.store.mock.calls[0][0]).toEqual("shofer_config_api_config")
 			expect(storedConfig).toEqual(expectedConfig)
 		})
 
@@ -500,7 +500,7 @@ describe("ProviderSettingsManager", () => {
 				},
 			}
 
-			expect(mockSecrets.store.mock.calls[0][0]).toEqual("roo_cline_config_api_config")
+			expect(mockSecrets.store.mock.calls[0][0]).toEqual("shofer_config_api_config")
 			expect(storedConfig).toEqual(expectedConfig)
 		})
 
@@ -544,7 +544,7 @@ describe("ProviderSettingsManager", () => {
 
 			const storedConfig = JSON.parse(mockSecrets.store.mock.calls[mockSecrets.store.mock.calls.length - 1][1])
 			expect(mockSecrets.store.mock.calls[mockSecrets.store.mock.calls.length - 1][0]).toEqual(
-				"roo_cline_config_api_config",
+				"shofer_config_api_config",
 			)
 			expect(storedConfig).toEqual(expectedConfig)
 		})
@@ -919,7 +919,7 @@ describe("ProviderSettingsManager", () => {
 			await providerSettingsManager.resetAllConfigs()
 
 			// Should have called delete with the correct config key
-			expect(mockSecrets.delete).toHaveBeenCalledWith("roo_cline_config_api_config")
+			expect(mockSecrets.delete).toHaveBeenCalledWith("shofer_config_api_config")
 		})
 	})
 

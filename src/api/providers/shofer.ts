@@ -37,7 +37,7 @@ function getSessionToken(): string {
 	return token ?? "unauthenticated"
 }
 
-export class RooHandler extends BaseOpenAiCompatibleProvider<string> {
+export class ShoferHandler extends BaseOpenAiCompatibleProvider<string> {
 	private fetcherBaseURL: string
 	private currentReasoningDetails: any[] = []
 
@@ -66,7 +66,7 @@ export class RooHandler extends BaseOpenAiCompatibleProvider<string> {
 		this.fetcherBaseURL = baseURL.endsWith("/v1") ? baseURL.slice(0, -3) : baseURL
 
 		this.loadDynamicModels(this.fetcherBaseURL, sessionToken).catch((error) => {
-			console.error("[RooHandler] Failed to load dynamic models:", error)
+			console.error("[ShoferHandler] Failed to load dynamic models:", error)
 		})
 	}
 
@@ -346,7 +346,7 @@ export class RooHandler extends BaseOpenAiCompatibleProvider<string> {
 				hasTaskId: Boolean(metadata?.taskId),
 			}
 
-			console.error(`[RooHandler] Error during message streaming: ${JSON.stringify(errorContext)}`)
+			console.error(`[ShoferHandler] Error during message streaming: ${JSON.stringify(errorContext)}`)
 
 			throw error
 		}
@@ -367,7 +367,7 @@ export class RooHandler extends BaseOpenAiCompatibleProvider<string> {
 			})
 		} catch (error) {
 			// Enhanced error logging with more context
-			console.error("[RooHandler] Error loading dynamic models:", {
+			console.error("[ShoferHandler] Error loading dynamic models:", {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
 				baseURL,

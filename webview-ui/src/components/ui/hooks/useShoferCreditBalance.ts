@@ -20,7 +20,7 @@ export const useShoferCreditBalance = () => {
 		const handleMessage = (event: MessageEvent) => {
 			const message: ExtensionMessage = event.data
 
-			if (message.type === "rooCreditBalance" && message.requestId === requestId) {
+			if (message.type === "shoferCreditBalance" && message.requestId === requestId) {
 				window.removeEventListener("message", handleMessage)
 				clearTimeout(timeout)
 

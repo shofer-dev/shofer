@@ -14,7 +14,7 @@ import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { OpenRouterHandler } from "../../api/providers/openrouter"
-import { RooHandler } from "../../api/providers/shofer"
+import { ShoferHandler } from "../../api/providers/shofer"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"
@@ -58,7 +58,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 
 		const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 		if (!accessAllowed) {
-			await task.say("rooignore_error", relPath)
+			await task.say("shoferignore_error", relPath)
 			pushToolResult(formatResponse.shoferIgnoreError(relPath))
 			return
 		}
@@ -79,7 +79,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 
 			const inputImageAccessAllowed = task.shoferIgnoreController?.validateAccess(inputImagePath)
 			if (!inputImageAccessAllowed) {
-				await task.say("rooignore_error", inputImagePath)
+				await task.say("shoferignore_error", inputImagePath)
 				pushToolResult(formatResponse.shoferIgnoreError(inputImagePath))
 				return
 			}
@@ -120,7 +120,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 			}
 		}
 
-		const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+		const isWriteProtected = task.shoferProtectedController?.isWriteProtected(relPath) || false
 
 		// Use shared utility for backwards compatibility logic
 		const imageProvider = getImageGenerationProvider(
@@ -192,7 +192,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 			let result
 			if (modelProvider === "shofer") {
 				// Use Shofer Cloud provider (supports both chat completions and images API)
-				const rooHandler = new RooHandler({} as any)
+				const rooHandler = new ShoferHandler({} as any)
 				result = await rooHandler.generateImage(prompt, selectedModel, inputImageData, apiMethod)
 			} else {
 				// Use OpenRouter provider (only supports chat completions API)
@@ -241,7 +241,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 			await fs.writeFile(absolutePath, imageBuffer)
 
 			if (finalPath) {
-				await task.fileContextTracker.trackFileContext(finalPath, "roo_edited")
+				await task.fileContextTracker.trackFileContext(finalPath, "shofer_edited")
 			}
 
 			task.didEditFile = true

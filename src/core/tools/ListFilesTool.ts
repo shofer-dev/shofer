@@ -46,7 +46,7 @@ export class ListFilesTool extends BaseTool<"list_files"> {
 				didHitLimit,
 				task.shoferIgnoreController,
 				showShoferIgnoredFiles,
-				task.rooProtectedController,
+				task.shoferProtectedController,
 			)
 
 			const sharedMessageProps: ShoferSayTool = {

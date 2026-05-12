@@ -12,7 +12,7 @@ import { Task } from "../task/Task"
 import { ToolUse, ToolResponse } from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
-import { ExitCodeDetails, RooTerminalCallbacks, RooTerminalProcess } from "../../integrations/terminal/types"
+import { ExitCodeDetails, ShoferTerminalCallbacks, ShoferTerminalProcess } from "../../integrations/terminal/types"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
@@ -35,7 +35,7 @@ export function resolveAgentTimeoutMs(timeoutSeconds: number | null | undefined)
 	// In CLI runtime, stdin harnesses expect command lifetime to be governed
 	// solely by commandExecutionTimeout (user setting), not model-provided
 	// background timeouts.
-	return process.env.ROO_CLI_RUNTIME === "1" ? 0 : requestedAgentTimeout
+	return process.env.SHOFER_CLI_RUNTIME === "1" ? 0 : requestedAgentTimeout
 }
 
 export class ExecuteCommandTool extends BaseTool<"execute_command"> {
@@ -58,7 +58,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 			const ignoredFileAttemptedToAccess = task.shoferIgnoreController?.validateCommand(canonicalCommand)
 
 			if (ignoredFileAttemptedToAccess) {
-				await task.say("rooignore_error", ignoredFileAttemptedToAccess)
+				await task.say("shoferignore_error", ignoredFileAttemptedToAccess)
 				pushToolResult(formatResponse.shoferIgnoreError(ignoredFileAttemptedToAccess))
 				return
 			}
@@ -284,8 +284,8 @@ export async function executeCommandInTerminal(
 		resolveOnCompleted = resolve
 	})
 
-	const callbacks: RooTerminalCallbacks = {
-		onLine: async (lines: string, process: RooTerminalProcess) => {
+	const callbacks: ShoferTerminalCallbacks = {
+		onLine: async (lines: string, process: ShoferTerminalProcess) => {
 			accumulatedOutput += lines
 
 			// Trim accumulated output to prevent unbounded memory growth

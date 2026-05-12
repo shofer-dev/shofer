@@ -335,14 +335,14 @@ export async function activate(context: vscode.ExtensionContext) {
 	// touching disk. Content is carried base64-encoded in the URI's `query` so
 	// each invocation is self-contained (no runtime registry to keep in sync
 	// with task lifecycle).
-	const rooOriginalProvider = new (class implements vscode.TextDocumentContentProvider {
+	const shoferOriginalProvider = new (class implements vscode.TextDocumentContentProvider {
 		provideTextDocumentContent(uri: vscode.Uri): string {
 			return Buffer.from(uri.query, "base64").toString("utf-8")
 		}
 	})()
 
 	context.subscriptions.push(
-		vscode.workspace.registerTextDocumentContentProvider("shofer-original", rooOriginalProvider),
+		vscode.workspace.registerTextDocumentContentProvider("shofer-original", shoferOriginalProvider),
 	)
 
 	context.subscriptions.push(vscode.window.registerUriHandler({ handleUri }))

@@ -44,7 +44,7 @@ export const Shofer = ({
 				<div className="flex flex-col gap-2">
 					<Button
 						variant="primary"
-						onClick={() => vscode.postMessage({ type: "rooCloudSignIn" })}
+						onClick={() => vscode.postMessage({ type: "shoferCloudSignIn" })}
 						className="w-fit">
 						{t("settings:providers.shofer.connectButton")}
 					</Button>

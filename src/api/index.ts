@@ -30,7 +30,7 @@ import {
 	SambaNovaHandler,
 	ZAiHandler,
 	FireworksHandler,
-	RooHandler,
+	ShoferHandler,
 	VercelAiGatewayHandler,
 	MiniMaxHandler,
 	BasetenHandler,
@@ -174,7 +174,7 @@ export function buildApiHandler(
 		case "shofer":
 			// Never throw exceptions from provider constructors
 			// The provider-proxy server will handle authentication and return appropriate error codes
-			return new RooHandler(options)
+			return new ShoferHandler(options)
 		case "vercel-ai-gateway":
 			return new VercelAiGatewayHandler(options)
 		case "minimax":

@@ -148,7 +148,7 @@ describe("WelcomeViewProvider", () => {
 			fireEvent.click(getStartedButton)
 
 			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "rooCloudSignIn",
+				type: "shoferCloudSignIn",
 				useProviderSignup: true,
 			})
 		})
@@ -236,7 +236,7 @@ describe("WelcomeViewProvider", () => {
 			fireEvent.click(getStartedButton)
 
 			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "rooCloudSignIn",
+				type: "shoferCloudSignIn",
 				useProviderSignup: true,
 			})
 		})

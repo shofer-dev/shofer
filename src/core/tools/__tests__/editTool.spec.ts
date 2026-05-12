@@ -116,7 +116,7 @@ describe("editTool", () => {
 		mockTask.shoferIgnoreController = {
 			validateAccess: vi.fn().mockReturnValue(true),
 		}
-		mockTask.rooProtectedController = {
+		mockTask.shoferProtectedController = {
 			isWriteProtected: vi.fn().mockReturnValue(false),
 		}
 		mockTask.diffViewProvider = {
@@ -417,7 +417,7 @@ describe("editTool", () => {
 		it("tracks file context after successful edit", async () => {
 			await executeEditTool()
 
-			expect(mockTask.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "roo_edited")
+			expect(mockTask.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "shofer_edited")
 		})
 	})
 })

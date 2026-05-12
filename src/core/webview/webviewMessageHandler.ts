@@ -1254,14 +1254,14 @@ export const webviewMessageHandler = async (
 				const balance = await CloudService.instance.cloudAPI.creditBalance()
 
 				provider.postMessageToWebview({
-					type: "rooCreditBalance",
+					type: "shoferCreditBalance",
 					requestId,
 					values: { balance },
 				})
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
 				provider.postMessageToWebview({
-					type: "rooCreditBalance",
+					type: "shoferCreditBalance",
 					requestId,
 					values: { error: errorMessage },
 				})
@@ -1599,11 +1599,11 @@ export const webviewMessageHandler = async (
 			}
 
 			const workspaceFolder = getCurrentCwd()
-			const rooDir = path.join(workspaceFolder, ".shofer")
-			const mcpPath = path.join(rooDir, "mcp.json")
+			const shoferDir = path.join(workspaceFolder, ".shofer")
+			const mcpPath = path.join(shoferDir, "mcp.json")
 
 			try {
-				await fs.mkdir(rooDir, { recursive: true })
+				await fs.mkdir(shoferDir, { recursive: true })
 				const exists = await fileExistsAtPath(mcpPath)
 
 				if (!exists) {
@@ -2539,7 +2539,7 @@ export const webviewMessageHandler = async (
 			provider.postMessageToWebview({ type: "action", action: "cloudButtonClicked" })
 			break
 		}
-		case "rooCloudSignIn": {
+		case "shoferCloudSignIn": {
 			try {
 				TelemetryService.instance.captureEvent(TelemetryEventName.AUTHENTICATION_INITIATED)
 				// Use provider signup flow if useProviderSignup is explicitly true
@@ -2562,7 +2562,7 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
-		case "rooCloudSignOut": {
+		case "shoferCloudSignOut": {
 			try {
 				await CloudService.instance.logout()
 				await provider.postStateToWebview()
@@ -2613,7 +2613,7 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
-		case "rooCloudManualUrl": {
+		case "shoferCloudManualUrl": {
 			try {
 				if (!message.text) {
 					vscode.window.showErrorMessage(t("common:errors.manual_url_empty"))

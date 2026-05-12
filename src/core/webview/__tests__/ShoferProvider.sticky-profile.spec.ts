@@ -206,8 +206,8 @@ describe("ShoferProvider - Sticky Provider Profile", () => {
 	beforeEach(async () => {
 		vi.clearAllMocks()
 		taskIdCounter = 0
-		originalShoferCliRuntimeEnv = process.env.ROO_CLI_RUNTIME
-		delete process.env.ROO_CLI_RUNTIME
+		originalShoferCliRuntimeEnv = process.env.SHOFER_CLI_RUNTIME
+		delete process.env.SHOFER_CLI_RUNTIME
 
 		if (!TelemetryService.hasInstance()) {
 			TelemetryService.createInstance([])
@@ -298,9 +298,9 @@ describe("ShoferProvider - Sticky Provider Profile", () => {
 
 	afterEach(() => {
 		if (originalShoferCliRuntimeEnv === undefined) {
-			delete process.env.ROO_CLI_RUNTIME
+			delete process.env.SHOFER_CLI_RUNTIME
 		} else {
-			process.env.ROO_CLI_RUNTIME = originalShoferCliRuntimeEnv
+			process.env.SHOFER_CLI_RUNTIME = originalShoferCliRuntimeEnv
 		}
 	})
 
@@ -508,7 +508,7 @@ describe("ShoferProvider - Sticky Provider Profile", () => {
 
 		it("should skip restoring task apiConfigName from history in CLI runtime", async () => {
 			await provider.resolveWebviewView(mockWebviewView)
-			process.env.ROO_CLI_RUNTIME = "1"
+			process.env.SHOFER_CLI_RUNTIME = "1"
 
 			const historyItem: HistoryItem = {
 				id: "test-task-id",
@@ -542,7 +542,7 @@ describe("ShoferProvider - Sticky Provider Profile", () => {
 
 		it("should skip restoring mode-based provider config from history in CLI runtime", async () => {
 			await provider.resolveWebviewView(mockWebviewView)
-			process.env.ROO_CLI_RUNTIME = "1"
+			process.env.SHOFER_CLI_RUNTIME = "1"
 
 			const historyItem: HistoryItem = {
 				id: "test-task-id",

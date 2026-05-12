@@ -212,13 +212,13 @@ export class EditFileTool extends BaseTool<"edit_file"> {
 				// Finalize the partial tool preview before emitting any say() messages.
 				await finalizePartialToolAskIfNeeded(relPath)
 				task.didToolFailInCurrentTurn = true
-				await task.say("rooignore_error", relPath)
+				await task.say("shoferignore_error", relPath)
 				pushToolResult(formatResponse.shoferIgnoreError(relPath))
 				return
 			}
 
 			// Check if file is write-protected
-			const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
+			const isWriteProtected = task.shoferProtectedController?.isWriteProtected(relPath) || false
 
 			const absolutePath = path.resolve(task.cwd, relPath)
 			const fileExists = await fileExistsAtPath(absolutePath)
@@ -451,7 +451,7 @@ export class EditFileTool extends BaseTool<"edit_file"> {
 
 			// Track file edit operation
 			if (relPath) {
-				await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
+				await task.fileContextTracker.trackFileContext(relPath, "shofer_edited" as RecordSource)
 			}
 
 			task.didEditFile = true

@@ -83,7 +83,7 @@ import { RepoPerTaskCheckpointService } from "../../services/checkpoints"
 // integrations
 import { DiffViewProvider } from "../../integrations/editor/DiffViewProvider"
 import { findToolName } from "../../integrations/misc/export-markdown"
-import { RooTerminalProcess } from "../../integrations/terminal/types"
+import { ShoferTerminalProcess } from "../../integrations/terminal/types"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
 
@@ -421,9 +421,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	toolRepetitionDetector: ToolRepetitionDetector
 	shoferIgnoreController?: ShoferIgnoreController
-	rooProtectedController?: ShoferProtectedController
+	shoferProtectedController?: ShoferProtectedController
 	fileContextTracker: FileContextTracker
-	terminalProcess?: RooTerminalProcess
+	terminalProcess?: ShoferTerminalProcess
 
 	// Editing
 	diffViewProvider: DiffViewProvider
@@ -624,7 +624,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.taskNumber = -1
 
 		this.shoferIgnoreController = new ShoferIgnoreController(this.cwd)
-		this.rooProtectedController = new ShoferProtectedController(this.cwd)
+		this.shoferProtectedController = new ShoferProtectedController(this.cwd)
 		this.fileContextTracker = new FileContextTracker(provider, this.taskId)
 
 		this.shoferIgnoreController.initialize().catch((error) => {

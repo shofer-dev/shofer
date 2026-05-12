@@ -18,12 +18,12 @@ import fs from "fs/promises"
  *
  * @example Usage:
  * ```typescript
- * const globalDir = getGlobalRooDirectory()
+ * const globalDir = getGlobalShoferDirectory()
  * // Returns: "/Users/john/.shofer" (on macOS/Linux)
  * // Returns: "C:\\Users\\john\\.shofer" (on Windows)
  * ```
  */
-export function getGlobalRooDirectory(): string {
+export function getGlobalShoferDirectory(): string {
 	const homeDir = os.homedir()
 	return path.join(homeDir, ".shofer")
 }
@@ -80,10 +80,10 @@ export function getProjectAgentsDirectoryForCwd(cwd: string): string {
  *
  * @example
  * ```typescript
- * const projectDir = getProjectRooDirectoryForCwd('/Users/john/my-project')
+ * const projectDir = getProjectShoferDirectoryForCwd('/Users/john/my-project')
  * // Returns: "/Users/john/my-project/.shofer"
  *
- * const windowsProjectDir = getProjectRooDirectoryForCwd('C:\\Users\\john\\my-project')
+ * const windowsProjectDir = getProjectShoferDirectoryForCwd('C:\\Users\\john\\my-project')
  * // Returns: "C:\\Users\\john\\my-project\\.shofer"
  * ```
  *
@@ -101,7 +101,7 @@ export function getProjectAgentsDirectoryForCwd(cwd: string): string {
  * └── package.json
  * ```
  */
-export function getProjectRooDirectoryForCwd(cwd: string): string {
+export function getProjectShoferDirectoryForCwd(cwd: string): string {
 	return path.join(cwd, ".shofer")
 }
 
@@ -176,7 +176,7 @@ export async function readFileIfExists(filePath: string): Promise<string | null>
  * @example Directory structure:
  * ```
  * /Users/john/monorepo/
- * ├── .shofer/                    # Root .shofer (NOT included - use getProjectRooDirectoryForCwd)
+ * ├── .shofer/                    # Root .shofer (NOT included - use getProjectShoferDirectoryForCwd)
  * ├── package-a/
  * │   └── .shofer/                # Included
  * │       └── rules/
@@ -214,24 +214,24 @@ export async function discoverSubfolderRooDirectories(cwd: string): Promise<stri
 		const results = await executeRipgrep({ args, workspacePath: cwd })
 
 		// Extract unique .shofer directory paths
-		const rooDirs = new Set<string>()
-		const rootRooDir = path.join(cwd, ".shofer")
+		const shoferDirs = new Set<string>()
+		const rootShoferDir = path.join(cwd, ".shofer")
 
 		for (const result of results) {
 			// Match paths like "subfolder/.shofer/anything" or "subfolder/nested/.shofer/anything"
 			// Handle both forward slashes (Unix) and backslashes (Windows)
 			const match = result.path.match(/^(.+?)[/\\]\.shofer[/\\]/)
 			if (match) {
-				const rooDir = path.join(cwd, match[1], ".shofer")
-				// Exclude the root .shofer directory (already handled by getProjectRooDirectoryForCwd)
-				if (rooDir !== rootRooDir) {
-					rooDirs.add(rooDir)
+				const shoferDir = path.join(cwd, match[1], ".shofer")
+				// Exclude the root .shofer directory (already handled by getProjectShoferDirectoryForCwd)
+				if (shoferDir !== rootShoferDir) {
+					shoferDirs.add(shoferDir)
 				}
 			}
 		}
 
 		// Return sorted alphabetically
-		return Array.from(rooDirs).sort()
+		return Array.from(shoferDirs).sort()
 	} catch (error) {
 		// If discovery fails (e.g., ripgrep not available), return empty array
 		return []
@@ -275,10 +275,10 @@ export function getRooDirectoriesForCwd(cwd: string): string[] {
 	const directories: string[] = []
 
 	// Add global directory first
-	directories.push(getGlobalRooDirectory())
+	directories.push(getGlobalShoferDirectory())
 
 	// Add project-local directory second
-	directories.push(getProjectRooDirectoryForCwd(cwd))
+	directories.push(getProjectShoferDirectoryForCwd(cwd))
 
 	return directories
 }
@@ -306,10 +306,10 @@ export async function getAllRooDirectoriesForCwd(cwd: string): Promise<string[]>
 	const directories: string[] = []
 
 	// Add global directory first
-	directories.push(getGlobalRooDirectory())
+	directories.push(getGlobalShoferDirectory())
 
 	// Add project-local directory second
-	directories.push(getProjectRooDirectoryForCwd(cwd))
+	directories.push(getProjectShoferDirectoryForCwd(cwd))
 
 	// Discover and add subfolder .shofer directories
 	const subfolderDirs = await discoverSubfolderRooDirectories(cwd)
@@ -337,11 +337,11 @@ export async function getAgentsDirectoriesForCwd(cwd: string): Promise<string[]>
 	directories.push(cwd)
 
 	// Get all subfolder .shofer directories
-	const subfolderRooDirs = await discoverSubfolderRooDirectories(cwd)
+	const subfolderShoferDirs = await discoverSubfolderRooDirectories(cwd)
 
 	// Extract parent directories (remove .shofer from path)
-	for (const rooDir of subfolderRooDirs) {
-		const parentDir = path.dirname(rooDir)
+	for (const shoferDir of subfolderShoferDirs) {
+		const parentDir = path.dirname(shoferDir)
 		directories.push(parentDir)
 	}
 
@@ -407,8 +407,8 @@ export async function loadConfiguration(
 	project: string | null
 	merged: string
 }> {
-	const globalDir = getGlobalRooDirectory()
-	const projectDir = getProjectRooDirectoryForCwd(cwd)
+	const globalDir = getGlobalShoferDirectory()
+	const projectDir = getProjectShoferDirectoryForCwd(cwd)
 
 	const globalFilePath = path.join(globalDir, relativePath)
 	const projectFilePath = path.join(projectDir, relativePath)

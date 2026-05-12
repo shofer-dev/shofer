@@ -7,7 +7,7 @@
  * {@link FileContextTracker}, so they never appear in the FileChangesPanel
  * or in `get_changed_files`. This tool closes that gap: it captures the
  * pre-mutation original content via `FileContextTracker.captureOriginal`,
- * performs the mutation, then records each affected path as `roo_edited`
+ * performs the mutation, then records each affected path as `shofer_edited`
  * so the panel and per-file Revert/Redo work as for content edits.
  *
  * Subcommands:
@@ -140,7 +140,7 @@ export class FileTool extends BaseTool<"file"> {
 				}
 
 				for (const f of filesToTrack) {
-					await tracker.trackFileContext(f, "roo_edited")
+					await tracker.trackFileContext(f, "shofer_edited")
 				}
 
 				pushToolResult(
@@ -180,8 +180,8 @@ export class FileTool extends BaseTool<"file"> {
 			await fs.rename(absPath, absDest!)
 
 			// Track both endpoints; this triggers debounced panel push and final-snapshot capture.
-			await tracker.trackFileContext(relPath, "roo_edited")
-			await tracker.trackFileContext(relDest, "roo_edited")
+			await tracker.trackFileContext(relPath, "shofer_edited")
+			await tracker.trackFileContext(relDest, "shofer_edited")
 
 			pushToolResult(`Moved '${relPath}' → '${relDest}'.`)
 		} catch (error) {

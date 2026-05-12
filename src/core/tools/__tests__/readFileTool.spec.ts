@@ -286,7 +286,7 @@ describe("ReadFileTool", () => {
 
 			await readFileTool.execute({ path: "secret.env" }, mockTask as any, callbacks)
 
-			expect(mockTask.say).toHaveBeenCalledWith("rooignore_error", "secret.env")
+			expect(mockTask.say).toHaveBeenCalledWith("shoferignore_error", "secret.env")
 			expect(formatResponse.shoferIgnoreError).toHaveBeenCalledWith("secret.env")
 			expect(callbacks.pushToolResult).toHaveBeenCalledWith(
 				expect.stringContaining("blocked by the .shoferignore"),
