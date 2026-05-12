@@ -169,6 +169,12 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setIncludeCurrentCost: (value: boolean) => void
 	skills?: SkillMetadata[]
 	loadedSkills?: Record<string, string>
+	// Webview-only: when set on the home screen (no active task), the next
+	// `newTask`/`createParallelTask` will use this as `worktreeDir` so the
+	// task is scoped to the chosen worktree. Cleared once consumed. Not
+	// persisted across reloads and not synced to the extension host.
+	pendingWorktreeDir: string | null
+	setPendingWorktreeDir: (value: string | null) => void
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -314,6 +320,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [skills, setSkills] = useState<SkillMetadata[]>([])
 	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
 	const [includeTaskHistoryInEnhance, setIncludeTaskHistoryInEnhance] = useState(true)
+	const [pendingWorktreeDir, setPendingWorktreeDir] = useState<string | null>(null)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
 	const [includeCurrentTime, setIncludeCurrentTime] = useState(true)
 	const [includeCurrentCost, setIncludeCurrentCost] = useState(true)
@@ -695,6 +702,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		},
 		includeTaskHistoryInEnhance,
 		setIncludeTaskHistoryInEnhance,
+		pendingWorktreeDir,
+		setPendingWorktreeDir,
 		includeCurrentTime,
 		setIncludeCurrentTime,
 		includeCurrentCost,

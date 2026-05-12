@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react"
-import { GitBranch, ChevronDown, Plus } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { GitBranch, ChevronDown, Plus, Check } from "lucide-react"
 
 import type { Worktree, WorktreeStatus } from "@roo-code/types"
 
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { useRooPortal } from "@/components/ui/hooks/useRooPortal"
 import { Popover, PopoverContent, PopoverTrigger, StandardTooltip } from "@/components/ui"
 import { useAppTranslation } from "@/i18n/TranslationContext"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { vscode } from "@/utils/vscode"
 import { CreateWorktreeModal } from "@/components/worktrees/CreateWorktreeModal"
 
@@ -26,6 +27,7 @@ import { CreateWorktreeModal } from "@/components/worktrees/CreateWorktreeModal"
  */
 export const WorktreeIndicator = () => {
 	const { t } = useAppTranslation()
+	const { clineMessages, pendingWorktreeDir, setPendingWorktreeDir } = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [modalOpen, setModalOpen] = useState(false)
 	const [worktrees, setWorktrees] = useState<Worktree[]>([])
@@ -33,8 +35,29 @@ export const WorktreeIndicator = () => {
 	const [loading, setLoading] = useState(false)
 	const portalContainer = useRooPortal("roo-portal")
 
-	const currentWorktree = worktrees.find((w) => w.isCurrent)
-	const otherWorktrees = worktrees.filter((w) => !w.isBare && !w.isCurrent)
+	// A task is active once the backend has pushed any clineMessages for it.
+	// Switching/creating worktrees is only allowed before that point.
+	const hasActiveTask = (clineMessages?.length ?? 0) > 0
+
+	// The "current" worktree from the list reflects the workspace's git
+	// checkout (always master in the embedded model). Once a task is active,
+	// derive what to display from the task's cwd. Pre-task, prefer the user's
+	// pending selection.
+	const workspaceCurrent = worktrees.find((w) => w.isCurrent)
+	const selectedWorktree = useMemo<Worktree | undefined>(() => {
+		if (hasActiveTask) {
+			// TODO: when backend exposes the active task's cwd to the webview,
+			// match it here to surface the actual worktree. Until then fall
+			// back to the workspace's current.
+			return workspaceCurrent
+		}
+		if (pendingWorktreeDir) {
+			return worktrees.find((w) => w.path === pendingWorktreeDir) ?? workspaceCurrent
+		}
+		return workspaceCurrent
+	}, [hasActiveTask, pendingWorktreeDir, worktrees, workspaceCurrent])
+
+	const selectableWorktrees = worktrees.filter((w) => !w.isBare)
 
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent) => {
@@ -71,14 +94,23 @@ export const WorktreeIndicator = () => {
 		[refresh],
 	)
 
-	const handleSwitch = useCallback((wt: Worktree) => {
-		setOpen(false)
-		vscode.postMessage({
-			type: "createParallelTask",
-			worktreeDir: wt.path,
-			taskName: `worktree: ${wt.branch || wt.path}`,
-		})
-	}, [])
+	const handleSelect = useCallback(
+		(wt: Worktree) => {
+			setOpen(false)
+			if (hasActiveTask) {
+				// Worktree is locked once a task is running; clicking is a no-op.
+				return
+			}
+			// Pre-task: just record the selection. The worktreeDir is forwarded
+			// when the user submits the first message (see ChatView.handleSendMessage).
+			if (wt.isCurrent) {
+				setPendingWorktreeDir(null)
+			} else {
+				setPendingWorktreeDir(wt.path)
+			}
+		},
+		[hasActiveTask, setPendingWorktreeDir],
+	)
 
 	const handleCreate = useCallback(() => {
 		setOpen(false)
@@ -95,8 +127,10 @@ export const WorktreeIndicator = () => {
 							"bg-transparent border border-[rgba(255,255,255,0.08)] rounded-md text-vscode-foreground",
 							"transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder focus-visible:ring-inset",
 							"opacity-90 hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)] cursor-pointer",
+							"max-w-[160px]",
 						)}>
 						<GitBranch className="w-3 h-3 shrink-0" />
+						<span className="truncate">{selectedWorktree?.branch || t("worktrees:noBranch")}</span>
 						<ChevronDown className="size-2.5 shrink-0 opacity-70" />
 					</PopoverTrigger>
 				</StandardTooltip>
@@ -106,11 +140,11 @@ export const WorktreeIndicator = () => {
 					container={portalContainer}
 					className="p-0 overflow-hidden min-w-72 max-w-80">
 					<div className="flex flex-col w-full">
-						{/* Header: current branch */}
+						{/* Header: selected branch */}
 						<div className="px-3 pt-3 pb-2">
 							<h4 className="text-sm font-semibold m-0 flex items-center gap-2">
 								<GitBranch className="w-3.5 h-3.5" />
-								{currentWorktree?.branch || t("worktrees:noBranch")}
+								{selectedWorktree?.branch || t("worktrees:noBranch")}
 							</h4>
 						</div>
 
@@ -189,47 +223,55 @@ export const WorktreeIndicator = () => {
 							</div>
 						)}
 
-						{/* (c) Switch — list other worktrees */}
-						{otherWorktrees.length > 0 && (
+						{/* (c) Select another worktree (pre-task only) */}
+						{!hasActiveTask && selectableWorktrees.length > 1 && (
 							<>
 								<div className="border-t border-vscode-dropdown-border" />
 								<div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-vscode-descriptionForeground uppercase tracking-wide">
-									{t("worktreeStatus:otherWorktrees")}
+									{t("worktreeStatus:selectWorktree")}
 								</div>
 								<div className="max-h-48 overflow-y-auto pb-1">
-									{otherWorktrees.map((wt) => (
-										<button
-											key={wt.path}
-											type="button"
-											onClick={() => handleSwitch(wt)}
-											className={cn(
-												"w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left",
-												"bg-transparent border-none cursor-pointer",
-												"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
-												"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
-											)}>
-											<GitBranch className="w-3.5 h-3.5 shrink-0 opacity-80" />
-											<span className="truncate">{wt.branch || wt.path}</span>
-										</button>
-									))}
+									{selectableWorktrees.map((wt) => {
+										const isSelected = selectedWorktree?.path === wt.path
+										return (
+											<button
+												key={wt.path}
+												type="button"
+												onClick={() => handleSelect(wt)}
+												className={cn(
+													"w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left",
+													"bg-transparent border-none cursor-pointer",
+													"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
+													"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
+												)}>
+												<GitBranch className="w-3.5 h-3.5 shrink-0 opacity-80" />
+												<span className="truncate flex-1">{wt.branch || wt.path}</span>
+												{isSelected && <Check className="w-3.5 h-3.5 shrink-0 opacity-80" />}
+											</button>
+										)
+									})}
 								</div>
 							</>
 						)}
 
-						{/* (b) Create */}
-						<div className="border-t border-vscode-dropdown-border" />
-						<button
-							type="button"
-							onClick={handleCreate}
-							className={cn(
-								"w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
-								"bg-transparent border-none cursor-pointer",
-								"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
-								"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
-							)}>
-							<Plus className="w-3.5 h-3.5 shrink-0" />
-							<span>{t("worktreeStatus:createNew")}</span>
-						</button>
+						{/* (b) Create new worktree (pre-task only) */}
+						{!hasActiveTask && (
+							<>
+								<div className="border-t border-vscode-dropdown-border" />
+								<button
+									type="button"
+									onClick={handleCreate}
+									className={cn(
+										"w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
+										"bg-transparent border-none cursor-pointer",
+										"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
+										"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
+									)}>
+									<Plus className="w-3.5 h-3.5 shrink-0" />
+									<span>{t("worktreeStatus:createNew")}</span>
+								</button>
+							</>
+						)}
 					</div>
 				</PopoverContent>
 			</Popover>
