@@ -1,6 +1,15 @@
 import { z } from "zod"
 
 /**
+ * Feature flag controlling the Shofer Marketplace.
+ * When `false`, the marketplace tab, buttons, and API calls are disabled entirely.
+ * No server-side API is required when disabled.
+ *
+ * Set to `true` to re-enable the full marketplace experience.
+ */
+export const MARKETPLACE_ENABLED = false
+
+/**
  * Schema for MCP parameter definitions
  */
 export const mcpParameterSchema = z.object({

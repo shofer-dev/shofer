@@ -8,6 +8,7 @@ import {
 	VSCodeTextField,
 } from "@vscode/webview-ui-toolkit/react"
 import { Trans } from "react-i18next"
+import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { ChevronDown, X, Upload, Download } from "lucide-react"
 
 import { ModeConfig, GroupEntry, PromptComponent, ToolGroup, modeConfigSchema } from "@shofer/types"
@@ -653,23 +654,25 @@ const ModesView = () => {
 									</div>
 								)}
 							</div>
-							<StandardTooltip content={t("chat:modeSelector.marketplace")}>
-								<Button
-									variant="ghost"
-									size="icon"
-									onClick={() => {
-										window.postMessage(
-											{
-												type: "action",
-												action: "marketplaceButtonClicked",
-												values: { marketplaceTab: "mode" },
-											},
-											"*",
-										)
-									}}>
-									<span className="codicon codicon-extensions"></span>
-								</Button>
-							</StandardTooltip>
+							{MARKETPLACE_ENABLED && (
+								<StandardTooltip content={t("chat:modeSelector.marketplace")}>
+									<Button
+										variant="ghost"
+										size="icon"
+										onClick={() => {
+											window.postMessage(
+												{
+													type: "action",
+													action: "marketplaceButtonClicked",
+													values: { marketplaceTab: "mode" },
+												},
+												"*",
+											)
+										}}>
+										<span className="codicon codicon-extensions"></span>
+									</Button>
+								</StandardTooltip>
+							)}
 
 							<StandardTooltip content={t("prompts:modes.importMode")}>
 								<Button
