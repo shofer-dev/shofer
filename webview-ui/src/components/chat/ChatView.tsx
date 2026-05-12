@@ -98,6 +98,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		messageQueue = [],
 		parallelTasks,
 		taskNotifications,
+		pendingWorktreeDir,
+		setPendingWorktreeDir,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -885,7 +887,16 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				userRespondedRef.current = true
 
 				if (messagesRef.current.length === 0) {
-					vscode.postMessage({ type: "newTask", text, images })
+					// On the home screen the user may have chosen a target worktree
+					// via WorktreeIndicator. Forward it so the new task spawns
+					// scoped to that worktree's directory; clear after consuming.
+					vscode.postMessage({
+						type: "newTask",
+						text,
+						images,
+						worktreeDir: pendingWorktreeDir ?? undefined,
+					})
+					if (pendingWorktreeDir) setPendingWorktreeDir(null)
 				} else if (clineAskRef.current) {
 					if (clineAskRef.current === "followup") {
 						markFollowUpAsAnswered()
@@ -937,6 +948,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			isStreaming,
 			messageQueue.length,
 			apiConfiguration?.apiProvider,
+			pendingWorktreeDir,
+			setPendingWorktreeDir,
 		], // messagesRef and clineAskRef are stable
 	)
 
