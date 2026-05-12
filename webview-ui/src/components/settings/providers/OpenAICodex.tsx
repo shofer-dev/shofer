@@ -1,6 +1,6 @@
 import React from "react"
 
-import { type ProviderSettings, openAiCodexDefaultModelId, openAiCodexModels } from "@shofer/shared/types"
+import { type ProviderSettings, openAiCodexDefaultModelId, openAiCodexModels } from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Button } from "@src/components/ui"

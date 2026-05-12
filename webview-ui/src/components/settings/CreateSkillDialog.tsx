@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react"
-import { validateSkillName as validateSkillNameShared, SkillNameValidationError } from "@shofer/shared/types"
+import { validateSkillName as validateSkillNameShared, SkillNameValidationError } from "@shofer/types"
 
 import { getAllModes } from "@shofer/shared/modes"
 

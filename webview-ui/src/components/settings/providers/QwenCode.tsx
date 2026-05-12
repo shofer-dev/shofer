@@ -1,7 +1,7 @@
 import React from "react"
 import { VSCodeTextField, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 
-import { type ProviderSettings } from "@shofer/shared/types"
+import { type ProviderSettings } from "@shofer/types"
 
 interface QwenCodeProps {
 	apiConfiguration: ProviderSettings

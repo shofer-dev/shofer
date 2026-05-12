@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ChevronDown, ChevronRight, MessageSquareMore } from "lucide-react"
 
-import { QueuedMessage } from "@shofer/shared/types"
+import { QueuedMessage } from "@shofer/types"
 
 import { Button, Collapsible, CollapsibleContent, CollapsibleTrigger } from "@src/components/ui"
 

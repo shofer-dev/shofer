@@ -8,7 +8,7 @@ import {
 	type ExtensionMessage,
 	poeDefaultModelId,
 	type ProviderName,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { RouterName } from "@shofer/shared/api"
 

@@ -1,6 +1,6 @@
 import { Fzf } from "fzf"
 
-import type { ModeConfig, Command } from "@shofer/shared/types"
+import type { ModeConfig, Command } from "@shofer/types"
 
 import { mentionRegex } from "@shofer/shared/context-mentions"
 

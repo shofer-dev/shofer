@@ -1,7 +1,7 @@
 import { HTMLAttributes } from "react"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 
-import type { Language } from "@shofer/shared/types"
+import type { Language } from "@shofer/types"
 
 import { LANGUAGES } from "@shofer/shared/language"
 

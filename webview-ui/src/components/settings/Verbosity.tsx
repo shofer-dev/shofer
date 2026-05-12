@@ -1,4 +1,4 @@
-import { type ProviderSettings, type ModelInfo, type VerbosityLevel, verbosityLevels } from "@shofer/shared/types"
+import { type ProviderSettings, type ModelInfo, type VerbosityLevel, verbosityLevels } from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@src/components/ui"

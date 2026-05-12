@@ -20,7 +20,7 @@ import {
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { findLastIndex } from "@shofer/shared/array"
 

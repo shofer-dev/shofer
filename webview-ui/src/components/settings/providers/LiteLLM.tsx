@@ -6,7 +6,7 @@ import {
 	type OrganizationAllowList,
 	type ExtensionMessage,
 	litellmDefaultModelId,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { RouterName } from "@shofer/shared/api"
 

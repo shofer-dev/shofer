@@ -1,6 +1,6 @@
 import posthog from "posthog-js"
 
-import type { TelemetrySetting } from "@shofer/shared/types"
+import type { TelemetrySetting } from "@shofer/types"
 
 class TelemetryClient {
 	private static instance: TelemetryClient

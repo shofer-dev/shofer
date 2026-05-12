@@ -1,7 +1,7 @@
 import React, { memo, useState } from "react"
 import { Trans } from "react-i18next"
 
-import type { ShoferMessage } from "@shofer/shared/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { Button } from "@src/components/ui"

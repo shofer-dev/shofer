@@ -1,4 +1,4 @@
-import type { ProviderName, ModelInfo, ProviderSettings } from "@shofer/shared/types"
+import type { ProviderName, ModelInfo, ProviderSettings } from "@shofer/types"
 import {
 	anthropicDefaultModelId,
 	bedrockDefaultModelId,
@@ -16,7 +16,7 @@ import {
 	fireworksDefaultModelId,
 	minimaxDefaultModelId,
 	basetenDefaultModelId,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { MODELS_BY_PROVIDER } from "../constants"
 

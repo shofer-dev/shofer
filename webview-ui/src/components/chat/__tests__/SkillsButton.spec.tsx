@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 
-import type { SkillMetadata, ModeConfig } from "@shofer/shared/types"
+import type { SkillMetadata, ModeConfig } from "@shofer/types"
 
 import { SkillsButton } from "../SkillsButton"
 

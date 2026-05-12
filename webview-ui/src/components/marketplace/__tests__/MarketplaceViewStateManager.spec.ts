@@ -1,5 +1,5 @@
 import { MarketplaceViewStateManager, ViewStateTransition } from "../MarketplaceViewStateManager"
-import { MarketplaceItem } from "@shofer/shared/types"
+import { MarketplaceItem } from "@shofer/types"
 
 // Mock vscode module
 vi.mock("@/utils/vscode", () => ({

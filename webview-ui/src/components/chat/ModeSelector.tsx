@@ -2,7 +2,7 @@ import React from "react"
 import { Fzf } from "fzf"
 import { Check, X } from "lucide-react"
 
-import { type ModeConfig, type CustomModePrompts, TelemetryEventName } from "@shofer/shared/types"
+import { type ModeConfig, type CustomModePrompts, TelemetryEventName } from "@shofer/types"
 
 import { type Mode, getAllModes, defaultModeSlug } from "@shofer/shared/modes"
 

@@ -17,7 +17,7 @@ import {
 	fireworksModels,
 	minimaxModels,
 	basetenModels,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 export const MODELS_BY_PROVIDER: Partial<Record<ProviderName, Record<string, ModelInfo>>> = {
 	anthropic: anthropicModels,

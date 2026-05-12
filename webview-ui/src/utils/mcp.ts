@@ -1,4 +1,4 @@
-import type { McpResource, McpResourceTemplate } from "@shofer/shared/types"
+import type { McpResource, McpResourceTemplate } from "@shofer/types"
 
 /**
  * Matches a URI against an array of URI templates and returns the matching template

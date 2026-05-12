@@ -1,4 +1,4 @@
-import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/shared/types"
+import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/types"
 
 /**
  * Result of token distribution calculation

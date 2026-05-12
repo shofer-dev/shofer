@@ -1,4 +1,4 @@
-import type { ProviderSettings, OrganizationAllowList, RouterModels } from "@shofer/shared/types"
+import type { ProviderSettings, OrganizationAllowList, RouterModels } from "@shofer/types"
 
 // Mock i18next to return translation keys with interpolated values
 vi.mock("i18next", () => ({

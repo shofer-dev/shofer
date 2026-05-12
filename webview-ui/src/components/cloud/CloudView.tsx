@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { VSCodeProgressRing, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
-import { type CloudUserInfo, type CloudOrganizationMembership, TelemetryEventName } from "@shofer/shared/types"
+import { type CloudUserInfo, type CloudOrganizationMembership, TelemetryEventName } from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

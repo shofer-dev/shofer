@@ -1,6 +1,6 @@
 import { HTMLAttributes } from "react"
 
-import type { Experiments, ImageGenerationProvider } from "@shofer/shared/types"
+import type { Experiments, ImageGenerationProvider } from "@shofer/types"
 
 import { EXPERIMENT_IDS, experimentConfigsMap } from "@shofer/shared/experiments"
 

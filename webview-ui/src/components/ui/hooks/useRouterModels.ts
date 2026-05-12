@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { type RouterModels, type ExtensionMessage } from "@shofer/shared/types"
+import { type RouterModels, type ExtensionMessage } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 

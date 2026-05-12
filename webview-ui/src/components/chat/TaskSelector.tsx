@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { Plus, Pause, Play, Square, Trash2, Pencil, Check, X } from "lucide-react"
 
-import type { HistoryItem } from "@shofer/shared/types"
+import type { HistoryItem } from "@shofer/types"
 
 import { cn } from "@src/lib/utils"
 import { StandardTooltip } from "@src/components/ui"

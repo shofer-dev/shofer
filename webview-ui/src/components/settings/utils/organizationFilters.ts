@@ -1,4 +1,4 @@
-import type { ProviderName, ModelInfo, OrganizationAllowList } from "@shofer/shared/types"
+import type { ProviderName, ModelInfo, OrganizationAllowList } from "@shofer/types"
 
 export const filterProviders = (
 	providers: Array<{ value: string; label: string }>,
