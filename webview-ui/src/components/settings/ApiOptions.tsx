@@ -107,7 +107,7 @@ import { TemperatureControl } from "./TemperatureControl"
 import { RateLimitSecondsControl } from "./RateLimitSecondsControl"
 import { ConsecutiveMistakeLimitControl } from "./ConsecutiveMistakeLimitControl"
 import { BedrockCustomArn } from "./providers/BedrockCustomArn"
-import { ShoferBalanceDisplay } from "./providers/ShoferBalanceDisplay"
+// ShoferBalanceDisplay removed
 import { buildDocLink } from "@src/utils/docLinks"
 import { BookOpenText } from "lucide-react"
 
@@ -467,15 +467,11 @@ const ApiOptions = ({
 			<div className="flex flex-col gap-1 relative">
 				<div className="flex justify-between items-center">
 					<label className="block font-medium">{t("settings:providers.apiProvider")}</label>
-					{selectedProvider === "shofer" && cloudIsAuthenticated ? (
-						<ShoferBalanceDisplay />
-					) : (
-						docs && (
-							<VSCodeLink href={docs.url} target="_blank" className="flex gap-2">
-								{t("settings:providers.apiProviderDocs")}
-								<BookOpenText className="size-4 inline ml-2" />
-							</VSCodeLink>
-						)
+					{docs && (
+						<VSCodeLink href={docs.url} target="_blank" className="flex gap-2">
+							{t("settings:providers.apiProviderDocs")}
+							<BookOpenText className="size-4 inline ml-2" />
+						</VSCodeLink>
 					)}
 				</div>
 				<SearchableSelect

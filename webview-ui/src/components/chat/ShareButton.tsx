@@ -7,8 +7,8 @@ import { type HistoryItem, type ShareVisibility, TelemetryEventName } from "@sho
 import { vscode } from "@/utils/vscode"
 import { telemetryClient } from "@/utils/TelemetryClient"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-import { useCloudUpsell } from "@/hooks/useCloudUpsell"
-import { CloudUpsellDialog } from "@/components/cloud/CloudUpsellDialog"
+// useCloudUpsell removed
+// CloudUpsellDialog removed
 import {
 	Popover,
 	PopoverContent,
@@ -34,21 +34,13 @@ export const ShareButton = ({ item, disabled = false }: ShareButtonProps) => {
 	const { cloudUserInfo } = useExtensionState()
 
 	// Use enhanced cloud upsell hook with auto-open on auth success
-	const {
-		isOpen: connectModalOpen,
-		openUpsell,
-		closeUpsell,
-		handleConnect,
-		isAuthenticated: cloudIsAuthenticated,
-		sharingEnabled,
-		publicSharingEnabled,
-	} = useCloudUpsell({
-		onAuthSuccess: () => {
-			// Auto-open share dropdown after successful authentication
-			setShareDropdownOpen(true)
-			setWasConnectInitiatedFromShare(false)
-		},
-	})
+	const connectModalOpen = false
+	const cloudIsAuthenticated = false
+	const sharingEnabled = false
+	const publicSharingEnabled = false
+	const openUpsell = () => {}
+	const closeUpsell = () => {}
+	const handleConnect = () => {}
 
 	// Auto-open popover when user becomes authenticated after clicking Connect from share button
 	useEffect(() => {
@@ -227,7 +219,7 @@ export const ShareButton = ({ item, disabled = false }: ShareButtonProps) => {
 			)}
 
 			{/* Connect to Cloud Modal */}
-			<CloudUpsellDialog open={connectModalOpen} onOpenChange={closeUpsell} onConnect={handleConnectToCloud} />
+			{/* CloudUpsellDialog removed */}
 		</>
 	)
 }

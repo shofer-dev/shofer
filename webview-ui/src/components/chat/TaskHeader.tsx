@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, useMemo, useCallback } from "react"
 import { useTranslation } from "react-i18next"
-import { useCloudUpsell } from "@src/hooks/useCloudUpsell"
-import { CloudUpsellDialog } from "@src/components/cloud/CloudUpsellDialog"
+// useCloudUpsell removed
+// CloudUpsellDialog removed
 import DismissibleUpsell from "@src/components/common/DismissibleUpsell"
 import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft } from "lucide-react"
 import prettyBytes from "pretty-bytes"
@@ -72,9 +72,10 @@ const TaskHeader = ({
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 	const [showLongRunningTaskMessage, setShowLongRunningTaskMessage] = useState(false)
-	const { isOpen, openUpsell, closeUpsell, handleConnect } = useCloudUpsell({
-		autoOpenOnAuth: false,
-	})
+	const isOpen = false
+	const openUpsell = () => {}
+	const closeUpsell = () => {}
+	const handleConnect = () => {}
 
 	// Check if the task is complete by looking at the last relevant message (skipping resume messages)
 	const isTaskComplete =
@@ -535,7 +536,7 @@ const TaskHeader = ({
 				{/* Todo list - always shown at bottom when todos exist */}
 				{hasTodos && <TodoListDisplay todos={todos ?? (task as any)?.tool?.todos ?? []} />}
 			</div>
-			<CloudUpsellDialog open={isOpen} onOpenChange={closeUpsell} onConnect={handleConnect} />
+			{/* CloudUpsellDialog removed */}
 		</div>
 	)
 }

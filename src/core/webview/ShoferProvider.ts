@@ -28,8 +28,8 @@ import {
 	type TerminalActionId,
 	type TerminalActionPromptType,
 	type HistoryItem,
-	type CloudUserInfo,
-	type CloudOrganizationMembership,
+	// CloudUserInfo removed
+	// CloudOrganizationMembership removed
 	type CreateTaskOptions,
 	type TokenUsage,
 	type ToolUsage,
@@ -2465,7 +2465,7 @@ export class ShoferProvider
 			lockApiConfigAcrossModes,
 		} = await this.getState()
 
-		let cloudOrganizations: CloudOrganizationMembership[] = []
+		let cloudOrganizations: any[] = []
 
 		const telemetryKey = process.env.POSTHOG_API_KEY
 		const machineId = vscode.env.machineId
@@ -2659,7 +2659,7 @@ export class ShoferProvider
 			)
 		}
 
-		let cloudUserInfo: CloudUserInfo | null = null
+		let cloudUserInfo: any = null
 
 		try {
 			cloudUserInfo = null
@@ -3436,7 +3436,7 @@ export class ShoferProvider
 		return this._appProperties ?? this.getAppProperties()
 	}
 
-	private getCloudProperties(): CloudAppProperties {
+	private getCloudProperties(): { cloudIsAuthenticated?: boolean } {
 		return {
 			cloudIsAuthenticated: false,
 		}

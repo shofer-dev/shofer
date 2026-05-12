@@ -21,7 +21,6 @@ import {
 	IpcMessageType,
 } from "@shofer/types"
 import { IpcServer } from "@shofer/ipc"
-import { CloudService } from "@shofer/cloud"
 
 import { Package } from "../shared/package"
 import { ShoferProvider } from "../core/webview/ShoferProvider"

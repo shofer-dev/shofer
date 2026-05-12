@@ -11,7 +11,7 @@ import {
 	type GlobalState,
 	type ShoferMessage,
 	type TelemetrySetting,
-	type UserSettingsConfig,
+	// UserSettingsConfig removed with cloud
 	type ModelRecord,
 	type Command as SlashCommand,
 	type WebviewMessage,
@@ -2545,36 +2545,6 @@ export const webviewMessageHandler = async (
 			// Organization switching removed with cloud services
 			break
 		}
-		case "switchOrganization_removed": {
-			try {
-				const organizationId = message.organizationId ?? null
-
-				// Refresh the state to update UI
-				await provider.postStateToWebview()
-
-				// Send success response back to webview
-				await provider.postMessageToWebview({
-					type: "organizationSwitchResult",
-					success: true,
-					organizationId: organizationId,
-				})
-			} catch (error) {
-				provider.log(`Organization switch failed: ${error}`)
-				const errorMessage = error instanceof Error ? error.message : String(error)
-
-				// Send error response back to webview
-				await provider.postMessageToWebview({
-					type: "organizationSwitchResult",
-					success: false,
-					error: errorMessage,
-					organizationId: message.organizationId ?? null,
-				})
-
-				vscode.window.showErrorMessage(`Failed to switch organization: ${errorMessage}`)
-			}
-			break
-		}
-
 		case "saveCodeIndexSettingsAtomic": {
 			if (!message.codeIndexSettings) {
 				break
