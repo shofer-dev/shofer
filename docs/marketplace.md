@@ -1,10 +1,21 @@
 # Shofer Marketplace
 
+> **⚠️ CURRENT STATUS: DISABLED**
+>
+> The marketplace feature is currently **disabled** via the [`MARKETPLACE_ENABLED`](extensions/shofer/packages/types/src/marketplace.ts:7) feature flag set to `false`. This means:
+>
+> - No marketplace tab is shown in the Shofer panel.
+> - No marketplace buttons appear in MCP, Modes, ModeSelector, or Skills settings.
+> - No API calls are made to the Shofer backend for marketplace data.
+> - **No server-side infrastructure is required.**
+>
+> To re-enable the marketplace, set `MARKETPLACE_ENABLED = true` in [`packages/types/src/marketplace.ts`](extensions/shofer/packages/types/src/marketplace.ts:7).
+
 ## Overview
 
 The Shofer Marketplace is an in-IDE catalog that lets users discover, browse, and install **Custom Modes** (`.shofermodes` entries) and **MCP Servers** (`mcp.json` entries) directly from the Shofer extension. It is backed by a remote API, caches results locally, and integrates deeply with VS Code's configuration files for both project-level and global installation scopes.
 
-The marketplace was introduced in **v3.21.0** (June 2025) and has been **generally available** (no feature flag) since v3.25.x. It appears as a dedicated tab in the Shofer panel alongside Settings, History, Chat, and Cloud.
+The marketplace was introduced in **v3.21.0** (June 2025) and has been **generally available** (no feature flag) since v3.25.x. When enabled, it appears as a dedicated tab in the Shofer panel alongside Settings, History, Chat, and Cloud.
 
 ### Key capabilities
 

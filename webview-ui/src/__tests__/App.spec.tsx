@@ -260,32 +260,31 @@ describe("App", () => {
 	})
 
 	it("switches to marketplace view when receiving marketplaceButtonClicked action", async () => {
+		// Marketplace is currently disabled (MARKETPLACE_ENABLED = false)
 		render(<AppWithProviders />)
 
 		act(() => {
 			triggerMessage("marketplaceButtonClicked")
 		})
 
-		const marketplaceView = await screen.findByTestId("marketplace-view")
-		expect(marketplaceView).toBeInTheDocument()
-
+		// When marketplace is disabled, the marketplace view should NOT render,
+		// and the chat view should remain visible.
 		const chatView = screen.getByTestId("chat-view")
-		expect(chatView.getAttribute("data-hidden")).toBe("true")
+		expect(chatView.getAttribute("data-hidden")).toBe("false")
+		expect(screen.queryByTestId("marketplace-view")).not.toBeInTheDocument()
 	})
 
 	it("returns to chat view when clicking done in marketplace view", async () => {
+		// Marketplace is currently disabled (MARKETPLACE_ENABLED = false).
+		// When re-enabled, this test should verify that clicking "done" in the
+		// marketplace view returns to chat view.
 		render(<AppWithProviders />)
 
 		act(() => {
 			triggerMessage("marketplaceButtonClicked")
 		})
 
-		const marketplaceView = await screen.findByTestId("marketplace-view")
-
-		act(() => {
-			marketplaceView.click()
-		})
-
+		// When disabled, marketplace view does not render and chat stays visible.
 		const chatView = screen.getByTestId("chat-view")
 		expect(chatView.getAttribute("data-hidden")).toBe("false")
 		expect(screen.queryByTestId("marketplace-view")).not.toBeInTheDocument()

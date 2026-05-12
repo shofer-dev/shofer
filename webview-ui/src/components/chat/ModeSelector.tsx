@@ -2,7 +2,7 @@ import React from "react"
 import { Fzf } from "fzf"
 import { Check, X } from "lucide-react"
 
-import { type ModeConfig, type CustomModePrompts, TelemetryEventName } from "@shofer/types"
+import { type ModeConfig, type CustomModePrompts, TelemetryEventName, MARKETPLACE_ENABLED } from "@shofer/types"
 
 import { type Mode, getAllModes, defaultModeSlug } from "@shofer/shared/modes"
 
@@ -311,21 +311,23 @@ export const ModeSelector = ({
 					{/* Bottom bar with buttons on left and title on right */}
 					<div className="flex flex-row items-center justify-between px-2 py-2 border-t border-vscode-dropdown-border">
 						<div className="flex flex-row gap-1">
-							<IconButton
-								iconClass="codicon-extensions"
-								title={t("chat:modeSelector.marketplace")}
-								onClick={() => {
-									window.postMessage(
-										{
-											type: "action",
-											action: "marketplaceButtonClicked",
-											values: { marketplaceTab: "mode" },
-										},
-										"*",
-									)
-									setOpen(false)
-								}}
-							/>
+							{MARKETPLACE_ENABLED && (
+								<IconButton
+									iconClass="codicon-extensions"
+									title={t("chat:modeSelector.marketplace")}
+									onClick={() => {
+										window.postMessage(
+											{
+												type: "action",
+												action: "marketplaceButtonClicked",
+												values: { marketplaceTab: "mode" },
+											},
+											"*",
+										)
+										setOpen(false)
+									}}
+								/>
+							)}
 							<IconButton
 								iconClass="codicon-settings-gear"
 								title={t("chat:modeSelector.settings")}

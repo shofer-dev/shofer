@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { useEvent } from "react-use"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { type ExtensionMessage, TelemetryEventName } from "@shofer/types"
+import { type ExtensionMessage, TelemetryEventName, MARKETPLACE_ENABLED } from "@shofer/types"
 
 import TranslationProvider from "./i18n/TranslationContext"
 import { MarketplaceViewStateManager } from "./components/marketplace/MarketplaceViewStateManager"
@@ -19,7 +19,6 @@ import { MarketplaceView } from "./components/marketplace/MarketplaceView"
 import { CheckpointRestoreDialog } from "./components/chat/CheckpointRestoreDialog"
 import { DeleteMessageDialog, EditMessageDialog } from "./components/chat/MessageModificationConfirmationDialog"
 import ErrorBoundary from "./components/ErrorBoundary"
-import { CloudView } from "./components/cloud/CloudView"
 import { useAddNonInteractiveClickListener } from "./components/ui/hooks/useNonInteractiveClick"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { STANDARD_TOOLTIP_DELAY } from "./components/ui/standard-tooltip"
@@ -68,8 +67,8 @@ const App = () => {
 		mdmCompliant,
 	} = useExtensionState()
 
-	// Create a persistent state manager
-	const marketplaceStateManager = useMemo(() => new MarketplaceViewStateManager(), [])
+	// Create a persistent state manager (only when marketplace is enabled)
+	const marketplaceStateManager = useMemo(() => (MARKETPLACE_ENABLED ? new MarketplaceViewStateManager() : null), [])
 
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [tab, setTab] = useState<Tab>("chat")
@@ -218,9 +217,9 @@ const App = () => {
 			}
 		}, [renderContext]),
 	)
-	// Track marketplace tab views
+	// Track marketplace tab views (only when marketplace is enabled)
 	useEffect(() => {
-		if (tab === "marketplace") {
+		if (MARKETPLACE_ENABLED && tab === "marketplace") {
 			telemetryClient.capture(TelemetryEventName.MARKETPLACE_TAB_VIEWED)
 		}
 	}, [tab])
@@ -239,7 +238,7 @@ const App = () => {
 			{tab === "settings" && (
 				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 			)}
-			{tab === "marketplace" && (
+			{MARKETPLACE_ENABLED && tab === "marketplace" && marketplaceStateManager && (
 				<MarketplaceView
 					stateManager={marketplaceStateManager}
 					onDone={() => switchTab("chat")}
@@ -247,12 +246,7 @@ const App = () => {
 				/>
 			)}
 			{tab === "cloud" && (
-				<CloudView
-					userInfo={cloudUserInfo}
-					isAuthenticated={cloudIsAuthenticated}
-					cloudApiUrl={cloudApiUrl}
-					organizations={cloudOrganizations}
-				/>
+				<div className="p-4 text-center text-muted-foreground">Cloud features have been removed.</div>
 			)}
 			<ChatView
 				ref={chatViewRef}

@@ -23,7 +23,6 @@ import {
 	checkoutRestorePayloadSchema,
 } from "@shofer/types"
 import { customToolRegistry } from "@shofer/core"
-import { CloudService } from "@shofer/cloud"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { type ApiMessage } from "../task-persistence/apiMessages"
@@ -868,41 +867,7 @@ export const webviewMessageHandler = async (
 				break
 			}
 
-			try {
-				const visibility = message.visibility || "organization"
-				const result = await CloudService.instance.shareTask(shareTaskId, visibility, shoferMessages)
-
-				if (result.success && result.shareUrl) {
-					// Show success notification
-					const messageKey =
-						visibility === "public"
-							? "common:info.public_share_link_copied"
-							: "common:info.organization_share_link_copied"
-					vscode.window.showInformationMessage(t(messageKey))
-
-					// Send success feedback to webview for inline display
-					await provider.postMessageToWebview({
-						type: "shareTaskSuccess",
-						visibility,
-						text: result.shareUrl,
-					})
-				} else {
-					// Handle error
-					const errorMessage = result.error || "Failed to create share link"
-					if (errorMessage.includes("Authentication")) {
-						vscode.window.showErrorMessage(t("common:errors.share_auth_required"))
-					} else if (errorMessage.includes("sharing is not enabled")) {
-						vscode.window.showErrorMessage(t("common:errors.share_not_enabled"))
-					} else if (errorMessage.includes("not found")) {
-						vscode.window.showErrorMessage(t("common:errors.share_task_not_found"))
-					} else {
-						vscode.window.showErrorMessage(errorMessage)
-					}
-				}
-			} catch (error) {
-				provider.log(`[shareCurrentTask] Unexpected error: ${error}`)
-				vscode.window.showErrorMessage(t("common:errors.share_task_failed"))
-			}
+			vscode.window.showErrorMessage(t("common:errors.share_not_available"))
 			break
 		case "showTaskWithId":
 			await provider.focusTask(message.text!)
@@ -1071,16 +1036,6 @@ export const webviewMessageHandler = async (
 					},
 				},
 				{ key: "vercel-ai-gateway", options: { provider: "vercel-ai-gateway" } },
-				{
-					key: "shofer",
-					options: {
-						provider: "shofer",
-						baseUrl: process.env.SHOFER_PROVIDER_URL ?? "https://api.shofer.com/proxy",
-						apiKey: CloudService.hasInstance()
-							? CloudService.instance.authService?.getSessionToken()
-							: undefined,
-					},
-				},
 			]
 
 			// LiteLLM is conditional on baseUrl+apiKey
@@ -1211,61 +1166,22 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "requestRooModels": {
-			// Specific handler for Shofer models only - flushes cache to ensure fresh auth token is used
-			try {
-				const rooOptions = {
-					provider: "shofer" as const,
-					baseUrl: process.env.SHOFER_PROVIDER_URL ?? "https://api.shofer.com/proxy",
-					apiKey: CloudService.hasInstance()
-						? CloudService.instance.authService?.getSessionToken()
-						: undefined,
-				}
-				// Flush cache and refresh to ensure fresh models with current auth state
-				await flushModels(rooOptions, true)
-
-				const shoferModels = await getModels(rooOptions)
-
-				// Always send a response, even if no models are returned
-				provider.postMessageToWebview({
-					type: "singleRouterModelFetchResponse",
-					success: true,
-					values: { provider: "shofer", models: shoferModels },
-				})
-			} catch (error) {
-				// Send error response
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				provider.postMessageToWebview({
-					type: "singleRouterModelFetchResponse",
-					success: false,
-					error: errorMessage,
-					values: { provider: "shofer" },
-				})
-			}
+			// Shofer models no longer available since cloud services were removed
+			provider.postMessageToWebview({
+				type: "singleRouterModelFetchResponse",
+				success: true,
+				values: { provider: "shofer", models: {} },
+			})
 			break
 		}
 		case "requestRooCreditBalance": {
-			// Fetch Shofer credit balance using CloudAPI
+			// Shofer credit balance no longer available since cloud services were removed
 			const requestId = message.requestId
-			try {
-				if (!CloudService.hasInstance() || !CloudService.instance.cloudAPI) {
-					throw new Error("Cloud service not available")
-				}
-
-				const balance = await CloudService.instance.cloudAPI.creditBalance()
-
-				provider.postMessageToWebview({
-					type: "shoferCreditBalance",
-					requestId,
-					values: { balance },
-				})
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				provider.postMessageToWebview({
-					type: "shoferCreditBalance",
-					requestId,
-					values: { error: errorMessage },
-				})
-			}
+			provider.postMessageToWebview({
+				type: "shoferCreditBalance",
+				requestId,
+				values: { error: "Cloud services removed" },
+			})
 			break
 		}
 		case "requestOpenAiModels":
@@ -1680,15 +1596,7 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "taskSyncEnabled":
-			const enabled = message.bool ?? false
-			const updatedSettings: Partial<UserSettingsConfig> = { taskSyncEnabled: enabled }
-
-			try {
-				await CloudService.instance.updateUserSettings(updatedSettings)
-			} catch (error) {
-				provider.log(`Failed to update cloud settings for task sync: ${error}`)
-			}
-
+			// Task sync removed with cloud services
 			break
 
 		case "refreshAllMcpServers": {
@@ -2540,38 +2448,14 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "shoferCloudSignIn": {
-			try {
-				TelemetryService.instance.captureEvent(TelemetryEventName.AUTHENTICATION_INITIATED)
-				// Use provider signup flow if useProviderSignup is explicitly true
-				await CloudService.instance.login(undefined, message.useProviderSignup ?? false)
-			} catch (error) {
-				provider.log(`AuthService#login failed: ${error}`)
-				vscode.window.showErrorMessage("Sign in failed.")
-			}
-
+			vscode.window.showErrorMessage("Cloud services have been removed.")
 			break
 		}
 		case "cloudLandingPageSignIn": {
-			try {
-				const landingPageSlug = message.text || "supernova"
-				TelemetryService.instance.captureEvent(TelemetryEventName.AUTHENTICATION_INITIATED)
-				await CloudService.instance.login(landingPageSlug)
-			} catch (error) {
-				provider.log(`CloudService#login failed: ${error}`)
-				vscode.window.showErrorMessage("Sign in failed.")
-			}
+			vscode.window.showErrorMessage("Cloud services have been removed.")
 			break
 		}
 		case "shoferCloudSignOut": {
-			try {
-				await CloudService.instance.logout()
-				await provider.postStateToWebview()
-				provider.postMessageToWebview({ type: "authenticatedUser", userInfo: undefined })
-			} catch (error) {
-				provider.log(`AuthService#logout failed: ${error}`)
-				vscode.window.showErrorMessage("Sign out failed.")
-			}
-
 			break
 		}
 		case "openAiCodexSignIn": {
@@ -2637,12 +2521,8 @@ export const webviewMessageHandler = async (
 					throw new Error(t("common:errors.manual_url_missing_params"))
 				}
 
-				// Reuse the existing authentication flow
-				await CloudService.instance.handleAuthCallback(
-					code,
-					state,
-					organizationId === "null" ? null : organizationId,
-				)
+				// Cloud auth callback no longer supported
+				vscode.window.showErrorMessage("Cloud services have been removed.")
 
 				await provider.postStateToWebview()
 			} catch (error) {
@@ -2662,11 +2542,12 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "switchOrganization": {
+			// Organization switching removed with cloud services
+			break
+		}
+		case "switchOrganization_removed": {
 			try {
 				const organizationId = message.organizationId ?? null
-
-				// Switch to the new organization context
-				await CloudService.instance.switchOrganization(organizationId)
 
 				// Refresh the state to update UI
 				await provider.postStateToWebview()
