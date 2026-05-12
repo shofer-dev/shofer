@@ -28,8 +28,7 @@ import Thumbnails from "../common/Thumbnails"
 import { ModeSelector } from "./ModeSelector"
 import { ApiConfigSelector } from "./ApiConfigSelector"
 import { AutoApproveDropdown } from "./AutoApproveDropdown"
-import { WorktreeStatusIndicator } from "./WorktreeStatusIndicator"
-import { NewWorktreeTaskButton } from "./NewWorktreeTaskButton"
+import { WorktreeIndicator } from "./WorktreeIndicator"
 import { CommandsButton } from "./CommandsButton"
 import { SkillsButton } from "./SkillsButton"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
@@ -1338,8 +1337,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							onToggleLockApiConfig={handleToggleLockApiConfig}
 						/>
 						<AutoApproveDropdown triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink" />
-						<WorktreeStatusIndicator />
-						<NewWorktreeTaskButton />
+						<WorktreeIndicator />
 						<CommandsButton />
 						<SkillsButton />
 					</div>

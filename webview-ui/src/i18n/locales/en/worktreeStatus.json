@@ -9,5 +9,6 @@
 	"safeToMerge": "Safe to merge",
 	"conflictsDetected": "{{count}} conflicted file(s)",
 	"otherWorktrees": "Other worktrees",
+	"createNew": "Create new worktree…",
 	"noData": "No status data available"
 }

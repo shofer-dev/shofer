@@ -12,7 +12,7 @@ Manually-created worktrees outside the workspace (e.g. `git worktree add ../foo`
 ┌──────────────────────────────────────────────────────────────────┐
 │  Webview UI (React)                                               │
 │  WorktreesView · Create/Delete Modals                              │
-│  WorktreeStatusIndicator · NewWorktreeTaskButton                  │
+│  WorktreeIndicator                                                 │
 │  TaskHeader · TaskSelector (worktree badge)                        │
 ├──────────────────────────────────────────────────────────────────┤
 │  VSCode Bridge (handlers.ts)                                      │
@@ -146,15 +146,14 @@ The `new_task` tool also accepts a `worktreeDir` parameter (nullable string, `st
 
 ## UI Components
 
-| Component                                                                                  | Location            | Purpose                                                                                                                                     |
-| ------------------------------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                | Settings page       | Full CRUD management with 3-second polling; `.worktreeinclude` status footer                                                                |
-| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx)    | Modal               | Searchable base-branch selector; auto-generated branch/path (read-only); progress tracking; `openAfterCreate` flag spawns an in-window task |
-| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx)    | Confirmation dialog | Branch and filesystem deletion warnings                                                                                                     |
-| [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) | Chat input bar chip | Shows current worktree branch; click for ahead/behind, file stats, merge readiness                                                          |
-| [`NewWorktreeTaskButton`](../webview-ui/src/components/chat/NewWorktreeTaskButton.tsx)     | Chat input bar      | One-click entry to open `CreateWorktreeModal` with `openAfterCreate=true`                                                                   |
-| [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx)                           | Chat header         | Shows worktree badge (leaf dir name) when task `cwd` differs from workspace                                                                 |
-| [`TaskSelector`](../webview-ui/src/components/chat/TaskSelector.tsx)                       | Task switcher       | Badges worktree tasks with their branch/directory name                                                                                      |
+| Component                                                                               | Location            | Purpose                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)             | Settings page       | Full CRUD management with 3-second polling; `.worktreeinclude` status footer                                                                                                                                                                                  |
+| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx) | Modal               | Searchable base-branch selector; auto-generated branch/path (read-only); progress tracking; `openAfterCreate` flag spawns an in-window task                                                                                                                   |
+| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx) | Confirmation dialog | Branch and filesystem deletion warnings                                                                                                                                                                                                                       |
+| [`WorktreeIndicator`](../webview-ui/src/components/chat/WorktreeIndicator.tsx)          | Chat input bar chip | Single worktree control: shows current branch + status (ahead/behind, file stats, merge readiness), lists other worktrees (click to spawn parallel task there), and "Create new worktree…" entry that opens `CreateWorktreeModal` with `openAfterCreate=true` |
+| [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx)                        | Chat header         | Shows worktree badge (leaf dir name) when task `cwd` differs from workspace                                                                                                                                                                                   |
+| [`TaskSelector`](../webview-ui/src/components/chat/TaskSelector.tsx)                    | Task switcher       | Badges worktree tasks with their branch/directory name                                                                                                                                                                                                        |
 
 ## `.worktreeinclude` Mechanism
 
@@ -242,14 +241,15 @@ Core types are defined in [`packages/types/src/worktree.ts`](../packages/types/s
 
 `HistoryItem` now includes a `cwd` field (persisted per task) and the `worktree` tool is listed in `toolNames` and `TOOL_GROUPS.mode`.
 
-## Worktree Status Indicator
+## Worktree Indicator
 
-The [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) provides at-a-glance visibility of the current worktree's state directly in the chat input bar.
+The [`WorktreeIndicator`](../webview-ui/src/components/chat/WorktreeIndicator.tsx) is the single chat-input-bar control for everything worktree-related. It serves three purposes:
 
-- **When hidden**: ≤1 worktree exists (only the primary/bare worktree)
-- **When visible**: Shows the current branch name as a compact chip (e.g., `🌿 worktree/roo-hl911`)
+1. **Status** — ahead/behind counts, files changed, uncommitted change count, last commit, merge readiness. Requested via `getWorktreeStatus` when the popover opens; the backend handler runs 5+ git queries in parallel and returns a `WorktreeStatus` object.
+2. **Switch** — lists every other worktree (excluding the bare repo and the currently checked-out one). Clicking one posts `createParallelTask` with `worktreeDir` set to that worktree's path, spawning a parallel task scoped to it without leaving the window.
+3. **Create** — a "Create new worktree…" entry at the bottom opens `CreateWorktreeModal` with `openAfterCreate=true`, so a parallel task is automatically spawned in the freshly created worktree.
 
-On click, the indicator requests status via `getWorktreeStatus`. The backend handler runs 5+ git queries in parallel (last commit, ahead/behind, diff stats, uncommitted count, dry-run merge) and returns a `WorktreeStatus` object.
+The trigger is always rendered (it does not auto-hide on a single-worktree repo) so users can create the first worktree from the same place they later switch between them.
 
 i18n translations: [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../webview-ui/src/i18n/locales/en/worktreeStatus.json)
 
