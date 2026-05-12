@@ -56,7 +56,7 @@ export const mockExtensionContext: ExtensionContext = {
 	extension: {
 		packageJSON: {
 			version: "1.0.0",
-			publisher: "Arkware",
+			publisher: "shofer",
 			name: "shofer",
 		},
 	},

@@ -55,7 +55,7 @@ PRでこれらの分野との連携について言及してください。
 ### 3. Shoferコミュニティに参加する
 
 - **プライマリ：** [Discord](https://discord.gg/shofer)に参加し、**Hannes Rudolph (`hrudolph`)**にDMしてください。
-- **代替：** 経験豊富な貢献者は、[GitHubプロジェクト](https://github.com/orgs/Arkware/projects/1)を介して直接関与できます。
+- **代替：** 経験豊富な貢献者は、[GitHubプロジェクト](https://github.com/orgs/shofer/projects/1)を介して直接関与できます。
 
 ## 貢献内容の検索と計画
 
@@ -78,7 +78,7 @@ PRでこれらの分野との連携について言及してください。
 
 ### 何に取り組むかを決める
 
-- 「課題[未割り当て]」の課題については、[GitHubプロジェクト](https://github.com/orgs/Arkware/projects/1)を確認してください。
+- 「課題[未割り当て]」の課題については、[GitHubプロジェクト](https://github.com/orgs/shofer/projects/1)を確認してください。
 - ドキュメントについては、[Shoferドキュメント](https://github.com/alsterg/shofer.dev-Docs)をご覧ください。
 
 ### バグの報告

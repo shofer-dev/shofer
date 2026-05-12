@@ -153,8 +153,8 @@ The system uses **two separate storage locations** for different kinds of data:
 
 | Data                                      | Storage Location                                                                                                                                | Survives Reboot?                                |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_arkware_qdrant-storage/`                       | ✓ Yes — persisted on Kubernetes PVC             |
-| **File hash cache** (SHA-256 per file)    | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/arkware.shofer/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
+| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                       | ✓ Yes — persisted on Kubernetes PVC             |
+| **File hash cache** (SHA-256 per file)    | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
 | **Metadata marker** (`indexing_complete`) | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                    | ✓ Yes — persisted in Qdrant                     |
 
 #### Hash Cache Location
@@ -162,13 +162,13 @@ The system uses **two separate storage locations** for different kinds of data:
 The `CacheManager` persists file hashes to a JSON file in VS Code's extension global storage directory:
 
 ```
-~/.config/Code/User/globalStorage/arkware.shofer/shofer-index-cache-<sha256-of-workspace-path>.json
+~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<sha256-of-workspace-path>.json
 ```
 
 Example:
 
 ```
-~/.config/Code/User/globalStorage/arkware.shofer/shofer-index-cache-7d1f5ec07233fd91a20daff100cb1dafca4849d96205580a64af9b043026c073.json
+~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-7d1f5ec07233fd91a20daff100cb1dafca4849d96205580a64af9b043026c073.json
 ```
 
 This cache file is **NOT** on the Qdrant PVC. It lives on the local filesystem with VS Code's settings.

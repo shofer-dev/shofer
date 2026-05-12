@@ -31,7 +31,7 @@ function asObjectSafe(value: any): object {
 /**
  * Convert an Anthropic-format image block (base64 source) into a
  * `vscode.LanguageModelDataPart` so the underlying VS Code LM provider
- * (e.g. Arkware llm-provider) can forward the actual image bytes to a
+ * (e.g. Shofer llm-provider) can forward the actual image bytes to a
  * vision-capable upstream rather than receiving a placeholder string.
  *
  * Returns a `LanguageModelTextPart` placeholder when the API surface is

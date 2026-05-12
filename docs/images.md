@@ -46,7 +46,7 @@ The button is hidden (opacity 0) when:
 
 Images are automatically disabled when the selected model doesn't support vision input. This is controlled by the [`supportsImages`](../../src/api/providers/fetchers/vercel-ai-gateway.ts) property on each model's metadata.
 
-For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from llm-router via the `arkware.llm.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). See [`vscode-lm.ts`](../../src/api/providers/vscode-lm.ts) `refreshArkwareCapabilities()` and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.arkwareCapabilities.imageInput`).
+For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from llm-router via the `shofer.llm.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). See [`vscode-lm.ts`](../../src/api/providers/vscode-lm.ts) `refreshShoferCapabilities()` and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
 
 When `shouldDisableImages` is `true`:
 

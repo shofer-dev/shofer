@@ -3,9 +3,9 @@ import { spawn } from "child_process"
 import { VERSION } from "@/lib/utils/version.js"
 import { isRecord } from "@/lib/utils/guards.js"
 
-const RELEASES_URL = "https://api.github.com/repos/Arkware/Shofer/releases?per_page=100"
+const RELEASES_URL = "https://api.github.com/repos/alsterg/shofer.dev/releases?per_page=100"
 export const INSTALL_SCRIPT_COMMAND =
-	"curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer/main/apps/cli/install.sh | sh"
+	"curl -fsSL https://raw.githubusercontent.com/alsterg/shofer.dev/main/apps/cli/install.sh | sh"
 
 export interface UpgradeOptions {
 	currentVersion?: string

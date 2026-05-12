@@ -73,15 +73,15 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	/**
 	 * Pricing in USD per 1M tokens for the currently selected model, when
 	 * known. Populated asynchronously after `initializeClient` by querying
-	 * the well-known `arkware.llm.getModelPricing` command exposed by the
-	 * Arkware LLM Model Provider extension. The VS Code LM Chat API itself
+	 * the well-known `shofer.llm.getModelPricing` command exposed by the
+	 * Shofer LLM Model Provider extension. The VS Code LM Chat API itself
 	 * carries no pricing fields, so without this side channel `getModel()`
 	 * would have to keep returning `inputPrice: 0`/`outputPrice: 0`, which
 	 * makes Shofer's downstream `calculateApiCostOpenAI` produce `0` and the
 	 * task header's `apiCost` row never render. Stays `undefined` for
-	 * non-arkware vendors, in which case behaviour is unchanged.
+	 * non-shofer vendors, in which case behaviour is unchanged.
 	 */
-	private arkwarePricing:
+	private shoferPricing:
 		| {
 				inputPrice: number
 				outputPrice: number
@@ -92,16 +92,16 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 	/**
 	 * Capability flags for the active client's model, fetched from the
-	 * Arkware LLM Model Provider extension via the well-known
-	 * `arkware.llm.getModelCapabilities` command. The VS Code LM Chat API's
+	 * Shofer LLM Model Provider extension via the well-known
+	 * `shofer.llm.getModelCapabilities` command. The VS Code LM Chat API's
 	 * `LanguageModelChatProviderCapabilities` only models `imageInput` and
 	 * `toolCalling`, with no slot for prompt-cache support — and even those
 	 * two we prefer to source from llm-router's registry rather than rely on
 	 * VS Code's own capability surface, which is the single source of truth
 	 * for model capabilities across the stack. Stays `undefined` until the
-	 * async refresh completes or for non-arkware vendors.
+	 * async refresh completes or for non-shofer vendors.
 	 */
-	private arkwareCapabilities:
+	private shoferCapabilities:
 		| {
 				imageInput: boolean
 				toolCalling: boolean
@@ -163,10 +163,10 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			this.client = await this.createClient(this.options.vsCodeLmModelSelector || {})
 			console.debug("Shofer <Language Model API>: Client initialized successfully")
 			// Best-effort prefetch of pricing and capabilities for the selected
-			// model. Failures are non-fatal: non-arkware setups simply leave
+			// model. Failures are non-fatal: non-shofer setups simply leave
 			// these unset (consumers fall back to conservative defaults).
-			void this.refreshArkwarePricing()
-			void this.refreshArkwareCapabilities()
+			void this.refreshShoferPricing()
+			void this.refreshShoferCapabilities()
 		} catch (error) {
 			// Handle errors during client initialization
 			const errorMessage = error instanceof Error ? error.message : "Unknown error"
@@ -176,13 +176,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	}
 
 	/**
-	 * Look up pricing for the active client's model via the Arkware LLM
+	 * Look up pricing for the active client's model via the Shofer LLM
 	 * Model Provider extension's well-known command. Tries the bare model id
 	 * first and falls back to the slash-free `family` identifier so the
-	 * provider can resolve either form. Sets `this.arkwarePricing` on
+	 * provider can resolve either form. Sets `this.shoferPricing` on
 	 * success; silently leaves it untouched on miss/failure.
 	 */
-	private async refreshArkwarePricing(): Promise<void> {
+	private async refreshShoferPricing(): Promise<void> {
 		if (!this.client) return
 		const candidates = [this.client.id, this.client.family].filter(
 			(s): s is string => typeof s === "string" && s.length > 0,
@@ -192,26 +192,26 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				const pricing = await vscode.commands.executeCommand<
 					| { inputPrice: number; outputPrice: number; cacheReadsPrice?: number; cacheWritesPrice?: number }
 					| undefined
-				>("arkware.llm.getModelPricing", candidate)
+				>("shofer.llm.getModelPricing", candidate)
 				if (pricing && (pricing.inputPrice > 0 || pricing.outputPrice > 0)) {
-					this.arkwarePricing = pricing
+					this.shoferPricing = pricing
 					return
 				}
 			} catch {
-				// Command not registered (no arkware extension) or threw — try next.
+				// Command not registered (no shofer extension) or threw — try next.
 			}
 		}
 	}
 
 	/**
 	 * Look up capability flags for the active client's model via the
-	 * Arkware LLM Model Provider extension's well-known
-	 * `arkware.llm.getModelCapabilities` command. Mirrors
-	 * {@link refreshArkwarePricing} in identifier-resolution strategy. Sets
-	 * `this.arkwareCapabilities` on success; silently leaves it untouched on
-	 * miss/failure (e.g. when the arkware extension isn't installed).
+	 * Shofer LLM Model Provider extension's well-known
+	 * `shofer.llm.getModelCapabilities` command. Mirrors
+	 * {@link refreshShoferPricing} in identifier-resolution strategy. Sets
+	 * `this.shoferCapabilities` on success; silently leaves it untouched on
+	 * miss/failure (e.g. when the shofer extension isn't installed).
 	 */
-	private async refreshArkwareCapabilities(): Promise<void> {
+	private async refreshShoferCapabilities(): Promise<void> {
 		if (!this.client) return
 		const candidates = [this.client.id, this.client.family].filter(
 			(s): s is string => typeof s === "string" && s.length > 0,
@@ -220,38 +220,38 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			try {
 				const caps = await vscode.commands.executeCommand<
 					{ imageInput: boolean; toolCalling: boolean; promptCache: boolean } | undefined
-				>("arkware.llm.getModelCapabilities", candidate)
+				>("shofer.llm.getModelCapabilities", candidate)
 				if (caps) {
-					this.arkwareCapabilities = caps
+					this.shoferCapabilities = caps
 					return
 				}
 			} catch {
-				// Command not registered (no arkware extension) or threw — try next.
+				// Command not registered (no shofer extension) or threw — try next.
 			}
 		}
 	}
 
 	/**
-	 * Pull the running USD cost for `this.conversationId` from the Arkware
+	 * Pull the running USD cost for `this.conversationId` from the Shofer
 	 * LLM Model Provider extension via the well-known
-	 * `arkware.llm.getRequestCost` command. Returns `undefined` when the
-	 * command isn't registered (no arkware extension), when the provider
+	 * `shofer.llm.getRequestCost` command. Returns `undefined` when the
+	 * command isn't registered (no shofer extension), when the provider
 	 * has no cost data for this conversation (e.g. no completion has
 	 * routed through a model whose pricing the router can compute), or on
 	 * any error. Caller should treat `undefined` as "fall back to
 	 * per-token math".
 	 *
-	 * This is the canonical cost source for composite (`arkware/*`)
+	 * This is the canonical cost source for composite (`shofer/*`)
 	 * models, where the underlying serving model is picked at request
 	 * time and `getModel().info.inputPrice` is therefore zero — making
 	 * Shofer's downstream `calculateApiCostOpenAI` produce $0 and the cost
 	 * row never render.
 	 */
-	private async fetchArkwareRequestCost(): Promise<number | undefined> {
+	private async fetchShoferRequestCost(): Promise<number | undefined> {
 		if (!this.conversationId) return undefined
 		try {
 			const cost = await vscode.commands.executeCommand<number | undefined>(
-				"arkware.llm.getRequestCost",
+				"shofer.llm.getRequestCost",
 				this.conversationId,
 			)
 			if (typeof cost === "number" && Number.isFinite(cost) && cost >= 0) {
@@ -532,13 +532,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		// Snapshot the per-conversation cumulative cost ledger BEFORE the
 		// request so we can yield a per-request delta after the stream
-		// completes. The Arkware LLM Model Provider's
-		// `arkware.llm.getRequestCost` returns a running cumulative across
+		// completes. The Shofer LLM Model Provider's
+		// `shofer.llm.getRequestCost` returns a running cumulative across
 		// the whole conversation; if we yielded that as the chunk's
 		// `totalCost`, Shofer would then store it on each `apiReqInfo` message
 		// and re-sum across messages in `consolidateTokenUsage`, multiplying
 		// the spend by O(N²) and silently breaking the cost-cap math.
-		const conversationCostUsdBefore = await this.fetchArkwareRequestCost()
+		const conversationCostUsdBefore = await this.fetchShoferRequestCost()
 
 		// Calculate input tokens before starting the stream
 		const totalInputTokens: number = await this.calculateTotalInputTokens(vsCodeLmMessages)
@@ -726,15 +726,15 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			}
 
 			// Pull the per-conversation USD cost computed by llm-router and
-			// accumulated by the Arkware LLM Model Provider extension. This
-			// is the only reliable cost source for composite (`arkware/*`)
+			// accumulated by the Shofer LLM Model Provider extension. This
+			// is the only reliable cost source for composite (`shofer/*`)
 			// models, where the underlying that served the request is
 			// selected at request time and `getModel().info.inputPrice` is
 			// therefore zero. We compare against the pre-request snapshot
 			// taken above and yield the DELTA as `totalCost` (= the
 			// per-request cost), so Shofer's per-message accounting and the
 			// consolidate-then-sum pipeline don't double-count.
-			const conversationCostUsdAfter = await this.fetchArkwareRequestCost()
+			const conversationCostUsdAfter = await this.fetchShoferRequestCost()
 			let perRequestCostUsd: number | undefined
 			if (conversationCostUsdAfter !== undefined) {
 				const before = conversationCostUsdBefore ?? 0
@@ -825,17 +825,17 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				contextWindow:
 					typeof this.client.maxInputTokens === "number" ? Math.max(0, this.client.maxInputTokens) : 0,
 				// Capability flags are sourced from llm-router's model registry
-				// via the arkware side-channel. Conservative `false` default
+				// via the shofer side-channel. Conservative `false` default
 				// applies only when the side channel is unavailable.
-				supportsImages: this.arkwareCapabilities?.imageInput ?? false,
-				supportsPromptCache: this.arkwareCapabilities?.promptCache ?? false,
-				inputPrice: this.arkwarePricing?.inputPrice ?? 0,
-				outputPrice: this.arkwarePricing?.outputPrice ?? 0,
-				...(this.arkwarePricing?.cacheReadsPrice !== undefined && {
-					cacheReadsPrice: this.arkwarePricing.cacheReadsPrice,
+				supportsImages: this.shoferCapabilities?.imageInput ?? false,
+				supportsPromptCache: this.shoferCapabilities?.promptCache ?? false,
+				inputPrice: this.shoferPricing?.inputPrice ?? 0,
+				outputPrice: this.shoferPricing?.outputPrice ?? 0,
+				...(this.shoferPricing?.cacheReadsPrice !== undefined && {
+					cacheReadsPrice: this.shoferPricing.cacheReadsPrice,
 				}),
-				...(this.arkwarePricing?.cacheWritesPrice !== undefined && {
-					cacheWritesPrice: this.arkwarePricing.cacheWritesPrice,
+				...(this.shoferPricing?.cacheWritesPrice !== undefined && {
+					cacheWritesPrice: this.shoferPricing.cacheWritesPrice,
 				}),
 				description: `VSCode Language Model: ${modelId}`,
 			}
@@ -893,21 +893,21 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 const VSCODE_LM_STATIC_BLACKLIST: string[] = ["claude-3.7-sonnet", "claude-3.7-sonnet-thought"]
 
 /**
- * Capability flags exposed by the Arkware LLM Model Provider extension via
- * the `arkware.llm.getModelCapabilities` side-channel command. Mirrors the
+ * Capability flags exposed by the Shofer LLM Model Provider extension via
+ * the `shofer.llm.getModelCapabilities` side-channel command. Mirrors the
  * shape of llm-router's `/v1/models` `capabilities` block.
  */
-export interface ArkwareLmCapabilities {
+export interface shoferLmCapabilities {
 	imageInput: boolean
 	toolCalling: boolean
 	promptCache: boolean
 }
 
 /**
- * Pricing flags exposed by the Arkware LLM Model Provider extension via the
- * `arkware.llm.getModelPricing` side-channel command. USD per 1M tokens.
+ * Pricing flags exposed by the Shofer LLM Model Provider extension via the
+ * `shofer.llm.getModelPricing` side-channel command. USD per 1M tokens.
  */
-export interface ArkwareLmPricing {
+export interface shoferLmPricing {
 	inputPrice: number
 	outputPrice: number
 	cacheReadsPrice?: number
@@ -917,8 +917,8 @@ export interface ArkwareLmPricing {
 /**
  * Shape returned to the webview for each VS Code LM model. We can't extend
  * `vscode.LanguageModelChat` (it's a frozen interface), so we project the
- * subset the UI needs and attach Arkware-only fields (`arkwareCapabilities`,
- * `arkwarePricing`) sourced from the side-channel commands. The webview
+ * subset the UI needs and attach Shofer-only fields (`shoferCapabilities`,
+ * `shoferPricing`) sourced from the side-channel commands. The webview
  * relies on these to render capability/pricing facts without hardcoded
  * assumptions.
  */
@@ -930,20 +930,20 @@ export interface VsCodeLmModelDescriptor {
 	name: string
 	maxInputTokens: number
 	capabilities?: { imageInput?: boolean; toolCalling?: boolean }
-	arkwareCapabilities?: ArkwareLmCapabilities
-	arkwarePricing?: ArkwareLmPricing
+	shoferCapabilities?: shoferLmCapabilities
+	shoferPricing?: shoferLmPricing
 }
 
 /**
  * Enumerate VS Code LM chat models, filter the static blacklist, and enrich
- * each entry with Arkware capability/pricing data fetched from llm-provider.
+ * each entry with Shofer capability/pricing data fetched from llm-provider.
  *
  * The enrichment uses two side-channel commands
- * (`arkware.llm.getModelCapabilities`, `arkware.llm.getModelPricing`) keyed
+ * (`shofer.llm.getModelCapabilities`, `shofer.llm.getModelPricing`) keyed
  * tolerantly on the model id and the slash-free `family` identifier; this
- * mirrors {@link VsCodeLmHandler.refreshArkwareCapabilities} so both the
+ * mirrors {@link VsCodeLmHandler.refreshShoferCapabilities} so both the
  * runtime handler and the webview see the same source of truth. Failures
- * for individual models leave their Arkware fields unset; callers must treat
+ * for individual models leave their Shofer fields unset; callers must treat
  * `undefined` as "not available" and not as a capability assertion.
  */
 export async function getVsCodeLmModels(): Promise<VsCodeLmModelDescriptor[]> {
@@ -961,30 +961,30 @@ export async function getVsCodeLmModels(): Promise<VsCodeLmModelDescriptor[]> {
 
 async function enrichVsCodeLmModel(model: vscode.LanguageModelChat): Promise<VsCodeLmModelDescriptor> {
 	const candidates = [model.id, model.family].filter((s): s is string => typeof s === "string" && s.length > 0)
-	let arkwareCapabilities: ArkwareLmCapabilities | undefined
-	let arkwarePricing: ArkwareLmPricing | undefined
+	let shoferCapabilities: shoferLmCapabilities | undefined
+	let shoferPricing: shoferLmPricing | undefined
 	for (const candidate of candidates) {
-		if (!arkwareCapabilities) {
+		if (!shoferCapabilities) {
 			try {
-				arkwareCapabilities = await vscode.commands.executeCommand<ArkwareLmCapabilities | undefined>(
-					"arkware.llm.getModelCapabilities",
+				shoferCapabilities = await vscode.commands.executeCommand<shoferLmCapabilities | undefined>(
+					"shofer.llm.getModelCapabilities",
 					candidate,
 				)
 			} catch {
-				// Side-channel command unavailable (no arkware extension); leave undefined.
+				// Side-channel command unavailable (no shofer extension); leave undefined.
 			}
 		}
-		if (!arkwarePricing) {
+		if (!shoferPricing) {
 			try {
-				arkwarePricing = await vscode.commands.executeCommand<ArkwareLmPricing | undefined>(
-					"arkware.llm.getModelPricing",
+				shoferPricing = await vscode.commands.executeCommand<shoferLmPricing | undefined>(
+					"shofer.llm.getModelPricing",
 					candidate,
 				)
 			} catch {
 				// As above.
 			}
 		}
-		if (arkwareCapabilities && arkwarePricing) break
+		if (shoferCapabilities && shoferPricing) break
 	}
 	// `capabilities` exists at runtime on recent VS Code builds (forwarded via
 	// LanguageModelChat) but isn't declared in @types/vscode@1.100.0, so we
@@ -1002,7 +1002,7 @@ async function enrichVsCodeLmModel(model: vscode.LanguageModelChat): Promise<VsC
 		capabilities: runtimeCaps
 			? { imageInput: runtimeCaps.imageInput, toolCalling: runtimeCaps.toolCalling }
 			: undefined,
-		arkwareCapabilities,
-		arkwarePricing,
+		shoferCapabilities,
+		shoferPricing,
 	}
 }

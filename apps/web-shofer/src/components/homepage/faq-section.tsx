@@ -83,7 +83,7 @@ const faqs: FAQItem[] = [
 			<>
 				Install Shofer from the{" "}
 				<a
-					href="https://marketplace.visualstudio.com/items?itemName=Arkware.shofer"
+					href="https://marketplace.visualstudio.com/items?itemName=Shofer.dev"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">

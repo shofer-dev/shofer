@@ -18,7 +18,7 @@ export const EXTERNAL_LINKS = {
 	PRIVACY_POLICY_EXTENSION: "https://github.com/alsterg/shofer.dev/blob/main/PRIVACY.md",
 	INTEGRATIONS: "https://docs.shofer.com/community",
 	TUTORIALS: "https://docs.shofer.com/tutorial-videos",
-	MARKETPLACE: "https://marketplace.visualstudio.com/items?itemName=Arkware.shofer",
+	MARKETPLACE: "https://marketplace.visualstudio.com/items?itemName=Shofer.dev",
 	SECURITY: "https://trust.shofer.com",
 	EVALS: "https://shofer.com/evals",
 	BLOG_SUBSTACK: "https://blog.shofer.com",

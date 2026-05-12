@@ -96,10 +96,10 @@ A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
         - mcp
         - read:
               allowed:
-                  - mcp--arkware--web_search
+                  - mcp--shofer--web_search
     ```
     In this example the mode gets ALL `browser` and `mcp` tools, but from the
-    `read` group it gets ONLY `mcp--arkware--web_search` — not `read_file`,
+    `read` group it gets ONLY `mcp--shofer--web_search` — not `read_file`,
     `search_files`, etc.
 
 Group definitions live in [`src/shared/tools.ts`](../src/shared/tools.ts) as

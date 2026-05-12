@@ -264,7 +264,7 @@ export const CloudView = ({ userInfo, isAuthenticated, cloudApiUrl, organization
 										value={manualUrl}
 										onChange={handleManualUrlChange}
 										onKeyDown={handleKeyDown}
-										placeholder="vscode://Arkware.shofer/auth/clerk/callback?state=..."
+										placeholder="vscode://Shofer.dev/auth/clerk/callback?state=..."
 										className="w-full"
 									/>
 									<p className="mt-1">

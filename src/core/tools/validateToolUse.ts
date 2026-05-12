@@ -9,7 +9,7 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../shared/
 
 /**
  * Check whether a tool name belongs to a tool from a private provider
- * (arkware.privateToolProviders config convention).
+ * (shofer.privateToolProviders config convention).
  *
  * Tools from VS Code built-in extensions (e.g., GitHub Copilot) are excluded —
  * they are tightly coupled to their owning extension's internal orchestration
@@ -38,7 +38,7 @@ export function isValidToolName(toolName: string, experiments?: Record<string, b
 	}
 
 	// Check if it's a tool from a private provider
-	// (arkware.privateToolProviders config convention).
+	// (shofer.privateToolProviders config convention).
 	if (isPrivateLmTool(toolName)) {
 		return true
 	}

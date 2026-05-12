@@ -55,7 +55,7 @@ Wspomnij o dostosowaniu do tych obszarów w swoich PR-ach.
 ### 3. Dołącz do społeczności Shofer
 
 - **Głównie:** Dołącz do naszego [Discorda](https://discord.gg/shofer) i wyślij wiadomość prywatną do **Hannes Rudolph (`hrudolph`)**.
-- **Alternatywa:** Doświadczeni współtwórcy mogą angażować się bezpośrednio za pośrednictwem [projektów na GitHubie](https://github.com/orgs/Arkware/projects/1).
+- **Alternatywa:** Doświadczeni współtwórcy mogą angażować się bezpośrednio za pośrednictwem [projektów na GitHubie](https://github.com/orgs/shofer/projects/1).
 
 ## Znajdowanie i planowanie swojego wkładu
 
@@ -78,7 +78,7 @@ Wszystkie wkłady zaczynają się od zgłoszenia na GitHubie przy użyciu naszyc
 
 ### Decydowanie, nad czym pracować
 
-- Sprawdź [projekt na GitHubie](https://github.com/orgs/Arkware/projects/1) pod kątem zgłoszeń „Zgłoszenie [Nieprzypisane]”.
+- Sprawdź [projekt na GitHubie](https://github.com/orgs/shofer/projects/1) pod kątem zgłoszeń „Zgłoszenie [Nieprzypisane]”.
 - Aby uzyskać dokumentację, odwiedź [dokumentację Shofer](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Zgłaszanie błędów

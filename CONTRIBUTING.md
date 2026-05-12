@@ -55,7 +55,7 @@ Mention alignment with these areas in your PRs.
 ### 3. Join the Shofer Community
 
 - **Primary:** Join our [Discord](https://discord.gg/shofer) and DM **Hannes Rudolph (`hrudolph`)**.
-- **Alternative:** Experienced contributors can engage directly via [GitHub Projects](https://github.com/orgs/Arkware/projects/1).
+- **Alternative:** Experienced contributors can engage directly via [GitHub Projects](https://github.com/orgs/shofer/projects/1).
 
 ## Finding & Planning Your Contribution
 
@@ -78,7 +78,7 @@ All contributions start with a GitHub Issue using our skinny templates.
 
 ### Deciding What to Work On
 
-- Check the [GitHub Project](https://github.com/orgs/Arkware/projects/1) for "Issue [Unassigned]" issues.
+- Check the [GitHub Project](https://github.com/orgs/shofer/projects/1) for "Issue [Unassigned]" issues.
 - For docs, visit [Shofer Docs](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Reporting Bugs

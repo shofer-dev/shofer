@@ -504,7 +504,7 @@ describe("getGitRepositoryInfo", () => {
 
 		expect(result).toEqual({
 			repositoryUrl: "https://github.com/alsterg/shofer.dev.git",
-			repositoryName: "Arkware/Shofer",
+			repositoryName: "shofer"/Shofer",
 			defaultBranch: "main",
 		})
 
@@ -606,7 +606,7 @@ describe("getGitRepositoryInfo", () => {
 
 		expect(result).toEqual({
 			repositoryUrl: "https://github.com/alsterg/shofer.dev.git",
-			repositoryName: "Arkware/Shofer",
+			repositoryName: "shofer"/Shofer",
 		})
 	})
 
@@ -627,7 +627,7 @@ describe("getGitRepositoryInfo", () => {
 	filemode = true
 	bare = false
 [remote "origin"]
-	url = git@github.com:Arkware/Shofer.git
+	url = git@github.com:alsterg/shofer.dev.git
 	fetch = +refs/heads/*:refs/remotes/origin/*
 [branch "main"]
 	remote = origin
@@ -651,7 +651,7 @@ describe("getGitRepositoryInfo", () => {
 		// Verify that the SSH URL was converted to HTTPS
 		expect(result).toEqual({
 			repositoryUrl: "https://github.com/alsterg/shofer.dev.git",
-			repositoryName: "Arkware/Shofer",
+			repositoryName: "shofer"/Shofer",
 			defaultBranch: "main",
 		})
 	})
@@ -666,21 +666,21 @@ describe("convertGitUrlToHttps", () => {
 	})
 
 	it("should convert SSH URLs to HTTPS format", () => {
-		const url = "git@github.com:Arkware/Shofer.git"
+		const url = "git@github.com:alsterg/shofer.dev.git"
 		const converted = convertGitUrlToHttps(url)
 
 		expect(converted).toBe("https://github.com/alsterg/shofer.dev.git")
 	})
 
 	it("should convert SSH URLs with ssh:// prefix to HTTPS format", () => {
-		const url = "ssh://git@github.com/Arkware/Shofer.git"
+		const url = "ssh://git@github.com/alsterg/shofer.dev.git"
 		const converted = convertGitUrlToHttps(url)
 
 		expect(converted).toBe("https://github.com/alsterg/shofer.dev.git")
 	})
 
 	it("should handle URLs without git@ prefix", () => {
-		const url = "ssh://github.com/Arkware/Shofer.git"
+		const url = "ssh://github.com/alsterg/shofer.dev.git"
 		const converted = convertGitUrlToHttps(url)
 
 		expect(converted).toBe("https://github.com/alsterg/shofer.dev.git")
@@ -696,28 +696,28 @@ describe("convertGitUrlToHttps", () => {
 
 describe("sanitizeGitUrl", () => {
 	it("should sanitize HTTPS URLs with credentials", () => {
-		const url = "https://username:password@github.com/Arkware/Shofer.git"
+		const url = "https://username:password@github.com/alsterg/shofer.dev.git"
 		const sanitized = sanitizeGitUrl(url)
 
 		expect(sanitized).toBe("https://github.com/alsterg/shofer.dev.git")
 	})
 
 	it("should leave SSH URLs unchanged", () => {
-		const url = "git@github.com:Arkware/Shofer.git"
+		const url = "git@github.com:alsterg/shofer.dev.git"
 		const sanitized = sanitizeGitUrl(url)
 
-		expect(sanitized).toBe("git@github.com:Arkware/Shofer.git")
+		expect(sanitized).toBe("git@github.com:alsterg/shofer.dev.git")
 	})
 
 	it("should leave SSH URLs with ssh:// prefix unchanged", () => {
-		const url = "ssh://git@github.com/Arkware/Shofer.git"
+		const url = "ssh://git@github.com/alsterg/shofer.dev.git"
 		const sanitized = sanitizeGitUrl(url)
 
-		expect(sanitized).toBe("ssh://git@github.com/Arkware/Shofer.git")
+		expect(sanitized).toBe("ssh://git@github.com/alsterg/shofer.dev.git")
 	})
 
 	it("should remove tokens from other URL formats", () => {
-		const url = "https://oauth2:ghp_abcdef1234567890abcdef1234567890abcdef@github.com/Arkware/Shofer.git"
+		const url = "https://oauth2:ghp_abcdef1234567890abcdef1234567890abcdef@github.com/alsterg/shofer.dev.git"
 		const sanitized = sanitizeGitUrl(url)
 
 		expect(sanitized).toBe("https://github.com/alsterg/shofer.dev.git")
@@ -736,28 +736,28 @@ describe("extractRepositoryName", () => {
 		const url = "https://github.com/alsterg/shofer.dev.git"
 		const repoName = extractRepositoryName(url)
 
-		expect(repoName).toBe("Arkware/Shofer")
+		expect(repoName).toBe("shofer"/Shofer")
 	})
 
 	it("should extract repository name from HTTPS URL without .git suffix", () => {
 		const url = "https://github.com/alsterg/shofer.dev"
 		const repoName = extractRepositoryName(url)
 
-		expect(repoName).toBe("Arkware/Shofer")
+		expect(repoName).toBe("shofer"/Shofer")
 	})
 
 	it("should extract repository name from SSH URL", () => {
-		const url = "git@github.com:Arkware/Shofer.git"
+		const url = "git@github.com:alsterg/shofer.dev.git"
 		const repoName = extractRepositoryName(url)
 
-		expect(repoName).toBe("Arkware/Shofer")
+		expect(repoName).toBe("shofer"/Shofer")
 	})
 
 	it("should extract repository name from SSH URL with ssh:// prefix", () => {
-		const url = "ssh://git@github.com/Arkware/Shofer.git"
+		const url = "ssh://git@github.com/alsterg/shofer.dev.git"
 		const repoName = extractRepositoryName(url)
 
-		expect(repoName).toBe("Arkware/Shofer")
+		expect(repoName).toBe("shofer"/Shofer")
 	})
 
 	it("should return empty string for unrecognized URL formats", () => {
@@ -768,10 +768,10 @@ describe("extractRepositoryName", () => {
 	})
 
 	it("should handle URLs with credentials", () => {
-		const url = "https://username:password@github.com/Arkware/Shofer.git"
+		const url = "https://username:password@github.com/alsterg/shofer.dev.git"
 		const repoName = extractRepositoryName(url)
 
-		expect(repoName).toBe("Arkware/Shofer")
+		expect(repoName).toBe("shofer"/Shofer")
 	})
 })
 
@@ -826,7 +826,7 @@ describe("getWorkspaceGitInfo", () => {
 
 		expect(result).toEqual({
 			repositoryUrl: "https://github.com/alsterg/shofer.dev.git",
-			repositoryName: "Arkware/Shofer",
+			repositoryName: "shofer"/Shofer",
 			defaultBranch: "main",
 		})
 

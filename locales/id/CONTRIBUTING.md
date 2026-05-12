@@ -55,7 +55,7 @@ Sebutkan keselarasan dengan area-area ini di PR Anda.
 ### 3. Bergabunglah dengan Komunitas Shofer
 
 - **Utama:** Bergabunglah dengan [Discord](https://discord.gg/shofer) kami dan kirim DM ke **Hannes Rudolph (`hrudolph`)**.
-- **Alternatif:** Kontributor berpengalaman dapat terlibat langsung melalui [Proyek GitHub](https://github.com/orgs/Arkware/projects/1).
+- **Alternatif:** Kontributor berpengalaman dapat terlibat langsung melalui [Proyek GitHub](https://github.com/orgs/shofer/projects/1).
 
 ## Menemukan & Merencanakan Kontribusi Anda
 
@@ -78,7 +78,7 @@ Semua kontribusi dimulai dengan Masalah GitHub menggunakan template ramping kami
 
 ### Memutuskan Apa yang Akan Dikerjakan
 
-- Periksa [Proyek GitHub](https://github.com/orgs/Arkware/projects/1) untuk masalah "Masalah [Belum Ditugaskan]".
+- Periksa [Proyek GitHub](https://github.com/orgs/shofer/projects/1) untuk masalah "Masalah [Belum Ditugaskan]".
 - Untuk dokumentasi, kunjungi [Dokumentasi Shofer](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Melaporkan Bug

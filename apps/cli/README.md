@@ -13,7 +13,7 @@ This CLI uses the `@shofer/vscode-shim` package to provide a VSCode API compatib
 Install the Shofer CLI with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer/main/apps/cli/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/alsterg/shofer.dev/main/apps/cli/install.sh | sh
 ```
 
 **Requirements:**
@@ -30,7 +30,7 @@ SHOFER_INSTALL_DIR=/opt/shofer-code SHOFER_BIN_DIR=/usr/local/bin curl -fsSL ...
 **Install a specific version:**
 
 ```bash
-SHOFER_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer/main/apps/cli/install.sh | sh
+SHOFER_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/alsterg/shofer.dev/main/apps/cli/install.sh | sh
 ```
 
 ### Updating
@@ -38,7 +38,7 @@ SHOFER_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer
 Re-run the install script to update to the latest version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer/main/apps/cli/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/alsterg/shofer.dev/main/apps/cli/install.sh | sh
 ```
 
 Or run:

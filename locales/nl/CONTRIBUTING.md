@@ -55,7 +55,7 @@ Vermeld de afstemming met deze gebieden in je PR's.
 ### 3. Word lid van de Shofer-community
 
 - **Primair:** Word lid van onze [Discord](https://discord.gg/shofer) en stuur een DM naar **Hannes Rudolph (`hrudolph`)**.
-- **Alternatief:** Ervaren bijdragers kunnen rechtstreeks deelnemen via [GitHub Projects](https://github.com/orgs/Arkware/projects/1).
+- **Alternatief:** Ervaren bijdragers kunnen rechtstreeks deelnemen via [GitHub Projects](https://github.com/orgs/shofer/projects/1).
 
 ## Je bijdrage vinden en plannen
 
@@ -78,7 +78,7 @@ Alle bijdragen beginnen met een GitHub Issue met behulp van onze slanke sjablone
 
 ### Beslissen waaraan je wilt werken
 
-- Controleer het [GitHub Project](https://github.com/orgs/Arkware/projects/1) voor "Issue [Niet-toegewezen]" issues.
+- Controleer het [GitHub Project](https://github.com/orgs/shofer/projects/1) voor "Issue [Niet-toegewezen]" issues.
 - Ga voor documentatie naar [Shofer Docs](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Bugs rapporteren

@@ -55,7 +55,7 @@ Erwähne die Ausrichtung auf diese Bereiche in deinen PRs.
 ### 3. Tritt der Shofer Community bei
 
 - **Primär:** Tritt unserem [Discord](https://discord.gg/shofer) bei und schreibe eine DM an **Hannes Rudolph (`hrudolph`)**.
-- **Alternative:** Erfahrene Mitwirkende können sich direkt über [GitHub-Projekte](https://github.com/orgs/Arkware/projects/1) beteiligen.
+- **Alternative:** Erfahrene Mitwirkende können sich direkt über [GitHub-Projekte](https://github.com/orgs/shofer/projects/1) beteiligen.
 
 ## Deinen Beitrag finden und planen
 
@@ -78,7 +78,7 @@ Alle Beiträge beginnen mit einem GitHub-Issue unter Verwendung unserer schlanke
 
 ### Entscheiden, woran du arbeiten möchtest
 
-- Überprüfe das [GitHub-Projekt](https://github.com/orgs/Arkware/projects/1) auf „Issue [Unassigned]“-Issues.
+- Überprüfe das [GitHub-Projekt](https://github.com/orgs/shofer/projects/1) auf „Issue [Unassigned]“-Issues.
 - Für Dokumentation besuche [Shofer Docs](https://github.com/alsterg/shofer.dev-Docs).
 
 ### Fehler melden

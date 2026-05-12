@@ -10,7 +10,7 @@ To use this API in your extension:
 ```typescript
 import { ShoferAPI } from "@shofer/types"
 
-const extension = vscode.extensions.getExtension<ShoferAPI>("Arkware.shofer")
+const extension = vscode.extensions.getExtension<ShoferAPI>("Shofer.dev")
 
 if (!extension?.isActive) {
 	throw new Error("Extension is not activated")
@@ -38,10 +38,10 @@ await api.pressPrimaryButton()
 await api.pressSecondaryButton()
 ```
 
-**NOTE:** To ensure that the `Arkware.shofer` extension is activated before your extension, add it to the `extensionDependencies` in your `package.json`:
+**NOTE:** To ensure that the `Shofer.dev` extension is activated before your extension, add it to the `extensionDependencies` in your `package.json`:
 
 ```json
-"extensionDependencies": ["Arkware.shofer"]
+"extensionDependencies": ["Shofer.dev"]
 ```
 
 For detailed information on the available methods and their usage, refer to the `shofer-code.d.ts` file.

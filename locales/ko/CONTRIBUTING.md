@@ -55,7 +55,7 @@ PR에 이러한 영역과의 연관성을 언급하세요.
 ### 3. Shofer 커뮤니티에 참여하세요
 
 - **기본:** [Discord](https://discord.gg/shofer)에 참여하여 **Hannes Rudolph (`hrudolph`)**에게 DM을 보내세요.
-- **대안:** 숙련된 기여자는 [GitHub 프로젝트](https://github.com/orgs/Arkware/projects/1)를 통해 직접 참여할 수 있습니다.
+- **대안:** 숙련된 기여자는 [GitHub 프로젝트](https://github.com/orgs/shofer/projects/1)를 통해 직접 참여할 수 있습니다.
 
 ## 기여 찾기 및 계획하기
 
@@ -78,7 +78,7 @@ PR에 이러한 영역과의 연관성을 언급하세요.
 
 ### 작업할 내용 결정하기
 
-- "이슈 [할당되지 않음]" 이슈는 [GitHub 프로젝트](https://github.com/orgs/Arkware/projects/1)를 확인하세요.
+- "이슈 [할당되지 않음]" 이슈는 [GitHub 프로젝트](https://github.com/orgs/shofer/projects/1)를 확인하세요.
 - 문서는 [Shofer 문서](https://github.com/alsterg/shofer.dev-Docs)를 방문하세요.
 
 ### 버그 신고하기
