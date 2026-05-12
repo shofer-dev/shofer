@@ -72,7 +72,7 @@ export interface ExtensionMessage {
 		| "condenseTaskContextStarted"
 		| "condenseTaskContextResponse"
 		| "singleRouterModelFetchResponse"
-		| "rooCreditBalance"
+		| "shoferCreditBalance"
 		| "indexingStatusUpdate"
 		| "indexCleared"
 		| "codebaseIndexConfig"
@@ -594,10 +594,10 @@ export interface WebviewMessage {
 		| "lockApiConfigAcrossModes"
 		| "clearCloudAuthSkipModel"
 		| "cloudButtonClicked"
-		| "rooCloudSignIn"
+		| "shoferCloudSignIn"
 		| "cloudLandingPageSignIn"
-		| "rooCloudSignOut"
-		| "rooCloudManualUrl"
+		| "shoferCloudSignOut"
+		| "shoferCloudManualUrl"
 		| "openAiCodexSignIn"
 		| "openAiCodexSignOut"
 		| "switchOrganization"
@@ -758,7 +758,7 @@ export interface WebviewMessage {
 	upsellId?: string // For dismissUpsell
 	list?: string[] // For dismissedUpsells response
 	organizationId?: string | null // For organization switching
-	useProviderSignup?: boolean // For rooCloudSignIn to use provider signup flow
+	useProviderSignup?: boolean // For shoferCloudSignIn to use provider signup flow
 	codeIndexSettings?: {
 		// Global state settings
 		codebaseIndexEnabled: boolean

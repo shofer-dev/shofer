@@ -101,7 +101,7 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 	const loggableSays: ShoferSay[] = [
 		"error",
 		"command_output",
-		"rooignore_error",
+		"shoferignore_error",
 		"diff_error",
 		"condense_context",
 		"condense_context_error",
