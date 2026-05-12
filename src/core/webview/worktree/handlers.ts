@@ -212,41 +212,6 @@ export async function handleDeleteWorktree(
 	return worktreeService.deleteWorktree(cwd, worktreePath, force)
 }
 
-export async function handleSwitchWorktree(
-	provider: ClineProvider,
-	worktreePath: string,
-	newWindow: boolean,
-): Promise<WorktreeResult> {
-	try {
-		const worktreeUri = vscode.Uri.file(worktreePath)
-
-		if (newWindow) {
-			// Set the auto-open path so the new window opens Roo Code sidebar.
-			await provider.contextProxy.setValue("worktreeAutoOpenPath", worktreePath)
-
-			// Open in new window.
-			await vscode.commands.executeCommand("vscode.openFolder", worktreeUri, { forceNewWindow: true })
-		} else {
-			// For current window, we need to flush pending state first since window will reload.
-			await provider.contextProxy.setValue("worktreeAutoOpenPath", worktreePath)
-
-			// Open in current window (this will reload the window).
-			await vscode.commands.executeCommand("vscode.openFolder", worktreeUri, { forceNewWindow: false })
-		}
-
-		return {
-			success: true,
-			message: `Opened worktree at ${worktreePath}`,
-		}
-	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error)
-		return {
-			success: false,
-			message: `Failed to switch worktree: ${errorMessage}`,
-		}
-	}
-}
-
 export async function handleGetAvailableBranches(provider: ClineProvider): Promise<BranchInfo> {
 	const cwd = provider.cwd
 	// Include branches already in worktrees since we use this for base branch selection

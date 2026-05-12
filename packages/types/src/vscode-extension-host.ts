@@ -342,7 +342,6 @@ export type ExtensionState = Pick<
 	| "includeCurrentCost"
 	| "maxGitStatusFiles"
 	| "requestDelaySeconds"
-	| "showWorktreesInHomeScreen"
 	| "disabledTools"
 	| "defaultCostLimit"
 > & {
@@ -661,7 +660,6 @@ export interface WebviewMessage {
 		| "listWorktrees"
 		| "createWorktree"
 		| "deleteWorktree"
-		| "switchWorktree"
 		| "getAvailableBranches"
 		| "getWorktreeDefaults"
 		| "getWorktreeIncludeStatus"
@@ -806,7 +804,6 @@ export interface WebviewMessage {
 	worktreeBaseBranch?: string
 	worktreeCreateNewBranch?: boolean
 	worktreeForce?: boolean
-	worktreeNewWindow?: boolean
 	worktreeIncludeContent?: string
 }
 

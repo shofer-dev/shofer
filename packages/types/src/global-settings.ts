@@ -219,17 +219,6 @@ export const globalSettingsSchema = z.object({
 	lastImageSavePath: z.string().optional(),
 
 	/**
-	 * Path to worktree to auto-open after switching workspaces.
-	 * Used by the worktree feature to open the Roo Code sidebar in a new window.
-	 */
-	worktreeAutoOpenPath: z.string().optional(),
-	/**
-	 * Whether to show the worktree selector in the home screen.
-	 * @default true
-	 */
-	showWorktreesInHomeScreen: z.boolean().optional(),
-
-	/**
 	 * List of native tool names to globally disable.
 	 * Tools in this list will be excluded from prompt generation and rejected at execution time.
 	 */

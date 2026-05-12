@@ -47,7 +47,6 @@ import { TaskSelector } from "./TaskSelector"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
-import { WorktreeSelector } from "./WorktreeSelector"
 import FileChangesPanel from "./FileChangesPanel"
 import SessionSearch from "./SessionSearch"
 import DismissibleUpsell from "../common/DismissibleUpsell"
@@ -97,7 +96,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		soundVolume,
 		cloudIsAuthenticated,
 		messageQueue = [],
-		showWorktreesInHomeScreen,
 		parallelTasks,
 		taskNotifications,
 	} = useExtensionState()
@@ -1983,8 +1981,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					/>
 				</>
 			)}
-
-			{!task && showWorktreesInHomeScreen && <WorktreeSelector />}
 
 			{task && (
 				<>
