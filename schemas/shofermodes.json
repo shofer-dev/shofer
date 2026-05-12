@@ -27,9 +27,24 @@
 					"customInstructions": {
 						"type": "string"
 					},
+					"tools_allowed": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"tools_denied": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
 					"source": {
 						"type": "string",
-						"enum": ["global", "project"]
+						"enum": [
+							"global",
+							"project"
+						]
 					},
 					"provider": {
 						"type": "string"
@@ -40,7 +55,20 @@
 							"anyOf": [
 								{
 									"type": "string",
-									"enum": ["read", "edit", "command", "mcp", "modes", "browser"]
+									"enum": [
+										"read",
+										"write",
+										"execute",
+										"browser",
+										"mcp",
+										"mode",
+										"subtasks",
+										"questions",
+										"uncategorized",
+										"edit",
+										"command",
+										"modes"
+									]
 								},
 								{
 									"type": "array",
@@ -49,7 +77,20 @@
 									"items": [
 										{
 											"type": "string",
-											"enum": ["read", "edit", "command", "mcp", "modes", "browser"]
+											"enum": [
+												"read",
+												"write",
+												"execute",
+												"browser",
+												"mcp",
+												"mode",
+												"subtasks",
+												"questions",
+												"uncategorized",
+												"edit",
+												"command",
+												"modes"
+											]
 										},
 										{
 											"type": "object",
@@ -68,18 +109,6 @@
 							]
 						}
 					},
-					"tools_allowed": {
-						"type": "array",
-						"items": {
-							"type": "string"
-						}
-					},
-					"tools_denied": {
-						"type": "array",
-						"items": {
-							"type": "string"
-						}
-					},
 					"rulesFiles": {
 						"type": "array",
 						"items": {
@@ -92,18 +121,26 @@
 									"type": "string"
 								}
 							},
-							"required": ["relativePath"],
+							"required": [
+								"relativePath"
+							],
 							"additionalProperties": false
 						}
 					}
 				},
-				"required": ["slug", "name", "roleDefinition"],
-				"anyOf": [{ "required": ["groups"] }, { "required": ["tools_allowed"] }],
+				"required": [
+					"slug",
+					"name",
+					"roleDefinition",
+					"groups"
+				],
 				"additionalProperties": false
 			}
 		}
 	},
-	"required": ["customModes"],
+	"required": [
+		"customModes"
+	],
 	"additionalProperties": false,
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"$id": "https://github.com/alsterg/shofer.dev/blob/main/schemas/shofermodes.json",
