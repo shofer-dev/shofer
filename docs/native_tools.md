@@ -322,7 +322,6 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 | `list_background_tasks` | 🟣 AW  | –     |        ✅        |   ✅   | List all background child tasks started by this task        |
 | `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                        |
 | `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
-| `skill_update`          | 🟣 AW  | –     |        ✅        |   ✅   | Update an existing project skill (replace/append/patch)     |
 | `set_task_title`        | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
 | `give_feedback`         | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Arkware developers                     |
 
@@ -402,55 +401,6 @@ Load and execute a skill by name. Skills provide specialized instructions for co
 - **Reload is a no-op**: Calling `skill_load` for an already-loaded skill returns a no-op message without re-reading the file.
 - **Cleared on condense**: All loaded skills are cleared when context summarization/truncation triggers (see [`skills.md`](skills.md#loaded-skill-tracking)).
 
-### `skill_update`
-
-Update the SKILL.md body of an existing project skill at `.roo/skills/<slug>/SKILL.md`. Skill creation is deliberately out of scope — use the workspace skill-authoring UI or `browser_observe` to create skills.
-
-Three update modes:
-
-- **`replace`** — overwrite the entire file with `content`.
-- **`append`** — append `content` to the existing body (newline-separated).
-- **`patch`** — replace exactly one occurrence of `old_string` with `new_string`. Fails if `old_string` is missing or matches more than once.
-
-| Param        | Type                                   |      Required      | Description                                                    |
-| ------------ | -------------------------------------- | :----------------: | -------------------------------------------------------------- |
-| `skill`      | string                                 |         ✅         | Skill slug (directory name under `.roo/skills/`).              |
-| `mode`       | `"replace"` \| `"append"` \| `"patch"` |         ✅         | Update strategy.                                               |
-| `content`    | string                                 | for replace/append | New body (replace) or text to append (append).                 |
-| `old_string` | string                                 |     for patch      | Exact substring to find in SKILL.md (must match exactly once). |
-| `new_string` | string                                 |     for patch      | Replacement string.                                            |
-
----
-
-## Worktree Management
-
-| Tool       | Origin | Group | Always Available | Status | Description                                                     |
-| ---------- | :----: | ----- | :--------------: | :----: | --------------------------------------------------------------- |
-| `worktree` | 🟣 AW  | mode  |        –         |   ✅   | Manage git worktrees (create / list / merge / destroy / status) |
-
-### `worktree`
-
-Manage git worktrees for parallel task execution. Creates worktrees under `.roo/worktrees/` by default. The orchestrator uses this to create isolated worktrees, spawn subtasks on them, merge results, and clean up — all without `execute_command` access. Assigned to the `mode` group so Orchestrator tasks (which lack filesystem and command-execution access) can still drive the worktree lifecycle.
-
-| Param           | Type            | Required | Description                                                                                     |
-| --------------- | --------------- | :------: | ----------------------------------------------------------------------------------------------- |
-| `subcommand`    | enum            |    ✅    | One of `create`, `list`, `merge`, `destroy`, `status`                                           |
-| `path`          | string \| null  |    ✅    | Worktree path (absolute or relative to workspace root). Required for create/destroy/status      |
-| `branch`        | string \| null  |    ✅    | Branch name for `create`. Defaults to `worktree/roo-<random5>`                                  |
-| `base_branch`   | string \| null  |    ✅    | Base branch for `create`. Defaults to current branch (main/master)                              |
-| `target_branch` | string \| null  |    ✅    | (`merge` only) Branch to merge into. Defaults to detected base branch; refuses if HEAD ≠ target |
-| `force`         | boolean \| null |    ✅    | (`destroy` only) Force removal even if branch is unmerged. Default `false`                      |
-
-**Subcommand behaviours:**
-
-- `create`: `git worktree add <path> <branch>`, copies `.worktreeinclude` files, ensures `.roo/worktrees/` is gitignored.
-- `list`: `git worktree list --porcelain`, annotated with embedded-worktree flag.
-- `merge`: `git merge --no-ff <branch>` into `target_branch`. Refuses if main worktree has uncommitted changes or is not on `target_branch`. Reports conflicts.
-- `destroy`: `git worktree remove <path>` + `git branch -d <branch>`. Refuses unmerged branches unless `force=true`.
-- `status`: ahead/behind counts, uncommitted changes, dry-run merge readiness.
-
-All git operations run with `PAGER=cat`. Paths resolve relative to `task.cwd`. See [`worktrees.md`](worktrees.md) for the full embedded worktree model and orchestrated workflow.
-
 ---
 
 ## MCP (Model Context Protocol)
@@ -521,8 +471,6 @@ Checkmark (✓) means the tool is available in that mode by default.
 | **MCP group**              |
 | `use_mcp_tool`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `access_mcp_resource`      |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| **Mode group**             |
-| `worktree`                 |      ✓       |    ✓    |        |    ✓     |        |
 | **Always available**       |
 | `ask_followup_question`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `attempt_completion`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
@@ -533,7 +481,6 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `wait_for_task`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `list_background_tasks`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `skill`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `skill_update`             |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `set_task_title`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `give_feedback`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `run_slash_command`        |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |

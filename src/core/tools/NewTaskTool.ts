@@ -1,4 +1,3 @@
-import * as path from "path"
 import * as vscode from "vscode"
 
 import { TodoItem } from "@roo-code/types"
@@ -19,32 +18,17 @@ interface NewTaskParams {
 	todos?: string
 	is_background?: boolean | string | number | null
 	task_id?: string
-	/**
-	 * Working directory for the new task. When set (e.g., for embedded
-	 * worktree tasks), the child task operates in this directory instead
-	 * of the workspace root. Non-absolute paths are resolved relative to
-	 * the parent task's cwd.
-	 */
-	worktreeDir?: string
 }
 
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, todos, worktreeDir } = params
+		const { mode, message, todos } = params
 		// Normalize is_background across the various representations LLMs emit
 		// ("true"/"false", 0/1, native boolean, etc.). Absent/unrecognized → false.
 		const is_background = parseToolBoolean(params.is_background) ?? false
 		const { askApproval, handleError, pushToolResult } = callbacks
-
-		// Resolve worktree directory relative to parent task's cwd.
-		// Non-absolute paths become children of the parent's working directory.
-		const resolvedCwd = worktreeDir
-			? path.isAbsolute(worktreeDir)
-				? worktreeDir
-				: path.resolve(task.cwd, worktreeDir)
-			: undefined
 
 		try {
 			// Validate required parameters.
@@ -186,7 +170,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						isBackground: true,
 					},
 					undefined, // configuration
-					resolvedCwd,
+					undefined,
 				)
 
 				// Register the child with TaskManager so it is tracked as a managed background task.
@@ -242,7 +226,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						openInStack: true,
 					},
 					undefined, // configuration
-					resolvedCwd,
+					undefined,
 				)
 
 				// Register resolver after createTask so we have the child's taskId.

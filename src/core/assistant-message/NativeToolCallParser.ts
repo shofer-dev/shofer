@@ -534,26 +534,6 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "skill_delete":
-				if (partialArgs.skill !== undefined) {
-					nativeArgs = {
-						skill: partialArgs.skill,
-					}
-				}
-				break
-
-			case "skill_save":
-				if (partialArgs.skill !== undefined || partialArgs.mode !== undefined) {
-					nativeArgs = {
-						skill: partialArgs.skill,
-						mode: partialArgs.mode,
-						content: partialArgs.content,
-						old_string: partialArgs.old_string,
-						new_string: partialArgs.new_string,
-					}
-				}
-				break
-
 			case "search_files":
 				if (partialArgs.path !== undefined || partialArgs.regex !== undefined) {
 					nativeArgs = {
@@ -676,20 +656,6 @@ export class NativeToolCallParser {
 						message: partialArgs.message,
 						todos: partialArgs.todos,
 						is_background: this.coerceOptionalBoolean(partialArgs.is_background),
-						worktreeDir: partialArgs.worktreeDir,
-					}
-				}
-				break
-
-			case "worktree":
-				if (partialArgs.subcommand !== undefined) {
-					nativeArgs = {
-						subcommand: partialArgs.subcommand,
-						path: partialArgs.path,
-						branch: partialArgs.branch,
-						base_branch: partialArgs.base_branch,
-						target_branch: partialArgs.target_branch,
-						force: this.coerceOptionalBoolean(partialArgs.force),
 					}
 				}
 				break
@@ -1106,26 +1072,6 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "skill_delete":
-					if (args.skill !== undefined) {
-						nativeArgs = {
-							skill: args.skill,
-						} as NativeArgsFor<TName>
-					}
-					break
-
-				case "skill_save":
-					if (args.skill !== undefined && args.mode !== undefined) {
-						nativeArgs = {
-							skill: args.skill,
-							mode: args.mode,
-							content: args.content,
-							old_string: args.old_string,
-							new_string: args.new_string,
-						} as NativeArgsFor<TName>
-					}
-					break
-
 				case "search_files":
 					if (args.path !== undefined && args.regex !== undefined) {
 						nativeArgs = {
@@ -1261,20 +1207,6 @@ export class NativeToolCallParser {
 							message: args.message,
 							todos: args.todos,
 							is_background: this.coerceOptionalBoolean(args.is_background),
-							worktreeDir: args.worktreeDir,
-						} as NativeArgsFor<TName>
-					}
-					break
-
-				case "worktree":
-					if (args.subcommand !== undefined) {
-						nativeArgs = {
-							subcommand: args.subcommand,
-							path: args.path,
-							branch: args.branch,
-							base_branch: args.base_branch,
-							target_branch: args.target_branch,
-							force: args.force === true || args.force === "true",
 						} as NativeArgsFor<TName>
 					}
 					break

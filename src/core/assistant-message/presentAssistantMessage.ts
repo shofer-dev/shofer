@@ -36,8 +36,6 @@ import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
 import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
 import { skillLoadTool } from "../tools/SkillLoadTool"
-import { skillSaveTool } from "../tools/SkillSaveTool"
-import { skillDeleteTool } from "../tools/SkillDeleteTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
@@ -62,7 +60,6 @@ import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool"
 import { waitForTaskTool } from "../tools/WaitForTaskTool"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
 import { sleepTool } from "../tools/SleepTool"
-import { worktreeToolInstance } from "../tools/WorktreeTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
@@ -409,11 +406,6 @@ export async function presentAssistantMessage(cline: Task) {
 						const modeName = getModeBySlug(mode, customModes)?.name ?? mode
 						return `[${block.name} in ${modeName} mode: '${message}']`
 					}
-					case "worktree": {
-						const sub = block.params.subcommand ?? "?"
-						const branch = block.params.branch ? ` on '${block.params.branch}'` : ""
-						return `[${block.name} ${sub}${branch}]`
-					}
 					case "run_slash_command":
 						return `[${block.name} for '${block.params.command}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "check_task_status":
@@ -424,10 +416,6 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name}]`
 					case "skill_load":
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
-					case "skill_save":
-						return `[${block.name} '${block.params.skill}' (${block.params.mode})]`
-					case "skill_delete":
-						return `[${block.name} '${block.params.skill}']`
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
 					case "get_errors":
@@ -913,15 +901,6 @@ export async function presentAssistantMessage(cline: Task) {
 						toolCallId: block.id,
 					})
 					break
-				case "worktree":
-					await checkpointSaveAndMark(cline)
-					await worktreeToolInstance.handle(cline, block as ToolUse<"worktree">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-						toolCallId: block.id,
-					})
-					break
 				case "attempt_completion": {
 					// CRITICAL: Prevent duplicate attempt_completion execution when LLM generates
 					// multiple attempt_completion calls in a single response (common after delegation).
@@ -985,20 +964,6 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "skill_load":
 					await skillLoadTool.handle(cline, block as ToolUse<"skill_load">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "skill_save":
-					await skillSaveTool.handle(cline, block as ToolUse<"skill_save">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "skill_delete":
-					await skillDeleteTool.handle(cline, block as ToolUse<"skill_delete">, {
 						askApproval,
 						handleError,
 						pushToolResult,

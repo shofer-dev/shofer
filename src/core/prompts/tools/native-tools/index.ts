@@ -28,8 +28,6 @@ import readProjectStructure from "./read_project_structure"
 import renameSymbol from "./rename_symbol"
 import runSlashCommand from "./run_slash_command"
 import skillLoad from "./skill_load"
-import skillSave from "./skill_save"
-import skillDelete from "./skill_delete"
 import searchReplace from "./search_replace"
 import edit_file from "./edit_file"
 import searchFiles from "./search_files"
@@ -43,7 +41,6 @@ import listBackgroundTasks from "./list_background_tasks"
 import sed from "./sed"
 import sleep from "./sleep"
 import viewImage from "./view_image"
-import worktree from "./worktree"
 import writeToFile from "./write_to_file"
 
 export { getMcpServerTools } from "./mcp_server"
@@ -100,8 +97,6 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		renameSymbol,
 		runSlashCommand,
 		skillLoad,
-		skillSave,
-		skillDelete,
 		searchReplace,
 		edit_file,
 		editTool,
@@ -116,7 +111,6 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		sed,
 		sleep,
 		viewImage,
-		worktree,
 		writeToFile,
 	] satisfies OpenAI.Chat.ChatCompletionTool[]
 }
