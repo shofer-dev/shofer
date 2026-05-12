@@ -25,7 +25,6 @@ import { GetModelsOptions } from "../../../shared/api"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
 import { getPoeModels } from "./poe"
-import { getRooModels } from "./shofer"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -86,12 +85,10 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 		case "vercel-ai-gateway":
 			models = await getVercelAiGatewayModels()
 			break
-		case "shofer": {
-			// Shofer Cloud provider requires baseUrl and optional apiKey
-			const rooBaseUrl = options.baseUrl ?? process.env.SHOFER_PROVIDER_URL ?? "https://api.shofer.com/proxy"
-			models = await getRooModels(rooBaseUrl, options.apiKey)
+		case "shofer":
+			// Shofer models no longer available
+			models = {}
 			break
-		}
 		case "poe":
 			models = await getPoeModels(options.apiKey, options.baseUrl)
 			break
