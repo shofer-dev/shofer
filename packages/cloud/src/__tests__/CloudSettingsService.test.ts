@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "vscode"
 
-import type { OrganizationSettings, AuthService } from "@roo-code/types"
+import type { OrganizationSettings, AuthService } from "@shofer/types"
 
 import { CloudSettingsService } from "../CloudSettingsService.js"
 import { RefreshTimer } from "../RefreshTimer.js"
@@ -8,7 +8,7 @@ import { RefreshTimer } from "../RefreshTimer.js"
 vi.mock("../RefreshTimer")
 
 vi.mock("../config", () => ({
-	getRooCodeApiUrl: vi.fn().mockReturnValue("https://app.roocode.com"),
+	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.com"),
 }))
 
 global.fetch = vi.fn()
@@ -380,7 +380,7 @@ describe("CloudSettingsService", () => {
 
 			expect(result).toBe(true)
 
-			expect(fetch).toHaveBeenCalledWith("https://app.roocode.com/api/extension-settings", {
+			expect(fetch).toHaveBeenCalledWith("https://app.shofer.com/api/extension-settings", {
 				headers: {
 					Authorization: "Bearer valid-token",
 				},

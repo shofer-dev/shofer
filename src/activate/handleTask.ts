@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import { Package } from "../shared/package"
-import { ClineProvider } from "../core/webview/ClineProvider"
+import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { t } from "../i18n"
 
 /**
@@ -25,7 +25,7 @@ export const handleNewTask = async (params: { prompt?: string } | null | undefin
 	}
 
 	// Use createManagedTask to preserve current task in background (parallel execution)
-	const visibleProvider = await ClineProvider.getInstance()
+	const visibleProvider = await ShoferProvider.getInstance()
 	if (visibleProvider) {
 		await visibleProvider.createManagedTask(undefined, prompt, undefined)
 	}

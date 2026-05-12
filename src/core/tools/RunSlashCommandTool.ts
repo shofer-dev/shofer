@@ -60,12 +60,21 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 				const skillContent = await resolveSkillContentForMode(skillsManager, commandName, currentMode)
 
 				if (skillContent) {
+					// Reloading the same skill is a no-op (mirrors SkillLoadTool semantics).
+					if (task.loadedSkills.has(commandName)) {
+						pushToolResult(`Skill '${commandName}' is already loaded (no-op).`)
+						return
+					}
+
 					const skillMessage = buildSkillApprovalMessage(commandName, args, skillContent)
 					const didApprove = await askApproval("tool", skillMessage)
 
 					if (!didApprove) {
 						return
 					}
+
+					// Track the loaded skill so the SkillsButton popover can show it as loaded.
+					task.loadedSkills.set(commandName, skillContent.path)
 
 					pushToolResult(buildSkillResult(commandName, args, skillContent))
 					return

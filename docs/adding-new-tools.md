@@ -1,14 +1,14 @@
-# Adding New Tools to RooCode
+# Adding New Tools to Shofer
 
 ## Three Kinds of Tools
 
-RooCode supports three tool integration patterns. Choose the one that fits your use case:
+Shofer supports three tool integration patterns. Choose the one that fits your use case:
 
-| Kind                 | Where the tool lives                | How RooCode discovers it             | See doc                                                          |
-| -------------------- | ----------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
-| **Native tool**      | Inside RooCode (TypeScript handler) | Compiled into the extension          | This document                                                    |
-| **External LM tool** | Separate VS Code extension          | `vscode.lm.tools` + extension config | [`tool-categories.md`](tool-categories.md) § "External LM Tools" |
-| **MCP tool**         | External MCP server                 | MCP protocol                         | [`tool-categories.md`](tool-categories.md) § "MCP Tools"         |
+| Kind                 | Where the tool lives               | How Shofer discovers it              | See doc                                                          |
+| -------------------- | ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| **Native tool**      | Inside Shofer (TypeScript handler) | Compiled into the extension          | This document                                                    |
+| **External LM tool** | Separate VS Code extension         | `vscode.lm.tools` + extension config | [`tool-categories.md`](tool-categories.md) § "External LM Tools" |
+| **MCP tool**         | External MCP server                | MCP protocol                         | [`tool-categories.md`](tool-categories.md) § "MCP Tools"         |
 
 ---
 
@@ -23,7 +23,7 @@ RooCode supports three tool integration patterns. Choose the one that fits your 
 | 5   | Message Router (`presentAssistantMessage.ts`)          | ✅                       |
 | 6   | `NativeToolArgs` type (`src/shared/tools.ts`)          | ✅                       |
 | 7   | `NativeToolCallParser` — 2 switch cases                | ✅                       |
-| 8   | `ClineSayTool` type (`vscode-extension-host.ts`)       | If tool shows UI         |
+| 8   | `ShoferSayTool` type (`vscode-extension-host.ts`)      | If tool shows UI         |
 | 9   | `ChatRow` webview rendering                            | If tool shows UI         |
 | 10  | Auto-approval registration                             | If tool is auto-approved |
 | 11  | i18n strings (`chat.json`)                             | If tool shows UI         |
@@ -102,7 +102,7 @@ If the tool should bypass mode filtering entirely, add it to `ALWAYS_AVAILABLE_T
 Create a handler class in `src/core/tools/` extending `BaseTool<TName>`:
 
 ```typescript
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
@@ -134,7 +134,7 @@ export class MyTool extends BaseTool<"my_tool"> {
 				tool: "myTool",
 				path: getReadablePath(task.cwd, param1),
 				content: `Doing something with ${param1}`,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const didApprove = await askApproval("tool", completeMessage)
 			if (!didApprove) return
@@ -175,8 +175,8 @@ import { myTool } from "../tools/MyTool"
 
 ```typescript
 case "my_tool":
-    await checkpointSaveAndMark(cline)  // if file-modifying
-    await myTool.handle(cline, block as ToolUse<"my_tool">, {
+    await checkpointSaveAndMark(shofer)  // if file-modifying
+    await myTool.handle(shofer, block as ToolUse<"my_tool">, {
         askApproval, handleError, pushToolResult,
     })
     break
@@ -204,9 +204,9 @@ export type NativeToolArgs = {
 
 In [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts), add cases in **both** `createPartialToolUse()` and `parseToolCall()`. Both switch statements must stay in sync. Helper methods: `this.coerceOptionalNumber()`, `this.coerceOptionalBoolean()`.
 
-## Step 8–9: ClineSayTool + ChatRow
+## Step 8–9: ShoferSayTool + ChatRow
 
-**If the tool renders a ChatRow entry**, add the camelCase name to `ClineSayTool.tool` union in [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts) and add a `case` in [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx).
+**If the tool renders a ChatRow entry**, add the camelCase name to `ShoferSayTool.tool` union in [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts) and add a `case` in [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx).
 
 ## Step 10: Auto-Approval
 
@@ -248,7 +248,7 @@ Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts
 ## Build & Test
 
 ```bash
-./deploy.sh dev build Roo-Code
+./deploy.sh dev build Shofer
 ./deploy.sh dev install-extensions
 ```
 

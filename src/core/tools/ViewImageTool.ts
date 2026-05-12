@@ -9,7 +9,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -75,7 +75,7 @@ export class ViewImageTool extends BaseTool<"view_image"> {
 			const absolutePath = path.resolve(task.cwd, filePath)
 			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "viewImage",
 				path: getReadablePath(task.cwd, filePath),
 				isOutsideWorkspace,
@@ -84,7 +84,7 @@ export class ViewImageTool extends BaseTool<"view_image"> {
 			const completeMessage = JSON.stringify({
 				...sharedMessageProps,
 				content: `Viewing image: ${filePath}`,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const didApprove = await askApproval("tool", completeMessage)
 
@@ -133,13 +133,13 @@ export class ViewImageTool extends BaseTool<"view_image"> {
 		const absolutePath = filePath ? path.resolve(task.cwd, filePath) : task.cwd
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "viewImage",
 			path: getReadablePath(task.cwd, filePath ?? ""),
 			isOutsideWorkspace,
 		}
 
-		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

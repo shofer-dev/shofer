@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 
-import { type ClineSayTool, DEFAULT_WRITE_DELAY_MS } from "@roo-code/types"
+import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
@@ -108,10 +108,10 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 				const absolutePath = path.resolve(task.cwd, relPath)
 
 				// Check access permissions
-				const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+				const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 				if (!accessAllowed) {
 					await task.say("rooignore_error", relPath)
-					pushToolResult(formatResponse.rooIgnoreError(relPath))
+					pushToolResult(formatResponse.shoferIgnoreError(relPath))
 					return
 				}
 
@@ -181,7 +181,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 		const sanitizedDiff = sanitizeUnifiedDiff(diff || "")
 		const diffStats = computeDiffStats(sanitizedDiff) || undefined
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "appliedDiff",
 			path: getReadablePath(task.cwd, relPath),
 			diff: sanitizedDiff,
@@ -193,7 +193,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			content: sanitizedDiff,
 			isProtected: isWriteProtected,
 			diffStats,
-		} satisfies ClineSayTool)
+		} satisfies ShoferSayTool)
 
 		// Show diff view if focus disruption prevention is disabled
 		if (!isPreventFocusDisruptionEnabled) {
@@ -252,7 +252,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "appliedDiff",
 			path: getReadablePath(task.cwd, relPath),
 			diff: `File will be deleted: ${relPath}`,
@@ -263,7 +263,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			...sharedMessageProps,
 			content: `Delete file: ${relPath}`,
 			isProtected: isWriteProtected,
-		} satisfies ClineSayTool)
+		} satisfies ShoferSayTool)
 
 		const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
 
@@ -337,7 +337,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 		const sanitizedDiff = sanitizeUnifiedDiff(diff)
 		const diffStats = computeDiffStats(sanitizedDiff) || undefined
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "appliedDiff",
 			path: getReadablePath(task.cwd, relPath),
 			diff: sanitizedDiff,
@@ -350,7 +350,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			content: sanitizedDiff,
 			isProtected: isWriteProtected,
 			diffStats,
-		} satisfies ClineSayTool)
+		} satisfies ShoferSayTool)
 
 		// Show diff view if focus disruption prevention is disabled
 		if (!isPreventFocusDisruptionEnabled) {
@@ -375,10 +375,10 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			const moveAbsolutePath = path.resolve(task.cwd, change.movePath)
 
 			// Validate destination path access permissions
-			const moveAccessAllowed = task.rooIgnoreController?.validateAccess(change.movePath)
+			const moveAccessAllowed = task.shoferIgnoreController?.validateAccess(change.movePath)
 			if (!moveAccessAllowed) {
 				await task.say("rooignore_error", change.movePath)
-				pushToolResult(formatResponse.rooIgnoreError(change.movePath))
+				pushToolResult(formatResponse.shoferIgnoreError(change.movePath))
 				await task.diffViewProvider.reset()
 				return
 			}
@@ -465,7 +465,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			patchPreview = lines.join("\n") + (patch.split("\n").length > 5 ? "\n..." : "")
 		}
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "appliedDiff",
 			path: displayPath || path.basename(task.cwd) || "workspace",
 			diff: patchPreview || "Parsing patch...",

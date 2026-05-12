@@ -5,7 +5,7 @@
 
 ## Overview
 
-Roo Code uses a single unified ToolGroup system as the **single source of truth** for mode-based filtering, auto-approval classification, and grouping of external language model tools. Every tool — whether native, MCP, or registered by another extension — falls into exactly one category.
+Shofer uses a single unified ToolGroup system as the **single source of truth** for mode-based filtering, auto-approval classification, and grouping of external language model tools. Every tool — whether native, MCP, or registered by another extension — falls into exactly one category.
 
 ## The 9 Categories
 
@@ -23,7 +23,7 @@ Roo Code uses a single unified ToolGroup system as the **single source of truth*
 
 ## Where Each Tool Gets Its Group
 
-### 1. RooCode Native Tools — Declared in Code
+### 1. Shofer Native Tools — Declared in Code
 
 Each native tool is assigned to a group in [`TOOL_GROUPS`](../packages/types/src/tool.ts#L141) in `packages/types/src/tool.ts`. This is the canonical source for all built-in tools.
 
@@ -43,7 +43,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 
 ### 2. External LM Tools — Declared by the Extension That Registers Them
 
-Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Roo Code reads this configuration at runtime via `resolveExternalLmToolGroup()` in [`build-tools.ts`](../src/core/task/build-tools.ts).
+Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer reads this configuration at runtime via `resolveExternalLmToolGroup()` in [`build-tools.ts`](../src/core/task/build-tools.ts).
 
 | Extension               | Config namespace                  | Tool prefix |
 | ----------------------- | --------------------------------- | ----------- |
@@ -92,7 +92,7 @@ MCP tools are classified via a three-tier priority system (highest first):
 }
 ```
 
-**User-side override** (`~/.roo/mcp.json` or `.roo/mcp.json`):
+**User-side override** (`~/.shofer/mcp.json` or `.shofer/mcp.json`):
 
 ```json
 {

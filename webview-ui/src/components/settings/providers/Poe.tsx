@@ -8,9 +8,9 @@ import {
 	type ExtensionMessage,
 	poeDefaultModelId,
 	type ProviderName,
-} from "@roo-code/types"
+} from "@shofer/types"
 
-import { RouterName } from "@roo/api"
+import { RouterName } from "@shofer/api"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { VSCodeButtonLink } from "@src/components/common/VSCodeButtonLink"

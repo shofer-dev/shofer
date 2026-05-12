@@ -56,7 +56,7 @@ It covers three tightly coupled subsystems:
 
 The `MessageQueueService` instance is **owned by the Task** (one queue per
 Task). The webview is rendered with `messageQueue` taken from the _currently
-focused_ Task (`ClineProvider.getStateToPostToWebview`), which is why a queue
+focused_ Task (`ShoferProvider.getStateToPostToWebview`), which is why a queue
 appears to "follow" the focused Task — in reality every Task has its own
 queue and the UI just shows the active one.
 
@@ -166,7 +166,7 @@ if (!queued) return
 
 #### 3. The streaming catch must NOT dispose the Task
 
-The streaming code in `recursivelyMakeClineRequests` has a catch block
+The streaming code in `recursivelyMakeShoferRequests` has a catch block
 that, on stream error, calls `abortTask()` to fully tear down the Task.
 But on Send Now we _want_ the abort to propagate up to the streaming
 code (to cancel the in-flight API request) **without** disposing the
@@ -179,12 +179,12 @@ Fix: a new `_softCancelForQueuedMessage` flag on `Task`. When set:
 - The streaming catch block detects the flag and `break`s out of the
   loop _without_ calling `abortTask()`/`dispose()`.
 - `cancelAndProcessQueuedMessages` clears the flag and then drives a
-  fresh `recursivelyMakeClineRequests` call with the dequeued message.
+  fresh `recursivelyMakeShoferRequests` call with the dequeued message.
 
 Pseudo-code:
 
 ```ts
-// in recursivelyMakeClineRequests' stream catch:
+// in recursivelyMakeShoferRequests' stream catch:
 if (this._softCancelForQueuedMessage) {
 	break // unwind only; leave the Task instance alive
 }
@@ -211,7 +211,7 @@ ChatView                Task                       MessageQueueService
    │                     │ _softCancelForQueuedMessage = false│
    │                     │                                   │
    │                     │ say("user_feedback", text, images)│
-   │                     │ recursivelyMakeClineRequests([... │
+   │                     │ recursivelyMakeShoferRequests([... │
    │                     │       { type:"text", text } ...]) │
 ```
 
@@ -286,7 +286,7 @@ changes but always sees the latest text.
   `messageQueueService` ownership, `handleWebviewAskResponse`,
   `processQueuedMessages`, `cancelAndProcessQueuedMessages`,
   `_softCancelForQueuedMessage`, the `ask()` abort observation.
-- [src/core/webview/ClineProvider.ts](../src/core/webview/ClineProvider.ts) —
+- [src/core/webview/ShoferProvider.ts](../src/core/webview/ShoferProvider.ts) —
   exposes the focused Task's queue to the webview via
   `getStateToPostToWebview` and `focusTask`.
 - [webview-ui/src/components/chat/ChatView.tsx](../webview-ui/src/components/chat/ChatView.tsx) —

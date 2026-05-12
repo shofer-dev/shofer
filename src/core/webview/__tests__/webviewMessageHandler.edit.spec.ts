@@ -38,13 +38,13 @@ vi.mock("../checkpointRestoreHandler", () => ({
 
 // Import after mocks
 import { webviewMessageHandler } from "../webviewMessageHandler"
-import type { ClineProvider } from "../ClineProvider"
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferProvider } from "../ShoferProvider"
+import type { ShoferMessage } from "@shofer/types"
 import type { ApiMessage } from "../../task-persistence/apiMessages"
 import { MessageManager } from "../../message-manager"
 
 describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
-	let mockClineProvider: ClineProvider
+	let mockShoferProvider: ShoferProvider
 	let mockCurrentTask: any
 
 	beforeEach(() => {
@@ -53,16 +53,16 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		// Create a mock task with messages
 		mockCurrentTask = {
 			taskId: "test-task-id",
-			clineMessages: [] as ClineMessage[],
+			shoferMessages: [] as ShoferMessage[],
 			apiConversationHistory: [] as ApiMessage[],
-			overwriteClineMessages: vi.fn(),
+			overwriteShoferMessages: vi.fn(),
 			overwriteApiConversationHistory: vi.fn(),
 			handleWebviewAskResponse: vi.fn(),
 		}
 		mockCurrentTask.messageManager = new MessageManager(mockCurrentTask)
 
 		// Create mock provider
-		mockClineProvider = {
+		mockShoferProvider = {
 			getCurrentTask: vi.fn().mockReturnValue(mockCurrentTask),
 			postMessageToWebview: vi.fn(),
 			contextProxy: {
@@ -75,7 +75,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 				maxImageFileSize: 5,
 				maxTotalImageSize: 20,
 			}),
-		} as unknown as ClineProvider
+		} as unknown as ShoferProvider
 	})
 
 	it("should not modify API history when apiConversationHistoryIndex is -1", async () => {
@@ -84,20 +84,20 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		const assistantMessageTs = 2000
 		const completionMessageTs = 3000
 
-		// UI messages (clineMessages)
-		mockCurrentTask.clineMessages = [
+		// UI messages (shoferMessages)
+		mockCurrentTask.shoferMessages = [
 			{
 				ts: userMessageTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Hello",
-			} as ClineMessage,
+			} as ShoferMessage,
 			{
 				ts: completionMessageTs,
 				type: "say",
 				say: "completion_result",
 				text: "Task Completed!",
-			} as ClineMessage,
+			} as ShoferMessage,
 		]
 
 		// API conversation history - note the user message is missing (common scenario after condense)
@@ -129,7 +129,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		] as ApiMessage[]
 
 		// Trigger edit confirmation
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World", // edited content
@@ -137,7 +137,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		})
 
 		// Verify that UI messages were truncated at the correct index
-		expect(mockCurrentTask.overwriteClineMessages).toHaveBeenCalledWith(
+		expect(mockCurrentTask.overwriteShoferMessages).toHaveBeenCalledWith(
 			[], // All messages before index 0 (empty array)
 		)
 
@@ -151,25 +151,25 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		const assistantMessageTs = 2000
 
 		// UI messages
-		mockCurrentTask.clineMessages = [
+		mockCurrentTask.shoferMessages = [
 			{
 				ts: earlierMessageTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Earlier message",
-			} as ClineMessage,
+			} as ShoferMessage,
 			{
 				ts: userMessageTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Hello",
-			} as ClineMessage,
+			} as ShoferMessage,
 			{
 				ts: assistantMessageTs,
 				type: "say",
 				say: "text",
 				text: "Response",
-			} as ClineMessage,
+			} as ShoferMessage,
 		]
 
 		// API history - missing the exact user message at ts=1000
@@ -186,7 +186,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			},
 		] as ApiMessage[]
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
@@ -194,7 +194,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		})
 
 		// Verify UI messages were truncated to preserve earlier message
-		expect(mockCurrentTask.overwriteClineMessages).toHaveBeenCalledWith([
+		expect(mockCurrentTask.overwriteShoferMessages).toHaveBeenCalledWith([
 			{
 				ts: earlierMessageTs,
 				type: "say",
@@ -218,19 +218,19 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		const assistantMessageTs = 2000
 
 		// Both UI and API have the message at the same timestamp
-		mockCurrentTask.clineMessages = [
+		mockCurrentTask.shoferMessages = [
 			{
 				ts: userMessageTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Hello",
-			} as ClineMessage,
+			} as ShoferMessage,
 			{
 				ts: assistantMessageTs,
 				type: "say",
 				say: "text",
 				text: "Response",
-			} as ClineMessage,
+			} as ShoferMessage,
 		]
 
 		mockCurrentTask.apiConversationHistory = [
@@ -246,7 +246,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			},
 		] as ApiMessage[]
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
@@ -254,20 +254,20 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		})
 
 		// Both should be truncated at index 0
-		expect(mockCurrentTask.overwriteClineMessages).toHaveBeenCalledWith([])
+		expect(mockCurrentTask.overwriteShoferMessages).toHaveBeenCalledWith([])
 		expect(mockCurrentTask.overwriteApiConversationHistory).toHaveBeenCalledWith([])
 	})
 
 	it("should handle case where no API messages match timestamp criteria", async () => {
 		const userMessageTs = 3000
 
-		mockCurrentTask.clineMessages = [
+		mockCurrentTask.shoferMessages = [
 			{
 				ts: userMessageTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Hello",
-			} as ClineMessage,
+			} as ShoferMessage,
 		]
 
 		// All API messages have timestamps before the edited message
@@ -284,7 +284,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			},
 		] as ApiMessage[]
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
@@ -292,7 +292,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		})
 
 		// UI messages truncated
-		expect(mockCurrentTask.overwriteClineMessages).toHaveBeenCalledWith([])
+		expect(mockCurrentTask.overwriteShoferMessages).toHaveBeenCalledWith([])
 
 		// API history should not be modified when no API messages meet the timestamp criteria
 		expect(mockCurrentTask.overwriteApiConversationHistory).not.toHaveBeenCalled()
@@ -301,18 +301,18 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 	it("should handle empty API conversation history gracefully", async () => {
 		const userMessageTs = 1000
 
-		mockCurrentTask.clineMessages = [
+		mockCurrentTask.shoferMessages = [
 			{
 				ts: userMessageTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Hello",
-			} as ClineMessage,
+			} as ShoferMessage,
 		]
 
 		mockCurrentTask.apiConversationHistory = []
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
@@ -320,7 +320,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		})
 
 		// UI messages should be truncated
-		expect(mockCurrentTask.overwriteClineMessages).toHaveBeenCalledWith([])
+		expect(mockCurrentTask.overwriteShoferMessages).toHaveBeenCalledWith([])
 
 		// API history should not be modified when message not found
 		expect(mockCurrentTask.overwriteApiConversationHistory).not.toHaveBeenCalled()
@@ -331,25 +331,25 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		const completionTs = 2000
 		const feedbackTs = 3000
 
-		mockCurrentTask.clineMessages = [
+		mockCurrentTask.shoferMessages = [
 			{
 				ts: userMessageTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Do something",
-			} as ClineMessage,
+			} as ShoferMessage,
 			{
 				ts: completionTs,
 				type: "say",
 				say: "completion_result",
 				text: "Task Completed!",
-			} as ClineMessage,
+			} as ShoferMessage,
 			{
 				ts: feedbackTs,
 				type: "say",
 				say: "user_feedback",
 				text: "Thanks",
-			} as ClineMessage,
+			} as ShoferMessage,
 		]
 
 		// API history with attempt_completion tool use (user message missing)
@@ -381,7 +381,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		] as ApiMessage[]
 
 		// Edit the first user message
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Do something else",
@@ -389,7 +389,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 		})
 
 		// UI messages truncated at edited message
-		expect(mockCurrentTask.overwriteClineMessages).toHaveBeenCalledWith([])
+		expect(mockCurrentTask.overwriteShoferMessages).toHaveBeenCalledWith([])
 
 		// API history should be truncated from first message at/after edited timestamp (fallback)
 		expect(mockCurrentTask.overwriteApiConversationHistory).toHaveBeenCalledWith([])

@@ -1,0 +1,112 @@
+{
+	"type": "object",
+	"properties": {
+		"customModes": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"slug": {
+						"type": "string",
+						"pattern": "^[a-zA-Z0-9-]+$"
+					},
+					"name": {
+						"type": "string",
+						"minLength": 1
+					},
+					"roleDefinition": {
+						"type": "string",
+						"minLength": 1
+					},
+					"whenToUse": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"customInstructions": {
+						"type": "string"
+					},
+					"source": {
+						"type": "string",
+						"enum": ["global", "project"]
+					},
+					"provider": {
+						"type": "string"
+					},
+					"groups": {
+						"type": "array",
+						"items": {
+							"anyOf": [
+								{
+									"type": "string",
+									"enum": ["read", "edit", "command", "mcp", "modes", "browser"]
+								},
+								{
+									"type": "array",
+									"minItems": 2,
+									"maxItems": 2,
+									"items": [
+										{
+											"type": "string",
+											"enum": ["read", "edit", "command", "mcp", "modes", "browser"]
+										},
+										{
+											"type": "object",
+											"properties": {
+												"fileRegex": {
+													"type": "string"
+												},
+												"description": {
+													"type": "string"
+												}
+											},
+											"additionalProperties": false
+										}
+									]
+								}
+							]
+						}
+					},
+					"tools_allowed": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"tools_denied": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"rulesFiles": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"relativePath": {
+									"type": "string"
+								},
+								"content": {
+									"type": "string"
+								}
+							},
+							"required": ["relativePath"],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["slug", "name", "roleDefinition"],
+				"anyOf": [{ "required": ["groups"] }, { "required": ["tools_allowed"] }],
+				"additionalProperties": false
+			}
+		}
+	},
+	"required": ["customModes"],
+	"additionalProperties": false,
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://github.com/Arkware/Shofer/blob/main/schemas/shofermodes.json",
+	"title": "Shofer Custom Modes",
+	"description": "Schema for .shofermodes configuration files used by Shofer to define custom modes."
+}

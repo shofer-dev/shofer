@@ -1,8 +1,8 @@
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
 
-import type { ClineApiReqInfo } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import type { ShoferApiReqInfo } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
 
@@ -254,7 +254,7 @@ export async function checkpointRestore(
 		return
 	}
 
-	const index = task.clineMessages.findIndex((m) => m.ts === ts)
+	const index = task.shoferMessages.findIndex((m) => m.ts === ts)
 
 	if (index === -1) {
 		return
@@ -269,7 +269,7 @@ export async function checkpointRestore(
 
 		if (mode === "restore") {
 			// Calculate metrics from messages that will be deleted (must be done before rewind)
-			const deletedMessages = task.clineMessages.slice(index + 1)
+			const deletedMessages = task.shoferMessages.slice(index + 1)
 
 			const { totalTokensIn, totalTokensOut, totalCacheWrites, totalCacheReads, totalCost } = getApiMetrics(
 				task.combineMessages(deletedMessages),
@@ -290,14 +290,14 @@ export async function checkpointRestore(
 					cacheWrites: totalCacheWrites,
 					cacheReads: totalCacheReads,
 					cost: totalCost,
-				} satisfies ClineApiReqInfo),
+				} satisfies ShoferApiReqInfo),
 			)
 		}
 
 		// The task is already cancelled by the provider beforehand, but we
 		// need to re-init to get the updated messages.
 		//
-		// This was taken from Cline's implementation of the checkpoints
+		// This was taken from Shofer's implementation of the checkpoints
 		// feature. The task instance will hang if we don't cancel twice,
 		// so this is currently necessary, but it seems like a complicated
 		// and hacky solution to a problem that I don't fully understand.
@@ -337,7 +337,7 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 	let toHash: string | undefined
 	let title: string
 
-	const checkpoints = task.clineMessages.filter(({ say }) => say === "checkpoint_saved").map(({ text }) => text!)
+	const checkpoints = task.shoferMessages.filter(({ say }) => say === "checkpoint_saved").map(({ text }) => text!)
 
 	if (["from-init", "full"].includes(mode) && checkpoints.length < 1) {
 		vscode.window.showInformationMessage(t("common:errors.checkpoint_no_first"))

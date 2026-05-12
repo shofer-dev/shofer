@@ -5,18 +5,18 @@ import deepEqual from "fast-deep-equal"
 import { VSCodeBadge } from "@vscode/webview-ui-toolkit/react"
 
 import type {
-	ClineMessage,
+	ShoferMessage,
 	FollowUpData,
 	SuggestionItem,
-	ClineApiReqInfo,
-	ClineAskUseMcpServer,
-	ClineSayTool,
-} from "@roo-code/types"
+	ShoferApiReqInfo,
+	ShoferAskUseMcpServer,
+	ShoferSayTool,
+} from "@shofer/types"
 
-import { Mode } from "@roo/modes"
+import { Mode } from "@shofer/modes"
 
-import { COMMAND_OUTPUT_STRING } from "@roo/combineCommandSequences"
-import { safeJsonParse } from "@roo/core"
+import { COMMAND_OUTPUT_STRING } from "@shofer/combineCommandSequences"
+import { safeJsonParse } from "@shofer/core"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { findMatchingResourceOrTemplate } from "@src/utils/mcp"
@@ -103,25 +103,25 @@ function humanizeToolName(name: string): string {
 }
 
 /**
- * Generic chat-row renderer for `ClineSayTool` payloads that don't have a
+ * Generic chat-row renderer for `ShoferSayTool` payloads that don't have a
  * tool-specific block. Every tool invocation must produce some UI feedback
  * — otherwise an auto-approved tool appears to "execute silently" and the
  * user has no idea the model is acting on their workspace.
  *
  * The block is intentionally minimal: an icon, the humanized tool name with
- * "Roo wants to use…" / "Roo used…" prefix, and (when present) the tool's
+ * "Shofer wants to use…" / "Shofer used…" prefix, and (when present) the tool's
  * `path` / `content` fields so common payload shapes display useful context.
  */
 function renderGenericToolBlock(
-	tool: ClineSayTool,
+	tool: ShoferSayTool,
 	isAsk: boolean,
 	headerStyle: React.CSSProperties,
 	t: (key: string, opts?: Record<string, unknown>) => string,
 ): React.ReactNode {
 	const label = humanizeToolName(tool.tool)
 	const headerText = isAsk
-		? t("chat:genericTool.wantsToUse", { tool: label, defaultValue: `Roo wants to use ${label}` })
-		: t("chat:genericTool.didUse", { tool: label, defaultValue: `Roo used ${label}` })
+		? t("chat:genericTool.wantsToUse", { tool: label, defaultValue: `Shofer wants to use ${label}` })
+		: t("chat:genericTool.didUse", { tool: label, defaultValue: `Shofer used ${label}` })
 	const detail = tool.path || tool.query || tool.regex || tool.content
 	return (
 		<>
@@ -139,7 +139,7 @@ function renderGenericToolBlock(
 }
 
 // Helper function to get previous todos before a specific message
-function getPreviousTodos(messages: ClineMessage[], currentMessageTs: number): any[] {
+function getPreviousTodos(messages: ShoferMessage[], currentMessageTs: number): any[] {
 	// Find the previous updateTodoList message before the current one
 	const previousUpdateIndex = messages
 		.slice()
@@ -172,8 +172,8 @@ function getPreviousTodos(messages: ClineMessage[], currentMessageTs: number): a
 }
 
 interface ChatRowProps {
-	message: ClineMessage
-	lastModifiedMessage?: ClineMessage
+	message: ShoferMessage
+	lastModifiedMessage?: ShoferMessage
 	isExpanded: boolean
 	isLast: boolean
 	isStreaming: boolean
@@ -249,7 +249,7 @@ export const ChatRowContent = ({
 }: ChatRowContentProps) => {
 	const { t, i18n } = useTranslation()
 
-	const { mcpServers, currentCheckpoint, mode, apiConfiguration, clineMessages, currentTaskItem } =
+	const { mcpServers, currentCheckpoint, mode, apiConfiguration, shoferMessages, currentTaskItem } =
 		useExtensionState()
 	const { info: model } = useSelectedModel(apiConfiguration)
 	const [isEditing, setIsEditing] = useState(false)
@@ -312,7 +312,7 @@ export const ChatRowContent = ({
 
 	const [cost, apiReqCancelReason, apiReqStreamingFailedMessage] = useMemo(() => {
 		if (message.text !== null && message.text !== undefined && message.say === "api_req_started") {
-			const info = safeJsonParse<ClineApiReqInfo>(message.text)
+			const info = safeJsonParse<ShoferApiReqInfo>(message.text)
 			return [info?.cost, info?.cancelReason, info?.streamingFailedMessage]
 		}
 
@@ -356,7 +356,7 @@ export const ChatRowContent = ({
 					</span>,
 				]
 			case "use_mcp_server":
-				const mcpServerUse = safeJsonParse<ClineAskUseMcpServer>(message.text)
+				const mcpServerUse = safeJsonParse<ShoferAskUseMcpServer>(message.text)
 				if (mcpServerUse === undefined) {
 					return [null, null]
 				}
@@ -487,7 +487,7 @@ export const ChatRowContent = ({
 	}
 
 	const tool = useMemo(
-		() => (message.ask === "tool" ? safeJsonParse<ClineSayTool>(message.text) : null),
+		() => (message.ask === "tool" ? safeJsonParse<ShoferSayTool>(message.text) : null),
 		[message.ask, message.text],
 	)
 
@@ -637,7 +637,7 @@ export const ChatRowContent = ({
 			case "updateTodoList" as any: {
 				const todos = (tool as any).todos || []
 				// Get previous todos from the latest todos in the task context
-				const previousTodos = getPreviousTodos(clineMessages, message.ts)
+				const previousTodos = getPreviousTodos(shoferMessages, message.ts)
 
 				return <TodoChangeDisplay previousTodos={previousTodos} newTodos={todos} />
 			}
@@ -915,9 +915,9 @@ export const ChatRowContent = ({
 				)
 			case "newTask":
 				// Find all newTask messages to determine which child task ID corresponds to this message
-				const newTaskMessages = clineMessages.filter((msg) => {
+				const newTaskMessages = shoferMessages.filter((msg) => {
 					if (msg.type === "ask" && msg.ask === "tool") {
-						const t = safeJsonParse<ClineSayTool>(msg.text)
+						const t = safeJsonParse<ShoferSayTool>(msg.text)
 						return t?.tool === "newTask"
 					}
 					return false
@@ -934,8 +934,8 @@ export const ChatRowContent = ({
 
 				// Check if the next message is a subtask_result - if so, don't show the button
 				// since the result is displayed right after this message
-				const currentMessageIndex = clineMessages.findIndex((msg) => msg.ts === message.ts)
-				const nextMessage = currentMessageIndex >= 0 ? clineMessages[currentMessageIndex + 1] : undefined
+				const currentMessageIndex = shoferMessages.findIndex((msg) => msg.ts === message.ts)
+				const nextMessage = currentMessageIndex >= 0 ? shoferMessages[currentMessageIndex + 1] : undefined
 				const isFollowedBySubtaskResult = nextMessage?.type === "say" && nextMessage?.say === "subtask_result"
 
 				return (
@@ -1292,7 +1292,7 @@ export const ChatRowContent = ({
 									message={apiRequestFailedMessage || apiReqStreamingFailedMessage || ""}
 									docsURL={
 										apiRequestFailedMessage?.toLowerCase().includes("powershell")
-											? "https://github.com/cline/cline/wiki/TroubleShooting-%E2%80%90-%22PowerShell-is-not-recognized-as-an-internal-or-external-command%22"
+											? "https://github.com/shofer/shofer/wiki/TroubleShooting-%E2%80%90-%22PowerShell-is-not-recognized-as-an-internal-or-external-command%22"
 											: undefined
 									}
 									errorDetails={apiReqStreamingFailedMessage}
@@ -1322,7 +1322,7 @@ export const ChatRowContent = ({
 								// Non-HTTP-status-code error message - store full text as errorDetails
 								body = t("chat:apiRequest.errorMessage.unknown")
 								docsURL =
-									"mailto:support@roocode.com?subject=Unknown API Error&body=[Please include full error details]"
+									"mailto:support@shofer.com?subject=Unknown API Error&body=[Please include full error details]"
 							}
 						}
 
@@ -1481,7 +1481,7 @@ export const ChatRowContent = ({
 						</div>
 					)
 				case "user_feedback_diff":
-					const tool = safeJsonParse<ClineSayTool>(message.text)
+					const tool = safeJsonParse<ShoferSayTool>(message.text)
 					return (
 						<div style={{ marginTop: -10, width: "100%" }}>
 							<CodeAccordion
@@ -1605,7 +1605,7 @@ export const ChatRowContent = ({
 					return <UpdateTodoListToolBlock userEdited onChange={() => {}} />
 				case "tool" as any:
 					// Handle say tool messages
-					const sayTool = safeJsonParse<ClineSayTool>(message.text)
+					const sayTool = safeJsonParse<ShoferSayTool>(message.text)
 					if (!sayTool) return null
 
 					switch (sayTool.tool) {
@@ -1801,7 +1801,7 @@ export const ChatRowContent = ({
 					const { response, ...mcpServerRequest } = messageJson
 
 					// Create the useMcpServer object with the response field
-					const useMcpServer: ClineAskUseMcpServer = {
+					const useMcpServer: ShoferAskUseMcpServer = {
 						...mcpServerRequest,
 						response,
 					}

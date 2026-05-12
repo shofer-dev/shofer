@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 
-import type { SkillMetadata, ModeConfig } from "@roo-code/types"
+import type { SkillMetadata, ModeConfig } from "@shofer/types"
 
 import { SkillsButton } from "../SkillsButton"
 
@@ -18,8 +18,8 @@ vi.mock("@/i18n/TranslationContext", () => ({
 	}),
 }))
 
-vi.mock("@/components/ui/hooks/useRooPortal", () => ({
-	useRooPortal: () => document.body,
+vi.mock("@/components/ui/hooks/useShoferPortal", () => ({
+	useShoferPortal: () => document.body,
 }))
 
 const mockUseExtensionState = vi.fn()

@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 /**
- * ClineAsk
+ * ShoferAsk
  */
 
 /**
@@ -24,7 +24,7 @@ import { z } from "zod"
  * - `use_mcp_server`: Permission to use Model Context Protocol (MCP) server functionality
  * - `auto_approval_max_req_reached`: Auto-approval limit has been reached, manual approval required
  */
-export const clineAsks = [
+export const shoferAsks = [
 	"followup",
 	"command",
 	"command_output",
@@ -39,9 +39,9 @@ export const clineAsks = [
 	"budget_limit",
 ] as const
 
-export const clineAskSchema = z.enum(clineAsks)
+export const shoferAskSchema = z.enum(shoferAsks)
 
-export type ClineAsk = z.infer<typeof clineAskSchema>
+export type ShoferAsk = z.infer<typeof shoferAskSchema>
 /**
  * IdleAsk
  *
@@ -54,12 +54,12 @@ export const idleAsks = [
 	"resume_completed_task",
 	"mistake_limit_reached",
 	"auto_approval_max_req_reached",
-] as const satisfies readonly ClineAsk[]
+] as const satisfies readonly ShoferAsk[]
 
 export type IdleAsk = (typeof idleAsks)[number]
 
-export function isIdleAsk(ask: ClineAsk): ask is IdleAsk {
-	return (idleAsks as readonly ClineAsk[]).includes(ask)
+export function isIdleAsk(ask: ShoferAsk): ask is IdleAsk {
+	return (idleAsks as readonly ShoferAsk[]).includes(ask)
 }
 
 /**
@@ -68,12 +68,12 @@ export function isIdleAsk(ask: ClineAsk): ask is IdleAsk {
  * Asks that put the task into an "resumable" state.
  */
 
-export const resumableAsks = ["resume_task"] as const satisfies readonly ClineAsk[]
+export const resumableAsks = ["resume_task"] as const satisfies readonly ShoferAsk[]
 
 export type ResumableAsk = (typeof resumableAsks)[number]
 
-export function isResumableAsk(ask: ClineAsk): ask is ResumableAsk {
-	return (resumableAsks as readonly ClineAsk[]).includes(ask)
+export function isResumableAsk(ask: ShoferAsk): ask is ResumableAsk {
+	return (resumableAsks as readonly ShoferAsk[]).includes(ask)
 }
 
 /**
@@ -88,12 +88,12 @@ export const interactiveAsks = [
 	"tool",
 	"use_mcp_server",
 	"budget_limit",
-] as const satisfies readonly ClineAsk[]
+] as const satisfies readonly ShoferAsk[]
 
 export type InteractiveAsk = (typeof interactiveAsks)[number]
 
-export function isInteractiveAsk(ask: ClineAsk): ask is InteractiveAsk {
-	return (interactiveAsks as readonly ClineAsk[]).includes(ask)
+export function isInteractiveAsk(ask: ShoferAsk): ask is InteractiveAsk {
+	return (interactiveAsks as readonly ShoferAsk[]).includes(ask)
 }
 
 /**
@@ -103,16 +103,16 @@ export function isInteractiveAsk(ask: ClineAsk): ask is InteractiveAsk {
  * to update chat messages.
  */
 
-export const nonBlockingAsks = ["command_output"] as const satisfies readonly ClineAsk[]
+export const nonBlockingAsks = ["command_output"] as const satisfies readonly ShoferAsk[]
 
 export type NonBlockingAsk = (typeof nonBlockingAsks)[number]
 
-export function isNonBlockingAsk(ask: ClineAsk): ask is NonBlockingAsk {
-	return (nonBlockingAsks as readonly ClineAsk[]).includes(ask)
+export function isNonBlockingAsk(ask: ShoferAsk): ask is NonBlockingAsk {
+	return (nonBlockingAsks as readonly ShoferAsk[]).includes(ask)
 }
 
 /**
- * ClineSay
+ * ShoferSay
  */
 
 /**
@@ -141,14 +141,14 @@ export function isNonBlockingAsk(ask: ClineAsk): ask is NonBlockingAsk {
  * - `mcp_server_response`: Response received from MCP server
  * - `subtask_result`: Result of a completed subtask
  * - `checkpoint_saved`: Indicates a checkpoint has been saved
- * - `rooignore_error`: Error related to .rooignore file processing
+ * - `rooignore_error`: Error related to .shoferignore file processing
  * - `diff_error`: Error occurred while applying a diff/patch
  * - `condense_context`: Context condensation/summarization has started
  * - `condense_context_error`: Error occurred during context condensation
  * - `codebase_search_result`: Results from searching the codebase
  * - `too_many_tools_warning`: Warning that too many MCP tools are enabled, which may confuse the LLM
  */
-export const clineSays = [
+export const shoferSays = [
 	"error",
 	"api_req_started",
 	"api_req_finished",
@@ -180,9 +180,9 @@ export const clineSays = [
 	"tool_preparing",
 ] as const
 
-export const clineSaySchema = z.enum(clineSays)
+export const shoferSaySchema = z.enum(shoferSays)
 
-export type ClineSay = z.infer<typeof clineSaySchema>
+export type ShoferSay = z.infer<typeof shoferSaySchema>
 
 /**
  * ToolProgressStatus
@@ -243,7 +243,7 @@ export const contextTruncationSchema = z.object({
 export type ContextTruncation = z.infer<typeof contextTruncationSchema>
 
 /**
- * ClineMessage
+ * ShoferMessage
  *
  * The main message type used for communication between the extension and webview.
  * Messages can either be "ask" (requiring user response) or "say" (informational).
@@ -254,11 +254,11 @@ export type ContextTruncation = z.infer<typeof contextTruncationSchema>
  *
  * Note: These fields are mutually exclusive - a message will have at most one of them.
  */
-export const clineMessageSchema = z.object({
+export const shoferMessageSchema = z.object({
 	ts: z.number(),
 	type: z.union([z.literal("ask"), z.literal("say")]),
-	ask: clineAskSchema.optional(),
-	say: clineSaySchema.optional(),
+	ask: shoferAskSchema.optional(),
+	say: shoferSaySchema.optional(),
 	text: z.string().optional(),
 	images: z.array(z.string()).optional(),
 	partial: z.boolean().optional(),
@@ -288,7 +288,7 @@ export const clineMessageSchema = z.object({
 	autoApproved: z.boolean().optional(),
 })
 
-export type ClineMessage = z.infer<typeof clineMessageSchema>
+export type ShoferMessage = z.infer<typeof shoferMessageSchema>
 
 /**
  * TokenUsage

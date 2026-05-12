@@ -14,10 +14,10 @@ vi.mock("vscode", () => ({
 // Mock Package module
 vi.mock("../../../shared/package", () => ({
 	Package: {
-		name: "roo-cline",
-		publisher: "RooVeterinaryInc",
+		name: "shofer",
+		publisher: "Arkware",
 		version: "1.0.0",
-		outputChannel: "Roo-Code",
+		outputChannel: "Shofer",
 	},
 }))
 
@@ -83,9 +83,9 @@ const mockRecordToolError = vi.fn()
 const mockSayAndCreateMissingParamError = vi.fn()
 const mockCheckpointSave = vi.fn()
 
-// Mock the Cline instance and its methods/properties.
+// Mock the Shofer instance and its methods/properties.
 // backgroundChildren is a real Map so set/get work correctly.
-const mockCline = {
+const mockShofer = {
 	ask: vi.fn(),
 	sayAndCreateMissingParamError: mockSayAndCreateMissingParamError,
 	emit: mockEmit,
@@ -142,10 +142,10 @@ describe("newTaskTool", () => {
 			roleDefinition: "Test role definition",
 			groups: ["execute", "read", "write"],
 		})
-		mockCline.consecutiveMistakeCount = 0
-		mockCline.didToolFailInCurrentTurn = false
-		mockCline.isPaused = false
-		mockCline.backgroundChildren.clear()
+		mockShofer.consecutiveMistakeCount = 0
+		mockShofer.didToolFailInCurrentTurn = false
+		mockShofer.isPaused = false
+		mockShofer.backgroundChildren.clear()
 		// Re-wire the resolver mock: fires immediately to unblock the foreground await.
 		mockRegisterBlockingChildResolver.mockImplementation(
 			(_childTaskId: string, resolver: (result: string) => void) => {
@@ -176,7 +176,7 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
@@ -188,7 +188,7 @@ describe("newTaskTool", () => {
 		expect(mockCreateTask).toHaveBeenCalledWith(
 			"Review this: \\@file1.txt and also \\\\\\@file2.txt",
 			undefined,
-			mockCline,
+			mockShofer,
 			expect.objectContaining({
 				initialTodos: expect.arrayContaining([
 					expect.objectContaining({ content: "First task" }),
@@ -216,7 +216,7 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
@@ -225,7 +225,7 @@ describe("newTaskTool", () => {
 		expect(mockCreateTask).toHaveBeenCalledWith(
 			"This is already unescaped: \\@file1.txt",
 			undefined,
-			mockCline,
+			mockShofer,
 			expect.objectContaining({ initialMode: "code" }),
 			undefined,
 			undefined,
@@ -245,7 +245,7 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
@@ -254,7 +254,7 @@ describe("newTaskTool", () => {
 		expect(mockCreateTask).toHaveBeenCalledWith(
 			"A normal mention @file1.txt",
 			undefined,
-			mockCline,
+			mockShofer,
 			expect.objectContaining({ initialMode: "code" }),
 			undefined,
 			undefined,
@@ -274,7 +274,7 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
@@ -283,7 +283,7 @@ describe("newTaskTool", () => {
 		expect(mockCreateTask).toHaveBeenCalledWith(
 			"Mix: @file0.txt, \\@file1.txt, \\@file2.txt, \\\\\\@file3.txt",
 			undefined,
-			mockCline,
+			mockShofer,
 			expect.objectContaining({ initialMode: "code" }),
 			undefined,
 			undefined,
@@ -303,20 +303,20 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
 		})
 
 		expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
-		expect(mockCline.consecutiveMistakeCount).toBe(0)
-		expect(mockCline.recordToolError).not.toHaveBeenCalledWith("new_task")
+		expect(mockShofer.consecutiveMistakeCount).toBe(0)
+		expect(mockShofer.recordToolError).not.toHaveBeenCalledWith("new_task")
 
 		expect(mockCreateTask).toHaveBeenCalledWith(
 			"Test message",
 			undefined,
-			mockCline,
+			mockShofer,
 			expect.objectContaining({ initialTodos: [], initialMode: "code" }),
 			undefined,
 			undefined,
@@ -338,7 +338,7 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
@@ -347,7 +347,7 @@ describe("newTaskTool", () => {
 		expect(mockCreateTask).toHaveBeenCalledWith(
 			"Test message with todos",
 			undefined,
-			mockCline,
+			mockShofer,
 			expect.objectContaining({
 				initialTodos: expect.arrayContaining([
 					expect.objectContaining({ content: "First task" }),
@@ -374,15 +374,15 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
 		})
 
 		expect(mockSayAndCreateMissingParamError).toHaveBeenCalledWith("new_task", "mode")
-		expect(mockCline.consecutiveMistakeCount).toBe(1)
-		expect(mockCline.recordToolError).toHaveBeenCalledWith("new_task")
+		expect(mockShofer.consecutiveMistakeCount).toBe(1)
+		expect(mockShofer.recordToolError).toHaveBeenCalledWith("new_task")
 	})
 
 	it("should error when message parameter is missing", async () => {
@@ -397,15 +397,15 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
 		})
 
 		expect(mockSayAndCreateMissingParamError).toHaveBeenCalledWith("new_task", "message")
-		expect(mockCline.consecutiveMistakeCount).toBe(1)
-		expect(mockCline.recordToolError).toHaveBeenCalledWith("new_task")
+		expect(mockShofer.consecutiveMistakeCount).toBe(1)
+		expect(mockShofer.recordToolError).toHaveBeenCalledWith("new_task")
 	})
 
 	it("should parse todos with different statuses correctly", async () => {
@@ -421,7 +421,7 @@ describe("newTaskTool", () => {
 			partial: false,
 		}
 
-		await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+		await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
@@ -430,7 +430,7 @@ describe("newTaskTool", () => {
 		expect(mockCreateTask).toHaveBeenCalledWith(
 			"Test message",
 			undefined,
-			mockCline,
+			mockShofer,
 			expect.objectContaining({
 				initialTodos: expect.arrayContaining([
 					expect.objectContaining({ content: "Pending task", status: "pending" }),
@@ -462,20 +462,20 @@ describe("newTaskTool", () => {
 				partial: false,
 			}
 
-			await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+			await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
 			expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
-			expect(mockCline.consecutiveMistakeCount).toBe(0)
-			expect(mockCline.recordToolError).not.toHaveBeenCalledWith("new_task")
+			expect(mockShofer.consecutiveMistakeCount).toBe(0)
+			expect(mockShofer.recordToolError).not.toHaveBeenCalledWith("new_task")
 
 			expect(mockCreateTask).toHaveBeenCalledWith(
 				"Test message",
 				undefined,
-				mockCline,
+				mockShofer,
 				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
 				undefined,
 				undefined,
@@ -502,15 +502,15 @@ describe("newTaskTool", () => {
 				partial: false,
 			}
 
-			await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+			await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
 			expect(mockSayAndCreateMissingParamError).toHaveBeenCalledWith("new_task", "todos")
-			expect(mockCline.consecutiveMistakeCount).toBe(1)
-			expect(mockCline.recordToolError).toHaveBeenCalledWith("new_task")
+			expect(mockShofer.consecutiveMistakeCount).toBe(1)
+			expect(mockShofer.recordToolError).toHaveBeenCalledWith("new_task")
 
 			expect(mockCreateTask).not.toHaveBeenCalled()
 		})
@@ -533,19 +533,19 @@ describe("newTaskTool", () => {
 				partial: false,
 			}
 
-			await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+			await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
 			expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
-			expect(mockCline.consecutiveMistakeCount).toBe(0)
+			expect(mockShofer.consecutiveMistakeCount).toBe(0)
 
 			expect(mockCreateTask).toHaveBeenCalledWith(
 				"Test message",
 				undefined,
-				mockCline,
+				mockShofer,
 				expect.objectContaining({
 					initialTodos: expect.arrayContaining([
 						expect.objectContaining({ content: "First task" }),
@@ -578,19 +578,19 @@ describe("newTaskTool", () => {
 				partial: false,
 			}
 
-			await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+			await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
 			expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "todos")
-			expect(mockCline.consecutiveMistakeCount).toBe(0)
+			expect(mockShofer.consecutiveMistakeCount).toBe(0)
 
 			expect(mockCreateTask).toHaveBeenCalledWith(
 				"Test message",
 				undefined,
-				mockCline,
+				mockShofer,
 				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
 				undefined,
 				undefined,
@@ -617,17 +617,17 @@ describe("newTaskTool", () => {
 				partial: false,
 			}
 
-			await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+			await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockGetConfiguration).toHaveBeenCalledWith("roo-cline")
+			expect(mockGetConfiguration).toHaveBeenCalledWith("shofer")
 			expect(mockGet).toHaveBeenCalledWith("newTaskRequireTodos", false)
 		})
 
-		it("should use current Package.name value (roo-code-nightly) when accessing VSCode configuration", async () => {
+		it("should use current Package.name value (shofer-nightly) when accessing VSCode configuration", async () => {
 			const mockGet = vi.fn().mockReturnValue(false)
 			const mockGetConfiguration = vi.fn().mockReturnValue({
 				get: mockGet,
@@ -635,7 +635,7 @@ describe("newTaskTool", () => {
 			vi.mocked(vscode.workspace.getConfiguration).mockImplementation(mockGetConfiguration)
 
 			const pkg = await import("../../../shared/package")
-			;(pkg.Package as any).name = "roo-code-nightly"
+			;(pkg.Package as any).name = "shofer-nightly"
 
 			const block: ToolUse<"new_task"> = {
 				type: "tool_use",
@@ -648,13 +648,13 @@ describe("newTaskTool", () => {
 				partial: false,
 			}
 
-			await newTaskTool.handle(mockCline as any, withNativeArgs(block), {
+			await newTaskTool.handle(mockShofer as any, withNativeArgs(block), {
 				askApproval: mockAskApproval,
 				handleError: mockHandleError,
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockGetConfiguration).toHaveBeenCalledWith("roo-code-nightly")
+			expect(mockGetConfiguration).toHaveBeenCalledWith("shofer-nightly")
 			expect(mockGet).toHaveBeenCalledWith("newTaskRequireTodos", false)
 		})
 	})

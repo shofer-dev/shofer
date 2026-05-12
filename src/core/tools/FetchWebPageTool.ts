@@ -103,7 +103,7 @@ async function fetchAndExtract(url: string, query: string | undefined): Promise<
 
 	const response = await fetch(url, {
 		headers: {
-			"User-Agent": "Mozilla/5.0 (compatible; RooCode/1.0)",
+			"User-Agent": "Mozilla/5.0 (compatible; Shofer/1.0)",
 			Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8",
 		},
 	})

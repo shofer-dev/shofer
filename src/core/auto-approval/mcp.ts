@@ -1,4 +1,4 @@
-import type { McpServerUse, McpServer, McpTool } from "@roo-code/types"
+import type { McpServerUse, McpServer, McpTool } from "@shofer/types"
 
 /**
  * Returns true if the MCP tool referenced by the use payload has not been

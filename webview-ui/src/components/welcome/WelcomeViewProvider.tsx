@@ -7,7 +7,7 @@ import {
 	VSCodeTextField,
 } from "@vscode/webview-ui-toolkit/react"
 
-import type { ProviderSettings } from "@roo-code/types"
+import type { ProviderSettings } from "@shofer/types"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { validateApiConfiguration } from "@src/utils/validate"
@@ -18,12 +18,12 @@ import { Button } from "@src/components/ui"
 import ApiOptions from "../settings/ApiOptions"
 import { Tab, TabContent } from "../common/Tab"
 
-import RooHero from "./RooHero"
+import ShoferHero from "./ShoferHero"
 import { Trans } from "react-i18next"
 import { ArrowLeft, ArrowRight, BadgeInfo, Brain, TriangleAlert } from "lucide-react"
 import { buildDocLink } from "@/utils/docLinks"
 
-type ProviderOption = "roo" | "custom"
+type ProviderOption = "shofer" | "custom"
 type AuthOrigin = "landing" | "providerSelection"
 
 const WelcomeViewProvider = () => {
@@ -47,7 +47,7 @@ const WelcomeViewProvider = () => {
 
 	// When auth completes during the provider signup flow, either:
 	// 1. If user skipped model selection (cloudAuthSkipModel=true), navigate to provider selection with "custom" selected
-	// 2. Otherwise, save the Roo config and navigate to chat
+	// 2. Otherwise, save the Shofer config and navigate to chat
 	useEffect(() => {
 		if (cloudIsAuthenticated && authInProgress) {
 			if (cloudAuthSkipModel) {
@@ -59,13 +59,13 @@ const WelcomeViewProvider = () => {
 				vscode.postMessage({ type: "clearCloudAuthSkipModel" })
 			} else {
 				// Auth completed from provider signup flow - save the config now
-				const rooConfig: ProviderSettings = {
-					apiProvider: "roo",
+				const shoferConfig: ProviderSettings = {
+					apiProvider: "shofer",
 				}
 				vscode.postMessage({
 					type: "upsertApiConfiguration",
 					text: currentApiConfigName,
-					apiConfiguration: rooConfig,
+					apiConfiguration: shoferConfig,
 				})
 				setAuthInProgress(false)
 				setShowManualEntry(false)
@@ -91,23 +91,23 @@ const WelcomeViewProvider = () => {
 	)
 
 	const handleGetStarted = useCallback(() => {
-		// Landing screen - always trigger auth with Roo
+		// Landing screen - always trigger auth with Shofer
 		if (selectedProvider === null) {
 			setAuthOrigin("landing")
 			vscode.postMessage({ type: "rooCloudSignIn", useProviderSignup: true })
 			setAuthInProgress(true)
 		}
 		// Provider Selection screen
-		else if (selectedProvider === "roo") {
+		else if (selectedProvider === "shofer") {
 			if (cloudIsAuthenticated) {
 				// Already authenticated - save config and finish
-				const rooConfig: ProviderSettings = {
-					apiProvider: "roo",
+				const shoferConfig: ProviderSettings = {
+					apiProvider: "shofer",
 				}
 				vscode.postMessage({
 					type: "upsertApiConfiguration",
 					text: currentApiConfigName,
-					apiConfiguration: rooConfig,
+					apiConfiguration: shoferConfig,
 				})
 			} else {
 				// Need to authenticate
@@ -130,8 +130,8 @@ const WelcomeViewProvider = () => {
 	}, [selectedProvider, cloudIsAuthenticated, apiConfiguration, currentApiConfigName])
 
 	const handleNoAccount = useCallback(() => {
-		// Navigate to Provider Selection, defaulting to Roo option
-		setSelectedProvider("roo")
+		// Navigate to Provider Selection, defaulting to Shofer option
+		setSelectedProvider("shofer")
 	}, [])
 
 	const handleBackToLanding = useCallback(() => {
@@ -239,7 +239,7 @@ const WelcomeViewProvider = () => {
 												ref={manualUrlInputRef as any}
 												value={manualUrl}
 												onKeyUp={handleManualUrlChange}
-												placeholder="vscode://RooVeterinaryInc.roo-cline/auth/clerk/callback?state=..."
+												placeholder="vscode://Arkware.shofer/auth/clerk/callback?state=..."
 												className="flex-1"
 											/>
 											<Button
@@ -255,7 +255,7 @@ const WelcomeViewProvider = () => {
 												components={{
 													DocsLink: (
 														<a
-															href={buildDocLink("roo-code-cloud/login", "setup")}
+															href={buildDocLink("shofer-code-cloud/login", "setup")}
 															target="_blank"
 															rel="noopener noreferrer"
 															className="text-vscode-textLink-foreground hover:underline">
@@ -292,7 +292,7 @@ const WelcomeViewProvider = () => {
 		return (
 			<Tab>
 				<TabContent className="relative flex flex-col gap-4 p-6 justify-center">
-					<RooHero />
+					<ShoferHero />
 					<h2 className="mt-0 mb-0 text-xl">{t("welcome:landing.greeting")}</h2>
 
 					<div className="space-y-4 leading-normal">
@@ -325,7 +325,7 @@ const WelcomeViewProvider = () => {
 		)
 	}
 
-	// Provider Selection screen - shown when selectedProvider is "roo" or "custom"
+	// Provider Selection screen - shown when selectedProvider is "shofer" or "custom"
 	return (
 		<Tab>
 			<TabContent className="flex flex-col gap-4 p-6 justify-center">
@@ -344,8 +344,8 @@ const WelcomeViewProvider = () => {
 								(e.target as HTMLInputElement)) as HTMLInputElement
 							setSelectedProvider(target.value as ProviderOption)
 						}}>
-						{/* Roo Code Router Option */}
-						<VSCodeRadio value="roo" className="flex items-start gap-2">
+						{/* Shofer Router Option */}
+						<VSCodeRadio value="shofer" className="flex items-start gap-2">
 							<div className="flex-1 space-y-1 cursor-pointer">
 								<p className="text-lg font-semibold block -mt-1">
 									{t("welcome:providerSignup.rooCloudProvider")}
@@ -353,7 +353,7 @@ const WelcomeViewProvider = () => {
 								<p className="text-base text-vscode-descriptionForeground mt-0">
 									{t("welcome:providerSignup.rooCloudDescription")}{" "}
 									<VSCodeLink
-										href="https://roocode.com/provider/pricing?utm_source=extension&utm_medium=welcome-screen&utm_campaign=provider-signup&utm_content=learn-more"
+										href="https://shofer.com/provider/pricing?utm_source=extension&utm_medium=welcome-screen&utm_campaign=provider-signup&utm_content=learn-more"
 										className="cursor-pointer">
 										{t("welcome:providerSignup.learnMore")}
 									</VSCodeLink>

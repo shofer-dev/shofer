@@ -2,11 +2,11 @@ import { createInterface } from "readline"
 import { randomUUID } from "crypto"
 
 import {
-	rooCliCommandNames,
-	type RooCliCommandName,
-	type RooCliInputCommand,
-	type RooCliStartCommand,
-} from "@roo-code/types"
+	shoferCliCommandNames,
+	type ShoferCliCommandName,
+	type ShoferCliInputCommand,
+	type ShoferCliStartCommand,
+} from "@shofer/types"
 
 import { isRecord } from "@/lib/utils/guards.js"
 import { isValidSessionId } from "@/lib/utils/session-id.js"
@@ -19,15 +19,15 @@ import type { JsonEventEmitter } from "@/agent/json-event-emitter.js"
 // Types
 // ---------------------------------------------------------------------------
 
-export type StdinStreamCommandName = RooCliCommandName
+export type StdinStreamCommandName = ShoferCliCommandName
 
-export type StdinStreamCommand = RooCliInputCommand
+export type StdinStreamCommand = ShoferCliInputCommand
 
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
-export const VALID_STDIN_COMMANDS = new Set<StdinStreamCommandName>(rooCliCommandNames)
+export const VALID_STDIN_COMMANDS = new Set<StdinStreamCommandName>(shoferCliCommandNames)
 
 export function parseStdinStreamCommand(line: string, lineNumber: number): StdinStreamCommand {
 	let parsed: unknown
@@ -102,7 +102,7 @@ export function parseStdinStreamCommand(line: string, lineNumber: number): Stdin
 					prompt: promptRaw,
 					...(taskId !== undefined ? { taskId } : {}),
 					...(images !== undefined ? { images } : {}),
-					configuration: parsed.configuration as RooCliStartCommand["configuration"],
+					configuration: parsed.configuration as ShoferCliStartCommand["configuration"],
 				}
 			}
 

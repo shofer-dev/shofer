@@ -37,10 +37,10 @@ vi.mock("../diagnosticsHandler", () => ({
 	generateErrorDiagnostics: vi.fn().mockResolvedValue({ success: true, filePath: "/tmp/diagnostics.json" }),
 }))
 
-import type { ModelRecord } from "@roo-code/types"
+import type { ModelRecord } from "@shofer/types"
 
 import { webviewMessageHandler } from "../webviewMessageHandler"
-import type { ClineProvider } from "../ClineProvider"
+import type { ShoferProvider } from "../ShoferProvider"
 import { getModels } from "../../../api/providers/fetchers/modelCache"
 import { getCommands } from "../../../services/command/commands"
 const { openAiCodexOAuthManager } = await import("../../../integrations/openai-codex/oauth")
@@ -52,8 +52,8 @@ const mockGetAccessToken = vi.mocked(openAiCodexOAuthManager.getAccessToken)
 const mockGetAccountId = vi.mocked(openAiCodexOAuthManager.getAccountId)
 const mockFetchOpenAiCodexRateLimitInfo = vi.mocked(fetchOpenAiCodexRateLimitInfo)
 
-// Mock ClineProvider
-const mockClineProvider = {
+// Mock ShoferProvider
+const mockShoferProvider = {
 	getState: vi.fn(),
 	postMessageToWebview: vi.fn(),
 	customModesManager: {
@@ -79,7 +79,7 @@ const mockClineProvider = {
 	createTaskWithHistoryItem: vi.fn(),
 	getSkillsManager: vi.fn(),
 	cwd: "/mock/workspace",
-} as unknown as ClineProvider
+} as unknown as ShoferProvider
 
 import { t } from "../../../i18n"
 
@@ -148,7 +148,7 @@ import * as fsUtils from "../../../utils/fs"
 import { getWorkspacePath } from "../../../utils/path"
 import { ensureSettingsDirectoryExists } from "../../../utils/globalContext"
 import { generateErrorDiagnostics } from "../diagnosticsHandler"
-import type { ModeConfig } from "@roo-code/types"
+import type { ModeConfig } from "@shofer/types"
 
 vi.mock("../../../utils/fs")
 vi.mock("../../../utils/path")
@@ -166,7 +166,7 @@ import { resolveImageMentions } from "../../mentions/resolveImageMentions"
 describe("webviewMessageHandler - requestLmStudioModels", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockShoferProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				lmStudioModelId: "model-1",
 				lmStudioBaseUrl: "http://localhost:1234",
@@ -192,13 +192,13 @@ describe("webviewMessageHandler - requestLmStudioModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestLmStudioModels",
 		})
 
 		expect(mockGetModels).toHaveBeenCalledWith({ provider: "lmstudio", baseUrl: "http://localhost:1234" })
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "lmStudioModels",
 			lmStudioModels: mockModels,
 		})
@@ -208,7 +208,7 @@ describe("webviewMessageHandler - requestLmStudioModels", () => {
 describe("webviewMessageHandler - image mentions", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockShoferProvider.getState = vi.fn().mockResolvedValue({
 			maxImageFileSize: 5,
 			maxTotalImageSize: 20,
 		})
@@ -216,13 +216,13 @@ describe("webviewMessageHandler - image mentions", () => {
 
 	it("should resolve image mentions for askResponse payloads", async () => {
 		const mockHandleWebviewAskResponse = vi.fn()
-		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
 			cwd: "/mock/workspace",
-			rooIgnoreController: undefined,
+			shoferIgnoreController: undefined,
 			handleWebviewAskResponse: mockHandleWebviewAskResponse,
 		} as any)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "askResponse",
 			askResponse: "messageResponse",
 			text: "See @/img.png",
@@ -239,7 +239,7 @@ describe("webviewMessageHandler - image mentions", () => {
 describe("webviewMessageHandler - requestOllamaModels", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockShoferProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				ollamaModelId: "model-1",
 				ollamaBaseUrl: "http://localhost:1234",
@@ -265,13 +265,13 @@ describe("webviewMessageHandler - requestOllamaModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestOllamaModels",
 		})
 
 		expect(mockGetModels).toHaveBeenCalledWith({ provider: "ollama", baseUrl: "http://localhost:1234" })
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "ollamaModels",
 			ollamaModels: mockModels,
 		})
@@ -281,7 +281,7 @@ describe("webviewMessageHandler - requestOllamaModels", () => {
 describe("webviewMessageHandler - requestRouterModels", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockShoferProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				openRouterApiKey: "openrouter-key",
 				requestyApiKey: "requesty-key",
@@ -309,7 +309,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestRouterModels",
 		})
 
@@ -324,7 +324,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		expect(mockGetModels).toHaveBeenCalledWith({ provider: "vercel-ai-gateway" })
 		expect(mockGetModels).toHaveBeenCalledWith(
 			expect.objectContaining({
-				provider: "roo",
+				provider: "shofer",
 				baseUrl: expect.any(String),
 			}),
 		)
@@ -335,14 +335,14 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		})
 
 		// Verify response was sent
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "routerModels",
 			routerModels: {
 				openrouter: mockModels,
 				requesty: mockModels,
 				unbound: mockModels,
 				litellm: mockModels,
-				roo: mockModels,
+				shofer: mockModels,
 				ollama: {},
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
@@ -353,7 +353,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 	})
 
 	it("handles LiteLLM models with values from message when config is missing", async () => {
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockShoferProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				openRouterApiKey: "openrouter-key",
 				requestyApiKey: "requesty-key",
@@ -372,7 +372,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestRouterModels",
 			values: {
 				litellmApiKey: "message-litellm-key",
@@ -389,7 +389,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 	})
 
 	it("skips LiteLLM when both config and message values are missing", async () => {
-		mockClineProvider.getState = vi.fn().mockResolvedValue({
+		mockShoferProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {
 				openRouterApiKey: "openrouter-key",
 				requestyApiKey: "requesty-key",
@@ -408,7 +408,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestRouterModels",
 			// No values provided
 		})
@@ -421,13 +421,13 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		)
 
 		// Verify response includes empty object for LiteLLM
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "routerModels",
 			routerModels: {
 				openrouter: mockModels,
 				requesty: mockModels,
 				unbound: mockModels,
-				roo: mockModels,
+				shofer: mockModels,
 				litellm: {},
 				ollama: {},
 				lmstudio: {},
@@ -454,22 +454,22 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockResolvedValueOnce(mockModels) // unbound
 			.mockResolvedValueOnce(mockModels) // vercel-ai-gateway
-			.mockResolvedValueOnce(mockModels) // roo
+			.mockResolvedValueOnce(mockModels) // shofer
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestRouterModels",
 		})
 
 		// Verify error messages were sent for failed providers (these come first)
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Requesty API error",
 			values: { provider: "requesty" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "LiteLLM connection failed",
@@ -477,13 +477,13 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		})
 
 		// Verify final routerModels response includes successful providers and empty objects for failed ones
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "routerModels",
 			routerModels: {
 				openrouter: mockModels,
 				requesty: {},
 				unbound: mockModels,
-				roo: mockModels,
+				shofer: mockModels,
 				litellm: {},
 				ollama: {},
 				lmstudio: {},
@@ -501,50 +501,50 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockRejectedValueOnce(new Error("Unbound error")) // unbound
 			.mockRejectedValueOnce(new Error("Vercel AI Gateway error")) // vercel-ai-gateway
-			.mockRejectedValueOnce(new Error("Roo API error")) // roo
+			.mockRejectedValueOnce(new Error("Shofer API error")) // shofer
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestRouterModels",
 		})
 
 		// Verify error handling for different error types
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Structured error message",
 			values: { provider: "openrouter" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Requesty API error",
 			values: { provider: "requesty" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Unbound error",
 			values: { provider: "unbound" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "Vercel AI Gateway error",
 			values: { provider: "vercel-ai-gateway" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
-			error: "Roo API error",
-			values: { provider: "roo" },
+			error: "Shofer API error",
+			values: { provider: "shofer" },
 		})
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "singleRouterModelFetchResponse",
 			success: false,
 			error: "LiteLLM connection failed",
@@ -556,7 +556,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 		const mockModels: ModelRecord = {}
 		mockGetModels.mockResolvedValue(mockModels)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "requestRouterModels",
 			values: {
 				litellmApiKey: "message-key",
@@ -581,9 +581,9 @@ describe("webviewMessageHandler - requestOpenAiCodexRateLimits", () => {
 	})
 
 	it("posts error when not authenticated", async () => {
-		await webviewMessageHandler(mockClineProvider, { type: "requestOpenAiCodexRateLimits" } as any)
+		await webviewMessageHandler(mockShoferProvider, { type: "requestOpenAiCodexRateLimits" } as any)
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "openAiCodexRateLimits",
 			error: "Not authenticated with OpenAI Codex",
 		})
@@ -597,10 +597,10 @@ describe("webviewMessageHandler - requestOpenAiCodexRateLimits", () => {
 			fetchedAt: 1700000000000,
 		})
 
-		await webviewMessageHandler(mockClineProvider, { type: "requestOpenAiCodexRateLimits" } as any)
+		await webviewMessageHandler(mockShoferProvider, { type: "requestOpenAiCodexRateLimits" } as any)
 
 		expect(mockFetchOpenAiCodexRateLimitInfo).toHaveBeenCalledWith("token", { accountId: "acct_123" })
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "openAiCodexRateLimits",
 			values: {
 				primary: { usedPercent: 10, resetsAt: 1700000000000 },
@@ -615,14 +615,14 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 		vi.clearAllMocks()
 		vi.mocked(getWorkspacePath).mockReturnValue("/mock/workspace")
 		vi.mocked(vscode.window.showErrorMessage).mockResolvedValue(undefined)
-		vi.mocked(ensureSettingsDirectoryExists).mockResolvedValue("/mock/global/storage/.roo")
+		vi.mocked(ensureSettingsDirectoryExists).mockResolvedValue("/mock/global/storage/.shofer")
 	})
 
 	it("should delete a project mode and its rules folder", async () => {
 		const slug = "test-project-mode"
-		const rulesFolderPath = path.join("/mock/workspace", ".roo", `rules-${slug}`)
+		const rulesFolderPath = path.join("/mock/workspace", ".shofer", `rules-${slug}`)
 
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockShoferProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Project Mode",
 				slug,
@@ -632,22 +632,22 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockShoferProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockShoferProvider, { type: "deleteCustomMode", slug })
 
 		// The confirmation dialog is now handled in the webview, so we don't expect showInformationMessage to be called
 		expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockShoferProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).toHaveBeenCalledWith(rulesFolderPath, { recursive: true, force: true })
 	})
 
 	it("should delete a global mode and its rules folder", async () => {
 		const slug = "test-global-mode"
 		const homeDir = os.homedir()
-		const rulesFolderPath = path.join(homeDir, ".roo", `rules-${slug}`)
+		const rulesFolderPath = path.join(homeDir, ".shofer", `rules-${slug}`)
 
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockShoferProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Global Mode",
 				slug,
@@ -657,19 +657,19 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockShoferProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockShoferProvider, { type: "deleteCustomMode", slug })
 
 		// The confirmation dialog is now handled in the webview, so we don't expect showInformationMessage to be called
 		expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockShoferProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).toHaveBeenCalledWith(rulesFolderPath, { recursive: true, force: true })
 	})
 
 	it("should only delete the mode when rules folder does not exist", async () => {
 		const slug = "test-mode-no-rules"
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockShoferProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Mode No Rules",
 				slug,
@@ -679,22 +679,22 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(false)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockShoferProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockShoferProvider, { type: "deleteCustomMode", slug })
 
 		// The confirmation dialog is now handled in the webview, so we don't expect showInformationMessage to be called
 		expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockShoferProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).not.toHaveBeenCalled()
 	})
 
 	it("should handle errors when deleting rules folder", async () => {
 		const slug = "test-mode-error"
-		const rulesFolderPath = path.join("/mock/workspace", ".roo", `rules-${slug}`)
+		const rulesFolderPath = path.join("/mock/workspace", ".shofer", `rules-${slug}`)
 		const error = new Error("Permission denied")
 
-		vi.mocked(mockClineProvider.customModesManager.getCustomModes).mockResolvedValue([
+		vi.mocked(mockShoferProvider.customModesManager.getCustomModes).mockResolvedValue([
 			{
 				name: "Test Mode Error",
 				slug,
@@ -704,12 +704,12 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			} as ModeConfig,
 		])
 		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(mockClineProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
+		vi.mocked(mockShoferProvider.customModesManager.deleteCustomMode).mockResolvedValue(undefined)
 		vi.mocked(fs.rm).mockRejectedValue(error)
 
-		await webviewMessageHandler(mockClineProvider, { type: "deleteCustomMode", slug })
+		await webviewMessageHandler(mockShoferProvider, { type: "deleteCustomMode", slug })
 
-		expect(mockClineProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
+		expect(mockShoferProvider.customModesManager.deleteCustomMode).toHaveBeenCalledWith(slug)
 		expect(fs.rm).toHaveBeenCalledWith(rulesFolderPath, { recursive: true, force: true })
 		// Verify error message is shown to the user
 		expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
@@ -719,36 +719,36 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 			}),
 		)
 		// No error response is sent anymore - we just continue with deletion
-		expect(mockClineProvider.postMessageToWebview).not.toHaveBeenCalled()
+		expect(mockShoferProvider.postMessageToWebview).not.toHaveBeenCalled()
 	})
 })
 
 describe("webviewMessageHandler - message dialog preferences", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		// Mock a current Cline instance
-		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
+		// Mock a current Shofer instance
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
 			taskId: "test-task-id",
 			apiConversationHistory: [],
-			clineMessages: [],
+			shoferMessages: [],
 		} as any)
 		// Reset getValue mock
-		vi.mocked(mockClineProvider.contextProxy.getValue).mockReturnValue(false)
+		vi.mocked(mockShoferProvider.contextProxy.getValue).mockReturnValue(false)
 	})
 
 	describe("deleteMessage", () => {
 		it("should always show dialog for delete confirmation", async () => {
-			vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
-				clineMessages: [],
+			vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
+				shoferMessages: [],
 				apiConversationHistory: [],
-			} as any) // Mock current cline with proper structure
+			} as any) // Mock current shofer with proper structure
 
-			await webviewMessageHandler(mockClineProvider, {
+			await webviewMessageHandler(mockShoferProvider, {
 				type: "deleteMessage",
 				value: 123456789, // Changed from messageTs to value
 			})
 
-			expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+			expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 				type: "showDeleteMessageDialog",
 				messageTs: 123456789,
 				hasCheckpoint: false,
@@ -758,18 +758,18 @@ describe("webviewMessageHandler - message dialog preferences", () => {
 
 	describe("submitEditedMessage", () => {
 		it("should always show dialog for edit confirmation", async () => {
-			vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
-				clineMessages: [],
+			vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
+				shoferMessages: [],
 				apiConversationHistory: [],
-			} as any) // Mock current cline with proper structure
+			} as any) // Mock current shofer with proper structure
 
-			await webviewMessageHandler(mockClineProvider, {
+			await webviewMessageHandler(mockShoferProvider, {
 				type: "submitEditedMessage",
 				value: 123456789,
 				editedMessageContent: "edited content",
 			})
 
-			expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+			expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 				type: "showEditMessageDialog",
 				messageTs: 123456789,
 				text: "edited content",
@@ -792,43 +792,43 @@ describe("webviewMessageHandler - mcpEnabled", () => {
 		}
 
 		// Ensure provider exposes getMcpHub and returns our mock
-		;(mockClineProvider as any).getMcpHub = vi.fn().mockReturnValue(mockMcpHub)
+		;(mockShoferProvider as any).getMcpHub = vi.fn().mockReturnValue(mockMcpHub)
 	})
 
 	it("delegates enable=true to McpHub and posts updated state", async () => {
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "updateSettings",
 			updatedSettings: { mcpEnabled: true },
 		})
 
-		expect((mockClineProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
+		expect((mockShoferProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledWith(true)
-		expect(mockClineProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+		expect(mockShoferProvider.postStateToWebview).toHaveBeenCalledTimes(1)
 	})
 
 	it("delegates enable=false to McpHub and posts updated state", async () => {
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "updateSettings",
 			updatedSettings: { mcpEnabled: false },
 		})
 
-		expect((mockClineProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
+		expect((mockShoferProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledWith(false)
-		expect(mockClineProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+		expect(mockShoferProvider.postStateToWebview).toHaveBeenCalledTimes(1)
 	})
 
 	it("handles missing McpHub instance gracefully and still posts state", async () => {
-		;(mockClineProvider as any).getMcpHub = vi.fn().mockReturnValue(undefined)
+		;(mockShoferProvider as any).getMcpHub = vi.fn().mockReturnValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "updateSettings",
 			updatedSettings: { mcpEnabled: true },
 		})
 
-		expect((mockClineProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
-		expect(mockClineProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+		expect((mockShoferProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
+		expect(mockShoferProvider.postStateToWebview).toHaveBeenCalledTimes(1)
 	})
 })
 
@@ -841,43 +841,43 @@ describe("webviewMessageHandler - requestCommands", () => {
 		mockGetCommands.mockResolvedValue([])
 
 		const getTaskMode = vi.fn().mockResolvedValue("code")
-		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
 			cwd: "/mock/workspace",
 			getTaskMode,
-		} as unknown as ReturnType<ClineProvider["getCurrentTask"]>)
+		} as unknown as ReturnType<ShoferProvider["getCurrentTask"]>)
 
 		const getSkillsForMode = vi.fn().mockReturnValue([
 			{
 				name: "skill-slug-entry",
 				description: "Primary skill slug",
-				path: "/mock/.roo/skills/skill-slug-entry/SKILL.md",
+				path: "/mock/.shofer/skills/skill-slug-entry/SKILL.md",
 				source: "project",
 				modeSlugs: ["code"],
 			},
 			{
 				name: "skill-slug-entry",
 				description: "Duplicate skill slug",
-				path: "/mock/.roo/skills/duplicate-skill/SKILL.md",
+				path: "/mock/.shofer/skills/duplicate-skill/SKILL.md",
 				source: "global",
 				modeSlugs: ["code"],
 			},
 			{
 				name: "another-skill-slug",
 				description: "Another skill-generated command",
-				path: "/mock/.roo/skills/another-skill-slug/SKILL.md",
+				path: "/mock/.shofer/skills/another-skill-slug/SKILL.md",
 				source: "global",
 				modeSlugs: ["code"],
 			},
 		])
 
-		vi.mocked(mockClineProvider.getSkillsManager).mockReturnValue({
+		vi.mocked(mockShoferProvider.getSkillsManager).mockReturnValue({
 			getSkillsForMode,
-		} as unknown as ReturnType<ClineProvider["getSkillsManager"]>)
+		} as unknown as ReturnType<ShoferProvider["getSkillsManager"]>)
 
-		await webviewMessageHandler(mockClineProvider, { type: "requestCommands" })
+		await webviewMessageHandler(mockShoferProvider, { type: "requestCommands" })
 
 		const commandMessageCall = vi
-			.mocked(mockClineProvider.postMessageToWebview)
+			.mocked(mockShoferProvider.postMessageToWebview)
 			.mock.calls.find(([postedMessage]) => postedMessage.type === "commands")
 		expect(commandMessageCall).toBeDefined()
 
@@ -887,13 +887,13 @@ describe("webviewMessageHandler - requestCommands", () => {
 				{
 					name: "skill-slug-entry",
 					source: "project",
-					filePath: "/mock/.roo/skills/skill-slug-entry/SKILL.md",
+					filePath: "/mock/.shofer/skills/skill-slug-entry/SKILL.md",
 					description: "Primary skill slug",
 				},
 				{
 					name: "another-skill-slug",
 					source: "global",
-					filePath: "/mock/.roo/skills/another-skill-slug/SKILL.md",
+					filePath: "/mock/.shofer/skills/another-skill-slug/SKILL.md",
 					description: "Another skill-generated command",
 				},
 			]),
@@ -908,64 +908,64 @@ describe("webviewMessageHandler - requestCommands", () => {
 				name: "deploy",
 				content: "existing command",
 				source: "project",
-				filePath: "/mock/workspace/.roo/commands/deploy.md",
+				filePath: "/mock/workspace/.shofer/commands/deploy.md",
 				description: "Deploy command",
 				argumentHint: "staging | production",
 			},
 		])
 
 		const getTaskMode = vi.fn().mockResolvedValue("code")
-		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
 			cwd: "/mock/workspace",
 			getTaskMode,
-		} as unknown as ReturnType<ClineProvider["getCurrentTask"]>)
+		} as unknown as ReturnType<ShoferProvider["getCurrentTask"]>)
 
 		const getSkillsForMode = vi.fn().mockReturnValue([
 			{
 				name: "deploy",
 				description: "Deploy skill",
-				path: "/mock/.roo/skills/deploy/SKILL.md",
+				path: "/mock/.shofer/skills/deploy/SKILL.md",
 				source: "global",
 				modeSlugs: ["code"],
 			},
 			{
 				name: "skill-only",
 				description: "Skill-generated command",
-				path: "/mock/.roo/skills/skill-only/SKILL.md",
+				path: "/mock/.shofer/skills/skill-only/SKILL.md",
 				source: "project",
 				modeSlugs: ["code"],
 			},
 		])
 
-		vi.mocked(mockClineProvider.getSkillsManager).mockReturnValue({
+		vi.mocked(mockShoferProvider.getSkillsManager).mockReturnValue({
 			getSkillsForMode,
-		} as unknown as ReturnType<ClineProvider["getSkillsManager"]>)
+		} as unknown as ReturnType<ShoferProvider["getSkillsManager"]>)
 
-		await webviewMessageHandler(mockClineProvider, { type: "requestCommands" })
+		await webviewMessageHandler(mockShoferProvider, { type: "requestCommands" })
 
 		expect(getSkillsForMode).toHaveBeenCalledWith("code")
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "commands",
 			commands: expect.arrayContaining([
 				{
 					name: "deploy",
 					source: "project",
-					filePath: "/mock/workspace/.roo/commands/deploy.md",
+					filePath: "/mock/workspace/.shofer/commands/deploy.md",
 					description: "Deploy command",
 					argumentHint: "staging | production",
 				},
 				{
 					name: "skill-only",
 					source: "project",
-					filePath: "/mock/.roo/skills/skill-only/SKILL.md",
+					filePath: "/mock/.shofer/skills/skill-only/SKILL.md",
 					description: "Skill-generated command",
 				},
 			]),
 		})
 
 		const commandMessageCall = vi
-			.mocked(mockClineProvider.postMessageToWebview)
+			.mocked(mockShoferProvider.postMessageToWebview)
 			.mock.calls.find(([postedMessage]) => postedMessage.type === "commands")
 		expect(commandMessageCall).toBeDefined()
 
@@ -985,15 +985,15 @@ describe("webviewMessageHandler - requestCommands", () => {
 			},
 		])
 
-		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
 			cwd: "/mock/workspace",
-		} as unknown as ReturnType<ClineProvider["getCurrentTask"]>)
+		} as unknown as ReturnType<ShoferProvider["getCurrentTask"]>)
 
-		vi.mocked(mockClineProvider.getSkillsManager).mockReturnValue(undefined)
+		vi.mocked(mockShoferProvider.getSkillsManager).mockReturnValue(undefined)
 
-		await webviewMessageHandler(mockClineProvider, { type: "requestCommands" })
+		await webviewMessageHandler(mockShoferProvider, { type: "requestCommands" })
 
-		expect(mockClineProvider.postMessageToWebview).toHaveBeenCalledWith({
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "commands",
 			commands: [
 				{
@@ -1013,16 +1013,16 @@ describe("webviewMessageHandler - downloadErrorDiagnostics", () => {
 		vi.clearAllMocks()
 
 		// Ensure contextProxy has a globalStorageUri for the handler
-		;(mockClineProvider as any).contextProxy.globalStorageUri = { fsPath: "/mock/global/storage" }
+		;(mockShoferProvider as any).contextProxy.globalStorageUri = { fsPath: "/mock/global/storage" }
 
 		// Provide a current task with a stable ID
-		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue({
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue({
 			taskId: "test-task-id",
 		} as any)
 	})
 
 	it("calls generateErrorDiagnostics with correct parameters", async () => {
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "downloadErrorDiagnostics",
 			values: {
 				timestamp: "2025-01-01T00:00:00.000Z",
@@ -1050,9 +1050,9 @@ describe("webviewMessageHandler - downloadErrorDiagnostics", () => {
 	})
 
 	it("shows error when no active task", async () => {
-		vi.mocked(mockClineProvider.getCurrentTask).mockReturnValue(null as any)
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue(null as any)
 
-		await webviewMessageHandler(mockClineProvider, {
+		await webviewMessageHandler(mockShoferProvider, {
 			type: "downloadErrorDiagnostics",
 			values: {},
 		} as any)

@@ -1,3 +1,3 @@
-# @roo-code/cloud
+# @shofer/cloud
 
 ## 0.0.1

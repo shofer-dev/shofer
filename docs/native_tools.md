@@ -1,6 +1,6 @@
-# Roo-Code Native Tools Reference
+# Shofer Native Tools Reference
 
-Complete reference for all native tools available in Roo-Code, their mode availability, and current status.
+Complete reference for all native tools available in Shofer, their mode availability, and current status.
 
 ## Mode Availability
 
@@ -29,7 +29,7 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | Tag   | Meaning                                                 |
 | ----- | ------------------------------------------------------- |
 | 🆕 WS | Ported from `workspace-tools` extension in this session |
-| 🔵 RC | Pre-existing RooCode tool                               |
+| 🔵 RC | Pre-existing Shofer tool                                |
 | 🟣 AW | New Arkware tool (custom addition)                      |
 
 ---
@@ -42,7 +42,7 @@ Complete reference for all native tools available in Roo-Code, their mode availa
 | `write_to_file`        | 🔵 RC  | write |        –         |   ✅   | Create or overwrite a file                     |
 | `apply_diff`           | 🔵 RC  | write |        –         |   ✅   | Apply precise targeted modifications           |
 | `create_directory`     | 🆕 WS  | write |        –         |   ✅   | Create directory (mkdir -p)                    |
-| `file`                 | 🟣 AW  | write |        –         |   ✅   | Filesystem ops (rm/mv) tracked as Roo edits    |
+| `file`                 | 🟣 AW  | write |        –         |   ✅   | Filesystem ops (rm/mv) tracked as Shofer edits |
 | `insert_edit`          | 🆕 WS  | write |        –         |   ✅   | Insert text at a specific line:column position |
 | `list_files`           | 🔵 RC  | read  |        –         |   ✅   | List files and directories at a path           |
 | `create_new_workspace` | 🆕 WS  | write |        –         |   ✅   | Create new workspace directory structure       |
@@ -235,7 +235,7 @@ Analyzes workspace root for config files and detects languages, frameworks, buil
 
 ### `get_changed_files`
 
-Returns the files Roo edited in the current task with per-file net-state annotations (+insertions / −deletions). Backed by the working-directory `ChangedFilesService` — each edited file has a `base/` copy captured at first edit and a `final/` copy captured after every `roo_edited`. Diff stats are computed via unified diff against the base content. No git dependency.
+Returns the files Shofer edited in the current task with per-file net-state annotations (+insertions / −deletions). Backed by the working-directory `ChangedFilesService` — each edited file has a `base/` copy captured at first edit and a `final/` copy captured after every `roo_edited`. Diff stats are computed via unified diff against the base content. No git dependency.
 
 No approval prompt — read-only meta-operation.
 
@@ -377,7 +377,7 @@ No approval prompt needed — this is a non-destructive meta-operation.
 
 ### `give_feedback`
 
-Send feedback to the Arkware developers. The feedback message is appended to the Roo Code extension output channel (auto-approved, harmless meta-operation).
+Send feedback to the Arkware developers. The feedback message is appended to the Shofer extension output channel (auto-approved, harmless meta-operation).
 
 | Param      | Type   | Required | Description                                  |
 | ---------- | ------ | :------: | -------------------------------------------- |
@@ -423,7 +423,7 @@ Load and execute a skill by name. Skills provide specialized instructions for co
 
 ## Legacy/Alias Tools
 
-These are alternative edit tool implementations selectable per-model. They map to canonical tools via `TOOL_ALIASES` or `customTools` in the edit group. All are pre-existing RooCode tools (🔵 RC).
+These are alternative edit tool implementations selectable per-model. They map to canonical tools via `TOOL_ALIASES` or `customTools` in the edit group. All are pre-existing Shofer tools (🔵 RC).
 
 | Tool                 | Origin | Canonical    | Status | Description                 |
 | -------------------- | :----: | ------------ | :----: | --------------------------- |

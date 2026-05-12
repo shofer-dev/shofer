@@ -1,9 +1,9 @@
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { detectAgentState } from "../agent-state.js"
 import { taskCompleted } from "../events.js"
 
-function createMessage(overrides: Partial<ClineMessage>): ClineMessage {
+function createMessage(overrides: Partial<ShoferMessage>): ShoferMessage {
 	return { ts: Date.now() + Math.random() * 1000, type: "say", ...overrides }
 }
 

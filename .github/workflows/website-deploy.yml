@@ -1,15 +1,15 @@
-name: Deploy roocode.com
+name: Deploy shofer.com
 
 on:
     push:
         branches:
             - main
         paths:
-            - 'apps/web-roo-code/**'
+            - 'apps/web-shofer-code/**'
     workflow_dispatch:
 
 concurrency:
-    group: deploy-roocode-com
+    group: deploy-shofer-com
     cancel-in-progress: true
 
 env:
@@ -42,13 +42,13 @@ jobs:
               uses: ./.github/actions/setup-node-pnpm
             - name: Run lint
               run: pnpm lint
-              working-directory: apps/web-roo-code
+              working-directory: apps/web-shofer-code
             - name: Run type check
               run: pnpm check-types
-              working-directory: apps/web-roo-code
+              working-directory: apps/web-shofer-code
             - name: Run build
               run: pnpm build
-              working-directory: apps/web-roo-code
+              working-directory: apps/web-shofer-code
             - name: Install Vercel CLI
               run: npm install --global vercel@latest
             - name: Pull Vercel Environment Information

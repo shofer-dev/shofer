@@ -14,8 +14,8 @@ import { Terminal } from "../../../integrations/terminal/Terminal"
 import { arePathsEqual } from "../../../utils/path"
 import { FileContextTracker } from "../../context-tracking/FileContextTracker"
 import { ApiHandler } from "../../../api/index"
-import { ClineProvider } from "../../webview/ClineProvider"
-import { RooIgnoreController } from "../../ignore/RooIgnoreController"
+import { ShoferProvider } from "../../webview/ShoferProvider"
+import { ShoferIgnoreController } from "../../ignore/ShoferIgnoreController"
 import { formatResponse } from "../../prompts/responses"
 import { getGitStatus } from "../../../utils/git"
 import { Task } from "../../task/Task"
@@ -64,7 +64,7 @@ describe("getEnvironmentDetails", () => {
 		getCurrentWorkingDirectory: Mock
 	}
 
-	let mockCline: Partial<Task>
+	let mockShofer: Partial<Task>
 	let mockProvider: any
 	let mockState: any
 
@@ -80,34 +80,34 @@ describe("getEnvironmentDetails", () => {
 			experiments: {},
 			customInstructions: "test instructions",
 			language: "en",
-			showRooIgnoredFiles: false,
+			showShoferIgnoredFiles: false,
 		}
 
 		mockProvider = {
 			getState: vi.fn().mockResolvedValue(mockState),
 		}
 
-		mockCline = {
+		mockShofer = {
 			cwd: mockCwd,
 			taskId: mockTaskId,
 			didEditFile: false,
 			fileContextTracker: {
 				getAndClearRecentlyModifiedFiles: vi.fn().mockReturnValue([]),
 			} as unknown as FileContextTracker,
-			rooIgnoreController: {
+			shoferIgnoreController: {
 				filterPaths: vi.fn((paths: string[]) => paths.join("\n")),
 				cwd: mockCwd,
 				ignoreInstance: {},
 				disposables: [],
-				rooIgnoreContent: "",
+				shoferIgnoreContent: "",
 				isPathIgnored: vi.fn(),
 				getIgnoreContent: vi.fn(),
 				updateIgnoreContent: vi.fn(),
 				addToIgnore: vi.fn(),
 				removeFromIgnore: vi.fn(),
 				dispose: vi.fn(),
-			} as unknown as RooIgnoreController,
-			clineMessages: [],
+			} as unknown as ShoferIgnoreController,
+			shoferMessages: [],
 			api: {
 				getModel: vi.fn().mockReturnValue({ id: "test-model", info: { contextWindow: 100000 } }),
 				createMessage: vi.fn(),
@@ -116,7 +116,7 @@ describe("getEnvironmentDetails", () => {
 			providerRef: {
 				deref: vi.fn().mockReturnValue(mockProvider),
 				[Symbol.toStringTag]: "WeakRef",
-			} as unknown as WeakRef<ClineProvider>,
+			} as unknown as WeakRef<ShoferProvider>,
 		}
 
 		// Mock other dependencies.
@@ -141,7 +141,7 @@ describe("getEnvironmentDetails", () => {
 	})
 
 	it("should return basic environment details", async () => {
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).toContain("<environment_details>")
 		expect(result).toContain("</environment_details>")
@@ -160,11 +160,11 @@ describe("getEnvironmentDetails", () => {
 			language: "en",
 		})
 
-		expect(getApiMetrics).toHaveBeenCalledWith(mockCline.clineMessages)
+		expect(getApiMetrics).toHaveBeenCalledWith(mockShofer.shoferMessages)
 	})
 
 	it("should include file details when includeFileDetails is true", async () => {
-		const result = await getEnvironmentDetails(mockCline as Task, true)
+		const result = await getEnvironmentDetails(mockShofer as Task, true)
 		expect(result).toContain("# Current Workspace Directory")
 		expect(result).toContain("Files")
 
@@ -174,20 +174,20 @@ describe("getEnvironmentDetails", () => {
 			mockCwd,
 			["file1.ts", "file2.ts"],
 			false,
-			mockCline.rooIgnoreController,
+			mockShofer.shoferIgnoreController,
 			false,
 		)
 	})
 
 	it("should not include file details when includeFileDetails is false", async () => {
-		await getEnvironmentDetails(mockCline as Task, false)
+		await getEnvironmentDetails(mockShofer as Task, false)
 		expect(listFiles).not.toHaveBeenCalled()
 		expect(formatResponse.formatFilesList).not.toHaveBeenCalled()
 	})
 
 	it("should handle desktop directory specially", async () => {
 		;(arePathsEqual as Mock).mockReturnValue(true)
-		const result = await getEnvironmentDetails(mockCline as Task, true)
+		const result = await getEnvironmentDetails(mockShofer as Task, true)
 		expect(result).toContain("Desktop files not shown automatically")
 		expect(listFiles).not.toHaveBeenCalled()
 	})
@@ -198,7 +198,7 @@ describe("getEnvironmentDetails", () => {
 			maxWorkspaceFiles: 0,
 		})
 
-		const result = await getEnvironmentDetails(mockCline as Task, true)
+		const result = await getEnvironmentDetails(mockShofer as Task, true)
 
 		expect(listFiles).not.toHaveBeenCalled()
 		expect(result).toContain("Workspace files context disabled")
@@ -206,12 +206,12 @@ describe("getEnvironmentDetails", () => {
 	})
 
 	it("should include recently modified files if any", async () => {
-		;(mockCline.fileContextTracker!.getAndClearRecentlyModifiedFiles as Mock).mockReturnValue([
+		;(mockShofer.fileContextTracker!.getAndClearRecentlyModifiedFiles as Mock).mockReturnValue([
 			"modified1.ts",
 			"modified2.ts",
 		])
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).toContain("# Recently Modified Files")
 		expect(result).toContain("modified1.ts")
@@ -229,7 +229,7 @@ describe("getEnvironmentDetails", () => {
 		;(TerminalRegistry.getTerminals as Mock).mockReturnValue([mockActiveTerminal])
 		;(TerminalRegistry.getUnretrievedOutput as Mock).mockReturnValue("Test output")
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).toContain("# Actively Running Terminals")
 		expect(result).toContain("## Terminal terminal-1 (Active)")
@@ -237,8 +237,8 @@ describe("getEnvironmentDetails", () => {
 		expect(result).toContain("### Original command: `npm test`")
 		expect(result).toContain("Test output")
 
-		mockCline.didEditFile = true
-		await getEnvironmentDetails(mockCline as Task)
+		mockShofer.didEditFile = true
+		await getEnvironmentDetails(mockShofer as Task)
 		expect(vi.mocked(delay)).toHaveBeenCalledWith(300)
 
 		expect(vi.mocked(pWaitFor)).toHaveBeenCalled()
@@ -262,7 +262,7 @@ describe("getEnvironmentDetails", () => {
 			active ? [] : [mockInactiveTerminal],
 		)
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).toContain("# Inactive Terminals with Completed Process Output")
 		expect(result).toContain("## Terminal terminal-2 (Inactive)")
@@ -299,7 +299,7 @@ describe("getEnvironmentDetails", () => {
 		)
 		;(TerminalRegistry.getUnretrievedOutput as Mock).mockReturnValue("Server started")
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		// Check active terminal working directory
 		expect(result).toContain("## Terminal terminal-1 (Active)")
@@ -317,20 +317,20 @@ describe("getEnvironmentDetails", () => {
 
 	it("should handle missing provider or state", async () => {
 		// Mock provider to return null.
-		mockCline.providerRef!.deref = vi.fn().mockReturnValue(null)
+		mockShofer.providerRef!.deref = vi.fn().mockReturnValue(null)
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		// Verify the function still returns a result.
 		expect(result).toContain("<environment_details>")
 		expect(result).toContain("</environment_details>")
 
 		// Mock provider to return null state.
-		mockCline.providerRef!.deref = vi.fn().mockReturnValue({
+		mockShofer.providerRef!.deref = vi.fn().mockReturnValue({
 			getState: vi.fn().mockResolvedValue(null),
 		})
 
-		const result2 = await getEnvironmentDetails(mockCline as Task)
+		const result2 = await getEnvironmentDetails(mockShofer as Task)
 
 		// Verify the function still returns a result.
 		expect(result2).toContain("<environment_details>")
@@ -349,17 +349,17 @@ describe("getEnvironmentDetails", () => {
 
 		;(TerminalRegistry.getTerminals as Mock).mockReturnValue([mockErrorTerminal])
 		;(TerminalRegistry.getBackgroundTerminals as Mock).mockReturnValue([])
-		;(mockCline.fileContextTracker!.getAndClearRecentlyModifiedFiles as Mock).mockReturnValue([])
+		;(mockShofer.fileContextTracker!.getAndClearRecentlyModifiedFiles as Mock).mockReturnValue([])
 
-		await expect(getEnvironmentDetails(mockCline as Task)).resolves.not.toThrow()
+		await expect(getEnvironmentDetails(mockShofer as Task)).resolves.not.toThrow()
 	})
 	it("should include REMINDERS section when todoListEnabled is true", async () => {
 		mockProvider.getState.mockResolvedValue({
 			...mockState,
 			apiConfiguration: { todoListEnabled: true },
 		})
-		const cline = { ...mockCline, todoList: [{ content: "test", status: "pending" }] }
-		const result = await getEnvironmentDetails(cline as Task)
+		const shofer = { ...mockShofer, todoList: [{ content: "test", status: "pending" }] }
+		const result = await getEnvironmentDetails(shofer as Task)
 		expect(result).toContain("REMINDERS")
 	})
 
@@ -368,8 +368,8 @@ describe("getEnvironmentDetails", () => {
 			...mockState,
 			apiConfiguration: { todoListEnabled: false },
 		})
-		const cline = { ...mockCline, todoList: [{ content: "test", status: "pending" }] }
-		const result = await getEnvironmentDetails(cline as Task)
+		const shofer = { ...mockShofer, todoList: [{ content: "test", status: "pending" }] }
+		const result = await getEnvironmentDetails(shofer as Task)
 		expect(result).not.toContain("REMINDERS")
 	})
 
@@ -378,8 +378,8 @@ describe("getEnvironmentDetails", () => {
 			...mockState,
 			apiConfiguration: {},
 		})
-		const cline = { ...mockCline, todoList: [{ content: "test", status: "pending" }] }
-		const result = await getEnvironmentDetails(cline as Task)
+		const shofer = { ...mockShofer, todoList: [{ content: "test", status: "pending" }] }
+		const result = await getEnvironmentDetails(shofer as Task)
 		expect(result).toContain("REMINDERS")
 	})
 	it("should include git status when maxGitStatusFiles > 0", async () => {
@@ -389,7 +389,7 @@ describe("getEnvironmentDetails", () => {
 			maxGitStatusFiles: 10,
 		})
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).toContain("# Git Status")
 		expect(result).toContain("## main")
@@ -402,7 +402,7 @@ describe("getEnvironmentDetails", () => {
 			maxGitStatusFiles: 0,
 		})
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).not.toContain("# Git Status")
 		expect(getGitStatus).not.toHaveBeenCalled()
@@ -414,7 +414,7 @@ describe("getEnvironmentDetails", () => {
 			maxGitStatusFiles: undefined,
 		})
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).not.toContain("# Git Status")
 		expect(getGitStatus).not.toHaveBeenCalled()
@@ -427,7 +427,7 @@ describe("getEnvironmentDetails", () => {
 			maxGitStatusFiles: 10,
 		})
 
-		const result = await getEnvironmentDetails(mockCline as Task)
+		const result = await getEnvironmentDetails(mockShofer as Task)
 
 		expect(result).not.toContain("# Git Status")
 		expect(getGitStatus).toHaveBeenCalledWith(mockCwd, 10)
@@ -440,7 +440,7 @@ describe("getEnvironmentDetails", () => {
 			maxGitStatusFiles: 5,
 		})
 
-		await getEnvironmentDetails(mockCline as Task)
+		await getEnvironmentDetails(mockShofer as Task)
 
 		expect(getGitStatus).toHaveBeenCalledWith(mockCwd, 5)
 	})

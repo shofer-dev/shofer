@@ -47,15 +47,15 @@ Deze Gedragscode is van toepassing binnen projectruimtes en in openbare ruimtes 
 
 ## Handhaving
 
-Voorvallen van beledigend, intimiderend of anderszins onacceptabel gedrag kunnen worden gemeld door contact op te nemen met het projectteam via support@roocode.com. Alle klachten zullen worden beoordeeld en onderzocht en zullen resulteren in een reactie die passend wordt geacht voor de omstandigheden. Het projectteam is verplicht vertrouwelijkheid te bewaren met betrekking tot de melder van het incident. Verdere details over specifiek handhavingsbeleid kunnen afzonderlijk worden gepubliceerd.
+Voorvallen van beledigend, intimiderend of anderszins onacceptabel gedrag kunnen worden gemeld door contact op te nemen met het projectteam via support@shofer.com. Alle klachten zullen worden beoordeeld en onderzocht en zullen resulteren in een reactie die passend wordt geacht voor de omstandigheden. Het projectteam is verplicht vertrouwelijkheid te bewaren met betrekking tot de melder van het incident. Verdere details over specifiek handhavingsbeleid kunnen afzonderlijk worden gepubliceerd.
 
 Projectbeheerders die de Gedragscode niet te goeder trouw volgen of handhaven, kunnen tijdelijke of permanente gevolgen ondervinden zoals bepaald door andere leden van het leiderschap van het project.
 
 ## Toeschrijving
 
-Deze Gedragscode is gebaseerd op [Cline's versie][cline_coc] van de [Contributor Covenant][homepage], versie 1.4, beschikbaar op https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
+Deze Gedragscode is gebaseerd op [Shofer's versie][cline_coc] van de [Contributor Covenant][homepage], versie 1.4, beschikbaar op https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
 
-[cline_coc]: https://github.com/cline/cline/blob/main/CODE_OF_CONDUCT.md
+[cline_coc]: https://github.com/shofer/shofer/blob/main/CODE_OF_CONDUCT.md
 [homepage]: https://www.contributor-covenant.org
 
 Voor antwoorden op veelgestelde vragen over deze gedragscode, zie https://www.contributor-covenant.org/faq

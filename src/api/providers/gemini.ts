@@ -9,15 +9,9 @@ import {
 } from "@google/genai"
 import type { JWTInput } from "google-auth-library"
 
-import {
-	type ModelInfo,
-	type GeminiModelId,
-	geminiDefaultModelId,
-	geminiModels,
-	ApiProviderError,
-} from "@roo-code/types"
-import { safeJsonParse } from "@roo-code/core"
-import { TelemetryService } from "@roo-code/telemetry"
+import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels, ApiProviderError } from "@shofer/types"
+import { safeJsonParse } from "@shofer/core"
+import { TelemetryService } from "@shofer/telemetry"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 

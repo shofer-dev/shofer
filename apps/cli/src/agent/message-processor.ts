@@ -17,8 +17,8 @@
  * - "invoke": Command invocations
  */
 
-import { ExtensionMessage, ClineMessage } from "@roo-code/types"
-import { debugLog } from "@roo-code/core/cli"
+import { ExtensionMessage, ShoferMessage } from "@shofer/types"
+import { debugLog } from "@shofer/core/cli"
 
 import type { StateStore } from "./state-store.js"
 import type { TypedEventEmitter, AgentStateChangeEvent, WaitingForInputEvent, TaskCompletedEvent } from "./events.js"
@@ -151,7 +151,7 @@ export class MessageProcessor {
 	 * Handle a "state" message - full state update from extension.
 	 *
 	 * This is the most important message type for state detection.
-	 * It contains the complete clineMessages array which is the source of truth.
+	 * It contains the complete shoferMessages array which is the source of truth.
 	 */
 	private handleStateMessage(message: ExtensionMessage): void {
 		if (!message.state) {
@@ -161,7 +161,7 @@ export class MessageProcessor {
 			return
 		}
 
-		const { clineMessages, mode } = message.state
+		const { shoferMessages, mode } = message.state
 
 		// Track mode changes.
 		if (mode && typeof mode === "string") {
@@ -177,9 +177,9 @@ export class MessageProcessor {
 			}
 		}
 
-		if (!clineMessages) {
+		if (!shoferMessages) {
 			if (this.options.debug) {
-				debugLog("[MessageProcessor] State message missing clineMessages")
+				debugLog("[MessageProcessor] State message missing shoferMessages")
 			}
 			return
 		}
@@ -190,14 +190,14 @@ export class MessageProcessor {
 		// Update the store with new messages
 		// Note: We only call setMessages, NOT setExtensionState, to avoid
 		// double processing (setExtensionState would call setMessages again)
-		this.store.setMessages(clineMessages)
+		this.store.setMessages(shoferMessages)
 
 		// Get new state after update
 		const currentState = this.store.getAgentState()
 
 		// Debug logging for state message
 		if (this.options.debug) {
-			const lastMsg = clineMessages[clineMessages.length - 1]
+			const lastMsg = shoferMessages[shoferMessages.length - 1]
 			const lastMsgInfo = lastMsg
 				? {
 						msgType: lastMsg.type === "ask" ? `ask:${lastMsg.ask}` : `say:${lastMsg.say}`,
@@ -206,7 +206,7 @@ export class MessageProcessor {
 					}
 				: null
 			debugLog("[MessageProcessor] State update", {
-				messageCount: clineMessages.length,
+				messageCount: shoferMessages.length,
 				lastMessage: lastMsgInfo,
 				stateTransition: `${previousState.state} → ${currentState.state}`,
 				currentAsk: currentState.currentAsk,
@@ -220,7 +220,7 @@ export class MessageProcessor {
 		this.emitStateChangeEvents(previousState, currentState)
 
 		// Emit new message events for any messages we haven't seen
-		this.emitNewMessageEvents(previousState, currentState, clineMessages)
+		this.emitNewMessageEvents(previousState, currentState, shoferMessages)
 	}
 
 	/**
@@ -229,23 +229,23 @@ export class MessageProcessor {
 	 * This is sent when a message is modified (e.g., partial -> complete).
 	 */
 	private handleMessageUpdated(message: ExtensionMessage): void {
-		if (!message.clineMessage) {
+		if (!message.shoferMessage) {
 			if (this.options.debug) {
-				debugLog("[MessageProcessor] messageUpdated missing clineMessage")
+				debugLog("[MessageProcessor] messageUpdated missing shoferMessage")
 			}
 			return
 		}
 
-		const clineMessage = message.clineMessage
+		const shoferMessage = message.shoferMessage
 		const previousState = this.store.getAgentState()
 
 		// Update the message in the store
-		this.store.updateMessage(clineMessage)
+		this.store.updateMessage(shoferMessage)
 
 		const currentState = this.store.getAgentState()
 
 		// Emit message updated event
-		this.emitter.emit("messageUpdated", clineMessage)
+		this.emitter.emit("messageUpdated", shoferMessage)
 
 		// Emit state change events
 		this.emitStateChangeEvents(previousState, currentState)
@@ -369,7 +369,7 @@ export class MessageProcessor {
 	private emitNewMessageEvents(
 		_previousState: AgentStateInfo,
 		_currentState: AgentStateInfo,
-		messages: ClineMessage[],
+		messages: ShoferMessage[],
 	): void {
 		// For now, just emit the last message as new
 		// A more sophisticated implementation would track seen message timestamps
@@ -405,10 +405,10 @@ export class MessageProcessor {
 // =============================================================================
 
 /**
- * Check if a message is a valid ClineMessage.
+ * Check if a message is a valid ShoferMessage.
  * Useful for validating messages before processing.
  */
-export function isValidClineMessage(message: unknown): message is ClineMessage {
+export function isValidShoferMessage(message: unknown): message is ShoferMessage {
 	if (!message || typeof message !== "object") {
 		return false
 	}
@@ -469,7 +469,7 @@ export function parseExtensionMessage(json: string): ExtensionMessage | undefine
  * Parse the text field of an api_req_started message.
  * Returns undefined if parsing fails or text is not present.
  */
-export function parseApiReqStartedText(message: ClineMessage): { cost?: number } | undefined {
+export function parseApiReqStartedText(message: ShoferMessage): { cost?: number } | undefined {
 	if (message.say !== "api_req_started" || !message.text) {
 		return undefined
 	}

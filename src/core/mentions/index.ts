@@ -15,7 +15,7 @@ import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file"
 
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
-import { RooIgnoreController } from "../ignore/RooIgnoreController"
+import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import { getCommand, type Command } from "../../services/command/commands"
 import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "../../services/skills/skillInvocation"
 import type { SkillContent } from "../../shared/skills"
@@ -70,6 +70,13 @@ export interface ParseMentionsResult {
 	contentBlocks: MentionContentBlock[]
 	slashCommandHelp?: string
 	mode?: string // Mode from the first slash command that has one
+	/**
+	 * Skills that were resolved and inlined via slash-style mentions
+	 * (`/skill-name`). Maps skill name → SKILL.md absolute path. The caller
+	 * is responsible for recording these into `Task.loadedSkills` so the
+	 * SkillsButton popover can show them as loaded.
+	 */
+	loadedSkills?: Record<string, string>
 }
 
 /**
@@ -100,8 +107,8 @@ export async function parseMentions(
 	text: string,
 	cwd: string,
 	fileContextTracker?: FileContextTracker,
-	rooIgnoreController?: RooIgnoreController,
-	showRooIgnoredFiles: boolean = false,
+	shoferIgnoreController?: ShoferIgnoreController,
+	showShoferIgnoredFiles: boolean = false,
 	includeDiagnosticMessages: boolean = true,
 	maxDiagnosticMessages: number = 50,
 	skillsManager?: SkillLookup,
@@ -126,9 +133,13 @@ export async function parseMentions(
 				}
 
 				const skillContent = await resolveSkillContentForMode(skillsManager, commandName, currentMode)
+				console.log(
+					`[parseMentions] skill lookup: name="${commandName}" skillsManager=${!!skillsManager} found=${!!skillContent} mode=${currentMode}`,
+				)
 				return { commandName, command: undefined, skillContent }
 			} catch (error) {
 				// If there's an error checking command existence, treat it as non-existent
+				console.log(`[parseMentions] skill lookup ERROR: name="${commandName}" error=${error}`)
 				return { commandName, command: undefined, skillContent: null }
 			}
 		}),
@@ -187,8 +198,8 @@ export async function parseMentions(
 				const fileResult = await getFileOrFolderContentWithMetadata(
 					mentionPath,
 					cwd,
-					rooIgnoreController,
-					showRooIgnoredFiles,
+					shoferIgnoreController,
+					showShoferIgnoredFiles,
 					fileContextTracker,
 				)
 				contentBlocks.push(fileResult)
@@ -246,15 +257,19 @@ export async function parseMentions(
 		}
 	}
 
+	const loadedSkills: Record<string, string> = {}
 	for (const [skillName, skillContent] of validSkills) {
 		slashCommandHelp += `\n\n${buildSkillResult(skillName, undefined, skillContent)}`
+		loadedSkills[skillName] = skillContent.path
 	}
+	console.log(`[parseMentions] returning loadedSkills:`, loadedSkills)
 
 	return {
 		text: parsedText,
 		contentBlocks,
 		mode: commandMode,
 		slashCommandHelp: slashCommandHelp.trim() || undefined,
+		loadedSkills: Object.keys(loadedSkills).length > 0 ? loadedSkills : undefined,
 	}
 }
 
@@ -265,8 +280,8 @@ export async function parseMentions(
 async function getFileOrFolderContentWithMetadata(
 	mentionPath: string,
 	cwd: string,
-	rooIgnoreController?: any,
-	showRooIgnoredFiles: boolean = false,
+	shoferIgnoreController?: any,
+	showShoferIgnoredFiles: boolean = false,
 	fileContextTracker?: FileContextTracker,
 ): Promise<MentionContentBlock> {
 	const unescapedPath = unescapeSpaces(mentionPath)
@@ -287,11 +302,11 @@ async function getFileOrFolderContentWithMetadata(
 					content: `[read_file for '${mentionPath}']\nNote: Binary file omitted from context.`,
 				}
 			}
-			if (rooIgnoreController && !rooIgnoreController.validateAccess(unescapedPath)) {
+			if (shoferIgnoreController && !shoferIgnoreController.validateAccess(unescapedPath)) {
 				return {
 					type: "file",
 					path: mentionPath,
-					content: `[read_file for '${mentionPath}']\nNote: File is ignored by .rooignore.`,
+					content: `[read_file for '${mentionPath}']\nNote: File is ignored by .shoferignore.`,
 				}
 			}
 			try {
@@ -334,11 +349,11 @@ async function getFileOrFolderContentWithMetadata(
 				const entryPath = path.join(absPath, entry.name)
 
 				let isIgnored = false
-				if (rooIgnoreController) {
-					isIgnored = !rooIgnoreController.validateAccess(entryPath)
+				if (shoferIgnoreController) {
+					isIgnored = !shoferIgnoreController.validateAccess(entryPath)
 				}
 
-				if (isIgnored && !showRooIgnoredFiles) {
+				if (isIgnored && !showShoferIgnoredFiles) {
 					continue
 				}
 

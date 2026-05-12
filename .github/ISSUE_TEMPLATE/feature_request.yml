@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for helping improve Roo Code!
+        Thank you for helping improve Shofer!
         Please focus on the problem and the desired behavior in plain language.
 
   - type: textarea
@@ -54,11 +54,11 @@ body:
           required: true
 
   - type: textarea
-    id: roo-code-tasks
+    id: shofer-code-tasks
     attributes:
-      label: Roo Code Task Links (optional)
-      description: If you explored this with Roo Code, share public task links for context.
-      placeholder: Paste your Roo Code share links here, one per line
+      label: Shofer Task Links (optional)
+      description: If you explored this with Shofer, share public task links for context.
+      placeholder: Paste your Shofer share links here, one per line
 
   - type: markdown
     attributes:

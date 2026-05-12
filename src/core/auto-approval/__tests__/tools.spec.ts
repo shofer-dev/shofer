@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest"
 
 import { getToolGroupForSayTool, isReadOnlyToolAction, isWriteToolAction } from "../tools"
-import type { ClineSayTool } from "@roo-code/types"
+import type { ShoferSayTool } from "@shofer/types"
 
-function makeSayTool(tool: string): ClineSayTool {
-	return { tool } as ClineSayTool
+function makeSayTool(tool: string): ShoferSayTool {
+	return { tool } as ShoferSayTool
 }
 
 describe("getToolGroupForSayTool", () => {

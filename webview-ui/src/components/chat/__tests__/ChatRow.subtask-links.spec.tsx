@@ -2,7 +2,7 @@ import React from "react"
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ChatRowContent } from "../ChatRow"
-import type { HistoryItem, ClineMessage } from "@roo-code/types"
+import type { HistoryItem, ShoferMessage } from "@shofer/types"
 
 // Mock vscode API
 const mockPostMessage = vi.fn()
@@ -17,7 +17,7 @@ vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
 		t: (key: string) => {
 			const map: Record<string, string> = {
-				"chat:subtasks.wantsToCreate": "Roo wants to create a new subtask",
+				"chat:subtasks.wantsToCreate": "Shofer wants to create a new subtask",
 				"chat:subtasks.resultContent": "Task result",
 				"chat:subtasks.goToSubtask": "Go to subtask",
 			}
@@ -31,7 +31,7 @@ vi.mock("react-i18next", () => ({
 
 // Mock extension state context
 let mockCurrentTaskItem: Partial<HistoryItem> | undefined = undefined
-let mockClineMessages: ClineMessage[] = []
+let mockShoferMessages: ShoferMessage[] = []
 
 vi.mock("@src/context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({
@@ -40,7 +40,7 @@ vi.mock("@src/context/ExtensionStateContext", () => ({
 		currentCheckpoint: null,
 		mode: "code",
 		apiConfiguration: {},
-		clineMessages: mockClineMessages,
+		shoferMessages: mockShoferMessages,
 		currentTaskItem: mockCurrentTaskItem,
 	}),
 }))
@@ -52,9 +52,9 @@ vi.mock("@src/components/ui/hooks/useSelectedModel", () => ({
 
 const queryClient = new QueryClient()
 
-function renderChatRow(message: any, currentTaskItem?: Partial<HistoryItem>, clineMessages?: ClineMessage[]) {
+function renderChatRow(message: any, currentTaskItem?: Partial<HistoryItem>, shoferMessages?: ShoferMessage[]) {
 	mockCurrentTaskItem = currentTaskItem
-	mockClineMessages = clineMessages || [message]
+	mockShoferMessages = shoferMessages || [message]
 
 	return render(
 		<QueryClientProvider client={queryClient}>
@@ -174,11 +174,11 @@ describe("ChatRow - subtask links", () => {
 				text: "The subtask has been completed successfully.",
 			}
 
-			// Pass both messages in the clineMessages array
+			// Pass both messages in the shoferMessages array
 			renderChatRow(newTaskMessage, { delegatedToId: "child-task-123" }, [
 				newTaskMessage,
 				subtaskResultMessage,
-			] as ClineMessage[])
+			] as ShoferMessage[])
 
 			// Button should be hidden because next message is subtask_result
 			const goToSubtaskButton = screen.queryByText("Go to subtask")

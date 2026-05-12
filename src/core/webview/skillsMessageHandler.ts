@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 
-import type { SkillMetadata, WebviewMessage } from "@roo-code/types"
+import type { SkillMetadata, WebviewMessage } from "@shofer/types"
 
-import type { ClineProvider } from "./ClineProvider"
+import type { ShoferProvider } from "./ShoferProvider"
 import { openFile } from "../../integrations/misc/open-file"
 import { t } from "../../i18n"
 
@@ -11,7 +11,7 @@ type SkillSource = SkillMetadata["source"]
 /**
  * Handles the requestSkills message - returns all skills metadata
  */
-export async function handleRequestSkills(provider: ClineProvider): Promise<SkillMetadata[]> {
+export async function handleRequestSkills(provider: ShoferProvider): Promise<SkillMetadata[]> {
 	try {
 		const skillsManager = provider.getSkillsManager()
 		const currentTask = provider.getCurrentTask()
@@ -22,10 +22,15 @@ export async function handleRequestSkills(provider: ClineProvider): Promise<Skil
 				loadedSkills[name] = path
 			}
 		}
+		console.log(`[handleRequestSkills] currentTask=${!!currentTask} loadedSkills:`, loadedSkills)
 		if (skillsManager) {
 			// Re-discover skills from disk so the UI picks up newly added/removed skills
 			await skillsManager.discoverSkills()
 			const skills = skillsManager.getSkillsMetadata()
+			console.log(
+				`[handleRequestSkills] sending skills count=${skills.length} loadedSkills keys=`,
+				Object.keys(loadedSkills),
+			)
 			await provider.postMessageToWebview({ type: "skills", skills, loadedSkills })
 			return skills
 		} else {
@@ -43,7 +48,7 @@ export async function handleRequestSkills(provider: ClineProvider): Promise<Skil
  * Handles the createSkill message - creates a new skill
  */
 export async function handleCreateSkill(
-	provider: ClineProvider,
+	provider: ShoferProvider,
 	message: WebviewMessage,
 ): Promise<SkillMetadata[] | undefined> {
 	try {
@@ -83,7 +88,7 @@ export async function handleCreateSkill(
  * Handles the deleteSkill message - deletes a skill
  */
 export async function handleDeleteSkill(
-	provider: ClineProvider,
+	provider: ShoferProvider,
 	message: WebviewMessage,
 ): Promise<SkillMetadata[] | undefined> {
 	try {
@@ -119,7 +124,7 @@ export async function handleDeleteSkill(
  * Handles the moveSkill message - moves a skill to a different mode
  */
 export async function handleMoveSkill(
-	provider: ClineProvider,
+	provider: ShoferProvider,
 	message: WebviewMessage,
 ): Promise<SkillMetadata[] | undefined> {
 	try {
@@ -155,7 +160,7 @@ export async function handleMoveSkill(
  * Handles the updateSkillModes message - updates the mode associations for a skill
  */
 export async function handleUpdateSkillModes(
-	provider: ClineProvider,
+	provider: ShoferProvider,
 	message: WebviewMessage,
 ): Promise<SkillMetadata[] | undefined> {
 	try {
@@ -189,7 +194,7 @@ export async function handleUpdateSkillModes(
 /**
  * Handles the openSkillFile message - opens a skill file in the editor
  */
-export async function handleOpenSkillFile(provider: ClineProvider, message: WebviewMessage): Promise<void> {
+export async function handleOpenSkillFile(provider: ShoferProvider, message: WebviewMessage): Promise<void> {
 	try {
 		const skillName = message.skillName
 		const source = message.source as SkillSource

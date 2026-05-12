@@ -210,7 +210,7 @@
 		@apply underline;
 	}
 
-	/* Custom smooth bounce animation for Roo hero */
+	/* Custom smooth bounce animation for Shofer hero */
 	@keyframes smooth-bounce {
 		0% {
 			transform: translateY(0);

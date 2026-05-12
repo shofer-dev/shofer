@@ -7,31 +7,31 @@ import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 
 import {
-	type RooCodeAPI,
-	type RooCodeSettings,
-	type RooCodeEvents,
+	type ShoferAPI,
+	type ShoferSettings,
+	type ShoferEvents,
 	type ProviderSettings,
 	type ProviderSettingsEntry,
 	type TaskEvent,
 	type CreateTaskOptions,
-	RooCodeEventName,
+	ShoferEventName,
 	TaskCommandName,
 	isSecretStateKey,
 	IpcOrigin,
 	IpcMessageType,
-} from "@roo-code/types"
-import { IpcServer } from "@roo-code/ipc"
-import { CloudService } from "@roo-code/cloud"
+} from "@shofer/types"
+import { IpcServer } from "@shofer/ipc"
+import { CloudService } from "@shofer/cloud"
 
 import { Package } from "../shared/package"
-import { ClineProvider } from "../core/webview/ClineProvider"
-import { openClineInNewTab } from "../activate/registerCommands"
+import { ShoferProvider } from "../core/webview/ShoferProvider"
+import { openShoferInNewTab } from "../activate/registerCommands"
 import { getCommands } from "../services/command/commands"
 import { getModels } from "../api/providers/fetchers/modelCache"
 
-export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
+export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	private readonly outputChannel: vscode.OutputChannel
-	private readonly sidebarProvider: ClineProvider
+	private readonly sidebarProvider: ShoferProvider
 	private readonly context: vscode.ExtensionContext
 	private readonly ipc?: IpcServer
 	private readonly log: (...args: unknown[]) => void
@@ -39,7 +39,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 
 	constructor(
 		outputChannel: vscode.OutputChannel,
-		provider: ClineProvider,
+		provider: ShoferProvider,
 		socketPath?: string,
 		enableLogging = false,
 	) {
@@ -55,7 +55,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 				console.log(args)
 			}
 
-			this.logfile = path.join(os.tmpdir(), "roo-code-messages.log")
+			this.logfile = path.join(os.tmpdir(), "shofer-code-messages.log")
 		} else {
 			this.log = () => {}
 		}
@@ -69,7 +69,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 			this.log(`[API] ipc server started: socketPath=${socketPath}, pid=${process.pid}, ppid=${process.ppid}`)
 
 			ipc.on(IpcMessageType.TaskCommand, async (clientId, command) => {
-				const sendResponse = (eventName: RooCodeEventName, payload: unknown[]) => {
+				const sendResponse = (eventName: ShoferEventName, payload: unknown[]) => {
 					ipc.send(clientId, {
 						type: IpcMessageType.TaskEvent,
 						origin: IpcOrigin.Server,
@@ -112,7 +112,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 						try {
 							const commands = await getCommands(this.sidebarProvider.cwd)
 
-							sendResponse(RooCodeEventName.CommandsResponse, [
+							sendResponse(ShoferEventName.CommandsResponse, [
 								commands.map((cmd) => ({
 									name: cmd.name,
 									source: cmd.source,
@@ -122,32 +122,32 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 								})),
 							])
 						} catch (error) {
-							sendResponse(RooCodeEventName.CommandsResponse, [[]])
+							sendResponse(ShoferEventName.CommandsResponse, [[]])
 						}
 
 						break
 					case TaskCommandName.GetModes:
 						try {
 							const modes = await this.sidebarProvider.getModes()
-							sendResponse(RooCodeEventName.ModesResponse, [modes])
+							sendResponse(ShoferEventName.ModesResponse, [modes])
 						} catch (error) {
-							sendResponse(RooCodeEventName.ModesResponse, [[]])
+							sendResponse(ShoferEventName.ModesResponse, [[]])
 						}
 
 						break
 					case TaskCommandName.GetModels:
 						try {
 							const models = await getModels({
-								provider: "roo" as const,
-								baseUrl: process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy",
+								provider: "shofer" as const,
+								baseUrl: process.env.SHOFER_PROVIDER_URL ?? "https://api.shofer.com/proxy",
 								apiKey: CloudService.hasInstance()
 									? CloudService.instance.authService?.getSessionToken()
 									: undefined,
 							})
 
-							sendResponse(RooCodeEventName.ModelsResponse, [models])
+							sendResponse(ShoferEventName.ModelsResponse, [models])
 						} catch (error) {
-							sendResponse(RooCodeEventName.ModelsResponse, [{}])
+							sendResponse(ShoferEventName.ModelsResponse, [{}])
 						}
 
 						break
@@ -165,11 +165,11 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 		}
 	}
 
-	public override emit<K extends keyof RooCodeEvents>(
+	public override emit<K extends keyof ShoferEvents>(
 		eventName: K,
-		...args: K extends keyof RooCodeEvents ? RooCodeEvents[K] : never
+		...args: K extends keyof ShoferEvents ? ShoferEvents[K] : never
 	) {
-		const data = { eventName: eventName as RooCodeEventName, payload: args } as TaskEvent
+		const data = { eventName: eventName as ShoferEventName, payload: args } as TaskEvent
 		this.ipc?.broadcast({ type: IpcMessageType.TaskEvent, origin: IpcOrigin.Server, data })
 		return super.emit(eventName, ...args)
 	}
@@ -180,18 +180,18 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 		images,
 		newTab,
 	}: {
-		configuration: RooCodeSettings
+		configuration: ShoferSettings
 		text?: string
 		images?: string[]
 		newTab?: boolean
 	}) {
-		let provider: ClineProvider
+		let provider: ShoferProvider
 
 		if (newTab) {
 			await vscode.commands.executeCommand("workbench.action.files.revert")
 			await vscode.commands.executeCommand("workbench.action.closeAllEditors")
 
-			provider = await openClineInNewTab({ context: this.context, outputChannel: this.outputChannel })
+			provider = await openShoferInNewTab({ context: this.context, outputChannel: this.outputChannel })
 			this.registerListeners(provider)
 		} else {
 			await vscode.commands.executeCommand(`${Package.name}.SidebarProvider.focus`)
@@ -199,7 +199,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 			provider = this.sidebarProvider
 		}
 
-		await provider.removeClineFromStack()
+		await provider.removeShoferFromStack()
 		await provider.postStateToWebview()
 		await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 		await provider.postMessageToWebview({ type: "invoke", invoke: "newChat", text, images })
@@ -248,7 +248,7 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 
 	public async clearCurrentTask(_lastMessage?: string) {
 		// Legacy finishSubTask removed; clear current by closing active task instance.
-		await this.sidebarProvider.removeClineFromStack()
+		await this.sidebarProvider.removeShoferFromStack()
 		await this.sidebarProvider.postStateToWebview()
 	}
 
@@ -312,17 +312,17 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 		}
 	}
 
-	private registerListeners(provider: ClineProvider) {
-		provider.on(RooCodeEventName.TaskCreated, (task) => {
+	private registerListeners(provider: ShoferProvider) {
+		provider.on(ShoferEventName.TaskCreated, (task) => {
 			// Task Lifecycle
 
-			task.on(RooCodeEventName.TaskStarted, async () => {
-				this.emit(RooCodeEventName.TaskStarted, task.taskId)
+			task.on(ShoferEventName.TaskStarted, async () => {
+				this.emit(ShoferEventName.TaskStarted, task.taskId)
 				await this.fileLog(`[${new Date().toISOString()}] taskStarted -> ${task.taskId}\n`)
 			})
 
-			task.on(RooCodeEventName.TaskCompleted, async (_, tokenUsage, toolUsage) => {
-				this.emit(RooCodeEventName.TaskCompleted, task.taskId, tokenUsage, toolUsage, {
+			task.on(ShoferEventName.TaskCompleted, async (_, tokenUsage, toolUsage) => {
+				this.emit(ShoferEventName.TaskCompleted, task.taskId, tokenUsage, toolUsage, {
 					isSubtask: !!task.parentTaskId,
 				})
 
@@ -331,95 +331,95 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 				)
 			})
 
-			task.on(RooCodeEventName.TaskAborted, () => {
-				this.emit(RooCodeEventName.TaskAborted, task.taskId)
+			task.on(ShoferEventName.TaskAborted, () => {
+				this.emit(ShoferEventName.TaskAborted, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskFocused, () => {
-				this.emit(RooCodeEventName.TaskFocused, task.taskId)
+			task.on(ShoferEventName.TaskFocused, () => {
+				this.emit(ShoferEventName.TaskFocused, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskUnfocused, () => {
-				this.emit(RooCodeEventName.TaskUnfocused, task.taskId)
+			task.on(ShoferEventName.TaskUnfocused, () => {
+				this.emit(ShoferEventName.TaskUnfocused, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskActive, () => {
-				this.emit(RooCodeEventName.TaskActive, task.taskId)
+			task.on(ShoferEventName.TaskActive, () => {
+				this.emit(ShoferEventName.TaskActive, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskInteractive, () => {
-				this.emit(RooCodeEventName.TaskInteractive, task.taskId)
+			task.on(ShoferEventName.TaskInteractive, () => {
+				this.emit(ShoferEventName.TaskInteractive, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskResumable, () => {
-				this.emit(RooCodeEventName.TaskResumable, task.taskId)
+			task.on(ShoferEventName.TaskResumable, () => {
+				this.emit(ShoferEventName.TaskResumable, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskIdle, () => {
-				this.emit(RooCodeEventName.TaskIdle, task.taskId)
+			task.on(ShoferEventName.TaskIdle, () => {
+				this.emit(ShoferEventName.TaskIdle, task.taskId)
 			})
 
 			// Subtask Lifecycle
 
-			task.on(RooCodeEventName.TaskPaused, () => {
-				this.emit(RooCodeEventName.TaskPaused, task.taskId)
+			task.on(ShoferEventName.TaskPaused, () => {
+				this.emit(ShoferEventName.TaskPaused, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskUnpaused, () => {
-				this.emit(RooCodeEventName.TaskUnpaused, task.taskId)
+			task.on(ShoferEventName.TaskUnpaused, () => {
+				this.emit(ShoferEventName.TaskUnpaused, task.taskId)
 			})
 
-			task.on(RooCodeEventName.TaskSpawned, (childTaskId) => {
-				this.emit(RooCodeEventName.TaskSpawned, task.taskId, childTaskId)
+			task.on(ShoferEventName.TaskSpawned, (childTaskId) => {
+				this.emit(ShoferEventName.TaskSpawned, task.taskId, childTaskId)
 			})
 
-			task.on(RooCodeEventName.TaskDelegated as any, (childTaskId: string) => {
-				;(this.emit as any)(RooCodeEventName.TaskDelegated, task.taskId, childTaskId)
+			task.on(ShoferEventName.TaskDelegated as any, (childTaskId: string) => {
+				;(this.emit as any)(ShoferEventName.TaskDelegated, task.taskId, childTaskId)
 			})
 
-			task.on(RooCodeEventName.TaskDelegationCompleted as any, (childTaskId: string, summary: string) => {
-				;(this.emit as any)(RooCodeEventName.TaskDelegationCompleted, task.taskId, childTaskId, summary)
+			task.on(ShoferEventName.TaskDelegationCompleted as any, (childTaskId: string, summary: string) => {
+				;(this.emit as any)(ShoferEventName.TaskDelegationCompleted, task.taskId, childTaskId, summary)
 			})
 
-			task.on(RooCodeEventName.TaskDelegationResumed as any, (childTaskId: string) => {
-				;(this.emit as any)(RooCodeEventName.TaskDelegationResumed, task.taskId, childTaskId)
+			task.on(ShoferEventName.TaskDelegationResumed as any, (childTaskId: string) => {
+				;(this.emit as any)(ShoferEventName.TaskDelegationResumed, task.taskId, childTaskId)
 			})
 
 			// Task Execution
 
-			task.on(RooCodeEventName.Message, async (message) => {
-				this.emit(RooCodeEventName.Message, { taskId: task.taskId, ...message })
+			task.on(ShoferEventName.Message, async (message) => {
+				this.emit(ShoferEventName.Message, { taskId: task.taskId, ...message })
 
 				if (message.message.partial !== true) {
 					await this.fileLog(`[${new Date().toISOString()}] ${JSON.stringify(message.message, null, 2)}\n`)
 				}
 			})
 
-			task.on(RooCodeEventName.TaskModeSwitched, (taskId, mode) => {
-				this.emit(RooCodeEventName.TaskModeSwitched, taskId, mode)
+			task.on(ShoferEventName.TaskModeSwitched, (taskId, mode) => {
+				this.emit(ShoferEventName.TaskModeSwitched, taskId, mode)
 			})
 
-			task.on(RooCodeEventName.TaskAskResponded, () => {
-				this.emit(RooCodeEventName.TaskAskResponded, task.taskId)
+			task.on(ShoferEventName.TaskAskResponded, () => {
+				this.emit(ShoferEventName.TaskAskResponded, task.taskId)
 			})
 
-			task.on(RooCodeEventName.QueuedMessagesUpdated, (taskId, messages) => {
-				this.emit(RooCodeEventName.QueuedMessagesUpdated, taskId, messages)
+			task.on(ShoferEventName.QueuedMessagesUpdated, (taskId, messages) => {
+				this.emit(ShoferEventName.QueuedMessagesUpdated, taskId, messages)
 			})
 
 			// Task Analytics
 
-			task.on(RooCodeEventName.TaskToolFailed, (taskId, tool, error) => {
-				this.emit(RooCodeEventName.TaskToolFailed, taskId, tool, error)
+			task.on(ShoferEventName.TaskToolFailed, (taskId, tool, error) => {
+				this.emit(ShoferEventName.TaskToolFailed, taskId, tool, error)
 			})
 
-			task.on(RooCodeEventName.TaskTokenUsageUpdated, (_, tokenUsage, toolUsage) => {
-				this.emit(RooCodeEventName.TaskTokenUsageUpdated, task.taskId, tokenUsage, toolUsage)
+			task.on(ShoferEventName.TaskTokenUsageUpdated, (_, tokenUsage, toolUsage) => {
+				this.emit(ShoferEventName.TaskTokenUsageUpdated, task.taskId, tokenUsage, toolUsage)
 			})
 
 			// Let's go!
 
-			this.emit(RooCodeEventName.TaskCreated, task.taskId)
+			this.emit(ShoferEventName.TaskCreated, task.taskId)
 		})
 	}
 
@@ -470,13 +470,13 @@ export class API extends EventEmitter<RooCodeEvents> implements RooCodeAPI {
 
 	// Global Settings Management
 
-	public getConfiguration(): RooCodeSettings {
+	public getConfiguration(): ShoferSettings {
 		return Object.fromEntries(
 			Object.entries(this.sidebarProvider.getValues()).filter(([key]) => !isSecretStateKey(key)),
 		)
 	}
 
-	public async setConfiguration(values: RooCodeSettings) {
+	public async setConfiguration(values: ShoferSettings) {
 		await this.sidebarProvider.contextProxy.setValues(values)
 		await this.sidebarProvider.providerSettingsManager.saveConfig(values.currentApiConfigName || "default", values)
 		await this.sidebarProvider.postStateToWebview()

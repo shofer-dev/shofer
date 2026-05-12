@@ -23,7 +23,7 @@ function asObjectSafe(value: any): object {
 
 		return {}
 	} catch (error) {
-		console.warn("Roo Code <Language Model API>: Failed to parse object:", error)
+		console.warn("Shofer <Language Model API>: Failed to parse object:", error)
 		return {}
 	}
 }
@@ -53,7 +53,7 @@ function imageBlockToContentPart(part: Anthropic.ImageBlockParam): vscode.Langua
 			const bytes = Buffer.from(source.data, "base64")
 			return DataPart.image(bytes, source.media_type)
 		} catch (err) {
-			console.warn("Roo Code <Language Model API>: Failed to decode image data:", err)
+			console.warn("Shofer <Language Model API>: Failed to decode image data:", err)
 		}
 	}
 	return new vscode.LanguageModelTextPart(
@@ -220,7 +220,7 @@ export function extractTextCountFromMessage(message: vscode.LanguageModelChatMes
 					try {
 						text += JSON.stringify(item.input)
 					} catch (error) {
-						console.error("Roo Code <Language Model API>: Failed to stringify tool call input:", error)
+						console.error("Shofer <Language Model API>: Failed to stringify tool call input:", error)
 					}
 				}
 			}

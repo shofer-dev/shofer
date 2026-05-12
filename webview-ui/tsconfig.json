@@ -22,7 +22,7 @@
 		"paths": {
 			"@/*": ["./src/*"],
 			"@src/*": ["./src/*"],
-			"@roo/*": ["../src/shared/*"]
+			"@shofer/*": ["../src/shared/*"]
 		}
 	},
 	"include": ["src", "../src/shared", "vitest.setup.ts"]

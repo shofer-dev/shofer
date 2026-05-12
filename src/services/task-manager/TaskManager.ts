@@ -1,10 +1,10 @@
 import EventEmitter from "events"
 
-import type { TaskExecutionState, HistoryItem, ToolName, TokenUsage, ToolUsage } from "@roo-code/types"
-import { RooCodeEventName } from "@roo-code/types"
+import type { TaskExecutionState, HistoryItem, ToolName, TokenUsage, ToolUsage } from "@shofer/types"
+import { ShoferEventName } from "@shofer/types"
 
 import type { Task } from "../../core/task/Task"
-import type { ClineProvider } from "../../core/webview/ClineProvider"
+import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 
 /** Type aliases for managed task state and notifications. */
 type ManagedTaskState = TaskExecutionState
@@ -85,9 +85,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	}
 
 	/** Weak reference to provider for state updates */
-	private providerRef: WeakRef<ClineProvider>
+	private providerRef: WeakRef<ShoferProvider>
 
-	constructor(provider: ClineProvider, limits?: Partial<TaskResourceLimits>) {
+	constructor(provider: ShoferProvider, limits?: Partial<TaskResourceLimits>) {
 		super()
 		this.providerRef = new WeakRef(provider)
 		if (limits) {
@@ -144,7 +144,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			return
 		}
 
-		const taskText = task.clineMessages.find((m) => m.type === "say" && m.say === "text")?.text || ""
+		const taskText = task.shoferMessages.find((m) => m.type === "say" && m.say === "text")?.text || ""
 		const autoName =
 			name || (taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : "New Task")
 
@@ -571,25 +571,25 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		}
 
 		// Register listeners
-		task.on(RooCodeEventName.TaskStarted, onStarted)
-		task.on(RooCodeEventName.TaskInteractive, onInteractive)
-		task.on(RooCodeEventName.TaskActive, onActive)
-		task.on(RooCodeEventName.TaskIdle, onIdle)
-		task.on(RooCodeEventName.TaskCompleted, onComplete)
-		task.on(RooCodeEventName.TaskToolFailed, onToolError)
-		task.on(RooCodeEventName.TaskAborted, onAborted)
-		task.on(RooCodeEventName.TaskError, onTaskError)
+		task.on(ShoferEventName.TaskStarted, onStarted)
+		task.on(ShoferEventName.TaskInteractive, onInteractive)
+		task.on(ShoferEventName.TaskActive, onActive)
+		task.on(ShoferEventName.TaskIdle, onIdle)
+		task.on(ShoferEventName.TaskCompleted, onComplete)
+		task.on(ShoferEventName.TaskToolFailed, onToolError)
+		task.on(ShoferEventName.TaskAborted, onAborted)
+		task.on(ShoferEventName.TaskError, onTaskError)
 
 		// Store cleanup function for later removal
 		const cleanup = () => {
-			task.off(RooCodeEventName.TaskStarted, onStarted)
-			task.off(RooCodeEventName.TaskInteractive, onInteractive)
-			task.off(RooCodeEventName.TaskActive, onActive)
-			task.off(RooCodeEventName.TaskIdle, onIdle)
-			task.off(RooCodeEventName.TaskCompleted, onComplete)
-			task.off(RooCodeEventName.TaskToolFailed, onToolError)
-			task.off(RooCodeEventName.TaskAborted, onAborted)
-			task.off(RooCodeEventName.TaskError, onTaskError)
+			task.off(ShoferEventName.TaskStarted, onStarted)
+			task.off(ShoferEventName.TaskInteractive, onInteractive)
+			task.off(ShoferEventName.TaskActive, onActive)
+			task.off(ShoferEventName.TaskIdle, onIdle)
+			task.off(ShoferEventName.TaskCompleted, onComplete)
+			task.off(ShoferEventName.TaskToolFailed, onToolError)
+			task.off(ShoferEventName.TaskAborted, onAborted)
+			task.off(ShoferEventName.TaskError, onTaskError)
 		}
 
 		// Use a symbol to store cleanup function on the task

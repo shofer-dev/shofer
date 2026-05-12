@@ -1,19 +1,19 @@
-# Roo-Code Settings Merge & Storage Architecture
+# Shofer Settings Merge & Storage Architecture
 
 ## Overview
 
-Roo-Code stores configuration across **three distinct categories**, each with its own storage backend, merge strategy, and scope. This document explains all storage layers, how they merge at runtime, and the import/export mechanics.
+Shofer stores configuration across **three distinct categories**, each with its own storage backend, merge strategy, and scope. This document explains all storage layers, how they merge at runtime, and the import/export mechanics.
 
 ---
 
 ## Config Types at a Glance
 
-| Category                 | Backend                                                         | Scope                        | Merge Priority                               |
-| ------------------------ | --------------------------------------------------------------- | ---------------------------- | -------------------------------------------- |
-| **API Provider Configs** | VS Code `SecretStorage` + `globalState`                         | Per-extension (machine-wide) | Profile IDs resolve per-mode                 |
-| **Mode Definitions**     | `.roomodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | `.roomodes` > `custom_modes.yaml` > built-in |
-| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                 | Per-extension (machine-wide) | Single file; no overlay                      |
-| **Global Settings**      | VS Code `globalState` (SQLite-backed)                           | Per-extension (machine-wide) | Flat key-value; no overlay                   |
+| Category                 | Backend                                                            | Scope                        | Merge Priority                                  |
+| ------------------------ | ------------------------------------------------------------------ | ---------------------------- | ----------------------------------------------- |
+| **API Provider Configs** | VS Code `SecretStorage` + `globalState`                            | Per-extension (machine-wide) | Profile IDs resolve per-mode                    |
+| **Mode Definitions**     | `.shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | `.shofermodes` > `custom_modes.yaml` > built-in |
+| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                    | Per-extension (machine-wide) | Single file; no overlay                         |
+| **Global Settings**      | VS Code `globalState` (SQLite-backed)                              | Per-extension (machine-wide) | Flat key-value; no overlay                      |
 
 ---
 
@@ -46,7 +46,7 @@ single JSON blob in VS Code's secure credential store with this schema:
     "architect": "<profile-id>",
     ...
   },
-  cloudProfileIds: ["..."],                 // IDs synced from Roo Code Cloud
+  cloudProfileIds: ["..."],                 // IDs synced from Shofer Cloud
   migrations: { ... }                       // migration tracking flags
 }
 ```
@@ -90,7 +90,7 @@ The full list of secret keys is defined in
 ### 1c. Non-Secret Provider Settings — VS Code `globalState`
 
 Non-sensitive provider settings are stored in VS Code's `globalState` API (backed by
-a SQLite database at `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/state.vscdb`
+a SQLite database at `~/.config/Code/User/globalStorage/arkware.shofer/state.vscdb`
 on Linux). These include:
 
 - `apiProvider`, `apiModelId` — selected provider and model
@@ -105,14 +105,14 @@ on Linux). These include:
 
 [`ContextProxy`](../src/core/config/ContextProxy.ts:40) acts as a caching layer that
 merges `SecretStorage` (API keys) and `globalState` (non-secret settings) into a unified
-`RooCodeSettings` object at [`getValues()`](../src/core/config/ContextProxy.ts:515):
+`ShoferSettings` object at [`getValues()`](../src/core/config/ContextProxy.ts:515):
 
 ```
 SecretStorage (apiKey, openRouterApiKey, ...)
     +
 globalState (apiProvider, apiModelId, baseUrl, ...)
     =
-RooCodeSettings (unified view for runtime)
+ShoferSettings (unified view for runtime)
 ```
 
 The `ContextProxy` maintains an in-memory cache (`stateCache` + `secretCache`) for
@@ -131,11 +131,11 @@ fast access and lazily syncs with the backing stores.
 Mode configurations (role definitions, groups, tool permissions) are stored across
 four layers, merged at runtime with a specific precedence order.
 
-### 2a. `.roomodes` — Project-level overrides
+### 2a. `.shofermodes` — Project-level overrides
 
 | Property       | Value                                            |
 | -------------- | ------------------------------------------------ |
-| **Path**       | `<workspace_root>/.roomodes`                     |
+| **Path**       | `<workspace_root>/.shofermodes`                  |
 | **Format**     | YAML                                             |
 | **Scope**      | Per-project (workspace folder)                   |
 | **Priority**   | **Highest** (wins all conflicts)                 |
@@ -149,7 +149,7 @@ Example:
 customModes:
     - slug: "code"
       name: "💻 Code"
-      roleDefinition: "You are Roo, a custom code assistant..."
+      roleDefinition: "You are Shofer, a custom code assistant..."
       customInstructions: |
           Use our team's code style guide...
       whenToUse: "Use this mode for all code changes"
@@ -180,17 +180,17 @@ customModes:
 | **Path**       | `<globalStorage>/settings/custom_modes.yaml`                         |
 | **Format**     | YAML                                                                 |
 | **Scope**      | Per-extension install (shared across workspaces on the same machine) |
-| **Priority**   | Lower than `.roomodes`, higher than built-in                         |
+| **Priority**   | Lower than `.shofermodes`, higher than built-in                      |
 | **Purpose**    | User's personal modes and customizations via Settings UI             |
 | **Source tag** | `source: "global"`                                                   |
 | **In git?**    | **No** — runtime artifact, created fresh on each machine             |
 | **Editable**   | Via Settings UI (not recommended to edit directly)                   |
 
 Where `<globalStorage>` is `context.globalStorageUri.fsPath` (e.g.,
-`~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/` on Linux), overridable
-via the `roo-cline.customStoragePath` setting.
+`~/.config/Code/User/globalStorage/arkware.shofer/` on Linux), overridable
+via the `shofer.customStoragePath` setting.
 
-> **This file is NOT part of the Roo-Code source tree.** It is a runtime artifact created
+> **This file is NOT part of the Shofer source tree.** It is a runtime artifact created
 > on the user's machine when they first use the Settings UI to configure modes. The code
 > references it only as a filename constant in
 > [`GlobalFileNames`](../src/shared/globalFileNames.ts:5):
@@ -226,7 +226,7 @@ Key globalState keys for modes:
 | Key                  | Contents                                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `customInstructions` | Global custom instructions (all modes)                                                                                         |
-| `customModes`        | Merged result of `.roomodes` + settings file                                                                                   |
+| `customModes`        | Merged result of `.shofermodes` + settings file                                                                                |
 | `customModePrompts`  | Per-mode prompt overrides (roleDefinition, customInstructions, whenToUse)                                                      |
 | `disabledTools`      | Global flat list of tool names hidden from the LLM (Settings → Tools) — applied across all modes by `filterNativeToolsForMode` |
 
@@ -294,7 +294,7 @@ MCP tools have their own visibility pipeline parallel to native tools, in
 
 The merge happens in **two stages**:
 
-### Stage 1: Merge `.roomodes` + Global Storage → `customModes`
+### Stage 1: Merge `.shofermodes` + Global Storage → `customModes`
 
 From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManager.ts:363):
 
@@ -302,7 +302,7 @@ From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManag
 ┌────────────────────────────────────────────────┐
 │  Stage 1: CustomModesManager.getCustomModes()  │
 │                                                 │
-│  Read .roomodes          → projectModes (map)   │
+│  Read .shofermodes          → projectModes (map)   │
 │  Read global storage     → globalModes (map)    │
 │                                                 │
 │  MERGE:                                         │
@@ -311,19 +311,19 @@ From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManag
 │     in project modes (no conflict overwrite)    │
 │                                                 │
 │  Result: customModes[]                          │
-│   - source: "project" (from .roomodes)          │
+│   - source: "project" (from .shofermodes)          │
 │   - source: "global"  (from global storage)     │
 └────────────────────────────────────────────────┘
 ```
 
 ```typescript
-// .roomodes wins for same slug; global ignored if project mode exists
-for (const mode of roomodesModes) {
+// .shofermodes wins for same slug; global ignored if project mode exists
+for (const mode of shofermodesModes) {
 	projectModes.set(mode.slug, { ...mode, source: "project" })
 }
 for (const mode of settingsModes) {
 	if (!projectModes.has(mode.slug)) {
-		// ← only if not already in .roomodes
+		// ← only if not already in .shofermodes
 		globalModes.set(mode.slug, { ...mode, source: "global" })
 	}
 }
@@ -376,7 +376,7 @@ active mode slug → modeApiConfigs[slug] → profile ID → apiConfigs[profileN
 ### Combined Flow
 
 ```
-.roomodes ─────┐
+.shofermodes ─────┐
                ├── Stage 1 merge ──→ customModes[] ──┐
 global storage ┘                                      │
                                                       ├── Stage 2 overlay ──→ final ModeConfig[]
@@ -389,12 +389,12 @@ API profile assignments (modeApiConfigs) ──→ resolved at task creation (Se
 
 When the same slug exists in multiple sources:
 
-| Sources with same slug             | Winner                  |
-| ---------------------------------- | ----------------------- |
-| `.roomodes` vs global storage      | `.roomodes` (Stage 1)   |
-| `customModes` (merged) vs built-in | `customModes` (Stage 2) |
+| Sources with same slug             | Winner                   |
+| ---------------------------------- | ------------------------ |
+| `.shofermodes` vs global storage   | `.shofermodes` (Stage 1) |
+| `customModes` (merged) vs built-in | `customModes` (Stage 2)  |
 
-👉 **`.roomodes` > global storage > built-in**
+👉 **`.shofermodes` > global storage > built-in**
 
 ---
 
@@ -421,10 +421,10 @@ Settings UI (API Provider tab)
             └── ContextProxy.setProviderSettings(config)  // sync cache
 ```
 
-### Via `.roomodes` file edit
+### Via `.shofermodes` file edit
 
 ```
-User edits .roomodes
+User edits .shofermodes
   └── File watcher triggers re-merge
        └── globalState.update("customModes", newMerged)
 ```
@@ -493,7 +493,7 @@ settingsWatcher.onDidChange(handleSettingsChange)
 settingsWatcher.onDidCreate(handleSettingsChange)
 settingsWatcher.onDidDelete(handleSettingsChange)
 
-// Watch .roomodes file
+// Watch .shofermodes file
 const roomodesWatcher = vscode.workspace.createFileSystemWatcher(roomodesPath)
 roomodesWatcher.onDidChange(handleRoomodesChange)
 roomodesWatcher.onDidCreate(handleRoomodesChange)
@@ -509,7 +509,7 @@ The [`McpHub`](../src/services/mcp/McpHub.ts) watches both global and project MC
 **Global:** [`mcp_settings.json`](../src/shared/globalFileNames.ts:4) via
 [`watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557) using `FileSystemWatcher`.
 
-**Project:** `.roo/mcp.json` via
+**Project:** `.shofer/mcp.json` via
 [`watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:377) using `FileSystemWatcher`.
 
 Both use a 500ms debounce. On file change, servers are re-read, validated against
@@ -525,7 +525,7 @@ this.settingsWatcher.onDidChange((uri) => this.debounceConfigChange(...))
 this.settingsWatcher.onDidCreate((uri) => this.debounceConfigChange(...))
 
 // Project: watchProjectMcpFile()
-const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".roo/mcp.json")
+const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".shofer/mcp.json")
 this.projectMcpWatcher = vscode.workspace.createFileSystemWatcher(projectMcpPattern)
 this.projectMcpWatcher.onDidChange((uri) => this.debounceConfigChange(...))
 this.projectMcpWatcher.onDidCreate((uri) => this.debounceConfigChange(...))
@@ -544,14 +544,14 @@ restarting code-server or VS Code, and how changes are detected.
 | Config Type                                  | On-the-Fly?     | Detection Mechanism                    | Delay          | Notes                                                                       |
 | -------------------------------------------- | --------------- | -------------------------------------- | -------------- | --------------------------------------------------------------------------- |
 | **MCP servers** (global `mcp_settings.json`) | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | Servers restarted/reconnected automatically                                 |
-| **MCP servers** (project `.roo/mcp.json`)    | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | File deletion triggers cleanup of project servers                           |
-| **Mode definitions** (`.roomodes`)           | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
+| **MCP servers** (project `.shofer/mcp.json`) | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | File deletion triggers cleanup of project servers                           |
+| **Mode definitions** (`.shofermodes`)        | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
 | **Mode definitions** (`custom_modes.yaml`)   | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
 | **API profiles** (SecretStorage)             | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow; OS keychain changes undetected |
 | **API keys** (SecretStorage)                 | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow                                 |
 | **Global settings** (globalState)            | ⚠️ UI only      | No external change detection           | —              | VS Code `globalState` does not emit change events for external writes       |
 | **Auto-import**                              | 🔄 Startup only | Runs on extension `activate()`         | —              | Triggered only at extension activation; not re-triggerable without restart  |
-| **Slash commands / rules** (`.roo/`)         | ✅ Yes          | Read at task start / on-demand         | —              | Not cached — read fresh when constructing system prompt                     |
+| **Slash commands / rules** (`.shofer/`)      | ✅ Yes          | Read at task start / on-demand         | —              | Not cached — read fresh when constructing system prompt                     |
 
 ### ✅ File-Based Configs: Instant Reload
 
@@ -564,7 +564,7 @@ All JSON/YAML file-based configs use VS Code's `FileSystemWatcher` API (backed b
 `<globalStorage>/settings/mcp_settings.json`, watched by
 [`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557).
 
-**Project:** `.roo/mcp.json` at `<workspace>/.roo/mcp.json`, watched by
+**Project:** `.shofer/mcp.json` at `<workspace>/.shofer/mcp.json`, watched by
 [`McpHub.watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:377).
 
 Both use a **500ms debounce** via [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:316)
@@ -579,12 +579,12 @@ On change:
 3. [`updateServerConnections()`](../src/services/mcp/McpHub.ts:363) reconnects affected servers
 4. WebView is notified of server changes
 
-#### Mode Definitions (`.roomodes` + `custom_modes.yaml`)
+#### Mode Definitions (`.shofermodes` + `custom_modes.yaml`)
 
 Both files are watched by [`CustomModesManager.watchCustomModesFiles()`](../src/core/config/CustomModesManager.ts:268):
 
 ```typescript
-// .roomodes watcher (per workspace folder)
+// .shofermodes watcher (per workspace folder)
 const roomodesWatcher = vscode.workspace.createFileSystemWatcher(roomodesPath)
 roomodesWatcher.onDidChange(handleRoomodesChange)
 roomodesWatcher.onDidCreate(handleRoomodesChange)
@@ -637,14 +637,14 @@ await autoImportSettings(outputChannel, {
 })
 ```
 
-It reads the path from the VS Code setting `roo-cline.autoImportSettingsPath` and, if
+It reads the path from the VS Code setting `shofer.autoImportSettingsPath` and, if
 the file exists, imports both `providerProfiles` and `globalSettings`. There is **no
 re-trigger mechanism** — to re-import, the extension must be restarted (or the Settings UI
 Import button must be used manually).
 
 ### ✅ Slash Commands & Rules: Read On-Demand
 
-Files under `.roo/commands/`, `.roo/rules/`, `.roo/rules-<mode>/`, and `AGENTS.md` are
+Files under `.shofer/commands/`, `.shofer/rules/`, `.shofer/rules-<mode>/`, and `AGENTS.md` are
 **not cached** and are read fresh each time the system prompt is constructed for a new
 task. There is no file watcher needed — the read happens at task start and on mode switch.
 
@@ -684,7 +684,7 @@ per-server `disabledTools` list in `mcp_settings.json`.
 
 | Layer                         | Storage                                        | Scope                | Edited via                                                        |
 | ----------------------------- | ---------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Per-mode `groups` / `tools_*` | `.roomodes` / `custom_modes.yaml`              | Per mode             | Mode editor / file                                                |
+| Per-mode `groups` / `tools_*` | `.shofermodes` / `custom_modes.yaml`           | Per mode             | Mode editor / file                                                |
 | Global `disabledTools`        | `globalState["disabledTools"]: string[]`       | All modes            | Settings → Tools                                                  |
 | MCP per-tool visibility       | `mcp_settings.json` per-server `disabledTools` | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
 
@@ -702,7 +702,7 @@ Auto-approval is decided by
 toggle is on for the tool's group, the action is auto-approved.
 
 Auto-approved decisions short-circuit the `Task.ask()` round-trip and are
-marked `autoApproved=true` on the `ClineMessage` so the webview suppresses the
+marked `autoApproved=true` on the `ShoferMessage` so the webview suppresses the
 Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)).
 
 ### Diagnostics
@@ -714,7 +714,7 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
     [tools] sending N tool(s) to LLM (mode=code): tool_a, tool_b, ...
     ```
 
-    Use this in the Roo-Code output channel to confirm visibility filtering.
+    Use this in the Shofer output channel to confirm visibility filtering.
 
 - If the model still calls a tool that has been removed by `disabledTools`
   (typically a hallucination from training data),
@@ -736,7 +736,7 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
 ### 10a. What Gets Exported
 
 Export (Settings → Modes → Export, or toolbar Export button) writes a single JSON file
-(`roo-code-settings.json`) containing two top-level sections:
+(`shofer-code-settings.json`) containing two top-level sections:
 
 ```json
 {
@@ -790,7 +790,7 @@ Based on [`globalSettingsExportSchema`](../src/core/config/ContextProxy.ts:34) w
 Includes:
 
 - **Mode:** `mode` (default mode slug)
-- **Custom modes:** `customModes` — only `source: "global"` entries (project `.roomodes` modes are excluded)
+- **Custom modes:** `customModes` — only `source: "global"` entries (project `.shofermodes` modes are excluded)
 - **Mode prompts:** `customModePrompts`, `customSupportPrompts`
 - **Custom instructions:** `customInstructions` (global, all modes)
 - **Auto-approval:** `autoApprovalEnabled`, all `alwaysAllow*` toggles, `followupAutoApproveTimeoutMs`
@@ -812,7 +812,7 @@ Includes:
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | **MCP server configs** (`mcp_settings.json`)     | Managed independently by `McpHub`; stored as a separate JSON file in `<globalStorage>/settings/` |
 | **Task history**                                 | Per-task data; explicitly excluded via `globalSettingsExportSchema.omit({ taskHistory: true })`  |
-| **Project `.roomodes` modes**                    | File-based, per-workspace; only `source: "global"` custom modes are exported                     |
+| **Project `.shofermodes` modes**                 | File-based, per-workspace; only `source: "global"` custom modes are exported                     |
 | **`currentApiConfigName` / `listApiConfigMeta`** | Derived from `providerProfiles` at import time                                                   |
 
 ### 10c. Import Flow
@@ -820,7 +820,7 @@ Includes:
 Import reads the JSON file and applies both sections:
 
 ```
-roo-code-settings.json
+shofer-code-settings.json
         │
    ┌────┴────┐
    ▼         ▼
@@ -853,8 +853,8 @@ are preserved. API keys in the import file overwrite existing ones for matching 
 
 ### 10d. Auto-Import on Startup
 
-RooCode supports automatic import on extension activation via the VS Code setting
-`roo-cline.autoImportSettingsPath`. When set to a file path, the extension will
+Shofer supports automatic import on extension activation via the VS Code setting
+`shofer.autoImportSettingsPath`. When set to a file path, the extension will
 automatically import settings from that file on startup.
 
 Implementation: [`autoImportSettings`](../src/utils/autoImportSettings.ts:16), called
@@ -863,7 +863,7 @@ from [`extension.ts:346`](../src/extension.ts:346).
 ```
 Extension activation
   └── autoImportSettings()
-       ├── Read roo-cline.autoImportSettingsPath from VS Code config
+       ├── Read shofer.autoImportSettingsPath from VS Code config
        ├── Check if file exists
        └── importSettingsFromPath(filePath)
             ├── ProviderSettingsManager.import(providerProfiles)  → SecretStorage
@@ -875,7 +875,7 @@ deployments. The setting can be pre-seeded in VS Code's `settings.json`:
 
 ```json
 {
-	"roo-cline.autoImportSettingsPath": "/etc/roocode/settings.json"
+	"shofer.autoImportSettingsPath": "/etc/shofer/settings.json"
 }
 ```
 
@@ -883,14 +883,14 @@ deployments. The setting can be pre-seeded in VS Code's `settings.json`:
 
 ## 11. Code-Server Pre-Configuration
 
-When deploying RooCode in a code-server environment, the following strategies ensure
+When deploying Shofer in a code-server environment, the following strategies ensure
 API configurations are available:
 
 ### Primary Approach: Auto-Import
 
-1. Export settings from a configured RooCode instance (creates `roo-code-settings.json`)
-2. Place the file at a known path on the code-server image (e.g., `/etc/roocode/settings.json`)
-3. Set the VS Code setting `roo-cline.autoImportSettingsPath` to point to it
+1. Export settings from a configured Shofer instance (creates `shofer-code-settings.json`)
+2. Place the file at a known path on the code-server image (e.g., `/etc/shofer/settings.json`)
+3. Set the VS Code setting `shofer.autoImportSettingsPath` to point to it
 4. On extension activation, all API profiles and global settings are automatically imported
 
 ### SecretStorage Persistence Caveat
@@ -908,12 +908,12 @@ Mitigations:
 
 ### Additional File Pre-Seeding
 
-| File                     | Path                                              | Contents                                             |
-| ------------------------ | ------------------------------------------------- | ---------------------------------------------------- |
-| `.roomodes`              | `<workspace>/.roomodes`                           | Project-specific mode overrides (YAML)               |
-| `custom_modes.yaml`      | `<globalStorage>/settings/custom_modes.yaml`      | Global user mode customizations (YAML)               |
-| `mcp_settings.json`      | `<globalStorage>/settings/mcp_settings.json`      | MCP server definitions (JSON)                        |
-| `roo-code-settings.json` | Any path (referenced by `autoImportSettingsPath`) | Full export including API profiles + global settings |
+| File                        | Path                                              | Contents                                             |
+| --------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
+| `.shofermodes`              | `<workspace>/.shofermodes`                        | Project-specific mode overrides (YAML)               |
+| `custom_modes.yaml`         | `<globalStorage>/settings/custom_modes.yaml`      | Global user mode customizations (YAML)               |
+| `mcp_settings.json`         | `<globalStorage>/settings/mcp_settings.json`      | MCP server definitions (JSON)                        |
+| `shofer-code-settings.json` | Any path (referenced by `autoImportSettingsPath`) | Full export including API profiles + global settings |
 
 > **Note:** `mcp_settings.json` is NOT covered by the export/import flow. To pre-configure
 > MCP servers, place the file directly in the `<globalStorage>/settings/` directory.
@@ -943,7 +943,7 @@ Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
 | **API Profiles (SoT)**      | `SecretStorage` | `roo_cline_config_api_config`                                 | JSON blob          | Per-extension | —               | Settings UI        |
 | **API Keys**                | `SecretStorage` | `apiKey`, `openRouterApiKey`, … (30+ keys)                    | String             | Per-extension | —               | Settings UI        |
 | **Non-secret API settings** | `globalState`   | `apiProvider`, `apiModelId`, `anthropicBaseUrl`, …            | Key-value          | Per-extension | —               | Settings UI        |
-| **`.roomodes`**             | File            | `<workspace>/.roomodes`                                       | YAML               | Per-project   | Highest (modes) | Direct edit        |
+| **`.shofermodes`**          | File            | `<workspace>/.shofermodes`                                    | YAML               | Per-project   | Highest (modes) | Direct edit        |
 | **Global modes**            | File            | `<globalStorage>/settings/custom_modes.yaml`                  | YAML               | Per-extension | Medium (modes)  | Settings UI        |
 | **MCP servers**             | File            | `<globalStorage>/settings/mcp_settings.json`                  | JSON               | Per-extension | —               | Settings UI / file |
 | **Global settings**         | `globalState`   | `mode`, `customInstructions`, `autoApprovalEnabled`, …        | Key-value (SQLite) | Per-extension | —               | Settings UI        |
@@ -952,4 +952,4 @@ Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
 | **Model cache**             | File            | `<globalStorage>/cache/<provider>_models.json`                | JSON               | Per-extension | —               | Auto-refreshed     |
 
 Where `<globalStorage>` defaults to `context.globalStorageUri.fsPath`, overridable
-via the `roo-cline.customStoragePath` VS Code setting.
+via the `shofer.customStoragePath` VS Code setting.

@@ -1,8 +1,8 @@
-import { ClineMessage, HistoryItem } from "@roo-code/types"
+import { ShoferMessage, HistoryItem } from "@shofer/types"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 interface UsePromptHistoryProps {
-	clineMessages: ClineMessage[] | undefined
+	shoferMessages: ShoferMessage[] | undefined
 	taskHistory: HistoryItem[] | undefined
 	cwd: string | undefined
 	inputValue: string
@@ -25,7 +25,7 @@ export interface UsePromptHistoryReturn {
 }
 
 export const usePromptHistory = ({
-	clineMessages,
+	shoferMessages,
 	taskHistory,
 	cwd,
 	inputValue,
@@ -41,8 +41,8 @@ export const usePromptHistory = ({
 
 	// Initialize prompt history with hybrid approach: conversation messages if in task, otherwise task history
 	const filteredPromptHistory = useMemo(() => {
-		// First try to get conversation messages (user_feedback from clineMessages)
-		const conversationPrompts = clineMessages
+		// First try to get conversation messages (user_feedback from shoferMessages)
+		const conversationPrompts = shoferMessages
 			?.filter((message) => message.type === "say" && message.say === "user_feedback" && message.text?.trim())
 			.map((message) => message.text!)
 
@@ -51,9 +51,9 @@ export const usePromptHistory = ({
 			return conversationPrompts.slice(-MAX_PROMPT_HISTORY_SIZE).reverse()
 		}
 
-		// If we have clineMessages array (meaning we're in an active task), don't fall back to task history
+		// If we have shoferMessages array (meaning we're in an active task), don't fall back to task history
 		// Only use task history when starting fresh (no active conversation)
-		if (clineMessages?.length) {
+		if (shoferMessages?.length) {
 			return []
 		}
 
@@ -67,7 +67,7 @@ export const usePromptHistory = ({
 			.filter((item) => item.task?.trim() && (!item.workspace || item.workspace === cwd))
 			.map((item) => item.task)
 			.slice(0, MAX_PROMPT_HISTORY_SIZE)
-	}, [clineMessages, taskHistory, cwd])
+	}, [shoferMessages, taskHistory, cwd])
 
 	// Update prompt history when filtered history changes and reset navigation
 	useEffect(() => {

@@ -8,7 +8,7 @@
 import * as path from "path"
 import * as fs from "fs/promises"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 import * as vscode from "vscode"
 
 import { Task } from "../task/Task"
@@ -55,13 +55,13 @@ export class CreateNewWorkspaceTool extends BaseTool<"create_new_workspace"> {
 			const forceNewWindow = openInNewWindow ?? false
 
 			const folderList = subfolders.length > 0 ? `\nSubdirectories: ${subfolders.join(", ")}` : ""
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "createNewWorkspace",
 				path: getReadablePath(task.cwd, projectRoot),
 				content: `Create workspace "${name}" at ${projectRoot}${folderList}`,
 			}
 
-			const didApprove = await askApproval("tool", JSON.stringify(sharedMessageProps satisfies ClineSayTool))
+			const didApprove = await askApproval("tool", JSON.stringify(sharedMessageProps satisfies ShoferSayTool))
 			if (!didApprove) {
 				return
 			}

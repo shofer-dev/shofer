@@ -1,4 +1,4 @@
-import { type CustomToolDefinition } from "@roo-code/types"
+import { type CustomToolDefinition } from "@shofer/types"
 
 export type StoredCustomTool = CustomToolDefinition & { source?: string }
 

@@ -1,19 +1,19 @@
 #!/bin/sh
-# Roo Code CLI Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/RooCodeInc/Roo-Code/main/apps/cli/install.sh | sh
+# Shofer CLI Installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/Arkware/Shofer/main/apps/cli/install.sh | sh
 #
 # Environment variables:
-#   ROO_INSTALL_DIR   - Installation directory (default: ~/.roo/cli)
-#   ROO_BIN_DIR       - Binary symlink directory (default: ~/.local/bin)
-#   ROO_VERSION       - Specific version to install (default: latest)
+#   SHOFER_INSTALL_DIR   - Installation directory (default: ~/.shofer/cli)
+#   SHOFER_BIN_DIR       - Binary symlink directory (default: ~/.local/bin)
+#   SHOFER_VERSION       - Specific version to install (default: latest)
 #   ROO_LOCAL_TARBALL - Path to local tarball to install (skips download)
 
 set -e
 
 # Configuration
-INSTALL_DIR="${ROO_INSTALL_DIR:-$HOME/.roo/cli}"
-BIN_DIR="${ROO_BIN_DIR:-$HOME/.local/bin}"
-REPO="RooCodeInc/Roo-Code"
+INSTALL_DIR="${SHOFER_INSTALL_DIR:-$HOME/.shofer/cli}"
+BIN_DIR="${SHOFER_BIN_DIR:-$HOME/.local/bin}"
+REPO="Arkware/Shofer"
 MIN_NODE_VERSION=20
 
 # Color output (only if terminal supports it)
@@ -86,13 +86,13 @@ detect_platform() {
 get_version() {
     # Skip version fetch if using local tarball
     if [ -n "$ROO_LOCAL_TARBALL" ]; then
-        VERSION="${ROO_VERSION:-local}"
+        VERSION="${SHOFER_VERSION:-local}"
         info "Using local tarball (version: $VERSION)"
         return
     fi
     
-    if [ -n "$ROO_VERSION" ]; then
-        VERSION="$ROO_VERSION"
+    if [ -n "$SHOFER_VERSION" ]; then
+        VERSION="$SHOFER_VERSION"
         info "Using specified version: $VERSION"
         return
     fi
@@ -168,7 +168,7 @@ if (latestVersion) {
 
 # Download and extract
 download_and_install() {
-    TARBALL="roo-cli-${PLATFORM}.tar.gz"
+    TARBALL="shofer-cli-${PLATFORM}.tar.gz"
     
     # Create temp directory
     TMP_DIR=$(mktemp -d)
@@ -242,7 +242,7 @@ Available at: https://github.com/$REPO/releases"
     fi
     
     # Make executable
-    chmod +x "$INSTALL_DIR/bin/roo"
+    chmod +x "$INSTALL_DIR/bin/shofer"
     
     # Also make ripgrep executable if it exists
     if [ -f "$INSTALL_DIR/bin/rg" ]; then
@@ -255,12 +255,12 @@ setup_bin() {
     mkdir -p "$BIN_DIR"
     
     # Remove old symlink if exists
-    if [ -L "$BIN_DIR/roo" ] || [ -f "$BIN_DIR/roo" ]; then
-        rm -f "$BIN_DIR/roo"
+    if [ -L "$BIN_DIR/shofer" ] || [ -f "$BIN_DIR/shofer" ]; then
+        rm -f "$BIN_DIR/shofer"
     fi
     
-    ln -sf "$INSTALL_DIR/bin/roo" "$BIN_DIR/roo"
-    info "Created symlink: $BIN_DIR/roo"
+    ln -sf "$INSTALL_DIR/bin/shofer" "$BIN_DIR/shofer"
+    info "Created symlink: $BIN_DIR/shofer"
 }
 
 # Check if bin dir is in PATH and provide instructions
@@ -305,28 +305,28 @@ check_path() {
 
 # Verify installation
 verify_install() {
-    if [ -x "$BIN_DIR/roo" ]; then
+    if [ -x "$BIN_DIR/shofer" ]; then
         info "Verifying installation..."
         # Just check if it runs without error
-        "$BIN_DIR/roo" --version >/dev/null 2>&1 || true
+        "$BIN_DIR/shofer" --version >/dev/null 2>&1 || true
     fi
 }
 
 # Print success message
 print_success() {
     echo ""
-    printf "${GREEN}${BOLD}✓ Roo Code CLI installed successfully!${NC}\n"
+    printf "${GREEN}${BOLD}✓ Shofer CLI installed successfully!${NC}\n"
     echo ""
     echo "  Installation: $INSTALL_DIR"
-    echo "  Binary: $BIN_DIR/roo"
+    echo "  Binary: $BIN_DIR/shofer"
     echo "  Version: $VERSION"
     echo ""
     echo "  ${BOLD}Get started:${NC}"
-    echo "    roo --help"
+    echo "    shofer --help"
     echo ""
     echo "  ${BOLD}Example:${NC}"
     echo "    export OPENROUTER_API_KEY=sk-or-v1-..."
-    echo "    cd ~/my-project && roo \"What is this project?\""
+    echo "    cd ~/my-project && shofer \"What is this project?\""
     echo ""
 }
 
@@ -335,7 +335,7 @@ main() {
     echo ""
     printf "${BLUE}${BOLD}"
     echo "  ╭─────────────────────────────────╮"
-    echo "  │     Roo Code CLI Installer      │"
+    echo "  │     Shofer CLI Installer      │"
     echo "  ╰─────────────────────────────────╯"
     printf "${NC}"
     echo ""

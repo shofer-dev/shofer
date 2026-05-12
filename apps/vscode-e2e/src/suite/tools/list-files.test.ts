@@ -3,12 +3,12 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as vscode from "vscode"
 
-import { RooCodeEventName, type ClineMessage } from "@roo-code/types"
+import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
 import { waitFor, sleep } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
-suite.skip("Roo Code list_files Tool", function () {
+suite.skip("Shofer list_files Tool", function () {
 	setDefaultSuiteTimeout(this)
 
 	let workspaceDir: string
@@ -175,13 +175,13 @@ This directory contains various files and subdirectories for testing the list_fi
 
 	test("Should list files in a directory (non-recursive)", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 		let listResults: string | null = null
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution and capture results
@@ -207,7 +207,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -215,7 +215,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -271,20 +271,20 @@ This directory contains various files and subdirectories for testing the list_fi
 			console.log("Test passed! Directory listing (non-recursive) executed successfully")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should list files in a directory (recursive)", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 		let listResults: string | null = null
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution and capture results
@@ -310,7 +310,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -318,7 +318,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -381,20 +381,20 @@ This directory contains various files and subdirectories for testing the list_fi
 			console.log("Test passed! Directory listing (recursive) executed successfully")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should list symlinked files and directories", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 		let listResults: string | null = null
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution and capture results
@@ -420,7 +420,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -428,7 +428,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -499,19 +499,19 @@ This directory contains various files and subdirectories for testing the list_fi
 			await fs.rm(testDir, { recursive: true, force: true })
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should list files in workspace root directory", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution
@@ -523,7 +523,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -531,7 +531,7 @@ This directory contains various files and subdirectories for testing the list_fi
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -569,8 +569,8 @@ This directory contains various files and subdirectories for testing the list_fi
 			console.log("Test passed! Workspace root directory listing executed successfully")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 })

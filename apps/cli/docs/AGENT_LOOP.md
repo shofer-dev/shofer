@@ -1,6 +1,6 @@
 # CLI Agent Loop
 
-This document explains how the Roo Code CLI detects and tracks the agent loop state.
+This document explains how the Shofer CLI detects and tracks the agent loop state.
 
 ## Overview
 
@@ -15,16 +15,16 @@ This is accomplished by analyzing the messages the extension sends to the client
 
 ## The Message Model
 
-All agent activity is communicated through **ClineMessages** - a stream of timestamped messages that represent everything the agent does.
+All agent activity is communicated through **ShoferMessages** - a stream of timestamped messages that represent everything the agent does.
 
 ### Message Structure
 
 ```typescript
-interface ClineMessage {
+interface ShoferMessage {
 	ts: number // Unique timestamp identifier
 	type: "ask" | "say" // Message category
-	ask?: ClineAsk // Specific ask type (when type="ask")
-	say?: ClineSay // Specific say type (when type="say")
+	ask?: ShoferAsk // Specific ask type (when type="ask")
+	say?: ShoferSay // Specific say type (when type="say")
 	text?: string // Message content
 	partial?: boolean // Is this message still streaming?
 }
@@ -158,7 +158,7 @@ function isStreaming(messages) {
 │  │                                                           │  │
 │  │  ┌─────────────────┐    ┌────────────────────┐            │  │
 │  │  │ MessageProcessor │───▶│    StateStore     │            │  │
-│  │  │                 │    │  (clineMessages)   │            │  │
+│  │  │                 │    │  (shoferMessages)   │            │  │
 │  │  └─────────────────┘    └────────┬───────────┘            │  │
 │  │                                  │                        │  │
 │  │                                  ▼                        │  │
@@ -191,7 +191,7 @@ The **single source of truth** for agent state, including the current mode. It:
 ```typescript
 const client = new ExtensionClient({
 	sendMessage: (msg) => extensionHost.sendToExtension(msg),
-	debug: true, // Writes to ~/.roo/cli-debug.log
+	debug: true, // Writes to ~/.shofer/cli-debug.log
 })
 
 // Query state at any time
@@ -217,11 +217,11 @@ client.on("modeChanged", (event) => {
 
 ### StateStore
 
-Holds the `clineMessages` array, computed state, and current mode:
+Holds the `shoferMessages` array, computed state, and current mode:
 
 ```typescript
 interface StoreState {
-	messages: ClineMessage[] // The raw message array
+	messages: ShoferMessage[] // The raw message array
 	agentState: AgentStateInfo // Computed state
 	isInitialized: boolean // Have we received any state?
 	currentMode: string | undefined // Current mode (e.g., "code", "architect")
@@ -232,7 +232,7 @@ interface StoreState {
 
 Handles incoming messages from the extension:
 
-- `"state"` messages → Update `clineMessages` array and track mode
+- `"state"` messages → Update `shoferMessages` array and track mode
 - `"messageUpdated"` messages → Update single message in array
 - Emits events for state transitions and mode changes
 
@@ -299,10 +299,10 @@ client.sendMessage({
 
 ## Type Guards
 
-The CLI uses type guards from `@roo-code/types` for categorization:
+The CLI uses type guards from `@shofer/types` for categorization:
 
 ```typescript
-import { isIdleAsk, isInteractiveAsk, isResumableAsk, isNonBlockingAsk } from "@roo-code/types"
+import { isIdleAsk, isInteractiveAsk, isResumableAsk, isNonBlockingAsk } from "@shofer/types"
 
 const ask = message.ask
 if (isInteractiveAsk(ask)) {
@@ -318,16 +318,16 @@ if (isInteractiveAsk(ask)) {
 
 ## Debug Logging
 
-Enable with `-d` flag. Logs go to `~/.roo/cli-debug.log`:
+Enable with `-d` flag. Logs go to `~/.shofer/cli-debug.log`:
 
 ```bash
-roo -d -P "Build something" --no-tui
+shofer -d -P "Build something" --no-tui
 ```
 
 View logs:
 
 ```bash
-tail -f ~/.roo/cli-debug.log
+tail -f ~/.shofer/cli-debug.log
 ```
 
 Example output:
@@ -348,7 +348,7 @@ Example output:
 
 ## Summary
 
-1. **Agent communicates via `ClineMessage` stream**
+1. **Agent communicates via `ShoferMessage` stream**
 2. **Last message determines state**
 3. **`ask` messages (non-partial) block the agent**
 4. **Ask category determines required action**

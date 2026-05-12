@@ -7,7 +7,7 @@
 import * as path from "path"
 import * as vscode from "vscode"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -40,7 +40,7 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 
 			task.consecutiveMistakeCount = 0
 
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "findFiles",
 				path: pattern,
 			}
@@ -48,7 +48,7 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 			const completeMessage = JSON.stringify({
 				...sharedMessageProps,
 				content: `Finding files matching: ${pattern}`,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const didApprove = await askApproval("tool", completeMessage)
 
@@ -86,12 +86,12 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 	override async handlePartial(task: Task, block: ToolUse<"find_files">): Promise<void> {
 		const pattern: string | undefined = block.params.pattern
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "findFiles",
 			path: pattern ?? "",
 		}
 
-		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

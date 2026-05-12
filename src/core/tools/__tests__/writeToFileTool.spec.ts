@@ -34,7 +34,7 @@ vi.mock("../../../utils/fs", () => ({
 vi.mock("../../prompts/responses", () => ({
 	formatResponse: {
 		toolError: vi.fn((msg) => `Error: ${msg}`),
-		rooIgnoreError: vi.fn((path) => `Access denied: ${path}`),
+		shoferIgnoreError: vi.fn((path) => `Access denied: ${path}`),
 		createPrettyPatch: vi.fn(() => "mock-diff"),
 	},
 }))
@@ -74,8 +74,8 @@ vi.mock("vscode", () => ({
 	},
 }))
 
-vi.mock("../../ignore/RooIgnoreController", () => ({
-	RooIgnoreController: class {
+vi.mock("../../ignore/ShoferIgnoreController", () => ({
+	ShoferIgnoreController: class {
 		initialize() {
 			return Promise.resolve()
 		}
@@ -102,7 +102,7 @@ describe("writeToFileTool", () => {
 	const mockedStripLineNumbers = stripLineNumbers as MockedFunction<typeof stripLineNumbers>
 	const mockedPathResolve = path.resolve as MockedFunction<typeof path.resolve>
 
-	const mockCline: any = {}
+	const mockShofer: any = {}
 	let mockAskApproval: ReturnType<typeof vi.fn>
 	let mockHandleError: ReturnType<typeof vi.fn>
 	let mockPushToolResult: ReturnType<typeof vi.fn>
@@ -120,11 +120,11 @@ describe("writeToFileTool", () => {
 		mockedEveryLineHasLineNumbers.mockReturnValue(false)
 		mockedStripLineNumbers.mockImplementation((content) => content)
 
-		mockCline.cwd = "/"
-		mockCline.consecutiveMistakeCount = 0
-		mockCline.didEditFile = false
-		mockCline.diffStrategy = undefined
-		mockCline.providerRef = {
+		mockShofer.cwd = "/"
+		mockShofer.consecutiveMistakeCount = 0
+		mockShofer.didEditFile = false
+		mockShofer.diffStrategy = undefined
+		mockShofer.providerRef = {
 			deref: vi.fn().mockReturnValue({
 				getState: vi.fn().mockResolvedValue({
 					diagnosticsEnabled: true,
@@ -132,10 +132,10 @@ describe("writeToFileTool", () => {
 				}),
 			}),
 		}
-		mockCline.rooIgnoreController = {
+		mockShofer.shoferIgnoreController = {
 			validateAccess: vi.fn().mockReturnValue(true),
 		}
-		mockCline.diffViewProvider = {
+		mockShofer.diffViewProvider = {
 			editType: undefined,
 			isEditing: false,
 			originalContent: "",
@@ -170,16 +170,16 @@ describe("writeToFileTool", () => {
 				return "Tool result message"
 			}),
 		}
-		mockCline.api = {
+		mockShofer.api = {
 			getModel: vi.fn().mockReturnValue({ id: "claude-3" }),
 		}
-		mockCline.fileContextTracker = {
+		mockShofer.fileContextTracker = {
 			trackFileContext: vi.fn().mockResolvedValue(undefined),
 		}
-		mockCline.say = vi.fn().mockResolvedValue(undefined)
-		mockCline.ask = vi.fn().mockResolvedValue(undefined)
-		mockCline.recordToolError = vi.fn()
-		mockCline.sayAndCreateMissingParamError = vi.fn().mockResolvedValue("Missing param error")
+		mockShofer.say = vi.fn().mockResolvedValue(undefined)
+		mockShofer.ask = vi.fn().mockResolvedValue(undefined)
+		mockShofer.recordToolError = vi.fn()
+		mockShofer.sayAndCreateMissingParamError = vi.fn().mockResolvedValue("Missing param error")
 
 		mockAskApproval = vi.fn().mockResolvedValue(true)
 		mockHandleError = vi.fn().mockResolvedValue(undefined)
@@ -204,7 +204,7 @@ describe("writeToFileTool", () => {
 		const accessAllowed = options.accessAllowed ?? true
 
 		mockedFileExistsAtPath.mockResolvedValue(fileExists)
-		mockCline.rooIgnoreController.validateAccess.mockReturnValue(accessAllowed)
+		mockShofer.shoferIgnoreController.validateAccess.mockReturnValue(accessAllowed)
 
 		// Create a tool use object
 		const toolUse: ToolUse = {
@@ -226,7 +226,7 @@ describe("writeToFileTool", () => {
 			toolResult = result
 		})
 
-		await writeToFileTool.handle(mockCline, toolUse as ToolUse<"write_to_file">, {
+		await writeToFileTool.handle(mockShofer, toolUse as ToolUse<"write_to_file">, {
 			askApproval: mockAskApproval,
 			handleError: mockHandleError,
 			pushToolResult: mockPushToolResult,
@@ -236,11 +236,11 @@ describe("writeToFileTool", () => {
 	}
 
 	describe("access control", () => {
-		it("validates and allows access when rooIgnoreController permits", async () => {
+		it("validates and allows access when shoferIgnoreController permits", async () => {
 			await executeWriteFileTool({}, { accessAllowed: true })
 
-			expect(mockCline.rooIgnoreController.validateAccess).toHaveBeenCalledWith(testFilePath)
-			expect(mockCline.diffViewProvider.open).toHaveBeenCalledWith(testFilePath)
+			expect(mockShofer.shoferIgnoreController.validateAccess).toHaveBeenCalledWith(testFilePath)
+			expect(mockShofer.diffViewProvider.open).toHaveBeenCalledWith(testFilePath)
 		})
 	})
 
@@ -249,18 +249,18 @@ describe("writeToFileTool", () => {
 			await executeWriteFileTool({}, { fileExists: true })
 
 			expect(mockedFileExistsAtPath).toHaveBeenCalledWith(absoluteFilePath)
-			expect(mockCline.diffViewProvider.editType).toBe("modify")
+			expect(mockShofer.diffViewProvider.editType).toBe("modify")
 		})
 
 		it.skipIf(process.platform === "win32")("detects new file and sets editType to create", async () => {
 			await executeWriteFileTool({}, { fileExists: false })
 
 			expect(mockedFileExistsAtPath).toHaveBeenCalledWith(absoluteFilePath)
-			expect(mockCline.diffViewProvider.editType).toBe("create")
+			expect(mockShofer.diffViewProvider.editType).toBe("create")
 		})
 
 		it("uses cached editType without filesystem check", async () => {
-			mockCline.diffViewProvider.editType = "modify"
+			mockShofer.diffViewProvider.editType = "modify"
 
 			await executeWriteFileTool({})
 
@@ -298,7 +298,7 @@ describe("writeToFileTool", () => {
 		})
 
 		it("does not create directories when editType is cached as modify", async () => {
-			mockCline.diffViewProvider.editType = "modify"
+			mockShofer.diffViewProvider.editType = "modify"
 
 			await executeWriteFileTool({})
 
@@ -306,7 +306,7 @@ describe("writeToFileTool", () => {
 		})
 
 		it.skipIf(process.platform === "win32")("creates directories when editType is cached as create", async () => {
-			mockCline.diffViewProvider.editType = "create"
+			mockShofer.diffViewProvider.editType = "create"
 
 			await executeWriteFileTool({})
 
@@ -318,17 +318,17 @@ describe("writeToFileTool", () => {
 		it("removes markdown code block markers from content", async () => {
 			await executeWriteFileTool({ content: testContentWithMarkdown })
 
-			expect(mockCline.diffViewProvider.update).toHaveBeenCalledWith("Line 1\nLine 2", true)
+			expect(mockShofer.diffViewProvider.update).toHaveBeenCalledWith("Line 1\nLine 2", true)
 		})
 
 		it("passes through empty content unchanged", async () => {
 			await executeWriteFileTool({ content: "" })
 
-			expect(mockCline.diffViewProvider.update).toHaveBeenCalledWith("", true)
+			expect(mockShofer.diffViewProvider.update).toHaveBeenCalledWith("", true)
 		})
 
 		it("unescapes HTML entities for non-Claude models", async () => {
-			mockCline.api.getModel.mockReturnValue({ id: "gpt-4" })
+			mockShofer.api.getModel.mockReturnValue({ id: "gpt-4" })
 
 			await executeWriteFileTool({ content: "&lt;test&gt;" })
 
@@ -336,7 +336,7 @@ describe("writeToFileTool", () => {
 		})
 
 		it("skips HTML unescaping for Claude models", async () => {
-			mockCline.api.getModel.mockReturnValue({ id: "claude-3" })
+			mockShofer.api.getModel.mockReturnValue({ id: "claude-3" })
 
 			await executeWriteFileTool({ content: "&lt;test&gt;" })
 
@@ -352,7 +352,7 @@ describe("writeToFileTool", () => {
 
 			expect(mockedEveryLineHasLineNumbers).toHaveBeenCalledWith(contentWithLineNumbers)
 			expect(mockedStripLineNumbers).toHaveBeenCalledWith(contentWithLineNumbers)
-			expect(mockCline.diffViewProvider.update).toHaveBeenCalledWith("line one\nline two", true)
+			expect(mockShofer.diffViewProvider.update).toHaveBeenCalledWith("line one\nline two", true)
 		})
 	})
 
@@ -360,13 +360,13 @@ describe("writeToFileTool", () => {
 		it("successfully creates new files with full workflow", async () => {
 			await executeWriteFileTool({}, { fileExists: false })
 
-			expect(mockCline.consecutiveMistakeCount).toBe(0)
-			expect(mockCline.diffViewProvider.open).toHaveBeenCalledWith(testFilePath)
-			expect(mockCline.diffViewProvider.update).toHaveBeenCalledWith(testContent, true)
+			expect(mockShofer.consecutiveMistakeCount).toBe(0)
+			expect(mockShofer.diffViewProvider.open).toHaveBeenCalledWith(testFilePath)
+			expect(mockShofer.diffViewProvider.update).toHaveBeenCalledWith(testContent, true)
 			expect(mockAskApproval).toHaveBeenCalled()
-			expect(mockCline.diffViewProvider.saveChanges).toHaveBeenCalled()
-			expect(mockCline.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "roo_edited")
-			expect(mockCline.didEditFile).toBe(true)
+			expect(mockShofer.diffViewProvider.saveChanges).toHaveBeenCalled()
+			expect(mockShofer.fileContextTracker.trackFileContext).toHaveBeenCalledWith(testFilePath, "roo_edited")
+			expect(mockShofer.didEditFile).toBe(true)
 		})
 
 		it("processes files outside workspace boundary", async () => {
@@ -382,7 +382,7 @@ describe("writeToFileTool", () => {
 			await executeWriteFileTool({ content: largeContent })
 
 			// Should process normally without issues
-			expect(mockCline.consecutiveMistakeCount).toBe(0)
+			expect(mockShofer.consecutiveMistakeCount).toBe(0)
 		})
 	})
 
@@ -390,26 +390,26 @@ describe("writeToFileTool", () => {
 		it("returns early when path is missing in partial block", async () => {
 			await executeWriteFileTool({ path: undefined }, { isPartial: true })
 
-			expect(mockCline.diffViewProvider.open).not.toHaveBeenCalled()
+			expect(mockShofer.diffViewProvider.open).not.toHaveBeenCalled()
 		})
 
 		it("returns early when content is undefined in partial block", async () => {
 			await executeWriteFileTool({ content: undefined }, { isPartial: true })
 
-			expect(mockCline.diffViewProvider.open).not.toHaveBeenCalled()
+			expect(mockShofer.diffViewProvider.open).not.toHaveBeenCalled()
 		})
 
 		it("streams content updates during partial execution after path stabilizes", async () => {
 			// First call - path not yet stabilized, early return (no file operations)
 			await executeWriteFileTool({}, { isPartial: true })
-			expect(mockCline.ask).not.toHaveBeenCalled()
-			expect(mockCline.diffViewProvider.open).not.toHaveBeenCalled()
+			expect(mockShofer.ask).not.toHaveBeenCalled()
+			expect(mockShofer.diffViewProvider.open).not.toHaveBeenCalled()
 
 			// Second call with same path - path is now stabilized, file operations proceed
 			await executeWriteFileTool({}, { isPartial: true })
-			expect(mockCline.ask).toHaveBeenCalled()
-			expect(mockCline.diffViewProvider.open).toHaveBeenCalledWith(testFilePath)
-			expect(mockCline.diffViewProvider.update).toHaveBeenCalledWith(testContent, false)
+			expect(mockShofer.ask).toHaveBeenCalled()
+			expect(mockShofer.diffViewProvider.open).toHaveBeenCalledWith(testFilePath)
+			expect(mockShofer.diffViewProvider.update).toHaveBeenCalledWith(testContent, false)
 		})
 	})
 
@@ -419,23 +419,23 @@ describe("writeToFileTool", () => {
 
 			await executeWriteFileTool({})
 
-			expect(mockCline.diffViewProvider.revertChanges).toHaveBeenCalled()
-			expect(mockCline.diffViewProvider.saveChanges).not.toHaveBeenCalled()
+			expect(mockShofer.diffViewProvider.revertChanges).toHaveBeenCalled()
+			expect(mockShofer.diffViewProvider.saveChanges).not.toHaveBeenCalled()
 		})
 
 		it("reports user edits with diff feedback", async () => {
 			const userEditsValue = "- old line\n+ new line"
-			mockCline.diffViewProvider.saveChanges.mockResolvedValue({
+			mockShofer.diffViewProvider.saveChanges.mockResolvedValue({
 				newProblemsMessage: " with warnings",
 				userEdits: userEditsValue,
 				finalContent: "modified content",
 			})
 			// Set the userEdits property on the diffViewProvider mock to simulate user edits
-			mockCline.diffViewProvider.userEdits = userEditsValue
+			mockShofer.diffViewProvider.userEdits = userEditsValue
 
 			await executeWriteFileTool({}, { fileExists: true })
 
-			expect(mockCline.say).toHaveBeenCalledWith(
+			expect(mockShofer.say).toHaveBeenCalledWith(
 				"user_feedback_diff",
 				expect.stringContaining("editedExistingFile"),
 			)
@@ -444,16 +444,16 @@ describe("writeToFileTool", () => {
 
 	describe("error handling", () => {
 		it("handles general file operation errors", async () => {
-			mockCline.diffViewProvider.open.mockRejectedValue(new Error("General error"))
+			mockShofer.diffViewProvider.open.mockRejectedValue(new Error("General error"))
 
 			await executeWriteFileTool({})
 
 			expect(mockHandleError).toHaveBeenCalledWith("writing file", expect.any(Error))
-			expect(mockCline.diffViewProvider.reset).toHaveBeenCalled()
+			expect(mockShofer.diffViewProvider.reset).toHaveBeenCalled()
 		})
 
 		it("handles partial streaming errors after path stabilizes", async () => {
-			mockCline.diffViewProvider.open.mockRejectedValue(new Error("Open failed"))
+			mockShofer.diffViewProvider.open.mockRejectedValue(new Error("Open failed"))
 
 			// First call - path not yet stabilized, no error yet
 			await executeWriteFileTool({}, { isPartial: true })

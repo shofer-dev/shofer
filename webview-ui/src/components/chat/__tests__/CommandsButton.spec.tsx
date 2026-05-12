@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 
-import type { Command } from "@roo-code/types"
+import type { Command } from "@shofer/types"
 
 import { CommandsButton } from "../CommandsButton"
 
@@ -18,8 +18,8 @@ vi.mock("@/i18n/TranslationContext", () => ({
 	}),
 }))
 
-vi.mock("@/components/ui/hooks/useRooPortal", () => ({
-	useRooPortal: () => document.body,
+vi.mock("@/components/ui/hooks/useShoferPortal", () => ({
+	useShoferPortal: () => document.body,
 }))
 
 const mockUseExtensionState = vi.fn()

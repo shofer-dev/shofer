@@ -1,5 +1,5 @@
-import { TaskStatus } from "@roo-code/types"
-import type { BackgroundTaskStatus } from "@roo-code/types"
+import { TaskStatus } from "@shofer/types"
+import type { BackgroundTaskStatus } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"

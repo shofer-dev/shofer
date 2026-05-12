@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Roo-Code's code indexing is a **semantic code search** system (RAG — Retrieval-Augmented Generation) that uses **vector embeddings** stored in **Qdrant** to let the AI agent search codebases by meaning rather than just keywords. It lives under `src/services/code-index/` and is exposed to the AI as the `codebase_search` native tool. A lighter companion tool `codebase_search_with_lsp` uses VS Code's built-in Language Server Protocol workspace symbol provider and requires no external infrastructure.
+Shofer's code indexing is a **semantic code search** system (RAG — Retrieval-Augmented Generation) that uses **vector embeddings** stored in **Qdrant** to let the AI agent search codebases by meaning rather than just keywords. It lives under `src/services/code-index/` and is exposed to the AI as the `codebase_search` native tool. A lighter companion tool `codebase_search_with_lsp` uses VS Code's built-in Language Server Protocol workspace symbol provider and requires no external infrastructure.
 
 ---
 
@@ -131,7 +131,7 @@ vectorStore.initialize() → create Qdrant collection if needed
   → if existing data: incremental scan (skip unchanged via cache)
   → if no data: full scan
   → scanner.scanDirectory():
-      listFiles() → filter by extensions, .gitignore, .rooignore
+      listFiles() → filter by extensions, .gitignore, .shoferignore
       → for each file (parallel, concurrency=10):
           SHA-256 hash check → skip if unchanged
           → CodeParser.parseFile():
@@ -151,24 +151,24 @@ vectorStore.initialize() → create Qdrant collection if needed
 
 The system uses **two separate storage locations** for different kinds of data:
 
-| Data                                      | Storage Location                                                                                                                                         | Survives Reboot?                                |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_arkware_qdrant-storage/`                                | ✓ Yes — persisted on Kubernetes PVC             |
-| **File hash cache** (SHA-256 per file)    | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/roo-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
-| **Metadata marker** (`indexing_complete`) | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                             | ✓ Yes — persisted in Qdrant                     |
+| Data                                      | Storage Location                                                                                                                                | Survives Reboot?                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_arkware_qdrant-storage/`                       | ✓ Yes — persisted on Kubernetes PVC             |
+| **File hash cache** (SHA-256 per file)    | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/arkware.shofer/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
+| **Metadata marker** (`indexing_complete`) | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                    | ✓ Yes — persisted in Qdrant                     |
 
 #### Hash Cache Location
 
 The `CacheManager` persists file hashes to a JSON file in VS Code's extension global storage directory:
 
 ```
-~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/roo-index-cache-<sha256-of-workspace-path>.json
+~/.config/Code/User/globalStorage/arkware.shofer/shofer-index-cache-<sha256-of-workspace-path>.json
 ```
 
 Example:
 
 ```
-~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/roo-index-cache-7d1f5ec07233fd91a20daff100cb1dafca4849d96205580a64af9b043026c073.json
+~/.config/Code/User/globalStorage/arkware.shofer/shofer-index-cache-7d1f5ec07233fd91a20daff100cb1dafca4849d96205580a64af9b043026c073.json
 ```
 
 This cache file is **NOT** on the Qdrant PVC. It lives on the local filesystem with VS Code's settings.
@@ -235,11 +235,11 @@ User query string
 
 ### Extension Host
 
-| Point      | File                                    | Details                                                                    |
-| ---------- | --------------------------------------- | -------------------------------------------------------------------------- |
-| Activation | `src/extension.ts:182-203`              | Creates `CodeIndexManager` per workspace folder, initializes in background |
-| Provider   | `src/core/webview/ClineProvider.ts:972` | Subscribes to `onProgressUpdate` to push indexing status to webview        |
-| Commands   | `src/activate/registerCommands.ts:214`  | Registers commands that reference `CodeIndexManager`                       |
+| Point      | File                                     | Details                                                                    |
+| ---------- | ---------------------------------------- | -------------------------------------------------------------------------- |
+| Activation | `src/extension.ts:182-203`               | Creates `CodeIndexManager` per workspace folder, initializes in background |
+| Provider   | `src/core/webview/ShoferProvider.ts:972` | Subscribes to `onProgressUpdate` to push indexing status to webview        |
+| Commands   | `src/activate/registerCommands.ts:214`   | Registers commands that reference `CodeIndexManager`                       |
 
 ### Settings & Webview
 
@@ -249,7 +249,7 @@ User query string
 | Status request   | `webviewMessageHandler.ts:2709`                  | `requestIndexingStatus`                                                     |
 | Start/stop/clear | `webviewMessageHandler.ts:2773-2892`             | `startIndexing`, `stopIndexing`, `clearIndexData`, `toggleCodeIndexEnabled` |
 | Secret status    | `webviewMessageHandler.ts:2744`                  | `requestCodeIndexSecretStatus`                                              |
-| Status display   | `ClineProvider.ts:2859-2904`                     | `getCurrentWorkspaceCodeIndexManager()`, subscribes to progress updates     |
+| Status display   | `ShoferProvider.ts:2859-2904`                    | `getCurrentWorkspaceCodeIndexManager()`, subscribes to progress updates     |
 
 ### Tool System
 

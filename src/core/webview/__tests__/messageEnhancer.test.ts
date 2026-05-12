@@ -1,5 +1,5 @@
-import { ProviderSettings, ClineMessage } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import { ProviderSettings, ShoferMessage } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { MessageEnhancer } from "../messageEnhancer"
 import * as singleCompletionHandlerModule from "../../../utils/single-completion-handler"
@@ -7,7 +7,7 @@ import { ProviderSettingsManager } from "../../config/ProviderSettingsManager"
 
 // Mock dependencies
 vi.mock("../../../utils/single-completion-handler")
-vi.mock("@roo-code/telemetry")
+vi.mock("@shofer/telemetry")
 
 describe("MessageEnhancer", () => {
 	let mockProviderSettingsManager: ProviderSettingsManager
@@ -100,7 +100,7 @@ describe("MessageEnhancer", () => {
 		})
 
 		it("should include task history when enabled", async () => {
-			const mockClineMessages: ClineMessage[] = [
+			const mockShoferMessages: ShoferMessage[] = [
 				{ type: "ask", text: "Create a React component", ts: 1000 },
 				{ type: "say", say: "text", text: "I'll create a React component for you", ts: 2000 },
 				{ type: "ask", text: "Add props to the component", ts: 3000 },
@@ -112,7 +112,7 @@ describe("MessageEnhancer", () => {
 				apiConfiguration: mockApiConfiguration,
 				listApiConfigMeta: mockListApiConfigMeta,
 				includeTaskHistoryInEnhance: true,
-				currentClineMessages: mockClineMessages,
+				currentShoferMessages: mockShoferMessages,
 				providerSettingsManager: mockProviderSettingsManager,
 			})
 
@@ -130,19 +130,19 @@ describe("MessageEnhancer", () => {
 
 		it("should limit task history to last 10 messages", async () => {
 			// Create 15 messages
-			const mockClineMessages: ClineMessage[] = Array.from({ length: 15 }, (_, i) => ({
+			const mockShoferMessages: ShoferMessage[] = Array.from({ length: 15 }, (_, i) => ({
 				type: i % 2 === 0 ? "ask" : "say",
 				say: i % 2 === 1 ? "text" : undefined,
 				text: `Message ${i + 1}`,
 				ts: i * 1000,
-			})) as ClineMessage[]
+			})) as ShoferMessage[]
 
 			await MessageEnhancer.enhanceMessage({
 				text: "Test",
 				apiConfiguration: mockApiConfiguration,
 				listApiConfigMeta: mockListApiConfigMeta,
 				includeTaskHistoryInEnhance: true,
-				currentClineMessages: mockClineMessages,
+				currentShoferMessages: mockShoferMessages,
 				providerSettingsManager: mockProviderSettingsManager,
 			})
 
@@ -156,14 +156,14 @@ describe("MessageEnhancer", () => {
 
 		it("should truncate long messages in task history", async () => {
 			const longText = "A".repeat(600) // 600 characters
-			const mockClineMessages: ClineMessage[] = [{ type: "ask", text: longText, ts: 1000 }]
+			const mockShoferMessages: ShoferMessage[] = [{ type: "ask", text: longText, ts: 1000 }]
 
 			await MessageEnhancer.enhanceMessage({
 				text: "Test",
 				apiConfiguration: mockApiConfiguration,
 				listApiConfigMeta: mockListApiConfigMeta,
 				includeTaskHistoryInEnhance: true,
-				currentClineMessages: mockClineMessages,
+				currentShoferMessages: mockShoferMessages,
 				providerSettingsManager: mockProviderSettingsManager,
 			})
 
@@ -244,7 +244,7 @@ describe("MessageEnhancer", () => {
 				apiConfiguration: mockApiConfiguration,
 				listApiConfigMeta: mockListApiConfigMeta,
 				includeTaskHistoryInEnhance: true,
-				currentClineMessages: [],
+				currentShoferMessages: [],
 				providerSettingsManager: mockProviderSettingsManager,
 			})
 
@@ -304,7 +304,7 @@ describe("MessageEnhancer", () => {
 
 	describe("extractTaskHistory", () => {
 		it("should filter and format messages correctly", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{ type: "ask", text: "User message 1", ts: 1000 },
 				{ type: "say", say: "text", text: "Assistant message 1", ts: 2000 },
 				{ type: "say", say: "reasoning", text: "Tool use", ts: 3000 },
@@ -351,7 +351,7 @@ describe("MessageEnhancer", () => {
 			const circularMessage: any = { type: "ask", text: "Test" }
 			circularMessage.self = circularMessage
 
-			const messages = [circularMessage] as ClineMessage[]
+			const messages = [circularMessage] as ShoferMessage[]
 
 			// Access private method through any type assertion for testing
 			const history = (MessageEnhancer as any).extractTaskHistory(messages)

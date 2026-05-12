@@ -2,9 +2,9 @@
 
 ## Overview
 
-Roo-Code discovers extension-provided tools through a **private command channel**
+Shofer discovers extension-provided tools through a **private command channel**
 instead of `vscode.lm.tools` (which is GitHub Copilot's interface). This keeps
-extension tools invisible to Copilot while remaining fully available to Roo-Code.
+extension tools invisible to Copilot while remaining fully available to Shofer.
 
 ## Provider Registration
 
@@ -19,7 +19,7 @@ configuration `arkware.privateToolProviders` in its `package.json`:
 				"arkware.privateToolProviders": {
 					"type": "object",
 					"default": {},
-					"description": "Private tool providers for Roo-Code.",
+					"description": "Private tool providers for Shofer.",
 					"additionalProperties": {
 						"type": "object",
 						"properties": {

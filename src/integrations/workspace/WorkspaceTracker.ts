@@ -2,14 +2,14 @@ import * as vscode from "vscode"
 import * as path from "path"
 
 import { listFiles } from "../../services/glob/list-files"
-import { ClineProvider } from "../../core/webview/ClineProvider"
+import { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { toRelativePath, getWorkspacePath } from "../../utils/path"
 
 const MAX_INITIAL_FILES = 1_000
 
 // Note: this is not a drop-in replacement for listFiles at the start of tasks, since that will be done for Desktops when there is no workspace selected
 class WorkspaceTracker {
-	private providerRef: WeakRef<ClineProvider>
+	private providerRef: WeakRef<ShoferProvider>
 	private disposables: vscode.Disposable[] = []
 	private filePaths: Set<string> = new Set()
 	private updateTimer: NodeJS.Timeout | null = null
@@ -19,13 +19,13 @@ class WorkspaceTracker {
 	get cwd() {
 		return this.providerRef?.deref()?.cwd ?? getWorkspacePath()
 	}
-	constructor(provider: ClineProvider) {
+	constructor(provider: ShoferProvider) {
 		this.providerRef = new WeakRef(provider)
 		this.registerListeners()
 	}
 
 	async initializeFilePaths() {
-		// should not auto get filepaths for desktop since it would immediately show permission popup before cline ever creates a file
+		// should not auto get filepaths for desktop since it would immediately show permission popup before shofer ever creates a file
 		if (!this.cwd) {
 			return
 		}

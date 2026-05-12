@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import prettyBytes from "pretty-bytes"
 
-import type { WorktreeDefaultsResponse, BranchInfo, WorktreeIncludeStatus } from "@roo-code/types"
+import type { WorktreeDefaultsResponse, BranchInfo, WorktreeIncludeStatus } from "@shofer/types"
 
 import { vscode } from "@/utils/vscode"
 import { useAppTranslation } from "@/i18n/TranslationContext"
@@ -74,7 +74,7 @@ export const CreateWorktreeModal = ({
 					break
 				}
 				// Removed "folderSelected" handler — worktree paths are
-				// auto-generated under .roo/worktrees/ (embedded convention).
+				// auto-generated under .shofer/worktrees/ (embedded convention).
 				// The user cannot choose an arbitrary path.
 				case "worktreeCopyProgress": {
 					setCopyProgress({
@@ -203,7 +203,7 @@ export const CreateWorktreeModal = ({
 						/>
 					</div>
 
-					{/* Worktree path (auto-generated under .roo/worktrees/, not user-editable) */}
+					{/* Worktree path (auto-generated under .shofer/worktrees/, not user-editable) */}
 					<div className="flex items-center gap-2">
 						<Folder className="size-4 ml-2 shrink-0" />
 						<label className="text-sm text-vscode-foreground shrink-0">{t("worktrees:worktreePath")}</label>

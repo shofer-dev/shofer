@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import { Vertex } from "../Vertex"
-import type { ProviderSettings } from "@roo-code/types"
-import { VERTEX_REGIONS } from "@roo-code/types"
+import type { ProviderSettings } from "@shofer/types"
+import { VERTEX_REGIONS } from "@shofer/types"
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeTextField: ({ children, value, onInput, type }: any) => (

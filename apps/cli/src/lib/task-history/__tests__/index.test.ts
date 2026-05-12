@@ -1,4 +1,4 @@
-import { readTaskSessionsFromStoragePath } from "@roo-code/core/cli"
+import { readTaskSessionsFromStoragePath } from "@shofer/core/cli"
 
 import {
 	filterSessionsForWorkspace,
@@ -7,8 +7,8 @@ import {
 	resolveWorkspaceResumeSessionId,
 } from "../index.js"
 
-vi.mock("@roo-code/core/cli", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@roo-code/core/cli")>()
+vi.mock("@shofer/core/cli", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@shofer/core/cli")>()
 	return {
 		...actual,
 		readTaskSessionsFromStoragePath: vi.fn(),

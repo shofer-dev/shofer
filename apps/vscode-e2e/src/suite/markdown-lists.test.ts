@@ -1,6 +1,6 @@
 import * as assert from "assert"
 
-import { RooCodeEventName, type ClineMessage } from "@roo-code/types"
+import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
 import { waitUntilCompleted } from "./utils"
 import { setDefaultSuiteTimeout } from "./test-utils"
@@ -11,9 +11,9 @@ suite("Markdown List Rendering", function () {
 	test("Should render unordered lists with bullets in chat", async () => {
 		const api = globalThis.api
 
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 
-		api.on(RooCodeEventName.Message, ({ message }: { message: ClineMessage }) => {
+		api.on(ShoferEventName.Message, ({ message }: { message: ShoferMessage }) => {
 			if (message.type === "say" && message.partial === false) {
 				messages.push(message)
 			}
@@ -48,9 +48,9 @@ suite("Markdown List Rendering", function () {
 	test("Should render ordered lists with numbers in chat", async () => {
 		const api = globalThis.api
 
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 
-		api.on(RooCodeEventName.Message, ({ message }: { message: ClineMessage }) => {
+		api.on(ShoferEventName.Message, ({ message }: { message: ShoferMessage }) => {
 			if (message.type === "say" && message.partial === false) {
 				messages.push(message)
 			}
@@ -85,9 +85,9 @@ suite("Markdown List Rendering", function () {
 	test("Should render nested lists with proper hierarchy", async () => {
 		const api = globalThis.api
 
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 
-		api.on(RooCodeEventName.Message, ({ message }: { message: ClineMessage }) => {
+		api.on(ShoferEventName.Message, ({ message }: { message: ShoferMessage }) => {
 			if (message.type === "say" && message.partial === false) {
 				messages.push(message)
 			}
@@ -137,9 +137,9 @@ suite("Markdown List Rendering", function () {
 	test("Should render mixed ordered and unordered lists", async () => {
 		const api = globalThis.api
 
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 
-		api.on(RooCodeEventName.Message, ({ message }: { message: ClineMessage }) => {
+		api.on(ShoferEventName.Message, ({ message }: { message: ShoferMessage }) => {
 			if (message.type === "say" && message.partial === false) {
 				messages.push(message)
 			}

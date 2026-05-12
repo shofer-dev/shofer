@@ -9,7 +9,7 @@ import { ExtensionStateContextProvider } from "@src/context/ExtensionStateContex
 import ChatView, { ChatViewProps } from "../ChatView"
 
 // Define minimal types needed for testing
-interface ClineMessage {
+interface ShoferMessage {
 	type: "say" | "ask"
 	say?: string
 	ask?: string
@@ -20,7 +20,7 @@ interface ClineMessage {
 
 interface ExtensionState {
 	version: string
-	clineMessages: ClineMessage[]
+	shoferMessages: ShoferMessage[]
 	taskHistory: any[]
 	shouldShowAnnouncement: boolean
 	allowedCommands: string[]
@@ -45,7 +45,7 @@ vi.mock("use-sound", () => ({
 
 // Mock components that use ESM dependencies
 vi.mock("../ChatRow", () => ({
-	default: function MockChatRow({ message }: { message: ClineMessage }) {
+	default: function MockChatRow({ message }: { message: ShoferMessage }) {
 		return <div data-testid="chat-row">{JSON.stringify(message)}</div>
 	},
 }))
@@ -107,17 +107,17 @@ vi.mock("../QueuedMessages", () => ({
 	},
 }))
 
-// Mock RooTips component
-vi.mock("@src/components/welcome/RooTips", () => ({
-	default: function MockRooTips() {
-		return <div data-testid="roo-tips">Tips content</div>
+// Mock ShoferTips component
+vi.mock("@src/components/welcome/ShoferTips", () => ({
+	default: function MockShoferTips() {
+		return <div data-testid="shofer-tips">Tips content</div>
 	},
 }))
 
-// Mock RooHero component
-vi.mock("@src/components/welcome/RooHero", () => ({
-	default: function MockRooHero() {
-		return <div data-testid="roo-hero">Hero content</div>
+// Mock ShoferHero component
+vi.mock("@src/components/welcome/ShoferHero", () => ({
+	default: function MockShoferHero() {
+		return <div data-testid="shofer-hero">Hero content</div>
 	},
 }))
 
@@ -209,8 +209,8 @@ vi.mock("react-virtuoso", () => ({
 		data,
 		itemContent,
 	}: {
-		data: ClineMessage[]
-		itemContent: (index: number, item: ClineMessage) => React.ReactNode
+		data: ShoferMessage[]
+		itemContent: (index: number, item: ShoferMessage) => React.ReactNode
 	}) {
 		return (
 			<div data-testid="virtuoso-item-list">
@@ -231,7 +231,7 @@ const mockPostMessage = (state: Partial<ExtensionState>) => {
 			type: "state",
 			state: {
 				version: "1.0.0",
-				clineMessages: [],
+				shoferMessages: [],
 				taskHistory: [],
 				shouldShowAnnouncement: false,
 				allowedCommands: [],
@@ -272,7 +272,7 @@ describe("ChatView - Preserve Images During Chat Activity", () => {
 		// Hydrate state with an active task
 		await act(async () => {
 			mockPostMessage({
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "say",
 						say: "task",
@@ -311,7 +311,7 @@ describe("ChatView - Preserve Images During Chat Activity", () => {
 		// Now simulate an api_req_started message (which happens during chat activity)
 		await act(async () => {
 			mockPostMessage({
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "say",
 						say: "task",
@@ -343,7 +343,7 @@ describe("ChatView - Preserve Images During Chat Activity", () => {
 		// Hydrate state with an active task
 		await act(async () => {
 			mockPostMessage({
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "say",
 						say: "task",
@@ -381,7 +381,7 @@ describe("ChatView - Preserve Images During Chat Activity", () => {
 		for (let i = 0; i < 3; i++) {
 			await act(async () => {
 				mockPostMessage({
-					clineMessages: [
+					shoferMessages: [
 						{
 							type: "say",
 							say: "task",
@@ -415,7 +415,7 @@ describe("ChatView - Preserve Images During Chat Activity", () => {
 		// Hydrate with an active task that has a followup ask (so sending is enabled)
 		await act(async () => {
 			mockPostMessage({
-				clineMessages: [
+				shoferMessages: [
 					{
 						type: "say",
 						say: "task",

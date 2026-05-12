@@ -9,7 +9,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 import * as fs from "fs/promises"
 
-import { type ClineSayTool } from "@roo-code/types"
+import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -62,7 +62,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 			const absolutePath = path.resolve(task.cwd, filePath)
 			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "editedExistingFile",
 				path: getReadablePath(task.cwd, filePath),
 				isOutsideWorkspace,
@@ -72,7 +72,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 			const completeMessage = JSON.stringify({
 				...sharedMessageProps,
 				content: `Inserting at ${filePath}:${line}:${resolvedColumn}\n${preview}`,
-			} satisfies ClineSayTool)
+			} satisfies ShoferSayTool)
 
 			const didApprove = await askApproval("tool", completeMessage)
 
@@ -118,7 +118,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				throw new Error("Failed to apply edit")
 			}
 
-			// Track as a Roo edit so it appears in the FileChangesPanel.
+			// Track as a Shofer edit so it appears in the FileChangesPanel.
 			await task.fileContextTracker?.trackFileContext(filePath, "roo_edited")
 			task.didEditFile = true
 
@@ -138,13 +138,13 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 		const absolutePath = filePath ? path.resolve(task.cwd, filePath) : task.cwd
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "editedExistingFile",
 			path: getReadablePath(task.cwd, filePath ?? ""),
 			isOutsideWorkspace,
 		}
 
-		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ClineSayTool)
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
 	}
 }

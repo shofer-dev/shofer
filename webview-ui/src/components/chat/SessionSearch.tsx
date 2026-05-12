@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { Input } from "@src/components/ui/input"
 
 /**
- * Floating in-session search box for the currently loaded Roo-Code task.
+ * Floating in-session search box for the currently loaded Shofer task.
  *
  * Triggered by Ctrl+F (Cmd+F on macOS) from `ChatView`. Performs a
  * case-insensitive substring search against the `text` field of every
- * `ClineMessage` in the active task and exposes prev/next navigation.
+ * `ShoferMessage` in the active task and exposes prev/next navigation.
  *
  * Match counts and navigation targets (message `ts`) are derived from the
  * raw message text. The actual *visual* highlighting of matched substrings
@@ -24,7 +24,7 @@ import { Input } from "@src/components/ui/input"
  */
 
 interface SessionSearchProps {
-	messages: ClineMessage[]
+	messages: ShoferMessage[]
 	isOpen: boolean
 	onClose: () => void
 	/** Invoked with the timestamp of the currently selected match (or null when there is no match). */

@@ -1,21 +1,21 @@
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=RooVeterinaryInc.roo-cline"><img src="https://img.shields.io/badge/VS_Code_Marketplace-007ACC?style=flat&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
-  <a href="https://x.com/roocode"><img src="https://img.shields.io/badge/roocode-000000?style=flat&logo=x&logoColor=white" alt="X"></a>
-  <a href="https://youtube.com/@roocodeyt?feature=shared"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat&logo=youtube&logoColor=white" alt="YouTube"></a>
-  <a href="https://discord.gg/roocode"><img src="https://img.shields.io/badge/Join%20Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Join Discord"></a>
-  <a href="https://www.reddit.com/r/RooCode/"><img src="https://img.shields.io/badge/Join%20r%2FRooCode-FF4500?style=flat&logo=reddit&logoColor=white" alt="Join r/RooCode"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=Arkware.shofer"><img src="https://img.shields.io/badge/VS_Code_Marketplace-007ACC?style=flat&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
+  <a href="https://x.com/shofer"><img src="https://img.shields.io/badge/shofer-000000?style=flat&logo=x&logoColor=white" alt="X"></a>
+  <a href="https://youtube.com/@shoferyt?feature=shared"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat&logo=youtube&logoColor=white" alt="YouTube"></a>
+  <a href="https://discord.gg/shofer"><img src="https://img.shields.io/badge/Join%20Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Join Discord"></a>
+  <a href="https://www.reddit.com/r/Shofer/"><img src="https://img.shields.io/badge/Join%20r%2FShofer-FF4500?style=flat&logo=reddit&logoColor=white" alt="Join r/Shofer"></a>
 </p>
 <p align="center">
-  <em>快速取得協助 → <a href="https://discord.gg/roocode">加入 Discord</a> • 偏好非同步溝通？→ <a href="https://www.reddit.com/r/RooCode/">加入 r/RooCode</a></em>
+  <em>快速取得協助 → <a href="https://discord.gg/shofer">加入 Discord</a> • 偏好非同步溝通？→ <a href="https://www.reddit.com/r/Shofer/">加入 r/Shofer</a></em>
 </p>
 
-# Roo Code
+# Shofer
 
 > 您的 AI 驅動開發團隊，就在您的編輯器中
 
 ## v3.52.0 新功能
 
-- 已將 Poe 新增為 AI 供應商，讓你可以在 Roo Code 中直接存取 Poe 模型。
+- 已將 Poe 新增為 AI 供應商，讓你可以在 Shofer 中直接存取 Poe 模型。
 - 已改善 xAI 供應商，完成 Responses API 遷移、加入可重複使用的轉換工具，並更新了 Grok-4.20 預設值。
 - 已修正 MiniMax 模型清單和上下文視窗處理方式，讓設定更加可靠。
 
@@ -41,11 +41,11 @@
 - [简体中文](../zh-CN/README.md)
 - [繁體中文](../zh-TW/README.md)
 - ...
-  </details>
+    </details>
 
 ---
 
-## Roo Code 能為您做什麼？
+## Shofer 能為您做什麼？
 
 - 從自然語言描述生成程式碼
 - 使用模式進行調整：程式碼、架構師、詢問、偵錯和自訂模式
@@ -57,7 +57,7 @@
 
 ## 模式
 
-Roo Code 會配合您的工作方式，而非要您配合它：
+Shofer 會配合您的工作方式，而非要您配合它：
 
 - 程式碼模式：日常開發、編輯和檔案操作
 - 架構師模式：規劃系統、規格和遷移
@@ -65,30 +65,30 @@ Roo Code 會配合您的工作方式，而非要您配合它：
 - 偵錯模式：追蹤問題、新增日誌、鎖定根本原因
 - 自訂模式：為您的團隊或工作流程建置專門的模式
 
-更多資訊：[使用模式](https://docs.roocode.com/basic-usage/using-modes) • [自訂模式](https://docs.roocode.com/advanced-usage/custom-modes)
+更多資訊：[使用模式](https://docs.shofer.com/basic-usage/using-modes) • [自訂模式](https://docs.shofer.com/advanced-usage/custom-modes)
 
 ## 教學和功能影片
 
 <div align="center">
 
-|                                                                                                                                                                     |                                                                                                                                                                  |                                                                                                                                                                    |
-| :-----------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| <a href="https://www.youtube.com/watch?v=Mcq3r1EPZ-4"><img src="https://img.youtube.com/vi/Mcq3r1EPZ-4/maxresdefault.jpg" width="100%"></a><br><b>安裝 Roo Code</b> | <a href="https://www.youtube.com/watch?v=ZBML8h5cCgo"><img src="https://img.youtube.com/vi/ZBML8h5cCgo/maxresdefault.jpg" width="100%"></a><br><b>設定設定檔</b> | <a href="https://www.youtube.com/watch?v=r1bpod1VWhg"><img src="https://img.youtube.com/vi/r1bpod1VWhg/maxresdefault.jpg" width="100%"></a><br><b>程式碼庫索引</b> |
-|   <a href="https://www.youtube.com/watch?v=iiAv1eKOaxk"><img src="https://img.youtube.com/vi/iiAv1eKOaxk/maxresdefault.jpg" width="100%"></a><br><b>自訂模式</b>    |   <a href="https://www.youtube.com/watch?v=Ho30nyY332E"><img src="https://img.youtube.com/vi/Ho30nyY332E/maxresdefault.jpg" width="100%"></a><br><b>檢查點</b>   |  <a href="https://www.youtube.com/watch?v=HmnNSasv7T8"><img src="https://img.youtube.com/vi/HmnNSasv7T8/maxresdefault.jpg" width="100%"></a><br><b>上下文管理</b>  |
+|                                                                                                                                                                   |                                                                                                                                                                  |                                                                                                                                                                    |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| <a href="https://www.youtube.com/watch?v=Mcq3r1EPZ-4"><img src="https://img.youtube.com/vi/Mcq3r1EPZ-4/maxresdefault.jpg" width="100%"></a><br><b>安裝 Shofer</b> | <a href="https://www.youtube.com/watch?v=ZBML8h5cCgo"><img src="https://img.youtube.com/vi/ZBML8h5cCgo/maxresdefault.jpg" width="100%"></a><br><b>設定設定檔</b> | <a href="https://www.youtube.com/watch?v=r1bpod1VWhg"><img src="https://img.youtube.com/vi/r1bpod1VWhg/maxresdefault.jpg" width="100%"></a><br><b>程式碼庫索引</b> |
+|  <a href="https://www.youtube.com/watch?v=iiAv1eKOaxk"><img src="https://img.youtube.com/vi/iiAv1eKOaxk/maxresdefault.jpg" width="100%"></a><br><b>自訂模式</b>   |   <a href="https://www.youtube.com/watch?v=Ho30nyY332E"><img src="https://img.youtube.com/vi/Ho30nyY332E/maxresdefault.jpg" width="100%"></a><br><b>檢查點</b>   |  <a href="https://www.youtube.com/watch?v=HmnNSasv7T8"><img src="https://img.youtube.com/vi/HmnNSasv7T8/maxresdefault.jpg" width="100%"></a><br><b>上下文管理</b>  |
 
 </div>
 <p align="center">
-<a href="https://docs.roocode.com/tutorial-videos">更多快速教學和功能影片...</a>
+<a href="https://docs.shofer.com/tutorial-videos">更多快速教學和功能影片...</a>
 </p>
 
 ## 資源
 
-- **[文件](https://docs.roocode.com):** 安裝、設定和掌握 Roo Code 的官方指南。
-- **[YouTube 頻道](https://youtube.com/@roocodeyt?feature=shared):** 觀看教學和功能實際操作。
-- **[Discord 伺服器](https://discord.gg/roocode):** 加入社群以獲得即時協助和討論。
-- **[Reddit 社群](https://www.reddit.com/r/RooCode):** 分享您的經驗，看看其他人正在建立什麼。
-- **[GitHub Issues](https://github.com/RooCodeInc/Roo-Code/issues):** 回報問題並追蹤開發進度。
-- **[功能請求](https://github.com/RooCodeInc/Roo-Code/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法嗎？與開發人員分享。
+- **[文件](https://docs.shofer.com):** 安裝、設定和掌握 Shofer 的官方指南。
+- **[YouTube 頻道](https://youtube.com/@shoferyt?feature=shared):** 觀看教學和功能實際操作。
+- **[Discord 伺服器](https://discord.gg/shofer):** 加入社群以獲得即時協助和討論。
+- **[Reddit 社群](https://www.reddit.com/r/Shofer):** 分享您的經驗，看看其他人正在建立什麼。
+- **[GitHub Issues](https://github.com/Arkware/Shofer/issues):** 回報問題並追蹤開發進度。
+- **[功能請求](https://github.com/Arkware/Shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法嗎？與開發人員分享。
 
 ---
 
@@ -97,7 +97,7 @@ Roo Code 會配合您的工作方式，而非要您配合它：
 1. **複製**儲存庫：
 
 ```sh
-git clone https://github.com/RooCodeInc/Roo-Code.git
+git clone https://github.com/Arkware/Shofer.git
 ```
 
 2. **安裝相依套件**:
@@ -108,13 +108,13 @@ pnpm install
 
 3. **執行擴充功能**:
 
-有幾種方法可以執行 Roo Code 擴充功能：
+有幾種方法可以執行 Shofer 擴充功能：
 
 ### 開發模式（F5）
 
 若要進行開發，請使用 VSCode 的內建偵錯功能：
 
-在 VSCode 中按 `F5`（或前往 **執行** → **開始偵錯**）。這將在執行 Roo Code 擴充功能的新 VSCode 視窗中開啟。
+在 VSCode 中按 `F5`（或前往 **執行** → **開始偵錯**）。這將在執行 Shofer 擴充功能的新 VSCode 視窗中開啟。
 
 - 對 webview 的變更將立即顯示。
 - 對核心擴充功能的變更也將自動熱重載。
@@ -148,10 +148,10 @@ pnpm install:vsix [-y] [--editor=<command>]
     ```sh
     pnpm vsix
     ```
-2.  將在 `bin/` 目錄中產生一個 `.vsix` 檔案（例如 `bin/roo-cline-<version>.vsix`）。
+2.  將在 `bin/` 目錄中產生一個 `.vsix` 檔案（例如 `bin/shofer-<version>.vsix`）。
 3.  使用 VSCode CLI 手動安裝：
     ```sh
-    code --install-extension bin/roo-cline-<version>.vsix
+    code --install-extension bin/shofer-<version>.vsix
     ```
 
 ---
@@ -162,7 +162,7 @@ pnpm install:vsix [-y] [--editor=<command>]
 
 ## 免責聲明
 
-**請注意**，Roo Code, Inc. **不**對與 Roo Code 相關的任何程式碼、模型或其他工具、任何相關的第三方工具或任何由此產生的輸出作出任何陳述或保證。您承擔使用任何此類工具或輸出的**所有風險**；此類工具均按**「原樣」**和**「可用」**的基礎提供。此類風險可能包括但不限於智慧財產權侵權、網路漏洞或攻擊、偏見、不準確、錯誤、缺陷、病毒、停機、財產損失或損害和/或人身傷害。您對自己使用任何此類工具或輸出負全部責任（包括但不限於其合法性、適當性和結果）。
+**請注意**，Shofer, Inc. **不**對與 Shofer 相關的任何程式碼、模型或其他工具、任何相關的第三方工具或任何由此產生的輸出作出任何陳述或保證。您承擔使用任何此類工具或輸出的**所有風險**；此類工具均按**「原樣」**和**「可用」**的基礎提供。此類風險可能包括但不限於智慧財產權侵權、網路漏洞或攻擊、偏見、不準確、錯誤、缺陷、病毒、停機、財產損失或損害和/或人身傷害。您對自己使用任何此類工具或輸出負全部責任（包括但不限於其合法性、適當性和結果）。
 
 ---
 
@@ -174,8 +174,8 @@ pnpm install:vsix [-y] [--editor=<command>]
 
 ## 授權
 
-[Apache 2.0 © 2025 Roo Code, Inc.](../../LICENSE)
+[Apache 2.0 © 2025 Shofer, Inc.](../../LICENSE)
 
 ---
 
-**享受 Roo Code！** 無論您是想嚴格控管它，還是讓它自主運作，我們都迫不及待地想看看您會打造些什麼。如果您有問題或功能想法，請造訪我們的 [Reddit 社群](https://www.reddit.com/r/RooCode/)或 [Discord](https://discord.gg/roocode)。祝您開發愉快！
+**享受 Shofer！** 無論您是想嚴格控管它，還是讓它自主運作，我們都迫不及待地想看看您會打造些什麼。如果您有問題或功能想法，請造訪我們的 [Reddit 社群](https://www.reddit.com/r/Shofer/)或 [Discord](https://discord.gg/shofer)。祝您開發愉快！

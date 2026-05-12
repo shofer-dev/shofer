@@ -1,5 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import { TelemetryService } from "@roo-code/telemetry"
+import { TelemetryService } from "@shofer/telemetry"
 import { findLastIndex } from "../../shared/array"
 
 /**

@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check, RefreshCw } from "lucide-react"
 
-import type { SkillMetadata } from "@roo-code/types"
+import type { SkillMetadata } from "@shofer/types"
 
 import { cn } from "@/lib/utils"
-import { useRooPortal } from "@/components/ui/hooks/useRooPortal"
+import { useShoferPortal } from "@/components/ui/hooks/useShoferPortal"
 import { Popover, PopoverContent, PopoverTrigger, StandardTooltip } from "@/components/ui"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -31,7 +31,7 @@ export const SkillsButton = () => {
 	const { t } = useAppTranslation()
 	const { skills, customModes, loadedSkills } = useExtensionState()
 	const [open, setOpen] = useState(false)
-	const portalContainer = useRooPortal("roo-portal")
+	const portalContainer = useShoferPortal("shofer-portal")
 
 	// Fetch skills on mount so the button appears
 	useEffect(() => {
@@ -58,12 +58,17 @@ export const SkillsButton = () => {
 
 	// Resolve loaded skills from metadata — only show loaded skills that still exist
 	const loadedSkillsSet = useMemo(() => new Set(Object.keys(loadedSkills ?? {})), [loadedSkills])
+	console.log("[SkillsButton] loadedSkills:", loadedSkills, "loadedSkillsSet:", loadedSkillsSet)
 
 	// Split skills into loaded and unloaded
 	const loadedSkillsList = useMemo(() => {
 		const items = skills ?? []
 		return items.filter((s) => loadedSkillsSet.has(s.name)).sort((a, b) => a.name.localeCompare(b.name))
 	}, [skills, loadedSkillsSet])
+	console.log(
+		"[SkillsButton] loadedSkillsList:",
+		loadedSkillsList.map((s) => s.name),
+	)
 
 	// Group unloaded skills by mode restriction, sorted alphabetically
 	const grouped = useMemo(() => {
@@ -120,7 +125,7 @@ export const SkillsButton = () => {
 		vscode.postMessage({ type: "openFile", text: path })
 	}, [])
 
-	// Trigger a re-read of .roo/skills directories
+	// Trigger a re-read of .shofer/skills directories
 	const handleRefresh = useCallback(() => {
 		vscode.postMessage({ type: "requestSkills" })
 	}, [])

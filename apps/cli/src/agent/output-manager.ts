@@ -13,7 +13,7 @@
  * - Can be disabled for TUI mode where Ink controls the terminal
  */
 
-import { ClineMessage, ClineSay } from "@roo-code/types"
+import { ShoferMessage, ShoferSay } from "@shofer/types"
 
 import { Observable } from "./events.js"
 
@@ -116,13 +116,13 @@ export class OutputManager {
 	// ===========================================================================
 
 	/**
-	 * Output a ClineMessage based on its type.
+	 * Output a ShoferMessage based on its type.
 	 * This is the main entry point for message output.
 	 *
 	 * @param msg - The message to output
 	 * @param skipFirstUserMessage - If true, skip the first "text" message (user prompt echo)
 	 */
-	outputMessage(msg: ClineMessage, skipFirstUserMessage = true): void {
+	outputMessage(msg: ShoferMessage, skipFirstUserMessage = true): void {
 		const ts = msg.ts
 		const text = msg.text || ""
 		const isPartial = msg.partial === true
@@ -235,7 +235,7 @@ export class OutputManager {
 
 	private outputSayMessage(
 		ts: number,
-		say: ClineSay,
+		say: ShoferSay,
 		text: string,
 		isPartial: boolean,
 		alreadyDisplayedComplete: boolean | undefined,
@@ -246,7 +246,7 @@ export class OutputManager {
 				this.outputTextMessage(ts, text, isPartial, alreadyDisplayedComplete, skipFirstUserMessage)
 				break
 
-			// case "thinking": - not a valid ClineSay type
+			// case "thinking": - not a valid ShoferSay type
 			case "reasoning":
 				this.outputReasoningMessage(ts, text, isPartial, alreadyDisplayedComplete)
 				break

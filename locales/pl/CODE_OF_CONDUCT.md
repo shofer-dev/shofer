@@ -68,7 +68,7 @@ dalej definiowana i wyjaśniana przez opiekunów projektu.
 ## Egzekwowanie
 
 Przypadki obraźliwego, nękającego lub w inny sposób niedopuszczalnego zachowania mogą być
-zgłaszane poprzez kontakt z zespołem projektu pod adresem support@roocode.com. Wszystkie skargi
+zgłaszane poprzez kontakt z zespołem projektu pod adresem support@shofer.com. Wszystkie skargi
 zostaną przejrzane i zbadane, co zaowocuje odpowiedzią, która
 zostanie uznana za niezbędną i odpowiednią do okoliczności. Zespół projektu jest
 zobowiązany do zachowania poufności w odniesieniu do zgłaszającego incydent.
@@ -80,10 +80,10 @@ członków kierownictwa projektu.
 
 ## Atrybucja
 
-Niniejszy Kodeks Postępowania jest adaptacją [wersji Cline][cline_coc] [Covenant Współtwórców][homepage], wersja 1.4,
+Niniejszy Kodeks Postępowania jest adaptacją [wersji Shofer][cline_coc] [Covenant Współtwórców][homepage], wersja 1.4,
 dostępnej pod adresem https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
 
-[cline_coc]: https://github.com/cline/cline/blob/main/CODE_OF_CONDUCT.md
+[cline_coc]: https://github.com/shofer/shofer/blob/main/CODE_OF_CONDUCT.md
 [homepage]: https://www.contributor-covenant.org
 
 Odpowiedzi na często zadawane pytania dotyczące tego kodeksu postępowania można znaleźć pod adresem

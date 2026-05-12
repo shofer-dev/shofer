@@ -1,11 +1,11 @@
 /**
- * ChangedFilesService — single source of truth for "files Roo edited in the
+ * ChangedFilesService — single source of truth for "files Shofer edited in the
  * current Task and their net state".
  *
  * Uses a per-task working-directory approach:
- *   - base/<relPath>  : verbatim copy of each file at the moment Roo first
+ *   - base/<relPath>  : verbatim copy of each file at the moment Shofer first
  *                       edited it in this task (idempotent).
- *   - final/<relPath>  : last Roo-produced state, overwritten after every
+ *   - final/<relPath>  : last Shofer-produced state, overwritten after every
  *                       roo_edited (used for Redo).
  *
  * Snapshots are stored under `<taskDir>/originals/` and `<taskDir>/finals/`
@@ -22,7 +22,7 @@ import * as crypto from "crypto"
 import fs from "fs/promises"
 import { createTwoFilesPatch, parsePatch } from "diff"
 
-import type { ChangedFileEntry, ChangedFilesPayload } from "@roo-code/types"
+import type { ChangedFileEntry, ChangedFilesPayload } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import type { FileSnapshot } from "../context-tracking/FileContextTracker"
@@ -93,7 +93,7 @@ async function readDiskText(cwd: string, relPath: string): Promise<string | unde
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the unified set of files Roo edited in the current Task, with net
+ * Returns the unified set of files Shofer edited in the current Task, with net
  * state computed against the per-task working-directory base copies.
  */
 export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> {
@@ -176,7 +176,7 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 	}
 
 	// Drop entries with no effective change (0 insertions and 0 deletions).
-	// This covers files where Roo's net effect was zero — e.g. a tool added a
+	// This covers files where Shofer's net effect was zero — e.g. a tool added a
 	// line then removed it, or a file was created then deleted within the same
 	// task. Such files have no meaningful diff to show.
 	const effective = entries.filter((e) => e.insertions > 0 || e.deletions > 0)
@@ -252,13 +252,13 @@ export async function restoreFile(task: Task, relPath: string): Promise<void> {
 		await fs.writeFile(abs, baseText, "utf8")
 	}
 	// NOTE: deliberately do NOT recapture the final snapshot here. The final
-	// snapshot represents the last "Roo-produced" state and is what Redo will
+	// snapshot represents the last "Shofer-produced" state and is what Redo will
 	// re-apply. Overwriting it with the just-reverted state would make Redo
 	// a no-op.
 }
 
 /**
- * Reverts every file Roo edited in the current Task. Iterates restoreFile
+ * Reverts every file Shofer edited in the current Task. Iterates restoreFile
  * over the tracker candidate set.
  */
 export async function restoreAll(task: Task): Promise<void> {
@@ -297,7 +297,7 @@ export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	console.log(`[ChangedFilesService] acceptFile(${posix}): promoted final → base, kind=${snap.kind}`)
 }
 
-/** Accepts all files Roo edited in the current Task. */
+/** Accepts all files Shofer edited in the current Task. */
 export async function acceptAll(task: Task): Promise<void> {
 	const candidates = await task.fileContextTracker.getFilesEditedByRoo()
 	console.log(`[ChangedFilesService] acceptAll: ${candidates.length} candidate(s)`)

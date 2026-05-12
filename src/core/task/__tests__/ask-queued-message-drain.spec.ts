@@ -7,7 +7,7 @@ describe("Task.ask queued message drain", () => {
 	it("consumes queued message while blocked on followup ask", async () => {
 		const task = Object.create(Task.prototype) as Task
 		;(task as any).abort = false
-		;(task as any).clineMessages = []
+		;(task as any).shoferMessages = []
 		;(task as any).askResponse = undefined
 		;(task as any).askResponseText = undefined
 		;(task as any).askResponseImages = undefined
@@ -18,9 +18,9 @@ describe("Task.ask queued message drain", () => {
 		;(task as any).messageQueueService = new MessageQueueService()
 
 		// Minimal stubs used by ask()
-		;(task as any).addToClineMessages = vi.fn(async () => {})
-		;(task as any).saveClineMessages = vi.fn(async () => {})
-		;(task as any).updateClineMessage = vi.fn(async () => {})
+		;(task as any).addToShoferMessages = vi.fn(async () => {})
+		;(task as any).saveShoferMessages = vi.fn(async () => {})
+		;(task as any).updateShoferMessage = vi.fn(async () => {})
 		;(task as any).cancelAutoApprovalTimeout = vi.fn(() => {})
 		;(task as any).checkpointSave = vi.fn(async () => {})
 		;(task as any).emit = vi.fn()
@@ -39,7 +39,7 @@ describe("Task.ask queued message drain", () => {
 	it("does not consume queued messages for command_output asks", async () => {
 		const task = Object.create(Task.prototype) as Task
 		;(task as any).abort = false
-		;(task as any).clineMessages = []
+		;(task as any).shoferMessages = []
 		;(task as any).askResponse = undefined
 		;(task as any).askResponseText = undefined
 		;(task as any).askResponseImages = undefined
@@ -47,9 +47,9 @@ describe("Task.ask queued message drain", () => {
 
 		const { MessageQueueService } = await import("../../message-queue/MessageQueueService")
 		;(task as any).messageQueueService = new MessageQueueService()
-		;(task as any).addToClineMessages = vi.fn(async () => {})
-		;(task as any).saveClineMessages = vi.fn(async () => {})
-		;(task as any).updateClineMessage = vi.fn(async () => {})
+		;(task as any).addToShoferMessages = vi.fn(async () => {})
+		;(task as any).saveShoferMessages = vi.fn(async () => {})
+		;(task as any).updateShoferMessage = vi.fn(async () => {})
 		;(task as any).cancelAutoApprovalTimeout = vi.fn(() => {})
 		;(task as any).checkpointSave = vi.fn(async () => {})
 		;(task as any).emit = vi.fn()

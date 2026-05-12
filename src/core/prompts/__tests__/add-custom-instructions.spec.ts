@@ -45,7 +45,7 @@ vi.mock("fs/promises")
 
 import * as vscode from "vscode"
 
-import { ModeConfig } from "@roo-code/types"
+import { ModeConfig } from "@shofer/types"
 
 import { SYSTEM_PROMPT } from "../system"
 import { McpHub } from "../../../services/mcp/McpHub"
@@ -210,7 +210,7 @@ describe("addCustomInstructions", () => {
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
-			undefined, // rooIgnoreInstructions
+			undefined, // shoferIgnoreInstructions
 			undefined, // partialReadsEnabled
 		)
 
@@ -230,7 +230,7 @@ describe("addCustomInstructions", () => {
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
-			undefined, // rooIgnoreInstructions
+			undefined, // shoferIgnoreInstructions
 			undefined, // partialReadsEnabled
 		)
 
@@ -252,7 +252,7 @@ describe("addCustomInstructions", () => {
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
-			undefined, // rooIgnoreInstructions
+			undefined, // shoferIgnoreInstructions
 			undefined, // partialReadsEnabled
 		)
 

@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { type RouterModels, type ExtensionMessage } from "@roo-code/types"
+import { type RouterModels, type ExtensionMessage } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 
 type UseRouterModelsOptions = {
-	provider?: string // single provider filter (e.g. "roo")
+	provider?: string // single provider filter (e.g. "shofer")
 	enabled?: boolean // gate fetching entirely
 }
 

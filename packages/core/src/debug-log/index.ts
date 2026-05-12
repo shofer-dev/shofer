@@ -1,17 +1,17 @@
 /**
  * File-based debug logging utility
  *
- * This writes logs to ~/.roo/cli-debug.log, avoiding stdout/stderr
+ * This writes logs to ~/.shofer/cli-debug.log, avoiding stdout/stderr
  * which would break TUI applications. The log format is timestamped JSON.
  *
  * Usage:
- *   import { debugLog, DebugLogger } from "@roo-code/core/cli"
+ *   import { debugLog, DebugLogger } from "@shofer/core/cli"
  *
  *   // Simple logging
  *   debugLog("handleModeSwitch", { mode: newMode, configId })
  *
  *   // Or create a named logger for a component
- *   const log = new DebugLogger("ClineProvider")
+ *   const log = new DebugLogger("ShoferProvider")
  *   log.info("handleModeSwitch", { mode: newMode })
  */
 
@@ -19,7 +19,7 @@ import * as fs from "fs"
 import * as path from "path"
 import * as os from "os"
 
-const DEBUG_LOG_PATH = path.join(os.homedir(), ".roo", "cli-debug.log")
+const DEBUG_LOG_PATH = path.join(os.homedir(), ".shofer", "cli-debug.log")
 
 let debugLogEnabled = false
 
@@ -33,7 +33,7 @@ export function setDebugLogEnabled(enabled: boolean): void {
 
 /**
  * Simple file-based debug log function.
- * Writes timestamped entries to ~/.roo/cli-debug.log
+ * Writes timestamped entries to ~/.shofer/cli-debug.log
  * Only writes when enabled via setDebugLogEnabled(true).
  */
 export function debugLog(message: string, data?: unknown): void {

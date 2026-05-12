@@ -3,7 +3,7 @@
  *
  * A native VSCode TreeView that acts as a drop target for files/folders from
  * the Explorer.  This is the only reliable cross-platform drop target for the
- * Roo Code chat context: VSCode Desktop's webview overlay swallows DOM drag
+ * Shofer chat context: VSCode Desktop's webview overlay swallows DOM drag
  * events at the iframe root, and code-server inherits the same limitation.
  *
  * The view itself is intentionally minimal — it owns no state.  When files
@@ -12,13 +12,13 @@
  * source of truth and renders the removable file tags above the chat input.
  *
  * The view is registered as collapsed-by-default so it does not visually
- * clutter the Roo Code sidebar; it expands on demand when the user wants to
+ * clutter the Shofer sidebar; it expands on demand when the user wants to
  * use it as a drop target.
  */
 
 import * as vscode from "vscode"
 
-import type { ClineProvider } from "./ClineProvider"
+import type { ShoferProvider } from "./ShoferProvider"
 
 /**
  * Convert a list of file/folder URIs into the `addContextFiles` message
@@ -28,7 +28,7 @@ import type { ClineProvider } from "./ClineProvider"
  */
 export async function addUrisToContext(
 	uris: readonly vscode.Uri[],
-	provider: ClineProvider | undefined,
+	provider: ShoferProvider | undefined,
 ): Promise<number> {
 	if (!provider || uris.length === 0) return 0
 
@@ -58,7 +58,7 @@ export async function addUrisToContext(
 
 	// Make sure the sidebar is visible so the user actually sees the tags appear.
 	try {
-		await vscode.commands.executeCommand("roo-cline.SidebarProvider.focus")
+		await vscode.commands.executeCommand("shofer.SidebarProvider.focus")
 	} catch {
 		// best-effort
 	}
@@ -96,7 +96,7 @@ class HintItem extends vscode.TreeItem {
 export class ContextDropZoneProvider
 	implements vscode.TreeDataProvider<HintItem>, vscode.TreeDragAndDropController<HintItem>
 {
-	static readonly viewId = "roo-cline.contextDropZone"
+	static readonly viewId = "shofer.contextDropZone"
 
 	// Accept Explorer file drops.  VSCode delivers Explorer drags as
 	// `text/uri-list`; we do not advertise any drag MIME types because this
@@ -107,13 +107,13 @@ export class ContextDropZoneProvider
 	private readonly _onDidChangeTreeData = new vscode.EventEmitter<HintItem | undefined | null | void>()
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event
 
-	private clineProvider: ClineProvider | undefined
+	private clineProvider: ShoferProvider | undefined
 
 	/**
 	 * Inject the chat provider so we can post `addContextFiles` messages back
 	 * to the webview when files are dropped.
 	 */
-	setClineProvider(provider: ClineProvider): void {
+	setShoferProvider(provider: ShoferProvider): void {
 		this.clineProvider = provider
 	}
 

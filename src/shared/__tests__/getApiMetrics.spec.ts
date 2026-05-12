@@ -1,6 +1,6 @@
 // npx vitest run src/shared/__tests__/getApiMetrics.spec.ts
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { getApiMetrics } from "../getApiMetrics"
 
@@ -9,7 +9,7 @@ describe("getApiMetrics", () => {
 	const createApiReqStartedMessage = (
 		text: string = '{"tokensIn":10,"tokensOut":20}',
 		ts: number = 1000,
-	): ClineMessage => ({
+	): ShoferMessage => ({
 		type: "say",
 		say: "api_req_started",
 		text,
@@ -22,7 +22,7 @@ describe("getApiMetrics", () => {
 		newContextTokens: number = 500,
 		prevContextTokens: number = 1000,
 		ts: number = 2000,
-	): ClineMessage => ({
+	): ShoferMessage => ({
 		type: "say",
 		say: "condense_context",
 		contextCondense: {
@@ -39,7 +39,7 @@ describe("getApiMetrics", () => {
 		say: "text" | "error" | "reasoning" | "completion_result" = "text",
 		text: string = "Hello world",
 		ts: number = 999,
-	): ClineMessage => ({
+	): ShoferMessage => ({
 		type: "say",
 		say,
 		text,
@@ -48,7 +48,7 @@ describe("getApiMetrics", () => {
 
 	describe("Basic functionality", () => {
 		it("should calculate metrics from a single api_req_started message", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createApiReqStartedMessage(
 					'{"tokensIn":100,"tokensOut":200,"cacheWrites":5,"cacheReads":10,"cost":0.005}',
 				),
@@ -65,7 +65,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should calculate metrics from multiple api_req_started messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createApiReqStartedMessage(
 					'{"tokensIn":100,"tokensOut":200,"cacheWrites":5,"cacheReads":10,"cost":0.005}',
 					1000,
@@ -87,7 +87,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should calculate metrics from condense_context messages", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createCondenseContextMessage(0.002, 500, 1000, 1000),
 				createCondenseContextMessage(0.003, 400, 800, 2000),
 			]
@@ -103,7 +103,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should calculate metrics from mixed message types", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createApiReqStartedMessage(
 					'{"tokensIn":100,"tokensOut":200,"cacheWrites":5,"cacheReads":10,"cost":0.005}',
 					1000,
@@ -140,7 +140,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should handle messages with no API metrics", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createOtherMessage("text", "Message 1", 1000),
 				createOtherMessage("error", "Error message", 2000),
 			]
@@ -160,7 +160,7 @@ describe("getApiMetrics", () => {
 			const originalConsoleError = console.error
 			console.error = vi.fn()
 
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "say",
 					say: "api_req_started",
@@ -184,7 +184,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should handle missing text field in api_req_started message", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "say",
 					say: "api_req_started",
@@ -205,7 +205,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should handle missing contextCondense field in condense_context message", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				{
 					type: "say",
 					say: "condense_context",
@@ -226,7 +226,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should handle partial metrics in api_req_started message", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createApiReqStartedMessage('{"tokensIn":100}', 1000), // Only tokensIn
 				createApiReqStartedMessage('{"tokensOut":200}', 2000), // Only tokensOut
 				createApiReqStartedMessage('{"cacheWrites":5}', 3000), // Only cacheWrites
@@ -248,7 +248,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should handle non-number values in api_req_started message", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				// Use string values that can be parsed as JSON but aren't valid numbers for the metrics
 				createApiReqStartedMessage(
 					'{"tokensIn":"not-a-number","tokensOut":"not-a-number","cacheWrites":"not-a-number","cacheReads":"not-a-number","cost":"not-a-number"}',
@@ -271,7 +271,7 @@ describe("getApiMetrics", () => {
 
 	describe("Context tokens calculation", () => {
 		it("should calculate contextTokens from the last api_req_started message", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createApiReqStartedMessage('{"tokensIn":100,"tokensOut":200,"cacheWrites":5,"cacheReads":10}', 1000),
 				createApiReqStartedMessage('{"tokensIn":50,"tokensOut":150,"cacheWrites":3,"cacheReads":7}', 2000),
 			]
@@ -283,7 +283,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should calculate contextTokens from the last condense_context message", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createApiReqStartedMessage('{"tokensIn":100,"tokensOut":200,"cacheWrites":5,"cacheReads":10}', 1000),
 				createCondenseContextMessage(0.002, 500, 1000, 2000),
 			]
@@ -295,7 +295,7 @@ describe("getApiMetrics", () => {
 		})
 
 		it("should prioritize the last message for contextTokens calculation", () => {
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createCondenseContextMessage(0.002, 500, 1000, 1000),
 				createApiReqStartedMessage('{"tokensIn":100,"tokensOut":200,"cacheWrites":5,"cacheReads":10}', 2000),
 				createCondenseContextMessage(0.003, 400, 800, 3000),
@@ -313,7 +313,7 @@ describe("getApiMetrics", () => {
 			const originalConsoleError = console.error
 			console.error = vi.fn()
 
-			const messages: ClineMessage[] = [
+			const messages: ShoferMessage[] = [
 				createApiReqStartedMessage('{"tokensIn":null,"cacheWrites":5,"cacheReads":10}', 1000),
 			]
 

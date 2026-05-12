@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { ClineProvider } from "../../webview/ClineProvider"
-import type { ProviderSettings } from "@roo-code/types"
+import type { ShoferProvider } from "../../webview/ShoferProvider"
+import type { ProviderSettings } from "@shofer/types"
 
 // All vi.mock() calls are hoisted to the top of the file by Vitest
 // and are applied before any imports are resolved
@@ -63,7 +63,7 @@ vi.mock("../../integrations/terminal/TerminalRegistry", () => ({
 	},
 }))
 
-vi.mock("@roo-code/telemetry", () => ({
+vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
 		instance: {
 			captureTaskCreated: vi.fn(),
@@ -75,7 +75,7 @@ vi.mock("@roo-code/telemetry", () => ({
 	},
 }))
 
-vi.mock("@roo-code/cloud", () => ({
+vi.mock("@shofer/cloud", () => ({
 	CloudService: {
 		isEnabled: () => false,
 	},
@@ -123,8 +123,8 @@ vi.mock("../../environment/getEnvironmentDetails", () => ({
 	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
 }))
 
-// Mock RooIgnoreController
-vi.mock("../../ignore/RooIgnoreController")
+// Mock ShoferIgnoreController
+vi.mock("../../ignore/ShoferIgnoreController")
 
 // Mock condense
 vi.mock("../../condense", () => ({
@@ -155,7 +155,7 @@ vi.mock("../../../utils/fs", () => ({
 import { Task } from "../Task"
 
 describe("Task grounding sources handling", () => {
-	let mockProvider: Partial<ClineProvider>
+	let mockProvider: Partial<ShoferProvider>
 	let mockApiConfiguration: ProviderSettings
 
 	beforeEach(() => {
@@ -185,7 +185,7 @@ describe("Task grounding sources handling", () => {
 	it("should strip grounding sources from assistant message before persisting to API history", async () => {
 		// Create a task instance
 		const task = new Task({
-			provider: mockProvider as ClineProvider,
+			provider: mockProvider as ShoferProvider,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
@@ -243,7 +243,7 @@ Sources: [1](https://example.com), [2](https://another.com)
 
 	it("should not modify assistant message when no grounding sources are present", async () => {
 		const task = new Task({
-			provider: mockProvider as ClineProvider,
+			provider: mockProvider as ShoferProvider,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,

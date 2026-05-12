@@ -1,10 +1,10 @@
-// pnpm --filter @roo-code/types test src/__tests__/message.test.ts
+// pnpm --filter @shofer/types test src/__tests__/message.test.ts
 
-import { clineAsks, isIdleAsk, isInteractiveAsk, isResumableAsk, isNonBlockingAsk } from "../message.js"
+import { shoferAsks, isIdleAsk, isInteractiveAsk, isResumableAsk, isNonBlockingAsk } from "../message.js"
 
 describe("ask messages", () => {
 	test("all ask messages are classified", () => {
-		for (const ask of clineAsks) {
+		for (const ask of shoferAsks) {
 			expect(
 				isIdleAsk(ask) || isInteractiveAsk(ask) || isResumableAsk(ask) || isNonBlockingAsk(ask),
 				`${ask} is not classified`,

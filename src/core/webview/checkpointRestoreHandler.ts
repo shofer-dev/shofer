@@ -1,13 +1,13 @@
 import { Task } from "../task/Task"
-import { ClineProvider } from "./ClineProvider"
+import { ShoferProvider } from "./ShoferProvider"
 import { saveTaskMessages } from "../task-persistence"
 import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 import { t } from "../../i18n"
 
 export interface CheckpointRestoreConfig {
-	provider: ClineProvider
-	currentCline: Task
+	provider: ShoferProvider
+	currentShofer: Task
 	messageTs: number
 	messageIndex: number
 	checkpoint: { hash: string }
@@ -24,16 +24,16 @@ export interface CheckpointRestoreConfig {
  * This consolidates the common logic while handling operation-specific behavior.
  */
 export async function handleCheckpointRestoreOperation(config: CheckpointRestoreConfig): Promise<void> {
-	const { provider, currentCline, messageTs, checkpoint, operation, editData } = config
+	const { provider, currentShofer, messageTs, checkpoint, operation, editData } = config
 
 	try {
 		// For delete operations, ensure the task is properly aborted to handle any pending ask operations
 		// This prevents "Current ask promise was ignored" errors
 		// For edit operations, we don't abort because the checkpoint restore will handle it
-		if (operation === "delete" && currentCline && !currentCline.abort) {
-			currentCline.abortTask()
+		if (operation === "delete" && currentShofer && !currentShofer.abort) {
+			currentShofer.abortTask()
 			// Wait a bit for the abort to complete
-			await pWaitFor(() => currentCline.abort === true, {
+			await pWaitFor(() => currentShofer.abort === true, {
 				timeout: 1000,
 				interval: 50,
 			}).catch(() => {
@@ -43,7 +43,7 @@ export async function handleCheckpointRestoreOperation(config: CheckpointRestore
 
 		// For edit operations, set up pending edit data before restoration
 		if (operation === "edit" && editData) {
-			const operationId = `task-${currentCline.taskId}`
+			const operationId = `task-${currentShofer.taskId}`
 			provider.setPendingEditOperation(operationId, {
 				messageTs,
 				editedContent: editData.editedContent,
@@ -54,7 +54,7 @@ export async function handleCheckpointRestoreOperation(config: CheckpointRestore
 		}
 
 		// Perform the checkpoint restoration
-		await currentCline.checkpointRestore({
+		await currentShofer.checkpointRestore({
 			ts: messageTs,
 			commitHash: checkpoint.hash,
 			mode: "restore",
@@ -67,13 +67,13 @@ export async function handleCheckpointRestoreOperation(config: CheckpointRestore
 		if (operation === "delete") {
 			// Save the updated messages to disk after checkpoint restoration
 			await saveTaskMessages({
-				messages: currentCline.clineMessages,
-				taskId: currentCline.taskId,
+				messages: currentShofer.shoferMessages,
+				taskId: currentShofer.taskId,
 				globalStoragePath: provider.contextProxy.globalStorageUri.fsPath,
 			})
 
 			// Get the updated history item and reinitialize
-			const { historyItem } = await provider.getTaskWithId(currentCline.taskId)
+			const { historyItem } = await provider.getTaskWithId(currentShofer.taskId)
 			await provider.createTaskWithHistoryItem(historyItem)
 		}
 		// For edit operations, the task cancellation in checkpointRestore
@@ -91,7 +91,10 @@ export async function handleCheckpointRestoreOperation(config: CheckpointRestore
  * Common checkpoint restore validation and initialization utility.
  * This can be used by any checkpoint restore flow that needs to wait for initialization.
  */
-export async function waitForClineInitialization(provider: ClineProvider, timeoutMs: number = 3000): Promise<boolean> {
+export async function waitForShoferInitialization(
+	provider: ShoferProvider,
+	timeoutMs: number = 3000,
+): Promise<boolean> {
 	try {
 		await pWaitFor(() => provider.getCurrentTask()?.isInitialized === true, {
 			timeout: timeoutMs,

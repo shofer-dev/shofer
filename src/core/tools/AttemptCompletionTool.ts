@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
-import { RooCodeEventName, type HistoryItem } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import { ShoferEventName, type HistoryItem } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
@@ -129,7 +129,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						if (historyItem?.isBackground) {
 							// Background child completion path. The parent is the focused
 							// task and is running concurrently; we MUST NOT call
-							// removeClineFromStack on the parent or fire the blocking
+							// removeShoferFromStack on the parent or fire the blocking
 							// parent resolver (which is only for foreground subtasks).
 							//
 							// Instead: persist completion status on the child's own
@@ -224,7 +224,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const result: string | undefined = block.params.result
 		const command: string | undefined = block.params.command
 
-		const lastMessage = task.clineMessages.at(-1)
+		const lastMessage = task.shoferMessages.at(-1)
 
 		if (command) {
 			if (lastMessage && lastMessage.ask === "command") {
@@ -245,7 +245,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		task.emitFinalTokenUsageUpdate()
 
 		TelemetryService.instance.captureTaskCompleted(task.taskId)
-		task.emit(RooCodeEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage)
+		task.emit(ShoferEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage)
 		console.log(`[AttemptCompletionTool.emitTaskCompleted] TaskCompleted event emitted, taskId=${task.taskId}`)
 	}
 }

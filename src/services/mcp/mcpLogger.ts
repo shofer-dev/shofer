@@ -1,5 +1,5 @@
 /**
- * Module-level logger for MCP services so they can write to Roo-Code's
+ * Module-level logger for MCP services so they can write to Shofer's
  * OutputChannel without taking a `vscode.OutputChannel` dependency in their
  * constructors. Set once at activation by `extension.ts`.
  *

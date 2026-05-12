@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, ChevronDown, ChevronRight, FileDiff, RotateCcw, Undo2 } from "lucide-react"
 
-import type { ChangedFileEntry, ChangedFilesPayload, ExtensionMessage } from "@roo-code/types"
+import type { ChangedFileEntry, ChangedFilesPayload, ExtensionMessage } from "@shofer/types"
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui"
 import { cn } from "@/lib/utils"
@@ -14,7 +14,7 @@ interface FileChangesPanelProps {
 }
 
 /**
- * FileChangesPanel — shows the files Roo edited in the current Task, with
+ * FileChangesPanel — shows the files Shofer edited in the current Task, with
  * net-state-aware accounting and per-file diff/revert/redo/accept actions.
  *
  * Source of truth is the extension-host `ChangedFilesService` (single

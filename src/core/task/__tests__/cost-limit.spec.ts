@@ -12,7 +12,7 @@
  * End-to-end pause/abort/kill behaviour is covered by manual QA.
  */
 import { describe, it, expect, vi } from "vitest"
-import type { HistoryItem } from "@roo-code/types"
+import type { HistoryItem } from "@shofer/types"
 
 import { aggregateTaskCostsRecursive } from "../../webview/aggregateTaskCosts"
 

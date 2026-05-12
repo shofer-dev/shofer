@@ -2,7 +2,7 @@ import React, { useEffect, useImperativeHandle, useRef } from "react"
 import { act, fireEvent, render, waitFor } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import type { ClineMessage } from "@roo-code/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { ExtensionStateContextProvider } from "@src/context/ExtensionStateContext"
 
@@ -14,7 +14,7 @@ interface ExtensionStateMessage {
 	type: "state"
 	state: {
 		version: string
-		clineMessages: ClineMessage[]
+		shoferMessages: ShoferMessage[]
 		taskHistory: unknown[]
 		shouldShowAnnouncement: boolean
 		allowedCommands: string[]
@@ -33,8 +33,8 @@ interface MockVirtuosoHandle {
 }
 
 interface MockVirtuosoProps {
-	data: ClineMessage[]
-	itemContent: (index: number, item: ClineMessage) => React.ReactNode
+	data: ShoferMessage[]
+	itemContent: (index: number, item: ShoferMessage) => React.ReactNode
 	atBottomStateChange?: (isAtBottom: boolean) => void
 	followOutput?: FollowOutput
 	className?: string
@@ -82,8 +82,8 @@ vi.mock("@src/hooks/useCloudUpsell", () => ({
 vi.mock("../common/TelemetryBanner", nullDefaultModule)
 vi.mock("../common/VersionIndicator", nullDefaultModule)
 vi.mock("../history/HistoryPreview", nullDefaultModule)
-vi.mock("@src/components/welcome/RooHero", nullDefaultModule)
-vi.mock("@src/components/welcome/RooTips", nullDefaultModule)
+vi.mock("@src/components/welcome/ShoferHero", nullDefaultModule)
+vi.mock("@src/components/welcome/ShoferTips", nullDefaultModule)
 vi.mock("../Announcement", nullDefaultModule)
 vi.mock("./TaskHeader", () => ({ default: () => <div data-testid="task-header" /> }))
 vi.mock("./ProfileViolationWarning", nullDefaultModule)
@@ -133,7 +133,7 @@ vi.mock("../ChatTextArea", () => {
 })
 
 vi.mock("../ChatRow", () => ({
-	default: ({ message }: { message: ClineMessage }) => <div data-testid="chat-row">{message.ts}</div>,
+	default: ({ message }: { message: ShoferMessage }) => <div data-testid="chat-row">{message.ts}</div>,
 }))
 
 vi.mock("react-virtuoso", () => {
@@ -208,7 +208,7 @@ const props: ChatViewProps = {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms))
 
-const buildMessages = (baseTs: number): ClineMessage[] => [
+const buildMessages = (baseTs: number): ShoferMessage[] => [
 	{ type: "say", say: "text", ts: baseTs, text: "task" },
 	{ type: "say", say: "text", ts: baseTs + 1, text: "row-1" },
 	{ type: "say", say: "text", ts: baseTs + 2, text: "row-2" },
@@ -222,12 +222,12 @@ const resolveFollowOutput = (isAtBottom: boolean): "auto" | false => {
 	return followOutput === "auto" ? "auto" : false
 }
 
-const postState = (clineMessages: ClineMessage[]) => {
+const postState = (shoferMessages: ShoferMessage[]) => {
 	const message: ExtensionStateMessage = {
 		type: "state",
 		state: {
 			version: "1.0.0",
-			clineMessages,
+			shoferMessages,
 			taskHistory: [],
 			shouldShowAnnouncement: false,
 			allowedCommands: [],

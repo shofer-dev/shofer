@@ -10,7 +10,7 @@ vi.mock("@src/utils/vscode", () => ({
 	},
 }))
 
-vi.mock("@roo/package", () => ({
+vi.mock("@shofer/package", () => ({
 	Package: {
 		version: "3.52.0",
 	},
@@ -34,13 +34,13 @@ vi.mock("@src/i18n/TranslationContext", () => ({
 			const translations: Record<string, string> = {
 				"chat:announcement.release.heading": "What's New:",
 				"chat:announcement.release.gpt54":
-					"Poe Provider: Added Poe as an AI provider so you can access Poe models directly in Roo Code.",
+					"Poe Provider: Added Poe as an AI provider so you can access Poe models directly in Shofer.",
 				"chat:announcement.release.slashSkills":
 					"xAI and MiniMax Improvements: Migrated the xAI provider to the Responses API, added Grok-4.20 defaults, and fixed MiniMax model listings and context window handling for a more reliable setup.",
 			}
 
 			if (key === "chat:announcement.title") {
-				return `Roo Code ${options?.version ?? ""} Released`
+				return `Shofer ${options?.version ?? ""} Released`
 			}
 
 			return translations[key] ?? key
@@ -52,10 +52,10 @@ describe("Announcement", () => {
 	it("renders the v3.52.0 announcement title and highlights", () => {
 		render(<Announcement hideAnnouncement={vi.fn()} />)
 
-		expect(screen.getByText("Roo Code 3.52.0 Released")).toBeInTheDocument()
+		expect(screen.getByText("Shofer 3.52.0 Released")).toBeInTheDocument()
 		expect(
 			screen.getByText(
-				"Poe Provider: Added Poe as an AI provider so you can access Poe models directly in Roo Code.",
+				"Poe Provider: Added Poe as an AI provider so you can access Poe models directly in Shofer.",
 			),
 		).toBeInTheDocument()
 		expect(

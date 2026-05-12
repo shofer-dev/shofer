@@ -8,7 +8,7 @@
 
 import * as path from "path"
 import * as fs from "fs/promises"
-import { type ClineSayTool, DEFAULT_WRITE_DELAY_MS } from "@roo-code/types"
+import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
@@ -60,11 +60,11 @@ export class SedTool extends BaseTool<"sed"> {
 				return
 			}
 
-			const accessAllowed = task.rooIgnoreController?.validateAccess(relPath)
+			const accessAllowed = task.shoferIgnoreController?.validateAccess(relPath)
 
 			if (!accessAllowed) {
 				await task.say("rooignore_error", relPath)
-				pushToolResult(formatResponse.rooIgnoreError(relPath))
+				pushToolResult(formatResponse.shoferIgnoreError(relPath))
 				return
 			}
 
@@ -132,7 +132,7 @@ export class SedTool extends BaseTool<"sed"> {
 			const isWriteProtected = task.rooProtectedController?.isWriteProtected(relPath) || false
 
 			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
-			const sharedMessageProps: ClineSayTool = {
+			const sharedMessageProps: ShoferSayTool = {
 				tool: "editedExistingFile",
 				path: getReadablePath(task.cwd, relPath),
 				isOutsideWorkspace,
@@ -152,7 +152,7 @@ export class SedTool extends BaseTool<"sed"> {
 					content: unifiedPatch,
 					diffStats,
 					isProtected: isWriteProtected,
-				} satisfies ClineSayTool)
+				} satisfies ShoferSayTool)
 
 				const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
 
@@ -176,7 +176,7 @@ export class SedTool extends BaseTool<"sed"> {
 					content: unifiedPatch,
 					diffStats,
 					isProtected: isWriteProtected,
-				} satisfies ClineSayTool)
+				} satisfies ShoferSayTool)
 
 				const didApprove = await askApproval("tool", completeMessage, undefined, isWriteProtected)
 
@@ -221,7 +221,7 @@ export class SedTool extends BaseTool<"sed"> {
 			return
 		}
 
-		const sharedMessageProps: ClineSayTool = {
+		const sharedMessageProps: ShoferSayTool = {
 			tool: "editedExistingFile",
 			path: getReadablePath(task.cwd, relPath ?? ""),
 		}

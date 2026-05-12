@@ -1,4 +1,4 @@
-# Run Roo Code Evals
+# Run Shofer Evals
 
 ### Prerequisites
 
@@ -8,11 +8,11 @@
 
 ### Setup
 
-Clone the Roo Code repo:
+Clone the Shofer repo:
 
 ```sh
-git clone https://github.com/RooCodeInc/Roo-Code.git
-cd Roo-Code
+git clone https://github.com/Arkware/Shofer.git
+cd Shofer
 ```
 
 Add your OpenRouter API key:
@@ -37,7 +37,7 @@ Additionally, you'll find in Docker Desktop that database and redis services are
 
 Navigate to [localhost:3446](http://localhost:3446/) in your browser and click the 🚀 button.
 
-By default an evals run will run all programming exercises in [Roo Code Evals](https://github.com/RooCodeInc/Roo-Code-Evals) repository with the Claude Sonnet 4 model and default settings. For basic configuration you can specify the LLM to use and any subset of the exercises you'd like. For advanced configuration you can import a Roo Code settings file which will allow you to run the evals with Roo Code configured any way you'd like (this includes custom modes, custom instructions, etc).
+By default an evals run will run all programming exercises in [Shofer Evals](https://github.com/Arkware/Shofer-Evals) repository with the Claude Sonnet 4 model and default settings. For basic configuration you can specify the LLM to use and any subset of the exercises you'd like. For advanced configuration you can import a Shofer settings file which will allow you to run the evals with Shofer configured any way you'd like (this includes custom modes, custom instructions, etc).
 
 <img width="1053" src="https://github.com/user-attachments/assets/2367eef4-6ae9-4ac2-8ee4-80f981046486" />
 
@@ -87,7 +87,7 @@ The setup script does the following:
 - Clones/updates the evals repository
 - Creates and migrates a Postgres database
 - Prompts for an OpenRouter API key to add to `.env.local`
-- Optionally builds and installs the Roo Code extension from source
+- Optionally builds and installs the Shofer extension from source
 
 ## Port Configuration
 

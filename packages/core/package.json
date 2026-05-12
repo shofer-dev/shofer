@@ -1,6 +1,6 @@
 {
-	"name": "@roo-code/core",
-	"description": "Platform agnostic core functionality for Roo Code.",
+	"name": "@shofer/core",
+	"description": "Platform agnostic core functionality for Shofer.",
 	"version": "0.0.1",
 	"type": "module",
 	"exports": {
@@ -15,7 +15,7 @@
 		"clean": "rimraf .turbo"
 	},
 	"dependencies": {
-		"@roo-code/types": "workspace:^",
+		"@shofer/types": "workspace:^",
 		"esbuild": "^0.25.0",
 		"execa": "^9.5.2",
 		"ignore": "^7.0.3",
@@ -23,8 +23,8 @@
 		"zod": "^3.25.61"
 	},
 	"devDependencies": {
-		"@roo-code/config-eslint": "workspace:^",
-		"@roo-code/config-typescript": "workspace:^",
+		"@shofer/config-eslint": "workspace:^",
+		"@shofer/config-typescript": "workspace:^",
 		"@types/node": "^24.1.0",
 		"vitest": "^3.2.3"
 	}

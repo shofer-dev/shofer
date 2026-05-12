@@ -3,12 +3,12 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as vscode from "vscode"
 
-import { RooCodeEventName, type ClineMessage } from "@roo-code/types"
+import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
 import { waitFor, sleep, waitUntilCompleted } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
-suite.skip("Roo Code execute_command Tool", function () {
+suite.skip("Shofer execute_command Tool", function () {
 	setDefaultSuiteTimeout(this)
 
 	let workspaceDir: string
@@ -122,7 +122,7 @@ suite.skip("Roo Code execute_command Tool", function () {
 		let commandExecuted = ""
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			// Log important messages for debugging
 			if (message.type === "say" && message.say === "error") {
 				errorOccurred = message.text || "Unknown error"
@@ -145,7 +145,7 @@ suite.skip("Roo Code execute_command Tool", function () {
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task events
 		const taskStartedHandler = (id: string) => {
@@ -154,7 +154,7 @@ suite.skip("Roo Code execute_command Tool", function () {
 				console.log("Task started:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskStarted, taskStartedHandler)
+		api.on(ShoferEventName.TaskStarted, taskStartedHandler)
 
 		const taskCompletedHandler = (id: string) => {
 			if (id === taskId) {
@@ -162,7 +162,7 @@ suite.skip("Roo Code execute_command Tool", function () {
 				console.log("Task completed:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -208,9 +208,9 @@ Then use the attempt_completion tool to complete the task. Do not suggest any co
 			console.log("Test passed! Command executed successfully")
 		} finally {
 			// Clean up event listeners
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskStarted, taskStartedHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskStarted, taskStartedHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
@@ -227,7 +227,7 @@ Then use the attempt_completion tool to complete the task. Do not suggest any co
 		await fs.mkdir(subDir, { recursive: true })
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			if (message.type === "say" && message.say === "error") {
 				errorOccurred = message.text || "Unknown error"
 				console.error("Error:", message.text)
@@ -251,7 +251,7 @@ Then use the attempt_completion tool to complete the task. Do not suggest any co
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task events
 		const taskStartedHandler = (id: string) => {
@@ -260,7 +260,7 @@ Then use the attempt_completion tool to complete the task. Do not suggest any co
 				console.log("Task started:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskStarted, taskStartedHandler)
+		api.on(ShoferEventName.TaskStarted, taskStartedHandler)
 
 		const taskCompletedHandler = (id: string) => {
 			if (id === taskId) {
@@ -268,7 +268,7 @@ Then use the attempt_completion tool to complete the task. Do not suggest any co
 				console.log("Task completed:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -320,9 +320,9 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 			console.log("Test passed! Command executed in custom directory")
 		} finally {
 			// Clean up event listeners
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskStarted, taskStartedHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskStarted, taskStartedHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 			// Clean up subdirectory
 			try {
@@ -343,7 +343,7 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 		const commandsExecuted: string[] = []
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			if (message.type === "say" && message.say === "error") {
 				errorOccurred = message.text || "Unknown error"
 				console.error("Error:", message.text)
@@ -365,7 +365,7 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task events
 		const taskStartedHandler = (id: string) => {
@@ -374,7 +374,7 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 				console.log("Task started:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskStarted, taskStartedHandler)
+		api.on(ShoferEventName.TaskStarted, taskStartedHandler)
 
 		const taskCompletedHandler = (id: string) => {
 			if (id === taskId) {
@@ -382,7 +382,7 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 				console.log("Task completed:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -440,9 +440,9 @@ After both commands are executed, use the attempt_completion tool to complete th
 			console.log("Test passed! Multiple commands executed successfully")
 		} finally {
 			// Clean up event listeners
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskStarted, taskStartedHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskStarted, taskStartedHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
@@ -456,7 +456,7 @@ After both commands are executed, use the attempt_completion tool to complete th
 		let commandExecuted = ""
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			if (message.type === "say" && message.say === "error") {
 				errorOccurred = message.text || "Unknown error"
 				console.error("Error:", message.text)
@@ -484,7 +484,7 @@ After both commands are executed, use the attempt_completion tool to complete th
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task events
 		const taskStartedHandler = (id: string) => {
@@ -493,7 +493,7 @@ After both commands are executed, use the attempt_completion tool to complete th
 				console.log("Task started:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskStarted, taskStartedHandler)
+		api.on(ShoferEventName.TaskStarted, taskStartedHandler)
 
 		const taskCompletedHandler = (id: string) => {
 			if (id === taskId) {
@@ -501,7 +501,7 @@ After both commands are executed, use the attempt_completion tool to complete th
 				console.log("Task completed:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -550,9 +550,9 @@ Avoid at all costs suggesting a command when using the attempt_completion tool`,
 			console.log("Test passed! Long-running command handled successfully")
 		} finally {
 			// Clean up event listeners
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskStarted, taskStartedHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskStarted, taskStartedHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 })

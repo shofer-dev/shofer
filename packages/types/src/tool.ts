@@ -144,7 +144,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	file: "manage files (rm/mv)",
 	fetch_web_page: "fetch web pages",
 	find_files: "find files by pattern",
-	get_changed_files: "list files changed by Roo",
+	get_changed_files: "list files changed by Shofer",
 	get_errors: "get diagnostics",
 	get_project_setup_info: "get project info",
 	get_search_results: "search text in files",

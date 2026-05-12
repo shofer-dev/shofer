@@ -32,7 +32,7 @@ import {
 	isDynamicProvider,
 	isRetiredProvider,
 	getProviderDefaultModelId,
-} from "@roo-code/types"
+} from "@shofer/types"
 
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useRouterModels } from "./useRouterModels"
@@ -351,9 +351,9 @@ function getSelectedModel({
 			const info = fireworksModels[id as keyof typeof fireworksModels]
 			return { id, info }
 		}
-		case "roo": {
-			const id = getValidatedModelId(apiConfiguration.apiModelId, routerModels.roo, defaultModelId)
-			const info = routerModels.roo?.[id]
+		case "shofer": {
+			const id = getValidatedModelId(apiConfiguration.apiModelId, routerModels.shofer, defaultModelId)
+			const info = routerModels.shofer?.[id]
 			return { id, info }
 		}
 		case "poe": {

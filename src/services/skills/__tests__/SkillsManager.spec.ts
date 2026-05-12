@@ -80,12 +80,12 @@ vi.mock("vscode", () => ({
 	RelativePattern: vi.fn(),
 }))
 
-// Global roo directory - computed once
-const GLOBAL_ROO_DIR = p(HOME_DIR, ".roo")
+// Global shofer directory - computed once
+const GLOBAL_ROO_DIR = p(HOME_DIR, ".shofer")
 const GLOBAL_AGENTS_DIR = p(HOME_DIR, ".agents")
 
-// Mock roo-config
-vi.mock("../../roo-config", () => ({
+// Mock shofer-config
+vi.mock("../../shofer-config", () => ({
 	getGlobalRooDirectory: () => GLOBAL_ROO_DIR,
 	getGlobalAgentsDirectory: () => GLOBAL_AGENTS_DIR,
 	getProjectAgentsDirectoryForCwd: (cwd: string) => p(cwd, ".agents"),
@@ -110,17 +110,17 @@ vi.mock("../../../i18n", () => ({
 }))
 
 import { SkillsManager } from "../SkillsManager"
-import { ClineProvider } from "../../../core/webview/ClineProvider"
+import { ShoferProvider } from "../../../core/webview/ShoferProvider"
 
 describe("SkillsManager", () => {
 	let skillsManager: SkillsManager
-	let mockProvider: Partial<ClineProvider>
+	let mockProvider: Partial<ShoferProvider>
 
 	// Pre-computed paths for tests
 	const globalSkillsDir = p(GLOBAL_ROO_DIR, "skills")
 	const globalSkillsCodeDir = p(GLOBAL_ROO_DIR, "skills-code")
 	const globalSkillsArchitectDir = p(GLOBAL_ROO_DIR, "skills-architect")
-	const projectRooDir = p(PROJECT_DIR, ".roo")
+	const projectRooDir = p(PROJECT_DIR, ".shofer")
 	const projectSkillsDir = p(projectRooDir, "skills")
 	// .agents directory paths
 	const globalAgentsSkillsDir = p(GLOBAL_AGENTS_DIR, "skills")
@@ -140,7 +140,7 @@ describe("SkillsManager", () => {
 			} as any,
 		}
 
-		skillsManager = new SkillsManager(mockProvider as ClineProvider)
+		skillsManager = new SkillsManager(mockProvider as ShoferProvider)
 	})
 
 	afterEach(async () => {
@@ -510,7 +510,7 @@ description: ${longDescription}
 			const sharedSkillDir = p(SHARED_DIR, "shared-skill")
 			const sharedSkillMd = p(sharedSkillDir, "SKILL.md")
 
-			// Simulate .roo/skills being a symlink to /shared/skills
+			// Simulate .shofer/skills being a symlink to /shared/skills
 			mockDirectoryExists.mockImplementation(async (dir: string) => {
 				return dir === globalSkillsDir
 			})
@@ -567,7 +567,7 @@ Instructions here...`
 			const myAliasDir = p(globalSkillsDir, "my-alias")
 			const myAliasMd = p(myAliasDir, "SKILL.md")
 
-			// Simulate .roo/skills/my-alias being a symlink to /external/actual-skill
+			// Simulate .shofer/skills/my-alias being a symlink to /external/actual-skill
 			mockDirectoryExists.mockImplementation(async (dir: string) => {
 				return dir === globalSkillsDir
 			})
@@ -717,7 +717,7 @@ Instructions here...`
 			expect(skills[0].source).toBe("project")
 		})
 
-		it("should prioritize .roo skills over .agents skills with same name", async () => {
+		it("should prioritize .shofer skills over .agents skills with same name", async () => {
 			const agentSkillDir = p(globalAgentsSkillsDir, "common-skill")
 			const agentSkillMd = p(agentSkillDir, "SKILL.md")
 			const rooSkillDir = p(globalSkillsDir, "common-skill")
@@ -759,10 +759,10 @@ description: Agent version (should be overridden)
 				if (file === rooSkillMd) {
 					return `---
 name: common-skill
-description: Roo version (should take priority)
+description: Shofer version (should take priority)
 ---
 
-# Roo Common Skill`
+# Shofer Common Skill`
 				}
 				throw new Error("File not found")
 			})
@@ -772,8 +772,8 @@ description: Roo version (should take priority)
 			const skills = skillsManager.getSkillsForMode("code")
 			const commonSkill = skills.find((s) => s.name === "common-skill")
 			expect(commonSkill).toBeDefined()
-			// .roo should override .agents
-			expect(commonSkill?.description).toBe("Roo version (should take priority)")
+			// .shofer should override .agents
+			expect(commonSkill?.description).toBe("Shofer version (should take priority)")
 		})
 
 		it("should discover mode-specific skills from .agents directory", async () => {
@@ -1243,7 +1243,7 @@ Instructions`)
 
 			const createdPath = await skillsManager.createSkill("project-skill", "project", "A project skill")
 
-			expect(createdPath).toBe(p(PROJECT_DIR, ".roo", "skills", "project-skill", "SKILL.md"))
+			expect(createdPath).toBe(p(PROJECT_DIR, ".shofer", "skills", "project-skill", "SKILL.md"))
 		})
 
 		it("should throw error for invalid skill name", async () => {

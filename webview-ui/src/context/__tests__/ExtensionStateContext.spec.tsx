@@ -4,25 +4,27 @@ import {
 	type ProviderSettings,
 	type ExperimentId,
 	type ExtensionState,
-	type ClineMessage,
+	type ShoferMessage,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-} from "@roo-code/types"
+} from "@shofer/types"
 
 import { ExtensionStateContextProvider, useExtensionState, mergeExtensionState } from "../ExtensionStateContext"
 
 const TestComponent = () => {
-	const { allowedCommands, setAllowedCommands, soundEnabled, showRooIgnoredFiles, setShowRooIgnoredFiles } =
+	const { allowedCommands, setAllowedCommands, soundEnabled, showShoferIgnoredFiles, setShowShoferIgnoredFiles } =
 		useExtensionState()
 
 	return (
 		<div>
 			<div data-testid="allowed-commands">{JSON.stringify(allowedCommands)}</div>
 			<div data-testid="sound-enabled">{JSON.stringify(soundEnabled)}</div>
-			<div data-testid="show-rooignored-files">{JSON.stringify(showRooIgnoredFiles)}</div>
+			<div data-testid="show-rooignored-files">{JSON.stringify(showShoferIgnoredFiles)}</div>
 			<button data-testid="update-button" onClick={() => setAllowedCommands(["npm install", "git status"])}>
 				Update Commands
 			</button>
-			<button data-testid="toggle-rooignore-button" onClick={() => setShowRooIgnoredFiles(!showRooIgnoredFiles)}>
+			<button
+				data-testid="toggle-rooignore-button"
+				onClick={() => setShowShoferIgnoredFiles(!showShoferIgnoredFiles)}>
 				Update Commands
 			</button>
 		</div>
@@ -68,7 +70,7 @@ describe("ExtensionStateContext", () => {
 		expect(JSON.parse(screen.getByTestId("sound-enabled").textContent!)).toBe(false)
 	})
 
-	it("initializes with showRooIgnoredFiles set to true", () => {
+	it("initializes with showShoferIgnoredFiles set to true", () => {
 		render(
 			<ExtensionStateContextProvider>
 				<TestComponent />
@@ -78,7 +80,7 @@ describe("ExtensionStateContext", () => {
 		expect(JSON.parse(screen.getByTestId("show-rooignored-files").textContent!)).toBe(true)
 	})
 
-	it("updates showRooIgnoredFiles through setShowRooIgnoredFiles", () => {
+	it("updates showShoferIgnoredFiles through setShowShoferIgnoredFiles", () => {
 		render(
 			<ExtensionStateContextProvider>
 				<TestComponent />
@@ -188,7 +190,7 @@ describe("mergeExtensionState", () => {
 		const baseState: ExtensionState = {
 			version: "",
 			mcpEnabled: false,
-			clineMessages: [],
+			shoferMessages: [],
 			taskHistory: [],
 			shouldShowAnnouncement: false,
 			enableCheckpoints: true,
@@ -200,7 +202,7 @@ describe("mergeExtensionState", () => {
 			maxWorkspaceFiles: 100,
 			apiConfiguration: { providerId: "openrouter" } as ProviderSettings,
 			telemetrySetting: "unset",
-			showRooIgnoredFiles: true,
+			showShoferIgnoredFiles: true,
 			enableSubfolderRules: false,
 			renderContext: "sidebar",
 			cloudUserInfo: null,
@@ -253,11 +255,11 @@ describe("mergeExtensionState", () => {
 		})
 	})
 
-	describe("clineMessagesSeq protection", () => {
+	describe("shoferMessagesSeq protection", () => {
 		const baseState: ExtensionState = {
 			version: "",
 			mcpEnabled: false,
-			clineMessages: [],
+			shoferMessages: [],
 			taskHistory: [],
 			shouldShowAnnouncement: false,
 			enableCheckpoints: true,
@@ -269,7 +271,7 @@ describe("mergeExtensionState", () => {
 			maxWorkspaceFiles: 100,
 			apiConfiguration: {},
 			telemetrySetting: "unset",
-			showRooIgnoredFiles: true,
+			showShoferIgnoredFiles: true,
 			enableSubfolderRules: false,
 			renderContext: "sidebar",
 			cloudUserInfo: null,
@@ -288,115 +290,115 @@ describe("mergeExtensionState", () => {
 			maxReadFileLine: -1,
 		}
 
-		const makeMessage = (ts: number, text: string): ClineMessage =>
-			({ ts, type: "say", say: "text", text }) as ClineMessage
+		const makeMessage = (ts: number, text: string): ShoferMessage =>
+			({ ts, type: "say", say: "text", text }) as ShoferMessage
 
-		it("rejects stale clineMessages when seq is not newer", () => {
+		it("rejects stale shoferMessages when seq is not newer", () => {
 			const newerMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
 			const staleMessages = [makeMessage(1, "hello")]
 
 			const prevState: ExtensionState = {
 				...baseState,
-				clineMessages: newerMessages,
-				clineMessagesSeq: 5,
+				shoferMessages: newerMessages,
+				shoferMessagesSeq: 5,
 			}
 
 			const result = mergeExtensionState(prevState, {
-				clineMessages: staleMessages,
-				clineMessagesSeq: 3, // stale seq
+				shoferMessages: staleMessages,
+				shoferMessagesSeq: 3, // stale seq
 			})
 
 			// Should keep the newer messages
-			expect(result.clineMessages).toBe(newerMessages)
-			expect(result.clineMessagesSeq).toBe(5)
+			expect(result.shoferMessages).toBe(newerMessages)
+			expect(result.shoferMessagesSeq).toBe(5)
 		})
 
-		it("rejects clineMessages when seq equals current (not strictly greater)", () => {
+		it("rejects shoferMessages when seq equals current (not strictly greater)", () => {
 			const currentMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
 			const sameSeqMessages = [makeMessage(1, "hello")]
 
 			const prevState: ExtensionState = {
 				...baseState,
-				clineMessages: currentMessages,
-				clineMessagesSeq: 5,
+				shoferMessages: currentMessages,
+				shoferMessagesSeq: 5,
 			}
 
 			const result = mergeExtensionState(prevState, {
-				clineMessages: sameSeqMessages,
-				clineMessagesSeq: 5, // same seq, not strictly greater
+				shoferMessages: sameSeqMessages,
+				shoferMessagesSeq: 5, // same seq, not strictly greater
 			})
 
-			expect(result.clineMessages).toBe(currentMessages)
-			expect(result.clineMessagesSeq).toBe(5)
+			expect(result.shoferMessages).toBe(currentMessages)
+			expect(result.shoferMessagesSeq).toBe(5)
 		})
 
-		it("accepts clineMessages when seq is strictly greater", () => {
+		it("accepts shoferMessages when seq is strictly greater", () => {
 			const oldMessages = [makeMessage(1, "hello")]
 			const newMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
 
 			const prevState: ExtensionState = {
 				...baseState,
-				clineMessages: oldMessages,
-				clineMessagesSeq: 3,
+				shoferMessages: oldMessages,
+				shoferMessagesSeq: 3,
 			}
 
 			const result = mergeExtensionState(prevState, {
-				clineMessages: newMessages,
-				clineMessagesSeq: 4, // newer seq
+				shoferMessages: newMessages,
+				shoferMessagesSeq: 4, // newer seq
 			})
 
-			expect(result.clineMessages).toBe(newMessages)
-			expect(result.clineMessagesSeq).toBe(4)
+			expect(result.shoferMessages).toBe(newMessages)
+			expect(result.shoferMessagesSeq).toBe(4)
 		})
 
-		it("preserves clineMessages when newState does not include them (cloud event path)", () => {
+		it("preserves shoferMessages when newState does not include them (cloud event path)", () => {
 			const existingMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
 
 			const prevState: ExtensionState = {
 				...baseState,
-				clineMessages: existingMessages,
-				clineMessagesSeq: 5,
+				shoferMessages: existingMessages,
+				shoferMessagesSeq: 5,
 			}
 
-			// Simulate a cloud event push that omits clineMessages and clineMessagesSeq
+			// Simulate a cloud event push that omits shoferMessages and shoferMessagesSeq
 			const result = mergeExtensionState(prevState, {
 				cloudIsAuthenticated: true,
 			})
 
-			expect(result.clineMessages).toBe(existingMessages)
-			expect(result.clineMessagesSeq).toBe(5)
+			expect(result.shoferMessages).toBe(existingMessages)
+			expect(result.shoferMessagesSeq).toBe(5)
 		})
 
-		it("applies clineMessages normally when neither state has seq (backward compat)", () => {
+		it("applies shoferMessages normally when neither state has seq (backward compat)", () => {
 			const oldMessages = [makeMessage(1, "hello")]
 			const newMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
 
 			const prevState: ExtensionState = {
 				...baseState,
-				clineMessages: oldMessages,
+				shoferMessages: oldMessages,
 			}
 
 			const result = mergeExtensionState(prevState, {
-				clineMessages: newMessages,
+				shoferMessages: newMessages,
 			})
 
-			expect(result.clineMessages).toBe(newMessages)
+			expect(result.shoferMessages).toBe(newMessages)
 		})
 
-		it("applies clineMessages when prevState has no seq but newState does (first push)", () => {
+		it("applies shoferMessages when prevState has no seq but newState does (first push)", () => {
 			const prevState: ExtensionState = {
 				...baseState,
-				clineMessages: [],
+				shoferMessages: [],
 			}
 
 			const newMessages = [makeMessage(1, "hello")]
 			const result = mergeExtensionState(prevState, {
-				clineMessages: newMessages,
-				clineMessagesSeq: 1,
+				shoferMessages: newMessages,
+				shoferMessagesSeq: 1,
 			})
 
-			expect(result.clineMessages).toBe(newMessages)
-			expect(result.clineMessagesSeq).toBe(1)
+			expect(result.shoferMessages).toBe(newMessages)
+			expect(result.shoferMessagesSeq).toBe(1)
 		})
 	})
 })

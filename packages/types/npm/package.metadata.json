@@ -1,22 +1,22 @@
 {
-	"name": "@roo-code/types",
+	"name": "@shofer/types",
 	"version": "1.115.0",
-	"description": "TypeScript type definitions for Roo Code.",
+	"description": "TypeScript type definitions for Shofer.",
 	"publishConfig": {
 		"access": "public",
-		"name": "@roo-code/types",
+		"name": "@shofer/types",
 		"registry": "https://registry.npmjs.org/"
 	},
-	"author": "Roo Code Team",
+	"author": "Shofer Team",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/RooCodeInc/Roo-Code.git"
+		"url": "git+https://github.com/Arkware/Shofer.git"
 	},
 	"bugs": {
-		"url": "https://github.com/RooCodeInc/Roo-Code/issues"
+		"url": "https://github.com/Arkware/Shofer/issues"
 	},
-	"homepage": "https://roocode.com",
-	"keywords": ["roo", "roo-code", "ai"],
+	"homepage": "https://shofer.com",
+	"keywords": ["shofer", "shofer-code", "ai"],
 	"files": ["dist"]
 }

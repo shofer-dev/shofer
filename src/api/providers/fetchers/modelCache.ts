@@ -5,9 +5,9 @@ import * as fsSync from "fs"
 import NodeCache from "node-cache"
 import { z } from "zod"
 
-import type { ProviderName, ModelRecord } from "@roo-code/types"
-import { modelInfoSchema, TelemetryEventName } from "@roo-code/types"
-import { TelemetryService } from "@roo-code/telemetry"
+import type { ProviderName, ModelRecord } from "@shofer/types"
+import { modelInfoSchema, TelemetryEventName } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { safeWriteJson } from "../../../utils/safeWriteJson"
 
@@ -25,7 +25,7 @@ import { GetModelsOptions } from "../../../shared/api"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
 import { getPoeModels } from "./poe"
-import { getRooModels } from "./roo"
+import { getRooModels } from "./shofer"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -86,9 +86,9 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 		case "vercel-ai-gateway":
 			models = await getVercelAiGatewayModels()
 			break
-		case "roo": {
-			// Roo Code Cloud provider requires baseUrl and optional apiKey
-			const rooBaseUrl = options.baseUrl ?? process.env.ROO_CODE_PROVIDER_URL ?? "https://api.roocode.com/proxy"
+		case "shofer": {
+			// Shofer Cloud provider requires baseUrl and optional apiKey
+			const rooBaseUrl = options.baseUrl ?? process.env.SHOFER_PROVIDER_URL ?? "https://api.shofer.com/proxy"
 			models = await getRooModels(rooBaseUrl, options.apiKey)
 			break
 		}

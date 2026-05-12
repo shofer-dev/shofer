@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Ellipsis, ClipboardList, Copy, Check, LoaderCircle, Trash, Settings, FileDown, StickyNote } from "lucide-react"
 
-import type { Run as EvalsRun, TaskMetrics as EvalsTaskMetrics } from "@roo-code/evals"
-import type { ToolName } from "@roo-code/types"
+import type { Run as EvalsRun, TaskMetrics as EvalsTaskMetrics } from "@shofer/evals"
+import type { ToolName } from "@shofer/types"
 
 import { deleteRun, updateRunDescription } from "@/actions/runs"
 import {

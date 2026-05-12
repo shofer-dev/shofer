@@ -95,7 +95,7 @@ The row renders only while `message.partial === true` and a valid JSON payload
 | File                                                                                                                     | Change                                                                                                                          |
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | [`extensions/llm-provider/src/language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts) | Replace announcement + dot heartbeat with `buildPreparingMarker()` emitting `\x00`-delimited markers on first name and every 5s |
-| [`packages/types/src/message.ts`](packages/types/src/message.ts)                                                         | Add `"tool_preparing"` to `clineSays` / `ClineSay` union                                                                        |
+| [`packages/types/src/message.ts`](packages/types/src/message.ts)                                                         | Add `"tool_preparing"` to `shoferSays` / `ShoferSay` union                                                                      |
 | [`src/api/transform/stream.ts`](src/api/transform/stream.ts)                                                             | Add `ApiStreamToolPreparingChunk` interface and union member                                                                    |
 | [`src/api/providers/vscode-lm.ts`](src/api/providers/vscode-lm.ts)                                                       | Detect `\x00tool_preparing\x00…` via regex in `LanguageModelThinkingPart`, yield `tool_preparing` chunk                         |
 | [`src/core/task/Task.ts`](src/core/task/Task.ts)                                                                         | Add `case "tool_preparing"` in stream consumer, posts partial via `say("tool_preparing", …, true)`                              |
@@ -108,7 +108,7 @@ The row renders only while `message.partial === true` and a valid JSON payload
 
 - No VS Code release cycle dependency.
 - Minimal changes (~7 files, ~100 lines total).
-- Backward compatible: old Roo-Code ignores unknown chunk types.
+- Backward compatible: old Shofer ignores unknown chunk types.
 - Null bytes are invisible if leaked into real thinking text and cannot
   occur in legitimate LLM reasoning output.
 
@@ -116,6 +116,6 @@ The row renders only while `message.partial === true` and a valid JSON payload
 
 The existing `say("type", text, images?, partial?)` machinery already handles
 in-place row updates — when `partial=true` and the previous message has the
-same `say` type, `Task.ts` calls `updateClineMessage()` which replaces the
+same `say` type, `Task.ts` calls `updateShoferMessage()` which replaces the
 row instead of appending. Reusing this avoids duplicating the
 save/post/update infrastructure.

@@ -1,3 +1,3 @@
-# @roo-code/evals
+# @shofer/evals
 
 ## 0.0.1

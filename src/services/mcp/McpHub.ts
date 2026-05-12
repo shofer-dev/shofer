@@ -26,12 +26,12 @@ import type {
 	McpServer,
 	McpTool,
 	McpToolCallResponse,
-} from "@roo-code/types"
-import { toolGroupsSchema } from "@roo-code/types"
+} from "@shofer/types"
+import { toolGroupsSchema } from "@shofer/types"
 
 import { t } from "../../i18n"
 
-import { ClineProvider } from "../../core/webview/ClineProvider"
+import { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { mcpLog } from "./mcpLogger"
 
 import { GlobalFileNames } from "../../shared/globalFileNames"
@@ -152,7 +152,7 @@ const McpSettingsSchema = z.object({
 })
 
 export class McpHub {
-	private providerRef: WeakRef<ClineProvider>
+	private providerRef: WeakRef<ShoferProvider>
 	private disposables: vscode.Disposable[] = []
 	private settingsWatcher?: vscode.FileSystemWatcher
 	private fileWatchers: Map<string, FSWatcher[]> = new Map()
@@ -170,7 +170,7 @@ export class McpHub {
 	private sanitizedNameRegistry: Map<string, string> = new Map()
 	private initializationPromise: Promise<void>
 
-	constructor(provider: ClineProvider) {
+	constructor(provider: ShoferProvider) {
 		this.providerRef = new WeakRef(provider)
 		this.watchMcpSettingsFile()
 		this.watchProjectMcpFile().catch(console.error)
@@ -197,7 +197,7 @@ export class McpHub {
 		await this.initializationPromise
 	}
 	/**
-	 * Registers a client (e.g., ClineProvider) using this hub.
+	 * Registers a client (e.g., ShoferProvider) using this hub.
 	 * Increments the reference count.
 	 */
 	public registerClient(): void {
@@ -391,7 +391,7 @@ export class McpHub {
 		}
 
 		const workspaceFolder = this.providerRef.deref()?.cwd ?? getWorkspacePath()
-		const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".roo/mcp.json")
+		const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".shofer/mcp.json")
 
 		// Create a file system watcher for the project MCP file pattern
 		this.projectMcpWatcher = vscode.workspace.createFileSystemWatcher(projectMcpPattern)
@@ -640,7 +640,7 @@ export class McpHub {
 	// Get project-level MCP configuration path
 	private async getProjectMcpPath(): Promise<string | null> {
 		const workspacePath = this.providerRef.deref()?.cwd ?? getWorkspacePath()
-		const projectMcpDir = path.join(workspacePath, ".roo")
+		const projectMcpDir = path.join(workspacePath, ".shofer")
 		const projectMcpPath = path.join(projectMcpDir, "mcp.json")
 
 		try {
@@ -734,7 +734,7 @@ export class McpHub {
 		try {
 			const client = new Client(
 				{
-					name: "Roo Code",
+					name: "Shofer",
 					version: this.providerRef.deref()?.context.extension?.packageJSON?.version ?? "1.0.0",
 				},
 				{
@@ -1505,7 +1505,7 @@ export class McpHub {
 			this.notifyAllProvidersFn(message)
 		} else {
 			// Fallback: notify only the provider that created this hub.
-			const targetProvider: ClineProvider | undefined = this.providerRef.deref()
+			const targetProvider: ShoferProvider | undefined = this.providerRef.deref()
 			if (targetProvider) {
 				try {
 					await targetProvider.postMessageToWebview(message)

@@ -1,6 +1,6 @@
-# Image Support in Roo Code
+# Image Support in Shofer
 
-Roo Code supports pasting images directly into the chat input for vision-capable models. Images are converted to base64 data URLs and included in the message payload sent to the AI provider.
+Shofer supports pasting images directly into the chat input for vision-capable models. Images are converted to base64 data URLs and included in the message payload sent to the AI provider.
 
 ## Adding Images to a Message
 
@@ -115,7 +115,7 @@ Images are sent from the webview to the extension host as part of the `images` f
 
 ### In API Payloads (anthropic format)
 
-Internally, Roo Code uses Anthropic's content block format as the canonical representation. Images are represented as:
+Internally, Shofer uses Anthropic's content block format as the canonical representation. Images are represented as:
 
 ```typescript
 {
@@ -130,7 +130,7 @@ Internally, Roo Code uses Anthropic's content block format as the canonical repr
 
 ## Provider-Specific Transformations
 
-Roo Code converts the internal Anthropic-format image blocks to each provider's expected format:
+Shofer converts the internal Anthropic-format image blocks to each provider's expected format:
 
 | Provider                 | Image Format                                                                                                                                                                      | Transform Location                                                         |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -204,7 +204,7 @@ Upstream AI provider
 ## Image Size Limits
 
 - **Per-message count**: [`MAX_IMAGES_PER_MESSAGE`](../webview-ui/src/components/chat/ChatView.tsx) controls the maximum number of images per message
-- **Per-file size**: [`maxReadFileImageSize`](https://docs.roocode.com/) setting controls maximum image size for `read_file` tool
+- **Per-file size**: [`maxReadFileImageSize`](https://docs.shofer.com/) setting controls maximum image size for `read_file` tool
 
 ## Multi-Turn Image Handling
 
@@ -212,7 +212,7 @@ Images from previous user turns are preserved in the conversation history (`apiC
 
 ## Image Generation
 
-Roo Code also supports **image generation** via a separate `generate_image` tool. This is documented separately in the [image generation section of the tool access docs](tool_access.md#image-generation).
+Shofer also supports **image generation** via a separate `generate_image` tool. This is documented separately in the [image generation section of the tool access docs](tool_access.md#image-generation).
 
 Image generation uses provider-specific endpoints (not the chat completions API) and returns images that are displayed in the chat using the [`ImageViewer`](../webview-ui/src/components/common/ImageViewer.tsx) component, which supports zoom, copy, save, and Mermaid-style action buttons.
 

@@ -6,14 +6,14 @@ import pWaitFor from "p-wait-for"
 import { execa } from "execa"
 
 import {
-	type ClineSay,
+	type ShoferSay,
 	type ToolUsage,
 	TaskCommandName,
-	RooCodeEventName,
+	ShoferEventName,
 	IpcMessageType,
 	EVALS_SETTINGS,
-} from "@roo-code/types"
-import { IpcClient } from "@roo-code/ipc"
+} from "@shofer/types"
+import { IpcClient } from "@shofer/ipc"
 
 import { updateTask, createTaskMetrics, updateTaskMetrics, createToolError } from "../db/index"
 import { EVALS_REPO_PATH } from "../exercises/index"
@@ -27,18 +27,18 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 	const prompt = fs.readFileSync(path.resolve(EVALS_REPO_PATH, `prompts/${language}.md`), "utf-8")
 	const workspacePath = path.resolve(EVALS_REPO_PATH, language, exercise)
 	const ipcSocketPath = path.resolve(os.tmpdir(), `evals-${run.id}-${task.id}.sock`)
-	const env = { ROO_CODE_IPC_SOCKET_PATH: ipcSocketPath }
+	const env = { SHOFER_IPC_SOCKET_PATH: ipcSocketPath }
 	const controller = new AbortController()
 	const cancelSignal = controller.signal
 	const containerized = isDockerContainer()
 	const logDir = containerized ? `/var/log/evals/runs/${run.id}` : `/tmp/evals/runs/${run.id}`
 
 	let codeCommand = containerized
-		? `xvfb-run --auto-servernum --server-num=1 code --wait --log trace --disable-workspace-trust --disable-gpu --disable-lcd-text --no-sandbox --user-data-dir /roo/.vscode --password-store="basic" -n ${workspacePath}`
+		? `xvfb-run --auto-servernum --server-num=1 code --wait --log trace --disable-workspace-trust --disable-gpu --disable-lcd-text --no-sandbox --user-data-dir /shofer/.vscode --password-store="basic" -n ${workspacePath}`
 		: `code --disable-workspace-trust -n ${workspacePath}`
 
 	if (jobToken) {
-		codeCommand = `ROO_CODE_CLOUD_TOKEN=${jobToken} ${codeCommand}`
+		codeCommand = `SHOFER_CLOUD_TOKEN=${jobToken} ${codeCommand}`
 	}
 
 	logger.info(codeCommand)
@@ -81,7 +81,7 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 	let taskAbortedAt: number | undefined
 	let taskTimedOut: boolean = false
 	let taskMetricsId: number | undefined
-	let rooTaskId: string | undefined
+	let shoferTaskId: string | undefined
 	let isClientDisconnected = false
 	// Track accumulated tool usage across task instances (handles rehydration after abort)
 	const accumulatedToolUsage: ToolUsage = {}
@@ -93,12 +93,12 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 		resolveTaskMetricsReady = resolve
 	})
 
-	const ignoreEvents: Record<"broadcast" | "log", RooCodeEventName[]> = {
-		broadcast: [RooCodeEventName.Message],
-		log: [RooCodeEventName.TaskTokenUsageUpdated, RooCodeEventName.TaskAskResponded],
+	const ignoreEvents: Record<"broadcast" | "log", ShoferEventName[]> = {
+		broadcast: [ShoferEventName.Message],
+		log: [ShoferEventName.TaskTokenUsageUpdated, ShoferEventName.TaskAskResponded],
 	}
 
-	const loggableSays: ClineSay[] = [
+	const loggableSays: ShoferSay[] = [
 		"error",
 		"command_output",
 		"rooignore_error",
@@ -117,7 +117,7 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 		const { eventName, payload } = taskEvent
 
 		if (
-			eventName === RooCodeEventName.Message &&
+			eventName === ShoferEventName.Message &&
 			payload[0].message.say &&
 			["api_req_retry_delayed", "api_req_retried"].includes(payload[0].message.say)
 		) {
@@ -133,12 +133,12 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 		// For message events we only log non-partial messages.
 		if (
 			!ignoreEvents.log.includes(eventName) &&
-			(eventName !== RooCodeEventName.Message ||
+			(eventName !== ShoferEventName.Message ||
 				(payload[0].message.say && loggableSays.includes(payload[0].message.say)) ||
 				payload[0].message.partial !== true)
 		) {
 			// Dedupe identical repeated message events (same message.ts + same payload)
-			if (eventName === RooCodeEventName.Message) {
+			if (eventName === ShoferEventName.Message) {
 				const action = payload[0]?.action as string | undefined
 				const message = payload[0]?.message
 				if (!messageLogDeduper.shouldLog(action, message)) {
@@ -148,7 +148,7 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 
 			// Extract tool name for tool-related messages for clearer logging
 			let logEventName: string = eventName
-			if (eventName === RooCodeEventName.Message && payload[0]?.message?.ask === "tool") {
+			if (eventName === ShoferEventName.Message && payload[0]?.message?.ask === "tool") {
 				try {
 					const textJson = JSON.parse(payload[0].message.text ?? "{}")
 					if (textJson.tool) {
@@ -157,15 +157,15 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 				} catch {
 					// If parsing fails, use the default event name
 				}
-			} else if (eventName === RooCodeEventName.Message && payload[0]?.message?.ask === "command") {
+			} else if (eventName === ShoferEventName.Message && payload[0]?.message?.ask === "command") {
 				logEventName = `${eventName} (command)`
-			} else if (eventName === RooCodeEventName.Message && payload[0]?.message?.ask === "completion_result") {
+			} else if (eventName === ShoferEventName.Message && payload[0]?.message?.ask === "completion_result") {
 				logEventName = `${eventName} (completion_result)`
 			}
 			logger.info(`${logEventName} ->`, payload)
 		}
 
-		if (eventName === RooCodeEventName.TaskStarted) {
+		if (eventName === ShoferEventName.TaskStarted) {
 			taskStartedAt = Date.now()
 
 			const taskMetrics = await createTaskMetrics({
@@ -182,18 +182,18 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 
 			taskStartedAt = Date.now()
 			taskMetricsId = taskMetrics.id
-			rooTaskId = payload[0]
+			shoferTaskId = payload[0]
 
 			// Signal that taskMetricsId is now ready for other handlers
 			resolveTaskMetricsReady()
 		}
 
-		if (eventName === RooCodeEventName.TaskToolFailed) {
+		if (eventName === ShoferEventName.TaskToolFailed) {
 			const [_taskId, toolName, error] = payload
 			await createToolError({ taskId: task.id, toolName, error })
 		}
 
-		if (eventName === RooCodeEventName.TaskTokenUsageUpdated || eventName === RooCodeEventName.TaskCompleted) {
+		if (eventName === ShoferEventName.TaskTokenUsageUpdated || eventName === ShoferEventName.TaskCompleted) {
 			// Wait for taskMetricsId to be set by the TaskStarted handler.
 			// This prevents a race condition where these events arrive before
 			// the TaskStarted handler finishes its async database operations.
@@ -228,11 +228,11 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 			})
 		}
 
-		if (eventName === RooCodeEventName.TaskAborted) {
+		if (eventName === ShoferEventName.TaskAborted) {
 			taskAbortedAt = Date.now()
 		}
 
-		if (eventName === RooCodeEventName.TaskCompleted) {
+		if (eventName === ShoferEventName.TaskCompleted) {
 			taskFinishedAt = Date.now()
 		}
 	})
@@ -268,7 +268,7 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 		taskTimedOut = true
 		logger.error("time limit reached")
 
-		if (rooTaskId && !isClientDisconnected) {
+		if (shoferTaskId && !isClientDisconnected) {
 			logger.info("cancelling task")
 			client.sendCommand({ commandName: TaskCommandName.CancelTask })
 			await new Promise((resolve) => setTimeout(resolve, 5_000)) // Allow some time for the task to cancel.
@@ -287,7 +287,7 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 	logger.info("setting task finished at")
 	await updateTask(task.id, { finishedAt: new Date() })
 
-	if (rooTaskId && !isClientDisconnected) {
+	if (shoferTaskId && !isClientDisconnected) {
 		logger.info("closing task")
 		client.sendCommand({ commandName: TaskCommandName.CloseTask })
 		await new Promise((resolve) => setTimeout(resolve, 2_000)) // Allow some time for the window to close.
@@ -305,9 +305,9 @@ export const runTaskInVscode = async ({ run, task, publish, logger, jobToken }: 
 
 	// Copy conversation history files from VS Code extension storage to the log directory
 	// for post-mortem analysis. Only do this in containerized mode where we have a known path.
-	if (containerized && rooTaskId) {
+	if (containerized && shoferTaskId) {
 		await copyConversationHistory({
-			rooTaskId,
+			shoferTaskId,
 			logDir,
 			language,
 			exercise,

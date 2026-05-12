@@ -1,12 +1,12 @@
 import { z } from "zod"
 
-import type { GlobalSettings, RooCodeSettings } from "./global-settings.js"
+import type { GlobalSettings, ShoferSettings } from "./global-settings.js"
 import type { ProviderSettings, ProviderSettingsEntry } from "./provider-settings.js"
 import type { HistoryItem, CostLimit } from "./history.js"
 import type { ModeConfig, PromptComponent } from "./mode.js"
 import type { TelemetrySetting } from "./telemetry.js"
 import type { Experiments } from "./experiment.js"
-import type { ClineMessage, QueuedMessage } from "./message.js"
+import type { ShoferMessage, QueuedMessage } from "./message.js"
 import {
 	type MarketplaceItem,
 	type MarketplaceInstalledMetadata,
@@ -118,7 +118,7 @@ export interface ExtensionMessage {
 	fileContent?: { path: string; content: string | null; error?: string }
 	/** For addContextFiles: workspace-relative paths to append to chat context. */
 	contextFiles?: Array<{ path: string; isFile: boolean }>
-	/** For changedFiles/update: snapshot of files Roo edited in the current Task. */
+	/** For changedFiles/update: snapshot of files Shofer edited in the current Task. */
 	changedFiles?: ChangedFilesPayload
 	payload?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	checkpointWarning?: {
@@ -149,7 +149,7 @@ export interface ExtensionMessage {
 		isActive: boolean
 		path?: string
 	}>
-	clineMessage?: ClineMessage
+	shoferMessage?: ShoferMessage
 	routerModels?: RouterModels
 	openAiModels?: string[]
 	ollamaModels?: ModelRecord
@@ -347,7 +347,7 @@ export type ExtensionState = Pick<
 > & {
 	lockApiConfigAcrossModes?: boolean
 	version: string
-	clineMessages: ClineMessage[]
+	shoferMessages: ShoferMessage[]
 	currentTaskId?: string
 	currentTaskItem?: HistoryItem
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
@@ -363,7 +363,7 @@ export type ExtensionState = Pick<
 	checkpointTimeout: number // Timeout for checkpoint initialization in seconds (default: 15)
 	maxOpenTabsContext: number // Maximum number of VSCode open tabs to include in context (0-500)
 	maxWorkspaceFiles: number // Maximum number of files to include in current working directory details (0-500)
-	showRooIgnoredFiles: boolean // Whether to show .rooignore'd files in listings
+	showShoferIgnoredFiles: boolean // Whether to show .shoferignore'd files in listings
 	enableSubfolderRules: boolean // Whether to load rules from subdirectories
 	maxReadFileLine?: number // Maximum line limit for read_file tool (-1 for default)
 	maxImageFileSize: number // Maximum size of image files to process in MB
@@ -432,12 +432,12 @@ export type ExtensionState = Pick<
 	debug?: boolean
 
 	/**
-	 * Monotonically increasing sequence number for clineMessages state pushes.
-	 * When present, the frontend should only apply clineMessages from a state push
+	 * Monotonically increasing sequence number for shoferMessages state pushes.
+	 * When present, the frontend should only apply shoferMessages from a state push
 	 * if its seq is greater than the last applied seq. This prevents stale state
 	 * (captured during async getStateToPostToWebview) from overwriting newer messages.
 	 */
-	clineMessagesSeq?: number
+	shoferMessagesSeq?: number
 }
 
 export interface Command {
@@ -453,7 +453,7 @@ export interface Command {
  * Webview | CLI -> Extension
  */
 
-export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse" | "objectResponse"
+export type ShoferAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse" | "objectResponse"
 
 export type AudioType = "notification" | "celebration" | "progress_loop"
 
@@ -465,9 +465,9 @@ export interface UpdateTodoListPayload {
 export type EditQueuedMessagePayload = Pick<QueuedMessage, "id" | "text" | "images">
 
 /**
- * Per-file entry describing a file Roo edited in the current Task.
+ * Per-file entry describing a file Shofer edited in the current Task.
  *
- * The list is scoped to files Roo touched at least once. Net state is
+ * The list is scoped to files Shofer touched at least once. Net state is
  * computed against the per-task working-directory base copy captured at
  * first edit. Files whose net state matches the base are excluded unless a
  * final snapshot exists (preserving the Redo action).
@@ -699,7 +699,7 @@ export interface WebviewMessage {
 	disabled?: boolean
 	context?: string
 	dataUri?: string
-	askResponse?: ClineAskResponse
+	askResponse?: ShoferAskResponse
 	apiConfiguration?: ProviderSettings
 	images?: string[]
 	bool?: boolean
@@ -791,9 +791,9 @@ export interface WebviewMessage {
 		codebaseIndexVercelAiGatewayApiKey?: string
 		codebaseIndexOpenRouterApiKey?: string
 	}
-	updatedSettings?: RooCodeSettings
+	updatedSettings?: ShoferSettings
 	/** Task configuration applied via `createTask()` when starting a cloud task. */
-	taskConfiguration?: RooCodeSettings
+	taskConfiguration?: ShoferSettings
 	// Parallel task properties
 	taskName?: string
 	// Worktree properties
@@ -879,7 +879,7 @@ export interface LanguageModelChatSelector {
 	id?: string
 }
 
-export interface ClineSayTool {
+export interface ShoferSayTool {
 	tool:
 		| "editedExistingFile"
 		| "appliedDiff"
@@ -1001,7 +1001,7 @@ export interface ClineSayTool {
 	}>
 }
 
-export interface ClineAskUseMcpServer {
+export interface ShoferAskUseMcpServer {
 	serverName: string
 	type: "use_mcp_tool" | "access_mcp_resource"
 	toolName?: string
@@ -1009,7 +1009,7 @@ export interface ClineAskUseMcpServer {
 	uri?: string
 	response?: string
 	/**
-	 * When true, this `use_mcp_server` envelope was synthesised by Roo-Code to
+	 * When true, this `use_mcp_server` envelope was synthesised by Shofer to
 	 * visualise an external VS Code language-model tool call (registered via
 	 * `vscode.lm.tools`) — not a real MCP server invocation. Mirrors the
 	 * `external_lm_tool` flag on {@link McpToolCallInfo}; the webview uses it
@@ -1018,16 +1018,16 @@ export interface ClineAskUseMcpServer {
 	external_lm_tool?: boolean
 }
 
-export interface ClineApiReqInfo {
+export interface ShoferApiReqInfo {
 	request?: string
 	tokensIn?: number
 	tokensOut?: number
 	cacheWrites?: number
 	cacheReads?: number
 	cost?: number
-	cancelReason?: ClineApiReqCancelReason
+	cancelReason?: ShoferApiReqCancelReason
 	streamingFailedMessage?: string
 	apiProtocol?: "anthropic" | "openai"
 }
 
-export type ClineApiReqCancelReason = "streaming_failed" | "user_cancelled"
+export type ShoferApiReqCancelReason = "streaming_failed" | "user_cancelled"

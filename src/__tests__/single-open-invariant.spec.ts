@@ -1,11 +1,11 @@
 // npx vitest run __tests__/single-open-invariant.spec.ts
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { ClineProvider } from "../core/webview/ClineProvider"
+import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { API } from "../extension/api"
 import * as ProfileValidatorMod from "../shared/ProfileValidator"
 
-// Mock Task class used by ClineProvider to avoid heavy startup
+// Mock Task class used by ShoferProvider to avoid heavy startup
 vi.mock("../core/task/Task", () => {
 	class TaskStub {
 		public taskId: string
@@ -36,12 +36,12 @@ describe("Single-open-task invariant", () => {
 		// Allow profile
 		vi.spyOn(ProfileValidatorMod.ProfileValidator, "isProfileAllowed").mockReturnValue(true)
 
-		const removeClineFromStack = vi.fn().mockResolvedValue(undefined)
-		const addClineToStack = vi.fn().mockResolvedValue(undefined)
+		const removeShoferFromStack = vi.fn().mockResolvedValue(undefined)
+		const addShoferToStack = vi.fn().mockResolvedValue(undefined)
 
 		const provider = {
 			// Simulate an existing task present in stack
-			clineStack: [{ taskId: "existing-1" }],
+			shoferStack: [{ taskId: "existing-1" }],
 			setValues: vi.fn(),
 			getState: vi.fn().mockResolvedValue({
 				apiConfiguration: { apiProvider: "anthropic", consecutiveMistakeLimit: 0 },
@@ -50,8 +50,8 @@ describe("Single-open-task invariant", () => {
 				checkpointTimeout: 60,
 				cloudUserInfo: null,
 			}),
-			removeClineFromStack,
-			addClineToStack,
+			removeShoferFromStack,
+			addShoferToStack,
 			setProviderProfile: vi.fn(),
 			log: vi.fn(),
 			getStateToPostToWebview: vi.fn(),
@@ -65,23 +65,23 @@ describe("Single-open-task invariant", () => {
 				setProviderSettings: vi.fn(),
 				getProviderSettings: vi.fn(() => ({})),
 			},
-		} as unknown as ClineProvider
+		} as unknown as ShoferProvider
 
-		await (ClineProvider.prototype as any).createTask.call(provider, "New task")
+		await (ShoferProvider.prototype as any).createTask.call(provider, "New task")
 
-		expect(removeClineFromStack).toHaveBeenCalledTimes(1)
-		expect(addClineToStack).toHaveBeenCalledTimes(1)
+		expect(removeShoferFromStack).toHaveBeenCalledTimes(1)
+		expect(addShoferToStack).toHaveBeenCalledTimes(1)
 	})
 
 	it("History resume path always closes current before rehydration (non-rehydrating case)", async () => {
-		const removeClineFromStack = vi.fn().mockResolvedValue(undefined)
-		const addClineToStack = vi.fn().mockResolvedValue(undefined)
+		const removeShoferFromStack = vi.fn().mockResolvedValue(undefined)
+		const addShoferToStack = vi.fn().mockResolvedValue(undefined)
 		const updateGlobalState = vi.fn().mockResolvedValue(undefined)
 
 		const provider = {
 			getCurrentTask: vi.fn(() => undefined), // ensure not rehydrating
-			removeClineFromStack,
-			addClineToStack,
+			removeShoferFromStack,
+			addShoferToStack,
 			updateGlobalState,
 			log: vi.fn(),
 			customModesManager: { getCustomModes: vi.fn().mockResolvedValue([]) },
@@ -109,7 +109,7 @@ describe("Single-open-task invariant", () => {
 				getProviderSettings: vi.fn(() => ({})),
 			},
 			postStateToWebview: vi.fn(),
-		} as unknown as ClineProvider
+		} as unknown as ShoferProvider
 
 		const historyItem = {
 			id: "hist-1",
@@ -122,18 +122,18 @@ describe("Single-open-task invariant", () => {
 			workspace: "/tmp",
 		}
 
-		const task = await (ClineProvider.prototype as any).createTaskWithHistoryItem.call(provider, historyItem)
+		const task = await (ShoferProvider.prototype as any).createTaskWithHistoryItem.call(provider, historyItem)
 		expect(task).toBeTruthy()
-		expect(removeClineFromStack).toHaveBeenCalledTimes(1)
-		expect(addClineToStack).toHaveBeenCalledTimes(1)
+		expect(removeShoferFromStack).toHaveBeenCalledTimes(1)
+		expect(addShoferToStack).toHaveBeenCalledTimes(1)
 	})
 
 	it("IPC StartNewTask path closes current before new task", async () => {
-		const removeClineFromStack = vi.fn().mockResolvedValue(undefined)
+		const removeShoferFromStack = vi.fn().mockResolvedValue(undefined)
 		const createTask = vi.fn().mockResolvedValue({ taskId: "ipc-1" })
 		const provider = {
 			context: {} as any,
-			removeClineFromStack,
+			removeShoferFromStack,
 			postStateToWebview: vi.fn(),
 			postMessageToWebview: vi.fn(),
 			createTask,
@@ -145,7 +145,7 @@ describe("Single-open-task invariant", () => {
 				}
 				return provider
 			}),
-		} as unknown as ClineProvider
+		} as unknown as ShoferProvider
 
 		const output = { appendLine: vi.fn() } as any
 		const api = new API(output, provider, undefined, false)
@@ -158,7 +158,7 @@ describe("Single-open-task invariant", () => {
 		})
 
 		expect(taskId).toBe("ipc-1")
-		expect(removeClineFromStack).toHaveBeenCalledTimes(1)
+		expect(removeShoferFromStack).toHaveBeenCalledTimes(1)
 		expect(createTask).toHaveBeenCalled()
 	})
 })

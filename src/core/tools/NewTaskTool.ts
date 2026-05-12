@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { TodoItem } from "@roo-code/types"
+import { TodoItem } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
@@ -159,7 +159,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						initialStatus: "active",
 						// startTask is irrelevant here: createTask always calls task.start() internally.
 						initialMode: effectiveMode,
-						// openInStack=false: child is NOT pushed onto clineStack, so the parent
+						// openInStack=false: child is NOT pushed onto shoferStack, so the parent
 						// remains the focused task and is never aborted.
 						openInStack: false,
 						// keepCurrentTask is only checked when parentTask is falsy, so it doesn't
@@ -207,7 +207,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				return
 			} else {
 				// Foreground (blocking) path: parent suspends via Promise until child completes.
-				// The parent Task instance stays alive in the clineStack below the child;
+				// The parent Task instance stays alive in the shoferStack below the child;
 				// this tool handler awaits the Promise, keeping the parent's tool loop alive.
 				let resolveChildCompletion!: (result: string) => void
 				const childCompletionPromise = new Promise<string>((resolve) => {
@@ -222,7 +222,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						initialTodos: todoItems,
 						initialStatus: "active",
 						initialMode: effectiveMode,
-						// openInStack=true (default): child is pushed onto clineStack on top of parent.
+						// openInStack=true (default): child is pushed onto shoferStack on top of parent.
 						openInStack: true,
 					},
 					undefined, // configuration

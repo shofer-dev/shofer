@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { providerNames } from "./provider-settings.js"
-import { clineMessageSchema } from "./message.js"
+import { shoferMessageSchema } from "./message.js"
 
 /**
  * TelemetrySetting
@@ -159,10 +159,10 @@ export type TelemetryEvent = {
 }
 
 /**
- * RooCodeTelemetryEvent
+ * ShoferTelemetryEvent
  */
 
-export const rooCodeTelemetryEventSchema = z.discriminatedUnion("type", [
+export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.enum([
 			TelemetryEventName.TASK_CREATED,
@@ -222,7 +222,7 @@ export const rooCodeTelemetryEventSchema = z.discriminatedUnion("type", [
 		properties: z.object({
 			...telemetryPropertiesSchema.shape,
 			taskId: z.string(),
-			message: clineMessageSchema,
+			message: shoferMessageSchema,
 		}),
 	}),
 	z.object({
@@ -238,7 +238,7 @@ export const rooCodeTelemetryEventSchema = z.discriminatedUnion("type", [
 	}),
 ])
 
-export type RooCodeTelemetryEvent = z.infer<typeof rooCodeTelemetryEventSchema>
+export type ShoferTelemetryEvent = z.infer<typeof shoferTelemetryEventSchema>
 
 /**
  * TelemetryEventSubscription
@@ -487,7 +487,7 @@ export function extractApiProviderErrorProperties(error: ApiProviderError): Reco
 export type ConsecutiveMistakeReason = "no_tools_used" | "tool_repetition" | "unknown"
 
 /**
- * Error class for "Roo is having trouble" consecutive mistake scenarios.
+ * Error class for "Shofer is having trouble" consecutive mistake scenarios.
  * Triggered when the task reaches the configured consecutive mistake limit.
  * Used for structured exception tracking via PostHog.
  */

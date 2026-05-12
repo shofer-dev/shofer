@@ -1,10 +1,10 @@
 # Cost Calculation
 
-How Roo Code tracks API cost, token usage, and displays totals in the chat UI.
+How Shofer tracks API cost, token usage, and displays totals in the chat UI.
 
 ## Overview
 
-Roo Code computes the **total cost** for a task by aggregating token usage and pricing data from every AI provider API call made during the conversation, plus any context condensation costs. The total is displayed in the [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx) at the top of the chat window.
+Shofer computes the **total cost** for a task by aggregating token usage and pricing data from every AI provider API call made during the conversation, plus any context condensation costs. The total is displayed in the [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx) at the top of the chat window.
 
 ## Data Flow
 
@@ -38,7 +38,7 @@ TaskHeader (total cost display)
 
 ### 1. Request Started
 
-When Roo is about to call the AI provider, it emits a placeholder `api_req_started` message:
+When Shofer is about to call the AI provider, it emits a placeholder `api_req_started` message:
 
 ```typescript
 // Task.ts line ~3150
@@ -49,7 +49,7 @@ At this point the message has no cost or token data — just the protocol (`"ant
 
 ### 2. Streaming — Usage Accumulation
 
-As the provider streams its response, Roo receives periodic `"usage"` chunks that carry token counts:
+As the provider streams its response, Shofer receives periodic `"usage"` chunks that carry token counts:
 
 ```typescript
 // Task.ts lines 3438-3441
@@ -66,13 +66,13 @@ case "usage":
 The `updateApiReqMsg()` function (Task.ts line 3261) stamps the accumulated usage into the `api_req_started` message's `text` field:
 
 ```typescript
-this.clineMessages[lastApiReqIndex].text = JSON.stringify({
+this.shoferMessages[lastApiReqIndex].text = JSON.stringify({
 	...existingData,
 	tokensIn: costResult.totalInputTokens,
 	tokensOut: costResult.totalOutputTokens,
 	cacheWrites: cacheWriteTokens,
 	cacheReads: cacheReadTokens,
-	cost: totalCost ?? costResult.totalCost, // provider-reported or Roo-calculated
+	cost: totalCost ?? costResult.totalCost, // provider-reported or Shofer-calculated
 })
 ```
 
@@ -120,12 +120,12 @@ messages.forEach((message) => {
 
 ## What Is NOT Counted (Known Gap)
 
-**Orphaned `api_req_started` messages** — if a request was started (`api_req_started` emitted) but the extension crashed or the task was force-closed before ANY response data arrived, the message has no `cost` and no `cancelReason`. These are removed during `saveClineMessages()`:
+**Orphaned `api_req_started` messages** — if a request was started (`api_req_started` emitted) but the extension crashed or the task was force-closed before ANY response data arrived, the message has no `cost` and no `cancelReason`. These are removed during `saveShoferMessages()`:
 
 ```typescript
 // Task.ts lines 2344-2350
 if (cost === undefined && cancelReason === undefined) {
-	modifiedClineMessages.splice(lastApiReqStartedIndex, 1)
+	modifiedShoferMessages.splice(lastApiReqStartedIndex, 1)
 }
 ```
 

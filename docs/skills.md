@@ -1,8 +1,8 @@
-# RooCode Skills System
+# Shofer Skills System
 
 ## Overview
 
-RooCode implements a **lazy-loading skill system** — only skill metadata (name, description, location) is included in the system prompt. Full skill instructions are loaded on-demand when the model invokes `skill_load`. Each `Task` tracks which skills have been loaded in a `loadedSkills` Map, preventing redundant loads and auto-clearing on context summarization.
+Shofer implements a **lazy-loading skill system** — only skill metadata (name, description, location) is included in the system prompt. Full skill instructions are loaded on-demand when the model invokes `skill_load`. Each `Task` tracks which skills have been loaded in a `loadedSkills` Map, preventing redundant loads and auto-clearing on context summarization.
 
 ## Architecture
 
@@ -27,8 +27,8 @@ Skills are discovered from multiple locations. Later directories override earlie
 
 1. `~/.agents/skills/` — Global shared agent skills (lowest priority)
 2. `{project}/.agents/skills/` — Project-level shared agent skills
-3. `~/.roo/skills/` — Global Roo-specific skills
-4. `{project}/.roo/skills/` — Project-level Roo-specific skills (highest priority)
+3. `~/.shofer/skills/` — Global Shofer-specific skills
+4. `{project}/.shofer/skills/` — Project-level Shofer-specific skills (highest priority)
 
 Plus mode-specific variants in each location: `skills-{mode}/` (e.g., `skills-code/`, `skills-architect/`)
 
@@ -37,7 +37,7 @@ Plus mode-specific variants in each location: `skills-{mode}/` (e.g., `skills-co
 Each skill lives in a subdirectory with a `SKILL.md` file:
 
 ```
-.roo/skills/
+.shofer/skills/
 └── my-skill/
     └── SKILL.md
 ```
@@ -87,7 +87,7 @@ Only metadata is included in the system prompt ([`skills.ts`](src/core/prompts/s
   <skill>
     <name>pdf-processing</name>
     <description>Extracts text & tables from PDFs</description>
-    <location>/home/user/.roo/skills/pdf-processing/SKILL.md</location>
+    <location>/home/user/.shofer/skills/pdf-processing/SKILL.md</location>
   </skill>
 </available_skills>
 ```
@@ -188,7 +188,7 @@ The [`SkillsButton`](webview-ui/src/components/chat/SkillsButton.tsx) in the cha
 
 - **Loaded skills** at top with green ✓ — filtered from `loadedSkills` state
 - **Available skills** below — grouped by mode, sorted alphabetically
-- **↻ Refresh** — re-reads `.roo/skills` directories via `requestSkills` IPC
+- **↻ Refresh** — re-reads `.shofer/skills` directories via `requestSkills` IPC
 - **⚙ Settings** — navigates to Settings → Skills
 - **Click** — inserts `"Use the <skill-name> skill"` into chat input
 - Skills inserted via `/skill-name` in messages also trigger loading

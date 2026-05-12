@@ -95,10 +95,10 @@ describe("resolveImageMentions", () => {
 		expect(result.images).toEqual([])
 	})
 
-	it("should respect rooIgnoreController", async () => {
+	it("should respect shoferIgnoreController", async () => {
 		const dataUrl = `data:image/jpeg;base64,${Buffer.from("jpg-bytes").toString("base64")}`
 		mockReadImageAsDataUrl.mockResolvedValue({ dataUrl, buffer: Buffer.from("jpg-bytes") })
-		const rooIgnoreController = {
+		const shoferIgnoreController = {
 			validateAccess: vi.fn().mockReturnValue(false),
 		}
 
@@ -106,10 +106,10 @@ describe("resolveImageMentions", () => {
 			text: "See @/secret.jpg",
 			images: [],
 			cwd: "/workspace",
-			rooIgnoreController,
+			shoferIgnoreController,
 		})
 
-		expect(rooIgnoreController.validateAccess).toHaveBeenCalledWith("secret.jpg")
+		expect(shoferIgnoreController.validateAccess).toHaveBeenCalledWith("secret.jpg")
 		expect(mockReadImageAsDataUrl).not.toHaveBeenCalled()
 		expect(result.images).toEqual([])
 	})

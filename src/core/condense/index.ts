@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import crypto from "crypto"
 
-import { TelemetryService } from "@roo-code/telemetry"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { t } from "../../i18n"
 import { ApiHandler, ApiHandlerCreateMessageMetadata } from "../../api"
@@ -9,7 +9,7 @@ import { ApiMessage } from "../task-persistence/apiMessages"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { findLast } from "../../shared/array"
 import { supportPrompt } from "../../shared/support-prompt"
-import { RooIgnoreController } from "../ignore/RooIgnoreController"
+import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import { generateFoldedFileContext } from "./foldedFileContext"
 
 export type { FoldedFileContextResult, FoldedFileContextOptions } from "./foldedFileContext"
@@ -218,7 +218,7 @@ export type SummarizeResponse = {
 	newContextTokens?: number // The number of tokens in the context for the next API request
 	error?: string // Populated iff the operation fails: error message shown to the user on failure (see Task.ts)
 	errorDetails?: string // Detailed error information including stack trace and API error info
-	condenseId?: string // The unique ID of the created Summary message, for linking to condense_context clineMessage
+	condenseId?: string // The unique ID of the created Summary message, for linking to condense_context shoferMessage
 }
 
 export type SummarizeConversationOptions = {
@@ -232,7 +232,7 @@ export type SummarizeConversationOptions = {
 	environmentDetails?: string
 	filesReadByRoo?: string[]
 	cwd?: string
-	rooIgnoreController?: RooIgnoreController
+	shoferIgnoreController?: ShoferIgnoreController
 }
 
 /**
@@ -251,7 +251,7 @@ export type SummarizeConversationOptions = {
  *   message won't have fresh environment details injected.
  * - For MANUAL condensing (isAutomaticTrigger=false): Environment details are NOT included
  *   because fresh environment details will be injected on the very next turn via
- *   getEnvironmentDetails() in recursivelyMakeClineRequests().
+ *   getEnvironmentDetails() in recursivelyMakeShoferRequests().
  */
 export async function summarizeConversation(options: SummarizeConversationOptions): Promise<SummarizeResponse> {
 	const {
@@ -265,7 +265,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 		environmentDetails,
 		filesReadByRoo,
 		cwd,
-		rooIgnoreController,
+		shoferIgnoreController,
 	} = options
 	TelemetryService.instance.captureContextCondensed(
 		taskId,
@@ -426,7 +426,7 @@ ${commandBlocks}
 		try {
 			const foldedResult = await generateFoldedFileContext(filesReadByRoo, {
 				cwd,
-				rooIgnoreController,
+				shoferIgnoreController,
 			})
 			if (foldedResult.sections.length > 0) {
 				for (const section of foldedResult.sections) {

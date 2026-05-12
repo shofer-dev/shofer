@@ -6,7 +6,7 @@ import { fileURLToPath } from "url"
 import { randomUUID } from "crypto"
 
 import { execa } from "execa"
-import type { TaskSessionEntry } from "@roo-code/core/cli"
+import type { TaskSessionEntry } from "@shofer/core/cli"
 
 type StreamEvent = {
 	type?: string
@@ -88,7 +88,7 @@ async function createSessionWithCustomId(
 			"dev",
 			"--print",
 			"--provider",
-			"roo",
+			"shofer",
 			"--output-format",
 			"stream-json",
 			"--workspace",
@@ -148,7 +148,7 @@ async function resumeSessionAndSendMarker(
 			"--print",
 			"--stdin-prompt-stream",
 			"--provider",
-			"roo",
+			"shofer",
 			"--output-format",
 			"stream-json",
 			"--workspace",
@@ -317,7 +317,7 @@ async function main() {
 	const cliRoot = process.env.ROO_CLI_ROOT
 		? path.resolve(process.env.ROO_CLI_ROOT)
 		: path.resolve(__dirname, "../../..")
-	const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "roo-cli-create-session-id-"))
+	const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "shofer-cli-create-session-id-"))
 
 	const firstSessionId = randomUUID()
 	const secondSessionId = randomUUID()

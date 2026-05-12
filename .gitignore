@@ -46,7 +46,7 @@ logs
 .idea/
 .qodo/
 .vercel
-.roo/mcp.json
+.shofer/mcp.json
 
 # Qdrant
 qdrant_storage/
@@ -54,4 +54,4 @@ qdrant_storage/
 # Architect plans
 plans/
 
-roo-cli-*.tar.gz*
+shofer-cli-*.tar.gz*

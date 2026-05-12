@@ -4,12 +4,12 @@ import * as path from "path"
 import * as os from "os"
 import * as vscode from "vscode"
 
-import { RooCodeEventName, type ClineMessage } from "@roo-code/types"
+import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 
 import { waitFor, sleep } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
-suite.skip("Roo Code read_file Tool", function () {
+suite.skip("Shofer read_file Tool", function () {
 	setDefaultSuiteTimeout(this)
 
 	let tempDir: string
@@ -24,7 +24,7 @@ suite.skip("Roo Code read_file Tool", function () {
 
 	// Create a temporary directory and test files
 	suiteSetup(async () => {
-		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "roo-test-read-"))
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "shofer-test-read-"))
 
 		// Create test files in VSCode workspace directory
 		const workspaceDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || tempDir
@@ -122,7 +122,7 @@ suite.skip("Roo Code read_file Tool", function () {
 
 	test("Should read a simple text file", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskStarted = false
 		let taskCompleted = false
 		let errorOccurred: string | null = null
@@ -130,7 +130,7 @@ suite.skip("Roo Code read_file Tool", function () {
 		let toolResult: string | null = null
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution and extract result
@@ -180,7 +180,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				console.log("AI response:", message.text?.substring(0, 200))
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task events
 		const taskStartedHandler = (id: string) => {
@@ -189,7 +189,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				console.log("Task started:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskStarted, taskStartedHandler)
+		api.on(ShoferEventName.TaskStarted, taskStartedHandler)
 
 		const taskCompletedHandler = (id: string) => {
 			if (id === taskId) {
@@ -197,7 +197,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				console.log("Task completed:", id)
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -259,21 +259,21 @@ suite.skip("Roo Code read_file Tool", function () {
 			console.log("Test passed! File read successfully with correct content")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskStarted, taskStartedHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskStarted, taskStartedHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should read a multiline file", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 		let toolResult: string | null = null
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution and extract result
@@ -314,7 +314,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				console.log("AI response:", message.text?.substring(0, 200))
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -322,7 +322,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -371,20 +371,20 @@ suite.skip("Roo Code read_file Tool", function () {
 			console.log("Test passed! Multiline file read successfully with correct content")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should read file with slice offset/limit", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 		let toolResult: string | null = null
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution and extract result
@@ -425,7 +425,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				console.log("AI response:", message.text?.substring(0, 200))
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -433,7 +433,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -483,20 +483,20 @@ suite.skip("Roo Code read_file Tool", function () {
 			console.log("Test passed! File read with line range successfully")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should handle reading non-existent file", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 		let _errorHandled = false
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution
@@ -511,7 +511,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -519,7 +519,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -555,19 +555,19 @@ suite.skip("Roo Code read_file Tool", function () {
 			console.log("Test passed! Non-existent file handled correctly")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should read XML content file", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution
@@ -584,7 +584,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				console.log("AI response:", message.text?.substring(0, 200))
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -592,7 +592,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -626,19 +626,19 @@ suite.skip("Roo Code read_file Tool", function () {
 			console.log("Test passed! XML file read successfully")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should read multiple files in sequence", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let readFileCount = 0
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Count read_file executions
@@ -650,7 +650,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				}
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -658,7 +658,7 @@ suite.skip("Roo Code read_file Tool", function () {
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -699,19 +699,19 @@ Assume both files exist and you can read them directly. Read each file and tell 
 			console.log("Test passed! Multiple files read successfully")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 
 	test("Should read large file efficiently", async function () {
 		const api = globalThis.api
-		const messages: ClineMessage[] = []
+		const messages: ShoferMessage[] = []
 		let taskCompleted = false
 		let toolExecuted = false
 
 		// Listen for messages
-		const messageHandler = ({ message }: { message: ClineMessage }) => {
+		const messageHandler = ({ message }: { message: ShoferMessage }) => {
 			messages.push(message)
 
 			// Check for tool execution
@@ -728,7 +728,7 @@ Assume both files exist and you can read them directly. Read each file and tell 
 				console.log("AI response:", message.text?.substring(0, 200))
 			}
 		}
-		api.on(RooCodeEventName.Message, messageHandler)
+		api.on(ShoferEventName.Message, messageHandler)
 
 		// Listen for task completion
 		const taskCompletedHandler = (id: string) => {
@@ -736,7 +736,7 @@ Assume both files exist and you can read them directly. Read each file and tell 
 				taskCompleted = true
 			}
 		}
-		api.on(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+		api.on(ShoferEventName.TaskCompleted, taskCompletedHandler)
 
 		let taskId: string
 		try {
@@ -770,8 +770,8 @@ Assume both files exist and you can read them directly. Read each file and tell 
 			console.log("Test passed! Large file read efficiently")
 		} finally {
 			// Clean up
-			api.off(RooCodeEventName.Message, messageHandler)
-			api.off(RooCodeEventName.TaskCompleted, taskCompletedHandler)
+			api.off(ShoferEventName.Message, messageHandler)
+			api.off(ShoferEventName.TaskCompleted, taskCompletedHandler)
 		}
 	})
 })
