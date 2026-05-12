@@ -148,10 +148,6 @@ const TaskHeader = ({
 	// Resolve the runtime state of the currently-shown task so the in-chat
 	// title can render a small status dot mirroring the drawer's row icons.
 	const currentTitle = currentTaskItem ? getTaskDisplayName(currentTaskItem) : ""
-	const worktreeLeaf =
-		currentTaskItem?.cwd && currentTaskItem.cwd !== currentTaskItem.workspace
-			? currentTaskItem.cwd.split("/").pop() || currentTaskItem.cwd.split("\\").pop()
-			: null
 	const currentRuntime = currentTaskItem ? parallelTasks?.find((p) => p.id === currentTaskItem.id) : undefined
 	const currentStateConfig = TASK_STATE_CONFIG[currentRuntime?.state ?? "idle"] || TASK_STATE_CONFIG.idle
 
@@ -181,11 +177,6 @@ const TaskHeader = ({
 							{currentTitle || t("chat:task.title")}
 						</span>
 					</StandardTooltip>
-					{worktreeLeaf && (
-						<span className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium rounded-full bg-[var(--vscode-badge-background,#4d4d4d)] text-[var(--vscode-badge-foreground,#fff)]">
-							🌿 {worktreeLeaf}
-						</span>
-					)}
 				</div>
 				{isSubtask && (
 					<Button
