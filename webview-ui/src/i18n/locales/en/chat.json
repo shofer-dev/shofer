@@ -1,5 +1,6 @@
 {
 	"greeting": "Welcome to Roo Code!",
+	"newWorktreeTask": "New worktree task",
 	"task": {
 		"title": "Task",
 		"expand": "Expand task",

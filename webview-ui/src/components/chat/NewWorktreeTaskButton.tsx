@@ -21,10 +21,10 @@ export const NewWorktreeTaskButton = () => {
 
 	return (
 		<>
-			<StandardTooltip content={t("chat:newWorktreeTask", "New worktree task")}>
+			<StandardTooltip content={t("chat:newWorktreeTask")}>
 				<button
 					type="button"
-					aria-label={t("chat:newWorktreeTask", "New worktree task")}
+					aria-label={t("chat:newWorktreeTask")}
 					onClick={() => setOpen(true)}
 					className={cn(
 						"relative inline-flex items-center justify-center",

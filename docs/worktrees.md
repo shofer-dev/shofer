@@ -2,25 +2,33 @@
 
 ## Overview
 
-Roo Code added full git worktree management in **v3.44.0** (January 2026, PR #10940). Worktrees enable agentic coding across multiple branches simultaneously — each branch gets its own directory and VS Code window, with Roo Code auto-opening in the new window.
+Roo Code supports two worktree models:
+
+| Model               | Introduced         | Worktree location                    | Tasks              | Windows          |
+| ------------------- | ------------------ | ------------------------------------ | ------------------ | ---------------- |
+| **Separate-window** | v3.44.0 (Jan 2026) | `~/.roo/worktrees/<project>-<rand>`  | One per window     | One per worktree |
+| **Embedded**        | v3.67.0 (May 2026) | `<workspace>/.roo/worktrees/<name>/` | All in same window | Single window    |
+
+The embedded model is preferred for new worktrees. It enables concurrent task execution, orchestrated merges, and task-selector visibility — all within the same VS Code window.
 
 ## Architecture
 
-The feature is split across three layers:
-
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Webview UI (React)                                           │
-│  WorktreeSelector · WorktreesView · Create/Delete Modals      │
-├──────────────────────────────────────────────────────────────┤
-│  VSCode Bridge (handlers.ts)                                  │
-│  handleListWorktrees · handleCreateWorktree                   │
-│  handleSwitchWorktree · handleDeleteWorktree                  │
-├──────────────────────────────────────────────────────────────┤
-│  Platform-Agnostic Core (@roo-code/core)                      │
-│  WorktreeService · WorktreeIncludeService                     │
-│  (no VSCode dependencies — pure git CLI wrappers)             │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  Webview UI (React)                                               │
+│  WorktreeSelector · WorktreesView · Create/Delete Modals          │
+│  WorktreeStatusIndicator · NewWorktreeTaskButton                  │
+│  TaskHeader · TaskSelector (worktree badge)                        │
+├──────────────────────────────────────────────────────────────────┤
+│  VSCode Bridge (handlers.ts)                                      │
+│  handleListWorktrees · handleCreateWorktree                        │
+│  handleSwitchWorktree · handleDeleteWorktree                       │
+│  handleGetWorktreeDefaults · handleGetWorktreeStatus               │
+├──────────────────────────────────────────────────────────────────┤
+│  Platform-Agnostic Core (@roo-code/core)                          │
+│  WorktreeService · WorktreeIncludeService                          │
+│  (no VSCode dependencies — pure git CLI wrappers)                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ### 1. Core Services (`packages/core/src/worktree/`)
@@ -46,29 +54,124 @@ The feature is split across three layers:
 
 Handlers translate webview IPC messages to core service calls:
 
-- `handleListWorktrees` — Enforces constraints (no multi-root, no subfolder workspace) before listing
+- `handleListWorktrees` — Enforces constraints (no multi-root; subfolder workspaces allowed only when the subfolder lives under `<gitRoot>/.roo/worktrees/` — i.e., it is itself an embedded worktree)
 - `handleCreateWorktree` — Creates worktree then auto-copies `.worktreeinclude` files with progress
 - `handleSwitchWorktree` — Opens `vscode.openFolder` (same or new window); stores `worktreeAutoOpenPath` in global state for auto-open behavior
 - `handleDeleteWorktree` — Delegates to core service
-- `handleGetWorktreeDefaults` — Generates suggested path (`~/.roo/worktrees/<project>-<random>`) and branch name (`worktree/roo-<random>`)
+- `handleGetWorktreeDefaults` — Generates suggested path (`<workspace>/.roo/worktrees/<project>-<random>`) and branch name (`worktree/roo-<random>`)
 
-### 3. Extension Activation Flow
+### 3. Per-Task `cwd`
 
-When a worktree is opened (either same-window or new-window), the stored [`worktreeAutoOpenPath`](../src/extension.ts:83) triggers:
+Each `Task` instance has a `cwd` property (defaults to the workspace root). For embedded worktree tasks, `cwd` is set to the worktree subdirectory (e.g., `<workspace>/.roo/worktrees/repo-hl911/`).
+
+- All tools operate relative to `task.cwd`
+- `HistoryItem.cwd` is persisted in task metadata so worktree tasks rehydrate correctly
+- `ClineProvider.createTask(…, cwd?)` accepts an optional `cwd` override
+- `createManagedTask(name, text, images, worktreeDir?)` creates an in-window task scoped to a worktree directory
+- Webview messages `newTask` and `createParallelTask` both accept a `worktreeDir` field
+
+### 4. Checkpoint Isolation (`src/services/checkpoints/`)
+
+Two parallel tasks running against the same workspace would interfere if their shadow gits both pointed `core.worktree` at the workspace root. The solution uses scoped shadow gits:
+
+| Instance                   | `core.worktree`                      | Excludes                                    |
+| -------------------------- | ------------------------------------ | ------------------------------------------- |
+| Main task (workspace root) | `<workspace>/`                       | `/.roo/worktrees/` appended to exclude file |
+| Worktree task              | `<workspace>/.roo/worktrees/<name>/` | (already scoped — no exclude needed)        |
+
+`ShadowCheckpointService` accepts an optional `scopedWorktreeDir` constructor argument. When set, the shadow git's `core.worktree` is set to the worktree subdirectory. Non-scoped instances exclude `.roo/worktrees/` to prevent cross-contamination. `core.worktree` validation accepts the scoped path (not just `workspaceDir`).
+
+### 5. Embedded Worktree Detection (`isEmbeddedWorktree`)
+
+`handleListWorktrees` uses `path.relative(gitRootPath, cwd)` to determine whether a subfolder workspace is itself an embedded worktree:
+
+```typescript
+const rel = path.relative(gitRootPath, cwd)
+const embeddedPrefix = path.join(".roo", "worktrees") + path.sep
+isEmbeddedWorktree = !rel.startsWith("..") && !path.isAbsolute(rel) && rel.startsWith(embeddedPrefix)
+```
+
+This is a containment check anchored to the git root — not a substring match — so it cannot be confused by unrelated directories that happen to contain the string `.roo/worktrees`.
+
+### 6. Extension Activation Flow (Separate-Window Model Only)
+
+When a worktree is opened in a new window, the stored [`worktreeAutoOpenPath`](../src/extension.ts:83) triggers:
 
 1. On activation, `checkWorktreeAutoOpen` reads the stored path from `globalState`
 2. If the current workspace path matches, it clears the stored path and auto-opens the Roo Code sidebar (500ms delay for UI readiness)
 3. This ensures Roo Code is immediately available in the new worktree window
 
+For embedded worktrees this mechanism is not used — tasks are spawned via `createManagedTask` and appear directly in the in-window task selector.
+
+## Native `worktree` Tool
+
+The orchestrator can manage the full worktree lifecycle programmatically via the `worktree` native tool (registered in the `mode` tool group). This removes the need for `execute_command` access in worktree orchestration flows.
+
+### Parameters
+
+| Parameter       | Type          | Required | Description                                                                                               |
+| --------------- | ------------- | :------: | --------------------------------------------------------------------------------------------------------- |
+| `subcommand`    | string        |    ✅    | `create`, `list`, `merge`, `destroy`, or `status`                                                         |
+| `path`          | string\|null  |    ✅    | Worktree path (absolute or relative to workspace root). Required for create/destroy/status; null for list |
+| `branch`        | string\|null  |    ✅    | Branch name (create). Defaults to `worktree/roo-<random5>`                                                |
+| `base_branch`   | string\|null  |    ✅    | Base branch to create from (create). Defaults to main/master                                              |
+| `target_branch` | string\|null  |    ✅    | Target branch for merge. Defaults to detected base branch. Merge refuses if HEAD ≠ target                 |
+| `force`         | boolean\|null |    ✅    | Force destroy even if unmerged. Default false                                                             |
+
+All optional params use nullable types (`["string","null"]`/`["boolean","null"]`) to comply with OpenAI `strict: true` schema mode — all properties appear in the `required` array.
+
+### Subcommand Behaviours
+
+| Subcommand | Behavior                                                                                                     | Returns                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| `create`   | `git worktree add <path> <branch>`, copies `.worktreeinclude` files, ensures `.roo/worktrees/` is gitignored | `{ path, branch, message }`                             |
+| `list`     | `git worktree list --porcelain`, annotated with embedded-worktree flag                                       | `[{ path, branch, isCurrent, isRooWorktree }]`          |
+| `merge`    | Checks target branch, `git merge --no-ff <branch>`, reports conflicts                                        | `{ merged, conflicts?, conflictedFiles? }`              |
+| `destroy`  | `git worktree remove <path>` + `git branch -d <branch>`. Refuses unmerged unless `force=true`                | `{ removed, branchDeleted, message }`                   |
+| `status`   | ahead/behind counts, uncommitted changes, dry-run merge readiness                                            | `{ branch, ahead, behind, hasUncommitted, mergeReady }` |
+
+### Safety Invariants
+
+- `destroy` refuses if the branch is not fully merged into the current branch (unless `force=true`)
+- `merge` refuses if there are uncommitted changes in the main worktree
+- `merge` refuses if the main worktree HEAD is not on `target_branch`
+- `create` refuses if the path already exists or the branch name is taken
+- All git operations run with `PAGER=cat` to avoid interactive pagers
+- Paths are resolved relative to `task.cwd`
+
+### Orchestrated Workflow
+
+```
+Orchestrator task (mode=orchestrator, cwd=/repo/)
+  │
+  ├─ worktree create → .roo/worktrees/repo-hl911/ (branch: worktree/roo-hl911)
+  │
+  ├─ new_task(mode=code, worktreeDir=".roo/worktrees/repo-hl911", message="…")
+  │   └─ subtask runs with cwd=<worktreeDir>; works on branch worktree/roo-hl911
+  │
+  ├─ wait_for_task(task_id)
+  │
+  ├─ worktree merge path=.roo/worktrees/repo-hl911
+  │   └─ git merge --no-ff worktree/roo-hl911 into main/master
+  │
+  └─ worktree destroy path=.roo/worktrees/repo-hl911
+      └─ git worktree remove + git branch -d → cleanup complete
+```
+
+The `new_task` tool also accepts a `worktreeDir` parameter (nullable string, `strict: true` compatible). Relative paths are resolved against the parent task's `cwd`.
+
 ## UI Components
 
-| Component                                                                                  | Location             | Purpose                                                                                                    |
-| ------------------------------------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [`WorktreeSelector`](../webview-ui/src/components/chat/WorktreeSelector.tsx)               | Chat header dropdown | Quick-switch between worktrees; shows branch name and path; hidden when ≤1 worktree exists                 |
-| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                | Settings page        | Full CRUD management with 3-second polling; `.worktreeinclude` status footer; "show in home screen" toggle |
-| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx)    | Modal                | Searchable base-branch selector, auto-generated branch/path defaults, progress tracking during file copy   |
-| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx)    | Confirmation dialog  | Branch and filesystem deletion warnings                                                                    |
-| [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) | Chat input bar chip  | Shows current worktree branch name; click to see commits ahead/behind, files changed, merge readiness      |
+| Component                                                                                  | Location             | Purpose                                                                                                                                     |
+| ------------------------------------------------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorktreeSelector`](../webview-ui/src/components/chat/WorktreeSelector.tsx)               | Chat header dropdown | Quick-switch between worktrees; shows branch name and path; hidden when ≤1 worktree                                                         |
+| [`WorktreesView`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                | Settings page        | Full CRUD management with 3-second polling; `.worktreeinclude` status footer                                                                |
+| [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx)    | Modal                | Searchable base-branch selector; auto-generated branch/path (read-only); progress tracking; `openAfterCreate` flag spawns an in-window task |
+| [`DeleteWorktreeModal`](../webview-ui/src/components/worktrees/DeleteWorktreeModal.tsx)    | Confirmation dialog  | Branch and filesystem deletion warnings                                                                                                     |
+| [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) | Chat input bar chip  | Shows current worktree branch; click for ahead/behind, file stats, merge readiness                                                          |
+| [`NewWorktreeTaskButton`](../webview-ui/src/components/chat/NewWorktreeTaskButton.tsx)     | Chat input bar       | One-click entry to open `CreateWorktreeModal` with `openAfterCreate=true`                                                                   |
+| [`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx)                           | Chat header          | Shows worktree badge (leaf dir name) when task `cwd` differs from workspace                                                                 |
+| [`TaskSelector`](../webview-ui/src/components/chat/TaskSelector.tsx)                       | Task switcher        | Badges worktree tasks with their branch/directory name                                                                                      |
 
 ## `.worktreeinclude` Mechanism
 
@@ -83,7 +186,7 @@ A custom extension to standard `git worktree`. The file `.worktreeinclude` in th
 
 ### Why Intersection?
 
-The intersection ensures only **untracked/ignored** files are copied (e.g., `node_modules`, `.env`, build artifacts). This prevents accidental duplication of tracked source files, which would create merge conflicts. Only files that the developer explicitly ignores AND also wants in new worktrees are copied.
+The intersection ensures only **untracked/ignored** files are copied (e.g., `node_modules`, `.env`, build artifacts). This prevents accidental duplication of tracked source files, which would create merge conflicts.
 
 ### UI Integration
 
@@ -94,38 +197,22 @@ The intersection ensures only **untracked/ignored** files are copied (e.g., `nod
 
 ## Subfolder Workspace Restriction
 
-Worktrees are **disabled** when the VS Code workspace root is a subdirectory of the git repository root.
-
-### The Check
-
-The function `isWorkspaceSubfolder` runs `git rev-parse --show-toplevel` and compares the result to the workspace root. If the workspace is deeper than the git root, worktrees are rejected.
-
-### Why?
-
-`git worktree` operates at the repository level. If the workspace only covers a subdirectory, there's no single unambiguous repository root to attach worktrees to. The feature requires the workspace root to equal the git root.
+Worktrees are disabled when the VS Code workspace root is a subdirectory of the git repository root, **unless** that subdirectory is itself an embedded worktree (i.e. lives under `<gitRoot>/.roo/worktrees/`).
 
 ### Submodule Interaction
 
-| Workspace                                  | Git Root         | Worktrees? |
-| ------------------------------------------ | ---------------- | ---------- |
-| Parent repo root (`/repo/`)                | `/repo/`         | ✅         |
-| Submodule root (`/repo/ext/sub/`)          | `/repo/ext/sub/` | ✅         |
-| Subdirectory of parent repo (`/repo/ext/`) | `/repo/`         | ❌         |
-
-Submodules have their **own** git root (via the `.git` file pointing to the parent's `.git/modules/` directory). Opening a submodule as its own workspace works correctly.
+| Workspace                                              | Git Root         | Worktrees? |
+| ------------------------------------------------------ | ---------------- | ---------- |
+| Parent repo root (`/repo/`)                            | `/repo/`         | ✅         |
+| Submodule root (`/repo/ext/sub/`)                      | `/repo/ext/sub/` | ✅         |
+| Subdirectory of parent repo (`/repo/ext/`)             | `/repo/`         | ❌         |
+| Embedded worktree (`/repo/.roo/worktrees/repo-hl911/`) | `/repo/`         | ✅         |
 
 ### Caveats with Submodules
 
 - **No auto-initialization**: `git worktree add` creates the directory structure but does not run `git submodule update --init`. Submodules in the new worktree appear as empty directories until manually initialized.
-- **`.worktreeinclude` doesn't apply**: Submodule directories are tracked by git, so they won't match `.gitignore` patterns. The `.worktreeinclude` mechanism cannot help here.
-- **Checkpoint safety**: The shadow git checkpoint system uses `GIT_DIR` isolation (see [`submodule-support.md`](./submodule-support.md)) to prevent submodule discovery during checkpoint operations, so checkpoints work correctly even with submodules present.
-
-## Checkpoint Integration
-
-The shadow git checkpoint system ([`ShadowCheckpointService`](../src/services/checkpoints/ShadowCheckpointService.ts)) uses `core.worktree` config to point the shadow git at the workspace directory. Key interactions:
-
-- **Worktree `.git` files**: `git worktree add` creates `.git` files (not directories), which historically evaded the nested-repo detector. This was resolved by setting `GIT_DIR` in the shadow git, preventing submodule discovery.
-- **`core.worktree` validation**: On shadow git init, the system verifies `core.worktree` is set and matches the workspace directory. Missing or mismatched `core.worktree` throws an error.
+- **`.worktreeinclude` doesn't apply**: Submodule directories are tracked by git, so they won't match `.gitignore` patterns.
+- **Checkpoint safety**: The shadow git checkpoint system uses `GIT_DIR` isolation (see [`submodule-support.md`](./submodule-support.md)) to prevent submodule discovery during checkpoint operations.
 
 ## IPC Message Types
 
@@ -144,17 +231,21 @@ The shadow git checkpoint system ([`ShadowCheckpointService`](../src/services/ch
 | `branchWorktreeInclude`    | `worktreeBranch`                                                                  |
 | `checkoutBranch`           | `worktreeBranch`                                                                  |
 | `browseForWorktreePath`    | (none)                                                                            |
+| `newTask`                  | `text`, `images?`, `worktreeDir?`                                                 |
+| `createParallelTask`       | `taskName?`, `text?`, `images?`, `worktreeDir?`                                   |
+| `getWorktreeStatus`        | (none)                                                                            |
 
 ### From Extension to Webview
 
 | Message Type            | Payload                                                                          |
 | ----------------------- | -------------------------------------------------------------------------------- |
 | `worktreeList`          | `worktrees[]`, `isGitRepo`, `isMultiRoot`, `isSubfolder`, `gitRootPath`, `error` |
-| `worktreeResult`        | `success`, `text` (message)                                                      |
+| `worktreeResult`        | `success`, `text`                                                                |
 | `worktreeCopyProgress`  | `copyProgressBytesCopied`, `copyProgressItemName`                                |
 | `branchList`            | `localBranches[]`, `remoteBranches[]`, `currentBranch`                           |
 | `worktreeDefaults`      | `suggestedBranch`, `suggestedPath`                                               |
 | `worktreeIncludeStatus` | `exists`, `hasGitignore`, `gitignoreContent`                                     |
+| `worktreeStatus`        | `worktreeStatus: WorktreeStatus`                                                 |
 
 ## Type Definitions
 
@@ -167,73 +258,23 @@ Core types are defined in [`packages/types/src/worktree.ts`](../packages/types/s
 - `WorktreeListResponse` — worktrees[], isGitRepo, isMultiRoot, isSubfolder, gitRootPath, error?
 - `WorktreeStatus` — branch, path, baseBranch, commitsAhead, commitsBehind, filesChanged, insertions, deletions, hasUncommittedChanges, uncommittedCount, lastCommit, mergeReadiness, isBaseBranch, otherWorktrees
 
+`HistoryItem` now includes a `cwd` field (persisted per task) and the `worktree` tool is listed in `toolNames` and `TOOL_GROUPS.mode`.
+
 ## Worktree Status Indicator
 
 The [`WorktreeStatusIndicator`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx) provides at-a-glance visibility of the current worktree's state directly in the chat input bar.
 
-### Display
-
 - **When hidden**: ≤1 worktree exists (only the primary/bare worktree)
 - **When visible**: Shows the current branch name as a compact chip (e.g., `🌿 worktree/roo-hl911`)
-- **Tooltip**: "Worktree status — click for details"
 
-### Popover Contents
+On click, the indicator requests status via `getWorktreeStatus`. The backend handler runs 5+ git queries in parallel (last commit, ahead/behind, diff stats, uncommitted count, dry-run merge) and returns a `WorktreeStatus` object.
 
-On click, the indicator requests status via the `getWorktreeStatus` IPC message. The backend handler ([`handleGetWorktreeStatus`](../src/core/webview/worktree/handlers.ts)) collects:
-
-| Metric              | Source                                  | Example                                               |
-| ------------------- | --------------------------------------- | ----------------------------------------------------- |
-| Last commit         | `git log -1 --format`                   | `abc1234 Fix checkpoint race (3 hours ago) by Hannes` |
-| Ahead/Behind        | `git rev-list --count`                  | ▲ 5 ahead ▼ 0 behind                                  |
-| Files changed       | `git diff --shortstat`                  | 12 files changed (243+/87-)                           |
-| Uncommitted changes | `git status --short`                    | ⚠ 3 uncommitted change(s)                            |
-| Merge readiness     | Dry-run `git merge --no-commit --no-ff` | ✅ Safe to merge / ⚠ 2 conflicted file(s)            |
-| Other worktrees     | `git worktree list`                     | Lists all other worktrees with branch names           |
-
-### Technical Details
-
-**Backend** ([`handlers.ts`](../src/core/webview/worktree/handlers.ts)):
-
-- Detects base branch (`main` or `master`) automatically
-- Runs 5+ git queries in parallel for performance
-- Performs a dry-run merge (`git merge --no-commit --no-ff` then `git merge --abort`) to check conflicts
-- Returns `WorktreeStatus` with all fields populated
-
-**Frontend** ([`WorktreeStatusIndicator.tsx`](../webview-ui/src/components/chat/WorktreeStatusIndicator.tsx)):
-
-- Separate popover with loading spinner, error state, and detailed status display
-- Color-coded indicators: green for clean/ahead/safe, amber for behind/uncommitted, red for conflicts
-- Integrates into the chat input bar alongside Mode, API Configuration, and Auto-approve controls
-
-**IPC messages**:
-
-| Direction           | Type                | Payload                          |
-| ------------------- | ------------------- | -------------------------------- |
-| Webview → Extension | `getWorktreeStatus` | (none)                           |
-| Extension → Webview | `worktreeStatus`    | `worktreeStatus: WorktreeStatus` |
-
-### i18n
-
-Translations in [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../webview-ui/src/i18n/locales/en/worktreeStatus.json):
-
-| Key                  | Value                                 |
-| -------------------- | ------------------------------------- |
-| `tooltip`            | "Worktree status — click for details" |
-| `lastCommit`         | "Last commit"                         |
-| `ahead` / `behind`   | "ahead" / "behind"                    |
-| `upToDate`           | "Up to date with base"                |
-| `filesChanged`       | "files changed"                       |
-| `uncommittedChanges` | "uncommitted change(s)"               |
-| `safeToMerge`        | "Safe to merge"                       |
-| `conflictsDetected`  | "{{count}} conflicted file(s)"        |
-| `otherWorktrees`     | "Other worktrees"                     |
-| `noData`             | "No status data available"            |
+i18n translations: [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../webview-ui/src/i18n/locales/en/worktreeStatus.json)
 
 ## Known Limitations
 
 1. **No multi-root workspace support** — Workspaces with multiple folders cannot use worktrees
-2. **No subfolder workspace support** — The workspace must be the git repository root
-3. **No programmatic API** — Worktree operations are only accessible via webview IPC, not through a public extension API or CLI
+2. **Separate-window worktrees are not task-selector-aware** — External worktrees (outside `.roo/worktrees/`) still open a new VS Code window and are not visible in the in-window task selector
+3. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
 4. **`.worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
-5. **Single-connection model** — Each worktree is a separate VS Code window with independent state; there is no cross-worktree coordination
-6. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
+5. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC and the native `worktree` tool, but not through a public extension API
