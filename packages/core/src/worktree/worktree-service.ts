@@ -81,6 +81,41 @@ export class WorktreeService {
 	}
 
 	/**
+	 * Detect the repository's base branch (the long-lived branch that feature
+	 * branches/worktrees diverge from).
+	 *
+	 * Resolution order (first hit wins):
+	 *   1. `git symbolic-ref refs/remotes/origin/HEAD` — the remote's declared
+	 *      default branch (`origin/<name>`). This is what `git clone` records
+	 *      and respects whatever the upstream uses (`develop`, `trunk`, …).
+	 *   2. Local branch named `main`.
+	 *   3. Local branch named `master`.
+	 *
+	 * Returns `"main"` as a last-resort default if nothing matches.
+	 */
+	async detectBaseBranch(cwd: string): Promise<string> {
+		try {
+			const { stdout } = await execAsync("git symbolic-ref --short refs/remotes/origin/HEAD", { cwd })
+			const ref = stdout.trim()
+			if (ref.startsWith("origin/")) {
+				const branch = ref.slice("origin/".length)
+				if (branch) return branch
+			}
+		} catch {
+			// origin/HEAD not configured (e.g. no remote) — fall through.
+		}
+		for (const candidate of ["main", "master"]) {
+			try {
+				await execAsync(`git rev-parse --verify --quiet ${candidate}`, { cwd })
+				return candidate
+			} catch {
+				// Not present — try next.
+			}
+		}
+		return "main"
+	}
+
+	/**
 	 * List all worktrees in the repository
 	 */
 	async listWorktrees(cwd: string): Promise<Worktree[]> {

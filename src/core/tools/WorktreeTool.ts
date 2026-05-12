@@ -259,7 +259,7 @@ export class WorktreeTool extends BaseTool<"worktree"> {
 
 		// Determine the target branch (where the merge will land).  Defaults to
 		// the detected base branch when not explicitly provided.
-		const targetBranch = params.target_branch || (await this.detectBaseBranch(task.cwd))
+		const targetBranch = params.target_branch || (await worktreeService.detectBaseBranch(task.cwd))
 
 		// Refuse to merge if the main worktree's HEAD is not on the target branch.
 		// This prevents accidentally merging into the orchestrator's working branch
@@ -421,7 +421,7 @@ export class WorktreeTool extends BaseTool<"worktree"> {
 		if (wt.branch) {
 			try {
 				// Ahead/behind relative to main/master
-				const baseBranch = await this.detectBaseBranch(task.cwd)
+				const baseBranch = await worktreeService.detectBaseBranch(task.cwd)
 				const { stdout: aheadOut } = await runGit(`git rev-list --count ${baseBranch}..${wt.branch}`, task.cwd)
 				ahead = parseInt(aheadOut.trim(), 10) || 0
 
@@ -441,15 +441,6 @@ export class WorktreeTool extends BaseTool<"worktree"> {
 		}
 
 		pushToolResult(JSON.stringify(status, null, 2))
-	}
-
-	private async detectBaseBranch(cwd: string): Promise<string> {
-		try {
-			await runGit("git rev-parse --verify main", cwd)
-			return "main"
-		} catch {
-			return "master"
-		}
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"worktree">): Promise<void> {
