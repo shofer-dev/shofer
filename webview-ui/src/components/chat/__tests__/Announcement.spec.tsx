@@ -10,7 +10,7 @@ vi.mock("@src/utils/vscode", () => ({
 	},
 }))
 
-vi.mock("@shofer/package", () => ({
+vi.mock("@shofer/shared/package", () => ({
 	Package: {
 		version: "3.52.0",
 	},

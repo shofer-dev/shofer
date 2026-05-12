@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react"
-import type { OpenAiCodexRateLimitInfo } from "@shofer/types"
+import type { OpenAiCodexRateLimitInfo } from "@shofer/shared/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { vscode } from "@src/utils/vscode"

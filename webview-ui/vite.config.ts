@@ -99,7 +99,7 @@ export default defineConfig(({ mode }) => {
 			alias: {
 				"@": resolve(__dirname, "./src"),
 				"@src": resolve(__dirname, "./src"),
-				"@shofer": resolve(__dirname, "../src/shared"),
+				"@shofer/shared": resolve(__dirname, "../src/shared"),
 			},
 		},
 		build: {

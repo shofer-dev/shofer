@@ -7,7 +7,7 @@ import {
 	VSCodeTextField,
 } from "@vscode/webview-ui-toolkit/react"
 
-import type { ProviderSettings } from "@shofer/types"
+import type { ProviderSettings } from "@shofer/shared/types"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { validateApiConfiguration } from "@src/utils/validate"

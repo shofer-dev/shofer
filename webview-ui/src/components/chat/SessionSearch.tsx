@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage } from "@shofer/shared/types"
 
 import { Input } from "@src/components/ui/input"
 

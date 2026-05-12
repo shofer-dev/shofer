@@ -3,8 +3,8 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { type ModelInfo, type ProviderSettings, openAiModelInfoSaneDefaults } from "@shofer/types"
-import { openAiCodexDefaultModelId } from "@shofer/types"
+import { type ModelInfo, type ProviderSettings, openAiModelInfoSaneDefaults } from "@shofer/shared/types"
+import { openAiCodexDefaultModelId } from "@shofer/shared/types"
 
 import * as ExtensionStateContext from "@src/context/ExtensionStateContext"
 const { ExtensionStateContextProvider } = ExtensionStateContext

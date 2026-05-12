@@ -4,7 +4,7 @@ import React from "react"
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import type { ProviderSettings } from "@shofer/types"
+import type { ProviderSettings } from "@shofer/shared/types"
 
 import TaskHeader, { TaskHeaderProps } from "../TaskHeader"
 
@@ -80,7 +80,7 @@ vi.mock("@src/components/cloud/CloudUpsellDialog", () => ({
 }))
 
 // Mock findLastIndex from @shofer/array
-vi.mock("@shofer/array", () => ({
+vi.mock("@shofer/shared/array", () => ({
 	findLastIndex: (array: any[], predicate: (item: any) => boolean) => {
 		for (let i = array.length - 1; i >= 0; i--) {
 			if (predicate(array[i])) {
@@ -107,7 +107,7 @@ vi.mock("@/components/ui/hooks/useSelectedModel", () => ({
 
 // Mock getModelMaxOutputTokens from @shofer/api
 let mockMaxOutputTokens = 0
-vi.mock("@shofer/api", () => ({
+vi.mock("@shofer/shared/api", () => ({
 	getModelMaxOutputTokens: () => mockMaxOutputTokens,
 }))
 

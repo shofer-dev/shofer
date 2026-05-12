@@ -6,10 +6,10 @@ import DismissibleUpsell from "@src/components/common/DismissibleUpsell"
 import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage } from "@shofer/shared/types"
 
-import { getModelMaxOutputTokens } from "@shofer/api"
-import { findLastIndex } from "@shofer/array"
+import { getModelMaxOutputTokens } from "@shofer/shared/api"
+import { findLastIndex } from "@shofer/shared/array"
 
 import { formatLargeNumber } from "@src/utils/format"
 import { cn } from "@src/lib/utils"

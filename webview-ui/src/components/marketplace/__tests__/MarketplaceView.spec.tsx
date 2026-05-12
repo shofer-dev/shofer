@@ -5,7 +5,7 @@ import { vscode } from "@/utils/vscode"
 
 import { MarketplaceView } from "../MarketplaceView"
 import { MarketplaceViewStateManager } from "../MarketplaceViewStateManager"
-import { DEFAULT_CHECKPOINT_TIMEOUT_SECONDS } from "@shofer/types"
+import { DEFAULT_CHECKPOINT_TIMEOUT_SECONDS } from "@shofer/shared/types"
 
 vi.mock("@/utils/vscode", () => ({
 	vscode: {

@@ -33,7 +33,7 @@ import {
 	vercelAiGatewayDefaultModelId,
 	minimaxDefaultModelId,
 	unboundDefaultModelId,
-} from "@shofer/types"
+} from "@shofer/shared/types"
 
 import {
 	getProviderServiceConfig,

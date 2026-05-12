@@ -1,6 +1,6 @@
 import { renderHook, act } from "@/utils/test-utils"
 
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem } from "@shofer/shared/types"
 
 import { useGroupedTasks, buildSubtree } from "../useGroupedTasks"
 import { countAllSubtasks } from "../types"

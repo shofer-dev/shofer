@@ -1,4 +1,4 @@
-import { ShoferMessage, HistoryItem } from "@shofer/types"
+import { ShoferMessage, HistoryItem } from "@shofer/shared/types"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 interface UsePromptHistoryProps {

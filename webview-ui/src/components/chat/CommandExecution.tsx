@@ -3,11 +3,11 @@ import { useEvent } from "react-use"
 import { t } from "i18next"
 import { ChevronDown, OctagonX } from "lucide-react"
 
-import { type ExtensionMessage, type CommandExecutionStatus, commandExecutionStatusSchema } from "@shofer/types"
+import { type ExtensionMessage, type CommandExecutionStatus, commandExecutionStatusSchema } from "@shofer/shared/types"
 
-import { safeJsonParse } from "@shofer/core"
-import { COMMAND_OUTPUT_STRING } from "@shofer/combineCommandSequences"
-import { parseCommand } from "@shofer/parse-command"
+import { safeJsonParse } from "@shofer/shared/core"
+import { COMMAND_OUTPUT_STRING } from "@shofer/shared/combineCommandSequences"
+import { parseCommand } from "@shofer/shared/parse-command"
 
 import { vscode } from "@src/utils/vscode"
 import { extractPatternsFromCommand } from "@src/utils/command-parser"

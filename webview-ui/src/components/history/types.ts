@@ -1,4 +1,4 @@
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem } from "@shofer/shared/types"
 
 /**
  * Extended HistoryItem with display-related fields for search highlighting and subtask indication

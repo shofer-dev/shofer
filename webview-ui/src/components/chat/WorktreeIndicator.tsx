@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { GitBranch, ChevronDown, Plus, Check } from "lucide-react"
 
-import type { Worktree, WorktreeStatus } from "@shofer/types"
+import type { Worktree, WorktreeStatus } from "@shofer/shared/types"
 
 import { cn } from "@/lib/utils"
 import { useShoferPortal } from "@/components/ui/hooks/useShoferPortal"

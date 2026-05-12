@@ -4,7 +4,7 @@ import { useAppTranslation } from "@/i18n/TranslationContext"
 import { VSCodeCheckbox, VSCodeTextArea } from "@vscode/webview-ui-toolkit/react"
 import { FoldVertical } from "lucide-react"
 
-import { supportPrompt } from "@shofer/support-prompt"
+import { supportPrompt } from "@shofer/shared/support-prompt"
 
 import { cn } from "@/lib/utils"
 import {

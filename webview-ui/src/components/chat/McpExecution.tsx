@@ -8,9 +8,9 @@ import {
 	type ShoferAskUseMcpServer,
 	type McpExecutionStatus,
 	mcpExecutionStatusSchema,
-} from "@shofer/types"
+} from "@shofer/shared/types"
 
-import { safeJsonParse } from "@shofer/core"
+import { safeJsonParse } from "@shofer/shared/core"
 
 import { cn } from "@src/lib/utils"
 import { Button } from "@src/components/ui"

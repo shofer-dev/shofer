@@ -6,7 +6,7 @@ import {
 	type OrganizationAllowList,
 	type RouterModels,
 	unboundDefaultModelId,
-} from "@shofer/types"
+} from "@shofer/shared/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"

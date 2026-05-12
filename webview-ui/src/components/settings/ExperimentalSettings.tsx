@@ -1,8 +1,8 @@
 import { HTMLAttributes } from "react"
 
-import type { Experiments, ImageGenerationProvider } from "@shofer/types"
+import type { Experiments, ImageGenerationProvider } from "@shofer/shared/types"
 
-import { EXPERIMENT_IDS, experimentConfigsMap } from "@shofer/experiments"
+import { EXPERIMENT_IDS, experimentConfigsMap } from "@shofer/shared/experiments"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { cn } from "@src/lib/utils"

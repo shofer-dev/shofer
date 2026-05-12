@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { MAX_MCP_TOOLS_THRESHOLD, countEnabledMcpTools } from "@shofer/types"
+import { MAX_MCP_TOOLS_THRESHOLD, countEnabledMcpTools } from "@shofer/shared/types"
 
 export interface TooManyToolsInfo {
 	/** Number of enabled and connected MCP servers */

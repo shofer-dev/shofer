@@ -1,4 +1,4 @@
-import { mentionRegexGlobal } from "@shofer/context-mentions"
+import { mentionRegexGlobal } from "@shofer/shared/context-mentions"
 
 import { vscode } from "../../utils/vscode"
 

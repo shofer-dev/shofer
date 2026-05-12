@@ -1,4 +1,4 @@
-import type { McpResource, McpResourceTemplate } from "@shofer/types"
+import type { McpResource, McpResourceTemplate } from "@shofer/shared/types"
 
 type McpResourceRowProps = {
 	item: McpResource | McpResourceTemplate

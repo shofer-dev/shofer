@@ -1,5 +1,5 @@
 import React from "react"
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem } from "@shofer/shared/types"
 import { formatTimeAgo } from "@/utils/format"
 import { CopyButton } from "./CopyButton"
 import { ExportButton } from "./ExportButton"

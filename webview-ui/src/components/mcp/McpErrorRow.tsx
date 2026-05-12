@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import { formatRelative } from "date-fns"
 
-import type { McpErrorEntry } from "@shofer/types"
+import type { McpErrorEntry } from "@shofer/shared/types"
 
 type McpErrorRowProps = {
 	error: McpErrorEntry
