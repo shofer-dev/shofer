@@ -4,9 +4,8 @@ import * as path from "path"
 import * as vscode from "vscode"
 import * as yaml from "yaml"
 
-import type { OrganizationSettings, MarketplaceItem, MarketplaceItemType, McpMarketplaceItem } from "@shofer/types"
+import type { MarketplaceItem, MarketplaceItemType, McpMarketplaceItem } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
-import { CloudService } from "@shofer/cloud"
 
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
@@ -38,17 +37,8 @@ export class MarketplaceManager {
 		try {
 			const errors: string[] = []
 
-			let orgSettings: OrganizationSettings | undefined
-
-			try {
-				if (CloudService.hasInstance() && CloudService.instance.isAuthenticated()) {
-					orgSettings = CloudService.instance.getOrganizationSettings()
-				}
-			} catch (orgError) {
-				console.warn("Failed to load organization settings:", orgError)
-				const orgErrorMessage = orgError instanceof Error ? orgError.message : String(orgError)
-				errors.push(`Organization settings: ${orgErrorMessage}`)
-			}
+			let orgSettings: any
+			// Cloud services removed; orgSettings remains undefined
 
 			const allMarketplaceItems = await this.configLoader.loadAllItems(orgSettings?.hideMarketplaceMcps)
 			let organizationMcps: MarketplaceItem[] = []

@@ -33,7 +33,7 @@ import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"
 import ShoferHero from "@src/components/welcome/ShoferHero"
 import ShoferTips from "@src/components/welcome/ShoferTips"
 import { StandardTooltip, Button } from "@src/components/ui"
-import { CloudUpsellDialog } from "@src/components/cloud/CloudUpsellDialog"
+// CloudUpsellDialog removed
 
 import TelemetryBanner from "../common/TelemetryBanner"
 import VersionIndicator from "../common/VersionIndicator"
@@ -200,14 +200,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		shoferAskRef.current = shoferAsk
 	}, [shoferAsk])
 
-	const {
-		isOpen: isUpsellOpen,
-		openUpsell,
-		closeUpsell,
-		handleConnect,
-	} = useCloudUpsell({
-		autoOpenOnAuth: false,
-	})
+	const isUpsellOpen = false
+	const openUpsell = () => {}
+	const closeUpsell = () => {}
+	const handleConnect = () => {}
 
 	// Keep inputValueRef in sync with inputValue state
 	useEffect(() => {
@@ -2220,7 +2216,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			)}
 
 			<div id="shofer-portal" />
-			<CloudUpsellDialog open={isUpsellOpen} onOpenChange={closeUpsell} onConnect={handleConnect} />
+			{/* CloudUpsellDialog removed */}
 			{/* Task notifications for background tasks */}
 			<TaskNotificationContainer
 				notifications={taskNotifications || []}

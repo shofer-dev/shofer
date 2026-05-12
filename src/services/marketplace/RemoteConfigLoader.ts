@@ -8,7 +8,8 @@ import {
 	modeMarketplaceItemSchema,
 	mcpMarketplaceItemSchema,
 } from "@shofer/types"
-import { getShoferApiUrl } from "@shofer/cloud"
+
+const SHOFER_API_URL = process.env.SHOFER_API_URL || "https://app.shofer.com"
 
 const modeMarketplaceResponse = z.object({
 	items: z.array(modeMarketplaceItemSchema),
@@ -24,7 +25,7 @@ export class RemoteConfigLoader {
 	private cacheDuration = 5 * 60 * 1000 // 5 minutes
 
 	constructor() {
-		this.apiBaseUrl = getShoferApiUrl()
+		this.apiBaseUrl = SHOFER_API_URL
 	}
 
 	async loadAllItems(hideMarketplaceMcps = false): Promise<MarketplaceItem[]> {

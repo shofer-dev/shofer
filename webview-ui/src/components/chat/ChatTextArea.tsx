@@ -35,7 +35,7 @@ import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
 import { usePromptHistory } from "./hooks/usePromptHistory"
-import { CloudAccountSwitcher } from "../cloud/CloudAccountSwitcher"
+// CloudAccountSwitcher removed
 
 interface ChatTextAreaProps {
 	inputValue: string
@@ -1367,7 +1367,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</StandardTooltip>
 						)}
 						{!isEditMode ? <IndexingStatusBadge /> : null}
-						{!isEditMode && cloudUserInfo && <CloudAccountSwitcher />}
+						{/* CloudAccountSwitcher removed */}
 					</div>
 				</div>
 			</div>
