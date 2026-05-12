@@ -8,7 +8,7 @@ import {
 	type ShoferAskUseMcpServer,
 	type McpExecutionStatus,
 	mcpExecutionStatusSchema,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { safeJsonParse } from "@shofer/shared/core"
 

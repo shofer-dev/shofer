@@ -4,7 +4,7 @@ import { screen, fireEvent, render } from "@/utils/test-utils"
 import { act } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { ModelInfo } from "@shofer/shared/types"
+import { ModelInfo } from "@shofer/types"
 
 import { ModelPicker } from "../ModelPicker"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

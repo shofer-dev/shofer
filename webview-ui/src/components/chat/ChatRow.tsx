@@ -11,7 +11,7 @@ import type {
 	ShoferApiReqInfo,
 	ShoferAskUseMcpServer,
 	ShoferSayTool,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { Mode } from "@shofer/shared/modes"
 

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, ChevronDown, ChevronRight, FileDiff, RotateCcw, Undo2 } from "lucide-react"
 
-import type { ChangedFileEntry, ChangedFilesPayload, ExtensionMessage } from "@shofer/shared/types"
+import type { ChangedFileEntry, ChangedFilesPayload, ExtensionMessage } from "@shofer/types"
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui"
 import { cn } from "@/lib/utils"

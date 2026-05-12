@@ -11,7 +11,7 @@
  * 3. Using minimal state updates to avoid resetting scroll position
  */
 
-import { MarketplaceItem, MarketplaceInstalledMetadata } from "@shofer/shared/types"
+import { MarketplaceItem, MarketplaceInstalledMetadata } from "@shofer/types"
 
 import { vscode } from "../../utils/vscode"
 import { WebviewMessage } from "../../../../src/shared/WebviewMessage"

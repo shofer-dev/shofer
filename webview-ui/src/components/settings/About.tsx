@@ -4,7 +4,7 @@ import { Trans } from "react-i18next"
 import { Download, Upload, TriangleAlert, Bug, Lightbulb, Shield, MessageCircle, MessagesSquare } from "lucide-react"
 import { VSCodeCheckbox, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 
-import type { TelemetrySetting } from "@shofer/shared/types"
+import type { TelemetrySetting } from "@shofer/types"
 
 import { Package } from "@shofer/shared/package"
 

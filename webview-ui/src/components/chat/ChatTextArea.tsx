@@ -3,7 +3,7 @@ import { useEvent } from "react-use"
 import DynamicTextArea from "react-textarea-autosize"
 import { VolumeX, Image, WandSparkles, SendHorizontal, X, ListEnd, Square } from "lucide-react"
 
-import type { ExtensionMessage } from "@shofer/shared/types"
+import type { ExtensionMessage } from "@shofer/types"
 
 import { mentionRegex, mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "@shofer/shared/context-mentions"
 import { WebviewMessage } from "@shofer/shared/WebviewMessage"

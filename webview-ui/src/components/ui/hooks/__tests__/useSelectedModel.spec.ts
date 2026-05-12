@@ -13,7 +13,7 @@ import {
 	openAiModelInfoSaneDefaults,
 	minimaxDefaultModelId,
 	minimaxModels,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { useSelectedModel } from "../useSelectedModel"
 import { useRouterModels } from "../useRouterModels"

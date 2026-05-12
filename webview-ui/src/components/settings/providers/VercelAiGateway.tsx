@@ -6,7 +6,7 @@ import {
 	type OrganizationAllowList,
 	type RouterModels,
 	vercelAiGatewayDefaultModelId,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { VSCodeButtonLink } from "@src/components/common/VSCodeButtonLink"

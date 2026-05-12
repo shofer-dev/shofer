@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@/utils/test-utils"
 
-import { MarketplaceItem } from "@shofer/shared/types"
+import { MarketplaceItem } from "@shofer/types"
 
 import { MarketplaceInstallModal } from "../MarketplaceInstallModal"
 

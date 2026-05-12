@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 
-import type { Worktree } from "@shofer/shared/types"
+import type { Worktree } from "@shofer/types"
 
 import { vscode } from "@/utils/vscode"
 import { useAppTranslation } from "@/i18n/TranslationContext"

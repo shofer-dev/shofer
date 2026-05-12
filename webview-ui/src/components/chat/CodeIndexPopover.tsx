@@ -12,7 +12,7 @@ import {
 import * as ProgressPrimitive from "@radix-ui/react-progress"
 import { AlertTriangle } from "lucide-react"
 
-import { type IndexingStatus, type EmbedderProvider, CODEBASE_INDEX_DEFAULTS } from "@shofer/shared/types"
+import { type IndexingStatus, type EmbedderProvider, CODEBASE_INDEX_DEFAULTS } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

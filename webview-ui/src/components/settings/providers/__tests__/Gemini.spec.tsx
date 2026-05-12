@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import { Gemini } from "../Gemini"
-import type { ProviderSettings } from "@shofer/shared/types"
+import type { ProviderSettings } from "@shofer/types"
 
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeTextField: ({ children, value, onInput, type }: any) => (

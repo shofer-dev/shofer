@@ -1,6 +1,6 @@
 import React from "react"
 
-import type { Command } from "@shofer/shared/types"
+import type { Command } from "@shofer/types"
 
 interface SlashCommandItemSimpleProps {
 	command: Command

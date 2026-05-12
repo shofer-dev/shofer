@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@/utils/test-utils"
 
-import type { ModeConfig } from "@shofer/shared/types"
+import type { ModeConfig } from "@shofer/types"
 
 import type { Mode } from "@shofer/shared/modes"
 

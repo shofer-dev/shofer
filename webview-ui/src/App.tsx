@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { useEvent } from "react-use"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { type ExtensionMessage, TelemetryEventName } from "@shofer/shared/types"
+import { type ExtensionMessage, TelemetryEventName } from "@shofer/types"
 
 import TranslationProvider from "./i18n/TranslationContext"
 import { MarketplaceViewStateManager } from "./components/marketplace/MarketplaceViewStateManager"

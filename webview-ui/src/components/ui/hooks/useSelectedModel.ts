@@ -32,7 +32,7 @@ import {
 	isDynamicProvider,
 	isRetiredProvider,
 	getProviderDefaultModelId,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useRouterModels } from "./useRouterModels"

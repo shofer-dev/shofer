@@ -38,7 +38,7 @@ import {
 	type TelemetrySetting,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	ImageGenerationProvider,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { cn } from "@src/lib/utils"

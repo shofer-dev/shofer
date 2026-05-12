@@ -31,7 +31,7 @@ vi.mock("@/context/ExtensionStateContext", () => ({
 }))
 
 // Mock the getModelId function from @shofer/types
-vi.mock("@shofer/shared/types", () => ({
+vi.mock("@shofer/types", () => ({
 	getModelId: (config: any) => config?.apiModelId || undefined,
 }))
 

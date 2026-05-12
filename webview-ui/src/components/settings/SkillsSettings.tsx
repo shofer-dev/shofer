@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react"
 import { Plus, Globe, Folder, Edit, Trash2, Settings } from "lucide-react"
 import { Trans } from "react-i18next"
 
-import type { SkillMetadata } from "@shofer/shared/types"
+import type { SkillMetadata } from "@shofer/types"
 
 import { getAllModes } from "@shofer/shared/modes"
 

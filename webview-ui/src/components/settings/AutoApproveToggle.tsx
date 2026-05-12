@@ -1,4 +1,4 @@
-import type { GlobalSettings } from "@shofer/shared/types"
+import type { GlobalSettings } from "@shofer/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { cn } from "@/lib/utils"

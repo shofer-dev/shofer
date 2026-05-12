@@ -7,7 +7,7 @@ import {
 	type OrganizationAllowList,
 	type RouterModels,
 	openRouterDefaultModelId,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { getOpenRouterAuthUrl } from "@src/oauth/urls"

@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { Trans } from "react-i18next"
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 
-import type { McpServer } from "@shofer/shared/types"
+import type { McpServer } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

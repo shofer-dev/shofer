@@ -6,7 +6,7 @@ import DismissibleUpsell from "@src/components/common/DismissibleUpsell"
 import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
-import type { ShoferMessage } from "@shofer/shared/types"
+import type { ShoferMessage } from "@shofer/types"
 
 import { getModelMaxOutputTokens } from "@shofer/shared/api"
 import { findLastIndex } from "@shofer/shared/array"

@@ -1,4 +1,4 @@
-import type { HistoryItem } from "@shofer/shared/types"
+import type { HistoryItem } from "@shofer/types"
 
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { vscode } from "@/utils/vscode"

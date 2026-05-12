@@ -35,12 +35,7 @@ Notes:
 import { useEffect } from "react"
 import { Checkbox } from "vscrui"
 
-import {
-	type ProviderSettings,
-	type ModelInfo,
-	type ReasoningEffortWithMinimal,
-	reasoningEfforts,
-} from "@shofer/shared/types"
+import { type ProviderSettings, type ModelInfo, type ReasoningEffortWithMinimal, reasoningEfforts } from "@shofer/types"
 
 import {
 	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,

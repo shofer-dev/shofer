@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { Database } from "lucide-react"
 
-import type { IndexingStatus, IndexingStatusUpdateMessage } from "@shofer/shared/types"
+import type { IndexingStatus, IndexingStatusUpdateMessage } from "@shofer/types"
 
 import { cn } from "@src/lib/utils"
 import { vscode } from "@src/utils/vscode"

@@ -1,7 +1,7 @@
 import React from "react"
 import { fireEvent, render, screen } from "@/utils/test-utils"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import type { ShoferMessage } from "@shofer/shared/types"
+import type { ShoferMessage } from "@shofer/types"
 import { ExtensionStateContextProvider } from "@src/context/ExtensionStateContext"
 import { ChatRowContent } from "../ChatRow"
 

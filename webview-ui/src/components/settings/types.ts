@@ -1,4 +1,4 @@
-import type { ExperimentId } from "@shofer/shared/types"
+import type { ExperimentId } from "@shofer/types"
 
 import { ExtensionStateContextType } from "@/context/ExtensionStateContext"
 

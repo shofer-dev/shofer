@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react"
 
-import type { ProviderSettings, ModelInfo, VsCodeLmChatInfo } from "@shofer/shared/types"
+import type { ProviderSettings, ModelInfo, VsCodeLmChatInfo } from "@shofer/types"
 
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAppTranslation } from "@src/i18n/TranslationContext"

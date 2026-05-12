@@ -6,7 +6,7 @@ import {
 	type ExtensionState,
 	type ShoferMessage,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-} from "@shofer/shared/types"
+} from "@shofer/types"
 
 import { ExtensionStateContextProvider, useExtensionState, mergeExtensionState } from "../ExtensionStateContext"
 
