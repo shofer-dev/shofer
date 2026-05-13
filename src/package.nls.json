@@ -3,7 +3,7 @@
 	"extension.description": "A whole dev team of AI agents in your editor.",
 	"views.contextMenu.label": "Shofer",
 	"views.terminalMenu.label": "Shofer",
-	"views.activitybar.title": "Shofer",
+	"views.activitybar.title": "Shofer - Drop Zone",
 	"views.sidebar.name": "Shofer",
 	"views.dropZone.name": "Drop Files for Context",
 	"command.newTask.title": "New Task",
