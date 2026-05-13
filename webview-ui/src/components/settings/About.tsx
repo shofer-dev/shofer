@@ -7,6 +7,7 @@ import { VSCodeCheckbox, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import type { TelemetrySetting } from "@shofer/types"
 
 import { Package } from "@shofer/shared/package"
+import { TelemetryClient } from "@/utils/TelemetryClient"
 
 import { vscode } from "@/utils/vscode"
 import { cn } from "@/lib/utils"
@@ -36,27 +37,29 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						? `Version: ${Package.version} (${Package.sha.slice(0, 8)})`
 						: `Version: ${Package.version}`}
 				</p>
-				<SearchableSetting
-					settingId="about-telemetry"
-					section="about"
-					label={t("settings:footer.telemetry.label")}>
-					<VSCodeCheckbox
-						checked={telemetrySetting !== "disabled"}
-						onChange={(e: any) => {
-							const checked = e.target.checked === true
-							setTelemetrySetting(checked ? "enabled" : "disabled")
-						}}>
-						{t("settings:footer.telemetry.label")}
-					</VSCodeCheckbox>
-					<p className="text-vscode-descriptionForeground text-sm mt-0">
-						<Trans
-							i18nKey="settings:footer.telemetry.description"
-							components={{
-								privacyLink: <VSCodeLink href="https://shofer.dev/privacy" />,
-							}}
-						/>
-					</p>
-				</SearchableSetting>
+				{TelemetryClient.isGloballyEnabled() && (
+					<SearchableSetting
+						settingId="about-telemetry"
+						section="about"
+						label={t("settings:footer.telemetry.label")}>
+						<VSCodeCheckbox
+							checked={telemetrySetting !== "disabled"}
+							onChange={(e: any) => {
+								const checked = e.target.checked === true
+								setTelemetrySetting(checked ? "enabled" : "disabled")
+							}}>
+							{t("settings:footer.telemetry.label")}
+						</VSCodeCheckbox>
+						<p className="text-vscode-descriptionForeground text-sm mt-0">
+							<Trans
+								i18nKey="settings:footer.telemetry.description"
+								components={{
+									privacyLink: <VSCodeLink href="https://shofer.dev/privacy" />,
+								}}
+							/>
+						</p>
+					</SearchableSetting>
+				)}
 			</Section>
 
 			<Section className="space-y-0">

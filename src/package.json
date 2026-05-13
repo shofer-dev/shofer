@@ -199,7 +199,7 @@
 				{
 					"command": "shofer.marketplaceButtonClicked",
 					"group": "navigation@5",
-					"when": "view == shofer.SidebarProvider"
+					"when": "view == shofer.SidebarProvider && shofer:marketplaceEnabled"
 				},
 				{
 					"command": "shofer.historyButtonClicked",
@@ -277,7 +277,7 @@
 				{
 					"command": "shofer.marketplaceButtonClicked",
 					"group": "navigation@5",
-					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
+					"when": "activeWebviewPanelId == shofer.TabPanelProvider && shofer:marketplaceEnabled"
 				},
 				{
 					"command": "shofer.historyButtonClicked",
