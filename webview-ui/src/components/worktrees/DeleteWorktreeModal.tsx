@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 
 import type { Worktree } from "@shofer/types"
 
@@ -21,6 +21,15 @@ export const DeleteWorktreeModal = ({ open, onClose, worktree, onSuccess }: Dele
 	const [forceDeleteLocked, setForceDeleteLocked] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
+	// Store latest callbacks in refs to avoid re-registering the event listener
+	// on every parent re-render (which happens during polling). This prevents
+	// race conditions where the worktreeResult message is dropped during the
+	// brief window between cleanup and re-setup of the event listener.
+	const onSuccessRef = useRef(onSuccess)
+	onSuccessRef.current = onSuccess
+	const onCloseRef = useRef(onClose)
+	onCloseRef.current = onClose
+
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent) => {
 			const message = event.data
@@ -28,8 +37,8 @@ export const DeleteWorktreeModal = ({ open, onClose, worktree, onSuccess }: Dele
 			if (message.type === "worktreeResult") {
 				setIsDeleting(false)
 				if (message.success) {
-					onSuccess?.()
-					onClose()
+					onSuccessRef.current?.()
+					onCloseRef.current()
 				} else {
 					setError(message.text || "Unknown error")
 				}
@@ -38,7 +47,7 @@ export const DeleteWorktreeModal = ({ open, onClose, worktree, onSuccess }: Dele
 
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
-	}, [onSuccess, onClose])
+	}, [])
 
 	const handleDelete = useCallback(() => {
 		setError(null)

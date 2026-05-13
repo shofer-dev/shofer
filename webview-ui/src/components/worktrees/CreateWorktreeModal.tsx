@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import prettyBytes from "pretty-bytes"
 
 import type { WorktreeDefaultsResponse, BranchInfo, WorktreeIncludeStatus } from "@shofer/types"
@@ -24,10 +24,25 @@ export const CreateWorktreeModal = ({
 }: CreateWorktreeModalProps) => {
 	const { t } = useAppTranslation()
 
-	// Form state
+	// Form state (must be declared before refs that reference them)
 	const [branchName, setBranchName] = useState("")
 	const [worktreePath, setWorktreePath] = useState("")
 	const [baseBranch, setBaseBranch] = useState("")
+
+	// Store latest callbacks and values in refs to avoid re-registering
+	// the event listener on every parent re-render. This prevents race
+	// conditions where the worktreeResult message is dropped during the
+	// brief window between cleanup and re-setup of the event listener.
+	const onSuccessRef = useRef(onSuccess)
+	onSuccessRef.current = onSuccess
+	const onCloseRef = useRef(onClose)
+	onCloseRef.current = onClose
+	const openAfterCreateRef = useRef(openAfterCreate)
+	openAfterCreateRef.current = openAfterCreate
+	const worktreePathRef = useRef(worktreePath)
+	worktreePathRef.current = worktreePath
+	const branchNameRef = useRef(branchName)
+	branchNameRef.current = branchName
 
 	// Data state
 	const [defaults, setDefaults] = useState<WorktreeDefaultsResponse | null>(null)
@@ -94,15 +109,15 @@ export const CreateWorktreeModal = ({
 						// surfaced in TaskHeader/TaskSelector via the worktree
 						// badge), not as a synthesized "user" message — that would
 						// pollute the conversation history.
-						if (openAfterCreate) {
+						if (openAfterCreateRef.current) {
 							vscode.postMessage({
 								type: "createParallelTask",
-								worktreeDir: worktreePath,
-								taskName: `worktree: ${branchName}`,
+								worktreeDir: worktreePathRef.current,
+								taskName: `worktree: ${branchNameRef.current}`,
 							})
 						}
-						onSuccess?.()
-						onClose()
+						onSuccessRef.current?.()
+						onCloseRef.current()
 					} else {
 						setError(message.text || "Unknown error")
 					}
@@ -113,7 +128,7 @@ export const CreateWorktreeModal = ({
 
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
-	}, [openAfterCreate, worktreePath, branchName, onSuccess, onClose])
+	}, [])
 
 	const handleCreate = useCallback(() => {
 		setError(null)

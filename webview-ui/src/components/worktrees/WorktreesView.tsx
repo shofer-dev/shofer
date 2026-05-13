@@ -284,7 +284,10 @@ export const WorktreesView = () => {
 					worktree={deleteWorktree}
 					onSuccess={() => {
 						setDeleteWorktree(null)
-						fetchWorktrees()
+						// Note: fetchWorktrees() is NOT called here because
+						// WorktreesView's own worktreeResult handler already
+						// refreshes the list. Calling it twice causes redundant
+						// listWorktrees requests and extra re-renders.
 					}}
 				/>
 			)}
