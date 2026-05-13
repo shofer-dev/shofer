@@ -141,22 +141,28 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 | Tool                       | Origin | Group | Always Available | Status | Description                                    |
 | -------------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
-| `search_files`             | 🔵 RC  | read  |        –         |   ✅   | Regex search across files                      |
+| `search_files`             | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context |
 | `find_files`               | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                     |
-| `get_search_results`       | 🆕 WS  | read  |        –         |   ✅   | Text search using VS Code's indexed search API |
 | `list_code_usages`         | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)               |
 | `codebase_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)     |
 | `codebase_search_with_lsp` | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback          |
 
 ### `search_files`
 
-Perform regex search across files in the workspace.
+Unified search using VS Code's indexed `workspace.findTextInFiles` API. Supports both regex and literal text search, case-sensitive/whole-word matching, file type filtering, exclusion patterns, configurable context lines, and result capping. Replaces the former `get_search_results` tool.
 
-| Param          | Type   | Required | Description                |
-| -------------- | ------ | :------: | -------------------------- |
-| `path`         | string |    ✅    | Directory to search in     |
-| `regex`        | string |    ✅    | Regular expression pattern |
-| `file_pattern` | string |    –     | Glob to filter files       |
+| Param            | Type            | Required | Description                                                 |
+| ---------------- | --------------- | :------: | ----------------------------------------------------------- |
+| `path`           | string          |    ✅    | Directory to search recursively, relative to workspace      |
+| `query`          | string          |    ✅    | Search pattern (regex or literal text)                      |
+| `fileTypes`      | string \| null  |    ✅    | Glob to filter files (e.g., `*.ts`, `**/*.go`). null = all. |
+| `excludePattern` | string \| null  |    ✅    | Glob to exclude files (e.g., `**/node_modules/**`)          |
+| `isRegex`        | boolean \| null |    ✅    | Whether query is a regex (default: true)                    |
+| `caseSensitive`  | boolean \| null |    ✅    | Case-sensitive matching (default: false)                    |
+| `wholeWord`      | boolean \| null |    ✅    | Match whole words only (default: false)                     |
+| `maxResults`     | number \| null  |    ✅    | Maximum total results (default: 100)                        |
+| `contextBefore`  | number \| null  |    ✅    | Lines of context before each match (default: 1)             |
+| `contextAfter`   | number \| null  |    ✅    | Lines of context after each match (default: 1)              |
 
 ### `find_files`
 
@@ -166,22 +172,6 @@ Find files matching a glob pattern using VS Code's `workspace.findFiles`.
 | ------------ | ------ | :------: | ------------------------------ |
 | `pattern`    | string |    ✅    | Glob pattern (e.g., `**/*.ts`) |
 | `maxResults` | number |    –     | Max results (default: 100)     |
-
-### `get_search_results`
-
-Text search using VS Code's indexed `workspace.findTextInFiles` API for fast searches. Falls back to manual file scanning when the API is unavailable. Does not modify any UI.
-
-Supports case-sensitive and whole-word matching, plus include/exclude glob patterns for file filtering.
-
-| Param            | Type            | Required | Description                             |
-| ---------------- | --------------- | :------: | --------------------------------------- |
-| `query`          | string          |    ✅    | Search query text                       |
-| `isRegex`        | boolean \| null |    ✅    | Treat as regex (default: false)         |
-| `includePattern` | string \| null  |    ✅    | Glob to limit which files are searched  |
-| `excludePattern` | string \| null  |    ✅    | Glob to exclude files from search       |
-| `maxResults`     | number \| null  |    ✅    | Max results (default: 100)              |
-| `caseSensitive`  | boolean \| null |    ✅    | Case-sensitive search (default: false)  |
-| `wholeWord`      | boolean \| null |    ✅    | Match whole words only (default: false) |
 
 ### `list_code_usages`
 
@@ -453,7 +443,6 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `find_files`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `read_project_structure`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `view_image`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_search_results`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `list_code_usages`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `get_errors`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `get_project_setup_info`   |      ✓       |    ✓    |   ✓    |    ✓     |        |

@@ -23,7 +23,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	getErrors: "get_errors",
 	getChangedFiles: "get_changed_files",
 	getProjectSetupInfo: "get_project_setup_info",
-	getSearchResults: "get_search_results",
+	// getSearchResults removed — merged into search_files
 	readProjectStructure: "read_project_structure",
 	listCodeUsages: "list_code_usages",
 	fetchWebPage: "fetch_web_page",

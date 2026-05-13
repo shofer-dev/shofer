@@ -213,7 +213,7 @@ export async function checkAutoApproval({
 				"getErrors",
 				"getChangedFiles",
 				"getProjectSetupInfo",
-				"getSearchResults",
+				// getSearchResults removed — merged into search_files
 				"readProjectStructure",
 				"listCodeUsages",
 				"codebaseSearchWithLsp",

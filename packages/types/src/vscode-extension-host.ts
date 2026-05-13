@@ -927,7 +927,7 @@ export interface ShoferSayTool {
 		| "getErrors"
 		| "getChangedFiles"
 		| "getProjectSetupInfo"
-		| "getSearchResults"
+		// getSearchResults removed — merged into search_files
 		| "readProjectStructure"
 		| "listCodeUsages"
 		| "fetchWebPage"

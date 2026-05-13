@@ -93,7 +93,6 @@ of `alwaysAllowReadOnly`):
 | `get_errors`               | Language-server diagnostics for open files.        |
 | `get_changed_files`        | Files modified during the current task session.    |
 | `get_project_setup_info`   | Detected languages, frameworks, and build systems. |
-| `get_search_results`       | VS Code text search (opens Search panel).          |
 | `read_project_structure`   | Directory tree of the workspace.                   |
 | `list_code_usages`         | LSP "find all references" for a symbol.            |
 | `codebase_search_with_lsp` | LSP workspace symbol search.                       |
@@ -134,8 +133,6 @@ Controls the read-only tool actions as classified by `isReadOnlyToolAction()`:
 | `get_errors`               |
 | `get_changed_files`        |
 | `get_project_setup_info`   |
-| `get_search_results`       |
-| `read_project_structure`   |
 | `list_code_usages`         |
 | `fetch_web_page`           |
 

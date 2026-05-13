@@ -77,7 +77,7 @@ export const toolNames = [
 	"find_files",
 	"get_errors",
 	"get_project_setup_info",
-	"get_search_results",
+	// get_search_results removed — merged into search_files
 	"get_changed_files",
 	"insert_edit",
 	"list_code_usages",
@@ -147,7 +147,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	get_changed_files: "list files changed by Shofer",
 	get_errors: "get diagnostics",
 	get_project_setup_info: "get project info",
-	get_search_results: "search text in files",
+	// get_search_results removed — merged into search_files
 	insert_edit: "insert text at position",
 	list_code_usages: "find code references",
 	read_project_structure: "read project structure",
@@ -178,7 +178,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"find_files",
 			"read_project_structure",
 			"view_image",
-			"get_search_results",
+			// get_search_results removed — merged into search_files
 			"list_code_usages",
 			"get_errors",
 			"get_project_setup_info",
