@@ -744,7 +744,7 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 
 				{/* Scrollable list area */}
 				<div className="flex-1 overflow-y-auto">
-					{totalTaskCount === 0 ? (
+					{totalTaskCount === 0 && pinnedCount === 0 && archivedCount === 0 ? (
 						<div className="px-3 py-6 text-sm text-[var(--vscode-descriptionForeground)] text-center">
 							{t("chat:taskSelector.noTasks", "No tasks yet")}
 						</div>
