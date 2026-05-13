@@ -9,7 +9,7 @@ describe("experiments", () => {
 		it("is configured correctly", () => {
 			expect(EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION).toBe("preventFocusDisruption")
 			expect(experimentConfigsMap.PREVENT_FOCUS_DISRUPTION).toMatchObject({
-				enabled: false,
+				enabled: true,
 			})
 		})
 	})
