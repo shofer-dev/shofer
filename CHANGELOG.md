@@ -1,5 +1,237 @@
 # Shofer Changelog
 
+## 0.2.16 — 2026-05-14
+
+### Features
+
+- **Unified search_files tool**: Consolidated `search_files` and `get_search_results` into a single tool using VSCode's `workspace.findTextInFiles` API as the sole backend, replacing the old ripgrep-based implementation. The tool now supports `query` (both regex and literal text), `fileTypes`, `excludePattern`, `isRegex`, `caseSensitive`, `wholeWord`, and `maxResults`.
+- **TaskSelector archive & pin**: Added archive and pin features to the TaskSelector panel. Tasks can be archived (hidden from the main list) and pinned (kept at top), with explicit unpin/unarchive actions.
+- **Collapsible parent-child task hierarchy**: TaskSelector now renders parent-child task relationships as a collapsible tree, making it easier to navigate subtask hierarchies.
+- **TaskSelector polish**: Removed pause/play buttons and the current-task tick indicator from TaskSelector for a cleaner, simpler UI.
+
+### Bug Fixes
+
+- **Pin/unarchive no-op fix**: `upsert` merging logic caused `unpinManagedTask` and `unarchiveManagedTask` to be no-ops because destructured boolean flags were stripped instead of being explicitly set to `false`. Fixed by explicitly setting `pinned: false` and `archived: false`.
+- **Phantom subtask creation guard**: When the LLM emits multiple `new_task` calls in a single message, non-background calls are now properly rejected with error tool_results and removed from both API history and execution arrays, preventing unintended phantom subtask creation.
+- **Per-task scroll position with atBottom tracking**: Scroll position now tracks whether the user was at the bottom of chat when saving per-task position. Returning to a previously-viewed task restores the exact scroll state — browsing history or anchored at the bottom.
+- **Respect HistoryItem.status in resumeTaskFromHistory**: Tasks completed via `attempt_completion` that show a `say: completion_result` message (with `ask=undefined`) now correctly resume as completed instead of showing the wrong Continue/New Task buttons.
+- **TaskSelector shows pinned tasks when all tasks are pinned**: Previously, pinning all tasks would result in an empty list; now pinned tasks are always shown.
+- **Chat scroll position out-of-range guard**: `initialTopMostItemIndex` is now guarded against out-of-range saved positions, preventing crashes on task switch.
+- **Preserve ManagedTask state on background task re-registration**: Background task state is now preserved when a managed task is re-registered, preventing state loss.
+- **Eliminate Accept/Continue button flicker**: Auto-approved asks no longer cause Accept/Continue button flicker in the UI.
+- **Cost-limit post-stream gate fix**: When a provider reports `totalCost` in usage chunks without individual token counts, the cost-limit check now fires correctly instead of being silently skipped.
+- **Stop button no longer transfers queued messages**: Clicking Stop on a task with queued messages no longer rehydrates the task and transfers the queued messages, properly honoring the user's intent to stop.
+- **Queued messages & draft text isolation**: Switching from a task with queued messages to a new empty task no longer incorrectly preserves stale queued messages and draft text via JSON serialization of `undefined` values.
+- **Send Now shows queued message in chat**: When queued messages are prematurely sent via Send Now, the user's message now correctly appears in the chat history.
+- **CaptureFinal bail-out logging**: Silent failures in `captureFinal` (e.g., missing workspace folder) now log warnings, making missing final snapshots traceable.
+- **AcceptFile fallback to disk content**: When no final snapshot exists, `acceptFile` now falls back to current disk content instead of silently returning or throwing, ensuring the Accept button always works.
+- **Accept button state fix**: The Accept button is now properly disabled (greyed out) when no final snapshot exists, with an appropriate i18n tooltip.
+- **API request started row cleanup**: The `api_req_started` row now properly hides on successful API completion in all render paths, eliminating orphaned cost badges.
+- **File tool approval labels**: The approval dialog now shows descriptive subcommand-specific labels ("Remove File" / "Move File") instead of the ambiguous "File Op".
+- **TypeScript build errors from cloud removal resolved**: All remaining TypeScript errors from the cloud feature removal have been fixed.
+- **ESLint warnings suppressed**: 14 `no-unused-vars` warnings in webview-ui have been suppressed.
+
+---
+
+## 0.2.4 — 2026-05-13 (Branding & Rebrand)
+
+### Features
+
+- **Complete rebrand to Shofer.Dev**: Renamed all RooCode/Cline/Roo references to Shofer across the entire submodule (Part 1 of rebranding). This spanned thousands of symbol renames — `roo_*` → `shofer_*`, all remaining RooCode/Roo/Cline identifiers, publisher from `RooCodeInc` to `shofer`, extension ID to `shofer.dev`, display name to `Shofer.Dev`. Updated branding assets, repository URLs to `github.com/shofer-dev/shofer`, homepage to `www.shofer.dev`, and all domain references from `shofer.com` to `shofer.dev`.
+- **Cloud feature removal**: Removed all Shofer Cloud / Shofer Router functionality, including the cloud account creation prompt, Router option from provider selection, cloud icon/button from the top bar, `@shofer/cloud` package and all its references. The welcome screen was simplified from a 3-screen flow (landing → choose provider → configure) to a 2-screen flow (landing → configure provider). Removed `CloudService`, `MdmService`, `ShoferHandler`, `AuthOrigin` type, and all cloud-related test infrastructure.
+- **Marketplace & Telemetry feature flags**: The Marketplace button and Telemetry section are now conditionally rendered based on feature flags (`MARKETPLACE_ENABLED` defaults to `false`, `TELEMETRY_ENABLED` defaults to `false` via environment variable).
+- **Background editing enabled by default**: The Background editing experiment is now enabled by default for all users.
+- **Drop MIME type logging**: Added MIME type logging and extended `extractUriPayload` candidates for drag-and-drop operations.
+- **Drop zone re-enabled**: Re-instated the standalone drop zone tree view; drops are now handled inline via the webview textarea.
+
+### Bug Fixes
+
+- **Task-switch scroll position restoration**: Restoring saved scroll position on task switch now correctly lands on the last message instead of scrolling earlier than intended.
+- **25 missing NLS translation keys**: Added all missing translation keys required for `vsce` packaging, including missing terminal command NLS translations.
+- **Worktree deletion navigation**: Deleting a worktree no longer navigates to the home page.
+- **Stale Start New Task button flash**: Button state is now cleared via `useDeepCompareEffect` to prevent stale button flash on task switch.
+- **Provider selection reset fix**: Removed `fromWelcomeView` prop (a vestige of the old Shofer Router signup flow) that was causing the provider dropdown to reset incorrectly during the welcome flow.
+- **Orphaned test files removed**: Removed test files referencing the deleted `@shofer/cloud` package that were causing type-check failures on pre-push.
+- **Orphaned cloud type test file removed**: Removed the orphaned `cloud.ts` type test file.
+
+---
+
+## 3.66.x series — 2026-05-12 (Skills System Overhaul)
+
+### Features
+
+- **Skills popover refresh button**: Added a refresh button to Commands and Skills popovers.
+- **Loaded skills tracking**: Skills are now tracked as "loaded" in the IPC layer and surfaced in the SkillsButton UI, with `/loaded` and `/search` built-in slash commands for querying.
+- **Wider skills popover**: Redesigned the skills popover with a wider layout, two-line entries, and open-file buttons.
+- **Commands & Skills quick-access buttons**: Added Commands and Skills quick-access buttons to the chat input bar for faster workflow.
+- **Skills persistence in history**: Loaded skills are now persisted in history items and rehydrated on task restore.
+- **Worktree status indicator**: Added a worktree status indicator chip to the chat input bar showing the current worktree branch and status.
+- **Embedded worktree model**: Implemented an embedded worktree model with a native worktree tool, replacing the previous separate-window worktree approach.
+- **Task export in JSON**: Added JSON task trace export alongside the existing markdown export format.
+- **Unified worktree controls**: Consolidated worktree controls into a single WorktreeIndicator chip.
+
+### Bug Fixes
+
+- **Changed-files stale panel state**: Serialized `pushChangedFilesUpdate` to prevent stale panel state from concurrent updates.
+- **Skills mount-time fetch**: Restored mount-time skills fetch so the skills button appears immediately.
+- **Skills re-fetch on popover open**: Skills are now re-requested on every popover open for up-to-date listings.
+- **Orphaned tool_use blocks**: Extended the scan to the entire API history (not just visible messages) to find and handle orphaned tool_use blocks.
+- **Input clearing refactored**: Moved input clearing from `handleChatReset` to `handleSendMessage` to prevent draft text loss.
+- **Task draft isolation**: Chat drafts and queued messages are now scoped to their specific task and isolated from new task creation.
+- **File-changes streaming guard removed**: Accept and acceptAll handlers no longer block during streaming, preventing the UI from getting stuck.
+- **Zero-change entries dropped**: File change entries with zero net change (+0/−0) are dropped from the file changes list.
+- **Redo functionality removed**: The Redo button and `redoFile` functionality were removed as part of the file-changes system simplification.
+
+---
+
+## 3.65.x series — 2026-05-09 (File Changes System Rewrite)
+
+### Features
+
+- **Working-directory backend for file changes**: Removed git dependency from the file changes system, replacing it with a working-directory snapshot-based backend. This eliminates issues with nested git repos, worktrees, and git configuration pollution.
+- **Accept promoted to persisted baseline**: The Accept operation now promotes the accepted content to the new persisted baseline, removing the Reviewed section entirely.
+- **`sed` native tool**: Added a regex find-and-replace native tool (`sed`) with proper file change tracking integration.
+- **`insert_edit` column optional**: Made the `column` parameter optional (defaults to 1) in `insert_edit`, and added HTML entity decoding for pasted content.
+- **`removeFinalSnapshot` cleanup**: Added cleanup method to FileContextTracker for proper acceptFile lifecycle management.
+- **`get_changed_files` working-directory description**: Updated the native tool description to reflect the working-directory backend.
+
+### Bug Fixes
+
+- **Per-task mode isolation**: Mode is now properly isolated per task, preventing mode from leaking across concurrent tasks.
+- **`insert_edit` file change tracking**: `insert_edit` now correctly captures original content and tracks as a Shofer edit.
+- **`saveDirectly` original capture**: File changes now capture original content in `saveDirectly` before writing, ensuring proper diff generation.
+- **Dangling snapshot prevention**: Guards prevent dangling snapshots without base copies in the file changes system.
+- **Missing base copy guards**: Added guards against missing base copies in diff stats computation.
+- **Duplicate `captureOriginal` in SedTool removed**: Removed a redundant `captureOriginal` call that was causing issues.
+
+---
+
+## 3.64.x series — 2026-05-08 (Tool Infrastructure)
+
+### Features
+
+- **Generic private tool providers**: Replaced the `vscode.lm.tools` API with a generic private tool provider interface, enabling dynamic discovery and invocation of external LM tools from any extension.
+- **Tool registration interface**: Documented the tool registration interface for extensions to provide custom tools.
+- **Tool preparing progress indicator**: Added a `tool_preparing` progress row that appears while streaming tool call arguments, giving users visibility into tool invocation.
+- **Cost calculation documentation**: Documented the cost calculation system for all providers.
+
+### Bug Fixes
+
+- **Tool preparing spinner dismissal**: The `tool_preparing` spinner now dismisses correctly for all tool completion paths, including when `tool_call_start` fires.
+- **Nested git repos support**: Checkpoints now work with nested git repositories via `GIT_DIR` isolation, preventing conflicts when the workspace is a submodule.
+- **TypeScript strict-mode errors resolved**: Fixed 37 TypeScript strict-mode errors and build configuration issues.
+- **Rehydrated tasks stopping fix**: Rehydrated tasks no longer stop on focus switch when they should continue running.
+- **Task history ordering**: Tasks are now ordered by creation time instead of last activity time for more predictable history navigation.
+- **Mode switching task-scoped**: Mode switching is now properly scoped to the current task rather than being global.
+- **API request started row consolidation**: The `api_req_started` row now hides on success to reduce UI clutter.
+
+---
+
+## 3.57.x series — 2026-05-07 (Modes Overhaul)
+
+### Features
+
+- **Scoped group entries for modes**: Added scoped group entries with per-group allowed/denied tool lists, enabling fine-grained tool access control per mode.
+- **`give_feedback` promoted to native always-available tool**: The feedback tool is now always available regardless of mode settings.
+- **Skills system refinements**:
+    - Renamed `skill` tool to `skill_load` and added `skill_delete` tool
+    - Added SKILL.md frontmatter validation in `skill_save`
+    - Renamed ClineSayTool 'skill' label to 'loadSkill'
+
+### Bug Fixes
+
+- **Auto-approval mapping fix**: `listFilesTopLevel/Recursive` are now correctly mapped to the read tool group for auto-approval.
+- **Default mode changed to Code**: Changed default mode from Architect to Code for new installations.
+- **BRRR auto-approval label**: Renamed BRRR auto-approval label to "All" for clarity.
+
+---
+
+## 3.56.x series — 2026-05-05 (Per-Task Architecture)
+
+### Features
+
+- **Native 'file' tool (rm/mv)**: Added a native file operation tool supporting remove and move subcommands, fully integrated with file change tracking.
+- **Unified file-changes source**: Consolidated file change tracking through a `ChangedFilesService` with revert/redo support.
+- **Sticky per-task mode**: Mode is now sticky per task across focus switches and new-task creation.
+- **Per-task input drafts**: Chat input drafts are now scoped per task, with proper isolation between tasks.
+- **FIFO queue ordering**: Fixed message queue ordering to be proper FIFO (first-in-first-out).
+- **Send Now flow fix**: The Send Now flow correctly sends queued messages to the running task.
+
+### Bug Fixes
+
+- **File-changes reverted entries retained**: Reverted file entries are now retained in the panel instead of disappearing.
+- **File-changes diff via checkpoint**: File change diffs are now served via the checkpoint system.
+- **File-changes popup i18n fix**: Fixed missing internationalization keys in file changes popup dialogs.
+- **TaskSelector rendering on main screen**: The TaskSelector now renders on the main Shofer screen when no active task exists.
+- **Residual DIAG logs removed**: Dropped residual diagnostic log statements in `handleWebviewAskResponse`.
+
+---
+
+## 3.52.56–3.52.58 — 2026-04-23 (Async/Background Tasks)
+
+### Features
+
+- **Background tasks (`is_background` on `new_task`)**: Implemented asynchronous background task execution. `new_task` with `is_background: true` spawns a child task that runs concurrently while the parent continues. Added three new task management tools:
+    - [`check_task_status`](src/core/task/tools/CheckTaskStatusTool.ts): Query the current status of a background task
+    - [`wait_for_task`](src/core/task/tools/WaitForTaskTool.ts): Block until one or more background tasks complete (supports `all`/`any` wait strategies and multiple task IDs)
+    - [`list_background_tasks`](src/core/task/tools/ListBackgroundTasksTool.ts): List all background child tasks with their current status
+- **Parent-child task hierarchy in TaskSelector**: TaskSelector shows parent-child relationships as an ordered collapsible tree.
+- **Abort propagation**: Canceling a parent task now propagates abort to all background children.
+- **Parent mode inheritance**: Background children inherit the parent's mode by default.
+- **UI indication for async tools**: `wait_for_task`, `check_task_status`, and `list_background_tasks` display as special UI rows in the chat.
+- **Task title in UI instead of UUID**: The `task_id` parameter was removed from `new_task`; the UI now shows the human-readable task title instead of the raw UUID.
+- **`set_task_title` native tool**: Added a tool that allows the model to set a descriptive title for the current task, displayed in the TaskSelector and task header.
+
+### Bug Fixes
+
+- **Duplicate `attempt_completion` fix**: Fixed duplicate `attempt_completion` execution when the LLM generates multiple calls in a single message.
+- **New task sync call prevention**: Multiple sync `new_task` calls are now properly exempted from the repetition detector and handled correctly.
+- **HTTP stream abort on pause**: The HTTP stream is now immediately aborted when a task is paused, preventing resource leaks.
+- **Task re-registration on resume**: Rehydrated tasks are properly re-registered on resume to ensure state events work correctly.
+- **Background completion wiring**: `is_background` is properly wired through types, Task metadata, and NativeToolCallParser.
+- **Status resolution priority**: `WaitForTaskTool` and `CheckTaskStatusTool` now correctly resolve task status with proper priority.
+- **Task state indicator transitions**: Corrected state indicator transitions for stop/resume and followup ask scenarios.
+- **Existing notifications sent on webview launch**: The webview now receives existing task notifications when it launches.
+- **Task instance updated after rehydration**: Task instances are properly updated after rehydration for state event delivery.
+- **Task dropdown UI bugs**: Fixed various UI bugs in the task selector dropdown including auto-focus on managed task creation, Play button behavior, and control visibility for completed tasks.
+
+---
+
+## 3.56.x — 2026-04-17 (Parallel Tasks Foundation)
+
+### Features
+
+- **Parallel task management**: Implemented multi-task architecture enabling multiple concurrent tasks (Copilot-like). Each task runs independently with its own LLM conversation, state, and history.
+- **12 native tools from workspace-tools**: Ported 12 native tool schemas from the `workspace-tools` extension, including `codebase_search_with_lsp` (LSP-based symbol search), `create_new_workspace`, `fetch_web_page`, and others.
+- **Native tool handlers**: Implemented full tool execution handlers for all 12 ported tools.
+- **Task state indicators**: Added visual state indicators showing each task's status (running, paused, error, completed).
+- **Task notifications**: Webview notifications keep users informed of background task state changes.
+
+### Bug Fixes
+
+- **Reasoning content preservation**: Reasoning content is now preserved across multi-turn conversations, fixing model context loss.
+- **System prompt routing fix**: System prompt is now passed via `modelOptions` instead of as an Assistant message for VS Code LM API compatibility.
+- **Task redirect after stop**: User redirect after task stop is now sent as a separate `role=user` message.
+- **Drag-and-drop handlers**: Added proper drag-and-drop handlers to the textarea for VS Code webview compatibility.
+- **Parallel task critical fixes**: Fixed multiple critical issues in the parallel task implementation including state synchronization and event delivery.
+- **`console.log` replaced with outputChannel**: All debug logging now uses the proper output channel instead of `console.log`.
+
+---
+
+## 3.55.x — 2026-04-15 (VS Code LM Provider Improvements)
+
+### Features
+
+- **Thinking/reasoning blocks via VS Code LM API**: Added support for streaming thinking/reasoning blocks through the VS Code Language Model API, enabling models to show their reasoning process.
+- **MaxTokens from model config**: The VS Code LM provider now passes `maxTokens` from the model configuration to the LLM provider.
+- **TaskId as conversationId**: Task IDs are now passed as `conversationId` in model options for better conversation tracking.
+
+### Bug Fixes
+
+- **Shift key requirement removed**: Drag-and-drop file context no longer requires holding the shift key; files can be dropped directly into the chat.
+
+---
+
 ## 3.52.1
 
 ### Patch Changes
