@@ -388,9 +388,49 @@ export class ShoferProvider
 			}
 
 			this.taskHistoryStoreInitialized = true
+
+			// Start the periodic cleanup of archived tasks (runs once per day).
+			this.scheduleArchivedCleanup()
 		} catch (error) {
 			this.log(`[initializeTaskHistoryStore] Error: ${error instanceof Error ? error.message : String(error)}`)
 		}
+	}
+
+	/** Interval ID for the periodic archived-task cleanup timer. */
+	private archivedCleanupTimer: ReturnType<typeof setInterval> | null = null
+
+	/**
+	 * Auto-delete archived tasks that have been archived for longer than 7 days.
+	 * Runs at extension start and then once every 24 hours.
+	 */
+	private scheduleArchivedCleanup(): void {
+		const DAY_MS = 24 * 60 * 60 * 1000
+		const ARCHIVE_MAX_AGE_MS = 7 * DAY_MS
+
+		const doCleanup = async () => {
+			try {
+				const now = Date.now()
+				const allTasks = this.taskHistoryStore.getAll()
+				const expiredIds = allTasks
+					.filter((item) => item.archived && item.archivedAt && now - item.archivedAt >= ARCHIVE_MAX_AGE_MS)
+					.map((item) => item.id)
+
+				if (expiredIds.length > 0) {
+					this.log(`Auto-deleting ${expiredIds.length} expired archived tasks`)
+					await this.taskHistoryStore.deleteMany(expiredIds)
+				}
+			} catch (error) {
+				this.log(`Archived task cleanup failed: ${error instanceof Error ? error.message : String(error)}`)
+			}
+		}
+
+		// Run immediately, then every 24 hours.
+		doCleanup()
+
+		if (this.archivedCleanupTimer) {
+			clearInterval(this.archivedCleanupTimer)
+		}
+		this.archivedCleanupTimer = setInterval(doCleanup, DAY_MS)
 	}
 
 	/**
@@ -676,6 +716,12 @@ export class ShoferProvider
 		this.skillsManager = undefined
 		this.marketplaceManager?.cleanup()
 		this.customModesManager?.dispose()
+
+		if (this.archivedCleanupTimer) {
+			clearInterval(this.archivedCleanupTimer)
+			this.archivedCleanupTimer = null
+		}
+
 		this.taskHistoryStore.dispose()
 		this.flushGlobalStateWriteThrough()
 		this.log("Disposed all disposables")
@@ -3253,9 +3299,7 @@ export class ShoferProvider
 		// (cancelAndProcessQueuedMessages) already handles the case where
 		// the user genuinely wants to send queued messages.
 		// const queuedMessages = [...task.messageQueueService.messages]
-		this.log(
-			`[DIAG cancelTask] abort=${task.abort}, abandoned=${task.abandoned}, isStreaming=${task.isStreaming}`,
-		)
+		this.log(`[DIAG cancelTask] abort=${task.abort}, abandoned=${task.abandoned}, isStreaming=${task.isStreaming}`)
 
 		let historyItem: HistoryItem | undefined
 		try {
@@ -3336,9 +3380,7 @@ export class ShoferProvider
 		await this.createTaskWithHistoryItem({ ...historyItem, rootTask, parentTask })
 
 		const newTask = this.getCurrentTask()
-		this.log(
-			`[DIAG cancelTask] after rehydration: newTask=${newTask?.taskId}.${newTask?.instanceId}`,
-		)
+		this.log(`[DIAG cancelTask] after rehydration: newTask=${newTask?.taskId}.${newTask?.instanceId}`)
 	}
 
 	// Clear the current task without treating it as a subtask.
@@ -3877,6 +3919,55 @@ export class ShoferProvider
 			.catch((error) => {
 				this.log(`Failed to persist task rename: ${error}`)
 			})
+	}
+
+	/**
+	 * Archive a managed task — soft-remove it from the main task listing.
+	 */
+	public async archiveManagedTask(taskId: string): Promise<void> {
+		const { historyItem } = await this.getTaskWithId(taskId)
+		if (historyItem.archived) {
+			return // already archived
+		}
+		await this.updateTaskHistory({ ...historyItem, archived: true, archivedAt: Date.now() })
+	}
+
+	/**
+	 * Unarchive a managed task — move it back into the main task listing.
+	 */
+	public async unarchiveManagedTask(taskId: string): Promise<void> {
+		const { historyItem } = await this.getTaskWithId(taskId)
+		if (!historyItem.archived) {
+			return // already not archived
+		}
+		const { archived, archivedAt, ...rest } = historyItem as HistoryItem & {
+			archived?: boolean
+			archivedAt?: number
+		}
+		await this.updateTaskHistory(rest)
+	}
+
+	/**
+	 * Pin a task — show it at the top of the task listing.
+	 */
+	public async pinManagedTask(taskId: string): Promise<void> {
+		const { historyItem } = await this.getTaskWithId(taskId)
+		if (historyItem.pinned) {
+			return // already pinned
+		}
+		await this.updateTaskHistory({ ...historyItem, pinned: true })
+	}
+
+	/**
+	 * Unpin a task — remove it from the "Pinned" group.
+	 */
+	public async unpinManagedTask(taskId: string): Promise<void> {
+		const { historyItem } = await this.getTaskWithId(taskId)
+		if (!historyItem.pinned) {
+			return // already not pinned
+		}
+		const { pinned, ...rest } = historyItem as HistoryItem & { pinned?: boolean }
+		await this.updateTaskHistory(rest)
 	}
 
 	/**

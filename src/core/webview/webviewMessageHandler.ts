@@ -3828,6 +3828,50 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		case "archiveParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.archiveManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error archiving managed task: ${error}`)
+			}
+			break
+		}
+
+		case "unarchiveParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.unarchiveManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error unarchiving managed task: ${error}`)
+			}
+			break
+		}
+
+		case "pinParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.pinManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error pinning managed task: ${error}`)
+			}
+			break
+		}
+
+		case "unpinParallelTask": {
+			try {
+				if (message.taskId) {
+					await provider.unpinManagedTask(message.taskId)
+				}
+			} catch (error) {
+				provider.log(`Error unpinning managed task: ${error}`)
+			}
+			break
+		}
+
 		case "clearTaskNotification": {
 			try {
 				if (message.taskId) {
