@@ -21,9 +21,9 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/alsterg/shofer.dev"
+		"url": "https://github.com/shofer-dev/shofer"
 	},
-	"homepage": "https://shofer.com",
+	"homepage": "https://www.shofer.dev",
 	"categories": [
 		"AI",
 		"Chat",
