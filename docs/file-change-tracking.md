@@ -170,12 +170,33 @@ files, or the `file` tool's `rm`/`mv`).
 
 ## Capture points
 
-`captureOriginal` is called from every edit path:
+Both `captureOriginal` (before first edit, idempotent) and `captureFinal`
+(after every write, powers Redo/Accept) are needed for full panel support —
+diff, revert, redo, accept. A tool that only calls `trackFileContext("shofer_edited")`
+without `captureOriginal` will appear in the panel but diff won't work.
 
-- **`DiffViewProvider.open()`** — called by all tools that show a diff view ([`apply_diff`](../src/core/tools/ApplyDiffTool.ts), `search_replace`, `edit`, `edit_file`, `apply_patch`, `write_to_file`)
-- **`DiffViewProvider.saveDirectly()`** — called by the same tools when `preventFocusDisruption` experiment is enabled (no diff view shown)
-- **`InsertEditTool`** — manually reads the file and calls `captureOriginal` + `trackFileContext("roo_edited")` since it uses `vscode.WorkspaceEdit` directly
-- **`FileTool`** (`rm`/`mv`) — captures originals for both source and destination paths
+### Fully tracked (both `captureOriginal` + `trackFileContext("shofer_edited")`)
+
+| Tool | Mechanism |
+|---|---|
+| [`apply_diff`](../src/core/tools/ApplyDiffTool.ts), `write_to_file`, `edit`, `edit_file`, `apply_patch`, `search_replace` | Via [`DiffViewProvider`](../src/integrations/editor/DiffViewProvider.ts) — `open()` captures original before mutation, `saveDirectly()` when `preventFocusDisruption` is enabled |
+| [`file`](../src/core/tools/FileTool.ts) (`rm`/`mv`) | Manual — captures originals for source (and destination for `mv`), then `trackFileContext("shofer_edited")` for each path |
+| [`insert_edit`](../src/core/tools/InsertEditTool.ts) | Manual — reads file content for `captureOriginal`, then `trackFileContext("shofer_edited")` after `WorkspaceEdit` |
+| [`sed`](../src/core/tools/SedTool.ts) | Manual — reads file before regex replacement for `captureOriginal`, then `trackFileContext("shofer_edited")` after write |
+| [`rename_symbol`](../src/core/tools/RenameSymbolTool.ts) | Manual — reads each LSP-affected file for `captureOriginal` before rename, then `trackFileContext("shofer_edited")` after |
+
+### Partial (tracks final but not original — diff won't work)
+
+| Tool | Gap |
+|---|---|
+| [`generate_image`](../src/core/tools/GenerateImageTool.ts) | Calls `trackFileContext("shofer_edited")` but no `captureOriginal` — appears in panel, accept/revert work, click-to-diff doesn't |
+
+### Not tracked
+
+| Tool | Reason |
+|---|---|
+| `create_directory`, `create_new_workspace` | Only create directories (not files); no content to diff |
+| `execute_command` | Arbitrary CLI commands — inherently untrackable |
 
 ## Behaviour by feature
 
