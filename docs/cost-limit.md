@@ -80,6 +80,8 @@ through real money with no upper bound.
   (same shape). Applied to the root task at creation time in
   `ShoferProvider.createTask()` via
   `contextProxy.getValue("defaultCostLimit")`.
+  See also: [`configuration.md`](configuration.md) for all
+  `shofer.*` settings.
 
 ### Where the check fires
 
