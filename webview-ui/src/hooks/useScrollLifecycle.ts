@@ -3,11 +3,12 @@
  *
  * Simplified chat scroll lifecycle with a short, time-boxed hydration window.
  *
- * - Task switch enters `HYDRATING_PINNED_TO_BOTTOM`
- * - The initial `scrollToIndex("LAST")` is deferred by two animation frames so
- *   the Virtuoso (re-keyed on task.ts) can mount and measure its items first.
- * - When data arrives during hydration (tracked via `dataLength`), a fresh
- *   scroll-to-bottom fires to catch late-arriving messages.
+ * - Task switch enters `HYDRATING_PINNED_TO_BOTTOM`.
+ * - The initial scroll command is deferred by two animation frames so the
+ *   Virtuoso (re-keyed on task.ts) can mount and measure its items first.
+ * - If the task was previously viewed, the saved scroll position (captured
+ *   via Virtuoso's `rangeChanged` callback) is restored instead of scrolling
+ *   to the bottom.
  * - The hydration window retries up to `MAX_HYDRATION_RETRIES` times at
  *   `HYDRATION_RETRY_WINDOW_MS` intervals before giving up and entering
  *   `ANCHORED_FOLLOWING`.
@@ -20,7 +21,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import debounce from "debounce"
-import type { VirtuosoHandle } from "react-virtuoso"
+import type { ListRange, VirtuosoHandle } from "react-virtuoso"
 
 const HYDRATION_WINDOW_MS = 600
 const HYDRATION_RETRY_WINDOW_MS = 160
@@ -57,7 +58,6 @@ export interface UseScrollLifecycleOptions {
 	virtuosoRef: React.RefObject<VirtuosoHandle | null>
 	scrollContainerRef: React.RefObject<HTMLDivElement | null>
 	taskTs: number | undefined
-	dataLength: number
 	isStreaming: boolean
 	isHidden: boolean
 	hasTask: boolean
@@ -71,6 +71,8 @@ export interface UseScrollLifecycleReturn {
 	enterUserBrowsingHistory: (source: ScrollFollowDisengageSource) => void
 	followOutputCallback: () => "auto" | false
 	atBottomStateChangeCallback: (isAtBottom: boolean) => void
+	/** Callback for Virtuoso's rangeChanged prop — saves scroll position per task. */
+	rangeChangedCallback: (range: ListRange) => void
 	scrollToBottomAuto: () => void
 	isAtBottomRef: React.MutableRefObject<boolean>
 	scrollPhaseRef: React.MutableRefObject<ScrollPhase>
@@ -84,7 +86,6 @@ export function useScrollLifecycle({
 	virtuosoRef,
 	scrollContainerRef,
 	taskTs,
-	dataLength,
 	isStreaming,
 	isHidden,
 	hasTask,
@@ -106,7 +107,15 @@ export function useScrollLifecycle({
 	const isHydratingRef = useRef(false)
 	const hydrationTimeoutRef = useRef<number | null>(null)
 	const hydrationRetryCountRef = useRef(0)
-	const hydrationDataSeenRef = useRef(false)
+
+	// --- Per-task scroll position memory (in-memory, not persisted) ---
+	const taskScrollPositionRef = useRef<Map<number, number>>(new Map())
+
+	// --- Current taskTs ref (kept in sync for use in rangeChanged callback) ---
+	const taskTsRef = useRef(taskTs)
+	useEffect(() => {
+		taskTsRef.current = taskTs
+	}, [taskTs])
 
 	// --- Pointer scroll tracking ---
 	const pointerScrollActiveRef = useRef(false)
@@ -173,15 +182,94 @@ export function useScrollLifecycle({
 		})
 	}, [virtuosoRef])
 
+	const scrollToIndexAuto = useCallback(
+		(index: number) => {
+			virtuosoRef.current?.scrollToIndex({
+				index,
+				align: "start",
+				behavior: "auto",
+			})
+		},
+		[virtuosoRef],
+	)
+
 	const clearHydrationWindow = useCallback(() => {
 		isHydratingRef.current = false
 		hydrationRetryCountRef.current = 0
-		hydrationDataSeenRef.current = false
 		if (hydrationTimeoutRef.current !== null) {
 			window.clearTimeout(hydrationTimeoutRef.current)
 			hydrationTimeoutRef.current = null
 		}
 	}, [])
+
+	// -----------------------------------------------------------------------
+	// rangeChanged — continuously save the visible range for the current task
+	// -----------------------------------------------------------------------
+
+	const rangeChangedCallback = useCallback((range: ListRange) => {
+		const currentTaskTs = taskTsRef.current
+		if (currentTaskTs !== undefined) {
+			taskScrollPositionRef.current.set(currentTaskTs, range.startIndex)
+		}
+	}, [])
+
+	// -----------------------------------------------------------------------
+	// Scroll-to-index hydration (for restoring a saved position)
+	// -----------------------------------------------------------------------
+
+	const restoreTargetIndexRef = useRef<number | null>(null)
+
+	const finishRestoreWindow = useCallback(() => {
+		if (!isMountedRef.current || !isHydratingRef.current) {
+			return
+		}
+
+		if (scrollPhaseRef.current === "HYDRATING_PINNED_TO_BOTTOM") {
+			const targetIndex = restoreTargetIndexRef.current
+			if (targetIndex !== null) {
+				if (hydrationRetryCountRef.current < MAX_HYDRATION_RETRIES) {
+					hydrationRetryCountRef.current++
+					scrollToIndexAuto(targetIndex)
+					hydrationTimeoutRef.current = window.setTimeout(() => {
+						finishRestoreWindow()
+					}, HYDRATION_RETRY_WINDOW_MS)
+					return
+				}
+			}
+			// Retry budget exhausted (or no target index) — enter following mode.
+			enterAnchoredFollowing()
+		}
+
+		clearHydrationWindow()
+	}, [clearHydrationWindow, enterAnchoredFollowing, scrollToIndexAuto])
+
+	const startRestoreWindow = useCallback(
+		(targetIndex: number) => {
+			isHydratingRef.current = true
+			hydrationRetryCountRef.current = 0
+			restoreTargetIndexRef.current = targetIndex
+			if (hydrationTimeoutRef.current !== null) {
+				window.clearTimeout(hydrationTimeoutRef.current)
+			}
+			hydrationTimeoutRef.current = window.setTimeout(() => {
+				finishRestoreWindow()
+			}, HYDRATION_WINDOW_MS)
+
+			// Defer by two rAFs so the new Virtuoso has mounted and measured.
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					if (isHydratingRef.current) {
+						scrollToIndexAuto(targetIndex)
+					}
+				})
+			})
+		},
+		[finishRestoreWindow, scrollToIndexAuto],
+	)
+
+	// -----------------------------------------------------------------------
+	// Scroll-to-bottom hydration (for new / never-viewed tasks)
+	// -----------------------------------------------------------------------
 
 	const finishHydrationWindow = useCallback(() => {
 		if (!isMountedRef.current || !isHydratingRef.current) {
@@ -211,7 +299,7 @@ export function useScrollLifecycle({
 	const startHydrationWindow = useCallback(() => {
 		isHydratingRef.current = true
 		hydrationRetryCountRef.current = 0
-		hydrationDataSeenRef.current = false
+		restoreTargetIndexRef.current = null
 		if (hydrationTimeoutRef.current !== null) {
 			window.clearTimeout(hydrationTimeoutRef.current)
 		}
@@ -251,7 +339,9 @@ export function useScrollLifecycle({
 		scrollPhaseRef.current = scrollPhase
 	}, [scrollPhase])
 
-	// Task switch: reset and begin a short hydration window
+	// Task switch: reset and begin a short hydration window.
+	// If this task was previously viewed, restore its saved scroll position
+	// instead of scrolling to the bottom.
 	useEffect(() => {
 		isAtBottomRef.current = false
 		clearHydrationWindow()
@@ -260,7 +350,13 @@ export function useScrollLifecycle({
 		if (taskTs) {
 			transitionScrollPhase("HYDRATING_PINNED_TO_BOTTOM")
 			setShowScrollToBottom(false)
-			startHydrationWindow()
+
+			const savedIndex = taskScrollPositionRef.current.get(taskTs)
+			if (savedIndex !== undefined && savedIndex > 0) {
+				startRestoreWindow(savedIndex)
+			} else {
+				startHydrationWindow()
+			}
 		} else {
 			transitionScrollPhase("USER_BROWSING_HISTORY")
 			setShowScrollToBottom(false)
@@ -270,39 +366,14 @@ export function useScrollLifecycle({
 			clearHydrationWindow()
 			cancelReanchorFrame()
 		}
-	}, [cancelReanchorFrame, clearHydrationWindow, startHydrationWindow, taskTs, transitionScrollPhase])
-
-	// -----------------------------------------------------------------------
-	// Data-driven hydration scroll
-	// -----------------------------------------------------------------------
-
-	// When messages arrive during the hydration window (e.g. after a
-	// task-switch state push), the Virtuoso may not have been populated
-	// yet when the initial scroll-to-bottom fired.  Watching the data
-	// length lets us catch the moment the list becomes non-empty and
-	// trigger a fresh scroll so the user always lands at the last message.
-	const prevDataLengthRef = useRef(dataLength)
-	useEffect(() => {
-		prevDataLengthRef.current = dataLength
-	}, [dataLength])
-
-	// Fire a scroll-to-bottom the first time data appears during hydration.
-	useEffect(() => {
-		if (
-			isHydratingRef.current &&
-			dataLength > 0 &&
-			!hydrationDataSeenRef.current &&
-			scrollPhaseRef.current === "HYDRATING_PINNED_TO_BOTTOM"
-		) {
-			hydrationDataSeenRef.current = true
-			// Use rAF so Virtuoso has laid out the new items.
-			requestAnimationFrame(() => {
-				if (isHydratingRef.current) {
-					scrollToBottomAuto()
-				}
-			})
-		}
-	}, [dataLength, scrollToBottomAuto])
+	}, [
+		cancelReanchorFrame,
+		clearHydrationWindow,
+		startHydrationWindow,
+		startRestoreWindow,
+		taskTs,
+		transitionScrollPhase,
+	])
 
 	// -----------------------------------------------------------------------
 	// Row height change handler
@@ -533,6 +604,7 @@ export function useScrollLifecycle({
 		enterUserBrowsingHistory,
 		followOutputCallback,
 		atBottomStateChangeCallback,
+		rangeChangedCallback,
 		scrollToBottomAuto,
 		isAtBottomRef,
 		scrollPhaseRef,

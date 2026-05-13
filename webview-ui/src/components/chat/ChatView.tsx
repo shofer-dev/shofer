@@ -1562,6 +1562,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		enterUserBrowsingHistory,
 		followOutputCallback,
 		atBottomStateChangeCallback,
+		rangeChangedCallback,
 		scrollToBottomAuto,
 		isAtBottomRef,
 		scrollPhaseRef,
@@ -1569,7 +1570,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		virtuosoRef,
 		scrollContainerRef,
 		taskTs: task?.ts,
-		dataLength: groupedMessages.length,
 		isStreaming,
 		isHidden,
 		hasTask: !!task,
@@ -2003,6 +2003,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
+							rangeChanged={rangeChangedCallback}
 							atBottomThreshold={10}
 						/>
 						<SessionSearch
