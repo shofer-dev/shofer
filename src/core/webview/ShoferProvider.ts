@@ -3940,11 +3940,10 @@ export class ShoferProvider
 		if (!historyItem.archived) {
 			return // already not archived
 		}
-		const { archived, archivedAt, ...rest } = historyItem as HistoryItem & {
-			archived?: boolean
-			archivedAt?: number
-		}
-		await this.updateTaskHistory(rest)
+		// Explicitly set archived: false so the upsert merge in TaskHistoryStore
+		// overwrites the existing true value (destructuring out the property
+		// would leave it absent and the spread would preserve the old value).
+		await this.updateTaskHistory({ ...historyItem, archived: false })
 	}
 
 	/**
@@ -3966,8 +3965,10 @@ export class ShoferProvider
 		if (!historyItem.pinned) {
 			return // already not pinned
 		}
-		const { pinned, ...rest } = historyItem as HistoryItem & { pinned?: boolean }
-		await this.updateTaskHistory(rest)
+		// Explicitly set pinned: false so the upsert merge in TaskHistoryStore
+		// overwrites the existing true value (destructuring out the property
+		// would leave it absent and the spread would preserve the old value).
+		await this.updateTaskHistory({ ...historyItem, pinned: false })
 	}
 
 	/**
