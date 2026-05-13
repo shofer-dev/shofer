@@ -338,6 +338,16 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// if user finished a task, then start a new task with a new conversation history since in this moment that the extension is waiting for user response, the user could close the extension and the conversation history would be lost.
 		// basically as long as a task is active, the conversation history will be persisted
 		if (lastMessage) {
+			// Clear button state from any previous task before
+			// processing the current message. Individual cases below
+			// set the correct state for each message type. This
+			// prevents the "Start New Task" button from flashing when
+			// switching from a completed/paused task to a running one.
+			setShoferAsk(undefined)
+			setEnableButtons(false)
+			setPrimaryButtonText(undefined)
+			setSecondaryButtonText(undefined)
+
 			switch (lastMessage.type) {
 				case "ask":
 					// Reset user response flag when a new ask arrives to allow auto-approval
@@ -509,6 +519,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setSecondaryButtonText(undefined)
 							setDidClickCancel(false)
 							break
+						default:
+							// Unhandled "ask" type — button state already
+							// cleared by the top-level reset above.
+							break
 					}
 					break
 				case "say":
@@ -533,6 +547,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setPrimaryButtonText(undefined)
 							setSecondaryButtonText(undefined)
 							break
+						// "say" types that don't set button state — the
+						// top-level clear (above) already reset the state
+						// to neutral, so these are no-ops.
 						case "api_req_finished":
 						case "error":
 						case "text":
@@ -540,6 +557,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "mcp_server_request_started":
 						case "mcp_server_response":
 						case "completion_result":
+							break
+						default:
+							// Unhandled "say" type — button state already
+							// cleared by the top-level reset above.
 							break
 					}
 					break
