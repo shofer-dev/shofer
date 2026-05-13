@@ -3,7 +3,7 @@
 	"extension.description": "State-of-the-art open-source AI coding.",
 	"views.contextMenu.label": "Shofer",
 	"views.terminalMenu.label": "Shofer",
-	"views.activitybar.title": "Shofer - Drop Zone",
+	"views.activitybar.title": "Shofer",
 	"views.sidebar.name": "Shofer",
 	"views.dropZone.name": "Drop Files for Context",
 	"command.newTask.title": "New Task",
