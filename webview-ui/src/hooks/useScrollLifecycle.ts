@@ -131,8 +131,6 @@ export function useScrollLifecycle({
 		}
 		const saved = taskScrollPositionRef.current.get(taskTs)
 		return saved !== undefined && saved > 0 ? saved : undefined
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally
-		// only re-evaluates on taskTs boundary
 	}, [taskTs])
 
 	// --- Pointer scroll tracking ---
@@ -286,7 +284,7 @@ export function useScrollLifecycle({
 				finishRestoreWindow()
 			}, HYDRATION_WINDOW_MS)
 		},
-		[finishRestoreWindow, scrollToIndexAuto],
+		[finishRestoreWindow],
 	)
 
 	// -----------------------------------------------------------------------
