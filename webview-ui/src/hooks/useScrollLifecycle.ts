@@ -73,6 +73,9 @@ export interface UseScrollLifecycleReturn {
 	atBottomStateChangeCallback: (isAtBottom: boolean) => void
 	/** Callback for Virtuoso's rangeChanged prop — saves scroll position per task. */
 	rangeChangedCallback: (range: ListRange) => void
+	/** Pass to Virtuoso's initialTopMostItemIndex to start at the saved position
+	 *  on first paint — avoids a visible scroll jump on task switch. */
+	initialScrollIndex: number | undefined
 	scrollToBottomAuto: () => void
 	isAtBottomRef: React.MutableRefObject<boolean>
 	scrollPhaseRef: React.MutableRefObject<ScrollPhase>
@@ -115,6 +118,21 @@ export function useScrollLifecycle({
 	const taskTsRef = useRef(taskTs)
 	useEffect(() => {
 		taskTsRef.current = taskTs
+	}, [taskTs])
+
+	// --- Initial scroll index for Virtuoso's initialTopMostItemIndex ---
+	// Computed synchronously from the saved-position map when taskTs changes
+	// so the Virtuoso (re-keyed on task.ts) starts at the correct position
+	// on its first paint.  Returns undefined for first-view tasks (scroll to
+	// bottom via the hydration window instead).
+	const initialScrollIndex = useMemo(() => {
+		if (taskTs === undefined) {
+			return undefined
+		}
+		const saved = taskScrollPositionRef.current.get(taskTs)
+		return saved !== undefined && saved > 0 ? saved : undefined
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally
+		// only re-evaluates on taskTs boundary
 	}, [taskTs])
 
 	// --- Pointer scroll tracking ---
@@ -204,9 +222,16 @@ export function useScrollLifecycle({
 
 	// -----------------------------------------------------------------------
 	// rangeChanged — continuously save the visible range for the current task
+	//
+	// Skip saving during the hydration window so the initial Virtuoso render
+	// (which may report startIndex=0 before the intended position is reached)
+	// does not overwrite a previously saved position for this task.
 	// -----------------------------------------------------------------------
 
 	const rangeChangedCallback = useCallback((range: ListRange) => {
+		if (isHydratingRef.current) {
+			return
+		}
 		const currentTaskTs = taskTsRef.current
 		if (currentTaskTs !== undefined) {
 			taskScrollPositionRef.current.set(currentTaskTs, range.startIndex)
@@ -215,6 +240,12 @@ export function useScrollLifecycle({
 
 	// -----------------------------------------------------------------------
 	// Scroll-to-index hydration (for restoring a saved position)
+	//
+	// The initial positioning is handled by Virtuoso's initialTopMostItemIndex
+	// prop (communicated via initialScrollIndex return value) — no 2-rAF
+	// scroll is needed here.  The retry loop still runs as a safety net in
+	// case the Virtuoso measurement hasn't settled by the time the hydration
+	// window expires.
 	// -----------------------------------------------------------------------
 
 	const restoreTargetIndexRef = useRef<number | null>(null)
@@ -254,15 +285,6 @@ export function useScrollLifecycle({
 			hydrationTimeoutRef.current = window.setTimeout(() => {
 				finishRestoreWindow()
 			}, HYDRATION_WINDOW_MS)
-
-			// Defer by two rAFs so the new Virtuoso has mounted and measured.
-			requestAnimationFrame(() => {
-				requestAnimationFrame(() => {
-					if (isHydratingRef.current) {
-						scrollToIndexAuto(targetIndex)
-					}
-				})
-			})
 		},
 		[finishRestoreWindow, scrollToIndexAuto],
 	)
@@ -605,6 +627,7 @@ export function useScrollLifecycle({
 		followOutputCallback,
 		atBottomStateChangeCallback,
 		rangeChangedCallback,
+		initialScrollIndex,
 		scrollToBottomAuto,
 		isAtBottomRef,
 		scrollPhaseRef,
