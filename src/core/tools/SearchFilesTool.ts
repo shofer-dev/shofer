@@ -7,6 +7,7 @@
  * configurable context lines, and result capping.
  */
 
+import * as path from "path"
 import * as vscode from "vscode"
 
 import { type ShoferSayTool } from "@shofer/types"
@@ -76,8 +77,8 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 
 		task.consecutiveMistakeCount = 0
 
-		const absolutePath = vscode.Uri.joinPath(vscode.Uri.file(task.cwd), relDirPath)
-		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath.fsPath)
+		const resolvedPath = path.resolve(task.cwd, relDirPath)
+		const isOutsideWorkspace = isPathOutsideWorkspace(resolvedPath)
 
 		const sharedMessageProps: ShoferSayTool = {
 			tool: "searchFiles",
@@ -113,7 +114,9 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 				maxResults: maxResults,
 				beforeContext: contextBefore,
 				afterContext: contextAfter,
-				include: fileTypes ? new vscode.RelativePattern(absolutePath, fileTypes) : absolutePath,
+				include: fileTypes
+					? new vscode.RelativePattern(resolvedPath, fileTypes)
+					: new vscode.RelativePattern(resolvedPath, "**/*"),
 				exclude: excludePattern ?? undefined,
 			}
 
@@ -137,7 +140,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 				return
 			}
 
-			const output = this.formatResults(hits, query, task.cwd, maxResults, truncated)
+			const output = this.formatResults(hits, query, task.cwd, maxResults, truncated, contextBefore)
 			pushToolResult(output)
 		} catch (error) {
 			await handleError("searching files", error as Error)
@@ -161,6 +164,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		cwd: string,
 		maxResults: number,
 		truncated: boolean,
+		beforeContext: number,
 	): string {
 		// Group hits by file, preserving insertion order
 		const byFile = new Map<string, { lines: Map<number, string>; matchLines: Set<number> }>()
@@ -176,13 +180,14 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 			const matchLineNumber = hit.range.start.line + 1
 			file.matchLines.add(matchLineNumber)
 
-			// Extract the matching line text from the preview
-			const matchText = hit.preview.text.split("\n")[0]?.trim() ?? ""
-			file.lines.set(matchLineNumber, matchText)
-
-			// Context lines from the preview
+			// Context lines from the preview.
+			// VS Code's preview.text format: beforeContext lines → match line → afterContext lines.
 			const previewLines = hit.preview.text.split("\n")
-			const matchLineIndex = 0 // The match is the first line in preview.text
+			const matchLineIndex = Math.min(beforeContext, previewLines.length - 1)
+
+			// Extract the matching line text from the preview
+			const matchText = previewLines[matchLineIndex]?.trim() ?? ""
+			file.lines.set(matchLineNumber, matchText)
 			for (let i = 0; i < previewLines.length; i++) {
 				const lineNum = matchLineNumber - matchLineIndex + i
 				if (lineNum !== matchLineNumber) {
@@ -239,14 +244,14 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		const relDirPath = block.params.path
 		const query = block.params.query
 
-		const absolutePath = relDirPath ? vscode.Uri.joinPath(vscode.Uri.file(task.cwd), relDirPath).fsPath : task.cwd
+		const absolutePath = relDirPath ? path.resolve(task.cwd, relDirPath) : task.cwd
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
 		const sharedMessageProps: ShoferSayTool = {
 			tool: "searchFiles",
 			path: getReadablePath(task.cwd, relDirPath ?? ""),
 			regex: query ?? "",
-			filePattern: (block.params.fileTypes as string) ?? "",
+			filePattern: (block.nativeArgs?.fileTypes as string) ?? "",
 			isOutsideWorkspace,
 		}
 
