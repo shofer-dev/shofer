@@ -93,7 +93,7 @@ export class FileTool extends BaseTool<"file"> {
 			}
 
 			const sayTool: ShoferSayTool = {
-				tool: "fileOp",
+				tool: subcommand === "rm" ? "removeFile" : "moveFile",
 				fileOp: subcommand,
 				path: getReadablePath(task.cwd, relPath),
 				destination: absDest ? getReadablePath(task.cwd, destination as string) : undefined,
@@ -198,8 +198,9 @@ export class FileTool extends BaseTool<"file"> {
 		if (!this.hasPathStabilized(relPath)) {
 			return
 		}
+		const isRm = subcommand === "rm"
 		const sharedMessageProps: ShoferSayTool = {
-			tool: "fileOp",
+			tool: isRm ? "removeFile" : "moveFile",
 			fileOp: (subcommand as "rm" | "mv") ?? undefined,
 			path: getReadablePath(task.cwd, relPath ?? ""),
 			destination: block.params.destination ? getReadablePath(task.cwd, block.params.destination) : undefined,

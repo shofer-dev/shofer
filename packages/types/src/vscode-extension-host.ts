@@ -18,7 +18,16 @@ import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 
 // Types previously from cloud.ts, now defined inline
-type CloudUserInfo = { id?: string; name?: string; email?: string; picture?: string; organizationId?: string; organizationName?: string; organizationRole?: string; organizationImageUrl?: string }
+type CloudUserInfo = {
+	id?: string
+	name?: string
+	email?: string
+	picture?: string
+	organizationId?: string
+	organizationName?: string
+	organizationRole?: string
+	organizationImageUrl?: string
+}
 type CloudOrganizationMembership = { organization: { id: string; name: string; imageUrl?: string }; role: string }
 type ShareVisibility = "organization" | "public"
 import type { GitCommit } from "./git.js"
@@ -924,11 +933,12 @@ export interface ShoferSayTool {
 		| "setTaskTitle"
 		| "giveFeedback"
 		| "insertEdit"
-		| "fileOp"
+		| "removeFile"
+		| "moveFile"
 	path?: string
-	/** For `fileOp`: the rm/mv subcommand. */
+	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
 	fileOp?: "rm" | "mv"
-	/** For `fileOp` mv: destination path relative to workspace. */
+	/** For `moveFile`: destination path relative to workspace. */
 	destination?: string
 	// For readCommandOutput
 	readStart?: number
