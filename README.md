@@ -11,7 +11,7 @@
 
 # Shofer
 
-> Your AI-Powered Dev Team, Right in Your Editor
+> State-of-the-art open-source AI coding; 100% under your control.
 
 ## What's New in v3.52.0
 
@@ -41,7 +41,7 @@
 - [简体中文](locales/zh-CN/README.md)
 - [繁體中文](locales/zh-TW/README.md)
 - ...
-      </details>
+  </details>
 
 ---
 
