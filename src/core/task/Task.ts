@@ -1502,7 +1502,33 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					this.askResponseImages = undefined
 					askTs = Date.now()
 					this.lastMessageTs = askTs
-					await this.addToShoferMessages({ ts: askTs, type: "ask", ask: type, text, isProtected })
+
+					// Check auto-approval BEFORE sending to the webview so the
+					// `autoApproved` flag is already set on the initial message.
+					// This prevents the Accept/Reject buttons from flickering
+					// momentarily before the follow-up `messageUpdated` arrives.
+					const provider = this.providerRef.deref()
+					const state = provider ? await provider.getState() : undefined
+					const quickApproval = await checkAutoApproval({ state, ask: type, text, isProtected })
+					const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
+					const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
+
+					await this.addToShoferMessages({
+						ts: askTs,
+						type: "ask",
+						ask: type,
+						text,
+						isProtected,
+						autoApproved: isAutoApproved || undefined,
+						isAnswered: isAutoApprovedTool || undefined,
+					})
+
+					if (isAutoApproved) {
+						this.emit(ShoferEventName.TaskAskResponded)
+						const synthesized: ShoferAskResponse =
+							quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+						return { response: synthesized, text: undefined, images: undefined }
+					}
 				}
 			}
 		} else {
@@ -1512,7 +1538,33 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.askResponseImages = undefined
 			askTs = Date.now()
 			this.lastMessageTs = askTs
-			await this.addToShoferMessages({ ts: askTs, type: "ask", ask: type, text, isProtected })
+
+			// Check auto-approval BEFORE sending to the webview so the
+			// `autoApproved` flag is already set on the initial message.
+			// This prevents the Accept/Reject buttons from flickering
+			// momentarily before the follow-up `messageUpdated` arrives.
+			const provider = this.providerRef.deref()
+			const state = provider ? await provider.getState() : undefined
+			const quickApproval = await checkAutoApproval({ state, ask: type, text, isProtected })
+			const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
+			const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
+
+			await this.addToShoferMessages({
+				ts: askTs,
+				type: "ask",
+				ask: type,
+				text,
+				isProtected,
+				autoApproved: isAutoApproved || undefined,
+				isAnswered: isAutoApprovedTool || undefined,
+			})
+
+			if (isAutoApproved) {
+				this.emit(ShoferEventName.TaskAskResponded)
+				const synthesized: ShoferAskResponse =
+					quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
+				return { response: synthesized, text: undefined, images: undefined }
+			}
 		}
 
 		let timeouts: NodeJS.Timeout[] = []
@@ -1522,31 +1574,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const state = provider ? await provider.getState() : undefined
 		const approval = await checkAutoApproval({ state, ask: type, text, isProtected })
 
-		// Fast-path for auto-approved / auto-denied asks: short-circuit the
-		// entire wait-for-webview flow.
-		//
-		// Why this exists: previously we wrote the ask, then called
-		// `approveAsk()` (which forwards to `handleWebviewAskResponse`), then
-		// entered `pWaitFor` to observe the resulting `askResponse` slot.
-		// `handleWebviewAskResponse` is gated by `isAwaitingAskResponse`,
-		// which only flips to true *after* `pWaitFor` starts — so the
-		// synthetic auto-approval response was being silently dropped and the
-		// task would hang.
-		//
-		// Beyond fixing that race, presenting Approve/Deny buttons for an ask
-		// the user can't actually act on is bad UX. Marking the message
-		// `autoApproved` lets the webview suppress those buttons entirely.
+		// Note: the auto-approved / auto-denied fast-path was moved inside the
+		// two complete-message branches above so the `autoApproved` flag is
+		// set before `addToShoferMessages` sends the message to the webview.
+		// If we reach this point the decision is either "ask" or "timeout".
 		if (approval.decision === "approve" || approval.decision === "deny") {
+			// Edge case: should not normally be reached (fast path handled
+			// above), but guard against it.
 			const askMessage = this.findMessageByTimestamp(askTs)
 			if (askMessage) {
 				askMessage.autoApproved = true
-				// Mirror the `isAnswered` bookkeeping that
-				// `handleWebviewAskResponse` performs for human-driven
-				// approvals. Without this, downstream consumers (notably the
-				// webview FileChangesPanel, which filters ask "tool" entries
-				// by `isAnswered`) treat auto-approved tool calls as still
-				// pending and silently drop them from the listing of
-				// modified files for the task.
 				if (approval.decision === "approve" && askMessage.type === "ask" && askMessage.ask === "tool") {
 					askMessage.isAnswered = true
 				}
