@@ -23,7 +23,7 @@ import { useAddNonInteractiveClickListener } from "./components/ui/hooks/useNonI
 import { TooltipProvider } from "./components/ui/tooltip"
 import { STANDARD_TOOLTIP_DELAY } from "./components/ui/standard-tooltip"
 
-type Tab = "settings" | "history" | "chat" | "marketplace" | "cloud"
+type Tab = "settings" | "history" | "chat" | "marketplace"
 
 interface DeleteMessageDialogState {
 	isOpen: boolean
@@ -48,7 +48,6 @@ const tabsByMessageAction: Partial<Record<NonNullable<ExtensionMessage["action"]
 	settingsButtonClicked: "settings",
 	historyButtonClicked: "history",
 	marketplaceButtonClicked: "marketplace",
-	cloudButtonClicked: "cloud",
 }
 
 const App = () => {
@@ -94,7 +93,7 @@ const App = () => {
 		(newTab: Tab) => {
 			// Only check MDM compliance if mdmCompliant is explicitly false (meaning there's an MDM policy and user is non-compliant)
 			// If mdmCompliant is undefined or true, allow tab switching
-			if (mdmCompliant === false && newTab !== "cloud") {
+			if (mdmCompliant === false) {
 				// Notify the user that authentication is required by their organization
 				vscode.postMessage({ type: "showMdmAuthRequiredNotification" })
 				return
@@ -244,9 +243,6 @@ const App = () => {
 					onDone={() => switchTab("chat")}
 					targetTab={currentMarketplaceTab as "mcp" | "mode" | undefined}
 				/>
-			)}
-			{tab === "cloud" && (
-				<div className="p-4 text-center text-muted-foreground">Cloud features have been removed.</div>
 			)}
 			<ChatView
 				ref={chatViewRef}

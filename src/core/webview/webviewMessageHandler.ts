@@ -2442,11 +2442,6 @@ export const webviewMessageHandler = async (
 			await provider.postStateToWebview()
 			break
 		}
-		case "cloudButtonClicked": {
-			// Navigate to the cloud tab.
-			provider.postMessageToWebview({ type: "action", action: "cloudButtonClicked" })
-			break
-		}
 		case "shoferCloudSignIn": {
 			vscode.window.showErrorMessage("Cloud services have been removed.")
 			break

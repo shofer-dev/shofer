@@ -99,11 +99,6 @@
 				"icon": "$(link-external)"
 			},
 			{
-				"command": "shofer.cloudButtonClicked",
-				"title": "%command.cloud.title%",
-				"icon": "$(cloud)"
-			},
-			{
 				"command": "shofer.settingsButtonClicked",
 				"title": "%command.settings.title%",
 				"icon": "$(settings-gear)"
@@ -202,11 +197,6 @@
 					"when": "view == shofer.SidebarProvider"
 				},
 				{
-					"command": "shofer.cloudButtonClicked",
-					"group": "navigation@4",
-					"when": "view == shofer.SidebarProvider"
-				},
-				{
 					"command": "shofer.marketplaceButtonClicked",
 					"group": "navigation@5",
 					"when": "view == shofer.SidebarProvider"
@@ -282,11 +272,6 @@
 				{
 					"command": "shofer.settingsButtonClicked",
 					"group": "navigation@3",
-					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
-				},
-				{
-					"command": "shofer.cloudButtonClicked",
-					"group": "navigation@4",
 					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
 				},
 				{
@@ -470,7 +455,7 @@
 		"format": "prettier --write .",
 		"bundle": "node esbuild.mjs",
 		"vscode:prepublish": "pnpm bundle --production",
-		"vsix": "mkdirp ../bin && vsce package --no-dependencies --out ../bin",
+		"vsix": "mkdirp ../bin && sync && vsce package --no-dependencies --out ../bin",
 		"publish:marketplace": "vsce publish --no-dependencies && ovsx publish --no-dependencies",
 		"watch:bundle": "pnpm bundle --watch",
 		"watch:tsc": "cd .. && tsc --noEmit --watch --project src/tsconfig.json",
