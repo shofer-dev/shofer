@@ -1,50 +1,14 @@
 {
-	"routers": {
-		"requesty": {
-			"description": "Your optimized LLM router",
-			"incentive": "$1 free credit"
-		},
-		"openrouter": {
-			"description": "A unified interface for LLMs"
-		},
-		"shofer": {
-			"description": "The best free models to get started",
-			"incentive": "Try Shofer out for free"
-		}
-	},
 	"landing": {
 		"greeting": "Welcome to Shofer!",
 		"introduction": "With a range of built-in and extensible Modes, Shofer lets you plan, architect, code, debug and boost your productivity like never before.",
 		"getStarted": "Get Started"
 	},
 	"providerSignup": {
-		"heading": "Choose your provider",
-		"chooseProvider": "Shofer needs an LLM provider to work. Choose one to get started, you can add more later.",
-		"rooCloudProvider": "Shofer Router",
-		"rooCloudDescription": "The easiest way to start is with the Shofer Router: a curated mix of free and paid models at a low cost.",
-		"learnMore": "Learn more",
 		"useAnotherProvider": "3rd-party Provider",
 		"useAnotherProviderDescription": "Enter an API key and get going.",
-		"noApiKeys": "Don't want to deal with API keys and separate accounts?",
-		"backToRoo": "Go with the Shofer Router.",
 		"goBack": "Back",
 		"finish": "Finish"
-	},
-	"waitingForCloud": {
-		"heading": "Logging into Shofer Cloud...",
-		"description": "We'll take you to your browser to sign up for Shofer Cloud. We'll then bring you back here to finish.",
-		"noPrompt": "If you don't get prompted to open a URL, <clickHere>click here</clickHere>.",
-		"havingTrouble": "If you've completed sign up but are having trouble, <clickHere>click here</clickHere>.",
-		"pasteUrl": "Paste the callback URL shown in your browser:",
-		"docsLink": "Not working? <DocsLink>Check the docs</DocsLink>.",
-		"invalidURL": "That doesn't look like a valid callback URL. Please copy what Shofer Cloud is showing in your browser.",
-		"goBack": "Go back"
-	},
-	"startRouter": "We recommend using an LLM Router:",
-	"startCustom": "Or you can bring your provider API key:",
-	"telemetry": {
-		"helpImprove": "Help Improve Shofer",
-		"helpImproveMessage": "Shofer collects error and usage data to help us fix bugs and improve the extension. This telemetry does not collect code, prompts or personal information. You can turn this off in <settingsLink>settings</settingsLink>."
 	},
 	"importSettings": "Import Settings"
 }

@@ -100,7 +100,6 @@ const renderWelcomeViewProvider = (extensionState = {}) => {
 		currentApiConfigName: "default",
 		setApiConfiguration: vi.fn(),
 		uriScheme: "vscode",
-		cloudIsAuthenticated: false,
 		...extensionState,
 	} as any)
 
@@ -130,180 +129,63 @@ describe("WelcomeViewProvider", () => {
 
 			// Should show "Get Started" button
 			expect(screen.getByTestId("button-primary")).toBeInTheDocument()
-
-			// Should NOT show account mention (cloud feature removed)
-			expect(screen.queryByTestId("trans-welcome:landing.accountMention")).not.toBeInTheDocument()
-
-			// Should NOT show "no account" link (cloud feature removed)
-			const links = screen.queryAllByTestId("vscode-link")
-			const noAccountLink = links.find((link) => link.textContent?.includes("welcome:landing.noAccount"))
-			expect(noAccountLink).toBeUndefined()
 		})
 
-		it("navigates to provider selection when 'Get Started' is clicked (no auth trigger)", () => {
+		it("navigates to provider configuration when 'Get Started' is clicked", () => {
 			renderWelcomeViewProvider()
 
 			const getStartedButton = screen.getByTestId("button-primary")
 			fireEvent.click(getStartedButton)
 
-			// Should NOT trigger cloud auth from landing
-			expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "shoferCloudSignIn" }))
-
-			// Should now show provider selection screen with radio buttons
-			expect(screen.getByTestId("radio-group")).toBeInTheDocument()
-			expect(screen.getByTestId("radio-shofer")).toBeInTheDocument()
-			expect(screen.getByTestId("radio-custom")).toBeInTheDocument()
-			expect(screen.getByTestId("trans-welcome:providerSignup.chooseProvider")).toBeInTheDocument()
+			// Should now show provider configuration screen
+			expect(screen.getByText(/welcome:providerSignup.useAnotherProvider/)).toBeInTheDocument()
+			expect(screen.getByText(/welcome:providerSignup.useAnotherProviderDescription/)).toBeInTheDocument()
+			expect(screen.getByTestId("api-options")).toBeInTheDocument()
 		})
 	})
 
-	describe("Provider Selection Screen", () => {
-		const navigateToProviderSelection = () => {
+	describe("Configure Provider Screen", () => {
+		const navigateToConfigureProvider = () => {
 			const getStartedButton = screen.getByTestId("button-primary")
 			fireEvent.click(getStartedButton)
 		}
 
-		it("shows radio buttons for Shofer and Custom providers", () => {
+		it("shows API configuration form", () => {
 			renderWelcomeViewProvider()
-			navigateToProviderSelection()
+			navigateToConfigureProvider()
 
-			// Should show radio group
-			expect(screen.getByTestId("radio-group")).toBeInTheDocument()
-
-			// Should show both radio options
-			expect(screen.getByTestId("radio-shofer")).toBeInTheDocument()
-			expect(screen.getByTestId("radio-custom")).toBeInTheDocument()
-
-			// Should show Shofer provider description
-			expect(screen.getByText(/welcome:providerSignup.rooCloudDescription/)).toBeInTheDocument()
-
-			// Should show custom provider description
+			// Should show heading and description
+			expect(screen.getByText(/welcome:providerSignup.useAnotherProvider/)).toBeInTheDocument()
 			expect(screen.getByText(/welcome:providerSignup.useAnotherProviderDescription/)).toBeInTheDocument()
+
+			// Should show API options
+			expect(screen.getByTestId("api-options")).toBeInTheDocument()
 		})
 
-		it("Shofer provider is selected by default", () => {
+		it("returns to landing when Back is clicked", () => {
 			renderWelcomeViewProvider()
-			navigateToProviderSelection()
+			navigateToConfigureProvider()
 
-			const radioGroup = screen.getByTestId("radio-group")
-			expect(radioGroup).toHaveAttribute("data-value", "shofer")
+			const backButton = screen.getByTestId("button-secondary")
+			fireEvent.click(backButton)
+
+			// Should be back on landing screen
+			expect(screen.getByText(/welcome:landing.greeting/)).toBeInTheDocument()
+			expect(screen.getByTestId("trans-welcome:landing.introduction")).toBeInTheDocument()
 		})
 
-		it("does not show API options when Shofer provider is selected", () => {
+		it("validates and saves configuration when Finish is clicked", () => {
 			renderWelcomeViewProvider()
-			navigateToProviderSelection()
+			navigateToConfigureProvider()
 
-			// API options exist but should be hidden with max-h-0 (collapsed via CSS)
-			// We can't easily test CSS visibility, so just verify the element is in the DOM
-			// but would be hidden by the transition class
-			const apiOptions = screen.queryByTestId("api-options")
-			expect(apiOptions).toBeInTheDocument()
-		})
-
-		it("triggers auth when Get Started is clicked on Shofer provider (not authenticated)", () => {
-			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
-			navigateToProviderSelection()
-
-			const getStartedButton = screen.getByTestId("button-primary")
-			fireEvent.click(getStartedButton)
-
-			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "shoferCloudSignIn",
-				useProviderSignup: true,
-			})
-		})
-
-		it("saves config immediately when Get Started is clicked on Shofer provider (already authenticated)", () => {
-			renderWelcomeViewProvider({ cloudIsAuthenticated: true })
-			navigateToProviderSelection()
-
-			const getStartedButton = screen.getByTestId("button-primary")
-			fireEvent.click(getStartedButton)
+			const finishButton = screen.getByTestId("button-primary")
+			fireEvent.click(finishButton)
 
 			expect(vscode.postMessage).toHaveBeenCalledWith({
 				type: "upsertApiConfiguration",
 				text: "default",
-				apiConfiguration: {
-					apiProvider: "shofer",
-				},
+				apiConfiguration: {},
 			})
-		})
-
-		// Note: We can't easily test radio selection changes in the mocked environment
-		// since the VSCodeRadioGroup component's onChange is complex
-		// These tests would work in a real browser environment
-		it.skip("shows API options when custom provider is selected", () => {
-			renderWelcomeViewProvider()
-			navigateToProviderSelection()
-
-			// Would simulate selecting custom provider in real environment
-			// API options visibility is controlled by CSS transition based on selectedProvider state
-		})
-
-		it.skip("validates and saves configuration when Get Started is clicked on custom provider", () => {
-			// This test would require properly simulating the radio group onChange
-			// which is complex in the mocked environment
-		})
-	})
-
-	describe("Auth In Progress State", () => {
-		it("shows waiting state with progress ring", () => {
-			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
-
-			// Navigate to provider selection, then trigger auth
-			const landingGetStarted = screen.getByTestId("button-primary")
-			fireEvent.click(landingGetStarted)
-
-			// Now on provider selection - click Get Started to trigger auth
-			const providerGetStarted = screen.getByTestId("button-primary")
-			fireEvent.click(providerGetStarted)
-
-			// Should show progress ring
-			expect(screen.getByTestId("progress-ring")).toBeInTheDocument()
-
-			// Should show waiting heading
-			expect(screen.getByText(/welcome:waitingForCloud.heading/)).toBeInTheDocument()
-
-			// Should show description
-			expect(screen.getByText(/welcome:waitingForCloud.description/)).toBeInTheDocument()
-		})
-
-		it("shows Go Back button in waiting state", () => {
-			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
-
-			// Navigate to provider selection, then trigger auth
-			const landingGetStarted = screen.getByTestId("button-primary")
-			fireEvent.click(landingGetStarted)
-
-			const providerGetStarted = screen.getByTestId("button-primary")
-			fireEvent.click(providerGetStarted)
-
-			// Should show secondary button (Go Back)
-			expect(screen.getByTestId("button-secondary")).toBeInTheDocument()
-			expect(screen.getByText(/welcome:waitingForCloud.goBack/)).toBeInTheDocument()
-		})
-
-		it("returns to provider selection when Go Back is clicked", () => {
-			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
-
-			// Navigate to provider selection, then trigger auth
-			const landingGetStarted = screen.getByTestId("button-primary")
-			fireEvent.click(landingGetStarted)
-
-			const providerGetStarted = screen.getByTestId("button-primary")
-			fireEvent.click(providerGetStarted)
-
-			// Verify we're in auth progress
-			expect(screen.getByTestId("progress-ring")).toBeInTheDocument()
-
-			// Click Go Back
-			const goBackButton = screen.getByTestId("button-secondary")
-			fireEvent.click(goBackButton)
-
-			// Should be back on provider selection screen
-			expect(screen.getByTestId("radio-group")).toBeInTheDocument()
-			expect(screen.getByTestId("trans-welcome:providerSignup.chooseProvider")).toBeInTheDocument()
-			expect(screen.queryByTestId("progress-ring")).not.toBeInTheDocument()
 		})
 	})
 })

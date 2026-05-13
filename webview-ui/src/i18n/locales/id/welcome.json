@@ -1,50 +1,14 @@
 {
-	"routers": {
-		"requesty": {
-			"description": "Router LLM yang dioptimalkan",
-			"incentive": "Kredit gratis $1"
-		},
-		"openrouter": {
-			"description": "Antarmuka terpadu untuk LLM"
-		},
-		"shofer": {
-			"description": "Model gratis terbaik untuk memulai",
-			"incentive": "Coba Shofer gratis"
-		}
-	},
 	"landing": {
 		"greeting": "Selamat datang di Shofer!",
 		"introduction": "Dengan berbagai Mode bawaan dan dapat diperluas, Shofer memungkinkan Anda merencanakan, merancang, coding, debug, dan meningkatkan produktivitas seperti yang belum pernah terjadi sebelumnya.",
 		"getStarted": "Mulai"
 	},
 	"providerSignup": {
-		"heading": "Pilih penyedia Anda",
-		"chooseProvider": "Shofer memerlukan penyedia LLM untuk bekerja. Pilih satu untuk memulai, Anda dapat menambahkan lebih banyak nanti.",
-		"rooCloudProvider": "Penyedia Shofer Cloud",
-		"rooCloudDescription": "Cara termudah untuk memulai adalah dengan Penyedia Shofer Cloud: campuran model gratis dan berbayar yang dikurasi dengan hati-hati dengan biaya rendah.",
-		"learnMore": "Pelajari lebih lanjut",
 		"useAnotherProvider": "Penyedia Pihak Ketiga",
 		"useAnotherProviderDescription": "Masukkan kunci API dan mulai.",
-		"noApiKeys": "Tidak ingin berurusan dengan kunci API dan akun terpisah?",
-		"backToRoo": "Pilih Penyedia Shofer Cloud.",
 		"goBack": "Kembali",
 		"finish": "Selesai"
-	},
-	"waitingForCloud": {
-		"heading": "Masuk ke Shofer Cloud...",
-		"description": "Kami akan membawa Anda ke browser Anda untuk mendaftar Shofer Cloud. Kemudian kami akan membawa Anda kembali ke sini untuk menyelesaikannya.",
-		"noPrompt": "Jika Anda tidak diminta untuk membuka URL, <clickHere>klik di sini</clickHere>.",
-		"havingTrouble": "Jika Anda telah menyelesaikan pendaftaran tetapi mengalami masalah, <clickHere>klik di sini</clickHere>.",
-		"pasteUrl": "Tempel URL callback dari browser Anda:",
-		"docsLink": "Tidak bekerja? <DocsLink>Periksa dokumentasi</DocsLink>.",
-		"invalidURL": "Itu tidak terlihat seperti URL callback yang valid. Harap salin apa yang ditampilkan Shofer Cloud di browser Anda.",
-		"goBack": "Kembali"
-	},
-	"startRouter": "Kami merekomendasikan menggunakan router LLM:",
-	"startCustom": "Atau Anda dapat membawa kunci API Anda sendiri:",
-	"telemetry": {
-		"helpImprove": "Bantu Tingkatkan Shofer",
-		"helpImproveMessage": "Shofer mengumpulkan data kesalahan dan penggunaan untuk membantu kami memperbaiki bug dan meningkatkan ekstensi. Telemetri ini tidak mengumpulkan kode, prompt, atau informasi pribadi. Anda dapat menonaktifkannya di <settingsLink>pengaturan</settingsLink>."
 	},
 	"importSettings": "Impor Pengaturan"
 }
