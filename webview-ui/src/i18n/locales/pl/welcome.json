@@ -1,50 +1,14 @@
 {
-	"routers": {
-		"requesty": {
-			"description": "Twój zoptymalizowany router LLM",
-			"incentive": "Bezpłatny kredyt w wysokości $1"
-		},
-		"openrouter": {
-			"description": "Ujednolicony interfejs dla LLM"
-		},
-		"shofer": {
-			"description": "Najlepsze bezpłatne modele dla początkujących",
-			"incentive": "Wypróbuj Shofer bezpłatnie"
-		}
-	},
 	"landing": {
 		"greeting": "Witaj w Shofer!",
 		"introduction": "Dzięki szerokiej gamie wbudowanych i rozszerzalnych Trybów, Shofer pozwala planować, projektować architekturę, kodować, debugować i zwiększać produktywność jak nigdy dotąd.",
 		"getStarted": "Rozpocznij"
 	},
 	"providerSignup": {
-		"heading": "Wybierz swojego dostawcę",
-		"chooseProvider": "Shofer potrzebuje dostawcy LLM, aby działać. Wybierz jeden, aby zacząć, możesz dodać więcej później.",
-		"rooCloudProvider": "Dostawca Shofer Cloud",
-		"rooCloudDescription": "Najłatwiejszy sposób na rozpoczęcie to skorzystanie z Dostawcy Shofer Cloud: starannie wybrany mix bezpłatnych i płatnych modeli w niskiej cenie.",
-		"learnMore": "Dowiedz się więcej",
 		"useAnotherProvider": "Dostawca trzeciej strony",
 		"useAnotherProviderDescription": "Wprowadź klucz API i zacznij.",
-		"noApiKeys": "Nie chcesz radzić sobie z kluczami API i oddzielnymi kontami?",
-		"backToRoo": "Wybierz Dostawcę Shofer Cloud.",
 		"goBack": "Wróć",
 		"finish": "Zakończ"
-	},
-	"waitingForCloud": {
-		"heading": "Logowanie do Shofer Cloud...",
-		"description": "Zaprowadzimy Cię do przeglądarki, aby zarejestrować się w Shofer Cloud. Następnie wrócimy tutaj, aby ukończyć.",
-		"noPrompt": "Jeśli nie zostaniesz poproszony o otwarcie adresu URL, <clickHere>kliknij tutaj</clickHere>.",
-		"havingTrouble": "Jeśli ukończyłeś rejestrację, ale masz problemy, <clickHere>kliknij tutaj</clickHere>.",
-		"pasteUrl": "Wklej adres URL wywołania zwrotnego z przeglądarki:",
-		"docsLink": "Nie działa? <DocsLink>Sprawdź dokumentację</DocsLink>.",
-		"invalidURL": "To nie wygląda na prawidłowy adres URL wywołania zwrotnego. Skopiuj to, co Shofer Cloud wyświetla w przeglądarce.",
-		"goBack": "Wróć"
-	},
-	"startRouter": "Rekomendujemy użycie routera LLM:",
-	"startCustom": "Lub możesz przynieść swój własny klucz API:",
-	"telemetry": {
-		"helpImprove": "Pomóż ulepszyć Shofer",
-		"helpImproveMessage": "Shofer zbiera dane o błędach i użytkowaniu, aby pomóc nam naprawiać błędy i ulepszać rozszerzenie. Ta telemetria nie zbiera kodu, podpowiedzi ani danych osobowych. Możesz je wyłączyć w <settingsLink>ustawieniach</settingsLink>."
 	},
 	"importSettings": "Importuj ustawienia"
 }

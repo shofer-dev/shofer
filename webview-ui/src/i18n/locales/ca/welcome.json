@@ -1,50 +1,14 @@
 {
-	"routers": {
-		"requesty": {
-			"description": "El teu encaminador LLM optimitzat",
-			"incentive": "Crèdit gratuït de $1"
-		},
-		"openrouter": {
-			"description": "Una interfície unificada per als LLM"
-		},
-		"shofer": {
-			"description": "Els millors models gratuïts per començar",
-			"incentive": "Prova Shofer gratis"
-		}
-	},
 	"landing": {
 		"greeting": "Benvingut a Shofer!",
 		"introduction": "Amb una gamma de Modes integrats i ampliables, Shofer et permet planificar, arquitectar, codificar, depurar i augmentar la teva productivitat com mai abans.",
 		"getStarted": "Comença"
 	},
 	"providerSignup": {
-		"heading": "Tria el teu proveïdor",
-		"chooseProvider": "Shofer necessita un proveïdor de LLM per funcionar. Tria-ne un per començar, pots afegir-ne més tard.",
-		"rooCloudProvider": "Proveïdor de Shofer Cloud",
-		"rooCloudDescription": "La manera més fàcil de començar és amb el Proveïdor Shofer Cloud: una mescla acurada de models gratuïts i de pagament a baix cost.",
-		"learnMore": "Més informació",
 		"useAnotherProvider": "Proveïdor de tercers",
 		"useAnotherProviderDescription": "Entra una clau API i comença.",
-		"noApiKeys": "No vols tractar amb claus API i comptes separats?",
-		"backToRoo": "Tria el Proveïdor Shofer Cloud.",
 		"goBack": "Enrere",
 		"finish": "Finalitza"
-	},
-	"waitingForCloud": {
-		"heading": "Connexió a Shofer Cloud...",
-		"description": "Et portarem al teu navegador per registrar-te a Shofer Cloud. Després et portarem aquí per acabar.",
-		"noPrompt": "Si no se't demana que obris una URL, <clickHere>fes clic aquí</clickHere>.",
-		"havingTrouble": "Si has acabat de registrar-te però tens problemes, <clickHere>fes clic aquí</clickHere>.",
-		"pasteUrl": "Enganxa l'URL de devolució de trucada des del teu navegador:",
-		"docsLink": "No funciona? <DocsLink>Consulta la documentació</DocsLink>.",
-		"invalidURL": "Això no sembla una URL de devolució de trucada vàlida. Si us plau, copia el que Shofer Cloud està mostrant al teu navegador.",
-		"goBack": "Enrere"
-	},
-	"startRouter": "Recomanem utilitzar un encaminador LLM:",
-	"startCustom": "O pots portar la teva pròpia clau API:",
-	"telemetry": {
-		"helpImprove": "Ajuda a millorar Shofer",
-		"helpImproveMessage": "Shofer recopila dades d'errors i ús per ajudar-nos a corregir errors i millorar l'extensió. Aquesta telemetria no recopila codi, indicacions o informació personal. Pots desactivar-la a <settingsLink>configuració</settingsLink>."
 	},
 	"importSettings": "Importa la configuració"
 }
