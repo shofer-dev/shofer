@@ -69,4 +69,5 @@ class TelemetryClient {
 	}
 }
 
+export { TelemetryClient }
 export const telemetryClient = TelemetryClient.getInstance()

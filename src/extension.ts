@@ -33,6 +33,7 @@ import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { McpServerManager } from "./services/mcp/McpServerManager"
+import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
 import { CodeIndexManager } from "./services/code-index/manager"
 import { migrateSettings } from "./utils/migrateSettings"
@@ -73,6 +74,9 @@ export function getOutputChannel(): vscode.OutputChannel | undefined {
 export async function activate(context: vscode.ExtensionContext) {
 	extensionContext = context
 	outputChannel = vscode.window.createOutputChannel(Package.outputChannel)
+
+	// Set VS Code context key for marketplace visibility
+	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)
 	context.subscriptions.push(outputChannel)
 	setMcpOutputChannel(outputChannel)
 	outputChannel.appendLine(`${Package.name} extension activated - ${JSON.stringify(Package)}`)
