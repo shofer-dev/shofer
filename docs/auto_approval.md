@@ -32,16 +32,16 @@ The possible decisions are:
 
 These are the boolean toggles exposed in the UI. Each controls a specific class of actions.
 
-| Toggle (`alwaysAllow*`)        | Controls                           | Additional Options                                              |
-| ------------------------------ | ---------------------------------- | --------------------------------------------------------------- |
-| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup      | `alwaysAllowReadOnlyOutsideWorkspace`                           |
-| `alwaysAllowWrite`             | Tools in the `write` ToolGroup     | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected` |
-| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup   | –                                                               |
-| `alwaysAllowMcp`               | MCP tool calls and resource access | `mcpServers` (per-tool `alwaysAllow` flag)                      |
-| `alwaysAllowModeSwitch`        | `switch_mode` tool                 | –                                                               |
-| `alwaysAllowSubtasks`          | `new_task` and `finishTask`        | –                                                               |
-| `alwaysAllowExecute`           | Shell command execution            | `allowedCommands`, `deniedCommands`                             |
-| `alwaysAllowFollowupQuestions` | Follow-up question suggestions     | `followupAutoApproveTimeoutMs`                                  |
+| Toggle (`alwaysAllow*`)        | Controls                                                                       | Additional Options                                              |
+| ------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup                                                  | `alwaysAllowReadOnlyOutsideWorkspace`                           |
+| `alwaysAllowWrite`             | Tools in the `write` ToolGroup                                                 | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected` |
+| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup                                               | –                                                               |
+| `alwaysAllowMcp`               | MCP tool calls and resource access                                             | `mcpServers` (per-tool `alwaysAllow` flag)                      |
+| `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                               |
+| `alwaysAllowSubtasks`          | `new_task` and `finishTask`                                                    | –                                                               |
+| `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                             |
+| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                  |
 
 > **Each toggle maps to a ToolGroup** (see [`tool-categories.md`](tool-categories.md)).
 > Adding a new group to `TOOL_GROUPS` in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)
@@ -164,16 +164,50 @@ Additional constraints:
 
 ### `alwaysAllowExecute`
 
-Controls shell command execution. When enabled, each command is evaluated against
-`allowedCommands` and `deniedCommands` using prefix-matching with a "longest match wins"
-rule:
+Controls shell command execution. **This toggle is a gate — it does NOT auto-approve any
+command on its own.** Turning it ON merely enables the allowlist/denylist evaluation
+pipeline; without entries in `allowedCommands`, every command still prompts the user.
+
+When enabled, each command is first parsed into sub-commands (split by `&&`, `||`, `;`,
+`|`, `&`, and newlines), then each sub-command is evaluated against `allowedCommands` and
+`deniedCommands` using prefix-matching with a "longest match wins" rule:
+
+| allowedCommands          | deniedCommands | Command              | Result                            |
+| ------------------------ | -------------- | -------------------- | --------------------------------- |
+| `["git"]`                | `[]`           | `git status`         | `auto_approve`                    |
+| `["git"]`                | `["git push"]` | `git push origin`    | `auto_deny` (denylist longer)     |
+| `["git push --dry-run"]` | `["git push"]` | `git push --dry-run` | `auto_approve` (allowlist longer) |
+| `["*"]`                  | `["rm"]`       | `rm -rf /`           | `auto_deny`                       |
+| `["*"]`                  | `[]`           | `echo hello`         | `auto_approve`                    |
+| `["git"]`                | `[]`           | `npm install`        | `ask_user` (no match)             |
+| `[]` (empty)             | `[]`           | `anything`           | `ask_user` (nothing matches)      |
+
+**Decision logic per sub-command:**
 
 - If only an allowlist match → `auto_approve`
 - If only a denylist match → `auto_deny`
 - If both match → longer prefix wins
 - If neither matches → `ask_user`
-- Wildcard `*` in allowlist matches any command
-- Dangerous substitution patterns (`$(…)`, `` `…` ``, `${!var}`, zsh `=(…)`, zsh glob qualifiers) force `ask_user` regardless of allowlist
+
+**Aggregation across sub-commands:** If **any** sub-command is denied, the whole command
+chain is `auto_deny`. Only when **all** sub-commands are approved does the chain get
+`auto_approve`.
+
+**Wildcard `*`** in `allowedCommands` matches any command, but denylist entries can still
+block specific commands via longer-prefix-match.
+
+**Dangerous substitution patterns** are **never** auto-approved — even with `allowedCommands = ["*"]`.
+These always force an explicit user prompt:
+
+- `${var@P}` — Prompt string expansion (executes embedded commands)
+- `${var@Q}`, `${var@E}`, `${var@A}`, `${var@a}` — Parameter expansion operators
+- `${!var}` — Indirect variable references
+- `<<<$(...)` or `<<<\`...\`` — Here-strings with command substitution
+- `=(...)` — Zsh process substitution (except array assignments like `var=(...)`)
+- `*(e:...:)`, `?(e:...:)` — Zsh glob qualifiers with code execution
+
+If `alwaysAllowExecute` is **OFF**, every shell command always prompts the user for
+approval, regardless of `allowedCommands` or `deniedCommands` configuration.
 
 ### `alwaysAllowMcp`
 
