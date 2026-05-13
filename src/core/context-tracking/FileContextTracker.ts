@@ -453,14 +453,29 @@ export class FileContextTracker {
 	async captureFinal(relPath: string): Promise<void> {
 		try {
 			const dirs = await this.getSnapshotDirs()
-			if (!dirs) return
+			if (!dirs) {
+				console.warn(
+					`[FileContextTracker] captureFinal skipped for ${relPath}: no snapshot dirs (globalStorage unavailable)`,
+				)
+				return
+			}
 			const cwd = this.getCwd()
-			if (!cwd) return
+			if (!cwd) {
+				console.warn(
+					`[FileContextTracker] captureFinal skipped for ${relPath}: no workspace folder (cwd undefined)`,
+				)
+				return
+			}
 			const abs = path.resolve(cwd, relPath)
 			let content: string | undefined
 			try {
 				content = await fs.readFile(abs, "utf8")
-			} catch {
+			} catch (err: any) {
+				if (err?.code !== "ENOENT") {
+					console.warn(
+						`[FileContextTracker] captureFinal read error for ${relPath}: ${err?.code ?? err?.message ?? err}`,
+					)
+				}
 				content = undefined
 			}
 			const snap = this.buildSnapshotFromContent(content)
@@ -468,20 +483,24 @@ export class FileContextTracker {
 
 			// Also write a verbatim copy to final/<relPath>.
 			const wdirs = await this.getWorkingDirs()
-			if (wdirs) {
-				if (snap.kind === "absent") {
-					// Remove any stale final copy when the file was deleted.
-					const dest = path.join(wdirs.final, relPath)
-					try {
-						await fs.unlink(dest)
-					} catch {
-						/* ok if missing */
-					}
-				} else if (content !== undefined) {
-					const dest = path.join(wdirs.final, relPath)
-					await fs.mkdir(path.dirname(dest), { recursive: true })
-					await fs.writeFile(dest, content, "utf8")
+			if (!wdirs) {
+				console.warn(
+					`[FileContextTracker] captureFinal(${relPath}): metadata snapshot written but working dirs unavailable — verbatim final copy skipped`,
+				)
+				return
+			}
+			if (snap.kind === "absent") {
+				// Remove any stale final copy when the file was deleted.
+				const dest = path.join(wdirs.final, relPath)
+				try {
+					await fs.unlink(dest)
+				} catch {
+					/* ok if missing */
 				}
+			} else if (content !== undefined) {
+				const dest = path.join(wdirs.final, relPath)
+				await fs.mkdir(path.dirname(dest), { recursive: true })
+				await fs.writeFile(dest, content, "utf8")
 			}
 		} catch (err) {
 			console.error(`[FileContextTracker] captureFinal failed for ${relPath}:`, err)
