@@ -162,7 +162,6 @@ interface FileRowProps {
 const FileRow = memo(({ entry, onShowDiff, onRevert, onAccept }: FileRowProps) => {
 	const { t } = useTranslation()
 	const canDiff = entry.hasOriginalContent
-	const canAccept = entry.hasFinalContent
 	const reverted = entry.state === "reverted"
 	return (
 		<div
@@ -198,19 +197,9 @@ const FileRow = memo(({ entry, onShowDiff, onRevert, onAccept }: FileRowProps) =
 				</button>
 				<button
 					type="button"
-					className={cn(
-						"px-1 py-0.5 rounded",
-						canAccept
-							? "hover:bg-vscode-toolbar-hoverBackground cursor-pointer"
-							: "opacity-40 cursor-not-allowed",
-					)}
-					title={
-						canAccept
-							? (t("chat:fileChanges.accept") ?? "")
-							: (t("chat:fileChanges.acceptUnavailable") ?? "No final snapshot available — accept requires Shofer to have written this file in the current task")
-					}
-					disabled={!canAccept}
-					onClick={() => canAccept && onAccept(entry)}>
+					className="px-1 py-0.5 rounded hover:bg-vscode-toolbar-hoverBackground"
+					title={t("chat:fileChanges.accept") ?? ""}
+					onClick={() => onAccept(entry)}>
 					<Check className="size-3.5" aria-label={t("chat:fileChanges.accept") ?? ""} />
 				</button>
 			</div>

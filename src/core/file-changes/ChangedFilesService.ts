@@ -273,29 +273,42 @@ export async function restoreAll(task: Task): Promise<void> {
 }
 
 /**
- * Promotes the current final state of a file to the new baseline.
- * Overwrites base/<relPath> and the originals snapshot with the final
- * content (or marks absent). After accept, the file disappears from
- * the change panel since it matches the updated baseline.
+ * Accepts the current state of a file as the new baseline.
+ * Reads the current on-disk content and promotes it to the new original
+ * baseline. After accept, the file disappears from the change panel
+ * since it matches the updated baseline.
  *
- * No-op when the file has no final snapshot (nothing to accept).
+ * Falls back gracefully: if a final snapshot exists it is used as the
+ * source of truth; otherwise the current disk content is read directly.
+ * The final snapshot (if any) is always cleared after promotion so Redo
+ * cannot re-apply stale state.
  */
 export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	const posix = toPosix(relPath)
+
+	// Resolve accepted content: prefer the final snapshot (last Shofer-produced
+	// state), fall back to current on-disk content when the snapshot is missing.
+	let content: string | undefined
 	const snap = await task.fileContextTracker.getFinalSnapshot(posix)
-	if (!snap) {
-		throw new Error(
-			`Cannot accept "${posix}" — no final snapshot exists. The file may not have been written by Shofer in this task, or the final snapshot capture failed silently.`,
+	if (snap) {
+		content = snap.kind === "text" ? await task.fileContextTracker.getFinalContent(posix) : undefined
+	} else {
+		// The final snapshot may be missing if captureFinal failed silently
+		// (e.g. workspace folder not available during a rapid edit).
+		// Fall back to current disk content so accept still works.
+		content = await readDiskText(task.cwd, posix)
+		console.warn(
+			`[ChangedFilesService] acceptFile(${posix}): no final snapshot — falling back to current disk content`,
 		)
 	}
-
-	const content = snap.kind === "text" ? await task.fileContextTracker.getFinalContent(posix) : undefined
 
 	await task.fileContextTracker.overwriteOriginalBase(posix, content)
 	// Clear the final snapshot so the file disappears from the panel
 	// (it now matches the updated baseline and there's nothing to redo).
 	await task.fileContextTracker.removeFinalSnapshot(posix)
-	console.log(`[ChangedFilesService] acceptFile(${posix}): promoted final → base, kind=${snap.kind}`)
+	console.log(
+		`[ChangedFilesService] acceptFile(${posix}): promoted ${snap ? "final → " : "disk → "}base, kind=${snap?.kind ?? "disk"}`,
+	)
 }
 
 /** Accepts all files Shofer edited in the current Task. */
