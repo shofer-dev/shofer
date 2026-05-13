@@ -1573,9 +1573,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// block (via the `pWaitFor`).
 		const isBlocking = !(this.askResponse !== undefined || this.lastMessageTs !== askTs)
 		const isMessageQueued = !this.messageQueueService.isEmpty()
-		// Keep queued user messages intact during command_output asks. Those asks
-		// are terminal flow-control, not conversational turns.
-		const shouldDrainQueuedMessageForAsk = type !== "command_output"
+		// Keep queued user messages intact for asks that require explicit
+		// user input — the queued message should not be silently drained as
+		// the answer. These ask types are either terminal flow-control
+		// (command_output), user-facing questions (followup), or task-state
+		// transitions (resume_task / resume_completed_task).
+		const shouldDrainQueuedMessageForAsk =
+			type !== "command_output" &&
+			type !== "followup" &&
+			type !== "resume_task" &&
+			type !== "resume_completed_task"
 		// State is mutable when the task will actually wait for user input.
 		// Both "ask" and "timeout" decisions block waiting for input (timeout may auto-approve after delay).
 		const isWaitingForInput = approval.decision === "ask" || approval.decision === "timeout"
@@ -3758,7 +3765,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								tokens.input > 0 ||
 								tokens.output > 0 ||
 								tokens.cacheWrite > 0 ||
-								tokens.cacheRead > 0
+								tokens.cacheRead > 0 ||
+								(tokens.total !== undefined && tokens.total > 0)
 							) {
 								// Update the shared variables atomically
 								inputTokens = tokens.input
