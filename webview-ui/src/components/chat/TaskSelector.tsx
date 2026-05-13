@@ -1,7 +1,7 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Plus, Trash2, Pencil, Check, X, Archive, Pin, PinOff } from "lucide-react"
+import { Plus, Trash2, Pencil, Check, X, Archive, Pin, PinOff, ChevronRight, ChevronDown } from "lucide-react"
 
 import type { HistoryItem } from "@shofer/types"
 
@@ -155,6 +155,37 @@ function bucketForTimestamp(ts: number, now: number): DateBucketKey {
 }
 
 /**
+ * Returns true when a HistoryItem has at least one child subtask.
+ * Uses the `childIds` array populated during task delegation.
+ */
+function hasChildren(item: HistoryItem): boolean {
+	return !!(item.childIds && item.childIds.length > 0)
+}
+
+/**
+ * Builds a Set of node IDs that should be visible after collapsing.
+ *
+ * Walks the flat DFS-pre-order tree; when a collapsed parent is encountered,
+ * all descendants at greater depth are skipped until a node at the same or
+ * shallower depth appears.
+ */
+function computeVisibleNodeIds(tree: TaskTreeNode[], collapsedNodes: Set<string>): Set<string> {
+	const ids = new Set<string>()
+	let skipDepth: number | null = null
+	for (const node of tree) {
+		if (skipDepth !== null && node.depth > skipDepth) {
+			continue // skip descendants of a collapsed parent
+		}
+		skipDepth = null
+		ids.add(node.item.id)
+		if (collapsedNodes.has(node.item.id) && hasChildren(node.item)) {
+			skipDepth = node.depth
+		}
+	}
+	return ids
+}
+
+/**
  * ManagedTask holds the runtime execution state for tasks that have a live
  * Task instance (i.e. tasks that were started in this session and haven't been
  * stopped). It is used as a read-only overlay on top of HistoryItem, never as
@@ -216,6 +247,8 @@ interface TaskRowParams {
 	handleStartRename: (taskId: string, currentName: string, e: React.MouseEvent) => void
 	handleConfirmRename: (taskId: string, e: React.MouseEvent) => void
 	handleCancelRename: (e: React.MouseEvent) => void
+	collapsedNodes: Set<string>
+	handleToggleCollapse: (taskId: string, e: React.MouseEvent) => void
 	t: TFunction
 }
 
@@ -244,6 +277,8 @@ function renderTaskRow({
 	handleStartRename,
 	handleConfirmRename,
 	handleCancelRename,
+	collapsedNodes,
+	handleToggleCollapse,
 	t,
 }: TaskRowParams) {
 	const { item, depth, isLastSibling, ancestorIsLast } = node
@@ -253,6 +288,8 @@ function renderTaskRow({
 	const isCurrent = item.id === currentTaskId
 	const isEditing = editingTaskId === item.id
 	const displayName = getTaskDisplayName(item)
+	const showChevron = hasChildren(item)
+	const isCollapsed = collapsedNodes.has(item.id)
 
 	return (
 		<div
@@ -264,18 +301,27 @@ function renderTaskRow({
 				isCurrent && "bg-[var(--vscode-list-activeSelectionBackground,#094771)]",
 			)}>
 			{/* Tree connector gutter */}
-			{depth > 0 && (
+			{(depth > 0 || showChevron) && (
 				<span className="flex items-center flex-shrink-0 select-none" aria-hidden>
-					{ancestorIsLast.slice(1).map((anc, ai) => (
+					{ancestorIsLast.slice(showChevron ? 0 : 1).map((anc, ai) => (
 						<span
 							key={ai}
 							className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)]">
 							{anc ? "\u00a0" : "│"}
 						</span>
 					))}
-					<span className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)]">
-						{isLastSibling ? "└" : "├"}
-					</span>
+					{showChevron ? (
+						<button
+							className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)] hover:text-[var(--vscode-foreground)] cursor-pointer"
+							onClick={(e) => handleToggleCollapse(item.id, e)}
+							aria-label={isCollapsed ? "Expand subtasks" : "Collapse subtasks"}>
+							{isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+						</button>
+					) : (
+						<span className="inline-flex items-center justify-center w-3 text-[var(--vscode-editorIndentGuide-background,#404040)]">
+							{isLastSibling ? "└" : "├"}
+						</span>
+					)}
 				</span>
 			)}
 
@@ -427,6 +473,20 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 	const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
 	const [editName, setEditName] = useState("")
 
+	// Collapse state for parent-child subtree expansion in the tree.
+	// All subtrees start collapsed by default — we seed the set with every
+	// parent task ID.  The initial value is lazy-initialized so the
+	// computation only runs on first render.
+	const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(() => {
+		const ids = new Set<string>()
+		for (const item of taskHistory) {
+			if (item.childIds && item.childIds.length > 0) {
+				ids.add(item.id)
+			}
+		}
+		return ids
+	})
+
 	// Build a fast O(1) lookup map from parallelTasks for runtime state overlay.
 	const runtimeStateMap = useMemo(() => new Map(parallelTasks.map((t) => [t.id, t])), [parallelTasks])
 
@@ -490,6 +550,19 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 		e.stopPropagation()
 		setEditingTaskId(null)
 		setEditName("")
+	}, [])
+
+	const handleToggleCollapse = useCallback((taskId: string, e: React.MouseEvent) => {
+		e.stopPropagation() // don't trigger parent focus
+		setCollapsedNodes((prev) => {
+			const next = new Set(prev)
+			if (next.has(taskId)) {
+				next.delete(taskId)
+			} else {
+				next.add(taskId)
+			}
+			return next
+		})
 	}, [])
 
 	/**
@@ -557,6 +630,22 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 
 	const totalTaskCount = activeTree.length
 	const archivedCount = archivedTree.length
+
+	// Compute which node IDs are visible after applying subtree collapse.
+	// Each tree is in DFS pre-order, so the skipDepth single-pass algorithm
+	// correctly hides all descendants of a collapsed parent.
+	const visiblePinnedNodeIds = useMemo(
+		() => computeVisibleNodeIds(pinnedTree, collapsedNodes),
+		[pinnedTree, collapsedNodes],
+	)
+	const visibleActiveNodeIds = useMemo(
+		() => computeVisibleNodeIds(activeTree, collapsedNodes),
+		[activeTree, collapsedNodes],
+	)
+	const visibleArchivedNodeIds = useMemo(
+		() => computeVisibleNodeIds(archivedTree, collapsedNodes),
+		[archivedTree, collapsedNodes],
+	)
 
 	/** Collapsed/expanded state for the "Archived" section. Collapsed by default. */
 	const [isArchivedExpanded, setIsArchivedExpanded] = useState(false)
@@ -662,45 +751,53 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 					) : (
 						<>
 							{/* Pinned tasks — always shown first, before date buckets */}
-							{pinnedCount > 0 && (
-								<div className="mb-1">
-									<div
-										className={cn(
-											"flex items-center justify-between px-3 py-1",
-											"text-[11px] font-semibold uppercase tracking-wide",
-											"text-[var(--vscode-descriptionForeground)]",
-										)}>
-										<div className="flex items-center gap-1.5">
-											<Pin className="w-3 h-3" />
-											<span>{t("chat:taskSelector.groups.pinned", "Pinned")}</span>
+							{pinnedCount > 0 &&
+								(() => {
+									const visiblePinned = pinnedTree.filter((n) => visiblePinnedNodeIds.has(n.item.id))
+									if (visiblePinned.length === 0) return null
+									return (
+										<div className="mb-1">
+											<div
+												className={cn(
+													"flex items-center justify-between px-3 py-1",
+													"text-[11px] font-semibold uppercase tracking-wide",
+													"text-[var(--vscode-descriptionForeground)]",
+												)}>
+												<div className="flex items-center gap-1.5">
+													<Pin className="w-3 h-3" />
+													<span>{t("chat:taskSelector.groups.pinned", "Pinned")}</span>
+												</div>
+												<span className="font-normal">{visiblePinned.length}</span>
+											</div>
+											{visiblePinned.map((node) =>
+												renderTaskRow({
+													node,
+													runtimeStateMap,
+													currentTaskId,
+													editingTaskId,
+													editName,
+													setEditName,
+													handleFocusTask,
+													handleDeleteTask,
+													handleArchiveTask,
+													handleUnarchiveTask,
+													handlePinTask,
+													handleUnpinTask,
+													handleStartRename,
+													handleConfirmRename,
+													handleCancelRename,
+													collapsedNodes,
+													handleToggleCollapse,
+													t,
+												}),
+											)}
 										</div>
-										<span className="font-normal">{pinnedCount}</span>
-									</div>
-									{pinnedTree.map((node) =>
-										renderTaskRow({
-											node,
-											runtimeStateMap,
-											currentTaskId,
-											editingTaskId,
-											editName,
-											setEditName,
-											handleFocusTask,
-											handleDeleteTask,
-											handleArchiveTask,
-											handleUnarchiveTask,
-											handlePinTask,
-											handleUnpinTask,
-											handleStartRename,
-											handleConfirmRename,
-											handleCancelRename,
-											t,
-										}),
-									)}
-								</div>
-							)}
+									)
+								})()}
 							{DATE_BUCKET_ORDER.map((bucket) => {
 								const nodes = groupedTree[bucket]
-								if (nodes.length === 0) return null
+								const visibleNodes = nodes.filter((n) => visibleActiveNodeIds.has(n.item.id))
+								if (visibleNodes.length === 0) return null
 								const label = DATE_BUCKET_LABELS[bucket]
 								return (
 									<div key={bucket} className="mb-1">
@@ -712,10 +809,10 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 												"text-[var(--vscode-descriptionForeground)]",
 											)}>
 											<span>{t(label.key, label.fallback)}</span>
-											<span className="font-normal">{nodes.length}</span>
+											<span className="font-normal">{visibleNodes.length}</span>
 										</div>
 
-										{nodes.map((node) =>
+										{visibleNodes.map((node) =>
 											renderTaskRow({
 												node,
 												runtimeStateMap,
@@ -732,6 +829,8 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 												handleStartRename,
 												handleConfirmRename,
 												handleCancelRename,
+												collapsedNodes,
+												handleToggleCollapse,
 												t,
 											}),
 										)}
@@ -759,26 +858,30 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 								<span className="font-normal">{archivedCount}</span>
 							</button>
 							{isArchivedExpanded &&
-								archivedTree.map((node) =>
-									renderTaskRow({
-										node,
-										runtimeStateMap,
-										currentTaskId,
-										editingTaskId,
-										editName,
-										setEditName,
-										handleFocusTask,
-										handleDeleteTask,
-										handleArchiveTask,
-										handleUnarchiveTask,
-										handlePinTask,
-										handleUnpinTask,
-										handleStartRename,
-										handleConfirmRename,
-										handleCancelRename,
-										t,
-									}),
-								)}
+								archivedTree
+									.filter((n) => visibleArchivedNodeIds.has(n.item.id))
+									.map((node) =>
+										renderTaskRow({
+											node,
+											runtimeStateMap,
+											currentTaskId,
+											editingTaskId,
+											editName,
+											setEditName,
+											handleFocusTask,
+											handleDeleteTask,
+											handleArchiveTask,
+											handleUnarchiveTask,
+											handlePinTask,
+											handleUnpinTask,
+											handleStartRename,
+											handleConfirmRename,
+											handleCancelRename,
+											collapsedNodes,
+											handleToggleCollapse,
+											t,
+										}),
+									)}
 						</div>
 					)}
 				</div>
