@@ -72,10 +72,10 @@ const TaskHeader = ({
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 	const [showLongRunningTaskMessage, setShowLongRunningTaskMessage] = useState(false)
-	const isOpen = false
+	const _isOpen = false
 	const openUpsell = () => {}
-	const closeUpsell = () => {}
-	const handleConnect = () => {}
+	const _closeUpsell = () => {}
+	const _handleConnect = () => {}
 
 	// Check if the task is complete by looking at the last relevant message (skipping resume messages)
 	const isTaskComplete =

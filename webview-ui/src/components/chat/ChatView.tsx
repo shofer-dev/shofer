@@ -50,7 +50,6 @@ import { QueuedMessages } from "./QueuedMessages"
 import FileChangesPanel from "./FileChangesPanel"
 import SessionSearch from "./SessionSearch"
 import DismissibleUpsell from "../common/DismissibleUpsell"
-import { useCloudUpsell } from "@src/hooks/useCloudUpsell"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { Cloud } from "lucide-react"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
@@ -200,10 +199,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		shoferAskRef.current = shoferAsk
 	}, [shoferAsk])
 
-	const isUpsellOpen = false
+	const _isUpsellOpen = false
 	const openUpsell = () => {}
-	const closeUpsell = () => {}
-	const handleConnect = () => {}
+	const _closeUpsell = () => {}
+	const _handleConnect = () => {}
 
 	// Keep inputValueRef in sync with inputValue state
 	useEffect(() => {
