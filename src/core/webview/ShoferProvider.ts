@@ -3248,16 +3248,14 @@ export class ShoferProvider
 
 		// Capture any queued messages from the old task BEFORE aborting
 		// These will be transferred to the new task after rehydration
-		const queuedMessages = [...task.messageQueueService.messages]
+		// When the user explicitly clicks Stop, we should NOT transfer
+		// queued messages to the rehydrated task. The "Send Now" flow
+		// (cancelAndProcessQueuedMessages) already handles the case where
+		// the user genuinely wants to send queued messages.
+		// const queuedMessages = [...task.messageQueueService.messages]
 		this.log(
-			`[DIAG cancelTask] queuedMessages=${queuedMessages.length}, abort=${task.abort}, abandoned=${task.abandoned}, isStreaming=${task.isStreaming}`,
+			`[DIAG cancelTask] abort=${task.abort}, abandoned=${task.abandoned}, isStreaming=${task.isStreaming}`,
 		)
-		if (queuedMessages.length > 0) {
-			this.log(`[cancelTask] preserving ${queuedMessages.length} queued message(s) for transfer`)
-			for (const msg of queuedMessages) {
-				this.log(`[DIAG cancelTask] queued msg: text=${msg.text?.substring(0, 100)}`)
-			}
-		}
 
 		let historyItem: HistoryItem | undefined
 		try {
@@ -3339,21 +3337,8 @@ export class ShoferProvider
 
 		const newTask = this.getCurrentTask()
 		this.log(
-			`[DIAG cancelTask] after rehydration: newTask=${newTask?.taskId}.${newTask?.instanceId}, newQueueSize=${newTask?.messageQueueService.messages.length}`,
+			`[DIAG cancelTask] after rehydration: newTask=${newTask?.taskId}.${newTask?.instanceId}`,
 		)
-
-		// Transfer any queued messages from the old task to the new task
-		// This ensures user messages sent during cancellation are not lost
-		if (queuedMessages.length > 0) {
-			if (newTask) {
-				for (const msg of queuedMessages) {
-					newTask.messageQueueService.addMessage(msg.text, msg.images)
-				}
-				this.log(
-					`[DIAG cancelTask] transferred ${queuedMessages.length} queued message(s) to new task, newQueueSize=${newTask.messageQueueService.messages.length}`,
-				)
-			}
-		}
 	}
 
 	// Clear the current task without treating it as a subtask.
