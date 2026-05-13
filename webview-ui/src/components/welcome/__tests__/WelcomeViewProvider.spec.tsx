@@ -90,7 +90,7 @@ vi.mock("@src/i18n/TranslationContext", () => ({
 
 // Mock buildDocLink
 vi.mock("@/utils/docLinks", () => ({
-	buildDocLink: (path: string, source: string) => `https://docs.shofer.com/${path}?utm_source=${source}`,
+	buildDocLink: (path: string, source: string) => `https://docs.shofer.dev/${path}?utm_source=${source}`,
 }))
 
 const renderWelcomeViewProvider = (extensionState = {}) => {

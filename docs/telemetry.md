@@ -45,21 +45,21 @@ Shofer uses a **multi-client telemetry architecture** with a singleton [`Telemet
 │  Extension Host (Node.js)                                │
 │                                                          │
 │  TelemetryService (singleton)                            │
-│  ├── PostHogTelemetryClient  ──► posthog-node  ──► ph.shofer.com │
+│  ├── PostHogTelemetryClient  ──► posthog-node  ──► ph.shofer.dev │
 │  └── CloudTelemetryClient    ──► Shofer Cloud API        │
 │                                                          │
 ├─────────────────────────────────────────────────────────┤
 │  Webview UI (Browser)                                    │
 │                                                          │
 │  TelemetryClient (singleton)                             │
-│  └── posthog-js  ───────────► ph.shofer.com             │
+│  └── posthog-js  ───────────► ph.shofer.dev             │
 └─────────────────────────────────────────────────────────┘
 ```
 
 | Component                                                                       | Runtime                  | Library        | Endpoint                   |
 | ------------------------------------------------------------------------------- | ------------------------ | -------------- | -------------------------- |
-| [`PostHogTelemetryClient`](packages/telemetry/src/PostHogTelemetryClient.ts:24) | Node.js (extension host) | `posthog-node` | `https://ph.shofer.com`    |
-| [`TelemetryClient`](webview-ui/src/utils/TelemetryClient.ts:5)                  | Browser (webview)        | `posthog-js`   | `https://ph.shofer.com`    |
+| [`PostHogTelemetryClient`](packages/telemetry/src/PostHogTelemetryClient.ts:24) | Node.js (extension host) | `posthog-node` | `https://ph.shofer.dev`    |
+| [`TelemetryClient`](webview-ui/src/utils/TelemetryClient.ts:5)                  | Browser (webview)        | `posthog-js`   | `https://ph.shofer.dev`    |
 | [`CloudTelemetryClient`](packages/cloud/src/TelemetryClient.ts:87)              | Node.js (extension host) | Fetch API      | Shofer Cloud `/api/events` |
 
 ---
@@ -134,7 +134,7 @@ The primary Node.js-side telemetry client, backed by [`posthog-node`](https://ww
 
 | Setting          | Value                                                      |
 | ---------------- | ---------------------------------------------------------- |
-| **PostHog host** | `https://ph.shofer.com`                                    |
+| **PostHog host** | `https://ph.shofer.dev`                                    |
 | **Distinct ID**  | `vscode.env.machineId`                                     |
 | **API key**      | `process.env.POSTHOG_API_KEY` from [`.env`](.env.sample:1) |
 
@@ -407,7 +407,7 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 
 | Setting            | Value                                                                                  |
 | ------------------ | -------------------------------------------------------------------------------------- |
-| **API host**       | `https://ph.shofer.com`                                                                |
+| **API host**       | `https://ph.shofer.dev`                                                                |
 | **UI host**        | `https://us.posthog.com`                                                               |
 | **Persistence**    | `localStorage`                                                                         |
 | **Autocapture**    | Disabled (`capture_pageview: false`, `capture_pageleave: false`, `autocapture: false`) |

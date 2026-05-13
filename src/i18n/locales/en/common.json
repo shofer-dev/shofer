@@ -242,7 +242,7 @@
 	},
 	"docsLink": {
 		"label": "Docs",
-		"url": "https://docs.shofer.com"
+		"url": "https://docs.shofer.dev"
 	},
 	"fileChanges": {
 		"blockedTaskRunning": "Cannot revert files while the task is still running. Stop the task first.",

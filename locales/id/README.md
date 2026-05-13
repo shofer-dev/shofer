@@ -65,7 +65,7 @@ Shofer beradaptasi dengan cara Anda bekerja, bukan sebaliknya:
 - Mode Debug: melacak masalah, menambahkan log, mengisolasi akar penyebab
 - Mode Kustom: buat mode khusus untuk tim atau alur kerja Anda
 
-Pelajari lebih lanjut: [Menggunakan Mode](https://docs.shofer.com/basic-usage/using-modes) • [Mode Kustom](https://docs.shofer.com/advanced-usage/custom-modes)
+Pelajari lebih lanjut: [Menggunakan Mode](https://docs.shofer.dev/basic-usage/using-modes) • [Mode Kustom](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Video Tutorial & Fitur
 
@@ -78,17 +78,17 @@ Pelajari lebih lanjut: [Menggunakan Mode](https://docs.shofer.com/basic-usage/us
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">Video tutorial dan fitur cepat lainnya...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">Video tutorial dan fitur cepat lainnya...</a>
 </p>
 
 ## Sumber daya
 
-- **[Dokumentasi](https://docs.shofer.com):** Panduan resmi untuk menginstal, mengonfigurasi, dan menguasai Shofer.
+- **[Dokumentasi](https://docs.shofer.dev):** Panduan resmi untuk menginstal, mengonfigurasi, dan menguasai Shofer.
 - **[Saluran YouTube](https://youtube.com/@shoferyt?feature=shared):** Tonton tutorial dan lihat fitur-fitur dalam aksi.
 - **[Server Discord](https://discord.gg/shofer):** Bergabunglah dengan komunitas untuk bantuan dan diskusi real-time.
 - **[Komunitas Reddit](https://www.reddit.com/r/Shofer):** Bagikan pengalaman Anda dan lihat apa yang sedang dibangun orang lain.
-- **[Masalah GitHub](https://github.com/alsterg/shofer.dev/issues):** Laporkan bug dan lacak pengembangan.
-- **[Permintaan Fitur](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Punya ide? Bagikan dengan para pengembang.
+- **[Masalah GitHub](https://github.com/shofer-dev/shofer/issues):** Laporkan bug dan lacak pengembangan.
+- **[Permintaan Fitur](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Punya ide? Bagikan dengan para pengembang.
 
 ---
 
@@ -97,7 +97,7 @@ Pelajari lebih lanjut: [Menggunakan Mode](https://docs.shofer.com/basic-usage/us
 1. **Clone** repo:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Instal dependensi**:

@@ -172,7 +172,7 @@
 - Clean up repo-facing mode rules (PR #11410 by @hannesrudolph)
 - Implement ModelMessage storage layer with AI SDK response messages (PR #11409 by @daniel-lxs)
 - Extract translation and merge resolver modes into reusable skills (PR #11215 by @app/roomote)
-- Add blog section with initial posts to shofer.com (PR #11127 by @app/roomote)
+- Add blog section with initial posts to shofer.dev (PR #11127 by @app/roomote)
 - Replace Roomote Control with Linear Integration in cloud features grid (PR #11280 by @app/roomote)
 - Add IPC query handlers for commands, modes, and models (PR #11279 by @cte)
 - Add stdin stream mode for the CLI (PR #11476 by @cte)
@@ -1184,7 +1184,7 @@
 
 - The free Supernova model now has a 1M token context window (thanks @mrubens!)
 - Experiment to show the Shofer provider on the welcome screen (thanks @mrubens!)
-- Web: Website improvements to https://shofer.com/ (thanks @brunobergher!)
+- Web: Website improvements to https://shofer.dev/ (thanks @brunobergher!)
 - Fix: Remove <thinking> tags from prompts for cleaner output and fewer tokens (#8318 by @hannesrudolph, PR by @app/roomote)
 - Correct tool use suggestion to improve model adherence to suggestion (thanks @hannesrudolph!)
 - feat: log out from cloud when resetting extension state (thanks @app/roomote!)
@@ -2869,7 +2869,7 @@
 
 ## [3.7.5] - 2025-02-26
 
-- Fix context window truncation math (see [#1173](https://github.com/alsterg/shofer.dev/issues/1173))
+- Fix context window truncation math (see [#1173](https://github.com/shofer-dev/shofer/issues/1173))
 - Fix various issues with the model picker (thanks @System233!)
 - Fix model input / output cost parsing (thanks @System233!)
 - Add drag-and-drop for files
@@ -3084,7 +3084,7 @@
 - Ask and Architect modes can now edit markdown files
 - Custom modes can now be restricted to specific file patterns (for example, a technical writer who can only edit markdown files 👋)
 - Support for configuring the Bedrock provider with AWS Profiles
-- New Shofer community Discord at https://shofer.com/discord!
+- New Shofer community Discord at https://shofer.dev/discord!
 
 ## [3.2.8]
 
@@ -3298,7 +3298,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.2.16]
 
-- Incorporate Premshay's [PR](https://github.com/alsterg/shofer.dev/pull/60) to add support for Amazon Nova and Meta Llama Models via Bedrock (3, 3.1, 3.2) and unified Bedrock calls using BedrockClient and Bedrock Runtime API
+- Incorporate Premshay's [PR](https://github.com/shofer-dev/shofer/pull/60) to add support for Amazon Nova and Meta Llama Models via Bedrock (3, 3.1, 3.2) and unified Bedrock calls using BedrockClient and Bedrock Runtime API
 
 ## [2.2.14 - 2.2.15]
 
@@ -3370,7 +3370,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.1.15]
 
-- Incorporate dbasclpy's [PR](https://github.com/alsterg/shofer.dev/pull/54) to add support for gemini-exp-1206
+- Incorporate dbasclpy's [PR](https://github.com/shofer-dev/shofer/pull/54) to add support for gemini-exp-1206
 - Make it clear that diff editing is very experimental
 
 ## [2.1.14]
@@ -3380,7 +3380,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.1.13]
 
-- Fix https://github.com/alsterg/shofer.dev/issues/50 where sound effects were not respecting settings
+- Fix https://github.com/shofer-dev/shofer/issues/50 where sound effects were not respecting settings
 
 ## [2.1.12]
 
@@ -3388,7 +3388,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.1.11]
 
-- Incorporate lloydchang's [PR](https://github.com/alsterg/shofer.dev/pull/42) to add support for OpenRouter compression
+- Incorporate lloydchang's [PR](https://github.com/shofer-dev/shofer/pull/42) to add support for OpenRouter compression
 
 ## [2.1.10]
 

@@ -12,7 +12,7 @@ Use this skill when the task involves:
 - Modifying or debugging the evals execution infrastructure
 - Adding new eval exercises or languages
 - Working with the evals web interface (apps/web-evals)
-- Modifying the public evals display page on shofer.com
+- Modifying the public evals display page on shofer.dev
 - Understanding where evals code lives in this monorepo
 
 ## When NOT to Use This Skill
@@ -31,8 +31,8 @@ This monorepo has **two distinct evals-related locations** that can cause confus
 | --------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
 | **Evals Execution System**  | `packages/evals/`                                           | Core eval infrastructure: CLI, DB schema, Docker configs       |
 | **Evals Management UI**     | `apps/web-evals/`                                           | Next.js app for creating/monitoring eval runs (localhost:3446) |
-| **Website Evals Page**      | `apps/web-shofer-code/src/app/evals/`                       | Public shofer.com page displaying eval results                 |
-| **External Exercises Repo** | [Shofer-Evals](https://github.com/alsterg/shofer.dev-Evals) | Actual coding exercises (NOT in this monorepo)                 |
+| **Website Evals Page**      | `apps/web-shofer-code/src/app/evals/`                       | Public shofer.dev page displaying eval results                 |
+| **External Exercises Repo** | [Shofer-Evals](https://github.com/shofer-dev/shofer-Evals) | Actual coding exercises (NOT in this monorepo)                 |
 
 ## Directory Structure Reference
 
@@ -94,7 +94,7 @@ apps/web-shofer-code/src/app/evals/
 └── types.ts      # EvalRun type (extends packages/evals types)
 ```
 
-This page **displays** eval results on the public shofer.com website. It imports types from `@shofer/evals` but does NOT run evals.
+This page **displays** eval results on the public shofer.dev website. It imports types from `@shofer/evals` but does NOT run evals.
 
 ## Architecture Overview
 
@@ -123,7 +123,7 @@ The evals system is a distributed evaluation platform that runs AI coding tasks 
 
 ### Adding a New Eval Exercise
 
-1. Add exercise to [Shofer-Evals](https://github.com/alsterg/shofer.dev-Evals) repo (external)
+1. Add exercise to [Shofer-Evals](https://github.com/shofer-dev/shofer-Evals) repo (external)
 2. See [`packages/evals/ADDING-EVALS.md`](packages/evals/ADDING-EVALS.md) for structure
 
 ### Modifying Eval CLI Behavior

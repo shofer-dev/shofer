@@ -65,7 +65,7 @@ Shofer адаптируется к вашему стилю работы, а не
 - Режим Отладка: отслеживание проблем, добавление логов, изоляция первопричин
 - Пользовательские режимы: создавайте специализированные режимы для вашей команды или рабочего процесса
 
-Подробнее: [Использование режимов](https://docs.shofer.com/basic-usage/using-modes) • [Пользовательские режимы](https://docs.shofer.com/advanced-usage/custom-modes)
+Подробнее: [Использование режимов](https://docs.shofer.dev/basic-usage/using-modes) • [Пользовательские режимы](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Обучающие видео и видео о функциях
 
@@ -78,17 +78,17 @@ Shofer адаптируется к вашему стилю работы, а не
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">Больше коротких обучающих видео и видео о функциях...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">Больше коротких обучающих видео и видео о функциях...</a>
 </p>
 
 ## Ресурсы
 
-- **[Документация](https://docs.shofer.com):** Официальное руководство по установке, настройке и освоению Shofer.
+- **[Документация](https://docs.shofer.dev):** Официальное руководство по установке, настройке и освоению Shofer.
 - **[Канал на YouTube](https://youtube.com/@shoferyt?feature=shared):** Смотрите обучающие видео и функции в действии.
 - **[Сервер Discord](https://discord.gg/shofer):** Присоединяйтесь к сообществу для получения помощи и обсуждений в реальном времени.
 - **[Сообщество Reddit](https://www.reddit.com/r/Shofer):** Делитесь своим опытом и смотрите, что создают другие.
-- **[Проблемы на GitHub](https://github.com/alsterg/shofer.dev/issues):** Сообщайте об ошибках и отслеживайте разработку.
-- **[Запросы на новые функции](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Есть идея? Поделитесь ею с разработчиками.
+- **[Проблемы на GitHub](https://github.com/shofer-dev/shofer/issues):** Сообщайте об ошибках и отслеживайте разработку.
+- **[Запросы на новые функции](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Есть идея? Поделитесь ею с разработчиками.
 
 ---
 
@@ -97,7 +97,7 @@ Shofer адаптируется к вашему стилю работы, а не
 1. **Клонируйте** репозиторий:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Установите зависимости**:

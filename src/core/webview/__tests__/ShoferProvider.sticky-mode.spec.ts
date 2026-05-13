@@ -112,7 +112,7 @@ vi.mock("@shofer/cloud", () => ({
 			}
 		},
 	},
-	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.com"),
+	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.dev"),
 }))
 
 vi.mock("../../../shared/modes", () => ({

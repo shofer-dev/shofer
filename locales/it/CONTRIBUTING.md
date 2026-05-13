@@ -69,7 +69,7 @@ Menziona l'allineamento con queste aree nelle tue PR.
 
 Tutti i contributi iniziano con un'issue di GitHub utilizzando i nostri modelli snelli.
 
-- **Controlla le issue esistenti**: cerca nelle [issue di GitHub](https://github.com/alsterg/shofer.dev/issues).
+- **Controlla le issue esistenti**: cerca nelle [issue di GitHub](https://github.com/shofer-dev/shofer/issues).
 - **Crea un'issue** utilizzando:
     - **Miglioramenti:** modello "Richiesta di miglioramento" (linguaggio semplice incentrato sul vantaggio per l'utente).
     - **Bug:** modello "Segnalazione di bug" (riproduzione minima + previsto vs effettivo + versione).
@@ -79,16 +79,16 @@ Tutti i contributi iniziano con un'issue di GitHub utilizzando i nostri modelli 
 ### Decidere su cosa lavorare
 
 - Controlla il [progetto GitHub](https://github.com/orgs/shofer/projects/1) per le issue "Issue [Non assegnata]".
-- Per la documentazione, visita [Shofer Docs](https://github.com/alsterg/shofer.dev-Docs).
+- Per la documentazione, visita [Shofer Docs](https://github.com/shofer-dev/shofer-Docs).
 
 ### Segnalazione di bug
 
 - Controlla prima le segnalazioni esistenti.
-- Crea un nuovo bug utilizzando il [modello "Segnalazione di bug"](https://github.com/alsterg/shofer.dev/issues/new/choose) con:
+- Crea un nuovo bug utilizzando il [modello "Segnalazione di bug"](https://github.com/shofer-dev/shofer/issues/new/choose) con:
     - Passaggi di riproduzione chiari e numerati
     - Risultato previsto vs effettivo
     - Versione di Shofer (obbligatoria); provider/modello di intelligenza artificiale se pertinente
-- **Problemi di sicurezza**: segnala in privato tramite [avvisi di sicurezza](https://github.com/alsterg/shofer.dev/security/advisories/new).
+- **Problemi di sicurezza**: segnala in privato tramite [avvisi di sicurezza](https://github.com/shofer-dev/shofer/security/advisories/new).
 
 ## Processo di sviluppo e invio
 

@@ -65,7 +65,7 @@ Shofer se adapta a tu forma de trabajar, no al revés:
 - Modo Depuración: rastrear problemas, agregar registros, aislar causas raíz
 - Modos Personalizados: crea modos especializados para tu equipo o flujo de trabajo
 
-Más info: [Usar Modos](https://docs.shofer.com/basic-usage/using-modes) • [Modos Personalizados](https://docs.shofer.com/advanced-usage/custom-modes)
+Más info: [Usar Modos](https://docs.shofer.dev/basic-usage/using-modes) • [Modos Personalizados](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Tutoriales y vídeos de funcionalidades
 
@@ -78,17 +78,17 @@ Más info: [Usar Modos](https://docs.shofer.com/basic-usage/using-modes) • [Mo
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">Más tutoriales rápidos y vídeos de funcionalidades...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">Más tutoriales rápidos y vídeos de funcionalidades...</a>
 </p>
 
 ## Recursos
 
-- **[Documentación](https://docs.shofer.com):** La guía oficial para instalar, configurar y dominar Shofer.
+- **[Documentación](https://docs.shofer.dev):** La guía oficial para instalar, configurar y dominar Shofer.
 - **[Canal de YouTube](https://youtube.com/@shoferyt?feature=shared):** Mira tutoriales y ve las funcionalidades en acción.
 - **[Servidor de Discord](https://discord.gg/shofer):** Únete a la comunidad para obtener ayuda y discutir en tiempo real.
 - **[Comunidad de Reddit](https://www.reddit.com/r/Shofer):** Comparte tus experiencias y ve lo que otros están construyendo.
-- **[Incidencias de GitHub](https://github.com/alsterg/shofer.dev/issues):** Reporta errores y sigue el desarrollo.
-- **[Solicitudes de funcionalidades](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** ¿Tienes una idea? Compártela con los desarrolladores.
+- **[Incidencias de GitHub](https://github.com/shofer-dev/shofer/issues):** Reporta errores y sigue el desarrollo.
+- **[Solicitudes de funcionalidades](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** ¿Tienes una idea? Compártela con los desarrolladores.
 
 ---
 
@@ -97,7 +97,7 @@ Más info: [Usar Modos](https://docs.shofer.com/basic-usage/using-modes) • [Mo
 1. **Clona** el repositorio:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Instala las dependencias**:

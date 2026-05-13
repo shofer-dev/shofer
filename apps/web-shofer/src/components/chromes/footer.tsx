@@ -49,7 +49,7 @@ export function Footer() {
 
 						{/* Made with Shofer */}
 						<a
-							href="https://shofer.com"
+							href="https://shofer.dev"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="inline-flex items-center space-x-2 group">
@@ -232,7 +232,7 @@ export function Footer() {
 								<ul className="mt-6 space-y-4">
 									<li>
 										<a
-											href="mailto:support@shofer.com"
+											href="mailto:support@shofer.dev"
 											className="text-sm leading-6 text-muted-foreground transition-colors hover:text-foreground">
 											Contact
 										</a>

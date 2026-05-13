@@ -133,19 +133,19 @@ export function SlackThreadDemo({ className }: SlackThreadDemoProps): JSX.Elemen
 						<div>
 							The documentation for using Shofer from Slack is here:{" "}
 							<FakeLink className="hover:text-violet-200">
-								https://docs.shofer.com/shofer-code-cloud/slack-integration
+								https://docs.shofer.dev/shofer-code-cloud/slack-integration
 							</FakeLink>
 						</div>
 						<div className="text-[#B8BBC0]">Here are some pages from our site we can use for guidance:</div>
 						<ol className="list-decimal pl-5 text-[#D1D2D3]">
 							<li>
-								<FakeLink className="hover:text-violet-200">https://shofer.com</FakeLink>
+								<FakeLink className="hover:text-violet-200">https://shofer.dev</FakeLink>
 							</li>
 							<li>
-								<FakeLink className="hover:text-violet-200">https://shofer.com/extension</FakeLink>
+								<FakeLink className="hover:text-violet-200">https://shofer.dev/extension</FakeLink>
 							</li>
 							<li>
-								<FakeLink className="hover:text-violet-200">https://shofer.com/cloud</FakeLink>
+								<FakeLink className="hover:text-violet-200">https://shofer.dev/cloud</FakeLink>
 							</li>
 						</ol>
 					</div>
@@ -198,7 +198,7 @@ export function SlackThreadDemo({ className }: SlackThreadDemoProps): JSX.Elemen
 							Calling <span className="font-semibold text-[#F8F8F9]">Planneroo</span> to get started on
 							your task on{" "}
 							<code className="rounded bg-white/10 px-1.5 py-0.5 text-[12px] text-[#F8F8F9]">
-								alsterg/shofer.dev
+								shofer-dev/shofer
 							</code>
 						</div>
 						<div>
@@ -363,7 +363,7 @@ export function SlackThreadDemo({ className }: SlackThreadDemoProps): JSX.Elemen
 							<div className="mt-2">
 								<span className="font-semibold text-[#F8F8F9]">PR #10853</span>:{" "}
 								<FakeLink className="hover:text-violet-200">
-									https://github.com/alsterg/shofer.dev/pull/10853
+									https://github.com/shofer-dev/shofer/pull/10853
 								</FakeLink>
 							</div>
 						</div>

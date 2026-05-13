@@ -17,7 +17,7 @@ Closes: # <!-- Replace with the issue number, e.g., Closes: #123 -->
 <!--
 If you used Shofer to help create this PR, you can share public task links here.
 This helps reviewers understand your development process and provides additional context.
-Example: https://app.shofer.com/share/task-id
+Example: https://app.shofer.dev/share/task-id
 -->
 
 ### Description

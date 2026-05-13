@@ -44,7 +44,7 @@ This document provides a comprehensive overview of all cloud-related features in
     - [OrganizationSwitcher](#organizationswitcher)
     - [ShoferBalanceDisplay](#shoferbalancedisplay)
 14. [Marketplace Integration](#marketplace-integration)
-15. [Web App Pages (shofer.com)](#web-app-pages-shofercom)
+15. [Web App Pages (shofer.dev)](#web-app-pages-shofercom)
 16. [Configuration & Environment Variables](#configuration--environment-variables)
 17. [Error Handling](#error-handling)
 
@@ -348,7 +348,7 @@ The `creditBalance()` method (GET `/api/extension/credit-balance`) returns a num
 
 **File:** [`src/api/providers/shofer.ts`](src/api/providers/shofer.ts)
 
-The [`RooHandler`](src/api/providers/shofer.ts:40) is the AI model provider that routes requests through Shofer Cloud's proxy API at `https://api.shofer.com/proxy/v1`. It extends [`BaseOpenAiCompatibleProvider`](src/api/providers/base-openai-compatible-provider.ts).
+The [`RooHandler`](src/api/providers/shofer.ts:40) is the AI model provider that routes requests through Shofer Cloud's proxy API at `https://api.shofer.dev/proxy/v1`. It extends [`BaseOpenAiCompatibleProvider`](src/api/providers/base-openai-compatible-provider.ts).
 
 ### Key Features
 
@@ -522,7 +522,7 @@ The marketplace loads remote configurations from Shofer Cloud:
 
 ---
 
-## Web App Pages (shofer.com)
+## Web App Pages (shofer.dev)
 
 The Next.js app at [`apps/web-shofer/`](apps/web-shofer/) hosts marketing and product pages:
 
@@ -545,9 +545,9 @@ The Next.js app at [`apps/web-shofer/`](apps/web-shofer/) hosts marketing and pr
 
 | Variable                                        | Default                        | Description                                 |
 | ----------------------------------------------- | ------------------------------ | ------------------------------------------- |
-| `CLERK_BASE_URL`                                | `https://clerk.shofer.com`     | Clerk authentication server URL             |
-| `ROO_CODE_API_URL` / `SHOFER_API_URL`           | `https://app.shofer.com`       | Shofer Cloud API base URL                   |
-| `ROO_CODE_PROVIDER_URL` / `SHOFER_PROVIDER_URL` | `https://api.shofer.com/proxy` | Shofer Router proxy base URL                |
+| `CLERK_BASE_URL`                                | `https://clerk.shofer.dev`     | Clerk authentication server URL             |
+| `ROO_CODE_API_URL` / `SHOFER_API_URL`           | `https://app.shofer.dev`       | Shofer Cloud API base URL                   |
+| `ROO_CODE_PROVIDER_URL` / `SHOFER_PROVIDER_URL` | `https://api.shofer.dev/proxy` | Shofer Router proxy base URL                |
 | `SHOFER_CLOUD_TOKEN`                            | _(empty)_                      | Static JWT for cloud agent auth             |
 | `SHOFER_CLOUD_ORG_SETTINGS`                     | _(empty)_                      | Base64-encoded org settings for static mode |
 | `SHOFER_DISABLE_TELEMETRY`                      | `0`                            | Set to `1` to disable cloud telemetry       |

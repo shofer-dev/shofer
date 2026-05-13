@@ -65,7 +65,7 @@ Shofer thích ứng với cách bạn làm việc, chứ không phải ngược 
 - Chế độ Gỡ lỗi: theo dõi sự cố, thêm nhật ký, cô lập nguyên nhân gốc rễ
 - Chế độ Tùy chỉnh: xây dựng các chế độ chuyên biệt cho nhóm hoặc quy trình làm việc của bạn
 
-Xem thêm: [Sử dụng Chế độ](https://docs.shofer.com/basic-usage/using-modes) • [Chế độ tùy chỉnh](https://docs.shofer.com/advanced-usage/custom-modes)
+Xem thêm: [Sử dụng Chế độ](https://docs.shofer.dev/basic-usage/using-modes) • [Chế độ tùy chỉnh](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Video hướng dẫn & tính năng
 
@@ -78,17 +78,17 @@ Xem thêm: [Sử dụng Chế độ](https://docs.shofer.com/basic-usage/using-m
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">Thêm video hướng dẫn và tính năng nhanh...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">Thêm video hướng dẫn và tính năng nhanh...</a>
 </p>
 
 ## Tài nguyên
 
-- **[Tài liệu](https://docs.shofer.com):** Hướng dẫn chính thức để cài đặt, cấu hình và sử dụng thành thạo Shofer.
+- **[Tài liệu](https://docs.shofer.dev):** Hướng dẫn chính thức để cài đặt, cấu hình và sử dụng thành thạo Shofer.
 - **[Kênh YouTube](https://youtube.com/@shoferyt?feature=shared):** Xem các video hướng dẫn và các tính năng đang hoạt động.
 - **[Máy chủ Discord](https://discord.gg/shofer):** Tham gia cộng đồng để được trợ giúp và thảo luận trong thời gian thực.
 - **[Cộng đồng Reddit](https://www.reddit.com/r/Shofer):** Chia sẻ kinh nghiệm của bạn và xem những người khác đang xây dựng gì.
-- **[Vấn đề trên GitHub](https://github.com/alsterg/shofer.dev/issues):** Báo cáo lỗi và theo dõi quá trình phát triển.
-- **[Yêu cầu tính năng](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Có ý tưởng? Hãy chia sẻ với các nhà phát triển.
+- **[Vấn đề trên GitHub](https://github.com/shofer-dev/shofer/issues):** Báo cáo lỗi và theo dõi quá trình phát triển.
+- **[Yêu cầu tính năng](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Có ý tưởng? Hãy chia sẻ với các nhà phát triển.
 
 ---
 
@@ -97,7 +97,7 @@ Xem thêm: [Sử dụng Chế độ](https://docs.shofer.com/basic-usage/using-m
 1. **Sao chép** kho lưu trữ:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Cài đặt các dependency**:

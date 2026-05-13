@@ -43,7 +43,7 @@ export class PostHogTelemetryClient extends BaseTelemetryClient {
 		)
 
 		if (TELEMETRY_ENABLED) {
-			this.client = new PostHog(process.env.POSTHOG_API_KEY || "", { host: "https://ph.shofer.com" })
+			this.client = new PostHog(process.env.POSTHOG_API_KEY || "", { host: "https://ph.shofer.dev" })
 		}
 	}
 

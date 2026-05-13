@@ -276,6 +276,7 @@ const ApiOptions = ({
 
 	const onProviderChange = useCallback(
 		(value: ProviderName) => {
+			console.log(`[ApiOptions] onProviderChange: setting apiProvider to "${value}"`)
 			setApiConfigurationField("apiProvider", value)
 
 			// It would be much easier to have a single attribute that stores

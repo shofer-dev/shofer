@@ -181,7 +181,7 @@ export function PillarsSection() {
 								<div className="text-muted-foreground my-4 space-y-1">
 									<p>
 										The Shofer Extension is{" "}
-										<Link target="_blank" href="https://github.com/alsterg/shofer.dev">
+										<Link target="_blank" href="https://github.com/shofer-dev/shofer">
 											open source
 										</Link>{" "}
 										so you can see for yourself exactly what it&apos;s doing and we don&apos;t use

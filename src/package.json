@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer-dev",
-	"version": "0.2.4",
+	"version": "0.2.5",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -23,7 +23,7 @@
 		"type": "git",
 		"url": "https://github.com/shofer-dev/shofer"
 	},
-	"homepage": "https://www.shofer.dev",
+	"homepage": "https://shofer.dev",
 	"categories": [
 		"AI",
 		"Chat",
@@ -356,14 +356,14 @@
 					"default": [],
 					"description": "%commands.deniedCommands.description%"
 				},
-				"shofer.commandExecutionTimeout": {
+				"shofer.devmandExecutionTimeout": {
 					"type": "number",
 					"default": 0,
 					"minimum": 0,
 					"maximum": 600,
 					"description": "%commands.commandExecutionTimeout.description%"
 				},
-				"shofer.commandTimeoutAllowlist": {
+				"shofer.devmandTimeoutAllowlist": {
 					"type": "array",
 					"items": {
 						"type": "string"
