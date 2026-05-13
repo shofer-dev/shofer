@@ -11,7 +11,7 @@
 
 # Shofer
 
-> State-of-the-art open-source AI coding; 100% under your control.
+> State-of-the-art open-source AI coding.
 
 ## What's New in v3.52.0
 
