@@ -71,6 +71,22 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	private static _warnedMissingPricing = false
 	private static _warnedMissingCapabilities = false
 	private static _warnedMissingRequestCost = false
+
+	/**
+	 * Whether the user has opted into llm-provider integration via the
+	 * `shofer.enableLlmProviderIntegration` setting. Cached on first read
+	 * to avoid repeated config lookups during streaming.
+	 */
+	private static _llmProviderIntegrationEnabled: boolean | undefined
+
+	private static isLlmProviderIntegrationEnabled(): boolean {
+		if (VsCodeLmHandler._llmProviderIntegrationEnabled === undefined) {
+			VsCodeLmHandler._llmProviderIntegrationEnabled =
+				vscode.workspace.getConfiguration("shofer").get<boolean>("enableLlmProviderIntegration", false) ?? false
+		}
+		return VsCodeLmHandler._llmProviderIntegrationEnabled
+	}
+
 	protected options: ApiHandlerOptions
 	private client: vscode.LanguageModelChat | null
 	private disposable: vscode.Disposable | null
@@ -191,6 +207,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 * success; silently leaves it untouched on miss/failure.
 	 */
 	private async refreshShoferPricing(): Promise<void> {
+		if (!VsCodeLmHandler.isLlmProviderIntegrationEnabled()) return
 		if (!this.client) return
 		const candidates = [this.client.id, this.client.family].filter(
 			(s): s is string => typeof s === "string" && s.length > 0,
@@ -226,6 +243,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 * miss/failure (e.g. when the shofer extension isn't installed).
 	 */
 	private async refreshShoferCapabilities(): Promise<void> {
+		if (!VsCodeLmHandler.isLlmProviderIntegrationEnabled()) return
 		if (!this.client) return
 		const candidates = [this.client.id, this.client.family].filter(
 			(s): s is string => typeof s === "string" && s.length > 0,
@@ -268,6 +286,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 * row never render.
 	 */
 	private async fetchShoferRequestCost(): Promise<number | undefined> {
+		if (!VsCodeLmHandler.isLlmProviderIntegrationEnabled()) return undefined
 		if (!this.conversationId) return undefined
 		try {
 			const cost = await vscode.commands.executeCommand<number | undefined>(
