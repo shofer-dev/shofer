@@ -35,7 +35,8 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	generateImage: "generate_image",
 	createDirectory: "create_directory",
 	createNewWorkspace: "create_new_workspace",
-	fileOp: "file",
+	removeFile: "file",
+	moveFile: "file",
 	insertEdit: "insert_edit",
 	renameSymbol: "rename_symbol",
 
