@@ -231,6 +231,18 @@ export const globalSettingsSchema = z.object({
 	 * @default { maxUsd: 0, action: "pause" }
 	 */
 	defaultCostLimit: costLimitSchema.nullish(),
+
+	/**
+	 * Enable integration with the Shofer LLM Model Provider extension
+	 * (shofer.llm.getModelPricing, shofer.llm.getRequestCost, etc.).
+	 * When disabled (default), the vscode-lm provider uses only the
+	 * information available from the VS Code LM API itself — token counts
+	 * but no USD pricing. When enabled, it queries the llm-provider
+	 * extension for per-token rates and per-conversation cost ledgers,
+	 * which are required for cost-limit enforcement to work.
+	 * @default false
+	 */
+	enableLlmProviderIntegration: z.boolean().optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

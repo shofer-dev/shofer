@@ -367,8 +367,13 @@ limit firing?".
 
 ### Operational dependency: llm-provider command registration
 
-Both cost paths depend on well-known VS Code commands registered by
-the **Shofer LLM Model Provider** extension
+The llm-provider integration is **opt-in** and controlled by the
+`shofer.enableLlmProviderIntegration` setting (default: `false`).
+When disabled, Shofer operates without the llm-provider — token counts
+are available but USD pricing and cost-limit enforcement are not.
+
+When enabled, both cost paths depend on well-known VS Code commands
+registered by the **Shofer LLM Model Provider** extension
 ([`extensions/llm-provider/`](../../../extensions/llm-provider/)):
 
 | Command                           | Registers in                                                           | Consumed by                                         | Role                                                     |
@@ -383,17 +388,18 @@ expects, both cost paths silently return `undefined`. The consequence:
 `totalCost` stays at `$0` for every request, `consolidateTokenUsage`
 reports zero, and the budget limit can never trip.
 
-**Diagnostics (v3.56.x+):** The vscode-lm provider now logs a one-shot
-warning to the Shofer output channel when any of these commands fails:
+**Diagnostics (v3.56.x+):** When `enableLlmProviderIntegration` is
+enabled, the vscode-lm provider logs a one-shot warning to the Shofer
+output channel when any of these commands fails:
 
 ```
 [vscode-lm] shofer.llm.getModelPricing command not found — is the Shofer LLM Model Provider extension installed and active?
 [vscode-lm] shofer.llm.getRequestCost command not found — is the Shofer LLM Model Provider extension installed and active?
 ```
 
-If you see `cost: $0` for every request and the budget limit never
-trips, check the Shofer output channel for these messages. They are the
-quickest way to identify a command-registration mismatch.
+If you have enabled the integration but still see `cost: $0` for every
+request and the budget limit never trips, check the Shofer output
+channel for these messages.
 
 ## Versioning
 

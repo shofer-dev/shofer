@@ -40,6 +40,7 @@
 	"settings.debugProxy.serverUrl.description": "Proxy URL (e.g. http://127.0.0.1:8888). Only used when debug proxy is enabled.",
 	"settings.debugProxy.tlsInsecure.description": "Accept self-signed certificates from the proxy. Required for MITM inspection. Use only for local debugging.",
 	"settings.enableCodeActions.description": "Enable Shofer Quick Fix code actions.",
+	"settings.enableLlmProviderIntegration.description": "Enable integration with the Shofer LLM Model Provider extension (requires llm-provider to be installed). When enabled, the vscode-lm provider queries shofer.llm.getModelPricing and shofer.llm.getRequestCost for per-token pricing and per-conversation cost tracking — required for cost-limit enforcement and accurate API Cost display. When disabled (default), only token counts are available.",
 	"settings.maximumIndexedFilesForFileSearch.description": "Maximum number of files to index for the @-file search feature. Higher values provide better search results in large projects but may consume more memory. Default: 10000.",
 	"settings.newTaskRequireTodos.description": "Require todos parameter when creating new tasks with the new_task tool",
 	"settings.useAgentRules.description": "Enable loading AGENTS.md files for agent-specific rules (see https://agent-rules.org/)",
