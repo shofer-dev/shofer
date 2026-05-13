@@ -355,18 +355,18 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			const message: ExtensionMessage = event.data
 			switch (message.type) {
 				case "state": {
-						const newState = message.state ?? {}
-						if (newState.apiConfiguration !== undefined) {
-							const prevProvider = state.apiConfiguration?.apiProvider
-							const nextProvider = newState.apiConfiguration?.apiProvider
-							if (prevProvider !== nextProvider) {
-								console.log(
-									`[ExtensionStateContext] state push overwriting apiProvider: "${prevProvider}" -> "${nextProvider}"`,
-								)
-							}
+					const newState = message.state ?? {}
+					if (newState.apiConfiguration !== undefined) {
+						const prevProvider = state.apiConfiguration?.apiProvider
+						const nextProvider = newState.apiConfiguration?.apiProvider
+						if (prevProvider !== nextProvider) {
+							console.log(
+								`[ExtensionStateContext] state push overwriting apiProvider: "${prevProvider}" -> "${nextProvider}"`,
+							)
 						}
-						setState((prevState) => mergeExtensionState(prevState, newState))
-						setShowWelcome(!checkExistKey(newState.apiConfiguration))
+					}
+					setState((prevState) => mergeExtensionState(prevState, newState))
+					setShowWelcome(!checkExistKey(newState.apiConfiguration))
 					setDidHydrateState(true)
 					// Update alwaysAllowFollowupQuestions if present in state message
 					if ((newState as any).alwaysAllowFollowupQuestions !== undefined) {
@@ -573,7 +573,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				}
 			}
 		},
-		[setListApiConfigMeta],
+		[setListApiConfigMeta, state.apiConfiguration?.apiProvider],
 	)
 
 	useEffect(() => {
