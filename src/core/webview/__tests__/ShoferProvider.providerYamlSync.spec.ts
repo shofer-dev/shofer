@@ -118,7 +118,7 @@ vi.mock("@shofer/cloud", () => ({
 			return { isAuthenticated: vi.fn().mockReturnValue(false) }
 		},
 	},
-	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.com"),
+	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.dev"),
 }))
 
 // Built-in mode `code` plus a custom mode `reviewer` are returned via getModeBySlug.

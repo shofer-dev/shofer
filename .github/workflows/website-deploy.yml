@@ -1,4 +1,4 @@
-name: Deploy shofer.com
+name: Deploy shofer.dev
 
 on:
     push:

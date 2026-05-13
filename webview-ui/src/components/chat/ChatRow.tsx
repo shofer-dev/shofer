@@ -1332,7 +1332,7 @@ export const ChatRowContent = ({
 								// Non-HTTP-status-code error message - store full text as errorDetails
 								body = t("chat:apiRequest.errorMessage.unknown")
 								docsURL =
-									"mailto:support@shofer.com?subject=Unknown API Error&body=[Please include full error details]"
+									"mailto:support@shofer.dev?subject=Unknown API Error&body=[Please include full error details]"
 							}
 						}
 

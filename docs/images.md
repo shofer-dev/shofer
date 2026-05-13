@@ -204,7 +204,7 @@ Upstream AI provider
 ## Image Size Limits
 
 - **Per-message count**: [`MAX_IMAGES_PER_MESSAGE`](../webview-ui/src/components/chat/ChatView.tsx) controls the maximum number of images per message
-- **Per-file size**: [`maxReadFileImageSize`](https://docs.shofer.com/) setting controls maximum image size for `read_file` tool
+- **Per-file size**: [`maxReadFileImageSize`](https://docs.shofer.dev/) setting controls maximum image size for `read_file` tool
 
 ## Multi-Turn Image Handling
 

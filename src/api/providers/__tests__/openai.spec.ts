@@ -111,7 +111,7 @@ describe("OpenAiHandler", () => {
 				baseURL: expect.any(String),
 				apiKey: expect.any(String),
 				defaultHeaders: {
-					"HTTP-Referer": "https://github.com/alsterg/shofer.dev",
+					"HTTP-Referer": "https://github.com/shofer-dev/shofer",
 					"X-Title": "Shofer",
 					"User-Agent": `Shofer/${Package.version}`,
 				},

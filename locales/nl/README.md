@@ -65,7 +65,7 @@ Shofer past zich aan jouw werkwijze aan, niet andersom:
 - Debug Modus: spoor problemen op, voeg logs toe, isoleer de oorzaak
 - Aangepaste Modi: bouw gespecialiseerde modi voor je team of workflow
 
-Meer info: [Modi gebruiken](https://docs.shofer.com/basic-usage/using-modes) • [Aangepaste modi](https://docs.shofer.com/advanced-usage/custom-modes)
+Meer info: [Modi gebruiken](https://docs.shofer.dev/basic-usage/using-modes) • [Aangepaste modi](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Tutorial & Feature Videos
 
@@ -78,17 +78,17 @@ Meer info: [Modi gebruiken](https://docs.shofer.com/basic-usage/using-modes) •
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">Meer snelle tutorial- en featurevideo's...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">Meer snelle tutorial- en featurevideo's...</a>
 </p>
 
 ## Hulpbronnen
 
-- **[Documentatie](https://docs.shofer.com):** De officiële gids voor het installeren, configureren en beheersen van Shofer.
+- **[Documentatie](https://docs.shofer.dev):** De officiële gids voor het installeren, configureren en beheersen van Shofer.
 - **[YouTube-kanaal](https://youtube.com/@shoferyt?feature=shared):** Bekijk tutorials en zie functies in actie.
 - **[Discord Server](https://discord.gg/shofer):** Word lid van de community voor realtime hulp en discussie.
 - **[Reddit Community](https://www.reddit.com/r/Shofer):** Deel je ervaringen en kijk wat anderen bouwen.
-- **[GitHub Issues](https://github.com/alsterg/shofer.dev/issues):** Meld bugs en volg de ontwikkeling.
-- **[Feature Requests](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Heb je een idee? Deel het met de ontwikkelaars.
+- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues):** Meld bugs en volg de ontwikkeling.
+- **[Feature Requests](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Heb je een idee? Deel het met de ontwikkelaars.
 
 ---
 
@@ -97,7 +97,7 @@ Meer info: [Modi gebruiken](https://docs.shofer.com/basic-usage/using-modes) •
 1. **Kloon** de repo:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Installeer afhankelijkheden**:

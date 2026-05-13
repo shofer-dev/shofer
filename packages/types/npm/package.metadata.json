@@ -11,12 +11,12 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/alsterg/shofer.dev.git"
+		"url": "git+https://github.com/shofer-dev/shofer.git"
 	},
 	"bugs": {
-		"url": "https://github.com/alsterg/shofer.dev/issues"
+		"url": "https://github.com/shofer-dev/shofer/issues"
 	},
-	"homepage": "https://shofer.com",
+	"homepage": "https://shofer.dev",
 	"keywords": ["shofer", "shofer-code", "ai"],
 	"files": ["dist"]
 }

@@ -9,7 +9,7 @@ import {
 	mcpMarketplaceItemSchema,
 } from "@shofer/types"
 
-const SHOFER_API_URL = process.env.SHOFER_API_URL || "https://app.shofer.com"
+const SHOFER_API_URL = process.env.SHOFER_API_URL || "https://app.shofer.dev"
 
 const modeMarketplaceResponse = z.object({
 	items: z.array(modeMarketplaceItemSchema),

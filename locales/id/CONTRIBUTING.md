@@ -69,7 +69,7 @@ Sebutkan keselarasan dengan area-area ini di PR Anda.
 
 Semua kontribusi dimulai dengan Masalah GitHub menggunakan template ramping kami.
 
-- **Periksa masalah yang ada**: Cari di [Masalah GitHub](https://github.com/alsterg/shofer.dev/issues).
+- **Periksa masalah yang ada**: Cari di [Masalah GitHub](https://github.com/shofer-dev/shofer/issues).
 - **Buat masalah** menggunakan:
     - **Penyempurnaan:** Template "Permintaan Penyempurnaan" (bahasa sederhana yang berfokus pada manfaat pengguna).
     - **Bug:** Template "Laporan Bug" (repro minimal + yang diharapkan vs aktual + versi).
@@ -79,16 +79,16 @@ Semua kontribusi dimulai dengan Masalah GitHub menggunakan template ramping kami
 ### Memutuskan Apa yang Akan Dikerjakan
 
 - Periksa [Proyek GitHub](https://github.com/orgs/shofer/projects/1) untuk masalah "Masalah [Belum Ditugaskan]".
-- Untuk dokumentasi, kunjungi [Dokumentasi Shofer](https://github.com/alsterg/shofer.dev-Docs).
+- Untuk dokumentasi, kunjungi [Dokumentasi Shofer](https://github.com/shofer-dev/shofer-Docs).
 
 ### Melaporkan Bug
 
 - Periksa laporan yang ada terlebih dahulu.
-- Buat bug baru menggunakan [template "Laporan Bug"](https://github.com/alsterg/shofer.dev/issues/new/choose) dengan:
+- Buat bug baru menggunakan [template "Laporan Bug"](https://github.com/shofer-dev/shofer/issues/new/choose) dengan:
     - Langkah-langkah reproduksi yang jelas dan bernomor
     - Hasil yang diharapkan vs aktual
     - Versi Shofer (wajib); penyedia/model API jika relevan
-- **Masalah keamanan**: Laporkan secara pribadi melalui [saran keamanan](https://github.com/alsterg/shofer.dev/security/advisories/new).
+- **Masalah keamanan**: Laporkan secara pribadi melalui [saran keamanan](https://github.com/shofer-dev/shofer/security/advisories/new).
 
 ## Proses Pengembangan & Pengajuan
 

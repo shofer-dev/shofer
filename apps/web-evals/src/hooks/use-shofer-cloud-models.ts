@@ -33,7 +33,7 @@ export const rooCodeCloudModelSchema = z.object({
 export type ShoferCloudModel = z.infer<typeof rooCodeCloudModelSchema>
 
 export const getShoferCloudModels = async (): Promise<ShoferCloudModel[]> => {
-	const response = await fetch("https://api.shofer.com/proxy/v1/models")
+	const response = await fetch("https://api.shofer.dev/proxy/v1/models")
 
 	if (!response.ok) {
 		return []

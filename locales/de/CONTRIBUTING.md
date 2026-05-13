@@ -69,7 +69,7 @@ Erwähne die Ausrichtung auf diese Bereiche in deinen PRs.
 
 Alle Beiträge beginnen mit einem GitHub-Issue unter Verwendung unserer schlanken Vorlagen.
 
-- **Überprüfe bestehende Issues**: Suche in den [GitHub Issues](https://github.com/alsterg/shofer.dev/issues).
+- **Überprüfe bestehende Issues**: Suche in den [GitHub Issues](https://github.com/shofer-dev/shofer/issues).
 - **Erstelle ein Issue** mit:
     - **Verbesserungen:** Vorlage „Verbesserungsvorschlag“ (einfache Sprache mit Fokus auf den Nutzen für den Benutzer).
     - **Fehler:** Vorlage „Fehlerbericht“ (minimale Reproduktion + erwartet vs. tatsächlich + Version).
@@ -79,16 +79,16 @@ Alle Beiträge beginnen mit einem GitHub-Issue unter Verwendung unserer schlanke
 ### Entscheiden, woran du arbeiten möchtest
 
 - Überprüfe das [GitHub-Projekt](https://github.com/orgs/shofer/projects/1) auf „Issue [Unassigned]“-Issues.
-- Für Dokumentation besuche [Shofer Docs](https://github.com/alsterg/shofer.dev-Docs).
+- Für Dokumentation besuche [Shofer Docs](https://github.com/shofer-dev/shofer-Docs).
 
 ### Fehler melden
 
 - Überprüfe zuerst, ob bereits Berichte vorhanden sind.
-- Erstelle einen neuen Fehler mit der [Vorlage „Fehlerbericht“](https://github.com/alsterg/shofer.dev/issues/new/choose) mit:
+- Erstelle einen neuen Fehler mit der [Vorlage „Fehlerbericht“](https://github.com/shofer-dev/shofer/issues/new/choose) mit:
     - Klaren, nummerierten Reproduktionsschritten
     - Erwartetes vs. tatsächliches Ergebnis
     - Shofer-Version (erforderlich); API-Anbieter/Modell, falls relevant
-- **Sicherheitsprobleme**: Melde sie privat über [Sicherheitshinweise](https://github.com/alsterg/shofer.dev/security/advisories/new).
+- **Sicherheitsprobleme**: Melde sie privat über [Sicherheitshinweise](https://github.com/shofer-dev/shofer/security/advisories/new).
 
 ## Entwicklungs- und Einreichungsprozess
 

@@ -52,7 +52,7 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						<Trans
 							i18nKey="settings:footer.telemetry.description"
 							components={{
-								privacyLink: <VSCodeLink href="https://shofer.com/privacy" />,
+								privacyLink: <VSCodeLink href="https://shofer.dev/privacy" />,
 							}}
 						/>
 					</p>
@@ -66,7 +66,7 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						<Bug className="size-4 text-vscode-descriptionForeground shrink-0" />
 						<span>
 							{t("settings:about.bugReport.label")}{" "}
-							<VSCodeLink href="https://github.com/alsterg/shofer.dev/issues/new?template=bug_report.yml">
+							<VSCodeLink href="https://github.com/shofer-dev/shofer/issues/new?template=bug_report.yml">
 								{t("settings:about.bugReport.link")}
 							</VSCodeLink>
 						</span>
@@ -75,7 +75,7 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						<Lightbulb className="size-4 text-vscode-descriptionForeground shrink-0" />
 						<span>
 							{t("settings:about.featureRequest.label")}{" "}
-							<VSCodeLink href="https://github.com/alsterg/shofer.dev/issues/new?template=feature_request.yml">
+							<VSCodeLink href="https://github.com/shofer-dev/shofer/issues/new?template=feature_request.yml">
 								{t("settings:about.featureRequest.link")}
 							</VSCodeLink>
 						</span>
@@ -84,7 +84,7 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						<Shield className="size-4 text-vscode-descriptionForeground shrink-0" />
 						<span>
 							{t("settings:about.securityIssue.label")}{" "}
-							<VSCodeLink href="https://github.com/alsterg/shofer.dev/security/policy">
+							<VSCodeLink href="https://github.com/shofer-dev/shofer/security/policy">
 								{t("settings:about.securityIssue.link")}
 							</VSCodeLink>
 						</span>
@@ -93,7 +93,7 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						<MessageCircle className="size-4 text-vscode-descriptionForeground shrink-0" />
 						<span>
 							{t("settings:about.contact.label")}{" "}
-							<VSCodeLink href="mailto:support@shofer.com">support@shofer.com</VSCodeLink>
+							<VSCodeLink href="mailto:support@shofer.dev">support@shofer.dev</VSCodeLink>
 						</span>
 					</div>
 					<div className="flex items-start gap-2">

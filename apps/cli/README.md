@@ -13,7 +13,7 @@ This CLI uses the `@shofer/vscode-shim` package to provide a VSCode API compatib
 Install the Shofer CLI with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alsterg/shofer.dev/main/apps/cli/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/shofer-dev/shofer/main/apps/cli/install.sh | sh
 ```
 
 **Requirements:**
@@ -30,7 +30,7 @@ SHOFER_INSTALL_DIR=/opt/shofer-code SHOFER_BIN_DIR=/usr/local/bin curl -fsSL ...
 **Install a specific version:**
 
 ```bash
-SHOFER_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/alsterg/shofer.dev/main/apps/cli/install.sh | sh
+SHOFER_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/shofer-dev/shofer/main/apps/cli/install.sh | sh
 ```
 
 ### Updating
@@ -38,7 +38,7 @@ SHOFER_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/alsterg/shofer
 Re-run the install script to update to the latest version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alsterg/shofer.dev/main/apps/cli/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/shofer-dev/shofer/main/apps/cli/install.sh | sh
 ```
 
 Or run:
@@ -223,7 +223,7 @@ The CLI will look for API keys in environment variables if not provided via `--a
 
 | Variable             | Description                                                       |
 | -------------------- | ----------------------------------------------------------------- |
-| `SHOFER_WEB_APP_URL` | Override the Shofer Cloud URL (default: `https://app.shofer.com`) |
+| `SHOFER_WEB_APP_URL` | Override the Shofer Cloud URL (default: `https://app.shofer.dev`) |
 
 ## Architecture
 
@@ -283,7 +283,7 @@ pnpm lint
 By default the `start` script points `SHOFER_PROVIDER_URL` at `http://localhost:8080/proxy` for local development. To point at the production API instead, override the environment variable:
 
 ```bash
-SHOFER_PROVIDER_URL=https://api.shofer.com/proxy pnpm dev --provider shofer --api-key $SHOFER_API_KEY --print "Hello"
+SHOFER_PROVIDER_URL=https://api.shofer.dev/proxy pnpm dev --provider shofer --api-key $SHOFER_API_KEY --print "Hello"
 ```
 
 ## Releasing

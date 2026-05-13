@@ -6,7 +6,7 @@ import { Model, ModelWithTotalPrice, ModelsResponse, SortOption } from "@/lib/ty
 import Link from "next/link"
 import { ChevronDown, CircleX, Cloud, Loader, LoaderCircle, Puzzle, Search } from "lucide-react"
 
-const API_URL = "https://api.shofer.com/proxy/v1/models?include_paid=true"
+const API_URL = "https://api.shofer.dev/proxy/v1/models?include_paid=true"
 
 const faqs = [
 	{

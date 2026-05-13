@@ -1,6 +1,6 @@
 export async function getGitHubStars() {
 	try {
-		const res = await fetch("https://api.github.com/repos/alsterg/shofer.dev")
+		const res = await fetch("https://api.github.com/repos/shofer-dev/shofer")
 		const data = await res.json()
 
 		if (typeof data.stargazers_count !== "number") {

@@ -55,11 +55,11 @@ export default function Privacy() {
 					</p>
 					<ul className="lead">
 						<li>
-							browse any page under <strong>shofer.com</strong> (the <em>Marketing Site</em>); and/or
+							browse any page under <strong>shofer.dev</strong> (the <em>Marketing Site</em>); and/or
 						</li>
 						<li>
 							create an account for, sign in to, or otherwise use <strong>Shofer Cloud</strong> at{" "}
-							<strong>app.shofer.com</strong> or through the Shofer extension while authenticated to that
+							<strong>app.shofer.dev</strong> or through the Shofer extension while authenticated to that
 							Cloud account (the <em>Cloud Service</em>).
 						</li>
 					</ul>
@@ -70,7 +70,7 @@ export default function Privacy() {
 							If you run the Shofer extension <strong>without</strong> connecting to a Cloud account, your
 							data is governed by the standalone{" "}
 							<a
-								href="https://github.com/alsterg/shofer.dev/blob/main/PRIVACY.md"
+								href="https://github.com/shofer-dev/shofer/blob/main/PRIVACY.md"
 								target="_blank"
 								rel="noopener noreferrer"
 								className="text-primary hover:underline">
@@ -306,8 +306,8 @@ export default function Privacy() {
 					<h2 className="mt-12 text-2xl font-bold">8. Contact Us</h2>
 					<p>
 						Questions or concerns? Email{" "}
-						<a href="mailto:privacy@shofer.com" className="text-primary hover:underline">
-							privacy@shofer.com
+						<a href="mailto:privacy@shofer.dev" className="text-primary hover:underline">
+							privacy@shofer.dev
 						</a>
 						.
 					</p>

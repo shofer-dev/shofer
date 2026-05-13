@@ -92,7 +92,7 @@ const faqs: FAQItem[] = [
 				(or GitHub). Add your AI keys (OpenAI, Anthropic, or other) in the extension settings. Open the Shofer
 				panel (the rocket icon) in VS Code, and start typing commands in plain English!{" "}
 				<a
-					href="https://docs.shofer.com/tutorial-videos"
+					href="https://docs.shofer.dev/tutorial-videos"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">
@@ -123,7 +123,7 @@ const faqs: FAQItem[] = [
 				approval. And because Shofer is fully open-source, it&apos;s auditable—you can review exactly how it
 				works before deploying it.{" "}
 				<a
-					href="https://shofer.com/enterprise"
+					href="https://shofer.dev/enterprise"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">
@@ -158,7 +158,7 @@ const faqs: FAQItem[] = [
 			<>
 				Yes, please do! Shofer is open-source on{" "}
 				<a
-					href="https://github.com/alsterg/shofer.dev"
+					href="https://github.com/shofer-dev/shofer"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">
@@ -190,7 +190,7 @@ const faqs: FAQItem[] = [
 			<>
 				Check out our{" "}
 				<a
-					href="https://docs.shofer.com"
+					href="https://docs.shofer.dev"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">
@@ -222,7 +222,7 @@ const faqs: FAQItem[] = [
 				</a>{" "}
 				tutorials and{" "}
 				<a
-					href="https://blog.shofer.com"
+					href="https://blog.shofer.dev"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">

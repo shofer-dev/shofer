@@ -69,7 +69,7 @@ Mencioneu l'alineació amb aquestes àrees a les vostres sol·licituds d'extracc
 
 Totes les contribucions comencen amb una incidència de GitHub utilitzant les nostres plantilles bàsiques.
 
-- **Comproveu les incidències existents**: cerqueu a [Incidències de GitHub](https://github.com/alsterg/shofer.dev/issues).
+- **Comproveu les incidències existents**: cerqueu a [Incidències de GitHub](https://github.com/shofer-dev/shofer/issues).
 - **Creeu una incidència** utilitzant:
     - **Millores:** plantilla "Sol·licitud de millora" (llenguatge senzill centrat en el benefici per a l'usuari).
     - **Errors:** plantilla "Informe d'error" (reproducció mínima + esperat vs real + versió).
@@ -79,16 +79,16 @@ Totes les contribucions comencen amb una incidència de GitHub utilitzant les no
 ### Decidir en què treballar
 
 - Consulteu el [Projecte de GitHub](https://github.com/orgs/shofer/projects/1) per a incidències "Incidència [No assignada]".
-- Per a documents, visiteu [Documents de Shofer](https://github.com/alsterg/shofer.dev-Docs).
+- Per a documents, visiteu [Documents de Shofer](https://github.com/shofer-dev/shofer-Docs).
 
 ### Informar d'errors
 
 - Comproveu primer si hi ha informes existents.
-- Creeu un error nou utilitzant la [plantilla "Informe d'error"](https://github.com/alsterg/shofer.dev/issues/new/choose) amb:
+- Creeu un error nou utilitzant la [plantilla "Informe d'error"](https://github.com/shofer-dev/shofer/issues/new/choose) amb:
     - Passos de reproducció clars i numerats
     - Resultat esperat vs real
     - Versió de Shofer (obligatori); proveïdor/model d'API si és rellevant
-- **Problemes de seguretat**: informeu de manera privada a través d' [avisos de seguretat](https://github.com/alsterg/shofer.dev/security/advisories/new).
+- **Problemes de seguretat**: informeu de manera privada a través d' [avisos de seguretat](https://github.com/shofer-dev/shofer/security/advisories/new).
 
 ## Procés de desenvolupament i submissió
 

@@ -98,7 +98,7 @@ check_docker_services() {
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "⚠️ Only macOS is currently supported."
   echo "The Shofer evals system can also be run with Docker on any platform."
-  echo "See https://github.com/alsterg/shofer.dev/blob/main/packages/evals/README.md for instructions."
+  echo "See https://github.com/shofer-dev/shofer/blob/main/packages/evals/README.md for instructions."
   exit 1
 fi
 
@@ -294,7 +294,7 @@ echo "✅ Done"
 
 if [[ ! -d "../../../evals" ]]; then
   echo -n "🔗 Cloning evals repository... "
-  git clone https://github.com/alsterg/shofer.dev-Evals.git ../../../evals || exit 1
+  git clone https://github.com/shofer-dev/shofer-Evals.git ../../../evals || exit 1
   echo "✅ Done"
 else
   echo -n "🔄 Updating evals repository... "

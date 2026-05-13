@@ -22,6 +22,6 @@ export const ASCII_ROO = `  _,'   ___
         //   \\\\
       ,/'     \`\\_,`
 
-export const AUTH_BASE_URL = process.env.SHOFER_AUTH_BASE_URL ?? "https://app.shofer.com"
+export const AUTH_BASE_URL = process.env.SHOFER_AUTH_BASE_URL ?? "https://app.shofer.dev"
 
-export const SDK_BASE_URL = process.env.SHOFER_SDK_BASE_URL ?? "https://cloud-api.shofer.com"
+export const SDK_BASE_URL = process.env.SHOFER_SDK_BASE_URL ?? "https://cloud-api.shofer.dev"

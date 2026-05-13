@@ -2426,7 +2426,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Removing or merging it would destroy this metadata, causing all condensed
 					// messages to become "orphaned" and restored to active status — effectively
 					// undoing the condensation and sending the full history to the API.
-					// See: https://github.com/alsterg/shofer.dev/issues/11487
+					// See: https://github.com/shofer-dev/shofer/issues/11487
 					modifiedApiConversationHistory = [...existingApiConversationHistory]
 					modifiedOldUserContent = []
 				} else if (lastMessage.role === "assistant") {

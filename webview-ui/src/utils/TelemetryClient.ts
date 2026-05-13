@@ -33,7 +33,7 @@ class TelemetryClient {
 			TelemetryClient.telemetryEnabled = true
 
 			posthog.init(apiKey, {
-				api_host: "https://ph.shofer.com",
+				api_host: "https://ph.shofer.dev",
 				ui_host: "https://us.posthog.com",
 				persistence: "localStorage",
 				loaded: () => posthog.identify(distinctId),

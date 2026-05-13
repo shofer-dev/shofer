@@ -65,7 +65,7 @@ Shofer 适应您的工作方式，而不是相反：
 - 调试模式：跟踪问题、添加日志、隔离根本原因
 - 自定义模式：为您的团队或工作流程构建专门的模式
 
-了解更多：[使用模式](https://docs.shofer.com/basic-usage/using-modes) • [自定义模式](https://docs.shofer.com/advanced-usage/custom-modes)
+了解更多：[使用模式](https://docs.shofer.dev/basic-usage/using-modes) • [自定义模式](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## 教程和功能视频
 
@@ -78,17 +78,17 @@ Shofer 适应您的工作方式，而不是相反：
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">更多快速教程和功能视频...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">更多快速教程和功能视频...</a>
 </p>
 
 ## 资源
 
-- **[文档](https://docs.shofer.com):** 安装、配置和掌握 Shofer 的官方指南。
+- **[文档](https://docs.shofer.dev):** 安装、配置和掌握 Shofer 的官方指南。
 - **[YouTube 频道](https://youtube.com/@shoferyt?feature=shared):** 观看教程和功能演示。
 - **[Discord 服务器](https://discord.gg/shofer):** 加入社区以获得实时帮助和讨论。
 - **[Reddit 社区](https://www.reddit.com/r/Shofer):** 分享您的经验，看看别人在构建什么。
-- **[GitHub 问题](https://github.com/alsterg/shofer.dev/issues):** 报告错误并跟踪开发。
-- **[功能请求](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法吗？与开发人员分享。
+- **[GitHub 问题](https://github.com/shofer-dev/shofer/issues):** 报告错误并跟踪开发。
+- **[功能请求](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 有想法吗？与开发人员分享。
 
 ---
 
@@ -97,7 +97,7 @@ Shofer 适应您的工作方式，而不是相反：
 1. **克隆**仓库：
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **安装依赖项**:

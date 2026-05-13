@@ -65,7 +65,7 @@
 - डीबग मोड: समस्याओं का पता लगाएं, लॉग जोड़ें, मूल कारणों को अलग करें
 - कस्टम मोड: अपनी टीम या वर्कफ़्लो के लिए विशेष मोड बनाएं
 
-और जानो: [मोड्स का इस्तेमाल](https://docs.shofer.com/basic-usage/using-modes) • [कस्टम मोड्स](https://docs.shofer.com/advanced-usage/custom-modes)
+और जानो: [मोड्स का इस्तेमाल](https://docs.shofer.dev/basic-usage/using-modes) • [कस्टम मोड्स](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## ट्यूटोरियल और फ़ीचर वीडियो
 
@@ -78,17 +78,17 @@
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">अधिक त्वरित ट्यूटोरियल और फ़ीचर वीडियो...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">अधिक त्वरित ट्यूटोरियल और फ़ीचर वीडियो...</a>
 </p>
 
 ## संसाधन
 
-- **[दस्तावेज़ीकरण](https://docs.shofer.com):** Shofer को स्थापित करने, कॉन्फ़िगर करने और उसमें महारत हासिल करने के लिए आधिकारिक गाइड।
+- **[दस्तावेज़ीकरण](https://docs.shofer.dev):** Shofer को स्थापित करने, कॉन्फ़िगर करने और उसमें महारत हासिल करने के लिए आधिकारिक गाइड।
 - **[यूट्यूब चैनल](https://youtube.com/@shoferyt?feature=shared):** ट्यूटोरियल देखें और सुविधाओं को एक्शन में देखें।
 - **[डिस्कॉर्ड सर्वर](https://discord.gg/shofer):** रीयल-टाइम सहायता और चर्चा के लिए समुदाय में शामिल हों।
 - **[रेडिट समुदाय](https://www.reddit.com/r/Shofer):** अपने अनुभव साझा करें और देखें कि दूसरे क्या बना रहे हैं।
-- **[गिटहब मुद्दे](https://github.com/alsterg/shofer.dev/issues):** बग की रिपोर्ट करें और विकास को ट्रैक करें।
-- **[सुविधा अनुरोध](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** क्या आपके पास कोई विचार है? इसे डेवलपर्स के साथ साझा करें।
+- **[गिटहब मुद्दे](https://github.com/shofer-dev/shofer/issues):** बग की रिपोर्ट करें और विकास को ट्रैक करें।
+- **[सुविधा अनुरोध](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** क्या आपके पास कोई विचार है? इसे डेवलपर्स के साथ साझा करें।
 
 ---
 
@@ -97,7 +97,7 @@
 1. **क्लोन** करें रेपो:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **निर्भरताएँ स्थापित करें**:

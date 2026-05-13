@@ -355,9 +355,18 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			const message: ExtensionMessage = event.data
 			switch (message.type) {
 				case "state": {
-					const newState = message.state ?? {}
-					setState((prevState) => mergeExtensionState(prevState, newState))
-					setShowWelcome(!checkExistKey(newState.apiConfiguration))
+						const newState = message.state ?? {}
+						if (newState.apiConfiguration !== undefined) {
+							const prevProvider = state.apiConfiguration?.apiProvider
+							const nextProvider = newState.apiConfiguration?.apiProvider
+							if (prevProvider !== nextProvider) {
+								console.log(
+									`[ExtensionStateContext] state push overwriting apiProvider: "${prevProvider}" -> "${nextProvider}"`,
+								)
+							}
+						}
+						setState((prevState) => mergeExtensionState(prevState, newState))
+						setShowWelcome(!checkExistKey(newState.apiConfiguration))
 					setDidHydrateState(true)
 					// Update alwaysAllowFollowupQuestions if present in state message
 					if ((newState as any).alwaysAllowFollowupQuestions !== undefined) {
@@ -574,12 +583,19 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		}
 	}, [handleMessage])
 
+	// Only send webviewDidLaunch once on mount. Re-sending it causes the
+	// extension host to push a full state snapshot (postStateToWebview),
+	// which overwrites any unsaved local apiConfiguration edits — including
+	// provider selections made in the WelcomeView dropdown.
 	useEffect(() => {
 		vscode.postMessage({ type: "webviewDidLaunch" })
-		// Proactively request VS Code LM models so the dynamic list is
-		// available before the user opens settings or starts a chat with
-		// a vscode-lm model. Without this, vsCodeLmModels stays empty
-		// until the settings panel sends its own requestVsCodeLmModels.
+	}, [])
+
+	// Proactively request VS Code LM models so the dynamic list is
+	// available before the user opens settings or starts a chat with
+	// a vscode-lm model. Without this, vsCodeLmModels stays empty
+	// until the settings panel sends its own requestVsCodeLmModels.
+	useEffect(() => {
 		if (state.apiConfiguration?.apiProvider === "vscode-lm") {
 			vscode.postMessage({ type: "requestVsCodeLmModels" })
 		}

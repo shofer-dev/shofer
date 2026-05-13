@@ -69,7 +69,7 @@ Wspomnij o dostosowaniu do tych obszarów w swoich PR-ach.
 
 Wszystkie wkłady zaczynają się od zgłoszenia na GitHubie przy użyciu naszych uproszczonych szablonów.
 
-- **Sprawdź istniejące zgłoszenia**: Przeszukaj [zgłoszenia на GitHubie](https://github.com/alsterg/shofer.dev/issues).
+- **Sprawdź istniejące zgłoszenia**: Przeszukaj [zgłoszenia на GitHubie](https://github.com/shofer-dev/shofer/issues).
 - **Utwórz zgłoszenie**, używając:
     - **Ulepszenia:** szablon „Prośba o ulepszenie” (prosty język skoncentrowany na korzyściach dla użytkownika).
     - **Błędy:** szablon „Zgłoszenie błędu” (minimalna reprodukcja + oczekiwane a rzeczywiste + wersja).
@@ -79,16 +79,16 @@ Wszystkie wkłady zaczynają się od zgłoszenia na GitHubie przy użyciu naszyc
 ### Decydowanie, nad czym pracować
 
 - Sprawdź [projekt na GitHubie](https://github.com/orgs/shofer/projects/1) pod kątem zgłoszeń „Zgłoszenie [Nieprzypisane]”.
-- Aby uzyskać dokumentację, odwiedź [dokumentację Shofer](https://github.com/alsterg/shofer.dev-Docs).
+- Aby uzyskać dokumentację, odwiedź [dokumentację Shofer](https://github.com/shofer-dev/shofer-Docs).
 
 ### Zgłaszanie błędów
 
 - Najpierw sprawdź istniejące raporty.
-- Utwórz nowy błąd, używając szablonu [„Zgłoszenie błędu”](https://github.com/alsterg/shofer.dev/issues/new/choose) z:
+- Utwórz nowy błąd, używając szablonu [„Zgłoszenie błędu”](https://github.com/shofer-dev/shofer/issues/new/choose) z:
     - Jasnymi, ponumerowanymi krokami reprodukcji
     - Oczekiwanym a rzeczywistym wynikiem
     - Wersją Shofer (wymagane); dostawcą/modelem sztucznej inteligencji, jeśli ma to zastosowanie
-- **Problemy z bezpieczeństwem**: Zgłoś je prywatnie za pośrednictwem [zaleceń dotyczących bezpieczeństwa](https://github.com/alsterg/shofer.dev/security/advisories/new).
+- **Problemy z bezpieczeństwem**: Zgłoś je prywatnie za pośrednictwem [zaleceń dotyczących bezpieczeństwa](https://github.com/shofer-dev/shofer/security/advisories/new).
 
 ## Proces rozwoju i przesyłania
 

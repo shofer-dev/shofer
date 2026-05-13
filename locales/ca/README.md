@@ -65,7 +65,7 @@ Shofer s'adapta a la teva manera de treballar, no a l'inrevés:
 - Mode Depuració: rastrejar problemes, afegir registres, aïllar les causes arrel
 - Modes personalitzats: crea modes especialitzats per al teu equip o flux de treball
 
-Més informació: [Ús de Modes](https://docs.shofer.com/basic-usage/using-modes) • [Modes personalitzats](https://docs.shofer.com/advanced-usage/custom-modes)
+Més informació: [Ús de Modes](https://docs.shofer.dev/basic-usage/using-modes) • [Modes personalitzats](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Tutorials i vídeos de funcionalitats
 
@@ -78,17 +78,17 @@ Més informació: [Ús de Modes](https://docs.shofer.com/basic-usage/using-modes
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">Més tutorials ràpids i vídeos de funcionalitats...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">Més tutorials ràpids i vídeos de funcionalitats...</a>
 </p>
 
 ## Recursos
 
-- **[Documentació](https://docs.shofer.com):** La guia oficial per instal·lar, configurar i dominar Shofer.
+- **[Documentació](https://docs.shofer.dev):** La guia oficial per instal·lar, configurar i dominar Shofer.
 - **[Canal de YouTube](https://youtube.com/@shoferyt?feature=shared):** Mira tutorials i veu les funcionalitats en acció.
 - **[Servidor de Discord](https://discord.gg/shofer):** Uneix-te a la comunitat per obtenir ajuda i discutir en temps real.
 - **[Comunitat de Reddit](https://www.reddit.com/r/Shofer):** Comparteix les teves experiències i veu què estan construint altres.
-- **[Incidències de GitHub](https://github.com/alsterg/shofer.dev/issues):** Informa d'errors i segueix el desenvolupament.
-- **[Sol·licituds de funcionalitats](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Tens una idea? Comparteix-la amb els desenvolupadors.
+- **[Incidències de GitHub](https://github.com/shofer-dev/shofer/issues):** Informa d'errors i segueix el desenvolupament.
+- **[Sol·licituds de funcionalitats](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Tens una idea? Comparteix-la amb els desenvolupadors.
 
 ---
 
@@ -97,7 +97,7 @@ Més informació: [Ús de Modes](https://docs.shofer.com/basic-usage/using-modes
 1. **Clona** el repositori:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Instal·la les dependències**:

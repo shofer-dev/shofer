@@ -2,7 +2,7 @@
 
 /**
  * Regression tests for the issue: "Rewind after Condense is broken"
- * https://github.com/alsterg/shofer.dev/issues/8295
+ * https://github.com/shofer-dev/shofer/issues/8295
  *
  * These tests verify that when a user rewinds (deletes/truncates) their conversation
  * after a condense operation, the orphaned condensed messages are properly reactivated

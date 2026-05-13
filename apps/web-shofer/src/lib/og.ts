@@ -5,7 +5,7 @@
  * @returns Absolute URL to the dynamic OG image endpoint
  */
 export function ogImageUrl(title: string, description?: string): string {
-	const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://shofer.com"
+	const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://shofer.dev"
 	const params = new URLSearchParams()
 
 	params.set("title", title)

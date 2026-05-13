@@ -65,7 +65,7 @@ Shoferは、あなたの働き方に合わせるように適応します。
 - デバッグモード：問題の追跡、ログの追加、根本原因の特定
 - カスタムモード：チームやワークフローに特化したモードの構築
 
-詳しくは: [モードの使い方](https://docs.shofer.com/basic-usage/using-modes) • [カスタムモード](https://docs.shofer.com/advanced-usage/custom-modes)
+詳しくは: [モードの使い方](https://docs.shofer.dev/basic-usage/using-modes) • [カスタムモード](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## チュートリアルと機能のビデオ
 
@@ -78,17 +78,17 @@ Shoferは、あなたの働き方に合わせるように適応します。
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">その他のクイックチュートリアルと機能のビデオ...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">その他のクイックチュートリアルと機能のビデオ...</a>
 </p>
 
 ## リソース
 
-- **[ドキュメント](https://docs.shofer.com):** Shoferのインストール、設定、習熟のための公式ガイド。
+- **[ドキュメント](https://docs.shofer.dev):** Shoferのインストール、設定、習熟のための公式ガイド。
 - **[YouTubeチャンネル](https://youtube.com/@shoferyt?feature=shared):** チュートリアルを見て、実際の機能を確認できます。
 - **[Discordサーバー](https://discord.gg/shofer):** コミュニティに参加して、リアルタイムのヘルプやディスカッションに参加できます。
 - **[Redditコミュニティ](https://www.reddit.com/r/Shofer):** あなたの経験を共有し、他の人が何を構築しているかを見ることができます。
-- **[GitHub Issues](https://github.com/alsterg/shofer.dev/issues):** バグを報告し、開発を追跡します。
-- **[機能リクエスト](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** アイデアがありますか？開発者と共有してください。
+- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues):** バグを報告し、開発を追跡します。
+- **[機能リクエスト](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** アイデアがありますか？開発者と共有してください。
 
 ---
 
@@ -97,7 +97,7 @@ Shoferは、あなたの働き方に合わせるように適応します。
 1. **リポジトリをクローンする**:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **依存関係をインストールする**:

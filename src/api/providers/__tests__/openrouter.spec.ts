@@ -100,7 +100,7 @@ describe("OpenRouterHandler", () => {
 			baseURL: "https://openrouter.ai/api/v1",
 			apiKey: mockOptions.openRouterApiKey,
 			defaultHeaders: {
-				"HTTP-Referer": "https://github.com/alsterg/shofer.dev",
+				"HTTP-Referer": "https://github.com/shofer-dev/shofer",
 				"X-Title": "Shofer",
 				"User-Agent": `Shofer/${Package.version}`,
 			},

@@ -90,7 +90,7 @@ describe("About", () => {
 			</TranslationProvider>,
 		)
 		expect(screen.getByText("settings:about.contact.label")).toBeInTheDocument()
-		expect(screen.getByText("support@shofer.com")).toBeInTheDocument()
+		expect(screen.getByText("support@shofer.dev")).toBeInTheDocument()
 	})
 
 	it("renders export, import, and reset buttons", () => {

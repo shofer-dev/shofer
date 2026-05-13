@@ -165,11 +165,11 @@ export default function CookiePolicy() {
 					<p>
 						Our blog at{" "}
 						<a
-							href="https://blog.shofer.com"
+							href="https://blog.shofer.dev"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-primary hover:underline">
-							blog.shofer.com
+							blog.shofer.dev
 						</a>{" "}
 						is hosted on Substack. When you visit it, Substack may set cookies for analytics,
 						personalization, and advertising/marketing. These cookies are managed directly by Substack and
@@ -209,8 +209,8 @@ export default function CookiePolicy() {
 					<h2 className="mt-12 text-2xl font-bold">Contact us</h2>
 					<p>
 						If you have questions about our use of cookies, please contact us at{" "}
-						<a href="mailto:privacy@shofer.com" className="text-primary hover:underline">
-							privacy@shofer.com
+						<a href="mailto:privacy@shofer.dev" className="text-primary hover:underline">
+							privacy@shofer.dev
 						</a>
 						.
 					</p>

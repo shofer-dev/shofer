@@ -65,7 +65,7 @@ Shofer adapts to how you work:
 - Debug Mode: trace issues, add logs, isolate root causes
 - Custom Modes: build specialized modes for your team or workflow
 
-Learn more: [Using Modes](https://docs.shofer.com/basic-usage/using-modes) • [Custom Modes](https://docs.shofer.com/advanced-usage/custom-modes)
+Learn more: [Using Modes](https://docs.shofer.dev/basic-usage/using-modes) • [Custom Modes](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Tutorial & Feature Videos
 
@@ -78,17 +78,17 @@ Learn more: [Using Modes](https://docs.shofer.com/basic-usage/using-modes) • [
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">More quick tutorial and feature videos...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">More quick tutorial and feature videos...</a>
 </p>
 
 ## Resources
 
-- **[Documentation](https://docs.shofer.com):** The official guide to installing, configuring, and mastering Shofer.
+- **[Documentation](https://docs.shofer.dev):** The official guide to installing, configuring, and mastering Shofer.
 - **[YouTube Channel](https://youtube.com/@shoferyt?feature=shared):** Watch tutorials and see features in action.
 - **[Discord Server](https://discord.gg/shofer):** Join the community for real-time help and discussion.
 - **[Reddit Community](https://www.reddit.com/r/Shofer):** Share your experiences and see what others are building.
-- **[GitHub Issues](https://github.com/alsterg/shofer.dev/issues):** Report bugs and track development.
-- **[Feature Requests](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Have an idea? Share it with the developers.
+- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues):** Report bugs and track development.
+- **[Feature Requests](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Have an idea? Share it with the developers.
 
 ---
 
@@ -97,7 +97,7 @@ Learn more: [Using Modes](https://docs.shofer.com/basic-usage/using-modes) • [
 1. **Clone** the repo:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Install dependencies**:

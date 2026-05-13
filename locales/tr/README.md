@@ -65,7 +65,7 @@ Shofer, sizin çalışma şeklinize uyum sağlar, tam tersi değil:
 - Hata Ayıklama Modu: sorunları izleyin, günlükler ekleyin, kök nedenleri izole edin
 - Özel Modlar: ekibiniz veya iş akışınız için özel modlar oluşturun
 
-Daha fazla: [Modları kullanma](https://docs.shofer.com/basic-usage/using-modes) • [Özel modlar](https://docs.shofer.com/advanced-usage/custom-modes)
+Daha fazla: [Modları kullanma](https://docs.shofer.dev/basic-usage/using-modes) • [Özel modlar](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## Eğitim ve Özellik Videoları
 
@@ -78,17 +78,17 @@ Daha fazla: [Modları kullanma](https://docs.shofer.com/basic-usage/using-modes)
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">Daha fazla hızlı eğitim ve özellik videosu...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">Daha fazla hızlı eğitim ve özellik videosu...</a>
 </p>
 
 ## Kaynaklar
 
-- **[Dokümantasyon](https://docs.shofer.com):** Shofer'u yükleme, yapılandırma ve ustalaşma konusundaki resmi kılavuz.
+- **[Dokümantasyon](https://docs.shofer.dev):** Shofer'u yükleme, yapılandırma ve ustalaşma konusundaki resmi kılavuz.
 - **[YouTube Kanalı](https://youtube.com/@shoferyt?feature=shared):** Eğitimleri izleyin ve özellikleri çalışırken görün.
 - **[Discord Sunucusu](https://discord.gg/shofer):** Gerçek zamanlı yardım ve tartışma için topluluğa katılın.
 - **[Reddit Topluluğu](https://www.reddit.com/r/Shofer):** Deneyimlerinizi paylaşın ve başkalarının ne inşa ettiğini görün.
-- **[GitHub Sorunları](https://github.com/alsterg/shofer.dev/issues):** Hataları bildirin ve gelişimi takip edin.
-- **[Özellik İstekleri](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Bir fikriniz mi var? Geliştiricilerle paylaşın.
+- **[GitHub Sorunları](https://github.com/shofer-dev/shofer/issues):** Hataları bildirin ve gelişimi takip edin.
+- **[Özellik İstekleri](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Bir fikriniz mi var? Geliştiricilerle paylaşın.
 
 ---
 
@@ -97,7 +97,7 @@ Daha fazla: [Modları kullanma](https://docs.shofer.com/basic-usage/using-modes)
 1. **Depoyu klonlayın**:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **Bağımlılıkları yükleyin**:

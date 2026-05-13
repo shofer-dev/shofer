@@ -65,7 +65,7 @@ Shofer는 당신의 작업 방식에 맞춰 적응합니다.
 - 디버그 모드: 문제 추적, 로그 추가, 근본 원인 격리
 - 사용자 지정 모드: 팀이나 워크플로우를 위한 특수 모드 구축
 
-자세히: [모드 사용](https://docs.shofer.com/basic-usage/using-modes) • [사용자 지정 모드](https://docs.shofer.com/advanced-usage/custom-modes)
+자세히: [모드 사용](https://docs.shofer.dev/basic-usage/using-modes) • [사용자 지정 모드](https://docs.shofer.dev/advanced-usage/custom-modes)
 
 ## 튜토리얼 및 기능 비디오
 
@@ -78,17 +78,17 @@ Shofer는 당신의 작업 방식에 맞춰 적응합니다.
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.com/tutorial-videos">더 많은 빠른 튜토리얼 및 기능 비디오...</a>
+<a href="https://docs.shofer.dev/tutorial-videos">더 많은 빠른 튜토리얼 및 기능 비디오...</a>
 </p>
 
 ## 리소스
 
-- **[문서](https://docs.shofer.com):** Shofer 설치, 구성 및 마스터하기 위한 공식 가이드.
+- **[문서](https://docs.shofer.dev):** Shofer 설치, 구성 및 마스터하기 위한 공식 가이드.
 - **[YouTube 채널](https://youtube.com/@shoferyt?feature=shared):** 튜토리얼을 시청하고 실제 기능을 확인하세요.
 - **[Discord 서버](https://discord.gg/shofer):** 커뮤니티에 가입하여 실시간 도움과 토론에 참여하세요.
 - **[Reddit 커뮤니티](https://www.reddit.com/r/Shofer):** 경험을 공유하고 다른 사람들이 무엇을 만들고 있는지 확인하세요.
-- **[GitHub 문제](https://github.com/alsterg/shofer.dev/issues):** 버그를 보고하고 개발을 추적하세요.
-- **[기능 요청](https://github.com/alsterg/shofer.dev/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 아이디어가 있으신가요? 개발자들과 공유하세요.
+- **[GitHub 문제](https://github.com/shofer-dev/shofer/issues):** 버그를 보고하고 개발을 추적하세요.
+- **[기능 요청](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** 아이디어가 있으신가요? 개발자들과 공유하세요.
 
 ---
 
@@ -97,7 +97,7 @@ Shofer는 당신의 작업 방식에 맞춰 적응합니다.
 1. **리포지토리 복제**:
 
 ```sh
-git clone https://github.com/alsterg/shofer.dev.git
+git clone https://github.com/shofer-dev/shofer.git
 ```
 
 2. **의존성 설치**:

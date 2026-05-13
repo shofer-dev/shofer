@@ -12,7 +12,7 @@ export const ShoferBalanceDisplay = () => {
 	}
 
 	const formattedBalance = balance.toFixed(2)
-	const billingUrl = cloudApiUrl ? `${cloudApiUrl.replace(/\/$/, "")}/billing` : "https://app.shofer.com/billing"
+	const billingUrl = cloudApiUrl ? `${cloudApiUrl.replace(/\/$/, "")}/billing` : "https://app.shofer.dev/billing"
 
 	return (
 		<VSCodeLink href={billingUrl} className="text-vscode-foreground hover:underline whitespace-nowrap">

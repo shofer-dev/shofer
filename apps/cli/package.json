@@ -16,7 +16,7 @@
 		"test:integration": "tsx scripts/integration/run.ts",
 		"build": "tsup",
 		"build:extension": "pnpm --filter shofer bundle",
-		"dev": "SHOFER_AUTH_BASE_URL=https://app.shofer.com SHOFER_SDK_BASE_URL=https://cloud-api.shofer.com SHOFER_PROVIDER_URL=https://api.shofer.com/proxy tsx src/index.ts",
+		"dev": "SHOFER_AUTH_BASE_URL=https://app.shofer.dev SHOFER_SDK_BASE_URL=https://cloud-api.shofer.dev SHOFER_PROVIDER_URL=https://api.shofer.dev/proxy tsx src/index.ts",
 		"dev:local": "SHOFER_AUTH_BASE_URL=http://localhost:3000 SHOFER_SDK_BASE_URL=http://localhost:3001 SHOFER_PROVIDER_URL=http://localhost:8080/proxy tsx src/index.ts",
 		"clean": "rimraf dist .turbo"
 	},

@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thank you for your report! Please search existing issues first:
-        https://github.com/alsterg/shofer.dev/issues
+        https://github.com/shofer-dev/shofer/issues
 
   - type: textarea
     id: problem
