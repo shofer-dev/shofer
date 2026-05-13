@@ -5556,6 +5556,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Replace the task-lifetime abort controller so the fresh run does
 		// not see the already-aborted signal from the cancellation above.
 		this._taskAbortController = new AbortController()
+		// Add the queued message to the chat UI so the user can see it.
+		// Without this, the message would be sent to the LLM but never
+		// appear in the chat — the user's "Send Now" action would seem to
+		// silently lose their message from the UI perspective.
+		await this.say("user_feedback", queued.text, queued.images)
+
 		// Start a new task loop with the queued message.
 		// Wrap in <user_message> so that processUserContentMentions /
 		// parseMentions can resolve slash-style skill mentions and track
