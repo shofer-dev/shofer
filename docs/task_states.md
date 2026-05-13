@@ -24,6 +24,18 @@ fallback                     → "idle"        (grey circle)
 - `HistoryItem.taskExecutionState` is written through by `TaskManager.updateTaskExecutionState` on every state transition (running, idle, paused, waiting_input, error). The runtime overlay stays authoritative for live UI; the persisted value is only consulted when the runtime is gone.
 - On restore (`TaskManager.restoreManagedTasks`), `running` and `waiting_input` are sanitized to `idle` because no live Task instance can exist after a restart. `error` and `paused` are preserved. Items with `status === "completed"` are also restored as `idle` so the green check (resolved from `status`) wins.
 
+## Edge Cases
+
+### Stopped/completed task showing as "running" after re-focus
+
+When a task is stopped (via Stop button) or completes naturally, `TaskManager` updates its `ManagedTask.state` to `"idle"` or `"paused"`. However, if the user later clicks the task in the TaskSelector to re-focus it, `ShoferProvider.focusTask` takes the "dead instance" path:
+
+1. Calls `removeManagedTaskInstance(taskId)` — removes the Task from `activeTasks` but leaves the `ManagedTask` in `managedTasks` with its terminal state.
+2. Calls `showTaskWithId(taskId)` — creates a **fresh** Task instance from history (with `abandoned=false`, `abort=false`).
+3. Calls `registerBackgroundTask(resumedTask)` — which previously **overwrote** the `ManagedTask` unconditionally with `state = "running"` (because the new Task was neither abandoned nor aborted).
+
+**Fix**: [`TaskManager.registerBackgroundTask`](../src/services/task-manager/TaskManager.ts) now checks whether a `ManagedTask` already exists for the task ID. If so, it preserves the existing `state`, `name`, and `createdAt` fields rather than resetting to `"running"`. Additionally, if the task is already in `activeTasks`, the old listeners are cleaned up and the new Task instance is swapped in without changing the state.
+
 ## State Icons
 
 | State           | Icon                           | Color                                   | Description                                                   |

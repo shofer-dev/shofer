@@ -139,10 +139,19 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 * @param name Optional name (falls back to task text or generic name)
 	 */
 	registerBackgroundTask(task: Task, name?: string): void {
-		if (this.activeTasks.has(task.taskId)) {
-			// Already registered
+		const existingActive = this.activeTasks.get(task.taskId)
+		if (existingActive) {
+			// Already registered — update the Task instance but keep the state.
+			this.cleanupTaskEventListeners(existingActive)
+			this.activeTasks.set(task.taskId, task)
+			this.setupManagedTaskEventListeners(task)
 			return
 		}
+
+		// Check whether a managedTask already exists (e.g. surviving from
+		// a previous stop/clear); preserve its state so the TaskSelector
+		// doesn't flip back to "running" after a re-focus.
+		const existing = this.managedTasks.get(task.taskId)
 
 		const taskText = task.shoferMessages.find((m) => m.type === "say" && m.say === "text")?.text || ""
 		const autoName =
@@ -150,12 +159,12 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		const managedTask: ManagedTask = {
 			id: task.taskId,
-			name: autoName,
+			name: existing?.name ?? autoName,
 			taskId: task.taskId,
 			workspace: task.cwd || "",
-			createdAt: Date.now(),
+			createdAt: existing?.createdAt ?? Date.now(),
 			lastActiveAt: Date.now(),
-			state: task.abandoned || task.abort ? "idle" : "running",
+			state: existing?.state ?? (task.abandoned || task.abort ? "idle" : "running"),
 		}
 
 		this.managedTasks.set(managedTask.id, managedTask)
