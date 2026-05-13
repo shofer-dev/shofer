@@ -2,7 +2,7 @@
 	"name": "shofer",
 	"displayName": "Shofer",
 	"description": "%extension.description%",
-	"publisher": "shofer",
+	"publisher": "shofer-dev",
 	"version": "0.2.2",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
@@ -69,12 +69,6 @@
 					"type": "webview",
 					"id": "shofer.SidebarProvider",
 					"name": "%views.sidebar.name%"
-				},
-				{
-					"type": "tree",
-					"id": "shofer.contextDropZone",
-					"name": "%views.dropZone.name%",
-					"initialSize": 1
 				}
 			]
 		},
