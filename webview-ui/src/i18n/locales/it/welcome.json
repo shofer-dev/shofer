@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Benvenuto in Shofer!",
 		"introduction": "Con una gamma di Modalità integrate ed estensibili, Shofer ti permette di pianificare, architettare, codificare, debuggare e aumentare la tua produttività come mai prima d'ora.",
-		"accountMention": "Per iniziare, crea il tuo account Shofer Cloud. Ottieni modelli potenti, controllo web, analitiche, supporto e altro ancora.",
-		"getStarted": "Crea account Shofer",
-		"noAccount": "o usa senza account"
+		"getStarted": "Inizia"
 	},
 	"providerSignup": {
 		"heading": "Scegli il tuo provider",

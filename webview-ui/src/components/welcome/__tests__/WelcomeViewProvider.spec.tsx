@@ -128,52 +128,26 @@ describe("WelcomeViewProvider", () => {
 			// Should show introduction
 			expect(screen.getByTestId("trans-welcome:landing.introduction")).toBeInTheDocument()
 
-			// Should show account mention
-			expect(screen.getByTestId("trans-welcome:landing.accountMention")).toBeInTheDocument()
-
 			// Should show "Get Started" button
 			expect(screen.getByTestId("button-primary")).toBeInTheDocument()
 
-			// Should show "no account" link
-			const noAccountLink = screen
-				.getAllByTestId("vscode-link")
-				.find((link) => link.textContent?.includes("welcome:landing.noAccount"))
-			expect(noAccountLink).toBeInTheDocument()
+			// Should NOT show account mention (cloud feature removed)
+			expect(screen.queryByTestId("trans-welcome:landing.accountMention")).not.toBeInTheDocument()
+
+			// Should NOT show "no account" link (cloud feature removed)
+			const links = screen.queryAllByTestId("vscode-link")
+			const noAccountLink = links.find((link) => link.textContent?.includes("welcome:landing.noAccount"))
+			expect(noAccountLink).toBeUndefined()
 		})
 
-		it("triggers auth when 'Get Started' is clicked on landing", () => {
+		it("navigates to provider selection when 'Get Started' is clicked (no auth trigger)", () => {
 			renderWelcomeViewProvider()
 
 			const getStartedButton = screen.getByTestId("button-primary")
 			fireEvent.click(getStartedButton)
 
-			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "shoferCloudSignIn",
-				useProviderSignup: true,
-			})
-		})
-
-		it("shows auth in progress after clicking 'Get Started' on landing", () => {
-			renderWelcomeViewProvider()
-
-			const getStartedButton = screen.getByTestId("button-primary")
-			fireEvent.click(getStartedButton)
-
-			// Should show progress ring
-			expect(screen.getByTestId("progress-ring")).toBeInTheDocument()
-
-			// Should show waiting heading
-			expect(screen.getByText(/welcome:waitingForCloud.heading/)).toBeInTheDocument()
-		})
-
-		it("navigates to provider selection when 'no account' is clicked", () => {
-			renderWelcomeViewProvider()
-
-			// Click the "no account" link
-			const noAccountLink = screen
-				.getAllByTestId("vscode-link")
-				.find((link) => link.textContent?.includes("welcome:landing.noAccount"))
-			fireEvent.click(noAccountLink!)
+			// Should NOT trigger cloud auth from landing
+			expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "shoferCloudSignIn" }))
 
 			// Should now show provider selection screen with radio buttons
 			expect(screen.getByTestId("radio-group")).toBeInTheDocument()
@@ -185,10 +159,8 @@ describe("WelcomeViewProvider", () => {
 
 	describe("Provider Selection Screen", () => {
 		const navigateToProviderSelection = () => {
-			const noAccountLink = screen
-				.getAllByTestId("vscode-link")
-				.find((link) => link.textContent?.includes("welcome:landing.noAccount"))
-			fireEvent.click(noAccountLink!)
+			const getStartedButton = screen.getByTestId("button-primary")
+			fireEvent.click(getStartedButton)
 		}
 
 		it("shows radio buttons for Shofer and Custom providers", () => {
@@ -276,10 +248,15 @@ describe("WelcomeViewProvider", () => {
 
 	describe("Auth In Progress State", () => {
 		it("shows waiting state with progress ring", () => {
-			renderWelcomeViewProvider()
+			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
 
-			const getStartedButton = screen.getByTestId("button-primary")
-			fireEvent.click(getStartedButton)
+			// Navigate to provider selection, then trigger auth
+			const landingGetStarted = screen.getByTestId("button-primary")
+			fireEvent.click(landingGetStarted)
+
+			// Now on provider selection - click Get Started to trigger auth
+			const providerGetStarted = screen.getByTestId("button-primary")
+			fireEvent.click(providerGetStarted)
 
 			// Should show progress ring
 			expect(screen.getByTestId("progress-ring")).toBeInTheDocument()
@@ -287,53 +264,34 @@ describe("WelcomeViewProvider", () => {
 			// Should show waiting heading
 			expect(screen.getByText(/welcome:waitingForCloud.heading/)).toBeInTheDocument()
 
-			// Should show description (it's rendered via t() not Trans)
+			// Should show description
 			expect(screen.getByText(/welcome:waitingForCloud.description/)).toBeInTheDocument()
 		})
 
 		it("shows Go Back button in waiting state", () => {
-			renderWelcomeViewProvider()
+			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
 
-			const getStartedButton = screen.getByTestId("button-primary")
-			fireEvent.click(getStartedButton)
+			// Navigate to provider selection, then trigger auth
+			const landingGetStarted = screen.getByTestId("button-primary")
+			fireEvent.click(landingGetStarted)
+
+			const providerGetStarted = screen.getByTestId("button-primary")
+			fireEvent.click(providerGetStarted)
 
 			// Should show secondary button (Go Back)
 			expect(screen.getByTestId("button-secondary")).toBeInTheDocument()
 			expect(screen.getByText(/welcome:waitingForCloud.goBack/)).toBeInTheDocument()
 		})
 
-		it("returns to landing screen when Go Back is clicked (auth from landing)", () => {
-			renderWelcomeViewProvider()
-
-			// Start auth from landing
-			const getStartedButton = screen.getByTestId("button-primary")
-			fireEvent.click(getStartedButton)
-
-			// Verify we're in auth progress
-			expect(screen.getByTestId("progress-ring")).toBeInTheDocument()
-
-			// Click Go Back
-			const goBackButton = screen.getByTestId("button-secondary")
-			fireEvent.click(goBackButton)
-
-			// Should be back on landing screen
-			expect(screen.getByText(/welcome:landing.greeting/)).toBeInTheDocument()
-			expect(screen.getByTestId("trans-welcome:landing.introduction")).toBeInTheDocument()
-			expect(screen.queryByTestId("progress-ring")).not.toBeInTheDocument()
-		})
-
-		it("returns to provider selection when Go Back is clicked (auth from provider selection)", () => {
+		it("returns to provider selection when Go Back is clicked", () => {
 			renderWelcomeViewProvider({ cloudIsAuthenticated: false })
 
-			// Navigate to provider selection
-			const noAccountLink = screen
-				.getAllByTestId("vscode-link")
-				.find((link) => link.textContent?.includes("welcome:landing.noAccount"))
-			fireEvent.click(noAccountLink!)
+			// Navigate to provider selection, then trigger auth
+			const landingGetStarted = screen.getByTestId("button-primary")
+			fireEvent.click(landingGetStarted)
 
-			// Start auth from provider selection (Shofer is selected by default)
-			const getStartedButton = screen.getByTestId("button-primary")
-			fireEvent.click(getStartedButton)
+			const providerGetStarted = screen.getByTestId("button-primary")
+			fireEvent.click(providerGetStarted)
 
 			// Verify we're in auth progress
 			expect(screen.getByTestId("progress-ring")).toBeInTheDocument()

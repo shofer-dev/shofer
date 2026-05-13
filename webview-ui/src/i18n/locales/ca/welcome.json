@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Benvingut a Shofer!",
 		"introduction": "Amb una gamma de Modes integrats i ampliables, Shofer et permet planificar, arquitectar, codificar, depurar i augmentar la teva productivitat com mai abans.",
-		"accountMention": "Per començar, crea el teu compte Shofer Cloud. Obtén models potents, control web, analítica, suport i molt més.",
-		"getStarted": "Crea compte Shofer",
-		"noAccount": "o utilitza sense compte"
+		"getStarted": "Comença"
 	},
 	"providerSignup": {
 		"heading": "Tria el teu proveïdor",

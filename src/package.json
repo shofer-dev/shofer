@@ -1,9 +1,9 @@
 {
-	"name": "dev",
+	"name": "shofer",
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",

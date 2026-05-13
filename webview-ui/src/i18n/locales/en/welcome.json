@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Welcome to Shofer!",
 		"introduction": "With a range of built-in and extensible Modes, Shofer lets you plan, architect, code, debug and boost your productivity like never before.",
-		"accountMention": "To get started, create your Shofer Cloud account. Get powerful models, web control, analytics, support and more.",
-		"getStarted": "Create Shofer Account",
-		"noAccount": "or use without an account"
+		"getStarted": "Get Started"
 	},
 	"providerSignup": {
 		"heading": "Choose your provider",

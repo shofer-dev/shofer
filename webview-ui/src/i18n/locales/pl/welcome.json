@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Witaj w Shofer!",
 		"introduction": "Dzięki szerokiej gamie wbudowanych i rozszerzalnych Trybów, Shofer pozwala planować, projektować architekturę, kodować, debugować i zwiększać produktywność jak nigdy dotąd.",
-		"accountMention": "Aby rozpocząć, utwórz konto Shofer Cloud. Otrzymaj potężne modele, kontrolę internetową, analizę, wsparcie i wiele więcej.",
-		"getStarted": "Utwórz konto Shofer",
-		"noAccount": "lub używaj bez konta"
+		"getStarted": "Rozpocznij"
 	},
 	"providerSignup": {
 		"heading": "Wybierz swojego dostawcę",
