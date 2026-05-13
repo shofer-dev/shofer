@@ -273,41 +273,37 @@ export async function restoreAll(task: Task): Promise<void> {
 }
 
 /**
- * Accepts the current state of a file as the new baseline.
- * Reads the current on-disk content and promotes it to the new original
- * baseline. After accept, the file disappears from the change panel
- * since it matches the updated baseline.
+ * Accepts the current on-disk state of a file as the new baseline.
+ * Promotes the current disk content to `base/<relPath>` and updates the
+ * originals hash so the file disappears from the change panel.
  *
- * Falls back gracefully: if a final snapshot exists it is used as the
- * source of truth; otherwise the current disk content is read directly.
+ * Always reads the current on-disk content — NOT the final snapshot —
+ * because the final snapshot represents Shofer's last produced state, which
+ * may have been subsequently modified by user edits, language-server
+ * formatting, or auto-save. Using the final snapshot when disk has diverged
+ * causes a hash mismatch in `getChangedFiles`, keeping the file in the
+ * panel and requiring a second Accept click (which then falls back to disk
+ * because the final snapshot was cleared by the first attempt).
+ *
  * The final snapshot (if any) is always cleared after promotion so Redo
  * cannot re-apply stale state.
  */
 export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	const posix = toPosix(relPath)
 
-	// Resolve accepted content: prefer the final snapshot (last Shofer-produced
-	// state), fall back to current on-disk content when the snapshot is missing.
-	let content: string | undefined
-	const snap = await task.fileContextTracker.getFinalSnapshot(posix)
-	if (snap) {
-		content = snap.kind === "text" ? await task.fileContextTracker.getFinalContent(posix) : undefined
-	} else {
-		// The final snapshot may be missing if captureFinal failed silently
-		// (e.g. workspace folder not available during a rapid edit).
-		// Fall back to current disk content so accept still works.
-		content = await readDiskText(task.cwd, posix)
-		console.warn(
-			`[ChangedFilesService] acceptFile(${posix}): no final snapshot — falling back to current disk content`,
-		)
-	}
+	// Always read current on-disk content as the new baseline.  The final
+	// snapshot can be stale — Shofer's last write might have been followed
+	// by user edits, auto-save, or formatter runs.  Accepting the disk
+	// state guarantees the new baseline hash matches reality and the entry
+	// disappears from the panel on the first click.
+	const content = await readDiskText(task.cwd, posix)
 
 	await task.fileContextTracker.overwriteOriginalBase(posix, content)
 	// Clear the final snapshot so the file disappears from the panel
 	// (it now matches the updated baseline and there's nothing to redo).
 	await task.fileContextTracker.removeFinalSnapshot(posix)
 	console.log(
-		`[ChangedFilesService] acceptFile(${posix}): promoted ${snap ? "final → " : "disk → "}base, kind=${snap?.kind ?? "disk"}`,
+		`[ChangedFilesService] acceptFile(${posix}): promoted disk → base, kind=${content !== undefined ? "text" : "absent"}`,
 	)
 }
 

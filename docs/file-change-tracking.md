@@ -110,15 +110,15 @@ acceptAll(task): Promise<void>
 
 ### Operation primitives
 
-| Operation            | Mechanism                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `getChangedFiles`    | Hash disk content vs. `base/` copy; compute unified diff for insertions/deletions                                         |
-| `getOriginalContent` | Read `base/<relPath>` (returns "" for absent, null for missing)                                                           |
-| `getFinalContent`    | Read `final/<relPath>`                                                                                                    |
-| `restoreFile`        | Copy `base/<relPath>` → workspace (or delete if absent)                                                                   |
-| `restoreAll`         | Iterate `restoreFile` over all candidates                                                                                 |
-| `acceptFile`         | Copy `final/<relPath>` → `base/<relPath>`, update originals hash, then `removeFinalSnapshot` — file disappears from panel |
-| `acceptAll`          | Iterate `acceptFile` over all candidates                                                                                  |
+| Operation            | Mechanism                                                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `getChangedFiles`    | Hash disk content vs. `base/` copy; compute unified diff for insertions/deletions                                            |
+| `getOriginalContent` | Read `base/<relPath>` (returns "" for absent, null for missing)                                                              |
+| `getFinalContent`    | Read `final/<relPath>`                                                                                                       |
+| `restoreFile`        | Copy `base/<relPath>` → workspace (or delete if absent)                                                                      |
+| `restoreAll`         | Iterate `restoreFile` over all candidates                                                                                    |
+| `acceptFile`         | Read current disk content → `base/<relPath>`, update originals hash, then `removeFinalSnapshot` — file disappears from panel |
+| `acceptAll`          | Iterate `acceptFile` over all candidates                                                                                     |
 
 ### Backend selection
 
@@ -177,26 +177,26 @@ without `captureOriginal` will appear in the panel but diff won't work.
 
 ### Fully tracked (both `captureOriginal` + `trackFileContext("shofer_edited")`)
 
-| Tool | Mechanism |
-|---|---|
+| Tool                                                                                                                      | Mechanism                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`apply_diff`](../src/core/tools/ApplyDiffTool.ts), `write_to_file`, `edit`, `edit_file`, `apply_patch`, `search_replace` | Via [`DiffViewProvider`](../src/integrations/editor/DiffViewProvider.ts) — `open()` captures original before mutation, `saveDirectly()` when `preventFocusDisruption` is enabled |
-| [`file`](../src/core/tools/FileTool.ts) (`rm`/`mv`) | Manual — captures originals for source (and destination for `mv`), then `trackFileContext("shofer_edited")` for each path |
-| [`insert_edit`](../src/core/tools/InsertEditTool.ts) | Manual — reads file content for `captureOriginal`, then `trackFileContext("shofer_edited")` after `WorkspaceEdit` |
-| [`sed`](../src/core/tools/SedTool.ts) | Manual — reads file before regex replacement for `captureOriginal`, then `trackFileContext("shofer_edited")` after write |
-| [`rename_symbol`](../src/core/tools/RenameSymbolTool.ts) | Manual — reads each LSP-affected file for `captureOriginal` before rename, then `trackFileContext("shofer_edited")` after |
+| [`file`](../src/core/tools/FileTool.ts) (`rm`/`mv`)                                                                       | Manual — captures originals for source (and destination for `mv`), then `trackFileContext("shofer_edited")` for each path                                                        |
+| [`insert_edit`](../src/core/tools/InsertEditTool.ts)                                                                      | Manual — reads file content for `captureOriginal`, then `trackFileContext("shofer_edited")` after `WorkspaceEdit`                                                                |
+| [`sed`](../src/core/tools/SedTool.ts)                                                                                     | Manual — reads file before regex replacement for `captureOriginal`, then `trackFileContext("shofer_edited")` after write                                                         |
+| [`rename_symbol`](../src/core/tools/RenameSymbolTool.ts)                                                                  | Manual — reads each LSP-affected file for `captureOriginal` before rename, then `trackFileContext("shofer_edited")` after                                                        |
 
 ### Partial (tracks final but not original — diff won't work)
 
-| Tool | Gap |
-|---|---|
+| Tool                                                       | Gap                                                                                                                              |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | [`generate_image`](../src/core/tools/GenerateImageTool.ts) | Calls `trackFileContext("shofer_edited")` but no `captureOriginal` — appears in panel, accept/revert work, click-to-diff doesn't |
 
 ### Not tracked
 
-| Tool | Reason |
-|---|---|
+| Tool                                       | Reason                                                  |
+| ------------------------------------------ | ------------------------------------------------------- |
 | `create_directory`, `create_new_workspace` | Only create directories (not files); no content to diff |
-| `execute_command` | Arbitrary CLI commands — inherently untrackable |
+| `execute_command`                          | Arbitrary CLI commands — inherently untrackable         |
 
 ## Behaviour by feature
 
@@ -246,10 +246,17 @@ git can always serve the base.
 captured `final` content (deterministic, no patch replay) and triggers a
 push; the entry returns to `state: "modified"` (or `added`/`deleted`).
 
-**Accept.** Copies `final/<relPath>` → `base/<relPath>`, updates the
-originals hash, then calls `removeFinalSnapshot` — the file disappears
-from the panel. This is a persistent operation that promotes Shofer's changes
-as the new accepted baseline.
+**Accept.** Reads the current on-disk content and copies it to `base/<relPath>`,
+updates the originals hash, then calls `removeFinalSnapshot` — the file
+disappears from the panel. This is a persistent operation that promotes the
+current workspace state as the new accepted baseline.
+
+> **Why disk, not `final/`?** The `final/` snapshot captures Shofer's last
+> produced state, but the file may have been subsequently modified by user
+> edits, language-server formatting, or auto-save. Using the `final/` content
+> when disk has diverged causes a hash mismatch in `getChangedFiles`, keeping
+> the file in the panel and requiring a second Accept click (which then falls
+> back to disk because the final snapshot was cleared by the first attempt).
 
 **Active-task guard.** Revert/redo are blocked with a toast when
 `task.isStreaming` is true: the user must pause or cancel the task first.
@@ -258,8 +265,8 @@ as the new accepted baseline.
 
 Two header buttons next to the file count.
 
-- **Accept all** copies all finals → base and removes all final snapshots
-  (persistent).
+- **Accept all** reads current disk content for every candidate, copies it
+  to the base, and removes all final snapshots (persistent).
 - **Revert all** shows a modal confirmation. On confirm:
     - Checkpoint backend: single `service.restoreCheckpoint(baseHash)` —
       atomic, fast.
@@ -287,6 +294,8 @@ Single bidirectional channel between webview and extension host:
 **Race condition fix:** Previously, rapid Accept clicks could cause some files to remain in the panel due to race conditions between concurrent `pushChangedFilesUpdate` calls. Each Accept would trigger a state mutation and a push, but the pushes could overlap and the last one to finish (even if stale) would win, causing accepted files to reappear.
 
 **Current behavior:** `pushChangedFilesUpdate` is now serialized. If a push is in progress, further requests are queued and only the final state is sent to the webview after all mutations complete. This guarantees the panel always reflects the true post-accept state, even under rapid or concurrent Accept/AcceptAll actions.
+
+**Disk-content fix (2026-05):** `acceptFile` now always reads the current on-disk content as the new baseline, instead of preferring the `final/` snapshot. The `final/` snapshot captures Shofer's last produced state, but the file may have been subsequently modified by user edits, language-server formatting, or auto-save. Using the stale `final/` content caused a hash mismatch in `getChangedFiles`, keeping the file in the panel and requiring a second Accept click to resolve. Reading disk content directly guarantees the baseline hash matches reality and the entry disappears on the first click.
 
 **Diagnostics:** Logging was added to `acceptFile`, `acceptAll`, and `pushChangedFilesUpdate` to trace candidate counts, mutation order, and backend state for troubleshooting. If you still see files not disappearing, check the logs for the sequence of accept and update events.
 
