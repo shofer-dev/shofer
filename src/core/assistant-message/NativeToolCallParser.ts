@@ -749,7 +749,10 @@ export class NativeToolCallParser {
 						query: partialArgs.query,
 						isRegex: this.coerceOptionalBoolean(partialArgs.isRegex),
 						includePattern: partialArgs.includePattern,
+						excludePattern: partialArgs.excludePattern,
 						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
+						caseSensitive: this.coerceOptionalBoolean(partialArgs.caseSensitive),
+						wholeWord: this.coerceOptionalBoolean(partialArgs.wholeWord),
 					}
 				}
 				break
@@ -1301,8 +1304,11 @@ export class NativeToolCallParser {
 							query: args.query,
 							isRegex: this.coerceOptionalBoolean(args.isRegex),
 							includePattern: args.includePattern,
+							excludePattern: args.excludePattern,
 							maxResults: this.coerceOptionalNumber(args.maxResults),
-						} as NativeArgsFor<TName>
+							caseSensitive: this.coerceOptionalBoolean(args.caseSensitive),
+							wholeWord: this.coerceOptionalBoolean(args.wholeWord),
+						} as any as NativeArgsFor<TName>
 					}
 					break
 

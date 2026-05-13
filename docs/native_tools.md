@@ -139,14 +139,14 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 ## Search & Discovery
 
-| Tool                       | Origin | Group | Always Available | Status | Description                                       |
-| -------------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------- |
-| `search_files`             | 🔵 RC  | read  |        –         |   ✅   | Regex search across files                         |
-| `find_files`               | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                        |
-| `get_search_results`       | 🆕 WS  | read  |        –         |   ✅   | Text search with VS Code Search panel integration |
-| `list_code_usages`         | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                  |
-| `codebase_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)        |
-| `codebase_search_with_lsp` | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback             |
+| Tool                       | Origin | Group | Always Available | Status | Description                                    |
+| -------------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
+| `search_files`             | 🔵 RC  | read  |        –         |   ✅   | Regex search across files                      |
+| `find_files`               | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                     |
+| `get_search_results`       | 🆕 WS  | read  |        –         |   ✅   | Text search using VS Code's indexed search API |
+| `list_code_usages`         | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)               |
+| `codebase_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)     |
+| `codebase_search_with_lsp` | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback          |
 
 ### `search_files`
 
@@ -169,14 +169,19 @@ Find files matching a glob pattern using VS Code's `workspace.findFiles`.
 
 ### `get_search_results`
 
-Text search with VS Code Search panel integration and fallback to manual scan.
+Text search using VS Code's indexed `workspace.findTextInFiles` API for fast searches. Falls back to manual file scanning when the API is unavailable. Does not modify any UI.
 
-| Param            | Type            | Required | Description                     |
-| ---------------- | --------------- | :------: | ------------------------------- |
-| `query`          | string          |    ✅    | Search query text               |
-| `isRegex`        | boolean \| null |    ✅    | Treat as regex (default: false) |
-| `includePattern` | string \| null  |    ✅    | Glob to limit files searched    |
-| `maxResults`     | number \| null  |    ✅    | Max results (default: 100)      |
+Supports case-sensitive and whole-word matching, plus include/exclude glob patterns for file filtering.
+
+| Param            | Type            | Required | Description                             |
+| ---------------- | --------------- | :------: | --------------------------------------- |
+| `query`          | string          |    ✅    | Search query text                       |
+| `isRegex`        | boolean \| null |    ✅    | Treat as regex (default: false)         |
+| `includePattern` | string \| null  |    ✅    | Glob to limit which files are searched  |
+| `excludePattern` | string \| null  |    ✅    | Glob to exclude files from search       |
+| `maxResults`     | number \| null  |    ✅    | Max results (default: 100)              |
+| `caseSensitive`  | boolean \| null |    ✅    | Case-sensitive search (default: false)  |
+| `wholeWord`      | boolean \| null |    ✅    | Match whole words only (default: false) |
 
 ### `list_code_usages`
 

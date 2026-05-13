@@ -1,8 +1,8 @@
 /**
  * GetSearchResultsTool - Searches across workspace files for text/regex matches.
  *
- * Opens the VS Code search view for visual feedback and collects results programmatically
- * using `workspace.findTextInFiles` with a fallback to manual file scanning.
+ * Uses VS Code's indexed workspace.findTextInFiles API for fast searches with a
+ * fallback to manual file scanning when the API is unavailable. No UI is modified.
  * Ported from workspace-tools `workspace_getSearchResults`.
  */
 
@@ -17,7 +17,10 @@ interface GetSearchResultsParams {
 	query: string
 	isRegex?: boolean | null
 	includePattern?: string | null
+	excludePattern?: string | null
 	maxResults?: number | null
+	caseSensitive?: boolean | null
+	wholeWord?: boolean | null
 }
 
 interface SearchMatch {
@@ -33,7 +36,15 @@ export class GetSearchResultsTool extends BaseTool<"get_search_results"> {
 	readonly name = "get_search_results" as const
 
 	async execute(params: GetSearchResultsParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { query, isRegex = false, includePattern, maxResults = DEFAULT_MAX_RESULTS } = params
+		const {
+			query,
+			isRegex = false,
+			includePattern,
+			excludePattern,
+			maxResults = DEFAULT_MAX_RESULTS,
+			caseSensitive = false,
+			wholeWord = false,
+		} = params
 		const { handleError, pushToolResult } = callbacks
 
 		try {
@@ -59,33 +70,29 @@ export class GetSearchResultsTool extends BaseTool<"get_search_results"> {
 
 			const effectiveMax = maxResults ?? DEFAULT_MAX_RESULTS
 
-			// Open VS Code search view for visual feedback (non-critical)
-			try {
-				await vscode.commands.executeCommand("workbench.action.findInFiles", {
-					query,
-					isRegex: isRegex ?? false,
-					isCaseSensitive: false,
-					matchWholeWord: false,
-					filesToInclude: includePattern || "",
-				})
-			} catch {
-				// Search view may not be available in headless environments
-			}
-
 			const matches: SearchMatch[] = []
+
+			// Pre-process query for whole-word matching (non-regex mode)
+			const effectiveQuery =
+				wholeWord && !isRegex ? `\\b${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b` : query
+			const effectiveIsRegex = isRegex || (wholeWord && !isRegex)
 
 			// Try VS Code's native text search API first
 			try {
 				const ws = vscode.workspace as any
 				if (typeof ws.findTextInFiles === "function") {
 					const textQuery = {
-						pattern: query,
-						isRegExp: isRegex ?? false,
-						isCaseSensitive: false,
+						pattern: effectiveQuery,
+						isRegExp: effectiveIsRegex,
+						isCaseSensitive: caseSensitive ?? false,
+						isWordMatch: wholeWord ?? false,
 					}
 					const searchOptions: any = { maxResults: effectiveMax }
 					if (includePattern) {
 						searchOptions.include = new vscode.RelativePattern(task.cwd, includePattern)
+					}
+					if (excludePattern) {
+						searchOptions.exclude = excludePattern
 					}
 
 					await ws.findTextInFiles(textQuery, searchOptions, (result: any) => {
@@ -102,7 +109,10 @@ export class GetSearchResultsTool extends BaseTool<"get_search_results"> {
 			} catch {
 				// Fallback: manual file scan
 				const globPattern = includePattern ?? "**/*"
-				const files = await vscode.workspace.findFiles(globPattern, "**/node_modules/**", 1000)
+				const excludeGlob = excludePattern || "**/node_modules/**"
+				const files = await vscode.workspace.findFiles(globPattern, excludeGlob, 1000)
+
+				const regexFlags = caseSensitive ? "g" : "gi"
 
 				for (const file of files) {
 					if (matches.length >= effectiveMax) break
@@ -116,16 +126,20 @@ export class GetSearchResultsTool extends BaseTool<"get_search_results"> {
 							const lineText = lines[i]
 							let matchIndex = -1
 
-							if (isRegex) {
+							if (effectiveIsRegex) {
 								try {
-									const re = new RegExp(query, "i")
+									const re = new RegExp(effectiveQuery, regexFlags)
 									const m = re.exec(lineText)
 									if (m) matchIndex = m.index
 								} catch {
 									// Invalid regex — skip
 								}
 							} else {
-								matchIndex = lineText.toLowerCase().indexOf(query.toLowerCase())
+								if (caseSensitive) {
+									matchIndex = lineText.indexOf(query)
+								} else {
+									matchIndex = lineText.toLowerCase().indexOf(query.toLowerCase())
+								}
 							}
 
 							if (matchIndex >= 0) {
