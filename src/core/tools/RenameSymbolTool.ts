@@ -7,6 +7,7 @@
  */
 
 import * as path from "path"
+import * as fs from "fs/promises"
 import * as vscode from "vscode"
 
 import { type ShoferSayTool } from "@shofer/types"
@@ -108,10 +109,13 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 			}
 
 			let editCount = 0
-			const affectedFiles = new Set<string>()
+			const affectedRelPaths: string[] = []
+			const affectedDisplayPaths = new Set<string>()
 			for (const [fileUri, edits] of workspaceEdit.entries()) {
 				editCount += edits.length
-				affectedFiles.add(getReadablePath(task.cwd, fileUri.fsPath))
+				const relPath = path.relative(task.cwd, fileUri.fsPath).split(path.sep).join("/")
+				affectedRelPaths.push(relPath)
+				affectedDisplayPaths.add(getReadablePath(task.cwd, fileUri.fsPath))
 			}
 
 			if (editCount === 0) {
@@ -119,15 +123,41 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 				return
 			}
 
+			// Capture originals before mutation so the file-changes panel
+			// can show diffs and support revert/accept.
+			for (const relPath of affectedRelPaths) {
+				try {
+					let original: string | undefined
+					try {
+						original = await fs.readFile(path.resolve(task.cwd, relPath), "utf8")
+					} catch {
+						// File may be new or unreadable; absent is fine.
+					}
+					await task.fileContextTracker?.captureOriginal(relPath, original)
+				} catch (err) {
+					console.warn(`[RenameSymbolTool] captureOriginal failed for ${relPath}:`, err)
+				}
+			}
+
 			const success = await vscode.workspace.applyEdit(workspaceEdit)
 			if (!success) {
 				throw new Error("Failed to apply rename edit")
 			}
 
+			// Track each affected file so the file-changes panel picks them up.
+			for (const relPath of affectedRelPaths) {
+				try {
+					await task.fileContextTracker?.trackFileContext(relPath, "shofer_edited")
+					task.didEditFile = true
+				} catch (err) {
+					console.warn(`[RenameSymbolTool] trackFileContext failed for ${relPath}:`, err)
+				}
+			}
+
 			pushToolResult(
 				`Renamed symbol to "${newName}"\n` +
-					`Changed ${editCount} occurrence(s) in ${affectedFiles.size} file(s):\n` +
-					Array.from(affectedFiles)
+					`Changed ${editCount} occurrence(s) in ${affectedDisplayPaths.size} file(s):\n` +
+					Array.from(affectedDisplayPaths)
 						.map((f) => `  - ${f}`)
 						.join("\n"),
 			)
