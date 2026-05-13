@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "Shofer",
-	"extension.description": "State-of-the-art open-source AI coding; 100% under your control.",
+	"extension.description": "State-of-the-art open-source AI coding.",
 	"views.contextMenu.label": "Shofer",
 	"views.terminalMenu.label": "Shofer",
 	"views.activitybar.title": "Shofer - Drop Zone",
