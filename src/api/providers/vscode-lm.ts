@@ -63,6 +63,14 @@ function convertToVsCodeLmTools(tools: OpenAI.Chat.ChatCompletionTool[]): vscode
  * ```
  */
 export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHandler {
+	/**
+	 * Latches so we only warn once per session when the shofer.llm.*
+	 * commands are missing (e.g. the llm-provider extension isn't
+	 * installed or its command names don't match).
+	 */
+	private static _warnedMissingPricing = false
+	private static _warnedMissingCapabilities = false
+	private static _warnedMissingRequestCost = false
 	protected options: ApiHandlerOptions
 	private client: vscode.LanguageModelChat | null
 	private disposable: vscode.Disposable | null
@@ -198,7 +206,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 					return
 				}
 			} catch {
-				// Command not registered (no shofer extension) or threw — try next.
+				// Command not registered (no shofer extension) or threw — log once.
+				if (!VsCodeLmHandler._warnedMissingPricing) {
+					VsCodeLmHandler._warnedMissingPricing = true
+					getOutputChannel()?.appendLine(
+						"[vscode-lm] shofer.llm.getModelPricing command not found — is the Shofer LLM Model Provider extension installed and active?",
+					)
+				}
 			}
 		}
 	}
@@ -226,7 +240,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 					return
 				}
 			} catch {
-				// Command not registered (no shofer extension) or threw — try next.
+				// Command not registered (no shofer extension) or threw — log once.
+				if (!VsCodeLmHandler._warnedMissingCapabilities) {
+					VsCodeLmHandler._warnedMissingCapabilities = true
+					getOutputChannel()?.appendLine(
+						"[vscode-lm] shofer.llm.getModelCapabilities command not found — is the Shofer LLM Model Provider extension installed and active?",
+					)
+				}
 			}
 		}
 	}
@@ -259,6 +279,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			}
 			return undefined
 		} catch {
+			// Command not registered or threw — log once per session.
+			if (!VsCodeLmHandler._warnedMissingRequestCost) {
+				VsCodeLmHandler._warnedMissingRequestCost = true
+				getOutputChannel()?.appendLine(
+					"[vscode-lm] shofer.llm.getRequestCost command not found — is the Shofer LLM Model Provider extension installed and active?",
+				)
+			}
 			return undefined
 		}
 	}
