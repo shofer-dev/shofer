@@ -2408,7 +2408,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // Could be multiple resume tasks.
 
 			let askType: ShoferAsk
-			if (lastShoferMessage?.ask === "completion_result") {
+			if (this.initialStatus === "completed" || lastShoferMessage?.ask === "completion_result") {
 				askType = "resume_completed_task"
 			} else {
 				askType = "resume_task"
