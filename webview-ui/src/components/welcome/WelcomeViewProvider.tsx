@@ -94,7 +94,6 @@ const WelcomeViewProvider = () => {
 
 				<div>
 					<ApiOptions
-						fromWelcomeView
 						apiConfiguration={apiConfiguration || {}}
 						uriScheme={uriScheme}
 						setApiConfigurationField={setApiConfigurationFieldForApiOptions}
