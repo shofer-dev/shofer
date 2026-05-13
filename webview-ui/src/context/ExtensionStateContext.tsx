@@ -191,7 +191,18 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Partial
 
 	const customModePrompts = { ...prevCustomModePrompts, ...(newCustomModePrompts ?? {}) }
 	const experiments = { ...prevExperiments, ...(newExperiments ?? {}) }
-	const rest = { ...prevRest, ...newRest }
+	// Defensive: message queues and task identifiers can arrive as undefined
+	// from the backend (optional chaining returns undefined). When serialised
+	// through VS Code's webview.postMessage (JSON), undefined values are
+	// stripped. Without explicit defaults the spread below preserves the
+	// previous stale value from a different task.
+	const rest = {
+		...prevRest,
+		...newRest,
+		messageQueue: newRest.messageQueue ?? [],
+		currentTaskId: newRest.currentTaskId ?? prevRest.currentTaskId,
+		currentTaskItem: newRest.currentTaskItem ?? prevRest.currentTaskItem,
+	}
 
 	// Protect shoferMessages from stale state pushes using sequence numbering.
 	// Multiple async event sources (cloud auth, settings, task streaming) can trigger
