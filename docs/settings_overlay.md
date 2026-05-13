@@ -435,7 +435,9 @@ User edits .shofermodes
 
 ### Global Custom Instructions (all modes)
 
-1. Stored in `globalState["customInstructions"]`
+1. Stored in `globalState["customInstructions"]` — backed by the SQLite database at
+   `~/.config/Code/User/globalStorage/shofer-dev.shofer/state.vscdb` (Linux). See §1c
+   for the `globalState` backend details.
 2. Added to system prompt for ALL modes
 3. Edited in: Settings → Modes → "Custom Instructions for All Modes"
 
@@ -735,7 +737,11 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
 
 ### 10a. What Gets Exported
 
-Export (Settings → Modes → Export, or toolbar Export button) writes a single JSON file
+**This section covers the full-settings Export (Settings → About).** The Modes tab has a
+separate per-mode Export that saves individual mode definitions as YAML — see §10g.
+
+Export (Settings → About → `Export` button) calls
+[`exportSettings()`](../src/core/config/importExport.ts:246) and writes a single JSON file
 (`shofer-code-settings.json`) containing two top-level sections:
 
 ```json
@@ -817,7 +823,12 @@ Includes:
 
 ### 10c. Import Flow
 
-Import reads the JSON file and applies both sections:
+**This section covers the full-settings Import (Settings → About).** The Modes tab has a
+separate per-mode Import that loads individual mode definitions from YAML — see §10g.
+
+Import (Settings → About → `Import` button) calls
+[`importSettingsWithFeedback()`](../src/core/config/importExport.ts:298) and reads a
+`shofer-code-settings.json` file, applying both sections:
 
 ```
 shofer-code-settings.json
@@ -878,6 +889,111 @@ deployments. The setting can be pre-seeded in VS Code's `settings.json`:
 	"shofer.autoImportSettingsPath": "/etc/shofer/settings.json"
 }
 ```
+
+### 10e. Reset State (Settings → About)
+
+The **Reset** button in Settings → About provides a destructive "factory reset" that
+wipes all Shofer settings back to defaults. It is available **only** in the About tab.
+
+**Implementation:** [`ShoferProvider.resetState()`](../src/core/webview/ShoferProvider.ts:2947),
+triggered by the `resetState` message from
+[`About.tsx`](../webview-ui/src/components/settings/About.tsx:153) →
+[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:974).
+
+The flow:
+
+```
+User clicks Reset
+  └── Confirmation dialog (modal Yes/No)
+       └── [Yes]
+            ├── contextProxy.resetAllState()           → clears ALL globalState keys + ALL SecretStorage keys
+            ├── providerSettingsManager.resetAllConfigs() → deletes the API profiles blob from SecretStorage
+            ├── customModesManager.resetCustomModes()     → resets custom modes to built-in defaults
+            ├── removeShoferFromStack()                   → removes from workspace task stack
+            └── postStateToWebview()                      → refreshes UI
+```
+
+**What Reset wipes:**
+
+| Layer                           | Wiped? | Notes                                                       |
+| ------------------------------- | ------ | ----------------------------------------------------------- |
+| API profiles & keys             | ✅     | All `SecretStorage` entries deleted                         |
+| Global settings (globalState)   | ✅     | All keys in the SQLite database cleared                     |
+| Custom modes                    | ✅     | Reset to built-in defaults; `custom_modes.yaml` overwritten |
+| Task history                    | ✅     | Part of globalState wipe                                    |
+| Auto-approval settings          | ✅     | Part of globalState wipe                                    |
+| Custom instructions (all modes) | ✅     | Part of globalState wipe                                    |
+| Mode-specific custom prompts    | ✅     | Part of globalState wipe                                    |
+| **MCP server configs**          | ❌     | `mcp_settings.json` is **untouched**                        |
+| **Project `.shofermodes`**      | ❌     | File on disk is **untouched**                               |
+| **VS Code `settings.json`**     | ❌     | Extension configuration in VS Code is **untouched**         |
+
+> **Warning:** Reset is **destructive and irreversible**. There is no undo. Export your
+> settings first if you want to restore them later.
+
+### 10f. Export / Import / Reset Comparison
+
+| Operation           | API Profiles & Keys  | Global Settings  | Custom Modes             | MCP Configs  | Task History | Destructive?   |
+| ------------------- | -------------------- | ---------------- | ------------------------ | ------------ | ------------ | -------------- |
+| **Export**          | ✅ Included          | ✅ Included      | Only `source:"global"`   | ❌           | ❌           | No (read-only) |
+| **Import**          | ✅ Merged additively | ✅ Applied       | ✅ Imported              | ❌           | ❌           | No (additive)  |
+| **Auto-Import**     | ✅ On activation     | ✅ On activation | ✅ On activation         | ❌           | ❌           | No (additive)  |
+| **Reset**           | ❌ Wiped             | ❌ Wiped         | ❌ Reset to defaults     | ❌ Untouched | ❌ Wiped     | **Yes**        |
+| **Per-mode Export** | ❌                   | ❌               | ✅ Single mode → YAML    | ❌           | ❌           | No (read-only) |
+| **Per-mode Import** | ❌                   | ❌               | ✅ Single mode from YAML | ❌           | ❌           | No (additive)  |
+
+### 10g. Per-Mode Export / Import (Settings → Modes)
+
+The Modes tab has its own **separate** Export/Import system that operates on individual
+mode definitions — it does NOT touch API profiles, API keys, or global settings.
+
+This is what the user sees in Settings → Modes and is distinct from the full-settings
+Export/Import in §10a–§10c.
+
+#### Per-Mode Export
+
+The `Export` button next to each mode in the Modes tab calls the `exportMode` message
+([`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx:894) →
+[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:2231)).
+
+It exports a **single mode** as a YAML file (e.g., `code-export.yaml`) via
+[`customModesManager.exportModeWithRules()`](../src/core/config/CustomModesManager.ts):
+
+```
+Single mode definition (YAML)
+├── slug, name, roleDefinition
+├── customInstructions, whenToUse
+├── groups, tools_allowed, tools_denied
+├── Any .shofer/rules-<mode>/ rules (bundled inline)
+└── Custom prompts merged in for built-in modes
+```
+
+**What it exports:**
+
+| Item                                          | Included? |
+| --------------------------------------------- | --------- |
+| Mode definition (slug, role, groups)          | ✅        |
+| Mode-specific custom instructions             | ✅        |
+| Mode-specific rules (`.shofer/rules-<slug>/`) | ✅        |
+| API profiles / keys                           | ❌        |
+| Global settings                               | ❌        |
+| Other modes                                   | ❌        |
+
+#### Per-Mode Import
+
+The `Import` button in the Modes tab toolbar calls the `importMode` message
+([`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx:1673) →
+[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:2309)).
+
+It opens a file dialog for YAML files and lets the user choose where to import:
+
+| Level       | File Written To                      | Effect                                           |
+| ----------- | ------------------------------------ | ------------------------------------------------ |
+| **Project** | `.shofermodes`                       | Mode available in this workspace only            |
+| **Global**  | `custom_modes.yaml` (global storage) | Mode available in all workspaces on this machine |
+
+The imported mode is merged into the target file. If a mode with the same slug already
+exists, it is **overwritten**.
 
 ---
 
