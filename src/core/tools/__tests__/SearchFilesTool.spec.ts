@@ -32,7 +32,6 @@ vi.mock("vscode", async () => {
 	const actual = await vi.importActual("vscode")
 	return {
 		...actual,
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		workspace: {
 			...((actual as any)?.workspace ?? {}),
 			findTextInFiles: mockFindTextInFiles,
