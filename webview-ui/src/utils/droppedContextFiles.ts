@@ -21,13 +21,22 @@ export interface DroppedContextFile {
  * drop, which is handled separately).
  */
 export function extractUriPayload(dataTransfer: DataTransfer): string | null {
-	const candidates = [
-		dataTransfer.getData("text/uri-list"),
-		dataTransfer.getData("text"), // text/plain — what VSCode Desktop uses on Shift+drop
-		dataTransfer.getData("application/vnd.code.uri-list"),
+	const candidates: Array<{ mime: string; desc: string }> = [
+		{ mime: "text/uri-list", desc: "standard URI list" },
+		{ mime: "application/vnd.code.tree.explorer", desc: "VSCode Explorer tree drag (primary)" },
+		{ mime: "text", desc: "text/plain (Shift+drop on VSCode Desktop)" },
+		{ mime: "application/vnd.code.uri-list", desc: "VSCode URI list" },
+		{ mime: "application/vnd.code.uri", desc: "VSCode single URI" },
+		{ mime: "text/x-moz-url", desc: "Mozilla URL format (Alt+drag fallback)" },
+		{ mime: "text/plain", desc: "explicit text/plain" },
 	]
-	for (const c of candidates) {
-		if (c && c.trim().length > 0) return c
+	for (const { mime } of candidates) {
+		try {
+			const val = dataTransfer.getData(mime)
+			if (val && val.trim().length > 0) return val
+		} catch {
+			// Some MIME types may throw in cross-origin contexts; skip.
+		}
 	}
 	return null
 }

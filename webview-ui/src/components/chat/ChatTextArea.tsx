@@ -874,27 +874,76 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				e.preventDefault()
 				setIsDraggingOver(false)
 
+				// Log all MIME types and modifier keys for debugging drop
+				// issues (e.g. Alt+drag from Explorer on Linux, where the
+				// window manager may consume Alt before VSCode sees it, and
+				// VSCode's cross-origin overlay may deliver different MIME
+				// types depending on the modifier).
+				const dt = e.dataTransfer
+				const dtTypes = Array.from(dt.types)
+				const samplePayloads: Record<string, string> = {}
+				for (const t of dtTypes) {
+					try {
+						const val = dt.getData(t)
+						if (val) {
+							samplePayloads[t] = val.length > 400 ? val.slice(0, 400) + "…" : val
+						}
+					} catch {
+						// best-effort
+					}
+				}
+				vscode.postMessage({
+					type: "webviewLog",
+					text: `[drop:textarea] fired alt=${e.altKey} ctrl=${e.ctrlKey} shift=${e.shiftKey} meta=${e.metaKey} types=[${dtTypes.join(",")}] files=${dt.files.length} payloads=${JSON.stringify(samplePayloads)}`,
+				})
+
 				// 1. Path-style drops first — these never carry a `files` list,
 				//    only a URI/text payload.
 				const payload = extractUriPayload(e.dataTransfer)
 				if (payload && onContextFilesDropped) {
+					vscode.postMessage({
+						type: "webviewLog",
+						text: `[drop:textarea] extracted payload (${payload.length}ch): ${payload.length > 300 ? payload.slice(0, 300) + "…" : payload}`,
+					})
 					const newFiles = parseDroppedUris(payload, cwd, [])
 					if (newFiles.length > 0) {
+						vscode.postMessage({
+							type: "webviewLog",
+							text: `[drop:textarea] parsed ${newFiles.length} file(s): ${newFiles.map((f) => f.path).join(", ")}`,
+						})
 						onContextFilesDropped(newFiles)
 						return
 					}
+					vscode.postMessage({
+						type: "webviewLog",
+						text: `[drop:textarea] parseDroppedUris returned 0 files from payload`,
+					})
 				}
 
 				// 2. Image file drops.
 				const files = Array.from(e.dataTransfer.files)
-				if (files.length === 0 || shouldDisableImages) return
+				if (files.length === 0 || shouldDisableImages) {
+					if (files.length === 0 && !payload) {
+						vscode.postMessage({
+							type: "webviewLog",
+							text: `[drop:textarea] no payload and no files — drop ignored`,
+						})
+					}
+					return
+				}
 
 				const acceptedTypes = ["png", "jpeg", "webp"]
 				const imageFiles = files.filter((file) => {
 					const [type, subtype] = file.type.split("/")
 					return type === "image" && acceptedTypes.includes(subtype)
 				})
-				if (imageFiles.length === 0) return
+				if (imageFiles.length === 0) {
+					vscode.postMessage({
+						type: "webviewLog",
+						text: `[drop:textarea] ${files.length} file(s) but none are accepted image types`,
+					})
+					return
+				}
 
 				const imagePromises = imageFiles.map((file) => {
 					return new Promise<string | null>((resolve) => {
