@@ -76,11 +76,14 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				return
 			}
 
-			// Parse todos if provided, otherwise use empty array
+			// Parse todos for validation (if required by workspace setting),
+			// but always start child tasks with an empty todo list.
+			// Subtasks must NOT inherit the parent's todo list — each child
+			// manages its own work tracking independently.
 			let todoItems: TodoItem[] = []
 			if (todos) {
 				try {
-					todoItems = parseMarkdownChecklist(todos)
+					parseMarkdownChecklist(todos) // validate format only
 				} catch (error) {
 					task.consecutiveMistakeCount++
 					task.recordToolError("new_task")

@@ -190,10 +190,7 @@ describe("newTaskTool", () => {
 			undefined,
 			mockShofer,
 			expect.objectContaining({
-				initialTodos: expect.arrayContaining([
-					expect.objectContaining({ content: "First task" }),
-					expect.objectContaining({ content: "Second task" }),
-				]),
+				initialTodos: [],
 				initialMode: "code",
 			}),
 			undefined,
@@ -349,10 +346,7 @@ describe("newTaskTool", () => {
 			undefined,
 			mockShofer,
 			expect.objectContaining({
-				initialTodos: expect.arrayContaining([
-					expect.objectContaining({ content: "First task" }),
-					expect.objectContaining({ content: "Second task" }),
-				]),
+				initialTodos: [],
 				initialMode: "code",
 			}),
 			undefined,
@@ -432,11 +426,7 @@ describe("newTaskTool", () => {
 			undefined,
 			mockShofer,
 			expect.objectContaining({
-				initialTodos: expect.arrayContaining([
-					expect.objectContaining({ content: "Pending task", status: "pending" }),
-					expect.objectContaining({ content: "Completed task", status: "completed" }),
-					expect.objectContaining({ content: "In progress task", status: "in_progress" }),
-				]),
+				initialTodos: [],
 			}),
 			undefined,
 			undefined,
@@ -547,10 +537,7 @@ describe("newTaskTool", () => {
 				undefined,
 				mockShofer,
 				expect.objectContaining({
-					initialTodos: expect.arrayContaining([
-						expect.objectContaining({ content: "First task" }),
-						expect.objectContaining({ content: "Second task" }),
-					]),
+					initialTodos: [],
 					initialMode: "code",
 				}),
 				undefined,
