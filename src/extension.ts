@@ -28,7 +28,7 @@ import { Package } from "./shared/package"
 import { formatLanguage } from "./shared/language"
 import { ContextProxy } from "./core/config/ContextProxy"
 import { ShoferProvider } from "./core/webview/ShoferProvider"
-import { addUrisToContext } from "./core/webview/ContextDropZoneProvider"
+import { ContextDropZoneProvider, addUrisToContext } from "./core/webview/ContextDropZoneProvider"
 import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
@@ -152,6 +152,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(ShoferProvider.sideBarId, provider, {
 			webviewOptions: { retainContextWhenHidden: true },
+		}),
+	)
+
+	// Native TreeView used as a reliable file drop target.  See
+	// ContextDropZoneProvider for rationale.  Registered collapsed-by-default
+	// via the view contribution in package.json so it stays out of the way.
+	const contextDropZoneProvider = new ContextDropZoneProvider()
+	contextDropZoneProvider.setShoferProvider(provider)
+	context.subscriptions.push(
+		vscode.window.createTreeView(ContextDropZoneProvider.viewId, {
+			treeDataProvider: contextDropZoneProvider,
+			dragAndDropController: contextDropZoneProvider,
 		}),
 	)
 
