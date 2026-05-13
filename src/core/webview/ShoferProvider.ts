@@ -2513,7 +2513,7 @@ export class ShoferProvider
 			})(),
 			shoferMessages: currentTask?.shoferMessages || [],
 			currentTaskTodos: currentTask?.todoList || [],
-			messageQueue: currentTask?.messageQueueService?.messages,
+			messageQueue: currentTask?.messageQueueService?.messages ?? [],
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),
 			soundEnabled: soundEnabled ?? false,
 			ttsEnabled: ttsEnabled ?? false,
