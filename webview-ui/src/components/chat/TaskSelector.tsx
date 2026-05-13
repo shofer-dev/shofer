@@ -1,7 +1,7 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Plus, Pause, Play, Square, Trash2, Pencil, Check, X } from "lucide-react"
+import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
 
 import type { HistoryItem } from "@shofer/types"
 
@@ -208,9 +208,6 @@ interface TaskRowParams {
 	editName: string
 	setEditName: (v: string) => void
 	handleFocusTask: (taskId: string) => void
-	handlePauseTask: (taskId: string, e: React.MouseEvent) => void
-	handleResumeTask: (taskId: string, e: React.MouseEvent) => void
-	handleStopTask: (taskId: string, e: React.MouseEvent) => void
 	handleDeleteTask: (taskId: string, e: React.MouseEvent) => void
 	handleStartRename: (taskId: string, currentName: string, e: React.MouseEvent) => void
 	handleConfirmRename: (taskId: string, e: React.MouseEvent) => void
@@ -222,7 +219,7 @@ interface TaskRowParams {
  * Renders a single task row in the dropdown.
  *
  * Layout (left → right):
- *   [tree-gutter] [status-icon] [title \n state · time] [hover actions] [✓]
+ *   [tree-gutter] [status-icon] [title \n state · time] [hover actions]
  *
  * The tree-gutter draws ├ / └ / │ connectors so subtasks visually nest under
  * their parent within a date bucket.
@@ -235,9 +232,6 @@ function renderTaskRow({
 	editName,
 	setEditName,
 	handleFocusTask,
-	handlePauseTask,
-	handleResumeTask,
-	handleStopTask,
 	handleDeleteTask,
 	handleStartRename,
 	handleConfirmRename,
@@ -342,49 +336,6 @@ function renderTaskRow({
 				<>
 					{/* Hover actions */}
 					<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-						{item.status !== "completed" && (
-							<>
-								{state === "running" && (
-									<StandardTooltip content={t("chat:taskSelector.pause", "Pause")}>
-										<button
-											onClick={(e) => handlePauseTask(item.id, e)}
-											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-											<Pause className="w-3 h-3" />
-										</button>
-									</StandardTooltip>
-								)}
-								{state === "paused" && runtime && (
-									<StandardTooltip content={t("chat:taskSelector.resume", "Resume")}>
-										<button
-											onClick={(e) => handleResumeTask(item.id, e)}
-											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-											<Play className="w-3 h-3" />
-										</button>
-									</StandardTooltip>
-								)}
-								{state === "idle" && runtime && (
-									<StandardTooltip content={t("chat:taskSelector.start", "Start")}>
-										<button
-											onClick={(e) => {
-												e.stopPropagation()
-												handleFocusTask(item.id)
-											}}
-											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-											<Play className="w-3 h-3" />
-										</button>
-									</StandardTooltip>
-								)}
-								{state === "waiting_input" && (
-									<StandardTooltip content={t("chat:taskSelector.stop", "Stop")}>
-										<button
-											onClick={(e) => handleStopTask(item.id, e)}
-											className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
-											<Square className="w-3 h-3" />
-										</button>
-									</StandardTooltip>
-								)}
-							</>
-						)}
 						<StandardTooltip content={t("chat:taskSelector.rename", "Rename")}>
 							<button
 								onClick={(e) => handleStartRename(item.id, displayName, e)}
@@ -400,8 +351,6 @@ function renderTaskRow({
 							</button>
 						</StandardTooltip>
 					</div>
-
-					{isCurrent && <span className="text-[var(--vscode-descriptionForeground)] text-xs">✓</span>}
 				</>
 			)}
 		</div>
@@ -450,21 +399,6 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 	const handleFocusTask = useCallback((taskId: string) => {
 		vscode.postMessage({ type: "focusParallelTask", taskId })
 		setIsOpen(false)
-	}, [])
-
-	const handlePauseTask = useCallback((taskId: string, e: React.MouseEvent) => {
-		e.stopPropagation()
-		vscode.postMessage({ type: "pauseParallelTask", taskId })
-	}, [])
-
-	const handleResumeTask = useCallback((taskId: string, e: React.MouseEvent) => {
-		e.stopPropagation()
-		vscode.postMessage({ type: "resumeParallelTask", taskId })
-	}, [])
-
-	const handleStopTask = useCallback((taskId: string, e: React.MouseEvent) => {
-		e.stopPropagation()
-		vscode.postMessage({ type: "stopParallelTask", taskId })
 	}, [])
 
 	const handleDeleteTask = useCallback((taskId: string, e: React.MouseEvent) => {
@@ -649,9 +583,6 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 											editName,
 											setEditName,
 											handleFocusTask,
-											handlePauseTask,
-											handleResumeTask,
-											handleStopTask,
 											handleDeleteTask,
 											handleStartRename,
 											handleConfirmRename,
