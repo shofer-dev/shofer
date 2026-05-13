@@ -17,7 +17,7 @@ import generateImage from "./generate_image"
 import getChangedFiles from "./get_changed_files"
 import getErrors from "./get_errors"
 import getProjectSetupInfo from "./get_project_setup_info"
-import getSearchResults from "./get_search_results"
+// get_search_results removed — merged into search_files
 import insertEdit from "./insert_edit"
 import listCodeUsages from "./list_code_usages"
 import listFiles from "./list_files"
@@ -86,7 +86,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		getChangedFiles,
 		getErrors,
 		getProjectSetupInfo,
-		getSearchResults,
+		// get_search_results removed — merged into search_files
 		insertEdit,
 		listCodeUsages,
 		listFiles,

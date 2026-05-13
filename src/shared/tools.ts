@@ -152,7 +152,18 @@ export type NativeToolArgs = {
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skill_load: { skill: string; args?: string }
-	search_files: { path: string; regex: string; file_pattern?: string | null }
+	search_files: {
+		path: string
+		query: string
+		fileTypes?: string | null
+		excludePattern?: string | null
+		isRegex?: boolean | null
+		caseSensitive?: boolean | null
+		wholeWord?: boolean | null
+		maxResults?: number | null
+		contextBefore?: number | null
+		contextAfter?: number | null
+	}
 	switch_mode: { mode_slug: string; reason: string }
 	set_task_title: { title: string }
 	give_feedback: { feedback: string }
@@ -168,12 +179,7 @@ export type NativeToolArgs = {
 	get_changed_files: Record<string, never>
 	get_errors: { filePaths?: string[] | null }
 	get_project_setup_info: Record<string, never>
-	get_search_results: {
-		query: string
-		isRegex?: boolean | null
-		includePattern?: string | null
-		maxResults?: number | null
-	}
+	// get_search_results removed — merged into search_files
 	insert_edit: { filePath: string; line: number; column?: number | null; text: string }
 	list_code_usages: { filePath: string; line: number; column: number }
 	read_project_structure: { maxDepth?: number | null; includeHidden?: boolean | null }

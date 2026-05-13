@@ -49,7 +49,6 @@ import { findFilesTool } from "../tools/FindFilesTool"
 import { getChangedFilesTool } from "../tools/GetChangedFilesTool"
 import { getErrorsTool } from "../tools/GetErrorsTool"
 import { getProjectSetupInfoTool } from "../tools/GetProjectSetupInfoTool"
-import { getSearchResultsTool } from "../tools/GetSearchResultsTool"
 import { insertEditTool } from "../tools/InsertEditTool"
 import { sedTool } from "../tools/SedTool"
 import { listCodeUsagesTool } from "../tools/ListCodeUsagesTool"
@@ -364,8 +363,12 @@ export async function presentAssistantMessage(shofer: Task) {
 						// Native-only: tool args are structured (no XML payloads).
 						return block.params?.path ? `[${block.name} for '${block.params.path}']` : `[${block.name}]`
 					case "search_files":
-						return `[${block.name} for '${block.params.regex}'${
-							block.params.file_pattern ? ` in '${block.params.file_pattern}'` : ""
+						return `[${block.name} for '${block.params.query}'${
+							block.params.fileTypes
+								? ` in '${block.params.fileTypes}'`
+								: block.params.file_pattern
+									? ` in '${block.params.file_pattern}'`
+									: ""
 						}]`
 					case "edit":
 					case "search_and_replace":
@@ -424,8 +427,6 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name}]`
 					case "get_project_setup_info":
 						return `[${block.name}]`
-					case "get_search_results":
-						return `[${block.name} for '${block.params.query}']`
 					case "read_project_structure":
 						return `[${block.name}]`
 					case "list_code_usages":
@@ -1030,13 +1031,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "get_project_setup_info":
 					await getProjectSetupInfoTool.handle(shofer, block as ToolUse<"get_project_setup_info">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "get_search_results":
-					await getSearchResultsTool.handle(shofer, block as ToolUse<"get_search_results">, {
 						askApproval,
 						handleError,
 						pushToolResult,

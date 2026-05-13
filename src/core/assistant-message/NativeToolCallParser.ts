@@ -535,11 +535,18 @@ export class NativeToolCallParser {
 				break
 
 			case "search_files":
-				if (partialArgs.path !== undefined || partialArgs.regex !== undefined) {
+				if (partialArgs.path !== undefined || partialArgs.query !== undefined) {
 					nativeArgs = {
 						path: partialArgs.path,
-						regex: partialArgs.regex,
-						file_pattern: partialArgs.file_pattern,
+						query: partialArgs.query,
+						fileTypes: partialArgs.fileTypes ?? partialArgs.file_pattern,
+						excludePattern: partialArgs.excludePattern,
+						isRegex: this.coerceOptionalBoolean(partialArgs.isRegex),
+						caseSensitive: this.coerceOptionalBoolean(partialArgs.caseSensitive),
+						wholeWord: this.coerceOptionalBoolean(partialArgs.wholeWord),
+						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
+						contextBefore: this.coerceOptionalNumber(partialArgs.contextBefore),
+						contextAfter: this.coerceOptionalNumber(partialArgs.contextAfter),
 					}
 				}
 				break
@@ -743,18 +750,6 @@ export class NativeToolCallParser {
 				nativeArgs = {}
 				break
 
-			case "get_search_results":
-				if (partialArgs.query !== undefined) {
-					nativeArgs = {
-						query: partialArgs.query,
-						isRegex: this.coerceOptionalBoolean(partialArgs.isRegex),
-						includePattern: partialArgs.includePattern,
-						excludePattern: partialArgs.excludePattern,
-						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
-						caseSensitive: this.coerceOptionalBoolean(partialArgs.caseSensitive),
-						wholeWord: this.coerceOptionalBoolean(partialArgs.wholeWord),
-					}
-				}
 				break
 
 			case "insert_edit":
@@ -1076,11 +1071,18 @@ export class NativeToolCallParser {
 					break
 
 				case "search_files":
-					if (args.path !== undefined && args.regex !== undefined) {
+					if (args.path !== undefined && args.query !== undefined) {
 						nativeArgs = {
 							path: args.path,
-							regex: args.regex,
-							file_pattern: args.file_pattern,
+							query: args.query,
+							fileTypes: args.fileTypes ?? args.file_pattern,
+							excludePattern: args.excludePattern,
+							isRegex: this.coerceOptionalBoolean(args.isRegex) ?? true,
+							caseSensitive: this.coerceOptionalBoolean(args.caseSensitive) ?? false,
+							wholeWord: this.coerceOptionalBoolean(args.wholeWord) ?? false,
+							maxResults: this.coerceOptionalNumber(args.maxResults),
+							contextBefore: this.coerceOptionalNumber(args.contextBefore),
+							contextAfter: this.coerceOptionalNumber(args.contextAfter),
 						} as NativeArgsFor<TName>
 					}
 					break
@@ -1298,18 +1300,6 @@ export class NativeToolCallParser {
 					nativeArgs = {} as NativeArgsFor<TName>
 					break
 
-				case "get_search_results":
-					if (args.query !== undefined) {
-						nativeArgs = {
-							query: args.query,
-							isRegex: this.coerceOptionalBoolean(args.isRegex),
-							includePattern: args.includePattern,
-							excludePattern: args.excludePattern,
-							maxResults: this.coerceOptionalNumber(args.maxResults),
-							caseSensitive: this.coerceOptionalBoolean(args.caseSensitive),
-							wholeWord: this.coerceOptionalBoolean(args.wholeWord),
-						} as any as NativeArgsFor<TName>
-					}
 					break
 
 				case "insert_edit":
