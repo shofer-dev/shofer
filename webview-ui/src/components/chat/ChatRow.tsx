@@ -1256,6 +1256,16 @@ export const ChatRowContent = ({
 					)
 				}
 				case "api_req_started":
+					// On success (cost present, no cancel reason), hide the row entirely
+					// to avoid cluttering the chat — same as tool_preparing dismissal.
+					if (
+						cost !== null &&
+						cost !== undefined &&
+						(apiReqCancelReason === null || apiReqCancelReason === undefined)
+					) {
+						return null
+					}
+
 					// Determine if the API request is in progress
 					const isApiRequestInProgress =
 						apiReqCancelReason === undefined && apiRequestFailedMessage === undefined && cost === undefined
