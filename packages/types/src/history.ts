@@ -71,6 +71,11 @@ export const historyItemSchema = z.object({
 	isBackground: z.boolean().optional(),
 	// Skills that have been loaded via skill_load and should survive rehydration
 	loadedSkills: z.array(z.string()).optional(),
+	// Archive support: soft-remove from the main task listing.
+	archived: z.boolean().optional(),
+	archivedAt: z.number().optional(),
+	// Pin support: show pinned tasks first in the listing.
+	pinned: z.boolean().optional(),
 })
 
 export type HistoryItem = z.infer<typeof historyItemSchema>

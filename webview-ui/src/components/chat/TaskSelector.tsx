@@ -1,7 +1,7 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
+import { Plus, Trash2, Pencil, Check, X, Archive, Pin, PinOff } from "lucide-react"
 
 import type { HistoryItem } from "@shofer/types"
 
@@ -209,6 +209,10 @@ interface TaskRowParams {
 	setEditName: (v: string) => void
 	handleFocusTask: (taskId: string) => void
 	handleDeleteTask: (taskId: string, e: React.MouseEvent) => void
+	handleArchiveTask: (taskId: string, e: React.MouseEvent) => void
+	handleUnarchiveTask: (taskId: string, e: React.MouseEvent) => void
+	handlePinTask: (taskId: string, e: React.MouseEvent) => void
+	handleUnpinTask: (taskId: string, e: React.MouseEvent) => void
 	handleStartRename: (taskId: string, currentName: string, e: React.MouseEvent) => void
 	handleConfirmRename: (taskId: string, e: React.MouseEvent) => void
 	handleCancelRename: (e: React.MouseEvent) => void
@@ -233,6 +237,10 @@ function renderTaskRow({
 	setEditName,
 	handleFocusTask,
 	handleDeleteTask,
+	handleArchiveTask,
+	handleUnarchiveTask,
+	handlePinTask,
+	handleUnpinTask,
 	handleStartRename,
 	handleConfirmRename,
 	handleCancelRename,
@@ -336,6 +344,40 @@ function renderTaskRow({
 				<>
 					{/* Hover actions */}
 					<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+						{item.pinned ? (
+							<StandardTooltip content={t("chat:taskSelector.unpin", "Unpin")}>
+								<button
+									onClick={(e) => handleUnpinTask(item.id, e)}
+									className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+									<PinOff className="w-3 h-3" />
+								</button>
+							</StandardTooltip>
+						) : (
+							<StandardTooltip content={t("chat:taskSelector.pin", "Pin")}>
+								<button
+									onClick={(e) => handlePinTask(item.id, e)}
+									className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+									<Pin className="w-3 h-3" />
+								</button>
+							</StandardTooltip>
+						)}
+						{item.archived ? (
+							<StandardTooltip content={t("chat:taskSelector.unarchive", "Unarchive")}>
+								<button
+									onClick={(e) => handleUnarchiveTask(item.id, e)}
+									className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+									<Archive className="w-3 h-3" />
+								</button>
+							</StandardTooltip>
+						) : (
+							<StandardTooltip content={t("chat:taskSelector.archive", "Archive")}>
+								<button
+									onClick={(e) => handleArchiveTask(item.id, e)}
+									className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded">
+									<Archive className="w-3 h-3" />
+								</button>
+							</StandardTooltip>
+						)}
 						<StandardTooltip content={t("chat:taskSelector.rename", "Rename")}>
 							<button
 								onClick={(e) => handleStartRename(item.id, displayName, e)}
@@ -406,6 +448,26 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 		vscode.postMessage({ type: "deleteParallelTask", taskId })
 	}, [])
 
+	const handlePinTask = useCallback((taskId: string, e: React.MouseEvent) => {
+		e.stopPropagation()
+		vscode.postMessage({ type: "pinParallelTask", taskId })
+	}, [])
+
+	const handleUnpinTask = useCallback((taskId: string, e: React.MouseEvent) => {
+		e.stopPropagation()
+		vscode.postMessage({ type: "unpinParallelTask", taskId })
+	}, [])
+
+	const handleArchiveTask = useCallback((taskId: string, e: React.MouseEvent) => {
+		e.stopPropagation()
+		vscode.postMessage({ type: "archiveParallelTask", taskId })
+	}, [])
+
+	const handleUnarchiveTask = useCallback((taskId: string, e: React.MouseEvent) => {
+		e.stopPropagation()
+		vscode.postMessage({ type: "unarchiveParallelTask", taskId })
+	}, [])
+
 	const handleStartRename = useCallback((taskId: string, currentName: string, e: React.MouseEvent) => {
 		e.stopPropagation()
 		setEditingTaskId(taskId)
@@ -431,10 +493,47 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 	}, [])
 
 	/**
+	 * Split flatTree into pinned, active, and archived subtrees.
+	 * - Pinned roots (and their descendants) go to pinnedTree, shown first.
+	 * - Archived roots (and their descendants) go to archivedTree, collapsed.
+	 * - Everything else stays in activeTree, grouped by date bucket.
+	 */
+	const { pinnedTree, activeTree, archivedTree } = useMemo(() => {
+		const pinned: TaskTreeNode[] = []
+		const active: TaskTreeNode[] = []
+		const archived: TaskTreeNode[] = []
+		const archivedRootIds = new Set(flatTree.filter((n) => n.depth === 0 && n.item.archived).map((n) => n.item.id))
+		const pinnedRootIds = new Set(
+			flatTree.filter((n) => n.depth === 0 && n.item.pinned && !n.item.archived).map((n) => n.item.id),
+		)
+		let inPinned = false
+		let inArchived = false
+		for (const node of flatTree) {
+			if (node.depth === 0) {
+				inPinned = !!node.item.pinned && !node.item.archived
+				inArchived = !!node.item.archived
+			}
+			if (inArchived || archivedRootIds.has(node.item.parentTaskId ?? "")) {
+				archived.push(node)
+			} else if (inPinned || pinnedRootIds.has(node.item.parentTaskId ?? "")) {
+				pinned.push(node)
+			} else {
+				active.push(node)
+			}
+		}
+		return { pinnedTree: pinned, activeTree: active, archivedTree: archived }
+	}, [flatTree])
+
+	const pinnedCount = pinnedTree.length
+
+	/**
 	 * Group nodes by date bucket while preserving DFS pre-order within
 	 * each bucket. We bucket by the root task's timestamp so that a
 	 * subtask is shown together with (and immediately after) its parent
 	 * even if its own ts would land it in a different bucket.
+	 *
+	 * Only non-archived (active) tasks are grouped here; archived tasks
+	 * appear in their own collapsible section.
 	 */
 	const groupedTree = useMemo(() => {
 		const now = Date.now()
@@ -445,7 +544,7 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 			older: [],
 		}
 		let currentBucket: DateBucketKey | null = null
-		for (const node of flatTree) {
+		for (const node of activeTree) {
 			if (node.depth === 0) {
 				currentBucket = bucketForTimestamp(node.item.ts, now)
 			}
@@ -454,9 +553,13 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 			}
 		}
 		return groups
-	}, [flatTree])
+	}, [activeTree])
 
-	const totalTaskCount = flatTree.length
+	const totalTaskCount = activeTree.length
+	const archivedCount = archivedTree.length
+
+	/** Collapsed/expanded state for the "Archived" section. Collapsed by default. */
+	const [isArchivedExpanded, setIsArchivedExpanded] = useState(false)
 
 	// Listen for the global toggle event dispatched by the action handler when
 	// the user clicks the VS Code view-title-bar Tasks button.
@@ -557,24 +660,23 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 							{t("chat:taskSelector.noTasks", "No tasks yet")}
 						</div>
 					) : (
-						DATE_BUCKET_ORDER.map((bucket) => {
-							const nodes = groupedTree[bucket]
-							if (nodes.length === 0) return null
-							const label = DATE_BUCKET_LABELS[bucket]
-							return (
-								<div key={bucket} className="mb-1">
-									{/* Section header */}
+						<>
+							{/* Pinned tasks — always shown first, before date buckets */}
+							{pinnedCount > 0 && (
+								<div className="mb-1">
 									<div
 										className={cn(
 											"flex items-center justify-between px-3 py-1",
 											"text-[11px] font-semibold uppercase tracking-wide",
 											"text-[var(--vscode-descriptionForeground)]",
 										)}>
-										<span>{t(label.key, label.fallback)}</span>
-										<span className="font-normal">{nodes.length}</span>
+										<div className="flex items-center gap-1.5">
+											<Pin className="w-3 h-3" />
+											<span>{t("chat:taskSelector.groups.pinned", "Pinned")}</span>
+										</div>
+										<span className="font-normal">{pinnedCount}</span>
 									</div>
-
-									{nodes.map((node) =>
+									{pinnedTree.map((node) =>
 										renderTaskRow({
 											node,
 											runtimeStateMap,
@@ -584,6 +686,10 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 											setEditName,
 											handleFocusTask,
 											handleDeleteTask,
+											handleArchiveTask,
+											handleUnarchiveTask,
+											handlePinTask,
+											handleUnpinTask,
 											handleStartRename,
 											handleConfirmRename,
 											handleCancelRename,
@@ -591,8 +697,89 @@ export const TaskSelector = memo(({ taskHistory, parallelTasks, currentTaskId }:
 										}),
 									)}
 								</div>
-							)
-						})
+							)}
+							{DATE_BUCKET_ORDER.map((bucket) => {
+								const nodes = groupedTree[bucket]
+								if (nodes.length === 0) return null
+								const label = DATE_BUCKET_LABELS[bucket]
+								return (
+									<div key={bucket} className="mb-1">
+										{/* Section header */}
+										<div
+											className={cn(
+												"flex items-center justify-between px-3 py-1",
+												"text-[11px] font-semibold uppercase tracking-wide",
+												"text-[var(--vscode-descriptionForeground)]",
+											)}>
+											<span>{t(label.key, label.fallback)}</span>
+											<span className="font-normal">{nodes.length}</span>
+										</div>
+
+										{nodes.map((node) =>
+											renderTaskRow({
+												node,
+												runtimeStateMap,
+												currentTaskId,
+												editingTaskId,
+												editName,
+												setEditName,
+												handleFocusTask,
+												handleDeleteTask,
+												handleArchiveTask,
+												handleUnarchiveTask,
+												handlePinTask,
+												handleUnpinTask,
+												handleStartRename,
+												handleConfirmRename,
+												handleCancelRename,
+												t,
+											}),
+										)}
+									</div>
+								)
+							})}
+						</>
+					)}
+
+					{/* Archived tasks — collapsible section */}
+					{archivedCount > 0 && (
+						<div className="mb-1">
+							<button
+								onClick={() => setIsArchivedExpanded((v) => !v)}
+								className={cn(
+									"flex items-center justify-between w-full px-3 py-1",
+									"text-[11px] font-semibold uppercase tracking-wide",
+									"text-[var(--vscode-descriptionForeground)]",
+									"hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] transition-colors",
+								)}>
+								<div className="flex items-center gap-1.5">
+									<Archive className="w-3 h-3" />
+									<span>{t("chat:taskSelector.groups.archived", "Archived")}</span>
+								</div>
+								<span className="font-normal">{archivedCount}</span>
+							</button>
+							{isArchivedExpanded &&
+								archivedTree.map((node) =>
+									renderTaskRow({
+										node,
+										runtimeStateMap,
+										currentTaskId,
+										editingTaskId,
+										editName,
+										setEditName,
+										handleFocusTask,
+										handleDeleteTask,
+										handleArchiveTask,
+										handleUnarchiveTask,
+										handlePinTask,
+										handleUnpinTask,
+										handleStartRename,
+										handleConfirmRename,
+										handleCancelRename,
+										t,
+									}),
+								)}
+						</div>
 					)}
 				</div>
 
