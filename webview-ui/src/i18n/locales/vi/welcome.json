@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Chào mừng đến với Shofer!",
 		"introduction": "Với nhiều Chế độ tích hợp và có thể mở rộng, Shofer cho phép bạn lập kế hoạch, thiết kế kiến trúc, viết mã, gỡ lỗi và tăng năng suất như chưa từng có trước đây.",
-		"accountMention": "Để bắt đầu, hãy tạo tài khoản Shofer Cloud của bạn. Nhận các mô hình mạnh mẽ, kiểm soát web, phân tích, hỗ trợ và hơn thế nữa.",
-		"getStarted": "Tạo tài khoản Shofer",
-		"noAccount": "hoặc sử dụng mà không có tài khoản"
+		"getStarted": "Bắt đầu"
 	},
 	"providerSignup": {
 		"heading": "Chọn nhà cung cấp của bạn",

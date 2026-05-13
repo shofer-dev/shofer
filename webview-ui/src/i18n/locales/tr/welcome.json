@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Shofer'a Hoş Geldin!",
 		"introduction": "Yerleşik ve genişletilebilir Modlar yelpazesiyle Shofer, daha önce hiç olmadığı gibi planlama, mimari tasarım, kodlama, hata ayıklama ve üretkenliğini artırmanı sağlar.",
-		"accountMention": "Başlamak için Shofer Cloud hesabını oluştur. Güçlü modeller, web kontrolü, analizler, destek ve daha fazlasını al.",
-		"getStarted": "Shofer Hesabı Oluştur",
-		"noAccount": "veya hesap olmadan kullan"
+		"getStarted": "Başla"
 	},
 	"providerSignup": {
 		"heading": "Sağlayıcınızı seçin",

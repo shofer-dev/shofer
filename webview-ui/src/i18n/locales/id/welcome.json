@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Selamat datang di Shofer!",
 		"introduction": "Dengan berbagai Mode bawaan dan dapat diperluas, Shofer memungkinkan Anda merencanakan, merancang, coding, debug, dan meningkatkan produktivitas seperti yang belum pernah terjadi sebelumnya.",
-		"accountMention": "Untuk memulai, buat akun Shofer Cloud Anda. Dapatkan model yang kuat, kontrol web, analitik, dukungan, dan banyak lagi.",
-		"getStarted": "Buat Akun Shofer",
-		"noAccount": "atau gunakan tanpa akun"
+		"getStarted": "Mulai"
 	},
 	"providerSignup": {
 		"heading": "Pilih penyedia Anda",

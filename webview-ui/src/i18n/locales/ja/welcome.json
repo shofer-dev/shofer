@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Shoferへようこそ！",
 		"introduction": "組み込みおよび拡張可能なモードを備えたShoferは、計画、アーキテクチャ設計、コーディング、デバッグ、そして今までにない生産性向上を可能にします。",
-		"accountMention": "始めるには、Shofer Cloudアカウントを作成してください。強力なモデル、ウェブコントロール、分析、サポート、その他をご利用いただけます。",
-		"getStarted": "Rooアカウントを作成",
-		"noAccount": "またはアカウントなしで使用"
+		"getStarted": "はじめる"
 	},
 	"providerSignup": {
 		"heading": "プロバイダーを選択",

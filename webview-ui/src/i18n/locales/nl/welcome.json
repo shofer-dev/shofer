@@ -15,9 +15,7 @@
 	"landing": {
 		"greeting": "Welkom bij Shofer!",
 		"introduction": "Met een reeks ingebouwde en uitbreidbare Modi laat Shofer je plannen, ontwerpen, coderen, debuggen en je productiviteit verhogen als nooit tevoren.",
-		"accountMention": "Maak je Shofer Cloud-account aan om te beginnen. Krijg krachtige modellen, webcontrole, analyses, ondersteuning en meer.",
-		"getStarted": "Shofer-account aanmaken",
-		"noAccount": "of gebruik zonder account"
+		"getStarted": "Aan de slag"
 	},
 	"providerSignup": {
 		"heading": "Kies je provider",

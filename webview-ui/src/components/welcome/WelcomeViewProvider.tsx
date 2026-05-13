@@ -24,7 +24,6 @@ import { ArrowLeft, ArrowRight, BadgeInfo, Brain, TriangleAlert } from "lucide-r
 import { buildDocLink } from "@/utils/docLinks"
 
 type ProviderOption = "shofer" | "custom"
-type AuthOrigin = "landing" | "providerSelection"
 
 const WelcomeViewProvider = () => {
 	const {
@@ -39,7 +38,6 @@ const WelcomeViewProvider = () => {
 	const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
 	const [selectedProvider, setSelectedProvider] = useState<ProviderOption | null>(null)
 	const [authInProgress, setAuthInProgress] = useState(false)
-	const [authOrigin, setAuthOrigin] = useState<AuthOrigin | null>(null)
 	const [showManualEntry, setShowManualEntry] = useState(false)
 	const [manualUrl, setManualUrl] = useState("")
 	const [manualErrorMessage, setManualErrorMessage] = useState<boolean | undefined>(undefined)
@@ -90,15 +88,14 @@ const WelcomeViewProvider = () => {
 		[setApiConfiguration], // setApiConfiguration from context is stable
 	)
 
+	const handleNavigateToProviderSelection = useCallback(() => {
+		// Navigate to Provider Selection, defaulting to Shofer option
+		setSelectedProvider("shofer")
+	}, [])
+
 	const handleGetStarted = useCallback(() => {
-		// Landing screen - always trigger auth with Shofer
-		if (selectedProvider === null) {
-			setAuthOrigin("landing")
-			vscode.postMessage({ type: "shoferCloudSignIn", useProviderSignup: true })
-			setAuthInProgress(true)
-		}
 		// Provider Selection screen
-		else if (selectedProvider === "shofer") {
+		if (selectedProvider === "shofer") {
 			if (cloudIsAuthenticated) {
 				// Already authenticated - save config and finish
 				const shoferConfig: ProviderSettings = {
@@ -111,7 +108,6 @@ const WelcomeViewProvider = () => {
 				})
 			} else {
 				// Need to authenticate
-				setAuthOrigin("providerSelection")
 				vscode.postMessage({ type: "shoferCloudSignIn", useProviderSignup: true })
 				setAuthInProgress(true)
 			}
@@ -129,11 +125,6 @@ const WelcomeViewProvider = () => {
 		}
 	}, [selectedProvider, cloudIsAuthenticated, apiConfiguration, currentApiConfigName])
 
-	const handleNoAccount = useCallback(() => {
-		// Navigate to Provider Selection, defaulting to Shofer option
-		setSelectedProvider("shofer")
-	}, [])
-
 	const handleBackToLanding = useCallback(() => {
 		// Return to the landing screen
 		setSelectedProvider(null)
@@ -146,15 +137,8 @@ const WelcomeViewProvider = () => {
 		setManualUrl("")
 		setManualErrorMessage(false)
 
-		// Return to the appropriate screen based on origin
-		if (authOrigin === "providerSelection") {
-			// Keep selectedProvider as-is, user returns to Provider Selection
-		} else {
-			// Return to Landing
-			setSelectedProvider(null)
-		}
-		setAuthOrigin(null)
-	}, [authOrigin])
+		// Keep selectedProvider as-is, user returns to Provider Selection
+	}, [])
 
 	const handleManualUrlChange = (e: any) => {
 		const url = e.target.value
@@ -299,18 +283,12 @@ const WelcomeViewProvider = () => {
 						<p className="text-base text-vscode-foreground">
 							<Trans i18nKey="welcome:landing.introduction" />
 						</p>
-						<p className="mb-0 font-semibold">
-							<Trans i18nKey="welcome:landing.accountMention" />
-						</p>
 					</div>
 
 					<div className="mt-2 flex gap-2 items-center">
-						<Button onClick={handleGetStarted} variant="primary">
+						<Button onClick={handleNavigateToProviderSelection} variant="primary">
 							{t("welcome:landing.getStarted")}
 						</Button>
-						<VSCodeLink onClick={handleNoAccount} className="cursor-pointer">
-							{t("welcome:landing.noAccount")}
-						</VSCodeLink>
 					</div>
 
 					<div className="absolute bottom-6 left-6">
