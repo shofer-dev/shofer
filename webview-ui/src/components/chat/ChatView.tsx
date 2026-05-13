@@ -1569,6 +1569,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		virtuosoRef,
 		scrollContainerRef,
 		taskTs: task?.ts,
+		dataLength: groupedMessages.length,
 		isStreaming,
 		isHidden,
 		hasTask: !!task,
