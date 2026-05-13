@@ -138,7 +138,7 @@ queries well-known commands for:
 - `shofer.llm.getModelCapabilities` — tool calling, image input, prompt cache
 
 These are **required** for cost-limit enforcement
-([`cost-limit.md`](cost-limit.md)) and for the API Cost row to show
+([`cost-calculation-and-limits.md`](cost-calculation-and-limits.md)) and for the API Cost row to show
 USD amounts. Without this setting, only token counts are available.
 
 > **Note:** The llm-provider extension must be installed and active
@@ -279,7 +279,7 @@ rows yet. Configure them directly in `settings.json`.
 
 Default per-root-task USD budget cap applied to all new tasks. When
 `maxUsd` is `0` or unset, cost limiting is disabled. See
-[`cost-limit.md`](cost-limit.md) for details.
+[`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for details.
 
 ### `shofer.disabledTools`
 
