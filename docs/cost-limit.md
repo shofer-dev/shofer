@@ -365,6 +365,36 @@ budget limit can never trip — this is by design (we only enforce on
 real billed cost), but worth flagging to users debugging "why isn't my
 limit firing?".
 
+### Operational dependency: llm-provider command registration
+
+Both cost paths depend on well-known VS Code commands registered by
+the **Shofer LLM Model Provider** extension
+([`extensions/llm-provider/`](../../../extensions/llm-provider/)):
+
+| Command                           | Registers in                                                           | Consumed by                                         | Role                                                     |
+| --------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
+| `shofer.llm.getModelPricing`      | [`llm-provider/main.ts`](../../../extensions/llm-provider/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 1: per-token USD rates for `calculateApiCostOpenAI` |
+| `shofer.llm.getRequestCost`       | [`llm-provider/main.ts`](../../../extensions/llm-provider/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 2: per-conversation cumulative USD cost             |
+| `shofer.llm.getModelCapabilities` | [`llm-provider/main.ts`](../../../extensions/llm-provider/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Tool calling, image input, prompt cache flags            |
+
+If the llm-provider extension is **not installed**, **not activated**,
+or its command names **don't match** what the vscode-lm provider
+expects, both cost paths silently return `undefined`. The consequence:
+`totalCost` stays at `$0` for every request, `consolidateTokenUsage`
+reports zero, and the budget limit can never trip.
+
+**Diagnostics (v3.56.x+):** The vscode-lm provider now logs a one-shot
+warning to the Shofer output channel when any of these commands fails:
+
+```
+[vscode-lm] shofer.llm.getModelPricing command not found — is the Shofer LLM Model Provider extension installed and active?
+[vscode-lm] shofer.llm.getRequestCost command not found — is the Shofer LLM Model Provider extension installed and active?
+```
+
+If you see `cost: $0` for every request and the budget limit never
+trips, check the Shofer output channel for these messages. They are the
+quickest way to identify a command-registration mismatch.
+
 ## Versioning
 
 Shipped as Shofer **3.53.0** (minor bump): new user-visible
