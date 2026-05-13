@@ -284,8 +284,9 @@ export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	const posix = toPosix(relPath)
 	const snap = await task.fileContextTracker.getFinalSnapshot(posix)
 	if (!snap) {
-		console.log(`[ChangedFilesService] acceptFile(${posix}): no final snapshot — nothing to accept`)
-		return // nothing to accept
+		throw new Error(
+			`Cannot accept "${posix}" — no final snapshot exists. The file may not have been written by Shofer in this task, or the final snapshot capture failed silently.`,
+		)
 	}
 
 	const content = snap.kind === "text" ? await task.fileContextTracker.getFinalContent(posix) : undefined

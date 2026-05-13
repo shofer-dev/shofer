@@ -40,6 +40,7 @@
 		"revert": "Revert",
 		"redo": "Redo",
 		"accept": "Accept",
+		"acceptUnavailable": "Accept unavailable — no final snapshot exists",
 		"acceptAll": "Accept all",
 		"revertAll": "Revert all",
 		"revertConfirmUserEdits": "{{path}} appears to have been modified outside of Shofer. Reverting will discard those changes. Continue?",
