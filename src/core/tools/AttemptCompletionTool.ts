@@ -8,6 +8,7 @@ import { formatResponse } from "../prompts/responses"
 import { Package } from "../../shared/package"
 import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"
+import { getChangedFiles } from "../file-changes/ChangedFilesService"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
@@ -40,6 +41,28 @@ interface DelegationProvider {
 	updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]>
 	taskManager?: {
 		getManagedTaskInstance?(taskId: string): Task | undefined
+	}
+}
+
+/**
+ * Computes the total insertions and deletions across all files changed
+ * by the task, aggregating the per-file stats from ChangedFilesService.
+ */
+async function computeFileChangeStats(task: Task): Promise<{ insertions: number; deletions: number }> {
+	try {
+		const payload = await getChangedFiles(task)
+		let insertions = 0
+		let deletions = 0
+		for (const entry of payload.entries) {
+			insertions += entry.insertions
+			deletions += entry.deletions
+		}
+		return { insertions, deletions }
+	} catch (err) {
+		console.error(
+			`[AttemptCompletionTool] Failed to compute file change stats for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
+		)
+		return { insertions: 0, deletions: 0 }
 	}
 }
 
@@ -142,10 +165,13 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							pushToolResult("")
 
 							try {
+								const fileStats = await computeFileChangeStats(task)
 								await provider.updateTaskHistory({
 									...historyItem,
 									status: "completed",
 									completionResultSummary: result,
+									insertions: fileStats.insertions,
+									deletions: fileStats.deletions,
 								})
 							} catch (err) {
 								console.error(
@@ -191,7 +217,13 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					if (provider) {
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
 						if (historyItem && historyItem.status !== "completed") {
-							await provider.updateTaskHistory({ ...historyItem, status: "completed" })
+							const fileStats = await computeFileChangeStats(task)
+							await provider.updateTaskHistory({
+								...historyItem,
+								status: "completed",
+								insertions: fileStats.insertions,
+								deletions: fileStats.deletions,
+							})
 						}
 					}
 				} catch (err) {

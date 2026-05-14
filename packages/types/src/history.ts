@@ -76,6 +76,9 @@ export const historyItemSchema = z.object({
 	archivedAt: z.number().optional(),
 	// Pin support: show pinned tasks first in the listing.
 	pinned: z.boolean().optional(),
+	// File change stats — total lines added/removed across all files in this task.
+	insertions: z.number().optional(),
+	deletions: z.number().optional(),
 })
 
 export type HistoryItem = z.infer<typeof historyItemSchema>

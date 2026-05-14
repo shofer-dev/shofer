@@ -381,6 +381,21 @@ function renderTaskRow({
 								<span className="mx-1">·</span>
 							</>
 						)}
+						{(item.insertions !== undefined || item.deletions !== undefined) && (
+							<>
+								{item.insertions !== undefined && item.insertions > 0 && (
+									<span className="text-[var(--vscode-charts-green,#16a34a)]">
+										+{item.insertions}
+									</span>
+								)}
+								{item.deletions !== undefined && item.deletions > 0 && (
+									<span className="text-[var(--vscode-charts-red,#ef4444)] ml-1">
+										-{item.deletions}
+									</span>
+								)}
+								<span className="mx-1">·</span>
+							</>
+						)}
 						<span>{formatTimeAgo(item.ts)}</span>
 					</span>
 				</div>

@@ -1331,6 +1331,27 @@ export class ShoferProvider
 						`[ShoferProvider#pushChangedFilesUpdate] task=${task.taskId} entries=${payload.entries.length} backend=${payload.backend}`,
 					)
 					await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
+
+					// Update the task history with live file-change stats so the
+					// TaskSelector can show +N/-N in real time without waiting for
+					// task completion.
+					let totalInsertions = 0
+					let totalDeletions = 0
+					for (const entry of payload.entries) {
+						totalInsertions += entry.insertions
+						totalDeletions += entry.deletions
+					}
+					const existing = this.taskHistoryStore.get(task.taskId)
+					if (
+						existing &&
+						(existing.insertions !== totalInsertions || existing.deletions !== totalDeletions)
+					) {
+						await this.updateTaskHistory({
+							...existing,
+							insertions: totalInsertions,
+							deletions: totalDeletions,
+						})
+					}
 				} catch (err) {
 					this.log(`[ShoferProvider#pushChangedFilesUpdate] failed: ${err}`)
 				}
