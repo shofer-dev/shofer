@@ -456,7 +456,11 @@ export class NativeToolCallParser {
 
 			case "attempt_completion":
 				if (partialArgs.result) {
-					nativeArgs = { result: partialArgs.result }
+					nativeArgs = {
+						result: partialArgs.result,
+						rating: partialArgs.rating,
+						feedback: partialArgs.feedback,
+					}
 				}
 				break
 
@@ -985,7 +989,11 @@ export class NativeToolCallParser {
 
 				case "attempt_completion":
 					if (args.result) {
-						nativeArgs = { result: args.result } as NativeArgsFor<TName>
+						nativeArgs = {
+							result: args.result,
+							rating: args.rating,
+							feedback: args.feedback,
+						} as NativeArgsFor<TName>
 					}
 					break
 
