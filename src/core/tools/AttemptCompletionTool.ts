@@ -215,7 +215,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								const fileStats = await computeFileChangeStats(task)
 								await provider.updateTaskHistory({
 									...historyItem,
-									status: "completed",
+									taskExecutionState: "completed",
 									completionResultSummary: effectiveResult,
 									completionRating: effectiveRating,
 									insertions: fileStats.insertions,
@@ -264,14 +264,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					const provider = task.providerRef.deref() as DelegationProvider | undefined
 					if (provider) {
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
-						if (historyItem && historyItem.status !== "completed") {
+						if (historyItem && historyItem.taskExecutionState !== "completed") {
 							const fileStats = await computeFileChangeStats(task)
 							getOutputChannel()?.appendLine(
 								`[DIAG] [PERSIST] taskId=${task.taskId} effectiveRating=${effectiveRating} — persisting status=completed, completionRating=${effectiveRating}`,
 							)
 							await provider.updateTaskHistory({
 								...historyItem,
-								status: "completed",
+								taskExecutionState: "completed",
 								completionRating: effectiveRating,
 								insertions: fileStats.insertions,
 								deletions: fileStats.deletions,

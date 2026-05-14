@@ -6,7 +6,7 @@ This document describes the task state model used in the Task Selector sidebar a
 
 The icon displayed for each task in the Task Selector is determined by the following priority:
 
-1. **`HistoryItem.status === "completed"`** — task finished via `attempt_completion`; uses `completionRating` to select icon
+1. **`HistoryItem.taskExecutionState === "completed"`** — task finished via `attempt_completion`; uses `completionRating` to select icon
 2. **`runtime.state`** — live execution state from `ManagedTask`
 3. **`HistoryItem.taskExecutionState`** — persisted execution state (survives restarts)
 4. **`"idle"`** — default fallback
@@ -25,13 +25,13 @@ When a task completes, the agent's self-assessed `completionRating` determines t
 State resolution logic:
 
 ```
-item.status === "completed"
+item.taskExecutionState === "completed"
   ├── item.completionRating === "excellent"  → "completed_excellent"
   ├── item.completionRating === "well"       → "completed_well"
   ├── item.completionRating === "poor"       → "completed_poor"
   └── (no rating)                            → "completed"
 
-item.status !== "completed"
+item.taskExecutionState !== "completed"
   ├── runtime?.state                         → runtime state (live)
   ├── item.taskExecutionState                → persisted
   └── fallback                               → "idle"
@@ -61,12 +61,12 @@ is stored.
 
 ## Persistence
 
-- `HistoryItem.status = "completed"` is written by `AttemptCompletionTool` on every
+- `HistoryItem.taskExecutionState = "completed"` is written by `AttemptCompletionTool` on every
   completion path. The `completionRating` is persisted alongside.
 - `HistoryItem.taskExecutionState` is written by `TaskManager.updateTaskExecutionState`
   on every state transition (running, idle, paused, waiting_input, error).
 - On restore, `running` and `waiting_input` are sanitized to `idle` (no live instance).
-  `error` and `paused` are preserved. Items with `status === "completed"` are also
+  `error` and `paused` are preserved. Items with `taskExecutionState === "completed"` are also
   restored as `idle` — the rating icon resolves from `status` + `completionRating`.
 
 ## Edge Cases

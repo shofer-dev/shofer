@@ -304,17 +304,17 @@ function renderTaskRow({
 }: TaskRowParams) {
 	const { item, depth, isLastSibling, ancestorIsLast } = node
 	const runtime = runtimeStateMap.get(item.id)
-	const resolvedRating = item.status === "completed" ? item.completionRating : undefined
+	const resolvedRating = item.taskExecutionState === "completed" ? item.completionRating : undefined
 	const state =
-		item.status === "completed"
+		item.taskExecutionState === "completed"
 			? resolvedRating
 				? `completed_${resolvedRating}`
 				: "completed"
 			: (runtime?.state ?? item.taskExecutionState ?? "idle")
 	// Diagnostic: log state resolution for completed tasks
-	if (item.status === "completed") {
+	if (item.taskExecutionState === "completed") {
 		console.log(
-			`[DIAG-TaskSelector] id=${item.id} status=${item.status} completionRating=${item.completionRating} → state=${state}`,
+			`[DIAG-TaskSelector] id=${item.id} status=${item.taskExecutionState} completionRating=${item.completionRating} → state=${state}`,
 		)
 	}
 	const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
