@@ -3,6 +3,8 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { createHash, randomUUID } from "crypto"
 import { TelemetryService } from "@shofer/telemetry"
+import { HelperAgentDirectoryTree } from "./directory-tree"
+import { HelperAgentFileWatcher } from "./file-watcher"
 import {
 	TelemetryEventName,
 	type HelperAgentState,
@@ -135,6 +137,18 @@ export class HelperAgentManager {
 
 	private _conversationUpdateEmitter = new vscode.EventEmitter<void>()
 	public readonly onConversationUpdate = this._conversationUpdateEmitter.event
+	// ─── Directory Tree ─────────────────────────────────────────────────
+
+	/** Directory tree generator for the system prompt. */
+	private _directoryTree: HelperAgentDirectoryTree | null = null
+
+	/** Cached directory tree string (regenerated on init and Clear Context). */
+	private _directoryTreeString: string = "[No workspace structure available]"
+
+	// ─── File Watcher ───────────────────────────────────────────────────
+
+	/** File watcher for external change detection. */
+	private _fileWatcher: HelperAgentFileWatcher | null = null
 
 	// Flag to prevent race conditions during error recovery
 	private _isRecoveringFromError = false
@@ -301,16 +315,20 @@ export class HelperAgentManager {
 			// 2. Resolve API key from SecretStorage
 			config.apiKey = await this._resolveApiKey()
 
-			// 3. Check if enabled
+			// 3. Generate directory tree and start file watcher
+			await this._initDirectoryTree()
+			this._startFileWatcher()
+
+			// 4. Check if enabled
 			if (!config.enabled) {
 				this._setState("Standby", "Helper agent is disabled")
 				return { requiresRestart: false }
 			}
 
-			// 4. Restore persisted conversation
+			// 5. Restore persisted conversation
 			await this._loadConversation()
 
-			// 5. Validate API configuration
+			// 6. Validate API configuration
 			if (!config.apiKey || !config.modelId) {
 				this._setState("Error", "API key or model ID not configured")
 				return { requiresRestart: false }
@@ -531,6 +549,7 @@ export class HelperAgentManager {
 	public async clearContext(): Promise<void> {
 		this._messages = []
 		this._fileContexts = []
+		await this._initDirectoryTree()
 		await this._saveConversation()
 		this._conversationUpdateEmitter.fire()
 
@@ -568,6 +587,11 @@ export class HelperAgentManager {
 	 * Cleans up the manager instance.
 	 */
 	public dispose(): void {
+		if (this._fileWatcher) {
+			this._fileWatcher.dispose()
+			this._fileWatcher = null
+		}
+		this.cancelAllQuestions()
 		this._stateChangeEmitter.dispose()
 		this._conversationUpdateEmitter.dispose()
 	}
@@ -713,6 +737,49 @@ export class HelperAgentManager {
 		}
 	}
 
+	// ─── Directory Tree + File Watcher ─────────────────────────────────
+
+	/**
+	 * Initialize the directory tree scanner and generate the tree string
+	 * for injection into the system prompt.
+	 */
+	private async _initDirectoryTree(): Promise<void> {
+		try {
+			this._directoryTree = new HelperAgentDirectoryTree(this.workspacePath, this.maxContextTokens)
+			this._directoryTreeString = await this._directoryTree.generate()
+		} catch (error) {
+			console.warn("[HelperAgent] Failed to generate directory tree:", error)
+			this._directoryTreeString = "[Workspace directory tree unavailable]"
+		}
+	}
+
+	/**
+	 * Start the file watcher to detect external changes.
+	 * On file change: evict stale context entries (hash mismatch on next reference).
+	 * On file delete: remove context entry entirely.
+	 */
+	private _startFileWatcher(): void {
+		if (this._fileWatcher) return
+
+		this._fileWatcher = new HelperAgentFileWatcher(this.workspacePath, (filePath, event) => {
+			if (event === "deleted") {
+				// Remove file from context
+				const idx = this._fileContexts.findIndex((fc) => fc.filePath === filePath)
+				if (idx !== -1) {
+					this._fileContexts.splice(idx, 1)
+				}
+			} else {
+				// Mark as stale (will be evicted on next reference)
+				const fc = this._fileContexts.find((f) => f.filePath === filePath)
+				if (fc) {
+					fc.contentHash = "" // Invalidate hash → evicted on next load
+				}
+			}
+		})
+
+		this._fileWatcher.start()
+	}
+
 	// ─── LLM Calling ─────────────────────────────────────────────────────
 
 	/**
@@ -726,11 +793,11 @@ export class HelperAgentManager {
 	): Array<{ role: string; content: string }> {
 		const messages: Array<{ role: string; content: string }> = []
 
-		// System prompt with directory tree placeholder (empty for Phase 1)
-		const systemPrompt = HELPER_AGENT_SYSTEM_PROMPT.replace(
-			"{directoryTree}",
-			"[Workspace structure will be populated in a future phase]",
-		)
+		// System prompt with workspace directory tree
+		const treeContent = this._directoryTreeString
+			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shogerignore and .gitignore patterns are respected.]`
+			: "[No workspace structure available]"
+		const systemPrompt = HELPER_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)
 		messages.push({ role: "system", content: systemPrompt })
 
 		// File contexts as system messages
