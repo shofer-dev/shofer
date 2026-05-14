@@ -1995,7 +1995,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
-							atBottomThreshold={10}
+							atBottomThreshold={1}
 						/>
 						<SessionSearch
 							messages={messages}
