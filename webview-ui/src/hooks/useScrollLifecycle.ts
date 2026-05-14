@@ -1,41 +1,26 @@
 /**
  * useScrollLifecycle
  *
- * Simplified chat scroll lifecycle with a short, time-boxed hydration window.
+ * Simplified chat scroll lifecycle: always scroll to the bottom on task
+ * switch and auto-follow new messages while the user stays at the bottom.
  *
- * **Task switch behavior:**
- *   - If the task was previously viewed AND the user was browsing history
- *     (not at the bottom) last time → restore the exact saved scroll position
- *     via Virtuoso's `initialTopMostItemIndex` (one paint, no jump).
- *   - Otherwise (first visit OR user was at the bottom) → scroll to the
- *     *current* bottom so new messages are visible.
+ * **Task switch:** enters `HYDRATING_PINNED_TO_BOTTOM`, fires a deferred
+ *   scroll-to-bottom, then transitions to `ANCHORED_FOLLOWING` so
+ *   `followOutput="auto"` keeps the list pinned.
  *
- * **Position memory:**
- *   - `rangeChanged` callback continuously saves `{ startIndex, atBottom }`
- *     per task into an in-memory Map, guarded during the hydration window
- *     to avoid corrupting saved positions.
- *
- * **Hydration window:**
- *   - Retries up to `MAX_HYDRATION_RETRIES` at `HYDRATION_RETRY_WINDOW_MS`
- *     intervals.
- *   - After restoring a saved position, transitions to `USER_BROWSING_HISTORY`
- *     so new messages don't auto-scroll the user away.
- *   - After scrolling to bottom (first visit / was-at-bottom), transitions
- *     to `ANCHORED_FOLLOWING`.
+ * **Hydration window:** retries up to `MAX_HYDRATION_RETRIES` at
+ *   `HYDRATION_RETRY_WINDOW_MS` intervals before giving up and entering
+ *   `ANCHORED_FOLLOWING`.
  *
  * **User escape intent** (wheel-up / keyboard-nav-up / pointer-scroll-up /
- *   row expansion) moves to `USER_BROWSING_HISTORY` and prevents forced
- *   re-pinning.
+ *   row expansion) moves to `USER_BROWSING_HISTORY`, sets
+ *   `followOutput=false`, and shows the scroll-to-bottom button.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import debounce from "debounce"
-import type { ListRange, VirtuosoHandle } from "react-virtuoso"
-
-/** Namespaced console logger for scroll lifecycle diagnostics.
- *  Prefix all messages with [scroll] so they are easy to grep in devtools. */
-const log = (...args: unknown[]) => console.log("[scroll]", ...args)
+import type { VirtuosoHandle } from "react-virtuoso"
 
 const HYDRATION_WINDOW_MS = 600
 const HYDRATION_RETRY_WINDOW_MS = 160
@@ -85,11 +70,6 @@ export interface UseScrollLifecycleReturn {
 	enterUserBrowsingHistory: (source: ScrollFollowDisengageSource) => void
 	followOutputCallback: () => "auto" | false
 	atBottomStateChangeCallback: (isAtBottom: boolean) => void
-	/** Callback for Virtuoso's rangeChanged prop — saves scroll position per task. */
-	rangeChangedCallback: (range: ListRange) => void
-	/** Pass to Virtuoso's initialTopMostItemIndex to start at the saved position
-	 *  on first paint — avoids a visible scroll jump on task switch. */
-	initialScrollIndex: number | undefined
 	scrollToBottomAuto: () => void
 	isAtBottomRef: React.MutableRefObject<boolean>
 	scrollPhaseRef: React.MutableRefObject<ScrollPhase>
@@ -125,50 +105,6 @@ export function useScrollLifecycle({
 	const hydrationTimeoutRef = useRef<number | null>(null)
 	const hydrationRetryCountRef = useRef(0)
 
-	/** Per-task saved state: the visible startIndex and whether the user
-	 *  was at the bottom when they last viewed this task.  Used to decide
-	 *  whether to restore a browsing position or scroll to the (new) bottom
-	 *  on the next visit. */
-	const taskScrollPositionRef = useRef<Map<number, { startIndex: number; atBottom: boolean }>>(new Map())
-
-	// --- Current taskTs ref (kept in sync for use in rangeChanged callback) ---
-	const taskTsRef = useRef(taskTs)
-	useEffect(() => {
-		taskTsRef.current = taskTs
-	}, [taskTs])
-
-	// --- Initial scroll index for Virtuoso's initialTopMostItemIndex ---
-	// Computed synchronously from the saved-position map when taskTs changes
-	// so the Virtuoso (re-keyed on task.ts) starts at the correct position
-	// on its first paint.
-	//
-	// Returns undefined when:
-	//   - No task is selected
-	//   - No saved position exists for this task (first visit)
-	//   - The user was at the bottom when they left (scroll to new bottom)
-	// Returns the saved startIndex only when the user was browsing history
-	// (not at bottom), so the exact position is restored without a jump.
-	const initialScrollIndex = useMemo(() => {
-		if (taskTs === undefined) {
-			log("initialScrollIndex: no taskTs")
-			return undefined
-		}
-		const saved = taskScrollPositionRef.current.get(taskTs)
-		if (saved !== undefined && saved.startIndex > 0 && !saved.atBottom) {
-			log("initialScrollIndex:", saved.startIndex, "(atBottom was false)")
-			return saved.startIndex
-		}
-		if (saved !== undefined) {
-			log(
-				"initialScrollIndex: saved exists but skipped",
-				JSON.stringify({ startIndex: saved.startIndex, atBottom: saved.atBottom }),
-			)
-		} else {
-			log("initialScrollIndex: no saved position for taskTs", taskTs)
-		}
-		return undefined
-	}, [taskTs])
-
 	// --- Pointer scroll tracking ---
 	const pointerScrollActiveRef = useRef(false)
 	const pointerScrollElementRef = useRef<HTMLElement | null>(null)
@@ -197,9 +133,6 @@ export function useScrollLifecycle({
 	const enterUserBrowsingHistory = useCallback(
 		(_source: ScrollFollowDisengageSource) => {
 			transitionScrollPhase("USER_BROWSING_HISTORY")
-			// Always show the scroll-to-bottom CTA when the user explicitly
-			// disengages. If they happen to still be at the physical bottom,
-			// the next Virtuoso atBottomStateChange(true) will hide it.
 			setShowScrollToBottom(true)
 		},
 		[transitionScrollPhase],
@@ -234,17 +167,6 @@ export function useScrollLifecycle({
 		})
 	}, [virtuosoRef])
 
-	const scrollToIndexAuto = useCallback(
-		(index: number) => {
-			virtuosoRef.current?.scrollToIndex({
-				index,
-				align: "start",
-				behavior: "auto",
-			})
-		},
-		[virtuosoRef],
-	)
-
 	const clearHydrationWindow = useCallback(() => {
 		isHydratingRef.current = false
 		hydrationRetryCountRef.current = 0
@@ -253,109 +175,6 @@ export function useScrollLifecycle({
 			hydrationTimeoutRef.current = null
 		}
 	}, [])
-
-	// -----------------------------------------------------------------------
-	// rangeChanged — continuously save the visible range for the current task
-	//
-	// Skip saving during the hydration window so the initial Virtuoso render
-	// (which may report startIndex=0 before the intended position is reached)
-	// does not overwrite a previously saved position for this task.
-	//
-	// Saves both the visible startIndex and whether the user was at the
-	// bottom at the time.  This lets us decide on re-entry whether to
-	// restore the exact browsing position (user scrolled away) or scroll
-	// to the current bottom (user was following new messages).  Virtuoso's
-	// atBottomStateChange fires before rangeChanged, so isAtBottomRef is
-	// always current by the time this callback runs.
-	// -----------------------------------------------------------------------
-
-	const rangeChangedCallback = useCallback((range: ListRange) => {
-		if (isHydratingRef.current) {
-			log("rangeChanged: SKIP (hydrating)")
-			return
-		}
-		const currentTaskTs = taskTsRef.current
-		if (currentTaskTs !== undefined) {
-			log(
-				"rangeChanged: save",
-				JSON.stringify({
-					taskTs: currentTaskTs,
-					startIndex: range.startIndex,
-					atBottom: isAtBottomRef.current,
-				}),
-			)
-			taskScrollPositionRef.current.set(currentTaskTs, {
-				startIndex: range.startIndex,
-				atBottom: isAtBottomRef.current,
-			})
-		}
-	}, [])
-
-	// -----------------------------------------------------------------------
-	// Scroll-to-index hydration (for restoring a saved position)
-	//
-	// The initial positioning is handled by Virtuoso's initialTopMostItemIndex
-	// prop (communicated via initialScrollIndex return value) — no 2-rAF
-	// scroll is needed here.  The retry loop still runs as a safety net in
-	// case the Virtuoso measurement hasn't settled by the time the hydration
-	// window expires.
-	// -----------------------------------------------------------------------
-
-	// Directly enter USER_BROWSING_HISTORY phase (no side effects like
-	// showing the CTA button) — used when the hydration window ends after
-	// restoring a saved browsing position.
-	const enterBrowsingQuiet = useCallback(() => {
-		transitionScrollPhase("USER_BROWSING_HISTORY")
-		setShowScrollToBottom(true)
-	}, [transitionScrollPhase])
-
-	const restoreTargetIndexRef = useRef<number | null>(null)
-
-	const finishRestoreWindow = useCallback(() => {
-		if (!isMountedRef.current || !isHydratingRef.current) {
-			log("finishRestoreWindow: unmounted or not hydrating, skip")
-			return
-		}
-
-		if (scrollPhaseRef.current === "HYDRATING_PINNED_TO_BOTTOM") {
-			const targetIndex = restoreTargetIndexRef.current
-			if (targetIndex !== null) {
-				if (hydrationRetryCountRef.current < MAX_HYDRATION_RETRIES) {
-					hydrationRetryCountRef.current++
-					log("finishRestoreWindow: retry", hydrationRetryCountRef.current, "targetIndex", targetIndex)
-					scrollToIndexAuto(targetIndex)
-					hydrationTimeoutRef.current = window.setTimeout(() => {
-						finishRestoreWindow()
-					}, HYDRATION_RETRY_WINDOW_MS)
-					return
-				}
-			}
-			// Retry budget exhausted (or no target index).
-			// The user was browsing history, not following — stay in
-			// browsing mode so new messages don't auto-scroll them away
-			// from the restored position.
-			log("finishRestoreWindow: entering browsing (retries exhausted)")
-			enterBrowsingQuiet()
-		}
-
-		clearHydrationWindow()
-	}, [clearHydrationWindow, enterBrowsingQuiet, scrollToIndexAuto])
-
-	const startRestoreWindow = useCallback(
-		(targetIndex: number) => {
-			log("startRestoreWindow: targetIndex", targetIndex)
-			isHydratingRef.current = true
-			hydrationRetryCountRef.current = 0
-			restoreTargetIndexRef.current = targetIndex
-			if (hydrationTimeoutRef.current !== null) {
-				window.clearTimeout(hydrationTimeoutRef.current)
-			}
-			hydrationTimeoutRef.current = window.setTimeout(() => {
-				finishRestoreWindow()
-			}, HYDRATION_WINDOW_MS)
-		},
-		[finishRestoreWindow],
-	)
 
 	// -----------------------------------------------------------------------
 	// Scroll-to-bottom hydration (for new / never-viewed tasks)
@@ -387,10 +206,8 @@ export function useScrollLifecycle({
 	}, [clearHydrationWindow, enterAnchoredFollowing, scrollToBottomAuto])
 
 	const startHydrationWindow = useCallback(() => {
-		log("startHydrationWindow: scroll to bottom")
 		isHydratingRef.current = true
 		hydrationRetryCountRef.current = 0
-		restoreTargetIndexRef.current = null
 		if (hydrationTimeoutRef.current !== null) {
 			window.clearTimeout(hydrationTimeoutRef.current)
 		}
@@ -430,17 +247,8 @@ export function useScrollLifecycle({
 		scrollPhaseRef.current = scrollPhase
 	}, [scrollPhase])
 
-	// Task switch: reset and begin a short hydration window.
-	//
-	// Decision matrix:
-	//   - No task selected → USER_BROWSING_HISTORY (empty state)
-	//   - Task previously viewed AND user was NOT at bottom last time
-	//     → restore saved scroll position (user was reading history)
-	//   - First visit OR user was at bottom last time
-	//     → scroll to the *current* bottom and enter anchored following
-	//     (new messages may have arrived since last visit)
+	// Task switch: always enter hydration and scroll to the bottom.
 	useEffect(() => {
-		log("task-switch: taskTs", taskTs, "isHydrating", isHydratingRef.current)
 		isAtBottomRef.current = false
 		clearHydrationWindow()
 		cancelReanchorFrame()
@@ -448,25 +256,7 @@ export function useScrollLifecycle({
 		if (taskTs) {
 			transitionScrollPhase("HYDRATING_PINNED_TO_BOTTOM")
 			setShowScrollToBottom(false)
-
-			const saved = taskScrollPositionRef.current.get(taskTs)
-			if (saved !== undefined) {
-				log(
-					"task-switch: found saved",
-					JSON.stringify({ taskTs, startIndex: saved.startIndex, atBottom: saved.atBottom }),
-				)
-			} else {
-				log("task-switch: no saved position for taskTs", taskTs)
-			}
-
-			if (saved !== undefined && saved.startIndex > 0 && !saved.atBottom) {
-				// User was browsing history — restore exact position.
-				startRestoreWindow(saved.startIndex)
-			} else {
-				// First visit or user was following the bottom —
-				// scroll to the (possibly updated) bottom.
-				startHydrationWindow()
-			}
+			startHydrationWindow()
 		} else {
 			transitionScrollPhase("USER_BROWSING_HISTORY")
 			setShowScrollToBottom(false)
@@ -476,14 +266,7 @@ export function useScrollLifecycle({
 			clearHydrationWindow()
 			cancelReanchorFrame()
 		}
-	}, [
-		cancelReanchorFrame,
-		clearHydrationWindow,
-		startHydrationWindow,
-		startRestoreWindow,
-		taskTs,
-		transitionScrollPhase,
-	])
+	}, [cancelReanchorFrame, clearHydrationWindow, startHydrationWindow, taskTs, transitionScrollPhase])
 
 	// -----------------------------------------------------------------------
 	// Row height change handler
@@ -540,14 +323,6 @@ export function useScrollLifecycle({
 
 	const atBottomStateChangeCallback = useCallback(
 		(isAtBottom: boolean) => {
-			log(
-				"atBottomStateChange:",
-				isAtBottom,
-				"phase:",
-				scrollPhaseRef.current,
-				"hydrating:",
-				isHydratingRef.current,
-			)
 			isAtBottomRef.current = isAtBottom
 
 			const currentPhase = scrollPhaseRef.current
@@ -722,8 +497,6 @@ export function useScrollLifecycle({
 		enterUserBrowsingHistory,
 		followOutputCallback,
 		atBottomStateChangeCallback,
-		rangeChangedCallback,
-		initialScrollIndex,
 		scrollToBottomAuto,
 		isAtBottomRef,
 		scrollPhaseRef,

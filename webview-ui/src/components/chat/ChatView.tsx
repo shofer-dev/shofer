@@ -4,7 +4,6 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
 import removeMd from "remove-markdown"
 import useSound from "use-sound"
 import { LRUCache } from "lru-cache"
-import { Trans } from "react-i18next"
 
 import { useDebounceEffect } from "@src/utils/useDebounceEffect"
 import { appendImages } from "@src/utils/imageUtils"
@@ -192,7 +191,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	useEffect(() => {
 		shoferAskRef.current = shoferAsk
 	}, [shoferAsk])
-
 
 	// Keep inputValueRef in sync with inputValue state
 	useEffect(() => {
@@ -1573,8 +1571,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		enterUserBrowsingHistory,
 		followOutputCallback,
 		atBottomStateChangeCallback,
-		rangeChangedCallback,
-		initialScrollIndex,
 		scrollToBottomAuto,
 		isAtBottomRef,
 		scrollPhaseRef,
@@ -1995,15 +1991,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							className="scrollable grow overflow-y-scroll mb-1"
 							increaseViewportBy={{ top: 3_000, bottom: 1000 }}
 							data={groupedMessages}
-							{...(initialScrollIndex !== undefined &&
-							initialScrollIndex > 0 &&
-							initialScrollIndex < groupedMessages.length
-								? { initialTopMostItemIndex: initialScrollIndex }
-								: {})}
+							initialTopMostItemIndex={groupedMessages.length}
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
-							rangeChanged={rangeChangedCallback}
 							atBottomThreshold={10}
 						/>
 						<SessionSearch
