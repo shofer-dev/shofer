@@ -22,6 +22,7 @@ import insertEdit from "./insert_edit"
 import listCodeUsages from "./list_code_usages"
 import listFiles from "./list_files"
 import newTask from "./new_task"
+import askHelperAgent from "./ask_helper_agent"
 import readCommandOutput from "./read_command_output"
 import { createReadFileTool, type ReadFileToolOptions } from "./read_file"
 import readProjectStructure from "./read_project_structure"
@@ -69,6 +70,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 	}
 
 	return [
+		askHelperAgent,
 		accessMcpResource,
 		apply_diff,
 		applyPatch,

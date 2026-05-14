@@ -41,6 +41,7 @@ import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
 import { codebaseSearchWithLspTool } from "../tools/CodebaseSearchWithLspTool"
+import { askHelperAgentTool } from "../tools/AskHelperAgentTool"
 import { createDirectoryTool } from "../tools/CreateDirectoryTool"
 import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool"
 import { fetchWebPageTool } from "../tools/FetchWebPageTool"
@@ -397,6 +398,8 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name}]`
 					case "codebase_search":
 						return `[${block.name} for '${block.params.query}']`
+					case "ask_helper_agent":
+						return `[${block.name} for '${block.params.question}']`
 					case "codebase_search_with_lsp":
 						return `[${block.name} for '${block.params.query}']`
 					case "read_command_output":
@@ -818,6 +821,13 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "codebase_search":
 					await codebaseSearchTool.handle(shofer, block as ToolUse<"codebase_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "ask_helper_agent":
+					await askHelperAgentTool.handle(shofer, block as ToolUse<"ask_helper_agent">, {
 						askApproval,
 						handleError,
 						pushToolResult,
