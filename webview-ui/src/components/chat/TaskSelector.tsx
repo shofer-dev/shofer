@@ -83,6 +83,27 @@ export const TASK_STATE_CONFIG: Record<
 		icon: "codicon-check",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
 	},
+	completed_1: {
+		dot: "bg-[var(--vscode-descriptionForeground)]",
+		label: "Completed",
+		pulse: false,
+		icon: "codicon-circle-large-outline",
+		iconColor: "text-[var(--vscode-descriptionForeground)]",
+	},
+	completed_2: {
+		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
+		label: "Completed",
+		pulse: false,
+		icon: "codicon-circle-large-filled",
+		iconColor: "text-[var(--vscode-charts-green,#16a34a)] opacity-50",
+	},
+	completed_3: {
+		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
+		label: "Completed",
+		pulse: false,
+		icon: "codicon-pass-filled",
+		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
+	},
 	idle: {
 		dot: "bg-[var(--vscode-descriptionForeground)]",
 		label: "Idle",
@@ -283,7 +304,13 @@ function renderTaskRow({
 }: TaskRowParams) {
 	const { item, depth, isLastSibling, ancestorIsLast } = node
 	const runtime = runtimeStateMap.get(item.id)
-	const state = item.status === "completed" ? "completed" : (runtime?.state ?? item.taskExecutionState ?? "idle")
+	const resolvedRating = item.status === "completed" ? item.completionRating : undefined
+	const state =
+		item.status === "completed"
+			? resolvedRating
+				? `completed_${resolvedRating}`
+				: "completed"
+			: (runtime?.state ?? item.taskExecutionState ?? "idle")
 	const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
 	const isCurrent = item.id === currentTaskId
 	const isEditing = editingTaskId === item.id
@@ -325,15 +352,30 @@ function renderTaskRow({
 				</span>
 			)}
 
-			{/* Leading status icon (codicon) — matches VS Code Sessions panel look */}
+			{/* Leading status icon — matches VS Code Sessions panel look */}
 			<StandardTooltip content={stateConfig.label}>
-				<span
-					className={cn(
-						"codicon flex-shrink-0 text-base leading-none",
-						stateConfig.icon,
-						stateConfig.iconColor,
-					)}
-				/>
+				{state === "completed_2" ? (
+					<svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" aria-hidden="true">
+						<circle
+							cx="8"
+							cy="8"
+							r="6"
+							fill="none"
+							stroke="currentColor"
+							className="text-[var(--vscode-descriptionForeground)]"
+							strokeWidth="1.5"
+						/>
+						<path d="M 8 2 A 6 6 0 0 1 8 14" fill="var(--vscode-charts-green,#16a34a)" />
+					</svg>
+				) : (
+					<span
+						className={cn(
+							"codicon flex-shrink-0 text-base leading-none",
+							stateConfig.icon,
+							stateConfig.iconColor,
+						)}
+					/>
+				)}
 			</StandardTooltip>
 
 			{/* Title + subtitle column */}
