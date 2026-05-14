@@ -9,6 +9,7 @@ export const taskExecutionStateSchema = z.enum([
 	"waiting_input", // Paused, needs user approval/input
 	"paused", // Manually paused by user
 	"error", // Stopped due to an error
+	"completed", // Finished via attempt_completion
 ])
 
 export type TaskExecutionState = z.infer<typeof taskExecutionStateSchema>
@@ -56,7 +57,6 @@ export const historyItemSchema = z.object({
 	mode: z.string().optional(),
 	apiConfigName: z.string().optional(), // Provider profile name for sticky profile feature
 	costLimit: costLimitSchema.optional(), // Per-root-task budget cap
-	status: z.enum(["active", "completed", "delegated"]).optional(),
 	delegatedToId: z.string().optional(), // Last child this parent delegated to
 	childIds: z.array(z.string()).optional(), // All children spawned by this task
 	awaitingChildId: z.string().optional(), // Child currently awaited (set when delegated)

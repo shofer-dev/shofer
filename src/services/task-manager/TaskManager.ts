@@ -687,15 +687,14 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 *
 	 * After a restart there are no live Task instances, so any execution state
 	 * that implies in-flight work (`running`, `waiting_input`) is stale and must
-	 * be downgraded to `idle`. Terminal states (`error`, `paused`, `idle`) are
-	 * preserved. Tasks that finished successfully (status === "completed") are
-	 * also surfaced as `idle` so the green check from `item.status` wins in the
-	 * UI's resolution chain.
+	 * be downgraded to `idle`. Terminal states (`completed`, `error`, `paused`)
+	 * are preserved across restarts.
 	 */
 	private static sanitizeRestoredState(item: HistoryItem): ManagedTaskState {
 		const persisted = item.taskExecutionState
-		if (item.status === "completed") return "idle"
 		if (persisted === "running" || persisted === "waiting_input") return "idle"
+		// Terminal states persist across restarts
+		if (persisted === "completed" || persisted === "error" || persisted === "paused") return persisted
 		return persisted ?? "idle"
 	}
 

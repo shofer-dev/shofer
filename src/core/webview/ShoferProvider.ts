@@ -540,10 +540,9 @@ export class ShoferProvider
 				try {
 					const { historyItem: parentHistory } = await this.getTaskWithId(parentTaskId)
 
-					if (parentHistory.status === "delegated" && parentHistory.awaitingChildId === childTaskId) {
+					if (parentHistory.delegatedToId !== undefined && parentHistory.awaitingChildId === childTaskId) {
 						await this.updateTaskHistory({
 							...parentHistory,
-							status: "active",
 							awaitingChildId: undefined,
 						})
 						this.log(
@@ -1148,7 +1147,7 @@ export class ShoferProvider
 			onCreated: this.taskCreationCallback,
 			startTask: options?.startTask ?? true,
 			// Preserve the status from the history item to avoid overwriting it when the task saves messages
-			initialStatus: historyItem.status,
+			initialStatus: historyItem.taskExecutionState ?? "idle",
 		})
 
 		if (isRehydratingCurrentTask) {
@@ -3593,7 +3592,6 @@ export class ShoferProvider
 			const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), childTaskId]))
 			await this.updateTaskHistory({
 				...parentHistory,
-				status: "active",
 				awaitingChildId: undefined,
 				completedByChildId: childTaskId,
 				completionResultSummary: completionResult,

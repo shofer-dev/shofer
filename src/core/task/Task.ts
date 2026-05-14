@@ -240,7 +240,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					const provider = this.providerRef.deref()
 					if (provider) {
 						const historyItem = await (provider as any).getTaskWithId(childId)
-						handle.status = historyItem.status === "completed" ? "completed" : "error"
+						handle.status = historyItem.taskExecutionState === "completed" ? "completed" : "error"
 					}
 				} catch (_) {
 					handle.status = "error"
