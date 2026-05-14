@@ -32,6 +32,7 @@ import {
 	type ToolProgressStatus,
 	type HistoryItem,
 	type CreateTaskOptions,
+	type TaskExecutionState,
 	type ModelInfo,
 	type ShoferApiReqCancelReason,
 	type ShoferApiReqInfo,
@@ -167,7 +168,7 @@ export interface TaskOptions extends CreateTaskOptions {
 	 */
 	cwd?: string
 	/** Initial status for the task's history item (e.g., "active" for child tasks) */
-	initialStatus?: import("@shofer/types").TaskExecutionState
+	initialStatus?: TaskExecutionState
 }
 
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
@@ -559,7 +560,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private debouncedEmitTokenUsage: ReturnType<typeof debounce>
 
 	// Initial status for the task's history item (set at creation time to avoid race conditions)
-	private readonly initialStatus?: import("@shofer/types").TaskExecutionState
+	private readonly initialStatus?: TaskExecutionState
 
 	// When true, this task is a background child of another task. Persisted onto
 	// the task's HistoryItem.isBackground from the first save and used by
