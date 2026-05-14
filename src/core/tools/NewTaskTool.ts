@@ -195,7 +195,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					task as any,
 					{
 						initialTodos: todoItems,
-						initialStatus: "active",
+						initialStatus: "running",
 						// startTask is irrelevant here: createTask always calls task.start() internally.
 						initialMode: effectiveMode,
 						// openInStack=false: child is NOT pushed onto shoferStack, so the parent
@@ -262,7 +262,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					task as any,
 					{
 						initialTodos: todoItems,
-						initialStatus: "active",
+						initialStatus: "running",
 						initialMode: effectiveMode,
 						// openInStack=true (default): child is pushed onto shoferStack on top of parent.
 						openInStack: true,
