@@ -126,9 +126,6 @@ vi.mock("@src/components/welcome/ShoferHero", () => ({
 	},
 }))
 
-// Mock TelemetryBanner component
-vi.mock("../common/TelemetryBanner", () => ({
-	default: function MockTelemetryBanner() {
 		return null // Don't render anything to avoid interference
 	},
 }))

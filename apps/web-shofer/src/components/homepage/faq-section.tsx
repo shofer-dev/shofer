@@ -92,7 +92,7 @@ const faqs: FAQItem[] = [
 				(or GitHub). Add your AI keys (OpenAI, Anthropic, or other) in the extension settings. Open the Shofer
 				panel (the rocket icon) in VS Code, and start typing commands in plain English!{" "}
 				<a
-					href="https://docs.shofer.dev/tutorial-videos"
+					href="https://shofer.dev/docs/tutorial-videos"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">
@@ -190,7 +190,7 @@ const faqs: FAQItem[] = [
 			<>
 				Check out our{" "}
 				<a
-					href="https://docs.shofer.dev"
+					href="https://shofer.dev/docs"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="text-primary underline-offset-4 hover:underline">

@@ -98,13 +98,6 @@ vi.mock("../Announcement", () => ({
 	},
 }))
 
-// Mock DismissibleUpsell component
-vi.mock("@/components/common/DismissibleUpsell", () => ({
-	default: function MockDismissibleUpsell({ children }: { children: React.ReactNode }) {
-		return <div data-testid="dismissible-upsell">{children}</div>
-	},
-}))
-
 // Mock QueuedMessages component
 vi.mock("../QueuedMessages", () => ({
 	QueuedMessages: function MockQueuedMessages({
@@ -147,9 +140,6 @@ vi.mock("@src/components/welcome/ShoferHero", () => ({
 	},
 }))
 
-// Mock TelemetryBanner component
-vi.mock("../common/TelemetryBanner", () => ({
-	default: function MockTelemetryBanner() {
 		return null // Don't render anything to avoid interference
 	},
 }))
@@ -667,143 +657,6 @@ describe("ChatView - Version Indicator Tests", () => {
 
 		// Should display version indicator on welcome screen
 		expect(queryByTestId("version-indicator")).toBeInTheDocument()
-	})
-})
-
-describe("ChatView - DismissibleUpsell Display Tests", () => {
-	beforeEach(() => vi.clearAllMocks())
-
-	it("does not show DismissibleUpsell when user is authenticated to Cloud", () => {
-		const { queryByTestId } = renderChatView()
-
-		// Hydrate state with user authenticated to cloud
-		mockPostMessage({
-			cloudIsAuthenticated: true,
-			taskHistory: [
-				{ id: "1", ts: Date.now() - 3000 },
-				{ id: "2", ts: Date.now() - 2000 },
-				{ id: "3", ts: Date.now() - 1000 },
-				{ id: "4", ts: Date.now() },
-			],
-			shoferMessages: [], // No active task
-		})
-
-		// Should not show DismissibleUpsell when authenticated
-		expect(queryByTestId("dismissible-upsell")).not.toBeInTheDocument()
-	})
-
-	it("does not show DismissibleUpsell when user has only run 3 tasks in their history", () => {
-		const { queryByTestId } = renderChatView()
-
-		// Hydrate state with user not authenticated but only 3 tasks
-		mockPostMessage({
-			cloudIsAuthenticated: false,
-			taskHistory: [
-				{ id: "1", ts: Date.now() - 2000 },
-				{ id: "2", ts: Date.now() - 1000 },
-				{ id: "3", ts: Date.now() },
-			],
-			shoferMessages: [], // No active task
-		})
-
-		// Should not show DismissibleUpsell with less than 4 tasks
-		expect(queryByTestId("dismissible-upsell")).not.toBeInTheDocument()
-	})
-
-	it("shows DismissibleUpsell when user is not authenticated and has run 6 or more tasks", async () => {
-		const { getByTestId } = renderChatView()
-
-		// Hydrate state with user not authenticated and 4 tasks
-		mockPostMessage({
-			cloudIsAuthenticated: false,
-			taskHistory: [
-				{ id: "1", ts: Date.now() - 6000 },
-				{ id: "2", ts: Date.now() - 5000 },
-				{ id: "3", ts: Date.now() - 4000 },
-				{ id: "4", ts: Date.now() - 3000 },
-				{ id: "5", ts: Date.now() - 2000 },
-				{ id: "6", ts: Date.now() - 1000 },
-				{ id: "7", ts: Date.now() },
-			],
-			shoferMessages: [], // No active task
-		})
-
-		// Wait for component to render and show DismissibleUpsell
-		await waitFor(() => {
-			expect(getByTestId("dismissible-upsell")).toBeInTheDocument()
-		})
-	})
-
-	it("does not show DismissibleUpsell when there is an active task (regardless of auth status)", async () => {
-		const { queryByTestId } = renderChatView()
-
-		// Hydrate state with active task
-		mockPostMessage({
-			cloudIsAuthenticated: false,
-			taskHistory: [
-				{ id: "1", ts: Date.now() - 3000 },
-				{ id: "2", ts: Date.now() - 2000 },
-				{ id: "3", ts: Date.now() - 1000 },
-				{ id: "4", ts: Date.now() },
-			],
-			shoferMessages: [
-				{
-					type: "say",
-					say: "task",
-					ts: Date.now(),
-					text: "Active task",
-				},
-			],
-		})
-
-		// Wait for component to render with active task
-		await waitFor(() => {
-			// Should not show DismissibleUpsell during active task
-			expect(queryByTestId("dismissible-upsell")).not.toBeInTheDocument()
-			// Should not show ShoferTips either since the entire welcome screen is hidden during active tasks
-			expect(queryByTestId("shofer-tips")).not.toBeInTheDocument()
-			// Should not show ShoferHero either since the entire welcome screen is hidden during active tasks
-			expect(queryByTestId("shofer-hero")).not.toBeInTheDocument()
-		})
-	})
-
-	it("shows ShoferTips when user is authenticated (instead of DismissibleUpsell)", () => {
-		const { queryByTestId, getByTestId } = renderChatView()
-
-		// Hydrate state with user authenticated to cloud
-		mockPostMessage({
-			cloudIsAuthenticated: true,
-			taskHistory: [
-				{ id: "1", ts: Date.now() - 3000 },
-				{ id: "2", ts: Date.now() - 2000 },
-				{ id: "3", ts: Date.now() - 1000 },
-				{ id: "4", ts: Date.now() },
-			],
-			shoferMessages: [], // No active task
-		})
-
-		// Should not show DismissibleUpsell but should show ShoferTips
-		expect(queryByTestId("dismissible-upsell")).not.toBeInTheDocument()
-		expect(getByTestId("shofer-tips")).toBeInTheDocument()
-	})
-
-	it("shows ShoferTips when user has fewer than 6 tasks (instead of DismissibleUpsell)", () => {
-		const { queryByTestId, getByTestId } = renderChatView()
-
-		// Hydrate state with user not authenticated but fewer than 4 tasks
-		mockPostMessage({
-			cloudIsAuthenticated: false,
-			taskHistory: [
-				{ id: "1", ts: Date.now() - 2000 },
-				{ id: "2", ts: Date.now() - 1000 },
-				{ id: "3", ts: Date.now() },
-			],
-			shoferMessages: [], // No active task
-		})
-
-		// Should not show DismissibleUpsell but should show ShoferTips
-		expect(queryByTestId("dismissible-upsell")).not.toBeInTheDocument()
-		expect(getByTestId("shofer-tips")).toBeInTheDocument()
 	})
 })
 
