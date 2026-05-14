@@ -4976,7 +4976,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					await this.overwriteApiConversationHistory(truncateResult.messages)
 				}
 				if (truncateResult.error) {
-					await this.say("condense_context_error", truncateResult.error)
+					if (truncateResult.truncationId) {
+						// Condensation failed but sliding window truncation succeeded as fallback.
+						// Log the condensation error to the output channel instead of alarming the user
+						// in chat — the fallback handled it and the conversation continues normally.
+						this.diagLog(
+							`[Task#${this.taskId}] Context condensation failed (${truncateResult.error}). ` +
+								`Fallback sliding window truncation succeeded ` +
+								`(removed ${truncateResult.messagesRemoved ?? 0} messages). ` +
+								(truncateResult.errorDetails ? `Details: ${truncateResult.errorDetails}` : ""),
+						)
+					} else {
+						// No fallback available — surface the error to the user
+						await this.say("condense_context_error", truncateResult.error)
+					}
 				}
 				if (truncateResult.summary) {
 					const { summary, cost, prevContextTokens, newContextTokens = 0, condenseId } = truncateResult
