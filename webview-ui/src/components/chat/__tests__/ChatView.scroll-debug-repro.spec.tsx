@@ -79,7 +79,6 @@ vi.mock("@src/hooks/useCloudUpsell", () => ({
 	}),
 }))
 
-vi.mock("../common/TelemetryBanner", nullDefaultModule)
 vi.mock("../common/VersionIndicator", nullDefaultModule)
 vi.mock("../history/HistoryPreview", nullDefaultModule)
 vi.mock("@src/components/welcome/ShoferHero", nullDefaultModule)

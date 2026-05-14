@@ -133,7 +133,7 @@ export function SlackThreadDemo({ className }: SlackThreadDemoProps): JSX.Elemen
 						<div>
 							The documentation for using Shofer from Slack is here:{" "}
 							<FakeLink className="hover:text-violet-200">
-								https://docs.shofer.dev/shofer-code-cloud/slack-integration
+								https://shofer.dev/docs/shofer-code-cloud/slack-integration
 							</FakeLink>
 						</div>
 						<div className="text-[#B8BBC0]">Here are some pages from our site we can use for guidance:</div>

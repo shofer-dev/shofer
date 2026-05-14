@@ -52,7 +52,6 @@ vi.mock("@src/components/welcome/ShoferHero", () => ({
 	default: () => null,
 }))
 
-vi.mock("../common/TelemetryBanner", () => ({
 	default: () => null,
 }))
 

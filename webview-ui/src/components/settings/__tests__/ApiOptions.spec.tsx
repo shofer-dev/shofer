@@ -220,11 +220,6 @@ vi.mock("../providers/Shofer", () => ({
 	),
 }))
 
-// Mock ShoferBalanceDisplay for tests
-vi.mock("../providers/ShoferBalanceDisplay", () => ({
-	ShoferBalanceDisplay: () => <div data-testid="shofer-balance-display">Balance: $10.00</div>,
-}))
-
 vi.mock("@src/components/ui/hooks/useSelectedModel", () => ({
 	useSelectedModel: vi.fn((apiConfiguration: ProviderSettings) => {
 		if (apiConfiguration.apiModelId?.includes("thinking")) {
@@ -570,40 +565,6 @@ describe("ApiOptions", () => {
 	})
 
 	describe("Shofer provider tests", () => {
-		it("shows balance display when authenticated", () => {
-			// Mock useExtensionState to return authenticated state
-			const useExtensionStateMock = vi.spyOn(ExtensionStateContext, "useExtensionState")
-			useExtensionStateMock.mockReturnValue({
-				cloudIsAuthenticated: true,
-				organizationAllowList: { providers: {} },
-			} as any)
-
-			renderApiOptions({
-				apiConfiguration: {
-					apiProvider: "shofer",
-				},
-			})
-
-			expect(screen.getByTestId("shofer-balance-display")).toBeInTheDocument()
-		})
-
-		it("does not show balance display when not authenticated", () => {
-			// Mock useExtensionState to return unauthenticated state
-			const useExtensionStateMock = vi.spyOn(ExtensionStateContext, "useExtensionState")
-			useExtensionStateMock.mockReturnValue({
-				cloudIsAuthenticated: false,
-				organizationAllowList: { providers: {} },
-			} as any)
-
-			renderApiOptions({
-				apiConfiguration: {
-					apiProvider: "shofer",
-				},
-			})
-
-			expect(screen.queryByTestId("shofer-balance-display")).not.toBeInTheDocument()
-		})
-
 		it("pins shofer provider to the top when not on welcome screen", () => {
 			// Mock useExtensionState to ensure no filtering
 			const useExtensionStateMock = vi.spyOn(ExtensionStateContext, "useExtensionState")

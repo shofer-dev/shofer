@@ -2,7 +2,6 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo
 import { useDeepCompareEffect, useEvent } from "react-use"
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
 import removeMd from "remove-markdown"
-import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import useSound from "use-sound"
 import { LRUCache } from "lru-cache"
 import { Trans } from "react-i18next"
@@ -35,7 +34,6 @@ import ShoferTips from "@src/components/welcome/ShoferTips"
 import { StandardTooltip, Button } from "@src/components/ui"
 // CloudUpsellDialog removed
 
-import TelemetryBanner from "../common/TelemetryBanner"
 import VersionIndicator from "../common/VersionIndicator"
 import HistoryPreview from "../history/HistoryPreview"
 import Announcement from "./Announcement"
@@ -49,9 +47,7 @@ import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
 import FileChangesPanel from "./FileChangesPanel"
 import SessionSearch from "./SessionSearch"
-import DismissibleUpsell from "../common/DismissibleUpsell"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
-import { Cloud } from "lucide-react"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
 
 export interface ChatViewProps {
@@ -90,10 +86,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setMode,
 		alwaysAllowModeSwitch,
 		customModes,
-		telemetrySetting,
 		soundEnabled,
 		soundVolume,
-		cloudIsAuthenticated,
 		messageQueue = [],
 		parallelTasks,
 		taskNotifications,
@@ -199,10 +193,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		shoferAskRef.current = shoferAsk
 	}, [shoferAsk])
 
-	const _isUpsellOpen = false
-	const openUpsell = () => {}
-	const _closeUpsell = () => {}
-	const _handleConnect = () => {}
 
 	// Keep inputValueRef in sync with inputValue state
 	useEffect(() => {
@@ -1907,7 +1897,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					</div>
 				</div>
 			)}
-			{telemetrySetting === "unset" && <TelemetryBanner />}
 			{(showAnnouncement || showAnnouncementModal) && (
 				<Announcement
 					hideAnnouncement={() => {
@@ -1987,22 +1976,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								{/* Everyone should see their task history if any */}
 								{taskHistory.length > 0 && <HistoryPreview />}
 							</div>
-							{/* Logged out users should see a one-time upsell, but not for brand new users */}
-							{!cloudIsAuthenticated && taskHistory.length >= 6 && (
-								<DismissibleUpsell
-									upsellId="taskList2"
-									icon={<Cloud className="size-5 shrink-0" />}
-									onClick={() => openUpsell()}
-									dismissOnClick={false}
-									className="bg-none mt-6 border-border rounded-xl p-3 !text-base">
-									<Trans
-										i18nKey="cloud:upsell.taskList"
-										components={{
-											learnMoreLink: <VSCodeLink href="#" />,
-										}}
-									/>
-								</DismissibleUpsell>
-							)}
 						</div>
 					</div>
 					<TaskSelector

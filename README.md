@@ -41,7 +41,7 @@
 - [简体中文](locales/zh-CN/README.md)
 - [繁體中文](locales/zh-TW/README.md)
 - ...
-  </details>
+    </details>
 
 ---
 
@@ -65,7 +65,7 @@ Shofer adapts to how you work:
 - Debug Mode: trace issues, add logs, isolate root causes
 - Custom Modes: build specialized modes for your team or workflow
 
-Learn more: [Using Modes](https://docs.shofer.dev/basic-usage/using-modes) • [Custom Modes](https://docs.shofer.dev/advanced-usage/custom-modes)
+Learn more: [Using Modes](https://shofer.dev/docs/basic-usage/using-modes) • [Custom Modes](https://shofer.dev/docs/advanced-usage/custom-modes)
 
 ## Tutorial & Feature Videos
 
@@ -78,12 +78,12 @@ Learn more: [Using Modes](https://docs.shofer.dev/basic-usage/using-modes) • [
 
 </div>
 <p align="center">
-<a href="https://docs.shofer.dev/tutorial-videos">More quick tutorial and feature videos...</a>
+<a href="https://shofer.dev/docs/tutorial-videos">More quick tutorial and feature videos...</a>
 </p>
 
 ## Resources
 
-- **[Documentation](https://docs.shofer.dev):** The official guide to installing, configuring, and mastering Shofer.
+- **[Documentation](https://shofer.dev/docs):** The official guide to installing, configuring, and mastering Shofer.
 - **[YouTube Channel](https://youtube.com/@shoferyt?feature=shared):** Watch tutorials and see features in action.
 - **[Discord Server](https://discord.gg/shofer):** Join the community for real-time help and discussion.
 - **[Reddit Community](https://www.reddit.com/r/Shofer):** Share your experiences and see what others are building.
