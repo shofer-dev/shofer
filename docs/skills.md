@@ -2,13 +2,13 @@
 
 ## Overview
 
-Shofer implements a **lazy-loading skill system** — only skill metadata (name, description, location) is included in the system prompt. Full skill instructions are loaded on-demand when the model invokes `skill_load`. Each `Task` tracks which skills have been loaded in a `loadedSkills` Map, preventing redundant loads and auto-clearing on context summarization.
+Shofer implements a **lazy-loading skill system** — only skill metadata (name, description, location) is included in the system prompt. Full skill instructions are loaded on-demand when the model invokes `skills`. Each `Task` tracks which skills have been loaded in a `loadedSkills` Map, preventing redundant loads and auto-clearing on context summarization.
 
 ## Architecture
 
 ```
 ┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
-│ SkillsManager│────▶│ System Prompt    │────▶│ Model evaluates │────▶│ skill_load   │
+│ SkillsManager│────▶│ System Prompt    │────▶│ Model evaluates │────▶│ skills   │
 │ .discover()  │     │ <available_skills>│     │ skill check     │     │ native tool  │
 └──────────────┘     └──────────────────┘     └─────────────────┘     └──────┬───────┘
                                                                              │
@@ -97,19 +97,19 @@ Only metadata is included in the system prompt ([`skills.ts`](src/core/prompts/s
 The system prompt includes instructions telling the model to:
 
 1. **Evaluate** every request against skill descriptions
-2. **If a skill matches**: Use `skill_load` to load it, then follow instructions
+2. **If a skill matches**: Use `skills` to load it, then follow instructions
 3. **If no skill matches**: Proceed normally
 4. **Constraints**: Don't load every skill up front; don't reload already-loaded skills
 
 ## Native Tools
 
-The `skill_load` native tool loads skill instructions into context:
+The `skills` native tool loads skill instructions into context:
 
-| Tool                                                              | Purpose                                       |
-| ----------------------------------------------------------------- | --------------------------------------------- |
-| [`skill_load`](src/core/prompts/tools/native-tools/skill_load.ts) | Load a skill's full instructions into context |
+| Tool                                                      | Purpose                                       |
+| --------------------------------------------------------- | --------------------------------------------- |
+| [`skills`](src/core/prompts/tools/native-tools/skills.ts) | Load a skill's full instructions into context |
 
-### `skill_load`
+### `skills`
 
 ```json
 {
@@ -118,7 +118,7 @@ The `skill_load` native tool loads skill instructions into context:
 }
 ```
 
-**Handler** ([`SkillLoadTool.ts`](src/core/tools/SkillLoadTool.ts)):
+**Handler** ([`SkillsTool.ts`](src/core/tools/SkillsTool.ts)):
 
 1. Validates `skill` parameter
 2. Checks `task.loadedSkills` — if already loaded, returns `"Skill 'X' is already loaded (no-op)."`
@@ -146,7 +146,7 @@ Each `Task` maintains a [`loadedSkills: Map<string, string>`](src/core/task/Task
 
 | Event                 | Behavior                                                                                  |
 | --------------------- | ----------------------------------------------------------------------------------------- |
-| **Skill loaded**      | `SkillLoadTool.execute()` records `loadedSkills.set(name, path)`                          |
+| **Skill loaded**      | `SkillsTool.execute()` records `loadedSkills.set(name, path)`                             |
 | **Reload attempted**  | Returns no-op message — no file re-read, no approval prompt                               |
 | **Context condensed** | `loadedSkills.clear()` called in all three condense paths                                 |
 | **UI refresh (↻)**    | `handleRequestSkills()` calls `discoverSkills()` + returns `loadedSkills` in IPC response |
@@ -231,12 +231,12 @@ When multiple skills have the same name:
 | File                                                                            | Purpose                                            |
 | ------------------------------------------------------------------------------- | -------------------------------------------------- |
 | [`Task.ts`](src/core/task/Task.ts:449)                                          | `loadedSkills` Map, condense clearing              |
-| [`SkillLoadTool.ts`](src/core/tools/SkillLoadTool.ts)                           | Handler: no-op check, tracking, approval           |
+| [`SkillsTool.ts`](src/core/tools/SkillsTool.ts)                                 | Handler: no-op check, tracking, approval           |
 | [`SkillsManager.ts`](src/services/skills/SkillsManager.ts)                      | Discovery, caching, file watching                  |
 | [`skillInvocation.ts`](src/services/skills/skillInvocation.ts)                  | Content loading, result formatting                 |
 | [`skills.ts`](src/shared/skills.ts)                                             | Type definitions (`SkillMetadata`, `SkillContent`) |
 | [`skills.ts` (prompt)](src/core/prompts/sections/skills.ts)                     | System prompt section generation                   |
-| [`skill_load.ts`](src/core/prompts/tools/native-tools/skill_load.ts)            | Native tool schema                                 |
+| [`skills.ts`](src/core/prompts/tools/native-tools/skills.ts)                    | Native tool schema                                 |
 | [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts)           | IPC handlers (requestSkills, create, delete, move) |
 | [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)           | Popover UI with loaded/unloaded split + refresh    |
 | [`ExtensionStateContext.tsx`](webview-ui/src/context/ExtensionStateContext.tsx) | `loadedSkills` state management                    |

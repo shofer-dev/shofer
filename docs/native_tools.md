@@ -380,7 +380,7 @@ Send feedback to the Shofer.Dev developers. The feedback message is appended to 
 
 No approval prompt needed — non-destructive, written only to the extension output channel.
 
-### `skill_load`
+### `skills`
 
 Load and execute a skill by name. Skills provide specialized instructions for common tasks.
 
@@ -393,7 +393,7 @@ Load and execute a skill by name. Skills provide specialized instructions for co
 
 - Reads the full `SKILL.md` body from disk, parses YAML frontmatter, and returns formatted instructions.
 - **Loaded skill tracking**: Each successfully loaded skill is recorded on the `Task` object (`loadedSkills: Map<name, path>`).
-- **Reload is a no-op**: Calling `skill_load` for an already-loaded skill returns a no-op message without re-reading the file.
+- **Reload is a no-op**: Calling `skills` for an already-loaded skill returns a no-op message without re-reading the file.
 - **Cleared on condense**: All loaded skills are cleared when context summarization/truncation triggers (see [`skills.md`](skills.md#loaded-skill-tracking)).
 
 ---

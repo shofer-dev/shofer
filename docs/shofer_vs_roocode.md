@@ -342,22 +342,7 @@ See [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for the f
 
 ## 17. Cloud removal and marketplace/telemetry feature flags
 
-Given that Shofer
-
-### Cloud Feature Removal
-
-All Shofer Cloud / Shofer Router functionality was **removed entirely**:
-
-- Cloud account creation and sign-in flow removed from the welcome screen.
-- Shofer Router option removed from provider selection.
-- Cloud icon and button removed from the top bar.
-- `@shofer/cloud` package and all its types, services, and tests deleted.
-- Welcome screen simplified from 3 screens to 2 screens (landing → configure provider).
-- `CloudService`, `MdmService`, `ShoferHandler`, `AuthOrigin` type — all removed.
-
-> 📸 TODO: screenshot of simplified welcome screen (2-step: landing → configure provider)
-
-> **Opinionated change**: Shofer is now purely local-first. All configuration, API keys, and task history stay on the user's machine. The simplified welcome flow gets users to their first task faster.
+Given that Shofer runs entirely locally with no server-side dependencies, other than your LLM provider, the extension was decoupled from all cloud-related features and dependencies. Additionally, marketplace and telemetry features were disabled.
 
 ---
 
@@ -369,17 +354,15 @@ All Shofer Cloud / Shofer Router functionality was **removed entirely**:
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Thinking/reasoning blocks**   | Streaming reasoning/thinking content is now surfaced in the chat UI as collapsible thinking blocks. Models using the VS Code LM API (including GitHub Copilot models) can show their reasoning process. |
 | **MaxTokens from model config** | The provider now passes `maxTokens` from the model configuration to the LLM, respecting model-specific output limits.                                                                                   |
-| **TaskId as conversationId**    | Each task's ID is passed as `conversationId` in model options for better conversation tracking and continuity.                                                                                          |
+| **TaskId as conversationId**    | Each task's ID is now optionally passisng a `conversationId` in model options for better conversation tracking and continuity.                                                                          |
 
 ### Tool Preparing Progress
 
-A new progress indicator appears in chat while the LLM streams tool call arguments. Previously, tool calls appeared abruptly — users now see that a tool invocation is in progress before it executes.
+A new progress indicator appears in chat while the LLM streams tool call arguments. Previously, there was no visual indicator and the cha appeared idle. Now users now see that a tool invocation is in progress before it executes. This addition significantly improves the perceived responsiveness and transparency of tool calls. Users know something is happening while arguments stream in.
 
 See [`tool-preparing-progress.md`](tool-preparing-progress.md) for the full design.
 
 > 📸 TODO: screenshot of tool_preparing spinner row during a tool call argument stream
-
-> **Opinionated change**: This addition significantly improves the perceived responsiveness and transparency of tool calls. Users know something is happening while arguments stream in.
 
 ---
 
@@ -387,35 +370,12 @@ See [`tool-preparing-progress.md`](tool-preparing-progress.md) for the full desi
 
 These are deliberate design decisions that changed the default behavior or appearance of the application.
 
-| Change                                           | Rationale                                                                                                                      |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Pause/play buttons removed from TaskSelector** | Redundant with task header controls. TaskSelector is for navigation, not management.                                           |
-| **Current-task tick removed**                    | The active task is obvious from context (it's the one you're looking at).                                                      |
-| **Default mode: Architect → Code**               | Code mode is the primary use case. Architect is still available but no longer the default.                                     |
-| **BRRR → All auto-approval label**               | "BRRR" (from "YOLO") was rebranded to "All" for clarity and professionalism.                                                   |
-| **Background editing enabled by default**        | The experiment graduated — background diffs are now the standard editing experience.                                           |
-| **Cloud icon removed from top bar**              | Part of the cloud feature removal. The top bar is cleaner with fewer icons.                                                    |
-| **Welcome screen simplified**                    | 3-screen flow (landing → choose provider → configure) became 2 screens (landing → configure). Fewer decisions, faster setup.   |
-| **API request started row auto-hides**           | The "API request started" indicator row now hides on success, reducing chat clutter. Only persists on errors or cancellations. |
-| **File operation approval labels**               | "File Op" → "Remove File" / "Move File" — descriptive subcommand-specific labels.                                              |
-| **Archive over delete**                          | Tasks are archived (hidden) rather than deleted. Data is preserved; nothing is lost.                                           |
-| **Debug logging via outputChannel**              | All debug logging uses the proper VS Code output channel instead of `console.log`, keeping the developer console clean.        |
-| **Tool prefixes: `vscode_` → `ide_`**            | Standardized to be provider-agnostic — tools come from the IDE, not specifically from VS Code.                                 |
-
----
-
-## Summary
-
-Shofer evolved from a single-threaded coding assistant into a **multi-agent platform** where:
-
-- **Tasks are first-class entities** with independent state, history, mode, and lifecycle — users can run multiple conversations simultaneously.
-- **The LLM can orchestrate work** — fanning out to background children, waiting for results, and aggregating findings.
-- **User input is decoupled from LLM processing** — message queue, Send Now, and per-task drafts make the UX feel responsive even during long turns.
-- **Tools are dynamically pluggable** — external extensions contribute tools via a generic provider interface; modes define fine-grained access control.
-- **The UI scales to concurrency** — TaskSelector with hierarchy/archive/pin, state indicators, notifications, and per-task isolation make managing multiple tasks natural.
-- **Drag-and-drop and export** make it easy to provide context and share results.
-- **Opinionated defaults reduce friction** — Code mode, background editing, simplified workflows, and a streamlined welcome screen.
-- **Local-first, no cloud dependency** — everything runs on the user's machine.
+| Change                                    | Rationale                                                                                                                      |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Default mode: Architect → Code**        | Code mode is the primary use case. Architect is still available but no longer the default.                                     |
+| **BRRR → All auto-approval label**        | "BRRR" (from "YOLO") was rebranded to "All" for clarity and professionalism.                                                   |
+| **Background editing enabled by default** | The experiment graduated — background diffs are now the standard editing experience.                                           |
+| **API request started row auto-hides**    | The "API request started" indicator row now hides on success, reducing chat clutter. Only persists on errors or cancellations. |
 
 ---
 
