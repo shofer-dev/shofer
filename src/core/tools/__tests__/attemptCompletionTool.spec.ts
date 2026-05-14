@@ -567,7 +567,7 @@ describe("attemptCompletionTool", () => {
 		})
 
 		describe("rating validation", () => {
-			it("should reject completion when rating is missing", async () => {
+			it("should default to 'poor' when rating is missing", async () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
@@ -588,14 +588,15 @@ describe("attemptCompletionTool", () => {
 
 				await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
 
-				expect(mockTask.consecutiveMistakeCount).toBe(1)
-				expect(mockTask.recordToolError).toHaveBeenCalledWith("attempt_completion")
-				expect(mockPushToolResult).toHaveBeenCalledWith(
+				// Should not block completion — defaults to "poor"
+				expect(mockTask.consecutiveMistakeCount).toBe(0)
+				expect(mockTask.recordToolError).not.toHaveBeenCalled()
+				expect(mockPushToolResult).not.toHaveBeenCalledWith(
 					expect.stringContaining("Missing value for required parameter"),
 				)
 			})
 
-			it("should reject completion when rating is invalid (e.g., 5)", async () => {
+			it('should default to "poor" when rating is invalid', async () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
@@ -616,9 +617,10 @@ describe("attemptCompletionTool", () => {
 
 				await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
 
-				expect(mockTask.consecutiveMistakeCount).toBe(1)
-				expect(mockTask.recordToolError).toHaveBeenCalledWith("attempt_completion")
-				expect(mockPushToolResult).toHaveBeenCalledWith(
+				// Should not block completion — defaults to "poor"
+				expect(mockTask.consecutiveMistakeCount).toBe(0)
+				expect(mockTask.recordToolError).not.toHaveBeenCalled()
+				expect(mockPushToolResult).not.toHaveBeenCalledWith(
 					expect.stringContaining("Missing value for required parameter"),
 				)
 			})
