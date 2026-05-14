@@ -229,6 +229,7 @@ export function filterNativeToolsForMode(
 	codeIndexManager?: CodeIndexManager,
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
+	helperAgentManager?: import("../../../services/helper-agent/manager").HelperAgentManager,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	// Get mode configuration and all tools for this mode
 	const modeSlug = mode ?? defaultModeSlug
@@ -273,6 +274,11 @@ export function filterNativeToolsForMode(
 		!(codeIndexManager.isFeatureEnabled && codeIndexManager.isFeatureConfigured && codeIndexManager.isInitialized)
 	) {
 		allowedToolNames.delete("codebase_search")
+	}
+
+	// Conditionally exclude ask_helper_agent if helper agent is not available
+	if (!helperAgentManager || !helperAgentManager.isHelperAgentAvailable) {
+		allowedToolNames.delete("ask_helper_agent")
 	}
 
 	// Conditionally exclude update_todo_list if disabled in settings
