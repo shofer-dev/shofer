@@ -37,6 +37,7 @@ import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
 import { CodeIndexManager } from "./services/code-index/manager"
 import { HelperAgentManager } from "./services/helper-agent/manager"
+import { showHelperAgentChatPanel } from "./core/webview/HelperAgentChatProvider"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -269,6 +270,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 			const actions: (vscode.QuickPickItem & { action: string })[] = [
 				{
+					label: "$(comment-discussion) View Chat",
+					description: "Open the helper agent chat panel",
+					action: "chat",
+				},
+				{
 					label: "$(trash) Clear Context",
 					description: "Reset conversation to system prompt (cost tracking preserved)",
 					action: "clear",
@@ -295,6 +301,9 @@ export async function activate(context: vscode.ExtensionContext) {
 			if (pick && "action" in pick) {
 				const action = (pick as any).action as string
 				switch (action) {
+					case "chat":
+						showHelperAgentChatPanel(context.extensionUri)
+						break
 					case "clear":
 						await mgr.clearContext()
 						vscode.window.showInformationMessage("Helper Agent context cleared.")
@@ -359,6 +368,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			webviewOptions: { retainContextWhenHidden: true },
 		}),
 	)
+
+	// ─── End Helper Agent Chat View ───────────────────────────────────
 
 	// Native TreeView used as a reliable file drop target.  See
 	// ContextDropZoneProvider for rationale.  Registered collapsed-by-default

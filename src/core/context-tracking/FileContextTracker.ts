@@ -9,6 +9,7 @@ import fs from "fs/promises"
 import { ContextProxy } from "../config/ContextProxy"
 import type { FileMetadataEntry, RecordSource, TaskMetadata } from "./FileContextTrackerTypes"
 import { ShoferProvider } from "../webview/ShoferProvider"
+import { HelperAgentManager } from "../../services/helper-agent/manager"
 
 /**
  * Snapshot kind written to the per-task originals/finals stores.
@@ -221,6 +222,10 @@ export class FileContextTracker {
 				)
 				const provider = this.providerRef.deref()
 				provider?.scheduleChangedFilesUpdate?.(this.taskId)
+
+				// Notify the helper agent so it can attach a "recently modified"
+				// hint to the next question (KV-cache preserving).
+				this._notifyHelperAgent(filePath)
 			}
 		} catch (error) {
 			console.error("Failed to add file to metadata:", error)
@@ -338,6 +343,21 @@ export class FileContextTracker {
 	// Marks a file as edited by Shofer to prevent false positives in file watchers
 	markFileAsEditedByRoo(filePath: string): void {
 		this.recentlyEditedByRoo.add(filePath)
+	}
+
+	/**
+	 * Notify the helper agent that a file was modified by a Shofer tool.
+	 * Best-effort — failures are silently ignored.
+	 */
+	private _notifyHelperAgent(filePath: string): void {
+		try {
+			const managers = HelperAgentManager.getAllInstances()
+			for (const mgr of managers) {
+				mgr.notifyFileModified(filePath)
+			}
+		} catch {
+			// Helper agent manager may not be loaded — best-effort only
+		}
 	}
 
 	// ------------------------------------------------------------------
