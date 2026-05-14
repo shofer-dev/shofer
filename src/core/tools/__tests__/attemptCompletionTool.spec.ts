@@ -22,6 +22,18 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
+const { mockOutputChannel } = vi.hoisted(() => {
+	const appendLine = vi.fn()
+	return {
+		mockOutputChannel: {
+			appendLine,
+		},
+	}
+})
+vi.mock("../../../extension", () => ({
+	getOutputChannel: vi.fn(() => mockOutputChannel),
+}))
+
 // Mock vscode module
 vi.mock("vscode", () => ({
 	workspace: {
@@ -53,6 +65,7 @@ describe("attemptCompletionTool", () => {
 
 	beforeEach(() => {
 		mockCaptureTaskCompleted.mockReset()
+		mockOutputChannel.appendLine.mockClear()
 		mockPushToolResult = vi.fn()
 		mockAskApproval = vi.fn()
 		mockHandleError = vi.fn()
@@ -73,6 +86,7 @@ describe("attemptCompletionTool", () => {
 		mockTask = {
 			consecutiveMistakeCount: 0,
 			recordToolError: vi.fn(),
+			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("Error: missing parameter"),
 			todoList: undefined,
 			say: vi.fn().mockResolvedValue(undefined),
 			ask: vi.fn().mockResolvedValue({ response: "yesButtonClicked", text: "", images: [] }),
@@ -91,8 +105,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -116,8 +130,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -140,8 +154,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -169,8 +183,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -211,8 +225,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -253,8 +267,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -296,8 +310,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -339,8 +353,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -382,8 +396,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully" },
-				nativeArgs: { result: "Task completed successfully" },
+				params: { result: "Task completed successfully", rating: 3 },
+				nativeArgs: { result: "Task completed successfully", rating: 3 },
 				partial: false,
 			}
 
@@ -426,8 +440,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Task completed successfully" },
-					nativeArgs: { result: "Task completed successfully" },
+					params: { result: "Task completed successfully", rating: 3 },
+					nativeArgs: { result: "Task completed successfully", rating: 3 },
 					partial: false,
 				}
 
@@ -460,8 +474,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Task completed successfully" },
-					nativeArgs: { result: "Task completed successfully" },
+					params: { result: "Task completed successfully", rating: 3 },
+					nativeArgs: { result: "Task completed successfully", rating: 3 },
 					partial: false,
 				}
 
@@ -488,8 +502,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "2" },
-					nativeArgs: { result: "2" },
+					params: { result: "2", rating: 3 },
+					nativeArgs: { result: "2", rating: 3 },
 					partial: false,
 				}
 
@@ -519,8 +533,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "2" },
-					nativeArgs: { result: "2" },
+					params: { result: "2", rating: 3 },
+					nativeArgs: { result: "2", rating: 3 },
 					partial: false,
 				}
 
@@ -549,6 +563,178 @@ describe("attemptCompletionTool", () => {
 					expect.anything(),
 				)
 				expect(mockPushToolResult).toHaveBeenCalledWith(expect.stringContaining("<user_message>"))
+			})
+		})
+
+		describe("rating validation", () => {
+			it("should reject completion when rating is missing", async () => {
+				const block: AttemptCompletionToolUse = {
+					type: "tool_use",
+					name: "attempt_completion",
+					params: { result: "Task completed successfully" },
+					nativeArgs: { result: "Task completed successfully" },
+					partial: false,
+				}
+
+				mockTask.todoList = undefined
+
+				const callbacks: AttemptCompletionCallbacks = {
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					askFinishSubTaskApproval: mockAskFinishSubTaskApproval,
+					toolDescription: mockToolDescription,
+				}
+
+				await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
+
+				expect(mockTask.consecutiveMistakeCount).toBe(1)
+				expect(mockTask.recordToolError).toHaveBeenCalledWith("attempt_completion")
+				expect(mockPushToolResult).toHaveBeenCalledWith(
+					expect.stringContaining("Missing value for required parameter"),
+				)
+			})
+
+			it("should reject completion when rating is invalid (e.g., 5)", async () => {
+				const block: AttemptCompletionToolUse = {
+					type: "tool_use",
+					name: "attempt_completion",
+					params: { result: "Task completed successfully", rating: 5 },
+					nativeArgs: { result: "Task completed successfully", rating: 5 },
+					partial: false,
+				}
+
+				mockTask.todoList = undefined
+
+				const callbacks: AttemptCompletionCallbacks = {
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					askFinishSubTaskApproval: mockAskFinishSubTaskApproval,
+					toolDescription: mockToolDescription,
+				}
+
+				await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
+
+				expect(mockTask.consecutiveMistakeCount).toBe(1)
+				expect(mockTask.recordToolError).toHaveBeenCalledWith("attempt_completion")
+				expect(mockPushToolResult).toHaveBeenCalledWith(
+					expect.stringContaining("Missing value for required parameter"),
+				)
+			})
+
+			it("should accept valid ratings (1, 2, 3)", async () => {
+				for (const rating of [1, 2, 3]) {
+					const block: AttemptCompletionToolUse = {
+						type: "tool_use",
+						name: "attempt_completion",
+						params: { result: "Done", rating } as any,
+						nativeArgs: { result: "Done", rating } as any,
+						partial: false,
+					}
+
+					mockTask.todoList = undefined
+					mockTask.consecutiveMistakeCount = 0
+					mockTask.recordToolError = vi.fn()
+					mockTask.ask = vi.fn().mockResolvedValue({ response: "yesButtonClicked", text: "", images: [] })
+					mockPushToolResult = vi.fn()
+
+					const callbacks: AttemptCompletionCallbacks = {
+						askApproval: mockAskApproval,
+						handleError: mockHandleError,
+						pushToolResult: mockPushToolResult,
+						askFinishSubTaskApproval: mockAskFinishSubTaskApproval,
+						toolDescription: mockToolDescription,
+					}
+
+					await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
+
+					expect(mockTask.recordToolError).not.toHaveBeenCalled()
+				}
+			})
+		})
+
+		describe("feedback parameter", () => {
+			it("should route optional feedback to the output channel", async () => {
+				const block: AttemptCompletionToolUse = {
+					type: "tool_use",
+					name: "attempt_completion",
+					params: { result: "Done", rating: 3, feedback: "The file tool was slow for large directories" },
+					nativeArgs: { result: "Done", rating: 3, feedback: "The file tool was slow for large directories" },
+					partial: false,
+				}
+
+				mockTask.todoList = undefined
+
+				const callbacks: AttemptCompletionCallbacks = {
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					askFinishSubTaskApproval: mockAskFinishSubTaskApproval,
+					toolDescription: mockToolDescription,
+				}
+
+				await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
+
+				expect(mockOutputChannel.appendLine).toHaveBeenCalled()
+				const calls = mockOutputChannel.appendLine.mock.calls.flat()
+				expect(calls.some((c: string) => c.includes("[FEEDBACK via attempt_completion]"))).toBe(true)
+				expect(calls.some((c: string) => c.includes("The file tool was slow for large directories"))).toBe(true)
+			})
+
+			it("should not write to output channel when feedback is empty", async () => {
+				const block: AttemptCompletionToolUse = {
+					type: "tool_use",
+					name: "attempt_completion",
+					params: { result: "Done", rating: 3, feedback: "" },
+					nativeArgs: { result: "Done", rating: 3, feedback: "" },
+					partial: false,
+				}
+
+				mockTask.todoList = undefined
+
+				const callbacks: AttemptCompletionCallbacks = {
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					askFinishSubTaskApproval: mockAskFinishSubTaskApproval,
+					toolDescription: mockToolDescription,
+				}
+
+				mockOutputChannel.appendLine.mockClear()
+
+				await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
+
+				// Should not have logged anything about feedback
+				const calls = mockOutputChannel.appendLine.mock.calls.flat()
+				expect(calls.some((c: string) => c.includes("[FEEDBACK via attempt_completion]"))).toBe(false)
+			})
+
+			it("should not write to output channel when feedback is whitespace only", async () => {
+				const block: AttemptCompletionToolUse = {
+					type: "tool_use",
+					name: "attempt_completion",
+					params: { result: "Done", rating: 3, feedback: "   " },
+					nativeArgs: { result: "Done", rating: 3, feedback: "   " },
+					partial: false,
+				}
+
+				mockTask.todoList = undefined
+
+				const callbacks: AttemptCompletionCallbacks = {
+					askApproval: mockAskApproval,
+					handleError: mockHandleError,
+					pushToolResult: mockPushToolResult,
+					askFinishSubTaskApproval: mockAskFinishSubTaskApproval,
+					toolDescription: mockToolDescription,
+				}
+
+				mockOutputChannel.appendLine.mockClear()
+
+				await attemptCompletionTool.handle(mockTask as Task, block, callbacks)
+
+				const calls = mockOutputChannel.appendLine.mock.calls.flat()
+				expect(calls.some((c: string) => c.includes("[FEEDBACK via attempt_completion]"))).toBe(false)
 			})
 		})
 	})

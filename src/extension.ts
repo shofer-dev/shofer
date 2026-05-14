@@ -36,6 +36,7 @@ import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
 import { CodeIndexManager } from "./services/code-index/manager"
+import { HelperAgentManager } from "./services/helper-agent/manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -139,6 +140,21 @@ export async function activate(context: vscode.ExtensionContext) {
 				})
 
 				context.subscriptions.push(manager)
+			}
+
+			// Initialize helper agent manager for this workspace folder.
+			const helperAgentManager = HelperAgentManager.getInstance(context, folder.uri.fsPath)
+
+			if (helperAgentManager) {
+				// Initialize in background; do not block extension activation
+				void helperAgentManager.initialize().catch((error) => {
+					const message = error instanceof Error ? error.message : String(error)
+					outputChannel.appendLine(
+						`[HelperAgentManager] Error during initialization for ${folder.uri.fsPath}: ${message}`,
+					)
+				})
+
+				context.subscriptions.push(helperAgentManager)
 			}
 		}
 	}
@@ -320,6 +336,8 @@ export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
 	await McpServerManager.cleanup(extensionContext)
+	HelperAgentManager.disposeAll()
+	CodeIndexManager.disposeAll()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
 }

@@ -120,6 +120,7 @@ export type ToolParamName = (typeof toolParamNames)[number]
  * Tools not listed here will fall back to `any` for backward compatibility.
  */
 export type NativeToolArgs = {
+	ask_helper_agent: { question: string; contextFiles?: string[]; timeoutMs?: number }
 	access_mcp_resource: { server_name: string; uri: string }
 	read_file: import("@shofer/types").ReadFileToolParams
 	read_command_output: { artifact_id: string; search?: string; offset?: number; limit?: number }
@@ -302,7 +303,7 @@ export interface AskFollowupQuestionToolUse extends ToolUse<"ask_followup_questi
 
 export interface AttemptCompletionToolUse extends ToolUse<"attempt_completion"> {
 	name: "attempt_completion"
-	params: Partial<Pick<Record<ToolParamName, string>, "result">>
+	params: Partial<Pick<Record<ToolParamName, string | number>, "result" | "rating" | "feedback">>
 }
 
 export interface SwitchModeToolUse extends ToolUse<"switch_mode"> {
