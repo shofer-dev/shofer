@@ -3226,7 +3226,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// Track skills resolved via slash-style mentions (e.g. `/skill-name`)
 			// so the SkillsButton popover reflects them as loaded — mirroring the
-			// behavior of the `skill_load` tool.
+			// behavior of the `skills` tool.
 			if (mentionLoadedSkills) {
 				for (const [name, path] of Object.entries(mentionLoadedSkills)) {
 					this.loadedSkills.set(name, path)

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { skillLoadTool } from "../SkillLoadTool"
+import { skillsTool } from "../SkillsTool"
 import { Task } from "../../task/Task"
 import { formatResponse } from "../../prompts/responses"
 import type { ToolUse } from "../../../shared/tools"
 
-describe("skillLoadTool", () => {
+describe("skillsTool", () => {
 	let mockTask: any
 	let mockCallbacks: any
 	let mockSkillsManager: any
@@ -40,9 +40,9 @@ describe("skillLoadTool", () => {
 	})
 
 	it("should handle missing skill parameter", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -50,18 +50,18 @@ describe("skillLoadTool", () => {
 			},
 		}
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockTask.consecutiveMistakeCount).toBe(1)
-		expect(mockTask.recordToolError).toHaveBeenCalledWith("skill_load")
-		expect(mockTask.sayAndCreateMissingParamError).toHaveBeenCalledWith("skill_load", "skill")
+		expect(mockTask.recordToolError).toHaveBeenCalledWith("skills")
+		expect(mockTask.sayAndCreateMissingParamError).toHaveBeenCalledWith("skills", "skill")
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith("Missing parameter error")
 	})
 
 	it("should handle skill not found", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -72,7 +72,7 @@ describe("skillLoadTool", () => {
 		mockSkillsManager.getSkillContent.mockResolvedValue(null)
 		mockSkillsManager.getSkillsForMode.mockReturnValue([{ name: "create-mcp-server" }])
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith(
 			formatResponse.toolError("Skill 'non-existent' not found. Available skills: create-mcp-server"),
@@ -80,9 +80,9 @@ describe("skillLoadTool", () => {
 	})
 
 	it("should handle empty available skills list", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -93,7 +93,7 @@ describe("skillLoadTool", () => {
 		mockSkillsManager.getSkillContent.mockResolvedValue(null)
 		mockSkillsManager.getSkillsForMode.mockReturnValue([])
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith(
 			formatResponse.toolError("Skill 'non-existent' not found. Available skills: (none)"),
@@ -101,9 +101,9 @@ describe("skillLoadTool", () => {
 	})
 
 	it("should successfully load a global skill", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -120,12 +120,12 @@ describe("skillLoadTool", () => {
 
 		mockSkillsManager.getSkillContent.mockResolvedValue(mockSkillContent)
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockCallbacks.askApproval).toHaveBeenCalledWith(
 			"tool",
 			JSON.stringify({
-				tool: "loadSkill",
+				tool: "skills",
 				skill: "create-mcp-server",
 				args: undefined,
 				source: "global",
@@ -145,9 +145,9 @@ Step 1: Create the server...`,
 	})
 
 	it("should successfully load skill with arguments", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -165,7 +165,7 @@ Step 1: Create the server...`,
 
 		mockSkillsManager.getSkillContent.mockResolvedValue(mockSkillContent)
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith(
 			`Skill: create-mcp-server
@@ -180,9 +180,9 @@ Step 1: Create the server...`,
 	})
 
 	it("should handle user rejection", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -199,15 +199,15 @@ Step 1: Create the server...`,
 
 		mockCallbacks.askApproval.mockResolvedValue(false)
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockCallbacks.pushToolResult).not.toHaveBeenCalled()
 	})
 
 	it("should handle partial block", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {
 				skill: "create-mcp-server",
 				args: "",
@@ -215,12 +215,12 @@ Step 1: Create the server...`,
 			partial: true,
 		}
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockTask.ask).toHaveBeenCalledWith(
 			"tool",
 			JSON.stringify({
-				tool: "loadSkill",
+				tool: "skills",
 				skill: "create-mcp-server",
 				args: "",
 			}),
@@ -231,9 +231,9 @@ Step 1: Create the server...`,
 	})
 
 	it("should handle errors during execution", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -244,15 +244,15 @@ Step 1: Create the server...`,
 		const error = new Error("Test error")
 		mockSkillsManager.getSkillContent.mockRejectedValue(error)
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockCallbacks.handleError).toHaveBeenCalledWith("executing skill", error)
 	})
 
 	it("should reset consecutive mistake count on valid skill", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -271,15 +271,15 @@ Step 1: Create the server...`,
 
 		mockSkillsManager.getSkillContent.mockResolvedValue(mockSkillContent)
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockTask.consecutiveMistakeCount).toBe(0)
 	})
 
 	it("should handle Skills Manager not available", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -292,18 +292,18 @@ Step 1: Create the server...`,
 			getSkillsManager: vi.fn().mockReturnValue(undefined),
 		})
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
-		expect(mockTask.recordToolError).toHaveBeenCalledWith("skill_load")
+		expect(mockTask.recordToolError).toHaveBeenCalledWith("skills")
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith(
 			formatResponse.toolError("Skills Manager not available"),
 		)
 	})
 
 	it("should load project skill", async () => {
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -320,12 +320,12 @@ Step 1: Create the server...`,
 
 		mockSkillsManager.getSkillContent.mockResolvedValue(mockSkillContent)
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		expect(mockCallbacks.askApproval).toHaveBeenCalledWith(
 			"tool",
 			JSON.stringify({
-				tool: "loadSkill",
+				tool: "skills",
 				skill: "my-project-skill",
 				args: undefined,
 				source: "project",
@@ -348,9 +348,9 @@ Follow these project-specific instructions...`,
 		// Pre-populate loadedSkills to simulate a previously loaded skill
 		mockTask.loadedSkills.set("my-project-skill", "/path/to/SKILL.md")
 
-		const block: ToolUse<"skill_load"> = {
+		const block: ToolUse<"skills"> = {
 			type: "tool_use" as const,
-			name: "skill_load" as const,
+			name: "skills" as const,
 			params: {},
 			partial: false,
 			nativeArgs: {
@@ -358,7 +358,7 @@ Follow these project-specific instructions...`,
 			},
 		}
 
-		await skillLoadTool.handle(mockTask as Task, block, mockCallbacks)
+		await skillsTool.handle(mockTask as Task, block, mockCallbacks)
 
 		// Should return no-op without calling SkillsManager or asking approval
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith("Skill 'my-project-skill' is already loaded (no-op).")

@@ -11,7 +11,7 @@ const ARGS_PARAMETER_DESCRIPTION = `Optional context or arguments to pass to the
 export default {
 	type: "function",
 	function: {
-		name: "skill_load",
+		name: "skills",
 		description: SKILL_DESCRIPTION,
 		strict: true,
 		parameters: {

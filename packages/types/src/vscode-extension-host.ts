@@ -914,7 +914,7 @@ export interface ShoferSayTool {
 		| "imageGenerated"
 		| "runSlashCommand"
 		| "updateTodoList"
-		| "loadSkill"
+		| "skills"
 		| "saveSkill"
 		| "deleteSkill"
 		| "createDirectory"

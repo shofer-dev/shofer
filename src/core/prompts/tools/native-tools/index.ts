@@ -27,7 +27,7 @@ import { createReadFileTool, type ReadFileToolOptions } from "./read_file"
 import readProjectStructure from "./read_project_structure"
 import renameSymbol from "./rename_symbol"
 import runSlashCommand from "./run_slash_command"
-import skillLoad from "./skill_load"
+import skillsToolDef from "./skills"
 import searchReplace from "./search_replace"
 import edit_file from "./edit_file"
 import searchFiles from "./search_files"
@@ -96,7 +96,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		readProjectStructure,
 		renameSymbol,
 		runSlashCommand,
-		skillLoad,
+		skillsToolDef,
 		searchReplace,
 		edit_file,
 		editTool,

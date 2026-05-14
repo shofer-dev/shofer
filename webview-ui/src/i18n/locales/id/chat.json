@@ -225,7 +225,7 @@
 			"description": "Pesan lama telah dihapus dari percakapan untuk tetap dalam batas jendela konteks. Ini adalah pendekatan yang cepat tetapi kurang mempertahankan konteks dibandingkan dengan kondensasi."
 		}
 	},
-	"loadSkill": {
+	"skills": {
 		"wantsToLoad": "Shofer ingin memuat keterampilan",
 		"didLoad": "Shofer telah memuat keterampilan"
 	},

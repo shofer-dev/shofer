@@ -328,7 +328,7 @@
 			"description": "Se eliminaron mensajes más antiguos de la conversación para mantenerse dentro del límite de la ventana de contexto. Este es un enfoque rápido pero menos conservador del contexto en comparación con la condensación."
 		}
 	},
-	"loadSkill": {
+	"skills": {
 		"wantsToLoad": "Shofer quiere cargar una habilidad",
 		"didLoad": "Shofer cargó una habilidad"
 	},

@@ -32,7 +32,7 @@ export type TaskMetadataOptions = {
 	isBackground?: boolean
 	/** Per-root-task cost limit (only set on root tasks). */
 	costLimit?: import("@shofer/types").CostLimit
-	/** Names of skills loaded via skill_load for this task. */
+	/** Names of skills loaded via skills for this task. */
 	loadedSkills?: string[]
 }
 

@@ -25,7 +25,7 @@ const SOURCE_ICONS: Record<SkillMetadata["source"], React.ElementType> = {
  * Clicking a skill appends a natural-language instruction (e.g.
  * "Use the <skill-name> skill") to the chat text area via the
  * `insertTextIntoTextarea` IPC message, so the model can then invoke
- * the `skill_load` tool.
+ * the `skills` tool.
  */
 export const SkillsButton = () => {
 	const { t } = useAppTranslation()
@@ -39,7 +39,7 @@ export const SkillsButton = () => {
 	}, [])
 
 	// Re-request skills from the extension every time the popover opens
-	// to reflect loaded/unloaded state changes from skill_load invocations.
+	// to reflect loaded/unloaded state changes from skills invocations.
 	const handleOpenChange = useCallback((isOpen: boolean) => {
 		setOpen(isOpen)
 		if (isOpen) {

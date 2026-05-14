@@ -353,7 +353,7 @@
 			"description": "Oudere berichten zijn uit het gesprek verwijderd om binnen de limiet van het contextvenster te blijven. Dit is een snelle maar minder contextbehoudende aanpak in vergelijking met samenvoeging."
 		}
 	},
-	"loadSkill": {
+	"skills": {
 		"wantsToLoad": "Shofer wil een vaardigheid laden",
 		"didLoad": "Shofer heeft een vaardigheid geladen"
 	},

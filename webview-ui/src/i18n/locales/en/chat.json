@@ -235,7 +235,7 @@
 			"description": "Older messages were removed from the conversation to stay within the context window limit. This is a fast but less context-preserving approach compared to condensation."
 		}
 	},
-	"loadSkill": {
+	"skills": {
 		"wantsToLoad": "Shofer wants to load a skill",
 		"didLoad": "Shofer loaded a skill"
 	},
