@@ -311,6 +311,12 @@ function renderTaskRow({
 				? `completed_${resolvedRating}`
 				: "completed"
 			: (runtime?.state ?? item.taskExecutionState ?? "idle")
+	// Diagnostic: log state resolution for completed tasks
+	if (item.status === "completed") {
+		console.log(
+			`[DIAG-TaskSelector] id=${item.id} status=${item.status} completionRating=${item.completionRating} → state=${state}`,
+		)
+	}
 	const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
 	const isCurrent = item.id === currentTaskId
 	const isEditing = editingTaskId === item.id
