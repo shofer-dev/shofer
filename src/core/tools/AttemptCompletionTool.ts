@@ -266,6 +266,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
 						if (historyItem && historyItem.status !== "completed") {
 							const fileStats = await computeFileChangeStats(task)
+							getOutputChannel()?.appendLine(
+								`[DIAG] [PERSIST] taskId=${task.taskId} effectiveRating=${effectiveRating} — persisting status=completed, completionRating=${effectiveRating}`,
+							)
 							await provider.updateTaskHistory({
 								...historyItem,
 								status: "completed",
@@ -273,7 +276,13 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								insertions: fileStats.insertions,
 								deletions: fileStats.deletions,
 							})
+						} else {
+							getOutputChannel()?.appendLine(
+								`[DIAG] [PERSIST-SKIP] taskId=${task.taskId} — historyItem=${JSON.stringify(historyItem)}`,
+							)
 						}
+					} else {
+						getOutputChannel()?.appendLine(`[DIAG] [PERSIST-NO-PROVIDER] taskId=${task.taskId}`)
 					}
 				} catch (err) {
 					console.error(

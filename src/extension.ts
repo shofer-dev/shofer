@@ -163,17 +163,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	// ─── Helper Agent Status Bar ───────────────────────────────────────
 
 	/** Status bar item showing helper agent state + fill percentage. */
-	const helperAgentStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 9)
+	const helperAgentStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10)
+	helperAgentStatusBar.name = "Helper Agent"
 	helperAgentStatusBar.tooltip = "Helper Agent"
 	helperAgentStatusBar.command = "shofer.helperAgent.showInfo"
-	helperAgentStatusBar.text = "$(hubot) Helper Agent"
+	helperAgentStatusBar.text = "$(comment-discussion) Helper Agent"
 	helperAgentStatusBar.show()
 
 	/** Update the status bar based on the first available helper agent manager. */
 	function updateHelperAgentStatusBar() {
 		const managers = HelperAgentManager.getAllInstances()
 		if (managers.length === 0) {
-			helperAgentStatusBar.text = "$(hubot) Helper Agent"
+			helperAgentStatusBar.text = "$(comment-discussion) Helper Agent"
 			helperAgentStatusBar.tooltip = "Helper Agent — not available"
 			return
 		}
@@ -184,30 +185,30 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		switch (mgr.state) {
 			case "Standby":
-				helperAgentStatusBar.text = `$(circle-outline) Agent: Standby`
+				helperAgentStatusBar.text = `$(circle-slash) HA: Standby`
 				helperAgentStatusBar.tooltip = `Helper Agent — not started\nClick to configure`
 				break
 			case "Initializing":
-				helperAgentStatusBar.text = `$(sync~spin) Agent: Init...`
+				helperAgentStatusBar.text = `$(sync~spin) HA: Init...`
 				helperAgentStatusBar.tooltip = `Helper Agent — initializing...`
 				break
 			case "Ready":
-				helperAgentStatusBar.text = `$(hubot) Agent: Ready (${fillPct}%)`
+				helperAgentStatusBar.text = `$(comment-discussion) HA: ${fillPct}%`
 				helperAgentStatusBar.tooltip = `Helper Agent — ready\n${usage.currentTokens} / ${usage.maxTokens} tokens (${fillPct}%)\nClick for details`
 				break
 			case "Busy": {
 				const pending = mgr.pendingQuestionCount
-				const pendingStr = pending > 0 ? ` +${pending} queued` : ""
-				helperAgentStatusBar.text = `$(sync~spin) Agent: Busy (${fillPct}%)${pendingStr}`
+				const pendingStr = pending > 0 ? ` +${pending}` : ""
+				helperAgentStatusBar.text = `$(sync~spin) HA: ${fillPct}%${pendingStr}`
 				helperAgentStatusBar.tooltip = `Helper Agent — processing question${pending > 0 ? `\n${pending} pending in queue` : ""}\n${usage.currentTokens} / ${usage.maxTokens} tokens`
 				break
 			}
 			case "Error":
-				helperAgentStatusBar.text = `$(error) Agent: Error`
+				helperAgentStatusBar.text = `$(error) HA: Error`
 				helperAgentStatusBar.tooltip = `Helper Agent — error: ${mgr.stateMessage}\nClick for details`
 				break
 			case "Stopping":
-				helperAgentStatusBar.text = `$(circle-outline) Agent: Stopping`
+				helperAgentStatusBar.text = `$(circle-slash) HA: Stopping`
 				helperAgentStatusBar.tooltip = `Helper Agent — stopping...`
 				break
 		}

@@ -103,7 +103,7 @@ export function isInteractiveAsk(ask: ShoferAsk): ask is InteractiveAsk {
  * to update chat messages.
  */
 
-export const nonBlockingAsks = ["command_output"] as const satisfies readonly ShoferAsk[]
+export const nonBlockingAsks = ["command_output", "completion_result"] as const satisfies readonly ShoferAsk[]
 
 export type NonBlockingAsk = (typeof nonBlockingAsks)[number]
 
