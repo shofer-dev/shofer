@@ -88,6 +88,7 @@ export interface ExtensionMessage {
 		| "singleRouterModelFetchResponse"
 		| "shoferCreditBalance"
 		| "indexingStatusUpdate"
+		| "helperAgentStatusUpdate"
 		| "indexCleared"
 		| "codebaseIndexConfig"
 		| "marketplaceInstallResult"

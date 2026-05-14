@@ -73,6 +73,7 @@ import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckpointService"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
+import { HelperAgentManager } from "../../services/helper-agent/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
 
@@ -136,6 +137,8 @@ export class ShoferProvider
 	private shoferStack: Task[] = []
 	private codeIndexStatusSubscription?: vscode.Disposable
 	private codeIndexManager?: CodeIndexManager
+	private helperAgentStatusSubscription?: vscode.Disposable
+	private helperAgentManager?: HelperAgentManager
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
@@ -903,6 +906,9 @@ export class ShoferProvider
 		// Initialize code index status subscription for the current workspace.
 		this.updateCodeIndexStatusSubscription()
 
+		// Initialize helper agent status subscription.
+		this.updateHelperAgentStatusSubscription()
+
 		// Listen for active editor changes to update code index status for the
 		// current workspace.
 		const activeEditorSubscription = vscode.window.onDidChangeActiveTextEditor(() => {
@@ -946,6 +952,7 @@ export class ShoferProvider
 					this.clearWebviewResources()
 					// Reset current workspace manager reference when view is disposed
 					this.codeIndexManager = undefined
+					this.helperAgentManager = undefined
 				}
 			},
 			null,
@@ -3122,6 +3129,56 @@ export class ShoferProvider
 				type: "indexingStatusUpdate",
 				values: currentManager.getCurrentStatus(),
 			})
+		}
+	}
+
+	/**
+	 * Updates the helper agent status subscription to push status to the webview.
+	 * Follows the same pattern as updateCodeIndexStatusSubscription.
+	 */
+	private updateHelperAgentStatusSubscription(): void {
+		const currentManager = HelperAgentManager.getInstance(this.context)
+
+		if (currentManager === this.helperAgentManager) {
+			return
+		}
+
+		if (this.helperAgentStatusSubscription) {
+			this.helperAgentStatusSubscription.dispose()
+			this.helperAgentStatusSubscription = undefined
+		}
+
+		this.helperAgentManager = currentManager
+
+		if (currentManager) {
+			const sendStatus = () => {
+				if (currentManager !== this.helperAgentManager) return
+				this.postMessageToWebview({
+					type: "helperAgentStatusUpdate",
+					text: JSON.stringify({
+						state: currentManager.state,
+						stateMessage: currentManager.stateMessage,
+						isAvailable: currentManager.isHelperAgentAvailable,
+						contextUsage: currentManager.getContextUsage(),
+						costSnapshot: currentManager.getCostSnapshot(),
+						conversationTurnCount: currentManager.conversationTurnCount,
+						pendingQuestionCount: currentManager.pendingQuestionCount,
+						contextFiles: currentManager.contextFiles,
+					}),
+				})
+			}
+
+			// Combine state-change and conversation-update subscriptions
+			// into a single disposable so both are cleaned up on re-subscribe.
+			const stateSubscription = currentManager.onStateChange(() => sendStatus())
+			const convSubscription = currentManager.onConversationUpdate(() => sendStatus())
+			this.helperAgentStatusSubscription = vscode.Disposable.from(stateSubscription, convSubscription)
+
+			if (this.view) {
+				this.webviewDisposables.push(this.helperAgentStatusSubscription)
+			}
+
+			sendStatus()
 		}
 	}
 
