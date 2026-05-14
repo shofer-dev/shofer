@@ -159,6 +159,195 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
+	// ─── Helper Agent Status Bar ───────────────────────────────────────
+
+	/** Status bar item showing helper agent state + fill percentage. */
+	const helperAgentStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 9)
+	helperAgentStatusBar.tooltip = "Helper Agent"
+	helperAgentStatusBar.command = "shofer.helperAgent.showInfo"
+	helperAgentStatusBar.text = "$(hubot) Helper Agent"
+	helperAgentStatusBar.show()
+
+	/** Update the status bar based on the first available helper agent manager. */
+	function updateHelperAgentStatusBar() {
+		const managers = HelperAgentManager.getAllInstances()
+		if (managers.length === 0) {
+			helperAgentStatusBar.text = "$(hubot) Helper Agent"
+			helperAgentStatusBar.tooltip = "Helper Agent — not available"
+			return
+		}
+
+		const mgr = managers[0]
+		const usage = mgr.getContextUsage()
+		const fillPct = (usage.fillFraction * 100).toFixed(0)
+
+		switch (mgr.state) {
+			case "Standby":
+				helperAgentStatusBar.text = `$(circle-outline) Agent: Standby`
+				helperAgentStatusBar.tooltip = `Helper Agent — not started\nClick to configure`
+				break
+			case "Initializing":
+				helperAgentStatusBar.text = `$(sync~spin) Agent: Init...`
+				helperAgentStatusBar.tooltip = `Helper Agent — initializing...`
+				break
+			case "Ready":
+				helperAgentStatusBar.text = `$(hubot) Agent: Ready (${fillPct}%)`
+				helperAgentStatusBar.tooltip = `Helper Agent — ready\n${usage.currentTokens} / ${usage.maxTokens} tokens (${fillPct}%)\nClick for details`
+				break
+			case "Busy": {
+				const pending = mgr.pendingQuestionCount
+				const pendingStr = pending > 0 ? ` +${pending} queued` : ""
+				helperAgentStatusBar.text = `$(sync~spin) Agent: Busy (${fillPct}%)${pendingStr}`
+				helperAgentStatusBar.tooltip = `Helper Agent — processing question${pending > 0 ? `\n${pending} pending in queue` : ""}\n${usage.currentTokens} / ${usage.maxTokens} tokens`
+				break
+			}
+			case "Error":
+				helperAgentStatusBar.text = `$(error) Agent: Error`
+				helperAgentStatusBar.tooltip = `Helper Agent — error: ${mgr.stateMessage}\nClick for details`
+				break
+			case "Stopping":
+				helperAgentStatusBar.text = `$(circle-outline) Agent: Stopping`
+				helperAgentStatusBar.tooltip = `Helper Agent — stopping...`
+				break
+		}
+
+		// Update fill percentage warning
+		if (usage.isNearlyFull) {
+			helperAgentStatusBar.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground")
+		} else {
+			helperAgentStatusBar.backgroundColor = undefined
+		}
+	}
+
+	// Listen for state changes on all managers
+	for (const mgr of HelperAgentManager.getAllInstances()) {
+		context.subscriptions.push(mgr.onStateChange(() => updateHelperAgentStatusBar()))
+		context.subscriptions.push(mgr.onConversationUpdate(() => updateHelperAgentStatusBar()))
+	}
+	updateHelperAgentStatusBar()
+	context.subscriptions.push(helperAgentStatusBar)
+
+	// ─── End Helper Agent Status Bar ───────────────────────────────────
+
+	// ─── Helper Agent Commands ──────────────────────────────────────────
+
+	/** Show helper agent info panel (quick pick). */
+	context.subscriptions.push(
+		vscode.commands.registerCommand("shofer.helperAgent.showInfo", async () => {
+			const managers = HelperAgentManager.getAllInstances()
+			if (managers.length === 0) {
+				vscode.window.showInformationMessage("Helper Agent is not available.")
+				return
+			}
+
+			const mgr = managers[0]
+			const usage = mgr.getContextUsage()
+			const cost = mgr.getCostSnapshot()
+			const fillPct = (usage.fillFraction * 100).toFixed(1)
+			const messages = mgr.getMessages()
+
+			const items: vscode.QuickPickItem[] = [
+				{
+					label: `$(info) State: ${mgr.state}`,
+					description: mgr.stateMessage,
+				},
+				{
+					label: `$(database) Context: ${usage.currentTokens} / ${usage.maxTokens} tokens (${fillPct}%)`,
+					description: usage.isNearlyFull ? "⚠ Nearly full" : "OK",
+				},
+				{
+					label: `$(file) Files in context: ${mgr.contextFiles.length}`,
+				},
+				{
+					label: `$(comment-discussion) Conversation turns: ${mgr.conversationTurnCount}`,
+				},
+				{
+					label: `$(credit-card) Session cost: $${cost.sessionEstimatedCostUSD.toFixed(6)}`,
+					description: `${cost.sessionInputTokens.toLocaleString()} in + ${cost.sessionOutputTokens.toLocaleString()} out tokens`,
+				},
+			]
+
+			const actions: (vscode.QuickPickItem & { action: string })[] = [
+				{
+					label: "$(trash) Clear Context",
+					description: "Reset conversation to system prompt (cost tracking preserved)",
+					action: "clear",
+				},
+				{
+					label: "$(gear) Configure API",
+					description: "Open helper agent API settings",
+					action: "configure",
+				},
+				{
+					label: "$(debug-start) Start Agent",
+					description: "Start or restart the helper agent",
+					action: "start",
+				},
+			]
+
+			const pick = await vscode.window.showQuickPick(
+				[...items, { label: "", kind: vscode.QuickPickItemKind.Separator }, ...actions],
+				{
+					placeHolder: "Helper Agent — Info & Actions",
+				},
+			)
+
+			if (pick && "action" in pick) {
+				const action = (pick as any).action as string
+				switch (action) {
+					case "clear":
+						await mgr.clearContext()
+						vscode.window.showInformationMessage("Helper Agent context cleared.")
+						break
+					case "configure":
+						vscode.commands.executeCommand("workbench.action.openSettings", "shofer.helperAgent")
+						break
+					case "start":
+						await mgr.initialize()
+						vscode.window.showInformationMessage("Helper Agent re-initialized.")
+						break
+				}
+			}
+		}),
+	)
+
+	/** Start / restart helper agent. */
+	context.subscriptions.push(
+		vscode.commands.registerCommand("shofer.helperAgent.start", async () => {
+			const managers = HelperAgentManager.getAllInstances()
+			for (const mgr of managers) {
+				await mgr.initialize()
+			}
+			vscode.window.showInformationMessage("Helper Agent started.")
+		}),
+	)
+
+	/** Stop helper agent (cancel all pending questions). */
+	context.subscriptions.push(
+		vscode.commands.registerCommand("shofer.helperAgent.stop", () => {
+			const managers = HelperAgentManager.getAllInstances()
+			for (const mgr of managers) {
+				mgr.cancelAllQuestions()
+				mgr.dispose()
+			}
+			HelperAgentManager.disposeAll()
+			vscode.window.showInformationMessage("Helper Agent stopped.")
+		}),
+	)
+
+	/** Clear helper agent context. */
+	context.subscriptions.push(
+		vscode.commands.registerCommand("shofer.helperAgent.clearContext", async () => {
+			const managers = HelperAgentManager.getAllInstances()
+			for (const mgr of managers) {
+				await mgr.clearContext()
+			}
+			vscode.window.showInformationMessage("Helper Agent context cleared.")
+		}),
+	)
+
+	// ─── End Helper Agent Commands ─────────────────────────────────────
+
 	// Initialize the provider.
 	const provider = new ShoferProvider(context, outputChannel, "sidebar", contextProxy, undefined)
 
