@@ -13,7 +13,7 @@ export interface TaskSessionEntry {
 	createdAt?: number
 	workspace?: string
 	mode?: string
-	status?: HistoryItem["status"]
+	taskExecutionState?: HistoryItem["taskExecutionState"]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,7 +31,7 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 	const createdAt = value.createdAt
 	const workspace = value.workspace
 	const mode = value.mode
-	const status = value.taskExecutionState
+	const status: string | undefined = value.taskExecutionState as string | undefined
 
 	if (typeof id !== "string" || typeof task !== "string" || typeof ts !== "number") {
 		return undefined
