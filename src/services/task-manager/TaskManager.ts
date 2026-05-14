@@ -694,7 +694,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const persisted = item.taskExecutionState
 		if (persisted === "running" || persisted === "waiting_input") return "idle"
 		// Terminal states persist across restarts
-		if (persisted === "completed" || persisted === "error" || persisted === "paused") return persisted
+		if (persisted === "error" || persisted === "paused" || persisted?.startsWith("completed_")) return persisted
 		return persisted ?? "idle"
 	}
 
