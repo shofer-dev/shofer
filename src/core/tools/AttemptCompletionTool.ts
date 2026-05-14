@@ -120,12 +120,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			// Validate rating: must be 1, 2, or 3
 			const ALLOWED_RATINGS = new Set([1, 2, 3])
-			if (!rating || !ALLOWED_RATINGS.has(rating)) {
+			if (typeof rating !== "number" || !ALLOWED_RATINGS.has(rating)) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("attempt_completion")
-				pushToolResult(
-					await task.sayAndCreateMissingParamError("attempt_completion", "rating (must be 1, 2, or 3)"),
-				)
+				pushToolResult(await task.sayAndCreateMissingParamError("attempt_completion", "rating"))
 				return
 			}
 
