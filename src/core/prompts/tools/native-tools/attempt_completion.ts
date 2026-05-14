@@ -15,7 +15,7 @@ Parameters:
 Example: Completing after updating CSS
 { "result": "I've updated the CSS to use flexbox layout for better responsiveness", "rating": 3 }`
 
-const RESULT_PARAMETER_DESCRIPTION = `Final result message to deliver to the user once the task is complete. If running as a subtask, keep within the character limit specified in your SUBTASK CONSTRAINTS (hard cap: ${MAX_SUBTASK_RESULT_LENGTH} characters).`
+const RESULT_PARAMETER_DESCRIPTION = `Final result message to deliver to the user once the task is complete. If running as a subtask, aim to keep within the character budget suggested in your SUBTASK CONSTRAINTS (hard safety cap: ${MAX_SUBTASK_RESULT_LENGTH} characters).`
 
 export default {
 	type: "function",

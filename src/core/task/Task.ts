@@ -4633,9 +4633,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				constraints.push("")
 				if (this.resultLength) {
 					constraints.push(
-						`- Result length limit: ${this.resultLength} characters. Your attempt_completion result MUST NOT exceed this character count. Summarize your findings concisely.`,
+						`- Result length suggestion: ${this.resultLength} characters (soft guidance — aim to keep your attempt_completion result within this budget by summarizing concisely; the parent may accept longer results).`,
 					)
-					constraints.push(`  Hard cap for safety: ${MAX_SUBTASK_RESULT_LENGTH} characters.`)
+					constraints.push(
+						`  Hard safety cap: ${MAX_SUBTASK_RESULT_LENGTH} characters (results exceeding this will be truncated).`,
+					)
 				}
 				if (this.estimatedTimeout) {
 					constraints.push(

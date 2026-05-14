@@ -144,15 +144,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			task.consecutiveMistakeCount = 0
 
-			// Enforce result length limit: first apply the parent-specified soft limit,
-			// then the hard safety cap. This ensures the completion result flowing back
-			// to the parent does not exceed the parent's capacity.
+			// Apply hard safety cap only.  The parent's resultLength is a soft
+			// suggestion communicated via the SUBTASK CONSTRAINTS system prompt —
+			// the subtask should keep its result within budget but we don't
+			// hard-truncate here.  The MAX_SUBTASK_RESULT_LENGTH cap prevents
+			// runaway subtasks from blowing up the parent's context.
 			let effectiveResult = result
-			const effectiveLimit = Math.min(task.resultLength ?? Infinity, MAX_SUBTASK_RESULT_LENGTH)
-			if (effectiveResult.length > effectiveLimit) {
+			if (effectiveResult.length > MAX_SUBTASK_RESULT_LENGTH) {
 				effectiveResult =
-					effectiveResult.slice(0, effectiveLimit) +
-					`\n[...truncated to ${effectiveLimit} characters (limit: ${task.resultLength ?? "hard cap"} chars)]`
+					effectiveResult.slice(0, MAX_SUBTASK_RESULT_LENGTH) +
+					`\n[...truncated to ${MAX_SUBTASK_RESULT_LENGTH} characters (hard safety cap)]`
 			}
 
 			await task.say("completion_result", effectiveResult, undefined, false)

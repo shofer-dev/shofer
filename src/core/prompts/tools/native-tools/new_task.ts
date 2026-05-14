@@ -16,7 +16,7 @@ const TODOS_PARAMETER_DESCRIPTION = `Optional initial todo list written as a mar
 
 const IS_BACKGROUND_PARAMETER_DESCRIPTION = `When true, start the child task in the background and return immediately without blocking the parent. Defaults to false (synchronous delegation).`
 
-const RESULT_LENGTH_PARAMETER_DESCRIPTION = `Maximum characters the parent is willing to accept as the completion result. The subtask MUST keep its attempt_completion result within this character limit by summarizing its findings concisely. Hard cap: 100000 characters.`
+const RESULT_LENGTH_PARAMETER_DESCRIPTION = `Soft suggestion for how many characters the parent is willing to accept as the completion result. The subtask should aim to keep its attempt_completion result within this budget by summarizing concisely, but it is not a hard limit — the parent may handle longer results. Hard safety cap: 100000 characters.`
 
 const ESTIMATED_TIMEOUT_PARAMETER_DESCRIPTION = `Soft guidance (in seconds) for how long the parent expects to wait for this subtask. Not a hard deadline; the parent may wait longer and the child may take longer. Use this to pace your work accordingly.`
 
