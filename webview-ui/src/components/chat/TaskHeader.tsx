@@ -151,7 +151,7 @@ const TaskHeader = ({
 	// When the task is completed with a rating, use the rating-specific state.
 	const currentTitle = currentTaskItem ? getTaskDisplayName(currentTaskItem) : ""
 	const currentRuntime = currentTaskItem ? parallelTasks?.find((p) => p.id === currentTaskItem.id) : undefined
-	const currentTaskCompleted = currentTaskItem?.status === "completed"
+	const currentTaskCompleted = currentTaskItem?.taskExecutionState === "completed"
 	const currentTaskRating = currentTaskCompleted ? currentTaskItem?.completionRating : undefined
 	const currentStateKey = currentTaskCompleted
 		? currentTaskRating

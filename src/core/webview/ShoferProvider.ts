@@ -2914,7 +2914,7 @@ export class ShoferProvider
 		if (broadcast && this.isViewLaunched) {
 			const updatedItem = this.taskHistoryStore.get(item.id) ?? item
 			this.log(
-				`[DIAG] [WEBVIEW-SEND] taskId=${updatedItem.id} status=${updatedItem.status} completionRating=${updatedItem.completionRating}`,
+				`[DIAG] [WEBVIEW-SEND] taskId=${updatedItem.id} status=${updatedItem.taskExecutionState} completionRating=${updatedItem.completionRating}`,
 			)
 			await this.postMessageToWebview({ type: "taskHistoryItemUpdated", taskHistoryItem: updatedItem })
 		}
@@ -3579,7 +3579,7 @@ export class ShoferProvider
 			const { historyItem: childHistory } = await this.getTaskWithId(childTaskId)
 			await this.updateTaskHistory({
 				...childHistory,
-				status: "completed",
+				taskExecutionState: "completed",
 				completionResultSummary: completionResult,
 			})
 		} catch (err) {
