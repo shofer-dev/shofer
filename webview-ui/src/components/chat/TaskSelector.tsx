@@ -311,7 +311,6 @@ function renderTaskRow({
 }: TaskRowParams) {
 	const { item, depth, isLastSibling, ancestorIsLast } = node
 	const runtime = runtimeStateMap.get(item.id)
-	const resolvedRating = item.taskExecutionState === "completed" ? item.completionRating : undefined
 	const state = runtime?.state ?? item.taskExecutionState ?? "idle"
 	if (item.taskExecutionState === "completed") {
 		console.log(
