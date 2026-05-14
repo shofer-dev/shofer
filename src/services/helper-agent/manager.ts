@@ -187,6 +187,16 @@ export class HelperAgentManager {
 		return this._state === "Ready" || this._state === "Busy"
 	}
 
+	/** Configured model ID (e.g., "gemini-2.0-flash"). */
+	public get modelId(): string {
+		return this._config?.modelId ?? "not configured"
+	}
+
+	/** Configured provider (e.g., "openai", "gemini"). */
+	public get provider(): string {
+		return this._config?.provider ?? "unknown"
+	}
+
 	/** Number of messages in the conversation. */
 	public get conversationTurnCount(): number {
 		return this._messages.length

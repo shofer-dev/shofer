@@ -160,6 +160,139 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
+	// ─── Helper Agent Status Bar ────────────────────────────────────────
+
+	/**
+	 * Status bar button for the Helper Agent. Sits next to the RAG indexer
+	 * button on the status bar. Shows agent state, context fill percentage,
+	 * and model name. Left-click opens the info panel (quick pick).
+	 */
+	const helperAgentStatusBar = vscode.window.createStatusBarItem(
+		vscode.StatusBarAlignment.Right,
+		99.9, // Position right after the RAG indexer (which uses 100)
+	)
+	helperAgentStatusBar.name = "Helper Agent"
+	helperAgentStatusBar.command = "shofer.helperAgent.showInfo"
+	helperAgentStatusBar.tooltip = "Helper Agent"
+	helperAgentStatusBar.show()
+	context.subscriptions.push(helperAgentStatusBar)
+
+	/**
+	 * Blinking timer for the "Busy" state. Fires every 500ms to toggle
+	 * the icon visibility, matching the RAG indexer's blinking pattern.
+	 */
+	let helperAgentBlinkTimer: NodeJS.Timeout | null = null
+	let helperAgentBlinkVisible = true
+
+	/**
+	 * Resolves the appropriate status bar text for the current agent state.
+	 */
+	function updateHelperAgentStatusBar(): void {
+		const managers = HelperAgentManager.getAllInstances()
+		if (managers.length === 0) {
+			helperAgentStatusBar.text = "$(comment-discussion) Helper Agent"
+			helperAgentStatusBar.tooltip = "Helper Agent — not available"
+			return
+		}
+
+		const mgr = managers[0]
+		const state = mgr.state
+		const usage = mgr.getContextUsage()
+		const cost = mgr.getCostSnapshot()
+		const fillPct = (usage.fillFraction * 100).toFixed(1)
+		const pendingCount = mgr.pendingQuestionCount
+
+		// Stop any active blink timer
+		if (helperAgentBlinkTimer) {
+			clearInterval(helperAgentBlinkTimer)
+			helperAgentBlinkTimer = null
+			helperAgentBlinkVisible = true
+		}
+
+		let stateIcon: string
+		let stateText: string
+		let tooltipLines: string[] = [
+			`Model: ${mgr.modelId} (${mgr.provider})`,
+			`Tokens: ${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} (${fillPct}%)`,
+			`Cost: $${cost.sessionEstimatedCostUSD.toFixed(6)}`,
+		]
+
+		switch (state) {
+			case "Initializing":
+				stateIcon = "$(sync~spin)"
+				stateText = `Initializing...`
+				break
+			case "Ready":
+				stateIcon = "$(comment-discussion)"
+				stateText = `Ready (${fillPct}%)`
+				if (usage.isNearlyFull) {
+					stateIcon = "$(warning)"
+					stateText = `Nearly Full (${fillPct}%)`
+				}
+				break
+			case "Busy":
+				stateIcon = "$(loading~spin)"
+				stateText = `Busy (${fillPct}%)`
+				if (pendingCount > 0) {
+					stateText += ` [${pendingCount}]`
+				}
+				tooltipLines.push(`${pendingCount} question(s) queued`)
+				// Start blinking
+				helperAgentBlinkTimer = setInterval(() => {
+					helperAgentBlinkVisible = !helperAgentBlinkVisible
+					helperAgentStatusBar.text = helperAgentBlinkVisible
+						? `$(loading~spin) ${stateText}`
+						: `$(comment-discussion) ${stateText}`
+				}, 500)
+				break
+			case "Error":
+				stateIcon = "$(error)"
+				stateText = `Error`
+				tooltipLines.push(`Error: ${mgr.stateMessage}`)
+				break
+			case "Stopping":
+				stateIcon = "$(sync~spin)"
+				stateText = `Stopping...`
+				break
+			case "Standby":
+			default:
+				stateIcon = "$(circle-outline)"
+				stateText = `Standby`
+				tooltipLines.push(`Reason: ${mgr.stateMessage}`)
+				break
+		}
+
+		helperAgentStatusBar.text = `${stateIcon} ${stateText}`
+		helperAgentStatusBar.tooltip = tooltipLines.join("\n")
+	}
+
+	// Subscribe to state changes to keep the status bar up-to-date
+	for (const mgr of HelperAgentManager.getAllInstances()) {
+		context.subscriptions.push(
+			mgr.onStateChange(() => {
+				updateHelperAgentStatusBar()
+			}),
+		)
+		context.subscriptions.push(
+			mgr.onConversationUpdate(() => {
+				updateHelperAgentStatusBar()
+			}),
+		)
+	}
+
+	// Clean up blink timer on deactivation
+	context.subscriptions.push({
+		dispose: () => {
+			if (helperAgentBlinkTimer) {
+				clearInterval(helperAgentBlinkTimer)
+				helperAgentBlinkTimer = null
+			}
+		},
+	})
+
+	// Initial update
+	updateHelperAgentStatusBar()
+
 	// ─── End Helper Agent Status Bar ───────────────────────────────────
 
 	// ─── Helper Agent Commands ──────────────────────────────────────────
@@ -185,7 +318,11 @@ export async function activate(context: vscode.ExtensionContext) {
 					description: mgr.stateMessage,
 				},
 				{
-					label: `$(database) Context: ${usage.currentTokens} / ${usage.maxTokens} tokens (${fillPct}%)`,
+					label: `$(rocket) Model: ${mgr.modelId}`,
+					description: `Provider: ${mgr.provider}`,
+				},
+				{
+					label: `$(database) Context: ${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} tokens (${fillPct}%)`,
 					description: usage.isNearlyFull ? "⚠ Nearly full" : "OK",
 				},
 				{

@@ -660,15 +660,13 @@ The Helper Agent status bar button sits **next to the RAG indexer button** on th
         - **View Chat** — opens the dedicated chat panel showing full conversation history
         - **Clear Context** — resets the conversation to just the system prompt (all messages and file contexts are dropped; cost tracking is preserved)
         - **Configure API** — opens the API configuration settings
-- **Right-click**: Opens context menu with: Clear Context, Configure API, View Info
 - **Tooltip**: Shows model name, token usage (`12.5K / 128K`), fill percentage, and estimated cost
 
 ### Helper Agent Chat View
 
 A dedicated **chat panel** lets the user observe everything the helper agent is doing in real time. It is accessible from:
 
-- The status bar quick pick: **"View Chat"** action
-- The right-click context menu: **"View Chat"**
+- The status bar info panel: **"View Chat"** action (left-click the status bar button, then select "View Chat")
 - A dedicated VS Code webview panel (similar to the Shofer task chat UI)
 
 The chat view displays:
@@ -808,7 +806,7 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 **Files to create/modify:**
 | File | Action | Notes |
 |------|--------|-------|
-| `src/activate/registerStatusBar.ts` | Modify | Register helper agent status bar button (blinking pattern, left-click info panel, right-click menu) |
+| `src/extension.ts` | Modify | Register helper agent status bar button (blinking pattern, left-click info panel) |
 | `src/services/helper-agent/manager.ts` | Modify | Add `getContextUsage()`, `clearContext()`, `onStateChange`/`onConversationUpdate` events |
 | `src/activate/registerCommands.ts` | Modify | Register `helperAgent.start`, `helperAgent.stop`, `helperAgent.clearContext`, `helperAgent.showInfo` |
 
@@ -818,7 +816,7 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 - Icon blinks when Busy (matching RAG pattern)
 - Left-click opens info panel: status, model, token usage bar, fill %, cost, files in context
 - Clear Context button resets conversation to system prompt (cost tracking preserved)
-- Right-click context menu with actions
+- All actions (View Chat, Clear Context, Configure API, Start Agent) accessible via info panel quick pick
 
 ---
 
