@@ -34,6 +34,7 @@ import { SkillsButton } from "./SkillsButton"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
+import { HelperAgentStatusBadge } from "./HelperAgentStatusBadge"
 import { usePromptHistory } from "./hooks/usePromptHistory"
 // CloudAccountSwitcher removed
 
@@ -1415,6 +1416,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								</button>
 							</StandardTooltip>
 						)}
+						{!isEditMode ? <HelperAgentStatusBadge /> : null}
 						{!isEditMode ? <IndexingStatusBadge /> : null}
 						{/* CloudAccountSwitcher removed */}
 					</div>
