@@ -857,3 +857,88 @@ Phase 1 (Core Manager)
 ```
 
 Phases 4 and 5 can be implemented in parallel after Phase 3 is complete.
+
+---
+
+## Implementation Status (Completed 2026-05-14)
+
+### Commit History
+
+| Phase | Commit                                                                               | Files Changed                                                                       |
+| ----- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| 1     | `3a26139d5` `feat(helper-agent): Phase 1 — Core Manager + Configuration`             | 2 new: `packages/types/src/helper-agent.ts`, `src/services/helper-agent/manager.ts` |
+| 2     | `d1309e281` `feat(helper-agent): Phase 2 — Native Tool + Tool System Integration`    | 2 new, 5 modified                                                                   |
+| 3     | `4bab12a81` `feat(helper-agent): Phase 3 — Queue + Timeout + KV-Cache Notifications` | 1 modified: `manager.ts` (+256/-63)                                                 |
+| 4     | `9d4c50554` `feat(helper-agent): Phase 4 — Status Bar + Info Panel + Clear Context`  | 1 modified: `extension.ts` (+189)                                                   |
+| 5     | `d80dbdc8c` `feat(helper-agent): Phase 5 — Directory Tree + File Watcher`            | 2 new, 1 modified                                                                   |
+
+_Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback` for `attempt_completion`.
+
+### Status Summary
+
+| Phase                                                                                              | Status      |
+| -------------------------------------------------------------------------------------------------- | ----------- |
+| Phase 1: Core Manager + Configuration                                                              | ✅ Complete |
+| Phase 2: Native Tool + Tool System Integration                                                     | ✅ Complete |
+| Phase 3: Queue + Timeout + KV-Cache-Preserving Notifications                                       | ✅ Complete |
+| Phase 4: Status Bar + Info Panel + Clear Context                                                   | ✅ Complete |
+| Phase 5: Directory Tree + File Watcher                                                             | ✅ Complete |
+| Phase 5: Chat View (`HelperAgentChatProvider`, `ShoferProvider` hooks, `FileContextTracker` hooks) | ⚠️ Deferred |
+
+### Files Created (7)
+
+| File                                                                                                                                     | Phase | Lines | Description                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`packages/types/src/helper-agent.ts`](extensions/shofer/packages/types/src/helper-agent.ts:1)                                           | 1     | 176   | Zod schemas for AgentMessage, FileContextEntry, HelperAgentConfig, QuestionResult, CostTracking; HELPER_AGENT_SYSTEM_PROMPT; all 11 constants                                          |
+| [`src/services/helper-agent/manager.ts`](extensions/shofer/src/services/helper-agent/manager.ts:1)                                       | 1     | ~1020 | Singleton-per-workspace with initialize(), askQuestion(), conversation persistence, multi-provider LLM, truncation-based context window, FIFO queue, timeout/abort, file notifications |
+| [`src/services/helper-agent/directory-tree.ts`](extensions/shofer/src/services/helper-agent/directory-tree.ts:1)                         | 5     | 185   | Recursive workspace scan, `find .`-style tree generation, ~10% token cap, common-dir exclusion set                                                                                     |
+| [`src/services/helper-agent/file-watcher.ts`](extensions/shofer/src/services/helper-agent/file-watcher.ts:1)                             | 5     | 95    | VSCode FileSystemWatcher wrapper, 500ms per-file debounce, worktree + hidden-path skipping                                                                                             |
+| [`src/core/prompts/tools/native-tools/ask_helper_agent.ts`](extensions/shofer/src/core/prompts/tools/native-tools/ask_helper_agent.ts:1) | 2     | 51    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs                                                                                                         |
+| [`src/core/tools/AskHelperAgentTool.ts`](extensions/shofer/src/core/tools/AskHelperAgentTool.ts:1)                                       | 2     | 102   | BaseTool<"ask_helper_agent"> delegating to HelperAgentManager                                                                                                                          |
+
+### Files Modified (9)
+
+| File                                                    | Phase  | Changes                                                                              |
+| ------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------ |
+| `packages/types/src/index.ts`                           | 1      | Added `export * from "./helper-agent.js"`                                            |
+| `packages/types/src/tool.ts`                            | 1      | Added `"ask_helper_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`  |
+| `packages/types/src/telemetry.ts`                       | 1      | Added `HELPER_AGENT_ERROR = "Helper Agent Error"` to TelemetryEventName              |
+| `src/shared/tools.ts`                                   | 1, fix | Added `ask_helper_agent` to `NativeToolArgs`; pre-existing fix for `toolParamNames`  |
+| `src/extension.ts`                                      | 1,4    | Per-workspace activation, disposeAll(), status bar button, 4 commands                |
+| `src/core/prompts/tools/native-tools/index.ts`          | 2      | Import + registration in `getNativeTools()`                                          |
+| `src/core/assistant-message/presentAssistantMessage.ts` | 2      | Import, description, dispatch case                                                   |
+| `src/core/prompts/tools/filter-tools-for-mode.ts`       | 2      | Added `helperAgentManager` (8th parameter), conditional `ask_helper_agent` exclusion |
+| `src/core/task/build-tools.ts`                          | 2      | Import `HelperAgentManager`, pass to `filterNativeToolsForMode`                      |
+| `src/core/auto-approval/tools.ts`                       | 2      | Added `askHelperAgent: "ask_helper_agent"` auto-approval entry                       |
+
+### Implementation Deviations from Design
+
+| Design Specification                                                                                                                                                                                   | Actual Implementation                                                                | Rationale                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Architecture: separate `orchestrator.ts`, `service-factory.ts`, `context-manager.ts`, `conversation-store.ts`, `question-queue.ts`, `search-service.ts`, `config-manager.ts`, `state-manager.ts` files | All functionality consolidated in `manager.ts` (~1020 lines)                         | For Phase 1-5 the manager file handles queue, timeout, context, conversation, LLM, and state without excessive complexity. Can be refactored into separate files if it grows significantly. |
+| `config-manager.ts` reads from `ContextProxy` globalState                                                                                                                                              | Reads from `vscode.workspace.getConfiguration("shofer")` + `context.secrets.get()`   | Avoids extending the typed `GlobalState`/`SecretState` key systems. Settings are standard VS Code configuration keys (`helperAgentEnabled`, `helperAgentProvider`, etc.).                   |
+| `llm-providers/` directory with dedicated provider implementations                                                                                                                                     | Direct `fetch()` calls in `_callLLM()` with switch on provider                       | The helper agent uses a simple chat/completion API (no streaming, no tools in the request). Dedicated provider classes would add overhead without benefit at this scale.                    |
+| `DEFAULT_MAX_CONTEXT_TOKENS` constant in `constants/index.ts`                                                                                                                                          | Defined in `packages/types/src/helper-agent.ts` alongside all other constants        | Single source of truth; avoids an extra file for 11 constants.                                                                                                                              |
+| `state-manager.ts` with `CodeIndexStateManager` pattern                                                                                                                                                | Inline `_setState()` + `_stateChangeEmitter` in manager                              | Simpler; the state transitions for the helper agent are straightforward compared to the RAG indexer's multi-phase scanning.                                                                 |
+| Status bar in `registerStatusBar.ts`                                                                                                                                                                   | Status bar code in `extension.ts` directly                                           | Avoids creating a new file for ~50 lines of status bar logic.                                                                                                                               |
+| Commands in `registerCommands.ts` via `CommandId` type system                                                                                                                                          | Commands registered directly in `extension.ts` via `vscode.commands.registerCommand` | Avoids extending the `CommandId` type. Functionally equivalent.                                                                                                                             |
+| Architecture diagram shows `HelperAgentConversationStore` as separate module                                                                                                                           | `_loadConversation()` / `_saveConversation()` as private methods on manager          | Conversation persistence is straightforward JSON I/O; a dedicated class would add indirection without value.                                                                                |
+| Architecture diagram shows `HelperAgentQuestionQueue` as separate module                                                                                                                               | `_questionQueue` array + `_processNextQuestion()` as private members on manager      | The queue logic is tightly coupled to the manager's state transitions; extracting it would require significant interface plumbing.                                                          |
+
+### Deferred Items
+
+| Item                                                                      | Design Reference                 | Reason                                                                                                                                                                                  |
+| ------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HelperAgentChatProvider.ts` — full chat view webview panel               | Phase 5, §Helper Agent Chat View | Requires React-based UI with live streaming, context sidebar, message styling. A non-trivial UI component that needs webview registration, new message handlers, and UI assets.         |
+| `ShoferProvider.ts` — subscribe to helper agent events                    | Phase 5 Integration Points table | Would push helper agent status/events to the Shofer webview. A separate wiring pass after the core tool pipeline is stabilized.                                                         |
+| `FileContextTracker.ts` — emit events for `notifyFileModified`            | Phase 5, §5b                     | Deep integration with the tool execution pipeline. The `notifyFileModified()` API exists on the manager; wiring tool completion events to call it requires a separate integration pass. |
+| `webviewMessageHandler.ts` — settings save, status request, secret status | Integration Points table         | Settings UI integration for the webview; needs the ChatView to exist first.                                                                                                             |
+| `system.ts` — helper agent status in system prompt context                | Integration Points table         | Inclusion of helper agent availability + model info in the task agent's system prompt. Depends on ShoferProvider integration.                                                           |
+
+### Build Verification
+
+All 5 phase commits pass:
+
+- **ESLint**: `pnpm run lint` — zero warnings
+- **TypeScript**: `pnpm run check-types` — only pre-existing test file errors (unrelated `AttemptCompletionToolUse` rating type issue)
+- **VSCE Packaging**: `./deploy.sh dev build shofer` — produces `shofer-0.5.0.vsix` (31.74 MB)
