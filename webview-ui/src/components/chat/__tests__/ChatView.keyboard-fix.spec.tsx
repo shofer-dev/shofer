@@ -52,9 +52,6 @@ vi.mock("@src/components/welcome/ShoferHero", () => ({
 	default: () => null,
 }))
 
-	default: () => null,
-}))
-
 // Mock i18n
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({

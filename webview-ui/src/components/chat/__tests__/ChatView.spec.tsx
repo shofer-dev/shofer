@@ -140,10 +140,6 @@ vi.mock("@src/components/welcome/ShoferHero", () => ({
 	},
 }))
 
-		return null // Don't render anything to avoid interference
-	},
-}))
-
 // Mock i18n
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
