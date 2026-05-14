@@ -96,6 +96,7 @@ import { getTaskDirectoryPath } from "../../utils/storage"
 import { formatResponse } from "../prompts/responses"
 import { SYSTEM_PROMPT } from "../prompts/system"
 import { buildNativeToolsArrayWithRestrictions } from "./build-tools"
+import { MAX_SUBTASK_RESULT_LENGTH } from "../tools/NewTaskTool"
 
 // core modules
 import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector"
@@ -257,6 +258,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	readonly parentTask: Task | undefined = undefined
 	readonly taskNumber: number
 	readonly workspacePath: string
+
+	/**
+	 * Maximum characters the parent will accept as the completion result.
+	 * Set by {@link NewTaskTool} via {@link CreateTaskOptions.resultLength} when a parent
+	 * spawns a child task. The child's {@link attempt_completion} tool enforces this.
+	 * If undefined, no result length constraint applies (top-level tasks).
+	 */
+	resultLength?: number
+
+	/**
+	 * Soft guidance (in seconds) for how long the parent expects to wait.
+	 * Set by {@link NewTaskTool} via {@link CreateTaskOptions.estimatedTimeout}.
+	 * Not a hard deadline — informational only. If undefined, no time guidance applies.
+	 */
+	estimatedTimeout?: number
 
 	/**
 	 * The mode associated with this task. Persisted across sessions
@@ -575,6 +591,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		initialStatus,
 		initialMode,
 		isBackground,
+		resultLength,
+		estimatedTimeout,
 	}: TaskOptions) {
 		super()
 
@@ -645,6 +663,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.parentTask = parentTask
 		this.rootTask = rootTask
 		this.taskNumber = taskNumber
+		this.resultLength = resultLength
+		this.estimatedTimeout = estimatedTimeout
 		// Restore the cost limit from history ONLY for root tasks. Subtasks
 		// resolve their effective limit via resolveCostLimit() and never carry
 		// their own — keeping a single source of truth on the root.
@@ -4572,7 +4592,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			const modelInfo = this.api.getModel().info
 
-			return SYSTEM_PROMPT(
+			const systemPrompt = await SYSTEM_PROMPT(
 				provider.context,
 				this.cwd,
 				false,
@@ -4604,6 +4624,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.api.getModel().id,
 				provider.getSkillsManager(),
 			)
+
+			// Inject subtask constraints when this is a child task with a result length
+			// and/or estimated timeout specified by the parent.
+			if (this.parentTaskId && (this.resultLength || this.estimatedTimeout)) {
+				const constraints: string[] = []
+				constraints.push("SUBTASK CONSTRAINTS")
+				constraints.push("")
+				if (this.resultLength) {
+					constraints.push(
+						`- Result length limit: ${this.resultLength} characters. Your attempt_completion result MUST NOT exceed this character count. Summarize your findings concisely.`,
+					)
+					constraints.push(`  Hard cap for safety: ${MAX_SUBTASK_RESULT_LENGTH} characters.`)
+				}
+				if (this.estimatedTimeout) {
+					constraints.push(
+						`- Estimated timeout: ${this.estimatedTimeout} seconds (soft guidance — the parent may wait longer and you may take longer). Pace your work accordingly.`,
+					)
+				}
+				return systemPrompt + "\n\n====\n\n" + constraints.join("\n")
+			}
+
+			return systemPrompt
 		})()
 	}
 

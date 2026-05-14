@@ -129,6 +129,18 @@ export interface CreateTaskOptions {
 	 * Defaults to the workspace root.
 	 */
 	cwd?: string
+	/**
+	 * Maximum characters the parent will accept as the completion result.
+	 * The subtask MUST keep its attempt_completion result within this limit.
+	 * If unset, no result length constraint is applied.
+	 */
+	resultLength?: number
+	/**
+	 * Soft guidance (in seconds) for how long the parent expects to wait.
+	 * Not a hard deadline; the parent may wait longer and the child may take longer.
+	 * Informational only — used to guide the subtask's pacing.
+	 */
+	estimatedTimeout?: number
 }
 
 export enum TaskStatus {

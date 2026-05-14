@@ -9,11 +9,14 @@ import { Package } from "../../shared/package"
 import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"
 import { getChangedFiles } from "../file-changes/ChangedFilesService"
+import { getOutputChannel } from "../../extension"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
 interface AttemptCompletionParams {
 	result: string
+	rating: number
+	feedback?: string
 	command?: string
 }
 
@@ -66,15 +69,17 @@ async function computeFileChangeStats(task: Task): Promise<{ insertions: number;
 	}
 }
 
+import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
+
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
 
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
-		const { result } = params
+		const { result, rating, feedback } = params
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
 		console.log(
-			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, result=${result?.substring(0, 100)}`,
+			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${rating}, result=${result?.substring(0, 100)}`,
 		)
 
 		// Prevent attempt_completion if any tool failed in the current turn
@@ -113,9 +118,44 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				return
 			}
 
+			// Validate rating: must be 1, 2, or 3
+			const ALLOWED_RATINGS = new Set([1, 2, 3])
+			if (!rating || !ALLOWED_RATINGS.has(rating)) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("attempt_completion")
+				pushToolResult(
+					await task.sayAndCreateMissingParamError("attempt_completion", "rating (must be 1, 2, or 3)"),
+				)
+				return
+			}
+
+			// Route optional feedback to the output channel (same mechanism as GiveFeedbackTool)
+			if (feedback && feedback.trim()) {
+				const trimmed = feedback.trim()
+				const channel = getOutputChannel()
+				const stamp = new Date().toISOString()
+				const header = `[${stamp}] [FEEDBACK via attempt_completion] taskId=${task.taskId} rating=${rating}`
+				if (channel) {
+					channel.appendLine(header)
+					channel.appendLine(trimmed)
+					channel.appendLine("")
+				}
+			}
+
 			task.consecutiveMistakeCount = 0
 
-			await task.say("completion_result", result, undefined, false)
+			// Enforce result length limit: first apply the parent-specified soft limit,
+			// then the hard safety cap. This ensures the completion result flowing back
+			// to the parent does not exceed the parent's capacity.
+			let effectiveResult = result
+			const effectiveLimit = Math.min(task.resultLength ?? Infinity, MAX_SUBTASK_RESULT_LENGTH)
+			if (effectiveResult.length > effectiveLimit) {
+				effectiveResult =
+					effectiveResult.slice(0, effectiveLimit) +
+					`\n[...truncated to ${effectiveLimit} characters (limit: ${task.resultLength ?? "hard cap"} chars)]`
+			}
+
+			await task.say("completion_result", effectiveResult, undefined, false)
 
 			console.log(
 				`[AttemptCompletionTool.execute] Checking delegation: taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}`,
@@ -135,7 +175,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						const blockingHandled = await provider.resumeBlockingParent({
 							parentTaskId: task.parentTaskId,
 							childTaskId: task.taskId,
-							completionResult: result,
+							completionResult: effectiveResult,
 						})
 						if (blockingHandled) {
 							console.log(
@@ -169,7 +209,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								await provider.updateTaskHistory({
 									...historyItem,
 									status: "completed",
-									completionResultSummary: result,
+									completionResultSummary: effectiveResult,
 									insertions: fileStats.insertions,
 									deletions: fileStats.deletions,
 								})

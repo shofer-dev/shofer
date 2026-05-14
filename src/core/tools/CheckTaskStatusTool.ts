@@ -7,6 +7,7 @@ import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { readTaskMessages } from "../task-persistence/taskMessages"
+import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
 
 interface CheckTaskStatusParams {
 	task_id: string
@@ -113,8 +114,8 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 
 		pushToolResult(
 			`Task: ${task_id}\nStatus: ${handle.status}\n` +
-				(result ? `Result: ${result.slice(0, 1000)}\n` : "") +
-				(errorText ? `Error: ${errorText.slice(0, 1000)}\n` : ""),
+				(result ? `Result: ${result.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : "") +
+				(errorText ? `Error: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : ""),
 		)
 	}
 

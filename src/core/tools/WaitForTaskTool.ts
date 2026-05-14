@@ -7,6 +7,7 @@ import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { readTaskMessages } from "../task-persistence/taskMessages"
+import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
 
 const DEFAULT_TIMEOUT_SECONDS = 120
 
@@ -202,8 +203,8 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 			resultLines.push(
 				`Task: ${id}\nStatus: ${handle.status}` +
 					(timedOut ? `\nTimed out after ${effectiveTimeout}s` : "") +
-					(result ? `\nResult: ${result.slice(0, 1000)}` : "") +
-					(errorText ? `\nError: ${errorText.slice(0, 1000)}` : ""),
+					(result ? `\nResult: ${result.slice(0, MAX_SUBTASK_RESULT_LENGTH)}` : "") +
+					(errorText ? `\nError: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}` : ""),
 			)
 		}
 

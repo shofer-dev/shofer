@@ -1,16 +1,21 @@
 import type OpenAI from "openai"
+import { MAX_SUBTASK_RESULT_LENGTH } from "../../../tools/NewTaskTool"
 
 const ATTEMPT_COMPLETION_DESCRIPTION = `After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
 
 IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user that any previous tool uses were successful. Failure to do so will result in code corruption and system failure. Before using this tool, you must confirm that you've received successful results from the user for any previous tool uses. If not, then DO NOT use this tool.
 
+If you are running as a subtask with a SUBTASK CONSTRAINTS section in your system prompt, your result will be truncated if it exceeds the specified limit. Keep your result concise and within the character budget.
+
 Parameters:
 - result: (required) The result of the task. Formulate this result in a way that is final and does not require further input from the user. Don't end your result with questions or offers for further assistance.
+- rating: (required) A self-assessment of how successfully you completed the task. 1 = poorly (significant issues or incomplete), 2 = okish (acceptable but room for improvement), 3 = nailed it (executed excellently, high quality).
+- feedback: (optional) Free-text feedback for Shofer.Dev engineers about tooling, system prompt, or other issues encountered during the task. Use this to report things that didn't work as expected or suggest concrete improvements. Only provide this if you noticed something worth reporting.
 
 Example: Completing after updating CSS
-{ "result": "I've updated the CSS to use flexbox layout for better responsiveness" }`
+{ "result": "I've updated the CSS to use flexbox layout for better responsiveness", "rating": 3 }`
 
-const RESULT_PARAMETER_DESCRIPTION = `Final result message to deliver to the user once the task is complete`
+const RESULT_PARAMETER_DESCRIPTION = `Final result message to deliver to the user once the task is complete. If running as a subtask, keep within the character limit specified in your SUBTASK CONSTRAINTS (hard cap: ${MAX_SUBTASK_RESULT_LENGTH} characters).`
 
 export default {
 	type: "function",
@@ -25,8 +30,18 @@ export default {
 					type: "string",
 					description: RESULT_PARAMETER_DESCRIPTION,
 				},
+				rating: {
+					type: "number",
+					description: "Self-assessment rating: 1 (poorly), 2 (okish), or 3 (nailed it)",
+					enum: [1, 2, 3],
+				},
+				feedback: {
+					type: "string",
+					description:
+						"Optional feedback for Shofer.Dev engineers to improve tooling, system prompt, etc. Only provide if you detected something that didn't work as expected or have a concrete improvement idea.",
+				},
 			},
-			required: ["result"],
+			required: ["result", "rating"],
 			additionalProperties: false,
 		},
 	},
