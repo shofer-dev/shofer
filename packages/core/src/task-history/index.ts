@@ -31,7 +31,7 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 	const createdAt = value.createdAt
 	const workspace = value.workspace
 	const mode = value.mode
-	const status = value.status
+	const status = value.taskExecutionState
 
 	if (typeof id !== "string" || typeof task !== "string" || typeof ts !== "number") {
 		return undefined
@@ -44,7 +44,9 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 		createdAt: typeof createdAt === "number" ? createdAt : undefined,
 		workspace: typeof workspace === "string" ? workspace : undefined,
 		mode: typeof mode === "string" ? mode : undefined,
-		status: status === "active" || status === "completed" || status === "delegated" ? status : undefined,
+		status: ["idle", "running", "waiting_input", "paused", "error", "completed"].includes(status)
+			? status
+			: undefined,
 	}
 }
 

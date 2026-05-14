@@ -167,7 +167,7 @@ export interface TaskOptions extends CreateTaskOptions {
 	 */
 	cwd?: string
 	/** Initial status for the task's history item (e.g., "active" for child tasks) */
-	initialStatus?: "active" | "delegated" | "completed"
+	initialStatus?: TaskExecutionState
 }
 
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
@@ -559,7 +559,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private debouncedEmitTokenUsage: ReturnType<typeof debounce>
 
 	// Initial status for the task's history item (set at creation time to avoid race conditions)
-	private readonly initialStatus?: "active" | "delegated" | "completed"
+	private readonly initialStatus?: TaskExecutionState
 
 	// When true, this task is a background child of another task. Persisted onto
 	// the task's HistoryItem.isBackground from the first save and used by
