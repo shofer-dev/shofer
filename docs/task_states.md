@@ -6,48 +6,95 @@ This document describes the task state model used in the Task Selector sidebar a
 
 The icon displayed for each task in the Task Selector is determined by the following priority:
 
-1. **`HistoryItem.status`** — persisted lifecycle status
+1. **`HistoryItem.status === "completed"`** — task finished via `attempt_completion`; uses `completionRating` to select icon
 2. **`runtime.state`** — live execution state from `ManagedTask`
 3. **`HistoryItem.taskExecutionState`** — persisted execution state (survives restarts)
 4. **`"idle"`** — default fallback
 
+### Completion Rating Icons
+
+When a task completes, the agent's self-assessed `completionRating` determines the icon:
+
+| Rating        | State Key             | Icon                           | Color | Description                          |
+| ------------- | --------------------- | ------------------------------ | ----- | ------------------------------------ |
+| `"excellent"` | `completed_excellent` | `codicon-pass-filled`          | Green | Task executed excellently            |
+| `"well"`      | `completed_well`      | half-green SVG arc             | Green | Acceptable with room for improvement |
+| `"poor"`      | `completed_poor`      | `codicon-circle-large-outline` | Grey  | Significant issues or incomplete     |
+| (no rating)   | `completed`           | `codicon-check`                | Green | Legacy completed task                |
+
+State resolution logic:
+
 ```
-item.status === "completed"   → "completed"  (green check)
-runtime?.state               → runtime state (live)
-item.taskExecutionState      → persisted     (e.g., error after restart)
-fallback                     → "idle"        (grey circle)
+item.status === "completed"
+  ├── item.completionRating === "excellent"  → "completed_excellent"
+  ├── item.completionRating === "well"       → "completed_well"
+  ├── item.completionRating === "poor"       → "completed_poor"
+  └── (no rating)                            → "completed"
+
+item.status !== "completed"
+  ├── runtime?.state                         → runtime state (live)
+  ├── item.taskExecutionState                → persisted
+  └── fallback                               → "idle"
 ```
+
+## Lifecycle
+
+### `attempt_completion` → auto-completion (no user approval needed)
+
+The `attempt_completion` native tool signals task completion with metadata:
+
+- `result` — task summary
+- `rating` — agent self-assessment (`"poor"` / `"well"` / `"excellent"`)
+- `feedback` — optional feedback for Shofer.Dev engineers
+
+This tool requires **no user approval**. The completion dialog (`completion_result`) is
+auto-approved by `isNonBlockingAsk`, so the agent's result is accepted and persisted
+immediately. The `HistoryItem.status` is set to `"completed"` and `completionRating`
+is stored.
+
+### `idle` state
+
+`idle` represents tasks with no active execution. It applies to:
+
+- Tasks that have been cleared or not yet started
+- Tasks blocked synchronously waiting for a subtask to complete
 
 ## Persistence
 
-- `HistoryItem.status = "completed"` is written by `AttemptCompletionTool` on every successful completion path: foreground approval, blocking subtask completion (`resumeBlockingParent`), and background-child completion. This guarantees the green check after restart for any task the user actually finished.
-- `HistoryItem.taskExecutionState` is written through by `TaskManager.updateTaskExecutionState` on every state transition (running, idle, paused, waiting_input, error). The runtime overlay stays authoritative for live UI; the persisted value is only consulted when the runtime is gone.
-- On restore (`TaskManager.restoreManagedTasks`), `running` and `waiting_input` are sanitized to `idle` because no live Task instance can exist after a restart. `error` and `paused` are preserved. Items with `status === "completed"` are also restored as `idle` so the green check (resolved from `status`) wins.
+- `HistoryItem.status = "completed"` is written by `AttemptCompletionTool` on every
+  completion path. The `completionRating` is persisted alongside.
+- `HistoryItem.taskExecutionState` is written by `TaskManager.updateTaskExecutionState`
+  on every state transition (running, idle, paused, waiting_input, error).
+- On restore, `running` and `waiting_input` are sanitized to `idle` (no live instance).
+  `error` and `paused` are preserved. Items with `status === "completed"` are also
+  restored as `idle` — the rating icon resolves from `status` + `completionRating`.
 
 ## Edge Cases
 
 ### Stopped/completed task showing as "running" after re-focus
 
-When a task is stopped (via Stop button) or completes naturally, `TaskManager` updates its `ManagedTask.state` to `"idle"` or `"paused"`. However, if the user later clicks the task in the TaskSelector to re-focus it, `ShoferProvider.focusTask` takes the "dead instance" path:
-
-1. Calls `removeManagedTaskInstance(taskId)` — removes the Task from `activeTasks` but leaves the `ManagedTask` in `managedTasks` with its terminal state.
-2. Calls `showTaskWithId(taskId)` — creates a **fresh** Task instance from history (with `abandoned=false`, `abort=false`).
-3. Calls `registerBackgroundTask(resumedTask)` — which previously **overwrote** the `ManagedTask` unconditionally with `state = "running"` (because the new Task was neither abandoned nor aborted).
-
-**Fix**: [`TaskManager.registerBackgroundTask`](../src/services/task-manager/TaskManager.ts) now checks whether a `ManagedTask` already exists for the task ID. If so, it preserves the existing `state`, `name`, and `createdAt` fields rather than resetting to `"running"`. Additionally, if the task is already in `activeTasks`, the old listeners are cleaned up and the new Task instance is swapped in without changing the state.
+When a task is stopped (via Stop button) or completes naturally, `TaskManager` updates
+its `ManagedTask.state`. If the user re-focuses a completed task via the TaskSelector,
+`TaskManager.registerBackgroundTask` preserves the existing state rather than resetting
+to `"running"`.
 
 ## State Icons
 
-| State           | Icon                           | Color                                   | Description                                                   |
-| --------------- | ------------------------------ | --------------------------------------- | ------------------------------------------------------------- |
-| `completed`     | `codicon-check`                | Green (`--vscode-charts-green`)         | Task finished successfully                                    |
-| `idle`          | `codicon-circle-large-outline` | Grey (`--vscode-descriptionForeground`) | No active execution; task has not been started or was cleared |
-| `running`       | `codicon-sync` (spinning)      | Blue (`--vscode-charts-blue`)           | Agent is actively processing (API call in progress)           |
-| `waiting_input` | `codicon-question`             | Yellow (`--vscode-charts-yellow`)       | Paused and waiting for user approval/input                    |
-| `paused`        | `codicon-debug-pause`          | Orange (`--vscode-charts-orange`)       | Manually paused by the user                                   |
-| `error`         | `codicon-error`                | Red (`--vscode-errorForeground`)        | Stopped due to an error                                       |
+| State                 | Icon                           | Color                                   | Description                                         |
+| --------------------- | ------------------------------ | --------------------------------------- | --------------------------------------------------- |
+| `completed_excellent` | `codicon-pass-filled`          | Green (`--vscode-charts-green`)         | Task finished — agent rated it excellent            |
+| `completed_well`      | half-green SVG arc             | Green / Grey                            | Task finished — agent rated it well                 |
+| `completed_poor`      | `codicon-circle-large-outline` | Grey (`--vscode-descriptionForeground`) | Task finished — agent rated it poor                 |
+| `completed`           | `codicon-check`                | Green (`--vscode-charts-green`)         | Task finished (no rating / legacy)                  |
+| `idle`                | `codicon-circle-large-outline` | Grey (`--vscode-descriptionForeground`) | No active execution; waiting for subtask or cleared |
+| `running`             | `codicon-sync` (spinning)      | Blue (`--vscode-charts-blue`)           | Agent is actively processing (API call in progress) |
+| `waiting_input`       | `codicon-question`             | Yellow (`--vscode-charts-yellow`)       | Paused and waiting for user approval/input          |
+| `paused`              | `codicon-debug-pause`          | Orange (`--vscode-charts-orange`)       | Manually paused by the user                         |
+| `error`               | `codicon-error`                | Red (`--vscode-errorForeground`)        | Stopped due to an error                             |
 
 ## Source Files
 
 - [`webview-ui/src/components/chat/TaskSelector.tsx`](../webview-ui/src/components/chat/TaskSelector.tsx) — `TASK_STATE_CONFIG` and state resolution logic
-- [`packages/types/src/history.ts`](../packages/types/src/history.ts) — `HistoryItem` schema (`status`, `taskExecutionState`)
+- [`packages/types/src/history.ts`](../packages/types/src/history.ts) — `HistoryItem` schema (`status`, `taskExecutionState`, `completionRating`)
+- [`packages/types/src/message.ts`](../packages/types/src/message.ts) — `isNonBlockingAsk` (auto-approves `completion_result`)
+- [`src/core/tools/AttemptCompletionTool.ts`](../src/core/tools/AttemptCompletionTool.ts) — completion tool implementation
