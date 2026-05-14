@@ -689,6 +689,12 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				}
 				if (chunk instanceof vscode.LanguageModelToolCallPart) {
 					try {
+						// Diagnostic log for attempt_completion calls
+						if (chunk.name === "attempt_completion") {
+							getOutputChannel()?.appendLine(
+								`[DIAG] [vscode-lm] attempt_completion input: ${JSON.stringify(chunk.input)}`,
+							)
+						}
 						// Log tool call details for Xiaomi
 						if (isXiaomiModel) {
 							getOutputChannel()?.appendLine(
