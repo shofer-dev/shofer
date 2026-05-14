@@ -9,11 +9,11 @@ If you are running as a subtask with a SUBTASK CONSTRAINTS section in your syste
 
 Parameters:
 - result: (required) The result of the task. Formulate this result in a way that is final and does not require further input from the user. Don't end your result with questions or offers for further assistance.
-- rating: (required) A self-assessment of how successfully you completed the task. 1 = poorly (significant issues or incomplete), 2 = okish (acceptable but room for improvement), 3 = nailed it (executed excellently, high quality).
+- rating: (required) A self-assessment of how successfully you completed the task. Use one of: "poor" (significant issues or incomplete), "well" (acceptable but room for improvement), "excellent" (executed excellently, high quality).
 - feedback: (optional) Free-text feedback for Shofer.Dev engineers about tooling, system prompt, or other issues encountered during the task. Use this to report things that didn't work as expected or suggest concrete improvements. Only provide this if you noticed something worth reporting.
 
 Example: Completing after updating CSS
-{ "result": "I've updated the CSS to use flexbox layout for better responsiveness", "rating": 3 }`
+{ "result": "I've updated the CSS to use flexbox layout for better responsiveness", "rating": "excellent" }`
 
 const RESULT_PARAMETER_DESCRIPTION = `Final result message to deliver to the user once the task is complete. If running as a subtask, aim to keep within the character budget suggested in your SUBTASK CONSTRAINTS (hard safety cap: ${MAX_SUBTASK_RESULT_LENGTH} characters).`
 
@@ -31,9 +31,9 @@ export default {
 					description: RESULT_PARAMETER_DESCRIPTION,
 				},
 				rating: {
-					type: "number",
-					description: "Self-assessment rating: 1 (poorly), 2 (okish), or 3 (nailed it)",
-					enum: [1, 2, 3],
+					type: "string",
+					description: "Self-assessment rating: 'poor', 'well', or 'excellent'",
+					enum: ["poor", "well", "excellent"],
 				},
 				feedback: {
 					type: "string",

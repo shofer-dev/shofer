@@ -13,9 +13,11 @@ import { getOutputChannel } from "../../extension"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
+type CompletionRating = "poor" | "well" | "excellent"
+
 interface AttemptCompletionParams {
 	result: string
-	rating: number
+	rating: CompletionRating
 	feedback?: string
 	command?: string
 }
@@ -118,9 +120,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				return
 			}
 
-			// Validate rating: must be 1, 2, or 3
-			const ALLOWED_RATINGS = new Set([1, 2, 3])
-			if (typeof rating !== "number" || !ALLOWED_RATINGS.has(rating)) {
+			// Validate rating: must be "poor", "well", or "excellent"
+			const ALLOWED_RATINGS = new Set(["poor", "well", "excellent"])
+			if (!rating || !ALLOWED_RATINGS.has(rating)) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("attempt_completion")
 				pushToolResult(await task.sayAndCreateMissingParamError("attempt_completion", "rating"))

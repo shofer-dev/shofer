@@ -387,16 +387,16 @@ Signal task completion to the user. Presents the final result and concludes the 
 | Param      | Type           | Required | Description                                                                                 |
 | ---------- | -------------- | :------: | ------------------------------------------------------------------------------------------- |
 | `result`   | string         |    ✅    | Final result message to deliver to the user                                                 |
-| `rating`   | number         |    ✅    | Success rating: `1` (poorly), `2` (okish), or `3` (nailed it)                               |
+| `rating`   | string         |    ✅    | Success rating: `"poor"`, `"well"`, or `"excellent"`                                        |
 | `feedback` | string \| null |    ✅    | Optional feedback for Shofer engineers: what didn't work, ideas for improving tooling, etc. |
 
 **IMPORTANT:** This tool cannot be used until all previous tool uses in the current turn have succeeded. If any tool failed, address the failure first.
 
 The `rating` parameter provides a self-assessment of how well the task was completed:
 
-- `1` — poorly executed, significant issues or incomplete
-- `2` — acceptable but with room for improvement
-- `3` — task executed excellently, high quality result
+- `"poor"` — poorly executed, significant issues or incomplete
+- `"well"` — acceptable but with room for improvement
+- `"excellent"` — task executed excellently, high quality result
 
 The optional `feedback` parameter captures concrete observations about tooling or system prompt shortcomings encountered during the task. This feedback is routed to Shofer.Dev developers for continuous improvement.
 
