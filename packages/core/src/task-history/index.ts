@@ -46,9 +46,20 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 		mode: typeof mode === "string" ? mode : undefined,
 		taskExecutionState:
 			taskExecutionState !== undefined &&
-			(["idle", "running", "waiting_input", "paused", "error", "completed"] as readonly string[]).includes(
-				taskExecutionState,
-			)
+			(
+				[
+					"idle",
+					"running",
+					"waiting",
+					"waiting_input",
+					"paused",
+					"error",
+					"completed",
+					"completed_poorly",
+					"completed_well",
+					"completed_excellent",
+				] as readonly string[]
+			).includes(taskExecutionState)
 				? (taskExecutionState as HistoryItem["taskExecutionState"])
 				: undefined,
 	}

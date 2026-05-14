@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { ShoferEventName, type HistoryItem } from "@shofer/types"
+import { ShoferEventName, type HistoryItem, type TaskExecutionState } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
@@ -129,6 +129,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// completion, we accept a missing rating with a default.
 			const ALLOWED_RATINGS = new Set(["poor", "well", "excellent"])
 			const effectiveRating = rating && ALLOWED_RATINGS.has(rating) ? rating : "poor"
+			const completionState = `completed_${effectiveRating}`
 			if (!rating || !ALLOWED_RATINGS.has(rating)) {
 				console.log(
 					`[AttemptCompletionTool.execute] Rating missing or invalid (got: ${rating}), defaulting to "poor"`,
@@ -215,9 +216,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								const fileStats = await computeFileChangeStats(task)
 								await provider.updateTaskHistory({
 									...historyItem,
-									taskExecutionState: "completed",
+									taskExecutionState: completionState as TaskExecutionState,
 									completionResultSummary: effectiveResult,
-									completionRating: effectiveRating,
 									insertions: fileStats.insertions,
 									deletions: fileStats.deletions,
 								})
@@ -271,10 +271,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							)
 							await provider.updateTaskHistory({
 								...historyItem,
-								taskExecutionState: "completed",
-								completionRating: effectiveRating,
-								insertions: fileStats.insertions,
-								deletions: fileStats.deletions,
+								taskExecutionState: completionState as TaskExecutionState,
 							})
 						} else {
 							getOutputChannel()?.appendLine(

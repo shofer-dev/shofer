@@ -83,7 +83,7 @@ export const TASK_STATE_CONFIG: Record<
 		icon: "codicon-check",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
 	},
-	completed_poor: {
+	completed_poorly: {
 		dot: "bg-[var(--vscode-descriptionForeground)]",
 		label: "Completed · Poor",
 		pulse: false,
@@ -117,6 +117,13 @@ export const TASK_STATE_CONFIG: Record<
 		pulse: true,
 		icon: "codicon-sync codicon-modifier-spin",
 		iconColor: "text-[var(--vscode-charts-blue,#3b82f6)]",
+	},
+	waiting: {
+		dot: "bg-[var(--vscode-charts-purple,#a855f7)]",
+		label: "Waiting",
+		pulse: true,
+		icon: "codicon-clock",
+		iconColor: "text-[var(--vscode-charts-purple,#a855f7)]",
 	},
 	waiting_input: {
 		dot: "bg-[var(--vscode-charts-yellow,#eab308)]",
@@ -305,13 +312,7 @@ function renderTaskRow({
 	const { item, depth, isLastSibling, ancestorIsLast } = node
 	const runtime = runtimeStateMap.get(item.id)
 	const resolvedRating = item.taskExecutionState === "completed" ? item.completionRating : undefined
-	const state =
-		item.taskExecutionState === "completed"
-			? resolvedRating
-				? `completed_${resolvedRating}`
-				: "completed"
-			: (runtime?.state ?? item.taskExecutionState ?? "idle")
-	// Diagnostic: log state resolution for completed tasks
+	const state = runtime?.state ?? item.taskExecutionState ?? "idle"
 	if (item.taskExecutionState === "completed") {
 		console.log(
 			`[DIAG-TaskSelector] id=${item.id} status=${item.taskExecutionState} completionRating=${item.completionRating} → state=${state}`,
