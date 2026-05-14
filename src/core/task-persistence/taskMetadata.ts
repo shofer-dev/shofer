@@ -1,7 +1,7 @@
 import NodeCache from "node-cache"
 import getFolderSize from "get-folder-size"
 
-import type { ShoferMessage, HistoryItem } from "@shofer/types"
+import type { ShoferMessage, HistoryItem, TaskExecutionState } from "@shofer/types"
 
 import { combineApiRequests } from "../../shared/combineApiRequests"
 import { combineCommandSequences } from "../../shared/combineCommandSequences"
@@ -27,7 +27,7 @@ export type TaskMetadataOptions = {
 	/** Provider profile name for the task (sticky profile feature) */
 	apiConfigName?: string
 	/** Initial status for the task (e.g., "active" for child tasks) */
-	initialStatus?: "active" | "delegated" | "completed"
+	initialStatus?: TaskExecutionState
 	/** When true, persist `isBackground: true` on the history item. */
 	isBackground?: boolean
 	/** Per-root-task cost limit (only set on root tasks). */
