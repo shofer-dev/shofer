@@ -264,7 +264,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					const provider = task.providerRef.deref() as DelegationProvider | undefined
 					if (provider) {
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
-						if (historyItem && historyItem.taskExecutionState !== "completed") {
+						if (historyItem && !historyItem.taskExecutionState?.startsWith("completed")) {
 							const fileStats = await computeFileChangeStats(task)
 							getOutputChannel()?.appendLine(
 								`[DIAG] [PERSIST] taskId=${task.taskId} effectiveRating=${effectiveRating} — persisting status=completed, completionRating=${effectiveRating}`,

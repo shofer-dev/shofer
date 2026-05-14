@@ -148,15 +148,13 @@ const TaskHeader = ({
 
 	// Resolve the runtime state of the currently-shown task so the in-chat
 	// title can render a small status dot mirroring the drawer's row icons.
-	// When the task is completed with a rating, use the rating-specific state.
+	// When the task is completed with a rating, use the rating-specific state
+	// stored directly in taskExecutionState (e.g. completed_excellent).
 	const currentTitle = currentTaskItem ? getTaskDisplayName(currentTaskItem) : ""
 	const currentRuntime = currentTaskItem ? parallelTasks?.find((p) => p.id === currentTaskItem.id) : undefined
-	const currentTaskCompleted = currentTaskItem?.taskExecutionState === "completed"
-	const currentTaskRating = currentTaskCompleted ? currentTaskItem?.completionRating : undefined
+	const currentTaskCompleted = currentTaskItem?.taskExecutionState?.startsWith("completed")
 	const currentStateKey = currentTaskCompleted
-		? currentTaskRating
-			? `completed_${currentTaskRating}`
-			: "completed"
+		? currentTaskItem!.taskExecutionState!
 		: (currentRuntime?.state ?? "idle")
 	const currentStateConfig = TASK_STATE_CONFIG[currentStateKey] || TASK_STATE_CONFIG.idle
 

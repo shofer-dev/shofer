@@ -76,13 +76,6 @@ export const TASK_STATE_CONFIG: Record<
 	string,
 	{ dot: string; label: string; pulse: boolean; icon: string; iconColor: string }
 > = {
-	completed: {
-		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
-		label: "Completed",
-		pulse: false,
-		icon: "codicon-check",
-		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
-	},
 	completed_poorly: {
 		dot: "bg-[var(--vscode-descriptionForeground)]",
 		label: "Completed · Poor",
@@ -312,11 +305,6 @@ function renderTaskRow({
 	const { item, depth, isLastSibling, ancestorIsLast } = node
 	const runtime = runtimeStateMap.get(item.id)
 	const state = runtime?.state ?? item.taskExecutionState ?? "idle"
-	if (item.taskExecutionState === "completed") {
-		console.log(
-			`[DIAG-TaskSelector] id=${item.id} status=${item.taskExecutionState} completionRating=${item.completionRating} → state=${state}`,
-		)
-	}
 	const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
 	const isCurrent = item.id === currentTaskId
 	const isEditing = editingTaskId === item.id
