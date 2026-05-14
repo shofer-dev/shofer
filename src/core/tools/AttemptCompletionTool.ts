@@ -77,11 +77,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
 
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
+		// Diagnostic: dump all received params to the output channel
+		getOutputChannel()?.appendLine(`[DIAG] [AttemptCompletionTool] RAW PARAMS: ${JSON.stringify(params)}`)
+
 		const { result, rating, feedback } = params
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
 		console.log(
-			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${effectiveRating}, result=${result?.substring(0, 100)}`,
+			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${rating}, result=${result?.substring(0, 100)}`,
 		)
 
 		// Prevent attempt_completion if any tool failed in the current turn
