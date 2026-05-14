@@ -1,6 +1,5 @@
 export const EXTERNAL_LINKS = {
 	GITHUB: "https://github.com/shofer-dev/shofer",
-	GITHUB_DISCUSSIONS: "https://github.com/shofer-dev/shofer/discussions",
 	DISCORD: "https://discord.gg/shofer",
 	REDDIT: "https://reddit.com/r/Shofer",
 	X: "https://x.com/shofer",
@@ -13,15 +12,12 @@ export const EXTERNAL_LINKS = {
 	CAREERS: "https://careers.shofer.dev",
 	ISSUES: "https://github.com/shofer-dev/shofer/issues",
 	FEATURE_REQUESTS: "https://github.com/shofer-dev/shofer/discussions/categories/feature-requests",
-	COMMUNITY: "https://github.com/shofer-dev/shofer/discussions",
 	CHANGELOG: "https://github.com/shofer-dev/shofer/blob/main/CHANGELOG.md",
 	PRIVACY_POLICY_EXTENSION: "https://github.com/shofer-dev/shofer/blob/main/PRIVACY.md",
-	INTEGRATIONS: "https://docs.shofer.dev/community",
 	TUTORIALS: "https://docs.shofer.dev/tutorial-videos",
 	MARKETPLACE: "https://marketplace.visualstudio.com/items?itemName=Shofer.dev",
 	SECURITY: "https://trust.shofer.dev",
 	EVALS: "https://shofer.dev/evals",
-	BLOG_SUBSTACK: "https://blog.shofer.dev",
 	OFFICE_HOURS_PODCAST: "https://www.youtube.com/@ShoferYT/podcasts",
 	FAQ: "https://shofer.dev/#faq",
 	TESTIMONIALS: "https://shofer.dev/#testimonials",
@@ -35,5 +31,4 @@ export const EXTERNAL_LINKS = {
 
 export const INTERNAL_LINKS = {
 	PRIVACY_POLICY_WEBSITE: "/privacy",
-	BLOG: "/blog",
 }
