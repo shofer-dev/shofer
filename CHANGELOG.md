@@ -66,7 +66,7 @@
 - **Commands & Skills quick-access buttons**: Added Commands and Skills quick-access buttons to the chat input bar for faster workflow.
 - **Skills persistence in history**: Loaded skills are now persisted in history items and rehydrated on task restore.
 - **Worktree status indicator**: Added a worktree status indicator chip to the chat input bar showing the current worktree branch and status.
-- **Embedded worktree model**: Implemented an embedded worktree model with a native worktree tool, replacing the previous separate-window worktree approach.
+- **Embedded worktree model**: Implemented an embedded worktree model, replacing the previous separate-window worktree approach. (A native worktree tool was added but later removed — worktree operations now happen through the UI indicator chip and worktree settings.)
 - **Task export in JSON**: Added JSON task trace export alongside the existing markdown export format.
 - **Unified worktree controls**: Consolidated worktree controls into a single WorktreeIndicator chip.
 
@@ -133,10 +133,7 @@
 
 - **Scoped group entries for modes**: Added scoped group entries with per-group allowed/denied tool lists, enabling fine-grained tool access control per mode.
 - **`give_feedback` promoted to native always-available tool**: The feedback tool is now always available regardless of mode settings.
-- **Skills system refinements**:
-    - Renamed `skill` tool to `skill_load` and added `skill_delete` tool
-    - Added SKILL.md frontmatter validation in `skill_save`
-    - Renamed ClineSayTool 'skill' label to 'loadSkill'
+- **Skills system refinements**: Renamed `skill` tool to `skills` (which remains in use for loading skills into task context via `TOOL_GROUPS`). `skill_delete` and `skill_save`/`skill_update` were later removed in favor of skills UI buttons and slash-command loading.
 
 ### Bug Fixes
 
