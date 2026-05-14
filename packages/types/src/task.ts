@@ -99,8 +99,8 @@ export interface CreateTaskOptions {
 	 * Useful when creating delegated/background tasks without mutating global mode.
 	 */
 	initialMode?: string
-	/** Initial status for the task's history item (e.g., "active" for child tasks) */
-	initialStatus?: "active" | "delegated" | "completed"
+	/** Initial execution state for the task's history item. */
+	initialStatus?: TaskExecutionState
 	/**
 	 * When true, marks the task as a background child of its parent so that
 	 * `attempt_completion` does NOT trigger the synchronous delegation flow
