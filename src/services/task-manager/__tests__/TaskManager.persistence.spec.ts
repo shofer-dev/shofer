@@ -145,16 +145,37 @@ describe("TaskManager persistence", () => {
 			expect(manager.getTaskExecutionState("t-pause")).toBe("paused")
 		})
 
-		it("forces 'idle' for tasks marked status='completed' so the green check wins", async () => {
+		it("forces 'idle' for stale 'running' state on restore", async () => {
 			const { manager } = buildManager()
 			await manager.restoreManagedTasks([
 				makeHistoryItem({
 					id: "t-done",
-					status: "completed",
-					taskExecutionState: "running", // stale, plus status takes precedence
+					taskExecutionState: "running", // stale — no live instance
 				}),
 			])
 			expect(manager.getTaskExecutionState("t-done")).toBe("idle")
+		})
+
+		it("preserves 'completed_poorly' state on restore", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([
+				makeHistoryItem({ id: "t-poor", taskExecutionState: "completed_poorly" }),
+			])
+			expect(manager.getTaskExecutionState("t-poor")).toBe("completed_poorly")
+		})
+
+		it("preserves 'completed_well' state on restore", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-well", taskExecutionState: "completed_well" })])
+			expect(manager.getTaskExecutionState("t-well")).toBe("completed_well")
+		})
+
+		it("preserves 'completed_excellent' state on restore", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([
+				makeHistoryItem({ id: "t-exc", taskExecutionState: "completed_excellent" }),
+			])
+			expect(manager.getTaskExecutionState("t-exc")).toBe("completed_excellent")
 		})
 
 		it("falls back to 'idle' when no execution state was persisted", async () => {

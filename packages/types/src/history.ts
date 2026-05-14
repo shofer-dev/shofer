@@ -10,7 +10,6 @@ export const taskExecutionStateSchema = z.enum([
 	"waiting_input", // Paused, needs user approval/input
 	"paused", // Manually paused by user
 	"error", // Stopped due to an error
-	"completed", // Finished (no rating / legacy)
 	"completed_poorly", // Finished — agent rated it poor
 	"completed_well", // Finished — agent rated it well
 	"completed_excellent", // Finished — agent rated it excellent
@@ -66,8 +65,6 @@ export const historyItemSchema = z.object({
 	awaitingChildId: z.string().optional(), // Child currently awaited (set when delegated)
 	completedByChildId: z.string().optional(), // Child that completed and resumed this parent
 	completionResultSummary: z.string().optional(), // Summary from completed child
-	/** Self-assessed quality rating set by the agent via attempt_completion. */
-	completionRating: z.enum(["poor", "well", "excellent"]).optional(),
 	// Parallel task fields
 	name: z.string().optional(), // User-defined task name
 	lastActiveTs: z.number().optional(), // Track when last switched to

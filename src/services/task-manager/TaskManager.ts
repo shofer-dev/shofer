@@ -546,10 +546,14 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			this.updateTaskExecutionState(targetTaskId, "idle")
 		}
 
-		// Handle task completion
+		// Handle task completion — use whatever state is persisted (which may
+		// be completed_poorly/well/excellent from AttemptCompletionTool, or any
+		// other state from preceding events). Fall back to idle.
 		const onComplete = (taskId: string, _tokenUsage: TokenUsage, _toolUsage: ToolUsage) => {
 			if (taskId !== targetTaskId) return
-			this.updateTaskExecutionState(targetTaskId, "idle")
+			const provider = this.providerRef.deref()
+			const persisted = provider?.taskHistoryStore?.get?.(targetTaskId)?.taskExecutionState
+			this.updateTaskExecutionState(targetTaskId, persisted ?? "idle")
 			this.emit("managedTask:completed", targetTaskId)
 		}
 
@@ -687,7 +691,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 *
 	 * After a restart there are no live Task instances, so any execution state
 	 * that implies in-flight work (`running`, `waiting_input`) is stale and must
-	 * be downgraded to `idle`. Terminal states (`completed`, `error`, `paused`)
+	 * be downgraded to `idle`. Terminal states (`completed_*`, `error`, `paused`)
 	 * are preserved across restarts.
 	 */
 	private static sanitizeRestoredState(item: HistoryItem): ManagedTaskState {
