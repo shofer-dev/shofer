@@ -102,6 +102,33 @@ export class HelperAgentManager {
 		lastUpdated: Date.now(),
 	}
 
+	// ─── Queue & Timeout ────────────────────────────────────────────────
+
+	/** Serialized question queue (FIFO, capacity-bounded). */
+	private _questionQueue: Array<{
+		question: string
+		contextFiles?: string[]
+		timeoutMs: number
+		resolve: (result: QuestionResult) => void
+		reject: (error: Error) => void
+		startTime: number
+	}> = []
+
+	/** Maximum queue size from constants. */
+	private readonly _maxQueueSize = 50
+
+	/** AbortController for the currently active LLM call. */
+	private _activeAbortController: AbortController | null = null
+
+	// ─── File Change Notifications (KV-cache preserving) ─────────────────
+
+	/**
+	 * Set of file paths modified by tasks since the last question.
+	 * These are attached to the next question as hints without evicting
+	 * context, preserving the LLM provider's KV cache.
+	 */
+	private _recentlyModifiedFiles = new Set<string>()
+
 	// Event emitters for UI updates
 	private _stateChangeEmitter = new vscode.EventEmitter<HelperAgentState>()
 	public readonly onStateChange = this._stateChangeEmitter.event
@@ -209,6 +236,50 @@ export class HelperAgentManager {
 		return this._messages
 	}
 
+	/** Number of pending questions in the queue. */
+	public get pendingQuestionCount(): number {
+		return this._questionQueue.length
+	}
+
+	/**
+	 * Notify the helper agent that a file was modified by a task tool.
+	 * The file path is accumulated and attached as a hint on the next
+	 * question — files are NOT evicted, preserving the KV cache.
+	 *
+	 * @param filePath - Path to the file that was modified, relative to workspace
+	 */
+	public notifyFileModified(filePath: string): void {
+		// Silently ignore empty paths
+		if (!filePath) return
+
+		// Skip .shoferignore paths (caller should pre-filter, but guard here)
+		if (filePath.startsWith(".shofer/")) return
+
+		this._recentlyModifiedFiles.add(filePath)
+	}
+
+	/**
+	 * Cancel all queued questions and abort the active LLM call.
+	 * Pending questions are rejected with an error.
+	 */
+	public cancelAllQuestions(): void {
+		// Abort active LLM call
+		if (this._activeAbortController) {
+			this._activeAbortController.abort()
+			this._activeAbortController = null
+		}
+
+		// Reject all pending questions
+		const pending = this._questionQueue.splice(0)
+		for (const entry of pending) {
+			entry.reject(new Error("Helper agent questions cancelled"))
+		}
+
+		if (this._state === "Busy") {
+			this._setState("Ready", "Agent is ready")
+		}
+	}
+
 	// ─── Initialization ──────────────────────────────────────────────────
 
 	/**
@@ -263,7 +334,10 @@ export class HelperAgentManager {
 
 	/**
 	 * Ask a question to the helper agent. Returns the agent's answer.
-	 * This is a synchronous (blocking) call — the caller waits for the answer.
+	 *
+	 * Questions are serialized via FIFO queue — only one question is
+	 * processed at a time. The timeout covers BOTH queue wait time AND
+	 * LLM processing time.
 	 *
 	 * @param question - The question text
 	 * @param contextFiles - Optional file paths to load into context
@@ -278,14 +352,87 @@ export class HelperAgentManager {
 			throw new Error("Helper agent is not initialized. Call initialize() first.")
 		}
 
-		if (!this.isHelperAgentAvailable) {
+		if (!this.isHelperAgentAvailable && this._state !== "Busy") {
 			throw new Error(`Helper agent is not available (state: ${this._state})`)
+		}
+
+		// ── Enqueue with timeout ──────────────────────────────────────
+
+		if (this._questionQueue.length >= this._maxQueueSize) {
+			throw new Error(`Helper agent question queue is full (max ${this._maxQueueSize}). Try again later.`)
 		}
 
 		const startTime = Date.now()
 
+		return new Promise<QuestionResult>((resolve, reject) => {
+			// Set up a global timeout covering queue wait + processing
+			const timeoutId = setTimeout(() => {
+				// Remove from queue if still waiting
+				const idx = this._questionQueue.findIndex((e) => e.resolve === resolve)
+				if (idx !== -1) {
+					this._questionQueue.splice(idx, 1)
+					reject(new Error(`Helper agent question timed out after ${timeoutMs}ms (in queue)`))
+					return
+				}
+				// If already processing (not in queue), abort the LLM call
+				if (this._activeAbortController) {
+					this._activeAbortController.abort()
+				}
+			}, timeoutMs)
+
+			const wrappedResolve = (result: QuestionResult) => {
+				clearTimeout(timeoutId)
+				resolve(result)
+			}
+
+			const wrappedReject = (error: Error) => {
+				clearTimeout(timeoutId)
+				reject(error)
+			}
+
+			this._questionQueue.push({
+				question,
+				contextFiles,
+				timeoutMs,
+				resolve: wrappedResolve,
+				reject: wrappedReject,
+				startTime,
+			})
+
+			// Start processing if not already busy
+			if (this._state !== "Busy") {
+				this._processNextQuestion()
+			}
+		})
+	}
+
+	/**
+	 * Process the next question in the queue.
+	 * Called when the agent transitions from Ready or after completing a question.
+	 */
+	private async _processNextQuestion(): Promise<void> {
+		const entry = this._questionQueue.shift()
+		if (!entry) {
+			if (this._state !== "Error" && this._state !== "Stopping") {
+				this._setState("Ready", "Agent is ready")
+			}
+			return
+		}
+
+		const { question, contextFiles, timeoutMs, resolve, reject, startTime } = entry
+
+		// Check if we already passed the timeout
+		if (Date.now() - startTime > timeoutMs) {
+			reject(new Error(`Helper agent question timed out (queue wait for ${timeoutMs}ms)`))
+			this._processNextQuestion()
+			return
+		}
+
 		try {
 			this._setState("Busy", "Processing question...")
+
+			// Drain recently modified files and attach to the question
+			const recentlyModified = this._drainRecentlyModifiedFiles()
 
 			// Load context files if provided
 			if (contextFiles && contextFiles.length > 0) {
@@ -294,11 +441,14 @@ export class HelperAgentManager {
 				}
 			}
 
-			// Build messages array for the LLM call
-			const messages = this._buildMessages(question)
+			// Build messages (includes recently-modified hints)
+			const messages = this._buildMessages(question, recentlyModified)
+
+			// Create AbortController for this LLM call
+			this._activeAbortController = new AbortController()
 
 			// Call the LLM
-			const result = await this._callLLM(messages, timeoutMs)
+			const result = await this._callLLM(messages, timeoutMs, this._activeAbortController.signal)
 
 			// Save the Q&A to conversation history
 			const userMsg: AgentMessage = {
@@ -324,26 +474,52 @@ export class HelperAgentManager {
 			const contextUsage = this.getContextUsage()
 			const durationMs = Date.now() - startTime
 
-			this._setState("Ready", "Agent is ready")
-
-			return {
+			resolve({
 				answer: result.answer,
 				tokensUsed: result.tokensUsed,
 				contextUsage,
 				costSnapshot: this.getCostSnapshot(),
 				contextFiles: this.contextFiles,
 				durationMs,
-			}
+			})
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
-			this._setState("Error", message)
+
+			// Don't transition to Error on abort/timeout — keep conversation intact
+			const isAbortError =
+				error instanceof Error &&
+				(error.name === "AbortError" || error.name === "TimeoutError" || message.includes("aborted"))
+
+			if (!isAbortError) {
+				this._setState("Error", message)
+			}
+
 			TelemetryService.instance.captureEvent(TelemetryEventName.HELPER_AGENT_ERROR, {
 				error: message,
 				stack: error instanceof Error ? error.stack : undefined,
 				location: "askQuestion",
 			})
-			throw error
+
+			reject(error instanceof Error ? error : new Error(message))
+		} finally {
+			this._activeAbortController = null
+
+			// Process next question if any
+			this._processNextQuestion()
 		}
+	}
+
+	/**
+	 * Drain the recently modified files set and return the list.
+	 * The set is cleared after draining so notifications don't
+	 * accumulate across questions.
+	 */
+	private _drainRecentlyModifiedFiles(): string[] {
+		if (this._recentlyModifiedFiles.size === 0) return []
+
+		const files = Array.from(this._recentlyModifiedFiles)
+		this._recentlyModifiedFiles.clear()
+		return files
 	}
 
 	// ─── Context Management ──────────────────────────────────────────────
@@ -539,7 +715,15 @@ export class HelperAgentManager {
 
 	// ─── LLM Calling ─────────────────────────────────────────────────────
 
-	private _buildMessages(question: string): Array<{ role: string; content: string }> {
+	/**
+	 * Build the messages array for an LLM call, including the system prompt,
+	 * file contexts, conversation history, recently-modified file hints, and
+	 * the current question.
+	 */
+	private _buildMessages(
+		question: string,
+		recentlyModifiedFiles?: string[],
+	): Array<{ role: string; content: string }> {
 		const messages: Array<{ role: string; content: string }> = []
 
 		// System prompt with directory tree placeholder (empty for Phase 1)
@@ -562,15 +746,31 @@ export class HelperAgentManager {
 			messages.push({ role: msg.role, content: msg.content })
 		}
 
+		// Recently modified file hints (KV-cache preserving notification)
+		if (recentlyModifiedFiles && recentlyModifiedFiles.length > 0) {
+			const fileList = recentlyModifiedFiles.join(", ")
+			messages.push({
+				role: "system",
+				content: `[Note: the following files have been modified since you last read them: ${fileList}. Consider re-reading them if relevant to this question.]`,
+			})
+		}
+
 		// Current question
 		messages.push({ role: "user", content: question })
 
 		return messages
 	}
 
+	/**
+	 * Call the LLM with the given messages.
+	 * @param messages - The messages to send
+	 * @param timeoutMs - Overall timeout for the HTTP request
+	 * @param signal - AbortSignal for cancellation (from queue timeout)
+	 */
 	private async _callLLM(
 		messages: Array<{ role: string; content: string }>,
 		timeoutMs: number,
+		signal?: AbortSignal,
 	): Promise<{ answer: string; tokensUsed: { prompt: number; completion: number; total: number } }> {
 		if (!this._config) {
 			throw new Error("Helper agent config not loaded")
@@ -653,61 +853,54 @@ export class HelperAgentManager {
 			}
 		}
 
-		// Make the API call
-		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+		// Make the API call using the provided signal for cancellation
+		const response = await fetch(endpoint, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(body),
+			signal: signal ?? undefined,
+		})
 
-		try {
-			const response = await fetch(endpoint, {
-				method: "POST",
-				headers,
-				body: JSON.stringify(body),
-				signal: controller.signal,
-			})
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "Unknown error")
+			throw new Error(`LLM API error (${response.status}): ${errorText}`)
+		}
 
-			if (!response.ok) {
-				const errorText = await response.text().catch(() => "Unknown error")
-				throw new Error(`LLM API error (${response.status}): ${errorText}`)
-			}
+		const data = (await response.json()) as any
 
-			const data = (await response.json()) as any
+		// Parse the response based on provider
+		let answer: string
+		let promptTokens = 0
+		let completionTokens = 0
 
-			// Parse the response based on provider
-			let answer: string
-			let promptTokens = 0
-			let completionTokens = 0
+		if (provider === "gemini") {
+			answer = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
+			promptTokens = data.usageMetadata?.promptTokenCount ?? 0
+			completionTokens = data.usageMetadata?.candidatesTokenCount ?? 0
+		} else if (provider === "ollama") {
+			answer = data.message?.content ?? ""
+			promptTokens = data.prompt_eval_count ?? 0
+			completionTokens = data.eval_count ?? 0
+		} else {
+			answer = data.choices?.[0]?.message?.content ?? ""
+			promptTokens = data.usage?.prompt_tokens ?? 0
+			completionTokens = data.usage?.completion_tokens ?? 0
+		}
 
-			if (provider === "gemini") {
-				answer = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-				promptTokens = data.usageMetadata?.promptTokenCount ?? 0
-				completionTokens = data.usageMetadata?.candidatesTokenCount ?? 0
-			} else if (provider === "ollama") {
-				answer = data.message?.content ?? ""
-				promptTokens = data.prompt_eval_count ?? 0
-				completionTokens = data.eval_count ?? 0
-			} else {
-				answer = data.choices?.[0]?.message?.content ?? ""
-				promptTokens = data.usage?.prompt_tokens ?? 0
-				completionTokens = data.usage?.completion_tokens ?? 0
-			}
+		// Update cost tracking
+		const totalTokens = promptTokens + completionTokens
+		this._costTracking.totalInputTokens += promptTokens
+		this._costTracking.totalOutputTokens += completionTokens
+		this._costTracking.estimatedCostUSD += this._estimateCost(promptTokens, completionTokens)
+		this._costTracking.lastUpdated = Date.now()
 
-			// Update cost tracking
-			const totalTokens = promptTokens + completionTokens
-			this._costTracking.totalInputTokens += promptTokens
-			this._costTracking.totalOutputTokens += completionTokens
-			this._costTracking.estimatedCostUSD += this._estimateCost(promptTokens, completionTokens)
-			this._costTracking.lastUpdated = Date.now()
-
-			return {
-				answer,
-				tokensUsed: {
-					prompt: promptTokens,
-					completion: completionTokens,
-					total: totalTokens,
-				},
-			}
-		} finally {
-			clearTimeout(timeoutId)
+		return {
+			answer,
+			tokensUsed: {
+				prompt: promptTokens,
+				completion: completionTokens,
+				total: totalTokens,
+			},
 		}
 	}
 
