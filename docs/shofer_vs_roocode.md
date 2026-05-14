@@ -1,10 +1,8 @@
-# Shofer Features & Opinionated Changes
+# Shofer Features and Opinionated Changes for Roo-Code Users
 
-This document catalogues every **user-facing feature** and **opinionated change** introduced in Shofer since its inception as a distinct project.
+This document catalogues every **user-facing feature** and **opinionated change** introduced in Shofer versus its predecessor, Roo-Code. Bug fixes are excluded — see [`CHANGELOG.md`](../CHANGELOG.md) for the complete picture including all defect corrections.
 
-Bug fixes are excluded — see [`CHANGELOG.md`](../CHANGELOG.md) for the complete picture including all defect corrections.
-
-> **Image placeholders**: Sections marked with `> 📸 TODO: screenshot` need screenshots. Search for `📸 TODO` to find them all.
+**Context**: Roo-Code has announced that it is sunsetting its VS Code Extension, Cloud, and Router services on May 15, 2026. The team is pivoting away from IDE-based tools to focus on their new cloud-based agent, Roomote.
 
 ---
 
@@ -56,8 +54,6 @@ Previously, the codebase supported only one task at a time — starting a new ta
 
 > 📸 TODO: screenshot of TaskSelector showing multiple tasks with different state badges (running, paused, completed)
 
-> **Opinionated change**: This moves Shofer from a single-threaded assistant model to a multi-agent platform.
-
 ---
 
 ## 2. Async / Background Tasks
@@ -91,8 +87,6 @@ Parent calls wait_for_task([A, B, C], wait="all") — resumes when all complete.
 
 > 📸 TODO: screenshot of chat showing `wait_for_task` row with status badges for multiple background children
 
-> **Opinionated change**: Removed `task_id` from the `new_task` schema. The extension assigns IDs internally; the LLM references tasks by title (set via [`set_task_title`](../src/core/task/tools/SetTaskTitleTool.ts)), making the UX more human-friendly.
-
 ---
 
 ## 3. TaskSelector UX
@@ -107,11 +101,8 @@ The TaskSelector (visible when no task is active) was redesigned to handle multi
 | **Archive**                | Tasks can be archived — hidden from the main list but preserved. Archived tasks are accessible via a filter toggle.                                 |
 | **Pin**                    | Tasks can be pinned to stay at the top of the list regardless of creation time. Useful for keeping reference tasks accessible.                      |
 | **State badges**           | Each task entry shows its state: _running_ (spinner), _paused_, _completed_ (checkmark), _error_ (warning). See [`task_states.md`](task_states.md). |
-| **Simplified controls**    | Pause/play buttons and the current-task tick indicator were removed for a cleaner UI. Task management happens via the task header.                  |
 
 > 📸 TODO: screenshot of TaskSelector showing parent-child tree, pinned tasks at top, and state badges
-
-> **Opinionated change**: Removed pause/play buttons from TaskSelector. They were redundant with the task header controls and added visual noise. The "current task" tick was also removed — the active task is obvious from context.
 
 ---
 
@@ -133,8 +124,6 @@ See [`message_queue.md`](message_queue.md) for the full design document.
 
 > 📸 TODO: screenshot of chat showing queued messages indicator and Send Now button
 
-> **Opinionated change**: Decoupling user input from the LLM's processing loop makes Shofer feel more responsive. You can queue up the next instruction while Shofer is still working on the current one.
-
 ---
 
 ## 5. Task Export (JSON + Markdown)
@@ -154,111 +143,67 @@ See [`task-export.md`](task-export.md) for the full format reference.
 
 ---
 
-## 6. Drag & Drop System
+## 6. Drag & Drop Workaround
 
-Files and folders can be dropped into Shofer to add them as `@mentions` in the chat context.
+Roo's Drag & Drop system was hard to use on the Desktop (Alt key didn't work for me), so Shofer introduces a workaround, with a dedicated drop zone in the sidebar. Dropped files appear as removable tags. Dropped files are prepended as `@mentions` in the message text when sent, making file context explicit.
 
 See [`drag_n_drop.md`](drag_n_drop.md) for the full design.
 
-### What Was Built
-
-| Feature                           | Description                                                                                             |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Native TreeView drop zone**     | A dedicated drag-and-drop target in the Shofer sidebar panel. Dropped files appear as removable tags.   |
-| **Inline webview textarea drops** | Files can also be dropped directly into the chat textarea.                                              |
-| **MIME type logging**             | Extended MIME type detection for robust URI extraction from drag payloads.                              |
-| **@mentions on send**             | Dropped files are prepended as `@mentions` in the message text when sent, making file context explicit. |
-
 > 📸 TODO: screenshot of drag-and-drop in action — file tags above the chat input
-
-> **Opinionated change**: Dropping files is the most natural way to provide context. The TreeView drop zone makes it discoverable; inline textarea drops make it convenient.
 
 ---
 
 ## 7. New Native Tools
 
-Twelve native tools were ported from the companion `workspace-tools` extension, and several new tools were created from scratch.
+Twelve native tools were implemented to provide functionality on par with Copilot, and in some cases better.
 
 See [`native_tools.md`](native_tools.md) for the complete tool reference.
 
-### Tools Ported from workspace-tools
-
-| Tool                                                                              | Description                                                                                                                                                                             |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`codebase_search_with_lsp`](../src/core/task/tools/CodebaseSearchWithLspTool.ts) | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available. |
-| [`create_new_workspace`](../src/core/task/tools/CreateNewWorkspaceTool.ts)        | Create a new workspace/project directory with optional subdirectories.                                                                                                                  |
-| [`fetch_web_page`](../src/core/task/tools/FetchWebPageTool.ts)                    | Download and extract text content from web pages, with optional content filtering.                                                                                                      |
-| [`execute_command`](../src/core/task/tools/ExecuteCommandTool.ts)                 | Run CLI commands with configurable working directory and timeout.                                                                                                                       |
-| [`list_files`](../src/core/task/tools/ListFilesTool.ts)                           | List directory contents with recursive option.                                                                                                                                          |
-| [`search_files`](../src/core/task/tools/SearchFilesTool.ts)                       | Regex/literal search across files with context display (later unified — see below). See [`search_files-tool.md`](search_files-tool.md).                                                 |
-| [`read_file`](../src/core/task/tools/ReadFileTool.ts)                             | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                            |
-| [`write_to_file`](../src/core/task/tools/WriteToFileTool.ts)                      | Write complete file content, with automatic directory creation.                                                                                                                         |
-| [`apply_diff`](../src/core/task/tools/ApplyDiffTool.ts)                           | Apply precise, targeted modifications using search/replace blocks.                                                                                                                      |
-| [`insert_edit`](../src/core/task/tools/InsertEditTool.ts)                         | Insert text at a specific line/column position.                                                                                                                                         |
-| [`rename_symbol`](../src/core/task/tools/RenameSymbolTool.ts)                     | Rename a symbol and all its references via LSP.                                                                                                                                         |
-| [`list_code_usages`](../src/core/task/tools/ListCodeUsagesTool.ts)                | Find all references/usages of a symbol via LSP.                                                                                                                                         |
-
-### New Tools Created
-
-| Tool                                                               | Description                                                                                                                                                                                     |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`sed`](../src/core/task/tools/SedTool.ts)**                     | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
-| **[`file`](../src/core/task/tools/FileTool.ts)**                   | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
-| **[`set_task_title`](../src/core/task/tools/SetTaskTitleTool.ts)** | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
-| **[`give_feedback`](../src/core/task/tools/GiveFeedbackTool.ts)**  | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
-| [`skill_load`](../src/core/task/tools/SkillLoadTool.ts)            | Load a skill by name (renamed from `skill`).                                                                                                                                                    |
-| [`skill_save`](../src/core/task/tools/SkillSaveTool.ts)            | Create or update skills, with SKILL.md frontmatter validation.                                                                                                                                  |
-| [`skill_delete`](../src/core/task/tools/SkillDeleteTool.ts)        | Delete an existing skill.                                                                                                                                                                       |
-
-### Unified search_files Tool
-
-The legacy `get_search_results` tool was **removed** and its functionality merged into `search_files`. The consolidated tool:
-
-- Uses VS Code's [`workspace.findTextInFiles`](https://code.visualstudio.com/api/references/vscode-api#workspace.findTextInFiles) API as its sole backend (no more ripgrep dependency).
-- Supports both regex and literal text search via the `isRegex` flag.
-- Adds `caseSensitive`, `wholeWord`, and `excludePattern` parameters.
-- Renames `regex` → `query` and `file_pattern` → `fileTypes` for clarity.
-
-See [`search_files-tool.md`](search_files-tool.md) for the full tool specification.
+| Tool                                                                              | Description                                                                                                                                                                                     |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`codebase_search_with_lsp`](../src/core/task/tools/CodebaseSearchWithLspTool.ts) | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
+| [`create_new_workspace`](../src/core/task/tools/CreateNewWorkspaceTool.ts)        | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
+| [`fetch_web_page`](../src/core/task/tools/FetchWebPageTool.ts)                    | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
+| [`execute_command`](../src/core/task/tools/ExecuteCommandTool.ts)                 | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
+| [`list_files`](../src/core/task/tools/ListFilesTool.ts)                           | List directory contents with recursive option.                                                                                                                                                  |
+| [`search_files`](../src/core/task/tools/SearchFilesTool.ts)                       | Regex/literal search across files with context display (using VS Code's native search API). See [`search_files-tool.md`](search_files-tool.md).                                                 |
+| [`read_file`](../src/core/task/tools/ReadFileTool.ts)                             | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
+| [`write_to_file`](../src/core/task/tools/WriteToFileTool.ts)                      | Write complete file content, with automatic directory creation.                                                                                                                                 |
+| [`apply_diff`](../src/core/task/tools/ApplyDiffTool.ts)                           | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
+| [`insert_edit`](../src/core/task/tools/InsertEditTool.ts)                         | Insert text at a specific line/column position.                                                                                                                                                 |
+| [`rename_symbol`](../src/core/task/tools/RenameSymbolTool.ts)                     | Rename a symbol and all its references via LSP.                                                                                                                                                 |
+| [`list_code_usages`](../src/core/task/tools/ListCodeUsagesTool.ts)                | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
+| **[`sed`](../src/core/task/tools/SedTool.ts)**                                    | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
+| **[`file`](../src/core/task/tools/FileTool.ts)**                                  | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
+| **[`set_task_title`](../src/core/task/tools/SetTaskTitleTool.ts)**                | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
+| [`skills`](../packages/types/src/tool.ts)                                         | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
+| **[`give_feedback`](../src/core/task/tools/GiveFeedbackTool.ts)**                 | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
 
 > 📸 TODO: screenshot of `codebase_search_with_lsp` results in chat
-
-> **Opinionated change**: Dropping ripgrep in favor of VS Code's native search API improves cross-platform consistency and reduces the extension's external dependencies. Having one consolidated search tool instead of two (`search_files` + `get_search_results`) simplifies the LLM's tool selection.
 
 ---
 
 ## 8. File Changes System
 
-The file changes tracking infrastructure was built from the ground up, then iterated on to reach the current simplified design.
+The file changes tracking infrastructure was built from the ground up.
 
 See [`file-change-tracking.md`](file-change-tracking.md) for the complete tracking specification.
 
-### Evolution
-
-**Phase 1 — Initial Build (May 4–5):** Created the `ChangedFilesService` and `FileContextTracker` with a full Accept / Revert / Redo workflow and a Reviewed section. The native [`file`](../src/core/task/tools/FileTool.ts) tool (rm/mv) was integrated from day one.
-
-**Phase 2 — Simplification (May 9–10):** Removed the git-dependent shadow-repository backend in favor of a **working-directory snapshot system**. Eliminated the Reviewed section and Redo functionality. The final workflow has two actions: **Accept** (promotes content to the new baseline) or **Revert** (restores original content).
-
-### Final Design
+Removed the git-dependent shadow-repository backend in favor of a **working-directory snapshot system**. This eliminates all git-related edge cases (nested repos, worktrees, submodules, custom git configs) and makes the system more robust and universally compatible.
 
 | Feature                         | Description                                                                                                                                                                                                |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Working-directory backend**   | File changes are tracked via snapshots in the extension's storage directory. **No git dependency.** This eliminates conflicts with nested repos, worktrees, submodules, and custom git configurations.     |
-| **Two-action workflow**         | **Accept** promotes content to persisted baseline. **Revert** restores the original content. No intermediate Reviewed state, no Redo.                                                                      |
+| **Two-action workflow**         | **Accept** promotes content to persisted baseline. **Revert** restores the original content.                                                                                                               |
 | **Comprehensive tool tracking** | Every disk-modifying tool is tracked: `write_to_file`, `apply_diff`, `insert_edit`, `sed`, `file` (rm/mv), `rename_symbol`. The tracker captures original content before mutation and final content after. |
-| **Resilient Accept**            | Accept falls back to current disk content when a snapshot is unavailable (e.g., rapid edits during streaming), ensuring the button always works.                                                           |
-| **Zero-change filtering**       | Entries with zero net change (+0/−0) are automatically dropped from the panel.                                                                                                                             |
-| **Serialized updates**          | Panel state updates are serialized to prevent stale data from concurrent tool executions.                                                                                                                  |
 
 > 📸 TODO: screenshot of File Changes panel showing tracked files with Accept/Revert buttons
-
-> **Opinionated change**: Removing the Reviewed section and Redo button simplifies the mental model. You either keep the change (Accept) or discard it (Revert). Accepting promotes the latest content to the new baseline — there's no intermediate state to manage.
 
 ---
 
 ## 9. Auto-Approval & Tool Categories
 
-The auto-approval system was refactored to be driven by a unified set of tool categories, replacing the previous ad-hoc toggle system.
+The auto-approval system was refactored to be driven by a unified set of tool categories, replacing the previous ad-hoc toggle system. Additional categories were added, included `uncategorized` as a catch-all. MCP servers can now voluntarily categorize their tools, instead of all falling into one category, the `MCP` bucket. MCP servers that don't support this feature can still have their tools properly categorized with Shofer-side configuration.
 
 See [`auto_approval.md`](auto_approval.md) and [`tool-categories.md`](tool-categories.md) for the full reference.
 
@@ -266,10 +211,9 @@ See [`auto_approval.md`](auto_approval.md) and [`tool-categories.md`](tool-categ
 
 | Feature                               | Description                                                                                                                                                                                                      |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ToolGroup-driven auto-approval**    | Auto-approval toggles now correspond to 9 canonical tool categories (read, write, edit, command, browser, mcp, modes, task, skills) — a single source of truth.                                                  |
+| **ToolGroup-driven auto-approval**    | Auto-approval toggles now correspond to 9 canonical tool categories (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`) — a single source of truth.                 |
 | **Unified 9 categories**              | Every tool — native, MCP, or registered by another extension — falls into exactly one category. Mode-based filtering and auto-approval both use the same groups. See [`tool-categories.md`](tool-categories.md). |
 | **Scoped auto-approve trigger badge** | The auto-approve badge in the chat header is scoped to the current mode, showing only relevant toggles.                                                                                                          |
-| **BRRR → All**                        | The "BRRR" (from "YOLO") auto-approval label was renamed to "All" for clarity and professionalism.                                                                                                               |
 
 > 📸 TODO: screenshot of auto-approval toolbar in chat header showing category toggles
 
@@ -283,19 +227,13 @@ See [`skills.md`](skills.md) and [`command-skill-buttons.md`](command-skill-butt
 
 ### What Was Built
 
-| Feature                       | Description                                                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Quick-access buttons**      | Dedicated **Commands** and **Skills** buttons in the chat input bar. One click opens a popover listing all available commands and skills.                                |
-| **Wider popover**             | Redesigned popover with a wider layout, two-line entries (name + description), and open-file buttons for each skill's SKILL.md.                                          |
-| **Refresh button**            | A refresh button in both popovers re-scans the filesystem for new/updated commands and skills.                                                                           |
-| **Loaded skills tracking**    | Skills are tracked as "loaded" in the IPC layer. The SkillsButton shows which skills are currently active.                                                               |
-| **Built-in slash commands**   | `/loaded` lists all loaded skills. `/search <query>` searches for skills matching a query.                                                                               |
-| **Persistence & rehydration** | Loaded skills are persisted in the task history. When a task is restored, skills are re-loaded automatically.                                                            |
-| **Tool renames**              | `skill` → `skill_load` (clearer intent). New `skill_delete` tool for removing skills. `skill_update` → `skill_save` with SKILL.md frontmatter validation before writing. |
+| Feature                       | Description                                                                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Quick-access buttons**      | Dedicated **Commands** and **Skills** buttons in the chat input bar. One click opens a popover listing all available commands and skills. |
+| **Loaded skills tracking**    | Skills are tracked as "loaded" in the IPC layer. The SkillsButton shows which skills are currently active.                                |
+| **Persistence & rehydration** | Loaded skills are persisted in the task history. When a task is restored, skills are re-loaded automatically.                             |
 
 > 📸 TODO: screenshot of Skills popover showing loaded skills with descriptions and open-file buttons
-
-> **Opinionated change**: Skills are now a first-class UI concept, not hidden behind slash commands. The quick-access buttons make them discoverable for all users.
 
 ---
 
@@ -310,12 +248,8 @@ The mode system was extended with scoped tool groups, per-task mode binding, and
 | **Scoped group entries**              | Mode groups now support `allowed`/`denied` lists per group, enabling fine-grained control. Example: a mode can allow `read` group tools but deny `search_files` specifically. See [`tool_access.md`](tool_access.md). |
 | **Per-task mode binding**             | Each task has its own mode, sticky for its lifetime. Switching tasks restores that task's mode. Starting a new task lets you choose a different mode without affecting running tasks.                                 |
 | **Sticky mode across focus switches** | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                       |
-| **Default mode: Code**                | Changed from Architect to Code for new installations. Code mode is what most users want most of the time.                                                                                                             |
-| **`give_feedback` always available**  | The feedback tool is now accessible regardless of mode settings.                                                                                                                                                      |
 
 > 📸 TODO: screenshot of mode selector dropdown showing scoped group configuration
-
-> **Opinionated change**: Changing the default mode to Code reflects real-world usage patterns. Architect mode is still available but no longer the first thing new users see.
 
 ---
 
@@ -332,7 +266,6 @@ See [`tool-registration-interface.md`](tool-registration-interface.md) for the p
 | **Generic provider interface** | Extensions register as tool providers via a well-defined interface. Shofer dynamically discovers and invokes their tools.       |
 | **MCP-style chat rows**        | External LM tool calls are surfaced in the chat UI with the same visual treatment as MCP tools — name, arguments, and result.   |
 | **Auto-approval integration**  | External tools participate in the ToolGroup-driven auto-approval system. Users can configure which external tools auto-approve. |
-| **Tool prefix normalization**  | Tool prefixes were standardized from `vscode_` to `ide_` to be provider-agnostic.                                               |
 
 This enables companion extensions to seamlessly contribute tools to Shofer's tool palette without Shofer needing to know about them at compile time.
 
@@ -340,25 +273,20 @@ This enables companion extensions to seamlessly contribute tools to Shofer's too
 
 ---
 
-## 13. Worktree Support
+## 13. Native Worktree Support
 
-Git worktrees were elevated to a first-class concept with an embedded UI and programmatic access.
+No need to maintain separate VS Code windows per worktree anymore.
 
 See [`worktrees.md`](worktrees.md) for the full architecture.
 
 ### What Was Built
 
-| Feature                         | Description                                                                                                                                           |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Embedded worktree model**     | Worktrees are managed within the same Shofer session. A separate-window approach was dropped in favor of in-process management.                       |
-| **Worktree status indicator**   | A chip in the chat input bar shows the current worktree branch name and git status (dirty/clean/ahead/behind). Clicking it opens worktree management. |
-| **Native worktree tool**        | The LLM can create, switch, and delete worktrees via a dedicated native tool.                                                                         |
-| **Path convention enforcement** | Worktrees must be created under `.shofer/worktrees/` — a predictable location that keeps the workspace clean.                                         |
-| **Unified indicator**           | Multiple worktree-related UI elements were consolidated into a single `WorktreeIndicator` chip.                                                       |
+| Feature                       | Description                                                                                                                                           |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Embedded worktree model**   | Worktrees are managed within the same Shofer session.                                                                                                 |
+| **Worktree status indicator** | A chip in the chat input bar shows the current worktree branch name and git status (dirty/clean/ahead/behind). Clicking it opens worktree management. |
 
 > 📸 TODO: screenshot of worktree status indicator chip in the chat input bar
-
-> **Opinionated change**: Dropping the separate-window model simplifies the architecture. Worktrees feel like a natural extension of the task system rather than a different mode of operation.
 
 ---
 
@@ -370,14 +298,11 @@ See [`cancellation.md`](cancellation.md) for the full cancellation architecture.
 
 ### What Was Built
 
-| Feature                        | Description                                                                                                                                                          |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **End-to-end abort**           | Stop propagates from the webview through the task loop, API handler, and all the way down to MCP server tool executions, aborting them immediately.                  |
-| **HTTP stream abort on pause** | When a task is paused, the HTTP stream is immediately aborted, preventing resource leaks.                                                                            |
-| **Stop button semantics**      | Stop no longer transfers queued messages to a rehydrated task — it cleanly cancels the current turn. The "Send Now" flow (separate) handles sending queued messages. |
-| **Always-available Stop**      | The Stop button is always responsive, even during streaming, reasoning, or tool execution phases.                                                                    |
-
-> **Opinionated change**: Clear separation between "Stop" (cancel current work) and "Send Now" (cancel and immediately resume with queued input) gives users precise control over task interruption.
+| Feature                        | Description                                                                                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **End-to-end abort**           | Stop propagates from the webview through the task loop, API handler, and all the way down to MCP server tool executions, aborting them immediately. |
+| **HTTP stream abort on pause** | When a task is paused, the HTTP stream is immediately aborted, preventing resource leaks.                                                           |
+| **Always-available Stop**      | The Stop button is always responsive, even during streaming, reasoning, or tool execution phases.                                                   |
 
 ---
 
@@ -415,33 +340,9 @@ See [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for the f
 
 ---
 
-## 17. Branding & Platform Changes
+## 17. Cloud removal and marketplace/telemetry feature flags
 
-### Complete Rebrand
-
-The entire codebase was rebranded from Roo-Code to Shofer.Dev:
-
-| Change             | Description                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| **Name**           | Shofer.Dev (extension ID: `shofer.dev`)                                                                                   |
-| **Publisher**      | `shofer`                                                                                                                  |
-| **Repository**     | [`github.com/shofer-dev/shofer`](https://github.com/shofer-dev/shofer)                                                    |
-| **Homepage**       | [`www.shofer.dev`](https://www.shofer.dev)                                                                                |
-| **Tagline**        | "State-of-the-art open-source AI coding"                                                                                  |
-| **Symbol renames** | All `roo_*` → `shofer_*` prefixes, all `RooCode`/`Roo`/`Cline` identifiers replaced throughout thousands of source files. |
-| **Sidebar title**  | "Shofer - Drop Zone"                                                                                                      |
-| **Version reset**  | Version numbering reset from `3.x` to `0.1.0` to mark the new project identity.                                           |
-
-### Feature Flags
-
-Shofer supports compile-time and environment-variable feature flags:
-
-| Flag                  | Default                            | Controls                                                     |
-| --------------------- | ---------------------------------- | ------------------------------------------------------------ |
-| `MARKETPLACE_ENABLED` | `false`                            | Marketplace button visibility and all marketplace-related UI |
-| `TELEMETRY_ENABLED`   | `false` (env: `TELEMETRY_ENABLED`) | PostHog telemetry and all telemetry-related UI sections      |
-
-See also: [`configuration.md`](configuration.md) for all VS Code settings.
+Given that Shofer
 
 ### Cloud Feature Removal
 
