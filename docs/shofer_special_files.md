@@ -242,7 +242,7 @@ Both the `skills/` directory itself and individual skill subdirectories can
 be symlinks.
 
 Skills are presented to the LLM in the system prompt via `<available_skills>`
-and are loaded on-demand via the `skill_load` tool.
+and are loaded on-demand via the `skills` tool.
 
 ---
 

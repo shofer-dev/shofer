@@ -8,13 +8,13 @@ Components:
 
 Backend:
 [`Task.ts:449`](src/core/task/Task.ts:449) — loadedSkills tracking,
-[`SkillLoadTool.ts`](src/core/tools/SkillLoadTool.ts) — reload no-op,
+[`SkillsTool.ts`](src/core/tools/SkillsTool.ts) — reload no-op,
 [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts) — IPC
 
 Tests:
 [`CommandsButton.spec.tsx`](webview-ui/src/components/chat/__tests__/CommandsButton.spec.tsx),
 [`SkillsButton.spec.tsx`](webview-ui/src/components/chat/__tests__/SkillsButton.spec.tsx),
-[`skillLoadTool.spec.ts`](src/core/tools/__tests__/skillLoadTool.spec.ts),
+[`skillsTool.spec.ts`](src/core/tools/__tests__/skillsTool.spec.ts),
 [`skillsMessageHandler.spec.ts`](src/core/webview/__tests__/skillsMessageHandler.spec.ts)
 
 i18n: [`quickAccess.json`](webview-ui/src/i18n/locales/en/quickAccess.json)
@@ -120,7 +120,7 @@ interface Command {
 
 Each `Task` maintains a `loadedSkills: Map<string,string>` (skill name → SKILL.md path):
 
-- **On load**: `SkillLoadTool` records the skill after successful `skill_load` invocation
+- **On load**: `SkillsTool` records the skill after successful `skills` invocation
 - **Reload is a no-op**: Returns `"Skill 'X' is already loaded (no-op)."` — no file re-read
 - **Cleared on condense**: All 3 context-condensation paths clear `loadedSkills`
 - **IPC**: `handleRequestSkills` includes `loadedSkills` in the skills message
@@ -150,7 +150,7 @@ interface SkillMetadata {
 
 ### How Skills Are Inserted
 
-When a skill is clicked, the text `Use the <skill-name> skill` is appended to the chat input. This natural-language instruction prompts the model to invoke the `skill_load` tool to load the skill into context.
+When a skill is clicked, the text `Use the <skill-name> skill` is appended to the chat input. This natural-language instruction prompts the model to invoke the `skills` tool to load the skill into context.
 
 No `use_skill` slash command is used — skills are invoked by the model's tool-calling mechanism.
 
@@ -255,7 +255,7 @@ Keys in [`quickAccess.json`](extensions/shofer/webview-ui/src/i18n/locales/en/qu
 
 1. **Buttons when task is active**: Always visible and enabled — no disabled/reduced-opacity state for active tasks.
 
-2. **How skills are invoked**: Skills insert a natural-language instruction (`Use the <skill-name> skill`). The model then uses its `skill_load` tool-calling mechanism. No `use_skill` slash command was added.
+2. **How skills are invoked**: Skills insert a natural-language instruction (`Use the <skill-name> skill`). The model then uses its `skills` tool-calling mechanism. No `use_skill` slash command was added.
 
 3. **Popover search**: Not yet implemented — left as a future enhancement.
 
