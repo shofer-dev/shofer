@@ -62,8 +62,8 @@ export const historyItemSchema = z.object({
 	awaitingChildId: z.string().optional(), // Child currently awaited (set when delegated)
 	completedByChildId: z.string().optional(), // Child that completed and resumed this parent
 	completionResultSummary: z.string().optional(), // Summary from completed child
-	/** Self-assessed quality rating set by the agent via attempt_completion (1-3). */
-	completionRating: z.number().min(1).max(3).optional(),
+	/** Self-assessed quality rating set by the agent via attempt_completion. */
+	completionRating: z.enum(["poor", "well", "excellent"]).optional(),
 	// Parallel task fields
 	name: z.string().optional(), // User-defined task name
 	lastActiveTs: z.number().optional(), // Track when last switched to

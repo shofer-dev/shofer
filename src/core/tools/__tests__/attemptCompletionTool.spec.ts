@@ -105,8 +105,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -130,8 +130,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -154,8 +154,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -183,8 +183,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -225,8 +225,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -267,8 +267,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -310,8 +310,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -353,8 +353,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -396,8 +396,8 @@ describe("attemptCompletionTool", () => {
 			const block: AttemptCompletionToolUse = {
 				type: "tool_use",
 				name: "attempt_completion",
-				params: { result: "Task completed successfully", rating: 3 },
-				nativeArgs: { result: "Task completed successfully", rating: 3 },
+				params: { result: "Task completed successfully", rating: "excellent" },
+				nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 				partial: false,
 			}
 
@@ -440,8 +440,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Task completed successfully", rating: 3 },
-					nativeArgs: { result: "Task completed successfully", rating: 3 },
+					params: { result: "Task completed successfully", rating: "excellent" },
+					nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 					partial: false,
 				}
 
@@ -474,8 +474,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Task completed successfully", rating: 3 },
-					nativeArgs: { result: "Task completed successfully", rating: 3 },
+					params: { result: "Task completed successfully", rating: "excellent" },
+					nativeArgs: { result: "Task completed successfully", rating: "excellent" },
 					partial: false,
 				}
 
@@ -502,8 +502,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "2", rating: 3 },
-					nativeArgs: { result: "2", rating: 3 },
+					params: { result: "2", rating: "excellent" },
+					nativeArgs: { result: "2", rating: "excellent" },
 					partial: false,
 				}
 
@@ -533,8 +533,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "2", rating: 3 },
-					nativeArgs: { result: "2", rating: 3 },
+					params: { result: "2", rating: "excellent" },
+					nativeArgs: { result: "2", rating: "excellent" },
 					partial: false,
 				}
 
@@ -599,8 +599,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Task completed successfully", rating: 5 },
-					nativeArgs: { result: "Task completed successfully", rating: 5 },
+					params: { result: "Task completed successfully", rating: "invalid" },
+					nativeArgs: { result: "Task completed successfully", rating: "invalid" },
 					partial: false,
 				}
 
@@ -623,8 +623,8 @@ describe("attemptCompletionTool", () => {
 				)
 			})
 
-			it("should accept valid ratings (1, 2, 3)", async () => {
-				for (const rating of [1, 2, 3]) {
+			it('should accept valid ratings ("poor", "well", "excellent")', async () => {
+				for (const rating of ["poor", "well", "excellent"]) {
 					const block: AttemptCompletionToolUse = {
 						type: "tool_use",
 						name: "attempt_completion",
@@ -659,8 +659,16 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Done", rating: 3, feedback: "The file tool was slow for large directories" },
-					nativeArgs: { result: "Done", rating: 3, feedback: "The file tool was slow for large directories" },
+					params: {
+						result: "Done",
+						rating: "excellent",
+						feedback: "The file tool was slow for large directories",
+					},
+					nativeArgs: {
+						result: "Done",
+						rating: "excellent",
+						feedback: "The file tool was slow for large directories",
+					},
 					partial: false,
 				}
 
@@ -686,8 +694,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Done", rating: 3, feedback: "" },
-					nativeArgs: { result: "Done", rating: 3, feedback: "" },
+					params: { result: "Done", rating: "excellent", feedback: "" },
+					nativeArgs: { result: "Done", rating: "excellent", feedback: "" },
 					partial: false,
 				}
 
@@ -714,8 +722,8 @@ describe("attemptCompletionTool", () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
-					params: { result: "Done", rating: 3, feedback: "   " },
-					nativeArgs: { result: "Done", rating: 3, feedback: "   " },
+					params: { result: "Done", rating: "excellent", feedback: "   " },
+					nativeArgs: { result: "Done", rating: "excellent", feedback: "   " },
 					partial: false,
 				}
 

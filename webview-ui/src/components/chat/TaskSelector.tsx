@@ -83,23 +83,23 @@ export const TASK_STATE_CONFIG: Record<
 		icon: "codicon-check",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
 	},
-	completed_1: {
+	completed_poor: {
 		dot: "bg-[var(--vscode-descriptionForeground)]",
-		label: "Completed",
+		label: "Completed · Poor",
 		pulse: false,
 		icon: "codicon-circle-large-outline",
 		iconColor: "text-[var(--vscode-descriptionForeground)]",
 	},
-	completed_2: {
+	completed_well: {
 		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
-		label: "Completed",
+		label: "Completed · Well",
 		pulse: false,
 		icon: "codicon-circle-large-filled",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)] opacity-50",
 	},
-	completed_3: {
+	completed_excellent: {
 		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
-		label: "Completed",
+		label: "Completed · Excellent",
 		pulse: false,
 		icon: "codicon-pass-filled",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
@@ -354,7 +354,7 @@ function renderTaskRow({
 
 			{/* Leading status icon — matches VS Code Sessions panel look */}
 			<StandardTooltip content={stateConfig.label}>
-				{state === "completed_2" ? (
+				{state === "completed_well" ? (
 					<svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" aria-hidden="true">
 						<circle
 							cx="8"
