@@ -525,7 +525,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "skill_load":
+			case "skills":
 				if (partialArgs.skill !== undefined) {
 					nativeArgs = {
 						skill: partialArgs.skill,
@@ -1061,7 +1061,7 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "skill_load":
+				case "skills":
 					if (args.skill !== undefined) {
 						nativeArgs = {
 							skill: args.skill,

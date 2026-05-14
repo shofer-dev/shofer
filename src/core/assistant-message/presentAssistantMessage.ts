@@ -35,7 +35,7 @@ import { attemptCompletionTool, AttemptCompletionCallbacks } from "../tools/Atte
 import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
 import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
-import { skillLoadTool } from "../tools/SkillLoadTool"
+import { skillsTool } from "../tools/SkillsTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
@@ -417,7 +417,7 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.task_id}']`
 					case "list_background_tasks":
 						return `[${block.name}]`
-					case "skill_load":
+					case "skills":
 						return `[${block.name} for '${block.params.skill}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
@@ -963,8 +963,8 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult,
 					})
 					break
-				case "skill_load":
-					await skillLoadTool.handle(shofer, block as ToolUse<"skill_load">, {
+				case "skills":
+					await skillsTool.handle(shofer, block as ToolUse<"skills">, {
 						askApproval,
 						handleError,
 						pushToolResult,

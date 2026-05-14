@@ -13,8 +13,8 @@ interface SkillParams {
 	args?: string
 }
 
-export class SkillLoadTool extends BaseTool<"skill_load"> {
-	readonly name = "skill_load" as const
+export class SkillsTool extends BaseTool<"skills"> {
+	readonly name = "skills" as const
 
 	async execute(params: SkillParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { skill: skillName, args } = params
@@ -24,9 +24,9 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 			// Validate skill name parameter
 			if (!skillName) {
 				task.consecutiveMistakeCount++
-				task.recordToolError("skill_load")
+				task.recordToolError("skills")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("skill_load", "skill"))
+				pushToolResult(await task.sayAndCreateMissingParamError("skills", "skill"))
 				return
 			}
 
@@ -43,7 +43,7 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 			const skillsManager = provider?.getSkillsManager()
 
 			if (!skillsManager) {
-				task.recordToolError("skill_load")
+				task.recordToolError("skills")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(formatResponse.toolError("Skills Manager not available"))
 				return
@@ -61,7 +61,7 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 				const availableSkills = skillsManager.getSkillsForMode(currentMode)
 				const skillNames = availableSkills.map((s) => s.name)
 
-				task.recordToolError("skill_load")
+				task.recordToolError("skills")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(
 					formatResponse.toolError(
@@ -89,12 +89,12 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 		}
 	}
 
-	override async handlePartial(task: Task, block: ToolUse<"skill_load">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"skills">): Promise<void> {
 		const skillName: string | undefined = block.params.skill
 		const args: string | undefined = block.params.args
 
 		const partialMessage = JSON.stringify({
-			tool: "loadSkill",
+			tool: "skills",
 			skill: skillName,
 			args: args,
 		})
@@ -103,4 +103,4 @@ export class SkillLoadTool extends BaseTool<"skill_load"> {
 	}
 }
 
-export const skillLoadTool = new SkillLoadTool()
+export const skillsTool = new SkillsTool()

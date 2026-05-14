@@ -151,7 +151,7 @@ export type NativeToolArgs = {
 	codebase_search: { query: string; path?: string }
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
-	skill_load: { skill: string; args?: string }
+	skills: { skill: string; args?: string }
 	search_files: {
 		path: string
 		query: string
@@ -320,8 +320,8 @@ export interface RunSlashCommandToolUse extends ToolUse<"run_slash_command"> {
 	params: Partial<Pick<Record<ToolParamName, string>, "command" | "args">>
 }
 
-export interface SkillLoadToolUse extends ToolUse<"skill_load"> {
-	name: "skill_load"
+export interface SkillsToolUse extends ToolUse<"skills"> {
+	name: "skills"
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "args">>
 }
 

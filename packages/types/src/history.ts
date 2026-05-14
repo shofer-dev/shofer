@@ -69,7 +69,7 @@ export const historyItemSchema = z.object({
 	// Async task fields
 	backgroundChildIds: z.array(z.string()).optional(),
 	isBackground: z.boolean().optional(),
-	// Skills that have been loaded via skill_load and should survive rehydration
+	// Skills that have been loaded via skills and should survive rehydration
 	loadedSkills: z.array(z.string()).optional(),
 	// Archive support: soft-remove from the main task listing.
 	archived: z.boolean().optional(),

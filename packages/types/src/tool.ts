@@ -38,6 +38,14 @@ export const deprecatedToolGroups: Record<string, string | null> = {
 	modes: "mode", // renamed
 }
 
+/**
+ * Tool names that have been renamed but may still exist in LLM outputs or older configs.
+ * Used by the NativeToolCallParser to map old tool names to their current canonical forms.
+ */
+export const deprecatedToolNames: Record<string, string> = {
+	skill_load: "skills", // renamed
+}
+
 export type ToolGroup = z.infer<typeof toolGroupsSchema>
 
 /**
@@ -66,7 +74,7 @@ export const toolNames = [
 	"codebase_search",
 	"update_todo_list",
 	"run_slash_command",
-	"skill_load",
+	"skills",
 	"generate_image",
 	"custom_tool",
 	// New native tools (ported from workspace-tools)
@@ -135,7 +143,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	codebase_search: "codebase search",
 	update_todo_list: "update todo list",
 	run_slash_command: "run slash command",
-	skill_load: "load skill",
+	skills: "load skill",
 	generate_image: "generate images",
 	custom_tool: "use custom tools",
 	// New native tools (ported from workspace-tools)
@@ -234,7 +242,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"attempt_completion",
 	"update_todo_list",
 	"run_slash_command",
-	"skill_load",
+	"skills",
 	"set_task_title",
 	"give_feedback",
 ] as const

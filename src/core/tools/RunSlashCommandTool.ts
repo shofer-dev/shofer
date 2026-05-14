@@ -60,7 +60,7 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 				const skillContent = await resolveSkillContentForMode(skillsManager, commandName, currentMode)
 
 				if (skillContent) {
-					// Reloading the same skill is a no-op (mirrors SkillLoadTool semantics).
+					// Reloading the same skill is a no-op (mirrors SkillsTool semantics).
 					if (task.loadedSkills.has(commandName)) {
 						pushToolResult(`Skill '${commandName}' is already loaded (no-op).`)
 						return

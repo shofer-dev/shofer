@@ -328,7 +328,7 @@
 			"description": "Ältere Nachrichten wurden aus der Konversation entfernt, um innerhalb des Kontextfenster-Limits zu bleiben. Dies ist ein schnellerer, aber weniger kontexterhaltender Ansatz im Vergleich zur Komprimierung."
 		}
 	},
-	"loadSkill": {
+	"skills": {
 		"wantsToLoad": "Shofer möchte eine Fähigkeit laden",
 		"didLoad": "Shofer hat eine Fähigkeit geladen"
 	},

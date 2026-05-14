@@ -328,7 +328,7 @@
 			"description": "S'han eliminat missatges més antics de la conversa per mantenir-se dins del límit de la finestra de context. Aquest és un enfocament ràpid però menys conservador del context en comparació amb la condensació."
 		}
 	},
-	"loadSkill": {
+	"skills": {
 		"wantsToLoad": "En Shofer vol carregar una habilitat",
 		"didLoad": "En Shofer ha carregat una habilitat"
 	},
