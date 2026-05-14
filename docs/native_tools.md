@@ -380,6 +380,26 @@ Send feedback to the Shofer.Dev developers. The feedback message is appended to 
 
 No approval prompt needed — non-destructive, written only to the extension output channel.
 
+### `attempt_completion`
+
+Signal task completion to the user. Presents the final result and concludes the task.
+
+| Param      | Type           | Required | Description                                                                                 |
+| ---------- | -------------- | :------: | ------------------------------------------------------------------------------------------- |
+| `result`   | string         |    ✅    | Final result message to deliver to the user                                                 |
+| `rating`   | number         |    ✅    | Success rating: `1` (poorly), `2` (okish), or `3` (nailed it)                               |
+| `feedback` | string \| null |    ✅    | Optional feedback for Shofer engineers: what didn't work, ideas for improving tooling, etc. |
+
+**IMPORTANT:** This tool cannot be used until all previous tool uses in the current turn have succeeded. If any tool failed, address the failure first.
+
+The `rating` parameter provides a self-assessment of how well the task was completed:
+
+- `1` — poorly executed, significant issues or incomplete
+- `2` — acceptable but with room for improvement
+- `3` — task executed excellently, high quality result
+
+The optional `feedback` parameter captures concrete observations about tooling or system prompt shortcomings encountered during the task. This feedback is routed to Shofer.Dev developers for continuous improvement.
+
 ### `skills`
 
 Load and execute a skill by name. Skills provide specialized instructions for common tasks.

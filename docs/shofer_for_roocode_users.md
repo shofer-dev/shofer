@@ -1,5 +1,7 @@
 # Shofer Features and Opinionated Changes for Roo-Code Users
 
+Shofer is a major improvement over Roo-Code, with a significant architectural overhaul and dozens of new features.
+
 This document catalogues every **user-facing feature** and **opinionated change** introduced in Shofer versus its predecessor, Roo-Code. Bug fixes are excluded — see [`CHANGELOG.md`](../CHANGELOG.md) for the complete picture including all defect corrections.
 
 **Context**: Roo-Code has announced that it is sunsetting its VS Code Extension, Cloud, and Router services on May 15, 2026. The team is pivoting away from IDE-based tools to focus on their new cloud-based agent, Roomote.

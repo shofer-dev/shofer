@@ -211,6 +211,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 									...historyItem,
 									status: "completed",
 									completionResultSummary: effectiveResult,
+									completionRating: rating,
 									insertions: fileStats.insertions,
 									deletions: fileStats.deletions,
 								})
@@ -262,6 +263,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							await provider.updateTaskHistory({
 								...historyItem,
 								status: "completed",
+								completionRating: rating,
 								insertions: fileStats.insertions,
 								deletions: fileStats.deletions,
 							})
