@@ -81,7 +81,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
 		console.log(
-			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${rating}, result=${result?.substring(0, 100)}`,
+			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${effectiveRating}, result=${result?.substring(0, 100)}`,
 		)
 
 		// Prevent attempt_completion if any tool failed in the current turn
@@ -120,13 +120,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				return
 			}
 
-			// Validate rating: must be "poor", "well", or "excellent"
+			// Default rating to "poor" if missing or invalid. The schema declares
+			// rating as required so well-behaved LLMs will include it, but providers
+			// like vscode-lm don't enforce strict schemas. Rather than blocking
+			// completion, we accept a missing rating with a default.
 			const ALLOWED_RATINGS = new Set(["poor", "well", "excellent"])
+			const effectiveRating = rating && ALLOWED_RATINGS.has(rating) ? rating : "poor"
 			if (!rating || !ALLOWED_RATINGS.has(rating)) {
-				task.consecutiveMistakeCount++
-				task.recordToolError("attempt_completion")
-				pushToolResult(await task.sayAndCreateMissingParamError("attempt_completion", "rating"))
-				return
+				console.log(
+					`[AttemptCompletionTool.execute] Rating missing or invalid (got: ${rating}), defaulting to "poor"`,
+				)
 			}
 
 			// Route optional feedback to the output channel (same mechanism as GiveFeedbackTool)
@@ -134,7 +137,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				const trimmed = feedback.trim()
 				const channel = getOutputChannel()
 				const stamp = new Date().toISOString()
-				const header = `[${stamp}] [FEEDBACK via attempt_completion] taskId=${task.taskId} rating=${rating}`
+				const header = `[${stamp}] [FEEDBACK via attempt_completion] taskId=${task.taskId} rating=${effectiveRating}`
 				if (channel) {
 					channel.appendLine(header)
 					channel.appendLine(trimmed)
@@ -211,7 +214,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 									...historyItem,
 									status: "completed",
 									completionResultSummary: effectiveResult,
-									completionRating: rating,
+									completionRating: effectiveRating,
 									insertions: fileStats.insertions,
 									deletions: fileStats.deletions,
 								})
@@ -263,7 +266,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							await provider.updateTaskHistory({
 								...historyItem,
 								status: "completed",
-								completionRating: rating,
+								completionRating: effectiveRating,
 								insertions: fileStats.insertions,
 								deletions: fileStats.deletions,
 							})
