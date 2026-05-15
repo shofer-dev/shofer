@@ -9,7 +9,7 @@
  * and the specific `ask` value determines what kind of response the agent is waiting for.
  */
 
-import { ShoferMessage, ShoferAsk, isIdleAsk, isResumableAsk, isInteractiveAsk, isNonBlockingAsk } from "@shofer/types"
+import { ShoferMessage, ShoferAsk, isIdleAsk, isResumableAsk, isInteractiveAsk, isAgentRunningAsk } from "@shofer/types"
 
 // =============================================================================
 // Agent Loop State Enum
@@ -349,8 +349,8 @@ export function detectAgentState(messages: ShoferMessage[]): AgentStateInfo {
 	if (lastMessage.type === "ask" && lastMessage.ask) {
 		const ask = lastMessage.ask
 
-		// Non-blocking asks (command_output) - agent is running but can be interrupted
-		if (isNonBlockingAsk(ask)) {
+		// Agent-running asks (command_output) - agent is running but can be interrupted
+		if (isAgentRunningAsk(ask)) {
 			return {
 				state: AgentLoopState.RUNNING,
 				isWaitingForInput: false,

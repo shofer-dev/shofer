@@ -929,8 +929,29 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						// There is no other case that a textfield should be enabled.
 					}
 				} else {
-					// This is a new message in an ongoing task.
-					vscode.postMessage({ type: "askResponse", askResponse: "messageResponse", text, images })
+					// Ongoing task with no ask currently awaiting a response (e.g. the
+					// user typed during the brief window between an ask resolving and
+					// the next one being posted, or after an auto-approved ask cleared
+					// `shoferAsk`). Sending a bare `messageResponse` here would land
+					// in the no-ask guard inside `handleWebviewAskResponse` on the host
+					// — which today routes it through `prependMessage`, but only after
+					// the round-trip and only because of that defensive guard.
+					//
+					// Route directly through the queue instead so:
+					// 1. The next `Task.ask()` drains it as the answer (existing logic).
+					// 2. We never depend on the host-side fallback to recover the message.
+					// 3. Order is preserved naturally (FIFO append, no prepend race).
+					try {
+						vscode.postMessage({ type: "queueMessage", text, images })
+						setInputValue("")
+						setSelectedImages([])
+						setDroppedContextFiles([])
+					} catch (error) {
+						console.error(
+							`Failed to queue message: ${error instanceof Error ? error.message : String(error)}`,
+						)
+					}
+					return
 				}
 
 				// Lock further sends until the backend acks (state effects above

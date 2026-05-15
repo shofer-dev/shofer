@@ -8,7 +8,7 @@
  * - Tracking which asks have been handled (to avoid duplicates)
  *
  * Design notes:
- * - Uses isIdleAsk, isInteractiveAsk, isResumableAsk, isNonBlockingAsk type guards
+ * - Uses isIdleAsk, isInteractiveAsk, isResumableAsk, isAgentRunningAsk type guards
  * - Single responsibility: Ask routing and handling only
  * - Delegates output to OutputManager, input to PromptManager
  * - Sends responses back through a provided callback
@@ -22,7 +22,7 @@ import {
 	isIdleAsk,
 	isInteractiveAsk,
 	isResumableAsk,
-	isNonBlockingAsk,
+	isAgentRunningAsk,
 } from "@shofer/types"
 import { debugLog } from "@shofer/core/cli"
 
@@ -151,8 +151,8 @@ export class AskDispatcher {
 
 		try {
 			// Route based on ask category
-			if (isNonBlockingAsk(ask)) {
-				return await this.handleNonBlockingAsk(ts, ask, text)
+			if (isAgentRunningAsk(ask)) {
+				return await this.handleAgentRunningAsk(ts, ask, text)
 			}
 
 			if (isIdleAsk(ask)) {
@@ -199,10 +199,10 @@ export class AskDispatcher {
 	// ===========================================================================
 
 	/**
-	 * Handle non-blocking asks (command_output).
-	 * These don't actually block the agent - just need acknowledgment.
+	 * Handle agent-running asks (command_output).
+	 * The agent is still actively executing — these asks just need acknowledgement.
 	 */
-	private async handleNonBlockingAsk(_ts: number, _ask: ShoferAsk, _text: string): Promise<AskHandleResult> {
+	private async handleAgentRunningAsk(_ts: number, _ask: ShoferAsk, _text: string): Promise<AskHandleResult> {
 		// command_output - output is handled by OutputManager
 		// Just send approval to continue
 		this.sendApprovalResponse(true)

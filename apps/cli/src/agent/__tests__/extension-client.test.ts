@@ -4,7 +4,8 @@ import {
 	isIdleAsk,
 	isResumableAsk,
 	isInteractiveAsk,
-	isNonBlockingAsk,
+	isAgentRunningAsk,
+	isAutoApprovableAsk,
 } from "@shofer/types"
 
 import { AgentLoopState, detectAgentState } from "../agent-state.js"
@@ -215,14 +216,29 @@ describe("Type Guards", () => {
 		})
 	})
 
-	describe("isNonBlockingAsk", () => {
-		it("should return true for non-blocking asks", () => {
-			expect(isNonBlockingAsk("command_output")).toBe(true)
+	describe("isAgentRunningAsk", () => {
+		it("should return true for agent-running asks", () => {
+			expect(isAgentRunningAsk("command_output")).toBe(true)
 		})
 
-		it("should return false for blocking asks", () => {
-			expect(isNonBlockingAsk("tool")).toBe(false)
-			expect(isNonBlockingAsk("followup")).toBe(false)
+		it("should return false for asks that pause the agent", () => {
+			expect(isAgentRunningAsk("tool")).toBe(false)
+			expect(isAgentRunningAsk("followup")).toBe(false)
+			expect(isAgentRunningAsk("completion_result")).toBe(false)
+		})
+	})
+
+	describe("isAutoApprovableAsk", () => {
+		it("should return true for asks the host auto-approves without user input", () => {
+			expect(isAutoApprovableAsk("command_output")).toBe(true)
+		})
+
+		it("should return false for asks that require a real user decision", () => {
+			expect(isAutoApprovableAsk("tool")).toBe(false)
+			expect(isAutoApprovableAsk("followup")).toBe(false)
+			// Regression guard: completion_result must NOT auto-approve, otherwise
+			// queued messages and typed feedback are silently dropped.
+			expect(isAutoApprovableAsk("completion_result")).toBe(false)
 		})
 	})
 })
