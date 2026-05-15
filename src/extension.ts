@@ -172,8 +172,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	 */
 	context.subscriptions.push(
 		vscode.commands.registerCommand("shofer.helperAgent.showInfo", async () => {
-			console.log("[SHOFER] helperAgent.showInfo FIRED — status bar clicked!")
-			outputChannel.appendLine("[HelperAgent] showInfo command invoked (status bar click)")
+			outputChannel.appendLine("[HelperAgent] showInfo FIRED — status bar clicked")
 			const managers = HelperAgentManager.getAllInstances()
 			if (managers.length === 0) {
 				vscode.window.showInformationMessage("Helper Agent is not available.")
@@ -269,13 +268,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 	helperAgentStatusBar.name = "Helper Agent"
 	// Use a Command object (not just a string) for reliable code-server resolution
-	// TEST: wire to a known command to see if status bar clicks work at all in code-server
-	helperAgentStatusBar.command = "shofer.focusInput"
-	console.log("[SHOFER] Status bar wired to shofer.focusInput for testing")
+	helperAgentStatusBar.command = "shofer.helperAgent.showInfo"
 	helperAgentStatusBar.tooltip = "Helper Agent"
 	helperAgentStatusBar.show()
 	context.subscriptions.push(helperAgentStatusBar)
-	outputChannel.appendLine("[HelperAgent] Status bar button created with command=" + helperAgentStatusBar.command)
+	outputChannel.appendLine("[HelperAgent] Status bar button created (click → shofer.helperAgent.showInfo)")
 
 	/**
 	 * Blinking timer for the "Busy" state. Fires every 500ms to toggle
