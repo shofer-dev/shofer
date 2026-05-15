@@ -547,8 +547,7 @@ export const webviewMessageHandler = async (
 			provider.workspaceTracker?.initializeFilePaths() // Don't await.
 
 			// Always push the current parallel task state so the TaskSelector has
-			// up-to-date data regardless of whether restoreManagedTasks has already
-			// fired its tasks:updated event before the webview loaded.
+			// up-to-date data when the webview loads.
 			{
 				const managedTasks = provider.getManagedTasks()
 				provider.postMessageToWebview({

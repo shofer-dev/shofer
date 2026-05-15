@@ -389,6 +389,11 @@ export class ShoferProvider
 
 			this.taskHistoryStoreInitialized = true
 
+			// Seed the TaskManager with persisted task states so the TaskSelector
+			// shows correct state icons on startup without waiting for a re-focus.
+			const historyItems = this.taskHistoryStore.getAll()
+			await this.taskManager.restoreManagedTasks(historyItems)
+
 			// Start the periodic cleanup of archived tasks (runs once per day).
 			this.scheduleArchivedCleanup()
 		} catch (error) {
