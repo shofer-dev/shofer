@@ -510,6 +510,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	assistantMessageSavedToHistory = false
 
+	/** True when TaskStarted has been emitted for the current run. Reset on each initiateTaskLoop. */
+	taskStartedEmitted = false
 	/**
 	 * Push a tool_result block to userMessageContent, preventing duplicates.
 	 * Duplicate tool_use_ids cause API errors.
@@ -3083,12 +3085,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		let nextUserContent = userContent
 		let includeFileDetails = true
-
-		// Don't emit TaskStarted for completed tasks being re-visited —
-		// the task is not starting, it's already done.
-		if (!this.initialStatus?.startsWith("completed")) {
-			this.emit(ShoferEventName.TaskStarted)
-		}
+		this.taskStartedEmitted = false
 
 		while (!this.abort) {
 			this.diagLog(
@@ -3468,6 +3465,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// Yields only if the first chunk is successful, otherwise will
 				// allow the user to retry the request (most likely due to rate
 				// limit error, which gets thrown on the first chunk).
+				if (!this.taskStartedEmitted) {
+					this.taskStartedEmitted = true
+					this.emit(ShoferEventName.TaskStarted)
+				}
 				const stream = this.attemptApiRequest(currentItem.retryAttempt ?? 0, { skipProviderRateLimit: true })
 				let assistantMessage = ""
 				let reasoningMessage = ""
