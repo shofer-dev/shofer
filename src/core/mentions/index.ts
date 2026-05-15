@@ -262,7 +262,6 @@ export async function parseMentions(
 		slashCommandHelp += `\n\n${buildSkillResult(skillName, undefined, skillContent)}`
 		loadedSkills[skillName] = skillContent.path
 	}
-	console.log(`[parseMentions] returning loadedSkills:`, loadedSkills)
 
 	return {
 		text: parsedText,
