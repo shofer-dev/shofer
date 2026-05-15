@@ -1,7 +1,7 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem, TaskState, TaskLifecycle, CompletionRating } from "@shofer/types"
 
 const HISTORY_ITEM_FILENAME = "history_item.json"
 const HISTORY_INDEX_FILENAME = "_index.json"
@@ -13,11 +13,30 @@ export interface TaskSessionEntry {
 	createdAt?: number
 	workspace?: string
 	mode?: string
-	taskExecutionState?: HistoryItem["taskExecutionState"]
+	taskState?: HistoryItem["taskState"]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null
+}
+
+const VALID_LIFECYCLES: readonly TaskLifecycle[] = ["idle", "running", "waiting_input", "paused", "completed", "error"]
+const VALID_RATINGS: readonly CompletionRating[] = ["poor", "well", "excellent"]
+
+function parseTaskState(value: unknown): TaskState | undefined {
+	if (!isRecord(value)) return undefined
+	const lifecycle = value.lifecycle
+	if (typeof lifecycle !== "string" || !(VALID_LIFECYCLES as readonly string[]).includes(lifecycle)) {
+		return undefined
+	}
+	const rating = value.rating
+	const validRating =
+		typeof rating === "string" && (VALID_RATINGS as readonly string[]).includes(rating)
+			? (rating as CompletionRating)
+			: undefined
+	return validRating
+		? { lifecycle: lifecycle as TaskLifecycle, rating: validRating }
+		: { lifecycle: lifecycle as TaskLifecycle }
 }
 
 function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
@@ -31,7 +50,6 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 	const createdAt = value.createdAt
 	const workspace = value.workspace
 	const mode = value.mode
-	const taskExecutionState: string | undefined = value.taskExecutionState as string | undefined
 
 	if (typeof id !== "string" || typeof task !== "string" || typeof ts !== "number") {
 		return undefined
@@ -44,24 +62,7 @@ function extractSessionEntry(value: unknown): TaskSessionEntry | undefined {
 		createdAt: typeof createdAt === "number" ? createdAt : undefined,
 		workspace: typeof workspace === "string" ? workspace : undefined,
 		mode: typeof mode === "string" ? mode : undefined,
-		taskExecutionState:
-			taskExecutionState !== undefined &&
-			(
-				[
-					"idle",
-					"running",
-					"waiting",
-					"waiting_input",
-					"paused",
-					"error",
-					"completed",
-					"completed_poorly",
-					"completed_well",
-					"completed_excellent",
-				] as readonly string[]
-			).includes(taskExecutionState)
-				? (taskExecutionState as HistoryItem["taskExecutionState"])
-				: undefined,
+		taskState: parseTaskState(value.taskState),
 	}
 }
 

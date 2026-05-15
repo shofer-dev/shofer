@@ -1,7 +1,7 @@
 import NodeCache from "node-cache"
 import getFolderSize from "get-folder-size"
 
-import type { ShoferMessage, HistoryItem, TaskExecutionState } from "@shofer/types"
+import type { ShoferMessage, HistoryItem, TaskState } from "@shofer/types"
 
 import { combineApiRequests } from "../../shared/combineApiRequests"
 import { combineCommandSequences } from "../../shared/combineCommandSequences"
@@ -26,8 +26,8 @@ export type TaskMetadataOptions = {
 	mode?: string
 	/** Provider profile name for the task (sticky profile feature) */
 	apiConfigName?: string
-	/** Initial status for the task (e.g., "active" for child tasks) */
-	initialStatus?: TaskExecutionState
+	/** Initial execution state for the task (e.g., for child tasks) */
+	initialState?: TaskState
 	/** When true, persist `isBackground: true` on the history item. */
 	isBackground?: boolean
 	/** Per-root-task cost limit (only set on root tasks). */
@@ -47,7 +47,7 @@ export async function taskMetadata({
 	cwd,
 	mode,
 	apiConfigName,
-	initialStatus,
+	initialState,
 	isBackground,
 	costLimit,
 	loadedSkills,
@@ -131,7 +131,7 @@ export async function taskMetadata({
 		mode,
 		...(cwd ? { cwd } : {}),
 		...(typeof apiConfigName === "string" && apiConfigName.length > 0 ? { apiConfigName } : {}),
-		...(initialStatus && { status: initialStatus }),
+		...(initialState ? { taskState: initialState } : {}),
 		...(isBackground ? { isBackground: true } : {}),
 		...(costLimit ? { costLimit } : {}),
 		...(loadedSkills && loadedSkills.length > 0 ? { loadedSkills } : {}),

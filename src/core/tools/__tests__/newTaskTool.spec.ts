@@ -121,16 +121,31 @@ import * as vscode from "vscode"
 /**
  * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.
  * `is_background` is forwarded so the tool's boolean normalisation runs correctly.
+ *
+ * Injects default values for the now-mandatory `result_length` and
+ * `estimated_timeout` parameters unless the test already provides them, so
+ * the existing test cases (which predate those parameters) continue to exercise
+ * the post-validation code paths.
  */
-const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => ({
-	...block,
-	nativeArgs: {
-		mode: block.params.mode,
-		message: block.params.message,
-		todos: block.params.todos,
-		is_background: block.params.is_background,
-	} as unknown as NativeToolArgs["new_task"],
-})
+const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
+	const paramsWithDefaults = {
+		...block.params,
+		result_length: (block.params as any).result_length ?? 1000,
+		estimated_timeout: (block.params as any).estimated_timeout ?? 60,
+	}
+	return {
+		...block,
+		params: paramsWithDefaults,
+		nativeArgs: {
+			mode: paramsWithDefaults.mode,
+			message: paramsWithDefaults.message,
+			todos: paramsWithDefaults.todos,
+			is_background: paramsWithDefaults.is_background,
+			result_length: paramsWithDefaults.result_length,
+			estimated_timeout: paramsWithDefaults.estimated_timeout,
+		} as unknown as NativeToolArgs["new_task"],
+	}
+}
 
 describe("newTaskTool", () => {
 	beforeEach(() => {
@@ -723,7 +738,7 @@ describe("newTaskTool delegation flow", () => {
 			expect.objectContaining({
 				initialTodos: [],
 				initialMode: "code",
-				initialStatus: "active",
+				initialState: { lifecycle: "running" },
 				openInStack: true,
 			}),
 			undefined,

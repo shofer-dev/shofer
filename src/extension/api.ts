@@ -312,9 +312,10 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 				await this.fileLog(`[${new Date().toISOString()}] taskStarted -> ${task.taskId}\n`)
 			})
 
-			task.on(ShoferEventName.TaskCompleted, async (_, tokenUsage, toolUsage) => {
+			task.on(ShoferEventName.TaskCompleted, async (_, tokenUsage, toolUsage, info) => {
 				this.emit(ShoferEventName.TaskCompleted, task.taskId, tokenUsage, toolUsage, {
-					isSubtask: !!task.parentTaskId,
+					rating: info.rating,
+					isSubtask: info.isSubtask,
 				})
 
 				await this.fileLog(
@@ -322,8 +323,8 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 				)
 			})
 
-			task.on(ShoferEventName.TaskAborted, () => {
-				this.emit(ShoferEventName.TaskAborted, task.taskId)
+			task.on(ShoferEventName.TaskAborted, (info) => {
+				this.emit(ShoferEventName.TaskAborted, task.taskId, info)
 			})
 
 			task.on(ShoferEventName.TaskFocused, () => {

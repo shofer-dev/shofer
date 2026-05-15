@@ -16,6 +16,7 @@ import {
 	type Command,
 	type McpServer,
 	type VsCodeLmChatInfo,
+	type TaskState,
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
@@ -38,7 +39,7 @@ export interface ManagedTask {
 	workspace: string
 	createdAt: number
 	lastActiveAt: number
-	state: string
+	state: TaskState
 }
 
 export interface TaskNotification {
@@ -505,7 +506,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					if (!item) {
 						break
 					}
-					console.log(`[DIAG-WEBVIEW-RX] id=${item.id} status=${item.taskExecutionState}`)
+					console.log(`[DIAG-WEBVIEW-RX] id=${item.id} state=${JSON.stringify(item.taskState)}`)
 					setState((prevState) => {
 						const existingIndex = prevState.taskHistory.findIndex((h) => h.id === item.id)
 						let nextHistory: typeof prevState.taskHistory

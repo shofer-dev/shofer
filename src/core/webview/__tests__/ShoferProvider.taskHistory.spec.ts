@@ -111,6 +111,9 @@ vi.mock("vscode", () => ({
 		showWarningMessage: vi.fn(),
 		showErrorMessage: vi.fn(),
 		onDidChangeActiveTextEditor: vi.fn(() => ({ dispose: vi.fn() })),
+		createTextEditorDecorationType: vi.fn(() => ({ dispose: vi.fn() })),
+		visibleTextEditors: [],
+		tabGroups: { all: [], onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })) },
 	},
 	workspace: {
 		getConfiguration: vi.fn().mockReturnValue({
@@ -134,6 +137,27 @@ vi.mock("vscode", () => ({
 		Production: 1,
 		Development: 2,
 		Test: 3,
+	},
+	TreeItem: class {
+		label: string
+		collapsibleState: number
+		constructor(label: string, collapsibleState?: number) {
+			this.label = label
+			this.collapsibleState = collapsibleState ?? 0
+		}
+	},
+	TreeItemCollapsibleState: {
+		None: 0,
+		Collapsed: 1,
+		Expanded: 2,
+	},
+	EventEmitter: class {
+		event = vi.fn()
+		fire = vi.fn()
+		dispose = vi.fn()
+	},
+	ThemeIcon: class {
+		constructor(public readonly id: string) {}
 	},
 	version: "1.85.0",
 }))
@@ -424,7 +448,7 @@ describe("ShoferProvider Task History Synchronization", () => {
 			const initial = createHistoryItem({
 				id: "task-delegated-metadata",
 				task: "Delegated task",
-				status: "delegated",
+				taskState: { lifecycle: "running" },
 				delegatedToId: "child-1",
 				awaitingChildId: "child-1",
 				childIds: ["child-1"],
@@ -435,14 +459,14 @@ describe("ShoferProvider Task History Synchronization", () => {
 			// Partial update intentionally omits delegated metadata fields.
 			const partialUpdate: HistoryItem = {
 				...createHistoryItem({ id: "task-delegated-metadata", task: "Delegated task (updated)" }),
-				status: "active",
+				taskState: { lifecycle: "idle" },
 			}
 
 			const updatedHistory = await provider.updateTaskHistory(partialUpdate, { broadcast: false })
 			const updatedItem = updatedHistory.find((item) => item.id === "task-delegated-metadata")
 
 			expect(updatedItem).toBeDefined()
-			expect(updatedItem?.status).toBe("active")
+			expect(updatedItem?.taskState).toEqual({ lifecycle: "idle" })
 			expect(updatedItem?.delegatedToId).toBe("child-1")
 			expect(updatedItem?.awaitingChildId).toBe("child-1")
 			expect(updatedItem?.childIds).toEqual(["child-1"])

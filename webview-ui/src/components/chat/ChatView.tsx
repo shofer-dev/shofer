@@ -696,7 +696,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		// such as an MCP server call, or processing a tool result between API
 		// turns). In this state there is no pending ask and no API streaming,
 		// but the user must still be able to interrupt the operation.
-		if (currentTaskRuntimeState === "running") return true
+		if (currentTaskRuntimeState?.lifecycle === "running") return true
 		// Any other active ask (command, command_output, tool, use_mcp_server,
 		// followup, api_req_failed, mistake_limit_reached, budget_limit) is
 		// considered stoppable: the user may want to abort the task instead

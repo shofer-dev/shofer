@@ -2,20 +2,20 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem, TaskState } from "@shofer/types"
+import { IDLE_TASK_STATE } from "@shofer/types"
 
 import { TaskManager } from "../TaskManager"
 
 /**
- * Tests for the persistence behaviour added in the task-state-restart fix:
+ * Tests for TaskManager persistence behaviour:
  *
- *   1. `updateTaskExecutionState` writes the new state through to HistoryItem
- *      so the icon survives a code-server / extension restart.
- *   2. `restoreManagedTasks` sanitizes stale "running" / "waiting_input" states
- *      (no live Task instance can exist after a restart).
- *   3. A successfully completed task (status === "completed") is restored as
- *      `"idle"` so the green check from `item.status` wins in the UI's state
- *      resolution chain.
+ *  1. `setState` writes the new (lifecycle, rating) tuple through to
+ *     HistoryItem so the icon survives an extension restart.
+ *  2. `restoreManagedTasks` sanitizes transient lifecycles (`running`,
+ *     `waiting_input`) — no live Task instance can exist after a restart.
+ *  3. Terminal lifecycles (`completed`, `error`) and user-initiated `paused`
+ *     survive verbatim.
  */
 describe("TaskManager persistence", () => {
 	function makeHistoryItem(overrides: Partial<HistoryItem>): HistoryItem {
@@ -50,52 +50,48 @@ describe("TaskManager persistence", () => {
 		return { manager, provider, updateTaskHistory, store }
 	}
 
+	function seedManaged(manager: TaskManager, id: string, state: TaskState) {
+		;(manager as any).managedTasks.set(id, {
+			id,
+			name: "test",
+			taskId: id,
+			workspace: "",
+			createdAt: 0,
+			lastActiveAt: 0,
+			state,
+		})
+	}
+
 	beforeEach(() => {
 		vi.clearAllMocks()
 	})
 
-	describe("updateTaskExecutionState persistence", () => {
-		it("writes the new execution state through to the HistoryItem", async () => {
-			const initial = makeHistoryItem({ taskExecutionState: "running" })
+	describe("setState persistence", () => {
+		it("writes the new state through to the HistoryItem", async () => {
+			const initial = makeHistoryItem({ taskState: { lifecycle: "running" } })
 			const { manager, updateTaskHistory, store } = buildManager(initial)
+			await manager.restoreManagedTasks([])
+			seedManaged(manager, initial.id, { lifecycle: "running" })
 
-			// Seed an in-memory managed task whose initial state matches history
-			;(manager as any).managedTasks.set(initial.id, {
-				id: initial.id,
-				name: "test",
-				taskId: initial.id,
-				workspace: "",
-				createdAt: initial.ts,
-				lastActiveAt: initial.ts,
-				state: "running",
-			})
+			manager.setState(initial.id, { lifecycle: "idle" })
 
-			manager.updateTaskExecutionState(initial.id, "idle")
-
-			// Allow the fire-and-forget persistence promise to resolve
+			// fire-and-forget persistence promise
 			await new Promise((r) => setImmediate(r))
 
 			expect(updateTaskHistory).toHaveBeenCalledTimes(1)
 			expect(updateTaskHistory.mock.calls[0][0]).toEqual(
-				expect.objectContaining({ id: initial.id, taskExecutionState: "idle" }),
+				expect.objectContaining({ id: initial.id, taskState: { lifecycle: "idle" } }),
 			)
-			expect(store.get(initial.id)?.taskExecutionState).toBe("idle")
+			expect(store.get(initial.id)?.taskState).toEqual({ lifecycle: "idle" })
 		})
 
 		it("does not write when the persisted state already matches", async () => {
-			const initial = makeHistoryItem({ taskExecutionState: "idle" })
+			const initial = makeHistoryItem({ taskState: { lifecycle: "idle" } })
 			const { manager, updateTaskHistory } = buildManager(initial)
-			;(manager as any).managedTasks.set(initial.id, {
-				id: initial.id,
-				name: "test",
-				taskId: initial.id,
-				workspace: "",
-				createdAt: initial.ts,
-				lastActiveAt: initial.ts,
-				state: "running", // in-memory differs but persisted matches the new state
-			})
+			await manager.restoreManagedTasks([])
+			seedManaged(manager, initial.id, { lifecycle: "running" })
 
-			manager.updateTaskExecutionState(initial.id, "idle")
+			manager.setState(initial.id, { lifecycle: "idle" })
 			await new Promise((r) => setImmediate(r))
 
 			expect(updateTaskHistory).not.toHaveBeenCalled()
@@ -103,85 +99,88 @@ describe("TaskManager persistence", () => {
 
 		it("is a no-op when the HistoryItem does not yet exist", async () => {
 			const { manager, updateTaskHistory } = buildManager()
-			;(manager as any).managedTasks.set("unknown", {
-				id: "unknown",
-				name: "x",
-				taskId: "unknown",
-				workspace: "",
-				createdAt: 0,
-				lastActiveAt: 0,
-				state: "idle",
-			})
+			await manager.restoreManagedTasks([])
+			seedManaged(manager, "unknown", { lifecycle: "idle" })
 
-			manager.updateTaskExecutionState("unknown", "running")
+			manager.setState("unknown", { lifecycle: "running" })
 			await new Promise((r) => setImmediate(r))
 
 			expect(updateTaskHistory).not.toHaveBeenCalled()
 		})
+
+		it("persists the rating component for completed states", async () => {
+			const initial = makeHistoryItem({ taskState: { lifecycle: "running" } })
+			const { manager, store } = buildManager(initial)
+			await manager.restoreManagedTasks([])
+			seedManaged(manager, initial.id, { lifecycle: "running" })
+
+			manager.setState(initial.id, { lifecycle: "completed", rating: "excellent" })
+			await new Promise((r) => setImmediate(r))
+
+			expect(store.get(initial.id)?.taskState).toEqual({
+				lifecycle: "completed",
+				rating: "excellent",
+			})
+		})
 	})
 
 	describe("restoreManagedTasks sanitization", () => {
-		it("downgrades stale 'running' state to 'idle' on restore", async () => {
-			const { manager } = buildManager()
-			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-running", taskExecutionState: "running" })])
-			expect(manager.getTaskExecutionState("t-running")).toBe("idle")
-		})
-
-		it("downgrades stale 'waiting_input' state to 'idle' on restore", async () => {
-			const { manager } = buildManager()
-			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-wait", taskExecutionState: "waiting_input" })])
-			expect(manager.getTaskExecutionState("t-wait")).toBe("idle")
-		})
-
-		it("preserves 'error' state on restore", async () => {
-			const { manager } = buildManager()
-			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-err", taskExecutionState: "error" })])
-			expect(manager.getTaskExecutionState("t-err")).toBe("error")
-		})
-
-		it("preserves 'paused' state on restore", async () => {
-			const { manager } = buildManager()
-			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-pause", taskExecutionState: "paused" })])
-			expect(manager.getTaskExecutionState("t-pause")).toBe("paused")
-		})
-
-		it("forces 'idle' for stale 'running' state on restore", async () => {
+		it("downgrades stale 'running' lifecycle to idle on restore", async () => {
 			const { manager } = buildManager()
 			await manager.restoreManagedTasks([
-				makeHistoryItem({
-					id: "t-done",
-					taskExecutionState: "running", // stale — no live instance
-				}),
+				makeHistoryItem({ id: "t-running", taskState: { lifecycle: "running" } }),
 			])
-			expect(manager.getTaskExecutionState("t-done")).toBe("idle")
+			expect(manager.getTaskState("t-running")).toEqual(IDLE_TASK_STATE)
 		})
 
-		it("preserves 'completed_poorly' state on restore", async () => {
+		it("downgrades stale 'waiting_input' lifecycle to idle on restore", async () => {
 			const { manager } = buildManager()
 			await manager.restoreManagedTasks([
-				makeHistoryItem({ id: "t-poor", taskExecutionState: "completed_poorly" }),
+				makeHistoryItem({ id: "t-wait", taskState: { lifecycle: "waiting_input" } }),
 			])
-			expect(manager.getTaskExecutionState("t-poor")).toBe("completed_poorly")
+			expect(manager.getTaskState("t-wait")).toEqual(IDLE_TASK_STATE)
 		})
 
-		it("preserves 'completed_well' state on restore", async () => {
+		it("preserves 'error' lifecycle on restore", async () => {
 			const { manager } = buildManager()
-			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-well", taskExecutionState: "completed_well" })])
-			expect(manager.getTaskExecutionState("t-well")).toBe("completed_well")
+			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-err", taskState: { lifecycle: "error" } })])
+			expect(manager.getTaskState("t-err")).toEqual({ lifecycle: "error" })
 		})
 
-		it("preserves 'completed_excellent' state on restore", async () => {
+		it("preserves 'paused' lifecycle on restore", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-pause", taskState: { lifecycle: "paused" } })])
+			expect(manager.getTaskState("t-pause")).toEqual({ lifecycle: "paused" })
+		})
+
+		it("preserves 'completed' + 'poor' rating on restore", async () => {
 			const { manager } = buildManager()
 			await manager.restoreManagedTasks([
-				makeHistoryItem({ id: "t-exc", taskExecutionState: "completed_excellent" }),
+				makeHistoryItem({ id: "t-poor", taskState: { lifecycle: "completed", rating: "poor" } }),
 			])
-			expect(manager.getTaskExecutionState("t-exc")).toBe("completed_excellent")
+			expect(manager.getTaskState("t-poor")).toEqual({ lifecycle: "completed", rating: "poor" })
 		})
 
-		it("falls back to 'idle' when no execution state was persisted", async () => {
+		it("preserves 'completed' + 'well' rating on restore", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([
+				makeHistoryItem({ id: "t-well", taskState: { lifecycle: "completed", rating: "well" } }),
+			])
+			expect(manager.getTaskState("t-well")).toEqual({ lifecycle: "completed", rating: "well" })
+		})
+
+		it("preserves 'completed' + 'excellent' rating on restore", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([
+				makeHistoryItem({ id: "t-exc", taskState: { lifecycle: "completed", rating: "excellent" } }),
+			])
+			expect(manager.getTaskState("t-exc")).toEqual({ lifecycle: "completed", rating: "excellent" })
+		})
+
+		it("falls back to idle when no state was persisted", async () => {
 			const { manager } = buildManager()
 			await manager.restoreManagedTasks([makeHistoryItem({ id: "t-fresh" })])
-			expect(manager.getTaskExecutionState("t-fresh")).toBe("idle")
+			expect(manager.getTaskState("t-fresh")).toEqual(IDLE_TASK_STATE)
 		})
 	})
 })

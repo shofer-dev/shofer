@@ -25,7 +25,7 @@ import { ContextWindowProgress } from "./ContextWindowProgress"
 import { Mention } from "./Mention"
 import { TodoListDisplay } from "./TodoListDisplay"
 import { LucideIconButton } from "./LucideIconButton"
-import { TaskSelector, getTaskDisplayName, TASK_STATE_CONFIG } from "./TaskSelector"
+import { TaskSelector, getTaskDisplayName, resolveStateVisual } from "./TaskSelector"
 import { BudgetLimitDialog } from "./BudgetLimitDialog"
 
 export interface TaskHeaderProps {
@@ -148,15 +148,12 @@ const TaskHeader = ({
 
 	// Resolve the runtime state of the currently-shown task so the in-chat
 	// title can render a small status dot mirroring the drawer's row icons.
-	// When the task is completed with a rating, use the rating-specific state
-	// stored directly in taskExecutionState (e.g. completed_excellent).
+	// Live runtime overlay wins over persisted state; rating is read from the
+	// (lifecycle, rating) tuple on the history item when no live overlay exists.
 	const currentTitle = currentTaskItem ? getTaskDisplayName(currentTaskItem) : ""
 	const currentRuntime = currentTaskItem ? parallelTasks?.find((p) => p.id === currentTaskItem.id) : undefined
-	const currentTaskCompleted = currentTaskItem?.taskExecutionState?.startsWith("completed")
-	const currentStateKey = currentTaskCompleted
-		? currentTaskItem!.taskExecutionState!
-		: (currentRuntime?.state ?? "idle")
-	const currentStateConfig = TASK_STATE_CONFIG[currentStateKey] || TASK_STATE_CONFIG.idle
+	const currentState = currentRuntime?.state ?? currentTaskItem?.taskState ?? { lifecycle: "idle" as const }
+	const currentStateConfig = resolveStateVisual(currentState)
 
 	return (
 		<div className="group pt-2 pb-0 px-3">

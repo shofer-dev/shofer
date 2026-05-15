@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import type { GlobalSettings, ShoferSettings } from "./global-settings.js"
 import type { ProviderSettings, ProviderSettingsEntry } from "./provider-settings.js"
-import type { HistoryItem, CostLimit } from "./history.js"
+import type { HistoryItem, CostLimit, TaskState } from "./history.js"
 import type { ModeConfig, PromptComponent } from "./mode.js"
 import type { TelemetrySetting } from "./telemetry.js"
 import type { Experiments } from "./experiment.js"
@@ -225,7 +225,7 @@ export interface ExtensionMessage {
 		workspace: string
 		createdAt: number
 		lastActiveAt: number
-		state: string
+		state: TaskState
 	}>
 	focusedTaskId?: string | null
 	taskId?: string
@@ -406,7 +406,7 @@ export type ExtensionState = Pick<
 		workspace: string
 		createdAt: number
 		lastActiveAt: number
-		state: string
+		state: TaskState
 	}>
 	focusedTaskId?: string | null
 	taskNotifications?: Array<{

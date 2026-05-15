@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { Plus, Trash2, Pencil, Check, X, Archive, Pin, PinOff, ChevronRight, ChevronDown } from "lucide-react"
 
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem, TaskState, TaskLifecycle, CompletionRating } from "@shofer/types"
 
 import { cn } from "@src/lib/utils"
 import { StandardTooltip } from "@src/components/ui"
@@ -65,38 +65,16 @@ function buildFlatTree(taskHistory: HistoryItem[]): TaskTreeNode[] {
 }
 
 /**
- * Task state indicator colors and labels.
+ * Visual configuration for each lifecycle phase.
  *
- * `icon` is a codicon class name used for the leading status glyph in the
- * dropdown rows (matches the VS Code "Sessions" panel look). `dot` is the
- * legacy small colored dot used by external surfaces (e.g. TaskHeader title)
- * that need to render a compact runtime-state indicator.
+ * `dot` is the legacy small colored dot used by external surfaces (e.g.
+ * TaskHeader title). `icon` + `iconColor` together produce the leading
+ * codicon for dropdown rows. Completion ratings are layered on top via
+ * `RATING_VISUAL` rather than expanding this table combinatorially.
  */
-export const TASK_STATE_CONFIG: Record<
-	string,
-	{ dot: string; label: string; pulse: boolean; icon: string; iconColor: string }
-> = {
-	completed_poorly: {
-		dot: "bg-[var(--vscode-descriptionForeground)]",
-		label: "Completed · Poor",
-		pulse: false,
-		icon: "codicon-circle-large-outline",
-		iconColor: "text-[var(--vscode-descriptionForeground)]",
-	},
-	completed_well: {
-		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
-		label: "Completed · Well",
-		pulse: false,
-		icon: "codicon-circle-large-filled",
-		iconColor: "text-[var(--vscode-charts-green,#16a34a)] opacity-50",
-	},
-	completed_excellent: {
-		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
-		label: "Completed · Excellent",
-		pulse: false,
-		icon: "codicon-pass-filled",
-		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
-	},
+type LifecycleVisual = { dot: string; label: string; pulse: boolean; icon: string; iconColor: string }
+
+export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 	idle: {
 		dot: "bg-[var(--vscode-descriptionForeground)]",
 		label: "Idle",
@@ -110,13 +88,6 @@ export const TASK_STATE_CONFIG: Record<
 		pulse: true,
 		icon: "codicon-sync codicon-modifier-spin",
 		iconColor: "text-[var(--vscode-charts-blue,#3b82f6)]",
-	},
-	waiting: {
-		dot: "bg-[var(--vscode-charts-purple,#a855f7)]",
-		label: "Waiting",
-		pulse: true,
-		icon: "codicon-clock",
-		iconColor: "text-[var(--vscode-charts-purple,#a855f7)]",
 	},
 	waiting_input: {
 		dot: "bg-[var(--vscode-charts-yellow,#eab308)]",
@@ -132,6 +103,14 @@ export const TASK_STATE_CONFIG: Record<
 		icon: "codicon-debug-pause",
 		iconColor: "text-[var(--vscode-charts-orange,#f97316)]",
 	},
+	completed: {
+		// Default visuals for `completed` without a rating; ratings override below.
+		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
+		label: "Completed",
+		pulse: false,
+		icon: "codicon-pass",
+		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
+	},
 	error: {
 		dot: "bg-[var(--vscode-errorForeground,#ef4444)]",
 		label: "Failed",
@@ -139,6 +118,44 @@ export const TASK_STATE_CONFIG: Record<
 		icon: "codicon-error",
 		iconColor: "text-[var(--vscode-errorForeground,#ef4444)]",
 	},
+}
+
+/**
+ * Per-rating overlay applied on top of the `completed` lifecycle visuals.
+ * Picking from the codicon set keeps every state rendered through the same
+ * `<span class="codicon …">` mechanism — no special-cased SVGs.
+ */
+const RATING_VISUAL: Record<CompletionRating, Pick<LifecycleVisual, "label" | "icon" | "iconColor" | "dot">> = {
+	poor: {
+		label: "Completed · Poor",
+		dot: "bg-[var(--vscode-descriptionForeground)]",
+		icon: "codicon-circle-large-outline",
+		iconColor: "text-[var(--vscode-descriptionForeground)]",
+	},
+	well: {
+		label: "Completed · Well",
+		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
+		icon: "codicon-circle-large-filled",
+		iconColor: "text-[var(--vscode-charts-green,#16a34a)] opacity-60",
+	},
+	excellent: {
+		label: "Completed · Excellent",
+		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
+		icon: "codicon-pass-filled",
+		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
+	},
+}
+
+/**
+ * Resolve the visual config for a `TaskState` (lifecycle + optional rating).
+ */
+export function resolveStateVisual(state: TaskState | undefined): LifecycleVisual {
+	const lifecycle = state?.lifecycle ?? "idle"
+	const base = LIFECYCLE_VISUAL[lifecycle]
+	if (lifecycle === "completed" && state?.rating) {
+		return { ...base, ...RATING_VISUAL[state.rating] }
+	}
+	return base
 }
 
 /**
@@ -219,7 +236,7 @@ export interface ManagedTask {
 	workspace: string
 	createdAt: number
 	lastActiveAt: number
-	state: string
+	state: TaskState
 }
 
 export interface TaskSelectorProps {
@@ -304,8 +321,11 @@ function renderTaskRow({
 }: TaskRowParams) {
 	const { item, depth, isLastSibling, ancestorIsLast } = node
 	const runtime = runtimeStateMap.get(item.id)
-	const state = runtime?.state ?? item.taskExecutionState ?? "idle"
-	const stateConfig = TASK_STATE_CONFIG[state] || TASK_STATE_CONFIG.idle
+	// Single source of truth: runtime overlay (TaskManager-hydrated) for live
+	// state, falling back to the persisted history snapshot only when no
+	// runtime entry exists yet (e.g. mid-startup race).
+	const state: TaskState = runtime?.state ?? item.taskState ?? { lifecycle: "idle" }
+	const stateConfig = resolveStateVisual(state)
 	const isCurrent = item.id === currentTaskId
 	const isEditing = editingTaskId === item.id
 	const displayName = getTaskDisplayName(item)
@@ -346,30 +366,16 @@ function renderTaskRow({
 				</span>
 			)}
 
-			{/* Leading status icon — matches VS Code Sessions panel look */}
+			{/* Leading status icon — single uniform mechanism for every state. */}
 			<StandardTooltip content={stateConfig.label}>
-				{state === "completed_well" ? (
-					<svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" aria-hidden="true">
-						<circle
-							cx="8"
-							cy="8"
-							r="6"
-							fill="none"
-							stroke="currentColor"
-							className="text-[var(--vscode-descriptionForeground)]"
-							strokeWidth="1.5"
-						/>
-						<path d="M 8 2 A 6 6 0 0 1 8 14" fill="var(--vscode-charts-green,#16a34a)" />
-					</svg>
-				) : (
-					<span
-						className={cn(
-							"codicon flex-shrink-0 text-base leading-none",
-							stateConfig.icon,
-							stateConfig.iconColor,
-						)}
-					/>
-				)}
+				<span
+					className={cn(
+						"codicon flex-shrink-0 text-base leading-none",
+						stateConfig.icon,
+						stateConfig.iconColor,
+					)}
+					aria-label={stateConfig.label}
+				/>
 			</StandardTooltip>
 
 			{/* Title + subtitle column */}
@@ -411,7 +417,7 @@ function renderTaskRow({
 						<span className="truncate text-sm leading-tight">{displayName}</span>
 					</div>
 					<span className="truncate text-[11px] leading-tight text-[var(--vscode-descriptionForeground)]">
-						{state !== "idle" && (
+						{state.lifecycle !== "idle" && (
 							<>
 								<span>{stateConfig.label}</span>
 								<span className="mx-1">·</span>
