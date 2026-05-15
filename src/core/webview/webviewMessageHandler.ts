@@ -587,9 +587,6 @@ export const webviewMessageHandler = async (
 			// If MCP Hub is already initialized, update the webview with
 			// current server list.
 			const mcpHub = provider.getMcpHub()
-			provider.log(
-				`[MCP-DEBUG] webviewDidLaunch hasMcpHub=${!!mcpHub} servers=${mcpHub?.getAllServers().length ?? "n/a"}`,
-			)
 
 			if (mcpHub) {
 				provider.postMessageToWebview({ type: "mcpServers", mcpServers: mcpHub.getAllServers() })

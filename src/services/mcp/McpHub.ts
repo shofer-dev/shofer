@@ -1495,9 +1495,6 @@ export class McpHub {
 			type: "mcpServers" as const,
 			mcpServers: serversToSend,
 		}
-		mcpLog(
-			`[MCP-DEBUG] notifyWebviewOfServerChanges servers=${serversToSend.length} hasBroadcast=${!!this.notifyAllProvidersFn}`,
-		)
 
 		// Prefer broadcasting to all registered providers so every open webview gets
 		// the updated list (notifyAllProvidersFn is injected by McpServerManager).
