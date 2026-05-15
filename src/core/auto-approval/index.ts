@@ -4,7 +4,7 @@ import {
 	type McpServerUse,
 	type FollowUpData,
 	type ExtensionState,
-	isNonBlockingAsk,
+	isAutoApprovableAsk,
 } from "@shofer/types"
 
 import { ShoferAskResponse } from "../../shared/WebviewMessage"
@@ -57,7 +57,7 @@ export async function checkAutoApproval({
 	text?: string
 	isProtected?: boolean
 }): Promise<CheckAutoApprovalResult> {
-	if (isNonBlockingAsk(ask)) {
+	if (isAutoApprovableAsk(ask)) {
 		return { decision: "approve" }
 	}
 

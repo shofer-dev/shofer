@@ -97,18 +97,54 @@ export function isInteractiveAsk(ask: ShoferAsk): ask is InteractiveAsk {
 }
 
 /**
- * NonBlockingAsk
+ * AutoApprovableAsk
  *
- * Asks that are not associated with an actual approval, and are only used
- * to update chat messages.
+ * Asks that the auto-approval engine in the extension host can resolve
+ * synchronously without any user input. The auto-approval fast-path in
+ * `Task.ask()` short-circuits these asks and never enters `pWaitFor`,
+ * so they are answered with a synthesized `yesButtonClicked` and the
+ * agent loop keeps running uninterrupted.
+ *
+ * Membership constraint: an ask MUST only live here if it is genuinely
+ * fire-and-forget (the LLM does not need a meaningful response). An ask
+ * that ends a turn (e.g. `completion_result`) must NOT be in this list,
+ * otherwise queued user messages and typed feedback are lost — see the
+ * regression analysis in [`docs/task_states.md`](../../../docs/task_states.md).
+ *
+ * Today only `command_output` qualifies: it surfaces command output to
+ * the chat while the command keeps streaming; the LLM doesn't actually
+ * await a user decision.
  */
 
-export const nonBlockingAsks = ["command_output", "completion_result"] as const satisfies readonly ShoferAsk[]
+export const autoApprovableAsks = ["command_output"] as const satisfies readonly ShoferAsk[]
 
-export type NonBlockingAsk = (typeof nonBlockingAsks)[number]
+export type AutoApprovableAsk = (typeof autoApprovableAsks)[number]
 
-export function isNonBlockingAsk(ask: ShoferAsk): ask is NonBlockingAsk {
-	return (nonBlockingAsks as readonly ShoferAsk[]).includes(ask)
+export function isAutoApprovableAsk(ask: ShoferAsk): ask is AutoApprovableAsk {
+	return (autoApprovableAsks as readonly ShoferAsk[]).includes(ask)
+}
+
+/**
+ * AgentRunningAsk
+ *
+ * Asks that do NOT pause the agent loop. From the consumer's perspective
+ * the agent is still actively executing — the ask is purely informational
+ * (e.g. `command_output` while a long-running command streams output).
+ *
+ * This is a *consumer-side* predicate (used by the CLI agent state
+ * detector and ask dispatcher) and is intentionally separate from
+ * `isAutoApprovableAsk` even though they currently happen to share the
+ * same membership. Conflating "the host auto-approves this" with "the
+ * agent is still running" is what produced the original `nonBlockingAsks`
+ * footgun: three different policies bolted onto one set.
+ */
+
+export const agentRunningAsks = ["command_output"] as const satisfies readonly ShoferAsk[]
+
+export type AgentRunningAsk = (typeof agentRunningAsks)[number]
+
+export function isAgentRunningAsk(ask: ShoferAsk): ask is AgentRunningAsk {
+	return (agentRunningAsks as readonly ShoferAsk[]).includes(ask)
 }
 
 /**
