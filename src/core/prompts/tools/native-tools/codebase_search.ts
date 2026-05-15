@@ -4,6 +4,8 @@ const CODEBASE_SEARCH_DESCRIPTION = `Find files most relevant to the search quer
 
 **CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use this tool FIRST before any other search or file exploration tools.** This applies throughout the entire conversation, not just at the beginning. This tool uses semantic search to find relevant code based on meaning rather than just keywords, making it far more effective than regex-based search_files for understanding implementations. Even if you've already explored some code, any new area of exploration requires codebase_search first.
 
+**⚠️ Indexing latency:** This tool queries a vector index that may not reflect the very latest code changes. File changes take at minimum 500ms (debounce) + embedding time to appear in the index. During a full workspace scan, search returns partial results. If you are looking for recently-modified code and need guaranteed fresh results, use codebase_search_with_lsp which queries the live codebase via the language server.
+
 Parameters:
 - query: (required) The search query. Reuse the user's exact wording/question format unless there's a clear reason not to.
 - path: (optional) Limit search to specific subdirectory (relative to the current workspace directory). Leave empty for entire workspace.
