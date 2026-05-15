@@ -269,7 +269,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 	helperAgentStatusBar.name = "Helper Agent"
 	// Use a Command object (not just a string) for reliable code-server resolution
-	helperAgentStatusBar.command = { command: "shofer.helperAgent.showInfo", title: "Helper Agent Info" }
+	// TEST: wire to a known command to see if status bar clicks work at all in code-server
+	helperAgentStatusBar.command = "shofer.focusInput"
+	console.log("[SHOFER] Status bar wired to shofer.focusInput for testing")
 	helperAgentStatusBar.tooltip = "Helper Agent"
 	helperAgentStatusBar.show()
 	context.subscriptions.push(helperAgentStatusBar)
