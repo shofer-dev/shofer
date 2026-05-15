@@ -172,6 +172,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	 */
 	context.subscriptions.push(
 		vscode.commands.registerCommand("shofer.helperAgent.showInfo", async () => {
+			console.log("[SHOFER] helperAgent.showInfo FIRED — status bar clicked!")
 			outputChannel.appendLine("[HelperAgent] showInfo command invoked (status bar click)")
 			const managers = HelperAgentManager.getAllInstances()
 			if (managers.length === 0) {
