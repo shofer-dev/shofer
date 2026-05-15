@@ -2917,7 +2917,6 @@ export class ShoferProvider
 		// Prefer per-item updates to avoid repeatedly cloning/sending the full history.
 		if (broadcast && this.isViewLaunched) {
 			const updatedItem = this.taskHistoryStore.get(item.id) ?? item
-			this.log(`[DIAG] [WEBVIEW-SEND] taskId=${updatedItem.id} status=${updatedItem.taskExecutionState}`)
 			await this.postMessageToWebview({ type: "taskHistoryItemUpdated", taskHistoryItem: updatedItem })
 		}
 
