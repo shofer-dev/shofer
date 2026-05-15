@@ -164,16 +164,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const autoName =
 			name || (taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : "New Task")
 
-		// When the managedTasks map is empty (e.g. after restart — restoreManagedTasks
-		// is never called in production), fall back to the persisted taskExecutionState
-		// rather than blindly assuming "running" for a fresh Task instance.
-		let state: ManagedTaskState
-		if (existing) {
-			state = existing.state
-		} else {
-			const persisted = this.providerRef.deref()?.taskHistoryStore?.get(task.taskId)?.taskExecutionState
-			state = persisted ?? (task.abandoned || task.abort ? "idle" : "running")
-		}
+		const state = existing?.state ?? (task.abandoned || task.abort ? "idle" : "running")
 		console.log(`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) → creating with state=${state}`)
 		const managedTask: ManagedTask = {
 			id: task.taskId,
@@ -683,8 +674,27 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		}
 	}
 
+	// ────────────────────────────── Cleanup ──────────────────────────────
+
+	/**
+	 * Dispose of all managed tasks and clean up resources.
+	 */
+	async dispose(): Promise<void> {
+		for (const [_targetTaskId, task] of this.activeTasks) {
+			this.cleanupTaskEventListeners(task)
+			await task.abortTask(true).catch(() => {})
+		}
+		this.activeTasks.clear()
+		this.managedTasks.clear()
+		this.notifications = []
+		this.focusedTaskId = null
+		this.removeAllListeners()
+	}
+
 	/**
 	 * Restore managed tasks from persisted HistoryItems.
+	 * Called once at startup so registerBackgroundTask can find
+	 * existing ManagedTask state for restored items.
 	 */
 	async restoreManagedTasks(historyItems: HistoryItem[]): Promise<void> {
 		for (const item of historyItems) {
@@ -722,22 +732,5 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		// Terminal states persist across restarts
 		if (persisted === "error" || persisted === "paused" || persisted?.startsWith("completed_")) return persisted
 		return persisted ?? "idle"
-	}
-
-	// ────────────────────────────── Cleanup ──────────────────────────────
-
-	/**
-	 * Dispose of all managed tasks and clean up resources.
-	 */
-	async dispose(): Promise<void> {
-		for (const [_targetTaskId, task] of this.activeTasks) {
-			this.cleanupTaskEventListeners(task)
-			await task.abortTask(true).catch(() => {})
-		}
-		this.activeTasks.clear()
-		this.managedTasks.clear()
-		this.notifications = []
-		this.focusedTaskId = null
-		this.removeAllListeners()
 	}
 }
