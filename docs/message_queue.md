@@ -60,22 +60,44 @@ focused_ Task (`ShoferProvider.getStateToPostToWebview`), which is why a queue
 appears to "follow" the focused Task — in reality every Task has its own
 queue and the UI just shows the active one.
 
+## ChatView send-path decision
+
+`ChatView.handleSendMessage` chooses between three host messages based on
+whether the Task is busy and whether an ask is awaiting:
+
+| Condition (checked in order)                                                                          | Posted message                                  |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `messagesRef.current.length === 0` (home screen)                                                      | `{ type: "newTask", text, images, worktreeDir }` |
+| Task is busy: `sendingDisabled \|\| isStreaming \|\| messageQueue.length > 0 \|\| ask === "command_output"` | `{ type: "queueMessage", text, images }`         |
+| `shoferAskRef.current` is set (a known interactive ask is awaiting)                                   | `{ type: "askResponse", askResponse: "messageResponse", text, images }` |
+| Otherwise (ongoing task, no ask currently awaiting)                                                   | `{ type: "queueMessage", text, images }`         |
+
+The **last row** is the important one: the webview MUST NOT post a bare
+`messageResponse` when no ask is awaiting. Doing so would land in the
+no-ask guard inside `handleWebviewAskResponse` on the host and rely on
+the defensive `prependMessage` fallback to be recovered. Routing
+through `queueMessage` makes the next `Task.ask()` drain it through the
+existing well-tested path with no host-side fallback in the loop.
+
+This rule is enforced as a convention in [AGENTS.md](../AGENTS.md)
+("Webview Send-Path Rule").
+
 ## FIFO ordering
 
 ### The race
 
-The naive flow is:
+Even with the send-path discipline above, there is still a window where
+an in-flight `messageResponse` can race the queue drain:
 
-1. User types message **A** → `MessageQueueService.addMessage("A")` →
-   queue = `[A]`.
-2. Task finishes its current ask → `processQueuedMessages()` calls
-   `dequeueMessage()` → queue = `[]` → submits **A** via
-   `submitUserMessage()`.
-3. Between steps 2 and 3, the user types message **B** →
+1. User clicks an inline button or types into a real ask → webview posts
+   `askResponse: "messageResponse"` for message **A**.
+2. Before that message reaches the host, the Task finishes the ask via
+   another path → `processQueuedMessages()` runs and calls
+   `dequeueMessage()` for whatever was queued.
+3. Meanwhile the user types message **B** while the queue is empty →
    `addMessage("B")` → queue = `[B]`.
-4. `submitUserMessage("A")` lands in `handleWebviewAskResponse` as a
-   `messageResponse`. By the time it arrives, `isAwaitingAskResponse` is
-   already `false` (the ask was consumed when we dequeued), so the
+4. **A** finally arrives in `handleWebviewAskResponse`. By then
+   `isAwaitingAskResponse` is `false` (the ask was consumed), so the
    handler enters the **defensive re-enqueue branch**.
 
 If that branch had used `addMessage("A")`, the queue would become
@@ -86,11 +108,12 @@ If that branch had used `addMessage("A")`, the queue would become
 `MessageQueueService` exposes two insertion methods:
 
 - `addMessage(text, images)` — append at the back (`Array.push`). Used
-  for **new** input from the user.
+  for **new** input from the user (the webview's `queueMessage` path
+  ends here).
 - `prependMessage(text, images)` — insert at the front (`Array.unshift`).
-  Used **only** when re-inserting a message that was just dequeued and
-  must keep its original position relative to anything queued in the
-  meantime.
+  Used **only** when re-inserting a message that was just dequeued (or
+  raced an `askResponse` past its ask) and must keep its original
+  position relative to anything queued in the meantime.
 
 `Task.handleWebviewAskResponse` calls `prependMessage` when it has to
 return a `messageResponse` to the queue, preserving FIFO under the race
@@ -105,9 +128,12 @@ if (!this.isAwaitingAskResponse && !this.abort && !this.abandoned) {
 }
 ```
 
-Other response kinds (`yesButtonClicked`, `noButtonClicked`,
-`objectResponse`) carry no user text and are dropped in this branch —
-they are meaningless without the ask they were answering.
+This branch is now a **defensive backstop**, not a routine path: with
+the webview send-path discipline above, the no-ask `messageResponse`
+would only arrive here under a true race. Other response kinds
+(`yesButtonClicked`, `noButtonClicked`, `objectResponse`) carry no user
+text and are dropped — they are meaningless without the ask they were
+answering.
 
 ## Send Now ("cancel and process queued messages")
 
