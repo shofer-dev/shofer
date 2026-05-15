@@ -166,17 +166,113 @@ export async function activate(context: vscode.ExtensionContext) {
 	 * Status bar button for the Helper Agent. Sits next to the RAG indexer
 	 * button on the status bar. Shows agent state, context fill percentage,
 	 * and model name. Left-click opens the info panel (quick pick).
+	 *
+	 * IMPORTANT: The command must be registered BEFORE creating the
+	 * StatusBarItem so that code-server/VSCode resolves it correctly.
 	 */
+	context.subscriptions.push(
+		vscode.commands.registerCommand("shofer.helperAgent.showInfo", async () => {
+			outputChannel.appendLine("[HelperAgent] showInfo command invoked (status bar click)")
+			const managers = HelperAgentManager.getAllInstances()
+			if (managers.length === 0) {
+				vscode.window.showInformationMessage("Helper Agent is not available.")
+				outputChannel.appendLine("[HelperAgent] showInfo: no manager instances")
+				return
+			}
+
+			const mgr = managers[0]
+			const usage = mgr.getContextUsage()
+			const cost = mgr.getCostSnapshot()
+			const fillPct = (usage.fillFraction * 100).toFixed(1)
+
+			const items: vscode.QuickPickItem[] = [
+				{
+					label: `$(info) State: ${mgr.state}`,
+					description: mgr.stateMessage,
+				},
+				{
+					label: `$(rocket) Model: ${mgr.modelId}`,
+					description: `Provider: ${mgr.provider}`,
+				},
+				{
+					label: `$(database) Context: ${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} tokens (${fillPct}%)`,
+					description: usage.isNearlyFull ? "⚠ Nearly full" : "OK",
+				},
+				{
+					label: `$(file) Files in context: ${mgr.contextFiles.length}`,
+				},
+				{
+					label: `$(comment-discussion) Conversation turns: ${mgr.conversationTurnCount}`,
+				},
+				{
+					label: `$(credit-card) Session cost: $${cost.sessionEstimatedCostUSD.toFixed(6)}`,
+					description: `${cost.sessionInputTokens.toLocaleString()} in + ${cost.sessionOutputTokens.toLocaleString()} out tokens`,
+				},
+			]
+
+			const actions: (vscode.QuickPickItem & { action: string })[] = [
+				{
+					label: "$(comment-discussion) View Chat",
+					description: "Open the helper agent chat panel",
+					action: "chat",
+				},
+				{
+					label: "$(trash) Clear Context",
+					description: "Reset conversation to system prompt (cost tracking preserved)",
+					action: "clear",
+				},
+				{
+					label: "$(gear) Configure API",
+					description: "Open helper agent API settings",
+					action: "configure",
+				},
+				{
+					label: "$(debug-start) Start Agent",
+					description: "Start or restart the helper agent",
+					action: "start",
+				},
+			]
+
+			const pick = await vscode.window.showQuickPick(
+				[...items, { label: "", kind: vscode.QuickPickItemKind.Separator }, ...actions],
+				{
+					placeHolder: "Helper Agent — Info & Actions",
+				},
+			)
+
+			if (pick && "action" in pick) {
+				const action = (pick as any).action as string
+				switch (action) {
+					case "chat":
+						showHelperAgentChatPanel(context.extensionUri)
+						break
+					case "clear":
+						await mgr.clearContext()
+						vscode.window.showInformationMessage("Helper Agent context cleared.")
+						break
+					case "configure":
+						vscode.commands.executeCommand("workbench.action.openSettings", "shofer.helperAgent")
+						break
+					case "start":
+						await mgr.initialize()
+						vscode.window.showInformationMessage("Helper Agent re-initialized.")
+						break
+				}
+			}
+		}),
+	)
+
 	const helperAgentStatusBar = vscode.window.createStatusBarItem(
 		vscode.StatusBarAlignment.Right,
 		99.9, // Position right after the RAG indexer (which uses 100)
 	)
 	helperAgentStatusBar.name = "Helper Agent"
-	helperAgentStatusBar.command = "shofer.helperAgent.showInfo"
+	// Use a Command object (not just a string) for reliable code-server resolution
+	helperAgentStatusBar.command = { command: "shofer.helperAgent.showInfo", title: "Helper Agent Info" }
 	helperAgentStatusBar.tooltip = "Helper Agent"
 	helperAgentStatusBar.show()
 	context.subscriptions.push(helperAgentStatusBar)
-	outputChannel.appendLine("[HelperAgent] Status bar button created and shown")
+	outputChannel.appendLine("[HelperAgent] Status bar button created with command=" + helperAgentStatusBar.command)
 
 	/**
 	 * Blinking timer for the "Busy" state. Fires every 500ms to toggle
@@ -296,100 +392,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// ─── End Helper Agent Status Bar ───────────────────────────────────
 
-	// ─── Helper Agent Commands ──────────────────────────────────────────
-
-	/** Show helper agent info panel (quick pick). */
-	context.subscriptions.push(
-		vscode.commands.registerCommand("shofer.helperAgent.showInfo", async () => {
-			outputChannel.appendLine("[HelperAgent] showInfo command invoked")
-			const managers = HelperAgentManager.getAllInstances()
-			if (managers.length === 0) {
-				vscode.window.showInformationMessage("Helper Agent is not available.")
-				return
-			}
-
-			const mgr = managers[0]
-			const usage = mgr.getContextUsage()
-			const cost = mgr.getCostSnapshot()
-			const fillPct = (usage.fillFraction * 100).toFixed(1)
-			const messages = mgr.getMessages()
-
-			const items: vscode.QuickPickItem[] = [
-				{
-					label: `$(info) State: ${mgr.state}`,
-					description: mgr.stateMessage,
-				},
-				{
-					label: `$(rocket) Model: ${mgr.modelId}`,
-					description: `Provider: ${mgr.provider}`,
-				},
-				{
-					label: `$(database) Context: ${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} tokens (${fillPct}%)`,
-					description: usage.isNearlyFull ? "⚠ Nearly full" : "OK",
-				},
-				{
-					label: `$(file) Files in context: ${mgr.contextFiles.length}`,
-				},
-				{
-					label: `$(comment-discussion) Conversation turns: ${mgr.conversationTurnCount}`,
-				},
-				{
-					label: `$(credit-card) Session cost: $${cost.sessionEstimatedCostUSD.toFixed(6)}`,
-					description: `${cost.sessionInputTokens.toLocaleString()} in + ${cost.sessionOutputTokens.toLocaleString()} out tokens`,
-				},
-			]
-
-			const actions: (vscode.QuickPickItem & { action: string })[] = [
-				{
-					label: "$(comment-discussion) View Chat",
-					description: "Open the helper agent chat panel",
-					action: "chat",
-				},
-				{
-					label: "$(trash) Clear Context",
-					description: "Reset conversation to system prompt (cost tracking preserved)",
-					action: "clear",
-				},
-				{
-					label: "$(gear) Configure API",
-					description: "Open helper agent API settings",
-					action: "configure",
-				},
-				{
-					label: "$(debug-start) Start Agent",
-					description: "Start or restart the helper agent",
-					action: "start",
-				},
-			]
-
-			const pick = await vscode.window.showQuickPick(
-				[...items, { label: "", kind: vscode.QuickPickItemKind.Separator }, ...actions],
-				{
-					placeHolder: "Helper Agent — Info & Actions",
-				},
-			)
-
-			if (pick && "action" in pick) {
-				const action = (pick as any).action as string
-				switch (action) {
-					case "chat":
-						showHelperAgentChatPanel(context.extensionUri)
-						break
-					case "clear":
-						await mgr.clearContext()
-						vscode.window.showInformationMessage("Helper Agent context cleared.")
-						break
-					case "configure":
-						vscode.commands.executeCommand("workbench.action.openSettings", "shofer.helperAgent")
-						break
-					case "start":
-						await mgr.initialize()
-						vscode.window.showInformationMessage("Helper Agent re-initialized.")
-						break
-				}
-			}
-		}),
-	)
+	// ─── Helper Agent Commands (non-status-bar) ─────────────────────────
 
 	/** Start / restart helper agent. */
 	context.subscriptions.push(
