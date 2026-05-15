@@ -21,9 +21,6 @@ export class McpServerManager {
 	static async getInstance(context: vscode.ExtensionContext, provider: ShoferProvider): Promise<McpHub> {
 		// Register the provider
 		this.providers.add(provider)
-		mcpLog(
-			`[MCP-DEBUG] getInstance called; providers.size=${this.providers.size}, instance=${!!this.instance}, initInProgress=${!!this.initializationPromise}`,
-		)
 
 		// If we already have an instance, return it
 		if (this.instance) {
@@ -40,15 +37,12 @@ export class McpServerManager {
 			try {
 				// Double-check instance in case it was created while we were waiting
 				if (!this.instance) {
-					mcpLog(`[MCP-DEBUG] creating new McpHub`)
 					const hub = new McpHub(provider)
 					// Inject the broadcast callback so hub can notify all providers without
 					// a circular import (McpHub → McpServerManager → McpHub would be circular).
 					hub.setNotifyAllProviders((message) => McpServerManager.notifyProviders(message))
-					mcpLog(`[MCP-DEBUG] notifyAllProviders callback injected; awaiting waitUntilReady`)
 					// Wait for all MCP servers to finish connecting (or timing out)
 					await hub.waitUntilReady()
-					mcpLog(`[MCP-DEBUG] waitUntilReady resolved; servers=${hub.getAllServers().length}`)
 					this.instance = hub
 					// Store a unique identifier in global state to track the primary instance
 					await context.globalState.update(this.GLOBAL_STATE_KEY, Date.now().toString())
@@ -75,13 +69,8 @@ export class McpServerManager {
 	 * Notify all registered providers of server state changes.
 	 */
 	static notifyProviders(message: any): void {
-		const kind = (message && (message as any).type) ?? "?"
-		const count = kind === "mcpServers" ? ((message as any).mcpServers?.length ?? 0) : -1
-		mcpLog(`[MCP-DEBUG] notifyProviders kind=${kind} servers=${count} providers=${this.providers.size}`)
 		this.providers.forEach((provider) => {
-			provider.postMessageToWebview(message).catch((error) => {
-				mcpLog(`[MCP-DEBUG] Failed to notify provider: ${error}`)
-			})
+			provider.postMessageToWebview(message).catch(() => {})
 		})
 	}
 
