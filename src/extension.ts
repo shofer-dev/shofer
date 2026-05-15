@@ -37,7 +37,6 @@ import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
 import { CodeIndexManager } from "./services/code-index/manager"
 import { HelperAgentManager } from "./services/helper-agent/manager"
-import { showHelperAgentChatPanel } from "./core/webview/HelperAgentChatProvider"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -159,55 +158,11 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	// ─── Helper Agent Commands ──────────────────────────────────────────
+	// ─── Helper Agent ──────────────────────────────────────────────────
 	// The Helper Agent's status indicator and action menu live in the
 	// Shofer chat-input toolbar (HelperAgentStatusBadge → HelperAgentPopover),
-	// not in the VS Code status bar. The commands below back the popover
-	// actions and are also exposed through the command palette.
-
-	/** Open the Helper Agent chat panel (invoked by the webview status badge). */
-	context.subscriptions.push(
-		vscode.commands.registerCommand("shofer.helperAgent.showChat", () => {
-			showHelperAgentChatPanel(context.extensionUri)
-		}),
-	)
-
-	/** Start / restart helper agent. */
-	context.subscriptions.push(
-		vscode.commands.registerCommand("shofer.helperAgent.start", async () => {
-			const managers = HelperAgentManager.getAllInstances()
-			for (const mgr of managers) {
-				await mgr.initialize()
-			}
-			vscode.window.showInformationMessage("Helper Agent started.")
-		}),
-	)
-
-	/** Stop helper agent (cancel all pending questions). */
-	context.subscriptions.push(
-		vscode.commands.registerCommand("shofer.helperAgent.stop", () => {
-			const managers = HelperAgentManager.getAllInstances()
-			for (const mgr of managers) {
-				mgr.cancelAllQuestions()
-				mgr.dispose()
-			}
-			HelperAgentManager.disposeAll()
-			vscode.window.showInformationMessage("Helper Agent stopped.")
-		}),
-	)
-
-	/** Clear helper agent context. */
-	context.subscriptions.push(
-		vscode.commands.registerCommand("shofer.helperAgent.clearContext", async () => {
-			const managers = HelperAgentManager.getAllInstances()
-			for (const mgr of managers) {
-				await mgr.clearContext()
-			}
-			vscode.window.showInformationMessage("Helper Agent context cleared.")
-		}),
-	)
-
-	// ─── End Helper Agent Commands ─────────────────────────────────────
+	// not in the VS Code status bar. Commands are registered through
+	// registerCommands() (typed CommandId system) below.
 
 	// Initialize the provider.
 	const provider = new ShoferProvider(context, outputChannel, "sidebar", contextProxy, undefined)

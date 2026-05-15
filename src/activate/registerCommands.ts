@@ -11,6 +11,8 @@ import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
 import { handleNewTask } from "./handleTask"
 import { CodeIndexManager } from "../services/code-index/manager"
+import { HelperAgentManager } from "../services/helper-agent/manager"
+import { showHelperAgentChatPanel } from "../core/webview/HelperAgentChatProvider"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 import { defaultModeSlug } from "../shared/modes"
 import { t } from "../i18n"
@@ -214,6 +216,39 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 			type: "action",
 			action: "toggleAutoApprove",
 		})
+	},
+
+	// ─── Helper Agent ──────────────────────────────────────────────────
+	// The Helper Agent's status indicator and action menu live in the
+	// Shofer chat-input toolbar (HelperAgentStatusBadge → HelperAgentPopover),
+	// not in the VS Code status bar. The commands below back the popover
+	// actions and are also exposed through the command palette.
+	"helperAgent.showChat": () => {
+		showHelperAgentChatPanel(context.extensionUri)
+	},
+	"helperAgent.start": async () => {
+		const managers = HelperAgentManager.getAllInstances()
+		await Promise.all(managers.map((mgr) => mgr.initialize()))
+		vscode.window.showInformationMessage("Helper Agent started.")
+	},
+	"helperAgent.stop": () => {
+		// Cancel pending work, then dispose every instance. disposeAll() calls
+		// dispose() on each, which already cancels questions and tears down
+		// watchers/emitters; the explicit cancel here is defensive in case a
+		// caller invokes stop() repeatedly.
+		for (const mgr of HelperAgentManager.getAllInstances()) {
+			mgr.cancelAllQuestions()
+		}
+		HelperAgentManager.disposeAll()
+		vscode.window.showInformationMessage("Helper Agent stopped.")
+	},
+	"helperAgent.clearContext": async () => {
+		const managers = HelperAgentManager.getAllInstances()
+		await Promise.all(managers.map((mgr) => mgr.clearContext()))
+		vscode.window.showInformationMessage("Helper Agent context cleared.")
+	},
+	"helperAgent.openSettings": async () => {
+		await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:shofer.shofer helperAgent")
 	},
 })
 

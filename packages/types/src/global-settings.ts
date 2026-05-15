@@ -243,6 +243,20 @@ export const globalSettingsSchema = z.object({
 	 * @default false
 	 */
 	enableLlmProviderIntegration: z.boolean().optional(),
+
+	// ─── Helper Agent ──────────────────────────────────────────────────
+	// Persistent codebase Q&A companion. Configuration is stored in
+	// GlobalState (typed via ContextProxy) instead of vscode workspace
+	// configuration so it shares the same lifecycle and migration hooks
+	// as the rest of the extension.
+	helperAgentEnabled: z.boolean().optional(),
+	helperAgentProvider: z
+		.enum(["openai", "gemini", "openai-compatible", "anthropic", "ollama", "openrouter"])
+		.optional(),
+	helperAgentModelId: z.string().optional(),
+	helperAgentBaseUrl: z.string().optional(),
+	helperAgentMaxContextTokens: z.number().int().positive().optional(),
+	helperAgentContextFillThreshold: z.number().min(0).max(1).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>
@@ -296,6 +310,13 @@ export const SECRET_STATE_KEYS = [
 // Global secrets that are part of GlobalSettings (not ProviderSettings)
 export const GLOBAL_SECRET_KEYS = [
 	"openRouterImageApiKey", // For image generation
+	// Helper agent API keys — one per supported helper-agent provider.
+	"helperAgentOpenAiKey",
+	"helperAgentGeminiKey",
+	"helperAgentOpenAiCompatibleKey",
+	"helperAgentAnthropicKey",
+	"helperAgentOllamaKey",
+	"helperAgentOpenRouterKey",
 ] as const
 
 // Type for the actual secret storage keys

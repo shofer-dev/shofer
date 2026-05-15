@@ -1,37 +1,54 @@
+/**
+ * HelperAgentManager — singleton-per-workspace orchestrator for the
+ * Helper Agent (a persistent, read-only codebase Q&A companion).
+ *
+ * Responsibilities (delegated to focused collaborators):
+ *   - persistence            → ConversationStore
+ *   - request serialization  → QuestionQueue
+ *   - context budget         → ContextWindow
+ *   - LLM dispatch           → HelperAgentLlmClient (wraps shared ApiHandler)
+ *   - workspace scan         → HelperAgentDirectoryTree
+ *   - external file changes  → HelperAgentFileWatcher
+ *
+ * The Manager itself is a thin state machine: it owns the lifecycle, the
+ * configuration, and the event emitters consumed by the webview. All
+ * heavy lifting lives in the modules above.
+ *
+ * Configuration & secrets are read from `ContextProxy` so the helper
+ * agent participates in the extension's typed settings/migration plumbing
+ * (no direct vscode.workspace.getConfiguration / context.secrets).
+ */
+
 import * as vscode from "vscode"
 import * as path from "path"
 import * as fs from "fs/promises"
 import { createHash, randomUUID } from "crypto"
+
 import { TelemetryService } from "@shofer/telemetry"
-import { HelperAgentDirectoryTree } from "./directory-tree"
-import { HelperAgentFileWatcher } from "./file-watcher"
 import {
 	TelemetryEventName,
 	type HelperAgentState,
 	type HelperAgentConfig,
 	type AgentMessage,
 	type FileContextEntry,
-	type HelperAgentConversationData,
-	type HelperAgentCostTracking,
 	type QuestionResult,
 	DEFAULT_MAX_CONTEXT_TOKENS,
 	DEFAULT_CONTEXT_FILL_THRESHOLD,
-	DEFAULT_MAX_RESPONSE_TOKENS,
-	QUESTION_TIMEOUT_MS,
 	HELPER_AGENT_SYSTEM_PROMPT,
-	CONVERSATION_STORE_VERSION,
+	QUESTION_TIMEOUT_MS,
 } from "@shofer/types"
 
-/**
- * HelperAgentManager — singleton per workspace.
- *
- * Manages the lifecycle of a persistent, long-context LLM companion that
- * accumulates codebase knowledge over time. The agent runs on a cheap model
- * with a large context window, surviving task termination and VSCode restarts.
- *
- * Follows the same singleton-per-workspace pattern as CodeIndexManager.
- */
-export class HelperAgentManager {
+import { ContextProxy } from "../../core/config/ContextProxy"
+import { logger } from "../../utils/logging"
+
+import { HelperAgentDirectoryTree } from "./directory-tree"
+import { HelperAgentFileWatcher } from "./file-watcher"
+import { ConversationStore, type ConversationSnapshot } from "./conversation-store"
+import { QuestionQueue } from "./question-queue"
+import { ContextWindow, estimateTokens } from "./context-window"
+import { HelperAgentLlmClient, type ChatMessage } from "./llm-client"
+
+export class HelperAgentManager implements vscode.Disposable {
 	// ─── Singleton Implementation ────────────────────────────────────────
 
 	private static instances = new Map<string, HelperAgentManager>()
@@ -50,28 +67,19 @@ export class HelperAgentManager {
 				folder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri)
 			}
 			if (!folder) {
-				const workspaceFolders = vscode.workspace.workspaceFolders
-				if (!workspaceFolders || workspaceFolders.length === 0) {
-					return undefined
-				}
-				folder = workspaceFolders[0]
+				const folders = vscode.workspace.workspaceFolders
+				if (!folders || folders.length === 0) return undefined
+				folder = folders[0]
 			}
 			workspacePath = folder.uri.fsPath
 		}
 
-		if (!HelperAgentManager.instances.has(workspacePath)) {
-			const folderUri =
-				folder?.uri ??
-				({
-					fsPath: workspacePath,
-					scheme: "file",
-					authority: "",
-					path: workspacePath,
-					toString: () => `file://${workspacePath}`,
-				} as unknown as vscode.Uri)
-			HelperAgentManager.instances.set(workspacePath, new HelperAgentManager(workspacePath, folderUri, context))
+		let instance = HelperAgentManager.instances.get(workspacePath)
+		if (!instance) {
+			instance = new HelperAgentManager(workspacePath, context)
+			HelperAgentManager.instances.set(workspacePath, instance)
 		}
-		return HelperAgentManager.instances.get(workspacePath)!
+		return instance
 	}
 
 	public static getAllInstances(): HelperAgentManager[] {
@@ -88,15 +96,28 @@ export class HelperAgentManager {
 	// ─── Instance Fields ─────────────────────────────────────────────────
 
 	private readonly workspacePath: string
-	private readonly _folderUri: vscode.Uri
 	private readonly context: vscode.ExtensionContext
 
 	private _state: HelperAgentState = "Standby"
 	private _stateMessage: string = ""
 	private _config: HelperAgentConfig | null = null
-	private _messages: AgentMessage[] = []
-	private _fileContexts: FileContextEntry[] = []
-	private _costTracking: HelperAgentCostTracking = {
+
+	private readonly _store: ConversationStore
+	private readonly _queue: QuestionQueue
+	private readonly _window: ContextWindow
+	private _llm: HelperAgentLlmClient | null = null
+
+	/** Workspace structure scanner — feeds the system prompt. */
+	private _directoryTree: HelperAgentDirectoryTree | null = null
+	private _directoryTreeString: string = "[No workspace structure available]"
+
+	/** External-edit detector — invalidates file context on writes. */
+	private _fileWatcher: HelperAgentFileWatcher | null = null
+
+	/** Files modified by tasks since last question (KV-cache preserving hint). */
+	private _recentlyModifiedFiles = new Set<string>()
+
+	private _costTracking = {
 		totalInputTokens: 0,
 		totalOutputTokens: 0,
 		totalTokensTruncated: 0,
@@ -104,149 +125,81 @@ export class HelperAgentManager {
 		lastUpdated: Date.now(),
 	}
 
-	// ─── Queue & Timeout ────────────────────────────────────────────────
-
-	/** Serialized question queue (FIFO, capacity-bounded). */
-	private _questionQueue: Array<{
-		question: string
-		contextFiles?: string[]
-		timeoutMs: number
-		resolve: (result: QuestionResult) => void
-		reject: (error: Error) => void
-		startTime: number
-	}> = []
-
-	/** Maximum queue size from constants. */
-	private readonly _maxQueueSize = 50
-
-	/** AbortController for the currently active LLM call. */
-	private _activeAbortController: AbortController | null = null
-
-	// ─── File Change Notifications (KV-cache preserving) ─────────────────
-
-	/**
-	 * Set of file paths modified by tasks since the last question.
-	 * These are attached to the next question as hints without evicting
-	 * context, preserving the LLM provider's KV cache.
-	 */
-	private _recentlyModifiedFiles = new Set<string>()
-
-	// Event emitters for UI updates
 	private _stateChangeEmitter = new vscode.EventEmitter<HelperAgentState>()
 	public readonly onStateChange = this._stateChangeEmitter.event
 
 	private _conversationUpdateEmitter = new vscode.EventEmitter<void>()
 	public readonly onConversationUpdate = this._conversationUpdateEmitter.event
-	// ─── Directory Tree ─────────────────────────────────────────────────
 
-	/** Directory tree generator for the system prompt. */
-	private _directoryTree: HelperAgentDirectoryTree | null = null
-
-	/** Cached directory tree string (regenerated on init and Clear Context). */
-	private _directoryTreeString: string = "[No workspace structure available]"
-
-	// ─── File Watcher ───────────────────────────────────────────────────
-
-	/** File watcher for external change detection. */
-	private _fileWatcher: HelperAgentFileWatcher | null = null
-
-	// Flag to prevent race conditions during error recovery
 	private _isRecoveringFromError = false
 
-	private constructor(workspacePath: string, folderUri: vscode.Uri, context: vscode.ExtensionContext) {
+	private constructor(workspacePath: string, context: vscode.ExtensionContext) {
 		this.workspacePath = workspacePath
-		this._folderUri = folderUri
 		this.context = context
+		this._store = new ConversationStore(workspacePath, context.globalStorageUri.fsPath)
+		this._window = new ContextWindow()
+		this._queue = new QuestionQueue()
+		this._queue.setProcessor((q, files, signal) => this._processQuestion(q, files, signal))
 	}
 
 	// ─── Public API ──────────────────────────────────────────────────────
 
-	/** Current state of the agent. */
 	public get state(): HelperAgentState {
 		return this._state
 	}
 
-	/** Current state message for UI display. */
 	public get stateMessage(): string {
 		return this._stateMessage
 	}
 
-	/** Whether the feature is enabled and configured. */
 	public get isFeatureEnabled(): boolean {
 		return this._config?.enabled ?? false
 	}
 
-	/** Whether the feature has valid API configuration. */
 	public get isFeatureConfigured(): boolean {
-		if (!this._config) return false
-		return !!(this._config.apiKey && this._config.modelId)
+		return !!(this._config?.apiKey && this._config?.modelId)
 	}
 
-	/** Whether the agent is available to answer questions (Ready or Busy state). */
 	public get isHelperAgentAvailable(): boolean {
 		return this._state === "Ready" || this._state === "Busy"
 	}
 
-	/** Configured model ID (e.g., "gemini-2.0-flash"). */
 	public get modelId(): string {
 		return this._config?.modelId ?? "not configured"
 	}
 
-	/** Configured provider (e.g., "openai", "gemini"). */
 	public get provider(): string {
 		return this._config?.provider ?? "unknown"
 	}
 
-	/** Number of messages in the conversation. */
 	public get conversationTurnCount(): number {
-		return this._messages.length
+		return this._window.messages.length
 	}
 
-	/** Current files in context. */
 	public get contextFiles(): string[] {
-		return this._fileContexts.map((f) => f.filePath)
+		return this._window.fileContextPaths
 	}
 
-	/** Current token estimate for the context window. */
 	public get estimatedTokenCount(): number {
-		let count = 0
-		for (const msg of this._messages) {
-			count += Math.ceil(msg.content.length / 4) // rough estimate: 4 chars per token
-		}
-		for (const fc of this._fileContexts) {
-			count += fc.tokenEstimate
-		}
-		return count
+		return this._window.estimatedTokenCount
 	}
 
-	/** Max context tokens from config or default. */
 	public get maxContextTokens(): number {
-		return this._config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS
+		return this._window.maxContextTokens
 	}
 
-	/** Fill threshold from config or default. */
 	public get contextFillThreshold(): number {
-		return this._config?.contextFillThreshold ?? DEFAULT_CONTEXT_FILL_THRESHOLD
+		return this._window.contextFillThreshold
 	}
 
-	/** Whether the context is nearly full (above fill threshold). */
 	public get isContextNearlyFull(): boolean {
-		return this.estimatedTokenCount > this.maxContextTokens * this.contextFillThreshold
+		return this._window.isNearlyFull
 	}
 
-	/** Current context usage snapshot. */
 	public getContextUsage() {
-		const currentTokens = this.estimatedTokenCount
-		const maxTokens = this.maxContextTokens
-		return {
-			currentTokens,
-			maxTokens,
-			fillFraction: maxTokens > 0 ? currentTokens / maxTokens : 0,
-			isNearlyFull: this.isContextNearlyFull,
-		}
+		return this._window.getUsage()
 	}
 
-	/** Current cost tracking snapshot (for UI display). */
 	public getCostSnapshot() {
 		return {
 			sessionInputTokens: this._costTracking.totalInputTokens,
@@ -255,50 +208,27 @@ export class HelperAgentManager {
 		}
 	}
 
-	/** Get all messages (for chat view). */
 	public getMessages(): ReadonlyArray<AgentMessage> {
-		return this._messages
+		return this._window.messages
 	}
 
-	/** Number of pending questions in the queue. */
 	public get pendingQuestionCount(): number {
-		return this._questionQueue.length
+		return this._queue.pendingCount
 	}
 
 	/**
 	 * Notify the helper agent that a file was modified by a task tool.
-	 * The file path is accumulated and attached as a hint on the next
-	 * question — files are NOT evicted, preserving the KV cache.
-	 *
-	 * @param filePath - Path to the file that was modified, relative to workspace
+	 * The path is accumulated and surfaced as a hint on the next question
+	 * (no eviction → preserves the LLM provider's KV cache).
 	 */
 	public notifyFileModified(filePath: string): void {
-		// Silently ignore empty paths
 		if (!filePath) return
-
-		// Skip .shoferignore paths (caller should pre-filter, but guard here)
 		if (filePath.startsWith(".shofer/")) return
-
 		this._recentlyModifiedFiles.add(filePath)
 	}
 
-	/**
-	 * Cancel all queued questions and abort the active LLM call.
-	 * Pending questions are rejected with an error.
-	 */
 	public cancelAllQuestions(): void {
-		// Abort active LLM call
-		if (this._activeAbortController) {
-			this._activeAbortController.abort()
-			this._activeAbortController = null
-		}
-
-		// Reject all pending questions
-		const pending = this._questionQueue.splice(0)
-		for (const entry of pending) {
-			entry.reject(new Error("Helper agent questions cancelled"))
-		}
-
+		this._queue.cancelAll()
 		if (this._state === "Busy") {
 			this._setState("Ready", "Agent is ready")
 		}
@@ -306,43 +236,39 @@ export class HelperAgentManager {
 
 	// ─── Initialization ──────────────────────────────────────────────────
 
-	/**
-	 * Initializes the manager with configuration and restores persisted state.
-	 * Must be called before using askQuestion().
-	 */
 	public async initialize(): Promise<{ requiresRestart: boolean }> {
 		try {
 			this._setState("Initializing", "Loading configuration...")
 
-			// 1. Load configuration from VS Code settings and secrets
-			const config = this._loadConfiguration()
+			const config = await this._loadConfiguration()
 			if (!config) {
 				this._setState("Standby", "Helper agent is not configured")
 				return { requiresRestart: false }
 			}
 			this._config = config
 
-			// 2. Resolve API key from SecretStorage
-			config.apiKey = await this._resolveApiKey()
+			this._window.configure({
+				maxContextTokens: config.maxContextTokens,
+				contextFillThreshold: config.contextFillThreshold,
+			})
 
-			// 3. Generate directory tree and start file watcher
 			await this._initDirectoryTree()
 			this._startFileWatcher()
 
-			// 4. Check if enabled
 			if (!config.enabled) {
 				this._setState("Standby", "Helper agent is disabled")
 				return { requiresRestart: false }
 			}
 
-			// 5. Restore persisted conversation
-			await this._loadConversation()
+			const snapshot = await this._store.load()
+			this._restoreSnapshot(snapshot)
 
-			// 6. Validate API configuration
 			if (!config.apiKey || !config.modelId) {
 				this._setState("Error", "API key or model ID not configured")
 				return { requiresRestart: false }
 			}
+
+			this._llm = new HelperAgentLlmClient(config)
 
 			this._setState("Ready", "Agent is ready")
 			return { requiresRestart: false }
@@ -360,133 +286,49 @@ export class HelperAgentManager {
 
 	// ─── Question Processing ─────────────────────────────────────────────
 
-	/**
-	 * Ask a question to the helper agent. Returns the agent's answer.
-	 *
-	 * Questions are serialized via FIFO queue — only one question is
-	 * processed at a time. The timeout covers BOTH queue wait time AND
-	 * LLM processing time.
-	 *
-	 * @param question - The question text
-	 * @param contextFiles - Optional file paths to load into context
-	 * @param timeoutMs - Optional timeout in milliseconds (default: 5 min)
-	 */
 	public async askQuestion(
 		question: string,
 		contextFiles?: string[],
 		timeoutMs: number = QUESTION_TIMEOUT_MS,
 	): Promise<QuestionResult> {
-		if (!this._config) {
+		if (!this._config || !this._llm) {
 			throw new Error("Helper agent is not initialized. Call initialize() first.")
 		}
-
 		if (!this.isHelperAgentAvailable && this._state !== "Busy") {
 			throw new Error(`Helper agent is not available (state: ${this._state})`)
 		}
-
-		// ── Enqueue with timeout ──────────────────────────────────────
-
-		if (this._questionQueue.length >= this._maxQueueSize) {
-			throw new Error(`Helper agent question queue is full (max ${this._maxQueueSize}). Try again later.`)
-		}
-
-		const startTime = Date.now()
-
-		return new Promise<QuestionResult>((resolve, reject) => {
-			// Set up a global timeout covering queue wait + processing
-			const timeoutId = setTimeout(() => {
-				// Remove from queue if still waiting
-				const idx = this._questionQueue.findIndex((e) => e.resolve === resolve)
-				if (idx !== -1) {
-					this._questionQueue.splice(idx, 1)
-					reject(new Error(`Helper agent question timed out after ${timeoutMs}ms (in queue)`))
-					return
-				}
-				// If already processing (not in queue), abort the LLM call
-				if (this._activeAbortController) {
-					this._activeAbortController.abort()
-				}
-			}, timeoutMs)
-
-			const wrappedResolve = (result: QuestionResult) => {
-				clearTimeout(timeoutId)
-				resolve(result)
-			}
-
-			const wrappedReject = (error: Error) => {
-				clearTimeout(timeoutId)
-				reject(error)
-			}
-
-			this._questionQueue.push({
-				question,
-				contextFiles,
-				timeoutMs,
-				resolve: wrappedResolve,
-				reject: wrappedReject,
-				startTime,
-			})
-
-			// Start processing if not already busy
-			if (this._state !== "Busy") {
-				this._processNextQuestion()
-			}
-		})
+		return this._queue.enqueue(question, contextFiles, timeoutMs)
 	}
 
-	/**
-	 * Process the next question in the queue.
-	 * Called when the agent transitions from Ready or after completing a question.
-	 */
-	private async _processNextQuestion(): Promise<void> {
-		const entry = this._questionQueue.shift()
-		if (!entry) {
-			if (this._state !== "Error" && this._state !== "Stopping") {
-				this._setState("Ready", "Agent is ready")
-			}
-			return
-		}
+	/** Queue processor — runs one question end-to-end. */
+	private async _processQuestion(
+		question: string,
+		contextFiles: string[] | undefined,
+		signal: AbortSignal,
+	): Promise<QuestionResult> {
+		const startTime = Date.now()
+		const llm = this._llm
+		if (!llm) throw new Error("Helper agent LLM client is not initialized")
 
-		const { question, contextFiles, timeoutMs, resolve, reject, startTime } = entry
-
-		// Check if we already passed the timeout
-		if (Date.now() - startTime > timeoutMs) {
-			reject(new Error(`Helper agent question timed out (queue wait for ${timeoutMs}ms)`))
-			this._processNextQuestion()
-			return
-		}
-
+		this._setState("Busy", "Processing question...")
 		try {
-			this._setState("Busy", "Processing question...")
-
-			// Drain recently modified files and attach to the question
 			const recentlyModified = this._drainRecentlyModifiedFiles()
 
-			// Load context files if provided
 			if (contextFiles && contextFiles.length > 0) {
 				for (const filePath of contextFiles) {
 					await this._loadFileIntoContext(filePath)
 				}
 			}
 
-			// Build messages (includes recently-modified hints)
-			const messages = this._buildMessages(question, recentlyModified)
+			const messages = this._buildChatMessages(question, recentlyModified)
+			const result = await llm.chat(messages, signal)
 
-			// Create AbortController for this LLM call
-			this._activeAbortController = new AbortController()
-
-			// Call the LLM
-			const result = await this._callLLM(messages, timeoutMs, this._activeAbortController.signal)
-
-			// Save the Q&A to conversation history
 			const userMsg: AgentMessage = {
 				id: randomUUID(),
 				role: "user",
 				content: question,
 				timestamp: Date.now(),
-				metadata: {
-					fileReferences: contextFiles,
-				},
+				metadata: { fileReferences: contextFiles },
 			}
 			const assistantMsg: AgentMessage = {
 				id: randomUUID(),
@@ -495,31 +337,35 @@ export class HelperAgentManager {
 				timestamp: Date.now(),
 			}
 
-			this._messages.push(userMsg, assistantMsg)
-			await this._saveConversation()
+			this._window.appendMessage(userMsg)
+			this._window.appendMessage(assistantMsg)
+
+			this._accumulateCost(result.tokensUsed.prompt, result.tokensUsed.completion, result.estimatedCostUSD)
+
+			await this._persist()
 			this._conversationUpdateEmitter.fire()
 
-			const contextUsage = this.getContextUsage()
-			const durationMs = Date.now() - startTime
+			this._setState("Ready", "Agent is ready")
 
-			resolve({
+			return {
 				answer: result.answer,
 				tokensUsed: result.tokensUsed,
-				contextUsage,
+				contextUsage: this._window.getUsage(),
 				costSnapshot: this.getCostSnapshot(),
-				contextFiles: this.contextFiles,
-				durationMs,
-			})
+				contextFiles: this._window.fileContextPaths,
+				durationMs: Date.now() - startTime,
+			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
-
-			// Don't transition to Error on abort/timeout — keep conversation intact
-			const isAbortError =
+			const isAbort =
 				error instanceof Error &&
 				(error.name === "AbortError" || error.name === "TimeoutError" || message.includes("aborted"))
 
-			if (!isAbortError) {
+			if (!isAbort) {
 				this._setState("Error", message)
+			} else {
+				// On abort/timeout, return to Ready so future questions can proceed.
+				this._setState("Ready", "Agent is ready")
 			}
 
 			TelemetryService.instance.captureEvent(TelemetryEventName.HELPER_AGENT_ERROR, {
@@ -527,24 +373,12 @@ export class HelperAgentManager {
 				stack: error instanceof Error ? error.stack : undefined,
 				location: "askQuestion",
 			})
-
-			reject(error instanceof Error ? error : new Error(message))
-		} finally {
-			this._activeAbortController = null
-
-			// Process next question if any
-			this._processNextQuestion()
+			throw error instanceof Error ? error : new Error(message)
 		}
 	}
 
-	/**
-	 * Drain the recently modified files set and return the list.
-	 * The set is cleared after draining so notifications don't
-	 * accumulate across questions.
-	 */
 	private _drainRecentlyModifiedFiles(): string[] {
 		if (this._recentlyModifiedFiles.size === 0) return []
-
 		const files = Array.from(this._recentlyModifiedFiles)
 		this._recentlyModifiedFiles.clear()
 		return files
@@ -552,15 +386,10 @@ export class HelperAgentManager {
 
 	// ─── Context Management ──────────────────────────────────────────────
 
-	/**
-	 * Clears the conversation context, resetting to just the system prompt.
-	 * Cost tracking is preserved.
-	 */
 	public async clearContext(): Promise<void> {
-		this._messages = []
-		this._fileContexts = []
+		this._window.clear()
 		await this._initDirectoryTree()
-		await this._saveConversation()
+		await this._persist()
 		this._conversationUpdateEmitter.fire()
 
 		if (this._state === "Error") {
@@ -570,21 +399,12 @@ export class HelperAgentManager {
 		}
 	}
 
-	// ─── Error Recovery ──────────────────────────────────────────────────
-
-	/**
-	 * Recovers from error state by resetting internal state.
-	 * Forces a clean re-initialization on next operation.
-	 */
 	public async recoverFromError(): Promise<void> {
-		if (this._isRecoveringFromError) {
-			return
-		}
-
+		if (this._isRecoveringFromError) return
 		this._isRecoveringFromError = true
 		try {
-			// Preserve conversation and cost tracking; just reset state
 			this._config = null
+			this._llm = null
 			this._setState("Standby", "Recovered from error")
 		} finally {
 			this._isRecoveringFromError = false
@@ -593,9 +413,6 @@ export class HelperAgentManager {
 
 	// ─── Lifecycle ───────────────────────────────────────────────────────
 
-	/**
-	 * Cleans up the manager instance.
-	 */
 	public dispose(): void {
 		if (this._fileWatcher) {
 			this._fileWatcher.dispose()
@@ -606,225 +423,118 @@ export class HelperAgentManager {
 		this._conversationUpdateEmitter.dispose()
 	}
 
-	// ─── Persistence Helpers ─────────────────────────────────────────────
+	// ─── Persistence Glue ────────────────────────────────────────────────
 
-	/** Path to the conversation store JSON file in globalStorage. */
-	private _conversationStorePath(): string {
-		const workspaceHash = createHash("sha256").update(this.workspacePath).digest("hex").substring(0, 16)
-		return path.join(this.context.globalStorageUri.fsPath, `shofer-helper-agent-${workspaceHash}.json`)
+	private _restoreSnapshot(snapshot: ConversationSnapshot): void {
+		this._window.restore(snapshot.messages, snapshot.fileContexts)
+		this._costTracking = snapshot.costTracking
 	}
 
-	private async _loadConversation(): Promise<void> {
-		try {
-			const filePath = this._conversationStorePath()
-			const data = await fs.readFile(filePath, "utf-8")
-			const parsed: HelperAgentConversationData = JSON.parse(data)
-
-			if (parsed.version !== CONVERSATION_STORE_VERSION) {
-				console.warn(`[HelperAgent] Unknown conversation store version: ${parsed.version}`)
-				return
-			}
-
-			this._messages = parsed.messages ?? []
-			this._fileContexts = parsed.fileContexts ?? []
-			this._costTracking = parsed.costTracking ?? {
-				totalInputTokens: 0,
-				totalOutputTokens: 0,
-				totalTokensTruncated: 0,
-				estimatedCostUSD: 0,
-				lastUpdated: Date.now(),
-			}
-
-			// Verify file contexts — re-read files and check hashes
-			const validContexts: FileContextEntry[] = []
-			for (const fc of this._fileContexts) {
-				try {
-					const fullPath = path.resolve(this.workspacePath, fc.filePath)
-					const content = await fs.readFile(fullPath, "utf-8")
-					const currentHash = createHash("sha256").update(content).digest("hex")
-					if (currentHash === fc.contentHash) {
-						validContexts.push(fc)
-					}
-					// Hash mismatch → silently evict
-				} catch {
-					// File deleted or unreadable → silently evict
-				}
-			}
-			this._fileContexts = validContexts
-		} catch (error) {
-			// File doesn't exist yet (first launch) — start fresh
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-				console.error("[HelperAgent] Error loading conversation:", error)
-			}
+	private _snapshot(): ConversationSnapshot {
+		return {
+			messages: [...this._window.messages],
+			fileContexts: [...this._window.fileContexts],
+			costTracking: this._costTracking,
 		}
 	}
 
-	private async _saveConversation(): Promise<void> {
+	private async _persist(): Promise<void> {
 		try {
-			const filePath = this._conversationStorePath()
-			const dir = path.dirname(filePath)
-			await fs.mkdir(dir, { recursive: true })
-
-			const data: HelperAgentConversationData = {
-				version: CONVERSATION_STORE_VERSION as 1,
-				workspacePath: this.workspacePath,
-				createdAt: Date.now(),
-				updatedAt: Date.now(),
-				messages: this._messages,
-				fileContexts: this._fileContexts,
-				costTracking: this._costTracking,
-			}
-
-			await fs.writeFile(filePath, JSON.stringify(data, null, "\t"), "utf-8")
+			await this._store.save(this._snapshot())
 		} catch (error) {
-			console.error("[HelperAgent] Error saving conversation:", error)
+			logger.error(
+				`[HelperAgent] Failed to persist conversation: ${error instanceof Error ? error.message : String(error)}`,
+			)
 		}
 	}
 
-	// ─── Configuration ───────────────────────────────────────────────────
+	// ─── Configuration (via ContextProxy) ────────────────────────────────
 
 	/**
-	 * Loads helper agent configuration from VS Code settings and SecretStorage.
-	 * Uses vscode.workspace.getConfiguration("shofer") for settings and
-	 * context.secrets.get() for API keys.
+	 * Read helper-agent configuration from ContextProxy. Settings live in
+	 * GlobalState and are typed via @shofer/types; secrets are routed
+	 * through the same proxy and stored in VSCode SecretStorage.
 	 */
-	private _loadConfiguration(): HelperAgentConfig | null {
-		const config = vscode.workspace.getConfiguration("shofer")
+	private async _loadConfiguration(): Promise<HelperAgentConfig | null> {
+		const proxy = await ContextProxy.getInstance(this.context)
 
-		const enabled = config.get<boolean>("helperAgentEnabled", true)
-		const provider = config.get<string>("helperAgentProvider", "openai") as HelperAgentConfig["provider"]
-		const modelId = config.get<string>("helperAgentModelId", "")
-		const baseUrl = config.get<string>("helperAgentBaseUrl") ?? undefined
-		const maxContextTokens = config.get<number>("helperAgentMaxContextTokens", DEFAULT_MAX_CONTEXT_TOKENS)
-		const contextFillThreshold = config.get<number>(
-			"helperAgentContextFillThreshold",
-			DEFAULT_CONTEXT_FILL_THRESHOLD,
-		)
+		const enabled = proxy.getValue("helperAgentEnabled") ?? true
+		const provider = (proxy.getValue("helperAgentProvider") ?? "openai") as HelperAgentConfig["provider"]
+		const modelId = proxy.getValue("helperAgentModelId") ?? ""
+		const baseUrl = proxy.getValue("helperAgentBaseUrl") ?? undefined
+		const maxContextTokens = proxy.getValue("helperAgentMaxContextTokens") ?? DEFAULT_MAX_CONTEXT_TOKENS
+		const contextFillThreshold =
+			proxy.getValue("helperAgentContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
 
-		// API key is read from SecretStorage. We resolve it in _resolveApiKey()
-		// during initialize(), which is async.
+		const apiKey = this._resolveApiKey(proxy, provider)
+
 		return {
 			enabled,
 			provider,
 			modelId,
-			apiKey: "", // Will be resolved in _resolveApiKey
+			apiKey,
 			baseUrl,
 			maxContextTokens,
 			contextFillThreshold,
 		}
 	}
 
-	/**
-	 * Resolves the API key from VS Code SecretStorage for the configured provider.
-	 */
-	private async _resolveApiKey(): Promise<string> {
-		if (!this._config) return ""
-
-		const secretKey = this._getSecretKeyForProvider(this._config.provider)
-		try {
-			return (await this.context.secrets.get(secretKey)) ?? ""
-		} catch {
-			return ""
-		}
+	private _resolveApiKey(proxy: ContextProxy, provider: HelperAgentConfig["provider"]): string {
+		const key = secretKeyForProvider(provider)
+		return proxy.getSecret(key) ?? ""
 	}
 
-	private _getSecretKeyForProvider(provider: HelperAgentConfig["provider"]): string {
-		switch (provider) {
-			case "openai":
-				return "helperAgentOpenAiKey"
-			case "gemini":
-				return "helperAgentGeminiKey"
-			case "openai-compatible":
-				return "helperAgentOpenAiCompatibleKey"
-			case "anthropic":
-				return "helperAgentAnthropicKey"
-			case "ollama":
-				return "helperAgentOllamaKey"
-			case "openrouter":
-				return "helperAgentOpenRouterKey"
-			default:
-				return "helperAgentOpenAiKey"
-		}
-	}
+	// ─── Directory Tree + File Watcher ───────────────────────────────────
 
-	// ─── Directory Tree + File Watcher ─────────────────────────────────
-
-	/**
-	 * Initialize the directory tree scanner and generate the tree string
-	 * for injection into the system prompt.
-	 */
 	private async _initDirectoryTree(): Promise<void> {
 		try {
-			this._directoryTree = new HelperAgentDirectoryTree(this.workspacePath, this.maxContextTokens)
+			this._directoryTree = new HelperAgentDirectoryTree(this.workspacePath, this._window.maxContextTokens)
 			this._directoryTreeString = await this._directoryTree.generate()
 		} catch (error) {
-			console.warn("[HelperAgent] Failed to generate directory tree:", error)
+			logger.warn(
+				`[HelperAgent] Failed to generate directory tree: ${error instanceof Error ? error.message : String(error)}`,
+			)
 			this._directoryTreeString = "[Workspace directory tree unavailable]"
 		}
 	}
 
-	/**
-	 * Start the file watcher to detect external changes.
-	 * On file change: evict stale context entries (hash mismatch on next reference).
-	 * On file delete: remove context entry entirely.
-	 */
 	private _startFileWatcher(): void {
 		if (this._fileWatcher) return
 
 		this._fileWatcher = new HelperAgentFileWatcher(this.workspacePath, (filePath, event) => {
 			if (event === "deleted") {
-				// Remove file from context
-				const idx = this._fileContexts.findIndex((fc) => fc.filePath === filePath)
-				if (idx !== -1) {
-					this._fileContexts.splice(idx, 1)
-				}
+				this._window.removeFileContext(filePath)
 			} else {
-				// Mark as stale (will be evicted on next reference)
-				const fc = this._fileContexts.find((f) => f.filePath === filePath)
-				if (fc) {
-					fc.contentHash = "" // Invalidate hash → evicted on next load
-				}
+				this._window.invalidateFileContext(filePath)
 			}
 		})
 
 		this._fileWatcher.start()
 	}
 
-	// ─── LLM Calling ─────────────────────────────────────────────────────
+	// ─── Message Construction ────────────────────────────────────────────
 
-	/**
-	 * Build the messages array for an LLM call, including the system prompt,
-	 * file contexts, conversation history, recently-modified file hints, and
-	 * the current question.
-	 */
-	private _buildMessages(
-		question: string,
-		recentlyModifiedFiles?: string[],
-	): Array<{ role: string; content: string }> {
-		const messages: Array<{ role: string; content: string }> = []
+	private _buildChatMessages(question: string, recentlyModifiedFiles: string[]): ChatMessage[] {
+		const messages: ChatMessage[] = []
 
-		// System prompt with workspace directory tree
 		const treeContent = this._directoryTreeString
 			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shogerignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
 		const systemPrompt = HELPER_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)
 		messages.push({ role: "system", content: systemPrompt })
 
-		// File contexts as system messages
-		for (const fc of this._fileContexts) {
+		for (const fc of this._window.fileContexts) {
 			messages.push({
 				role: "system",
 				content: `[File context: ${fc.filePath}]\n(Content hash: ${fc.contentHash}, tokens: ~${fc.tokenEstimate})`,
 			})
 		}
 
-		// Conversation history
-		for (const msg of this._messages) {
+		for (const msg of this._window.messages) {
 			messages.push({ role: msg.role, content: msg.content })
 		}
 
-		// Recently modified file hints (KV-cache preserving notification)
-		if (recentlyModifiedFiles && recentlyModifiedFiles.length > 0) {
+		if (recentlyModifiedFiles.length > 0) {
 			const fileList = recentlyModifiedFiles.join(", ")
 			messages.push({
 				role: "system",
@@ -832,153 +542,8 @@ export class HelperAgentManager {
 			})
 		}
 
-		// Current question
 		messages.push({ role: "user", content: question })
-
 		return messages
-	}
-
-	/**
-	 * Call the LLM with the given messages.
-	 * @param messages - The messages to send
-	 * @param timeoutMs - Overall timeout for the HTTP request
-	 * @param signal - AbortSignal for cancellation (from queue timeout)
-	 */
-	private async _callLLM(
-		messages: Array<{ role: string; content: string }>,
-		timeoutMs: number,
-		signal?: AbortSignal,
-	): Promise<{ answer: string; tokensUsed: { prompt: number; completion: number; total: number } }> {
-		if (!this._config) {
-			throw new Error("Helper agent config not loaded")
-		}
-
-		const { provider, modelId, apiKey, baseUrl } = this._config
-
-		// Determine the API endpoint based on provider
-		let endpoint: string
-		let headers: Record<string, string>
-		let body: Record<string, unknown>
-
-		switch (provider) {
-			case "openai":
-				endpoint = baseUrl
-					? `${baseUrl.replace(/\/$/, "")}/chat/completions`
-					: "https://api.openai.com/v1/chat/completions"
-				headers = {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${apiKey}`,
-				}
-				break
-			case "gemini":
-				endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(apiKey)}`
-				headers = { "Content-Type": "application/json" }
-				break
-			case "openai-compatible":
-			case "openrouter":
-				endpoint = baseUrl
-					? `${baseUrl.replace(/\/$/, "")}/chat/completions`
-					: provider === "openrouter"
-						? "https://openrouter.ai/api/v1/chat/completions"
-						: "http://localhost:11434/v1/chat/completions"
-				headers = {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${apiKey}`,
-				}
-				if (provider === "openrouter") {
-					;(headers as Record<string, string>)["HTTP-Referer"] = "https://github.com/shofer-ai/shofer"
-				}
-				break
-			case "ollama":
-				endpoint = baseUrl ? `${baseUrl.replace(/\/$/, "")}/api/chat` : "http://localhost:11434/api/chat"
-				headers = { "Content-Type": "application/json" }
-				break
-			default:
-				throw new Error(`Unsupported provider: ${provider}`)
-		}
-
-		// Build the request body
-		if (provider === "gemini") {
-			const contents = messages
-				.filter((m) => m.role !== "system")
-				.map((m) => ({
-					role: m.role === "assistant" ? "model" : "user",
-					parts: [{ text: m.content }],
-				}))
-			const systemMsg = messages.find((m) => m.role === "system")
-			body = {
-				contents,
-				systemInstruction: systemMsg ? { parts: [{ text: systemMsg.content }] } : undefined,
-				generationConfig: {
-					maxOutputTokens: DEFAULT_MAX_RESPONSE_TOKENS,
-				},
-			}
-		} else if (provider === "ollama") {
-			body = {
-				model: modelId,
-				messages,
-				stream: false,
-				options: {
-					num_predict: DEFAULT_MAX_RESPONSE_TOKENS,
-				},
-			}
-		} else {
-			body = {
-				model: modelId,
-				messages,
-				max_tokens: DEFAULT_MAX_RESPONSE_TOKENS,
-			}
-		}
-
-		// Make the API call using the provided signal for cancellation
-		const response = await fetch(endpoint, {
-			method: "POST",
-			headers,
-			body: JSON.stringify(body),
-			signal: signal ?? undefined,
-		})
-
-		if (!response.ok) {
-			const errorText = await response.text().catch(() => "Unknown error")
-			throw new Error(`LLM API error (${response.status}): ${errorText}`)
-		}
-
-		const data = (await response.json()) as any
-
-		// Parse the response based on provider
-		let answer: string
-		let promptTokens = 0
-		let completionTokens = 0
-
-		if (provider === "gemini") {
-			answer = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ""
-			promptTokens = data.usageMetadata?.promptTokenCount ?? 0
-			completionTokens = data.usageMetadata?.candidatesTokenCount ?? 0
-		} else if (provider === "ollama") {
-			answer = data.message?.content ?? ""
-			promptTokens = data.prompt_eval_count ?? 0
-			completionTokens = data.eval_count ?? 0
-		} else {
-			answer = data.choices?.[0]?.message?.content ?? ""
-			promptTokens = data.usage?.prompt_tokens ?? 0
-			completionTokens = data.usage?.completion_tokens ?? 0
-		}
-
-		// Update cost tracking
-		const totalTokens = promptTokens + completionTokens
-		this._costTracking.totalInputTokens += promptTokens
-		this._costTracking.totalOutputTokens += completionTokens
-		this._costTracking.estimatedCostUSD += this._estimateCost(promptTokens, completionTokens)
-		this._costTracking.lastUpdated = Date.now()
-
-		return {
-			answer,
-			tokensUsed: {
-				prompt: promptTokens,
-				completion: completionTokens,
-				total: totalTokens,
-			},
-		}
 	}
 
 	// ─── File Context ────────────────────────────────────────────────────
@@ -989,74 +554,31 @@ export class HelperAgentManager {
 			const content = await fs.readFile(fullPath, "utf-8")
 			const contentHash = createHash("sha256").update(content).digest("hex")
 
-			// Check if already in context with same hash
-			const existing = this._fileContexts.find((fc) => fc.filePath === filePath)
-			if (existing) {
-				existing.contentHash = contentHash
-				existing.lastReferencedAt = Date.now()
-				existing.tokenEstimate = Math.ceil(content.length / 4)
-				return
-			}
-
 			const entry: FileContextEntry = {
 				filePath,
 				contentHash,
-				tokenEstimate: Math.ceil(content.length / 4),
+				tokenEstimate: estimateTokens(content),
 				loadedAt: Date.now(),
 				lastReferencedAt: Date.now(),
 			}
 
-			this._fileContexts.push(entry)
-
-			// Check context size and truncate if needed
-			this._enforceContextLimit()
+			this._window.upsertFileContext(entry)
+			this._window.enforceLimit()
+			this._costTracking.totalTokensTruncated += this._window.consumeEvictedTokens()
 		} catch (error) {
-			// File can't be read — silently skip
-			console.warn(`[HelperAgent] Could not load file into context: ${filePath}`, error)
+			logger.warn(
+				`[HelperAgent] Could not load file into context: ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+			)
 		}
 	}
 
-	private _enforceContextLimit(): void {
-		const maxTokens = this._config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS
+	// ─── Cost Accumulation ───────────────────────────────────────────────
 
-		while (this.estimatedTokenCount > maxTokens) {
-			// Evict least-recently-referenced file contexts first
-			if (this._fileContexts.length > 0) {
-				this._fileContexts.sort((a, b) => a.lastReferencedAt - b.lastReferencedAt)
-				const evicted = this._fileContexts.shift()!
-				this._costTracking.totalTokensTruncated += evicted.tokenEstimate
-				continue
-			}
-
-			// Then truncate oldest conversation turns
-			if (this._messages.length > 2) {
-				this._messages.shift()
-				this._messages.shift() // remove a user+assistant pair
-				this._costTracking.totalTokensTruncated += 100 // rough estimate
-				continue
-			}
-
-			// Can't truncate further
-			break
-		}
-	}
-
-	// ─── Cost Estimation ─────────────────────────────────────────────────
-
-	/**
-	 * Rough cost estimate based on provider pricing.
-	 * Uses approximate per-token rates. For precise costs, integrate with
-	 * a pricing table in a future phase.
-	 */
-	private _estimateCost(promptTokens: number, completionTokens: number): number {
-		// Rough estimates per 1M tokens:
-		// - Input: $0.15 (Gemini Flash), $2.50 (GPT-4o-mini), $0.25 (Claude Haiku)
-		// - Output: $0.60 (Gemini Flash), $10.00 (GPT-4o-mini), $1.25 (Claude Haiku)
-		// Using conservative averages for now
-		const inputRatePerM = 0.5 // $0.50 per 1M input tokens (average)
-		const outputRatePerM = 2.0 // $2.00 per 1M output tokens (average)
-
-		return (promptTokens / 1_000_000) * inputRatePerM + (completionTokens / 1_000_000) * outputRatePerM
+	private _accumulateCost(promptTokens: number, completionTokens: number, costUSD: number): void {
+		this._costTracking.totalInputTokens += promptTokens
+		this._costTracking.totalOutputTokens += completionTokens
+		this._costTracking.estimatedCostUSD += costUSD
+		this._costTracking.lastUpdated = Date.now()
 	}
 
 	// ─── State Management ────────────────────────────────────────────────
@@ -1068,5 +590,32 @@ export class HelperAgentManager {
 			this._stateMessage = message
 			this._stateChangeEmitter.fire(newState)
 		}
+	}
+}
+
+// ─── Provider → Secret Key Mapping ─────────────────────────────────────
+
+type HelperAgentSecretKey =
+	| "helperAgentOpenAiKey"
+	| "helperAgentGeminiKey"
+	| "helperAgentOpenAiCompatibleKey"
+	| "helperAgentAnthropicKey"
+	| "helperAgentOllamaKey"
+	| "helperAgentOpenRouterKey"
+
+function secretKeyForProvider(provider: HelperAgentConfig["provider"]): HelperAgentSecretKey {
+	switch (provider) {
+		case "openai":
+			return "helperAgentOpenAiKey"
+		case "gemini":
+			return "helperAgentGeminiKey"
+		case "openai-compatible":
+			return "helperAgentOpenAiCompatibleKey"
+		case "anthropic":
+			return "helperAgentAnthropicKey"
+		case "ollama":
+			return "helperAgentOllamaKey"
+		case "openrouter":
+			return "helperAgentOpenRouterKey"
 	}
 }
