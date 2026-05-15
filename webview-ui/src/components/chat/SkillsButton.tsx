@@ -58,17 +58,12 @@ export const SkillsButton = () => {
 
 	// Resolve loaded skills from metadata — only show loaded skills that still exist
 	const loadedSkillsSet = useMemo(() => new Set(Object.keys(loadedSkills ?? {})), [loadedSkills])
-	console.log("[SkillsButton] loadedSkills:", loadedSkills, "loadedSkillsSet:", loadedSkillsSet)
 
 	// Split skills into loaded and unloaded
 	const loadedSkillsList = useMemo(() => {
 		const items = skills ?? []
 		return items.filter((s) => loadedSkillsSet.has(s.name)).sort((a, b) => a.name.localeCompare(b.name))
 	}, [skills, loadedSkillsSet])
-	console.log(
-		"[SkillsButton] loadedSkillsList:",
-		loadedSkillsList.map((s) => s.name),
-	)
 
 	// Group unloaded skills by mode restriction, sorted alphabetically
 	const grouped = useMemo(() => {
