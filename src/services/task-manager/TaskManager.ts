@@ -164,7 +164,16 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const autoName =
 			name || (taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : "New Task")
 
-		const state = existing?.state ?? (task.abandoned || task.abort ? "idle" : "running")
+		// When the managedTasks map is empty (e.g. after restart — restoreManagedTasks
+		// is never called in production), fall back to the persisted taskExecutionState
+		// rather than blindly assuming "running" for a fresh Task instance.
+		let state: ManagedTaskState
+		if (existing) {
+			state = existing.state
+		} else {
+			const persisted = this.providerRef.deref()?.taskHistoryStore?.get(task.taskId)?.taskExecutionState
+			state = persisted ?? (task.abandoned || task.abort ? "idle" : "running")
+		}
 		console.log(`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) → creating with state=${state}`)
 		const managedTask: ManagedTask = {
 			id: task.taskId,
