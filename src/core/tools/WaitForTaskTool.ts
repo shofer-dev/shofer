@@ -85,7 +85,7 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		const readPersistedStatus = async (taskId: string): Promise<"completed" | "pending"> => {
 			try {
 				const { historyItem } = await provider.getTaskWithId(taskId)
-				return historyItem.taskExecutionState === "completed" ? "completed" : "pending"
+				return historyItem.taskExecutionState?.startsWith("completed") ? "completed" : "pending"
 			} catch (_) {
 				// No persisted history yet — treat as pending.
 				return "pending"
