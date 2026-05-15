@@ -176,6 +176,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	helperAgentStatusBar.tooltip = "Helper Agent"
 	helperAgentStatusBar.show()
 	context.subscriptions.push(helperAgentStatusBar)
+	outputChannel.appendLine("[HelperAgent] Status bar button created and shown")
 
 	/**
 	 * Blinking timer for the "Busy" state. Fires every 500ms to toggle
@@ -300,6 +301,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	/** Show helper agent info panel (quick pick). */
 	context.subscriptions.push(
 		vscode.commands.registerCommand("shofer.helperAgent.showInfo", async () => {
+			outputChannel.appendLine("[HelperAgent] showInfo command invoked")
 			const managers = HelperAgentManager.getAllInstances()
 			if (managers.length === 0) {
 				vscode.window.showInformationMessage("Helper Agent is not available.")

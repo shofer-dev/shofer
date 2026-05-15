@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer-dev",
-	"version": "0.8.2",
+	"version": "0.8.3",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -182,6 +182,26 @@
 			{
 				"command": "shofer.addFilesToContext",
 				"title": "Add to Shofer Context",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.helperAgent.showInfo",
+				"title": "Helper Agent Info",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.helperAgent.start",
+				"title": "Start Helper Agent",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.helperAgent.stop",
+				"title": "Stop Helper Agent",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.helperAgent.clearContext",
+				"title": "Clear Helper Agent Context",
 				"category": "%configuration.title%"
 			}
 		],
