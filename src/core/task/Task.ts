@@ -1687,7 +1687,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						if (message) {
 							this.idleAsk = message
-							this.emit(ShoferEventName.TaskIdle, this.taskId)
+							// Re-visiting a completed task (resume_completed_task)
+							// should not change the managed task state — it remains
+							// whatever it was at completion time.
+							if (type !== "resume_completed_task") {
+								this.emit(ShoferEventName.TaskIdle, this.taskId)
+							}
 
 							// Emit TaskError for error conditions so TaskManager can set error state
 							const errorAskTypes = [
