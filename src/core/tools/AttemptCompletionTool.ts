@@ -79,7 +79,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		getOutputChannel()?.appendLine(`[DIAG] [AttemptCompletionTool] RAW PARAMS: ${JSON.stringify(params)}`)
 
 		const { result, rating, feedback } = params
-		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
+		const { handleError, pushToolResult } = callbacks
 
 		console.log(
 			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${rating}, result=${result?.substring(0, 100)}`,
@@ -243,65 +243,39 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							`[AttemptCompletionTool] Failed to get history for task ${task.taskId}: ${(err as Error)?.message ?? String(err)}. ` +
 								`Skipping delegation.`,
 						)
-						// Fall through to normal completion ask flow
+						// Fall through to normal completion flow
 					}
 				}
 			}
 
-			console.log(`[AttemptCompletionTool.execute] Showing completion ask to user, taskId=${task.taskId}`)
-			const { response, text, images } = await task.ask("completion_result", "", false)
-
-			if (response === "yesButtonClicked") {
-				console.log(
-					`[AttemptCompletionTool.execute] User approved completion, emitting TaskCompleted, taskId=${task.taskId}`,
-				)
-				// Persist file stats + result summary. The taskState (lifecycle/rating)
-				// is owned exclusively by TaskManager and gets set when it observes
-				// the TaskCompleted event below.
-				try {
-					const provider = task.providerRef.deref() as DelegationProvider | undefined
-					if (provider) {
-						const { historyItem } = await provider.getTaskWithId(task.taskId)
-						if (historyItem && historyItem.taskState?.lifecycle !== "completed") {
-							const fileStats = await computeFileChangeStats(task)
-							getOutputChannel()?.appendLine(
-								`[DIAG] [PERSIST] taskId=${task.taskId} effectiveRating=${effectiveRating} — persisting completion artefacts; rating goes via TaskCompleted event`,
-							)
-							await provider.updateTaskHistory({
-								...historyItem,
-								completionResultSummary: effectiveResult,
-								insertions: fileStats.insertions,
-								deletions: fileStats.deletions,
-							})
-						} else {
-							getOutputChannel()?.appendLine(
-								`[DIAG] [PERSIST-SKIP] taskId=${task.taskId} — historyItem=${JSON.stringify(historyItem)}`,
-							)
-						}
-					} else {
-						getOutputChannel()?.appendLine(`[DIAG] [PERSIST-NO-PROVIDER] taskId=${task.taskId}`)
+			// `attempt_completion` is the agent's self-declared terminal state — the
+			// rating and optional `feedback` are produced by the agent itself, so we
+			// do NOT ask the user to approve or to provide additional feedback.
+			// The completion result is rendered via the `say("completion_result", …)`
+			// above; here we just persist completion artefacts and emit the event.
+			try {
+				const provider = task.providerRef.deref() as DelegationProvider | undefined
+				if (provider) {
+					const { historyItem } = await provider.getTaskWithId(task.taskId)
+					if (historyItem && historyItem.taskState?.lifecycle !== "completed") {
+						const fileStats = await computeFileChangeStats(task)
+						await provider.updateTaskHistory({
+							...historyItem,
+							completionResultSummary: effectiveResult,
+							insertions: fileStats.insertions,
+							deletions: fileStats.deletions,
+						})
 					}
-				} catch (err) {
-					console.error(
-						`[AttemptCompletionTool] Failed to persist completion artefacts for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
-					)
 				}
-				this.emitTaskCompleted(task, effectiveRating)
-				// Set abort to stop the task loop from continuing after completion
-				task.abort = true
-				console.log(
-					`[AttemptCompletionTool.execute] Set abort=true and RETURNING after TaskCompleted, taskId=${task.taskId}`,
+			} catch (err) {
+				console.error(
+					`[AttemptCompletionTool] Failed to persist completion artefacts for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
 				)
-				return
 			}
 
-			console.log(
-				`[AttemptCompletionTool.execute] User provided feedback, continuing task, taskId=${task.taskId}`,
-			)
-			// User provided feedback - push tool result to continue the conversation
-			await task.say("user_feedback", text ?? "", images)
-			const feedbackText = `<user_message>\n${text}\n</user_message>`
-			pushToolResult(formatResponse.toolResult(feedbackText, images))
+			pushToolResult("")
+			this.emitTaskCompleted(task, effectiveRating)
+			task.abort = true
 		} catch (error) {
 			await handleError("inspecting site", error as Error)
 		}
