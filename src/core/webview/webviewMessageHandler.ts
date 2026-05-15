@@ -2733,6 +2733,31 @@ export const webviewMessageHandler = async (
 			})
 			break
 		}
+		case "helperAgentAction": {
+			// Routes helper-agent toolbar actions from the in-webview status badge
+			// to the corresponding extension commands. Used by the popover that
+			// replaced the former VS Code status bar item.
+			const action = message.text
+			switch (action) {
+				case "start":
+					await vscode.commands.executeCommand("shofer.helperAgent.start")
+					break
+				case "clear":
+					await vscode.commands.executeCommand("shofer.helperAgent.clearContext")
+					break
+				case "chat":
+					await vscode.commands.executeCommand("shofer.helperAgent.showChat")
+					break
+				case "configure":
+					await vscode.commands.executeCommand("workbench.action.openSettings", "shofer.helperAgent")
+					break
+			}
+			break
+		}
+		case "requestHelperAgentStatus": {
+			provider.sendHelperAgentStatus()
+			break
+		}
 		case "requestCodeIndexSecretStatus": {
 			// Check if secrets are set using the VSCode context directly for async access
 			const hasOpenAiKey = !!(await provider.context.secrets.get("codeIndexOpenAiKey"))

@@ -1,34 +1,35 @@
+/**
+ * HelperAgentStatusBadge — Shofer chat-input toolbar badge that displays
+ * the Helper Agent's status as a chat-bubble icon with a colored dot. Now
+ * acts as the trigger for HelperAgentPopover, which exposes the actions
+ * previously available from the VS Code status bar quick-pick.
+ */
 import React, { useState, useEffect, useMemo } from "react"
 import { MessageCircle } from "lucide-react"
 
 import { cn } from "@src/lib/utils"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
+import { vscode } from "@src/utils/vscode"
 import { StandardTooltip, Button } from "@src/components/ui"
 
-interface HelperAgentStatus {
-	state: string
-	stateMessage?: string
-	isAvailable?: boolean
-	contextUsage?: { currentTokens: number; maxTokens: number; fillFraction: number; isNearlyFull?: boolean }
-	costSnapshot?: { sessionEstimatedCostUSD?: number }
-	conversationTurnCount?: number
-	pendingQuestionCount?: number
-	contextFiles?: string[]
-}
+import { HelperAgentPopover, type HelperAgentStatusData } from "./HelperAgentPopover"
 
 export const HelperAgentStatusBadge: React.FC<{ className?: string }> = ({ className }) => {
 	const { cwd } = useExtensionState()
 
-	const [status, setStatus] = useState<HelperAgentStatus>({
+	const [status, setStatus] = useState<HelperAgentStatusData>({
 		state: "Standby",
 	})
 
 	useEffect(() => {
+		// Request initial snapshot — periodic updates only fire on state changes.
+		vscode.postMessage({ type: "requestHelperAgentStatus" })
+
 		const handleMessage = (event: MessageEvent<{ type: string; text?: string }>) => {
 			if (event.data.type === "helperAgentStatusUpdate" && event.data.text) {
 				try {
-					const parsed = JSON.parse(event.data.text) as HelperAgentStatus
+					const parsed = JSON.parse(event.data.text) as HelperAgentStatusData
 					setStatus(parsed)
 				} catch {
 					// Ignore parse errors
@@ -69,26 +70,28 @@ export const HelperAgentStatusBadge: React.FC<{ className?: string }> = ({ class
 	}, [status.state])
 
 	return (
-		<StandardTooltip content={tooltipText}>
-			<Button
-				variant="ghost"
-				size="sm"
-				aria-label={tooltipText}
-				className={cn(
-					"relative h-5 w-5 p-0",
-					"text-vscode-foreground opacity-85",
-					"hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)]",
-					"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
-					className,
-				)}>
-				<MessageCircle className="w-4 h-4" />
-				<span
+		<HelperAgentPopover status={status}>
+			<StandardTooltip content={tooltipText}>
+				<Button
+					variant="ghost"
+					size="sm"
+					aria-label={tooltipText}
 					className={cn(
-						"absolute top-0 right-0 w-1.5 h-1.5 rounded-full transition-colors duration-200",
-						statusColorClass,
-					)}
-				/>
-			</Button>
-		</StandardTooltip>
+						"relative h-5 w-5 p-0",
+						"text-vscode-foreground opacity-85",
+						"hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)]",
+						"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
+						className,
+					)}>
+					<MessageCircle className="w-4 h-4" />
+					<span
+						className={cn(
+							"absolute top-0 right-0 w-1.5 h-1.5 rounded-full transition-colors duration-200",
+							statusColorClass,
+						)}
+					/>
+				</Button>
+			</StandardTooltip>
+		</HelperAgentPopover>
 	)
 }

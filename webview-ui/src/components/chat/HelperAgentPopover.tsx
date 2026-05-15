@@ -1,0 +1,189 @@
+/**
+ * HelperAgentPopover — info + action panel that opens when the user clicks
+ * the Helper Agent badge on the Shofer chat-input toolbar. Replaces the
+ * former VS Code status bar quick-pick menu.
+ *
+ * Displays:
+ *  - State, model, provider
+ *  - Context fill (tokens / max), files in context, conversation turns
+ *  - Session cost and pending question count
+ *
+ * Actions:
+ *  - View Chat       → shofer.helperAgent.showChat
+ *  - Clear Context   → shofer.helperAgent.clearContext
+ *  - Configure API   → workbench.action.openSettings
+ *  - Start / Restart → shofer.helperAgent.start
+ *
+ * Action dispatch goes through the `helperAgentAction` webview message which
+ * is routed by webviewMessageHandler.ts to the corresponding extension
+ * commands.
+ */
+import React from "react"
+import {
+	MessageCircle,
+	Trash2,
+	Settings,
+	Play,
+	Info,
+	Cpu,
+	Database,
+	Files,
+	MessagesSquare,
+	CreditCard,
+} from "lucide-react"
+
+import { vscode } from "@src/utils/vscode"
+import { Popover, PopoverContent, PopoverTrigger, Button } from "@src/components/ui"
+
+export interface HelperAgentStatusData {
+	state: string
+	stateMessage?: string
+	isAvailable?: boolean
+	modelId?: string
+	provider?: string
+	contextUsage?: { currentTokens: number; maxTokens: number; fillFraction: number; isNearlyFull?: boolean }
+	costSnapshot?: {
+		sessionEstimatedCostUSD?: number
+		sessionInputTokens?: number
+		sessionOutputTokens?: number
+	}
+	conversationTurnCount?: number
+	pendingQuestionCount?: number
+	contextFiles?: string[]
+}
+
+interface HelperAgentPopoverProps {
+	children: React.ReactNode
+	status: HelperAgentStatusData
+}
+
+const sendAction = (action: "chat" | "clear" | "configure" | "start") => {
+	vscode.postMessage({ type: "helperAgentAction", text: action })
+}
+
+export const HelperAgentPopover: React.FC<HelperAgentPopoverProps> = ({ children, status }) => {
+	const usage = status.contextUsage
+	const fillPct = usage ? (usage.fillFraction * 100).toFixed(1) : "0.0"
+	const cost = status.costSnapshot
+
+	return (
+		<Popover>
+			<PopoverTrigger asChild>{children}</PopoverTrigger>
+			<PopoverContent
+				align="end"
+				side="top"
+				className="w-80 p-0 bg-vscode-editor-background border border-vscode-panel-border">
+				<div className="px-3 py-2 border-b border-vscode-panel-border">
+					<div className="flex items-center gap-2 text-sm font-medium">
+						<MessageCircle className="w-4 h-4" />
+						<span>Helper Agent</span>
+					</div>
+				</div>
+
+				<div className="px-3 py-2 space-y-1.5 text-xs text-vscode-foreground">
+					<InfoRow
+						icon={<Info className="w-3.5 h-3.5" />}
+						label="State"
+						value={status.state}
+						sub={status.stateMessage}
+					/>
+					{status.modelId ? (
+						<InfoRow
+							icon={<Cpu className="w-3.5 h-3.5" />}
+							label="Model"
+							value={status.modelId}
+							sub={status.provider ? `Provider: ${status.provider}` : undefined}
+						/>
+					) : null}
+					{usage ? (
+						<InfoRow
+							icon={<Database className="w-3.5 h-3.5" />}
+							label="Context"
+							value={`${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} (${fillPct}%)`}
+							sub={usage.isNearlyFull ? "⚠ Nearly full" : undefined}
+						/>
+					) : null}
+					<InfoRow
+						icon={<Files className="w-3.5 h-3.5" />}
+						label="Files in context"
+						value={String(status.contextFiles?.length ?? 0)}
+					/>
+					<InfoRow
+						icon={<MessagesSquare className="w-3.5 h-3.5" />}
+						label="Conversation turns"
+						value={String(status.conversationTurnCount ?? 0)}
+						sub={
+							status.pendingQuestionCount
+								? `${status.pendingQuestionCount} question(s) queued`
+								: undefined
+						}
+					/>
+					{cost ? (
+						<InfoRow
+							icon={<CreditCard className="w-3.5 h-3.5" />}
+							label="Session cost"
+							value={`$${(cost.sessionEstimatedCostUSD ?? 0).toFixed(6)}`}
+							sub={
+								cost.sessionInputTokens !== undefined && cost.sessionOutputTokens !== undefined
+									? `${cost.sessionInputTokens.toLocaleString()} in + ${cost.sessionOutputTokens.toLocaleString()} out`
+									: undefined
+							}
+						/>
+					) : null}
+				</div>
+
+				<div className="px-2 py-2 border-t border-vscode-panel-border grid grid-cols-2 gap-1.5">
+					<ActionButton
+						icon={<MessageCircle className="w-3.5 h-3.5" />}
+						label="View Chat"
+						onClick={() => sendAction("chat")}
+					/>
+					<ActionButton
+						icon={<Trash2 className="w-3.5 h-3.5" />}
+						label="Clear Context"
+						onClick={() => sendAction("clear")}
+					/>
+					<ActionButton
+						icon={<Settings className="w-3.5 h-3.5" />}
+						label="Configure API"
+						onClick={() => sendAction("configure")}
+					/>
+					<ActionButton
+						icon={<Play className="w-3.5 h-3.5" />}
+						label="Start Agent"
+						onClick={() => sendAction("start")}
+					/>
+				</div>
+			</PopoverContent>
+		</Popover>
+	)
+}
+
+const InfoRow: React.FC<{
+	icon: React.ReactNode
+	label: string
+	value: string
+	sub?: string
+}> = ({ icon, label, value, sub }) => (
+	<div className="flex items-start gap-2">
+		<span className="mt-0.5 opacity-70">{icon}</span>
+		<div className="flex-1 min-w-0">
+			<div className="flex justify-between gap-2">
+				<span className="opacity-70">{label}</span>
+				<span className="font-mono truncate">{value}</span>
+			</div>
+			{sub ? <div className="text-[10px] opacity-60">{sub}</div> : null}
+		</div>
+	</div>
+)
+
+const ActionButton: React.FC<{
+	icon: React.ReactNode
+	label: string
+	onClick: () => void
+}> = ({ icon, label, onClick }) => (
+	<Button variant="ghost" size="sm" onClick={onClick} className="justify-start gap-1.5 h-7 text-xs">
+		{icon}
+		<span>{label}</span>
+	</Button>
+)

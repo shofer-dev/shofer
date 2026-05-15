@@ -621,6 +621,8 @@ export interface WebviewMessage {
 		| "clearIndexData"
 		| "indexingStatusUpdate"
 		| "indexCleared"
+		| "helperAgentAction"
+		| "requestHelperAgentStatus"
 		| "toggleWorkspaceIndexing"
 		| "setAutoEnableDefault"
 		| "focusPanelRequest"

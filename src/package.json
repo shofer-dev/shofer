@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer-dev",
-	"version": "0.8.12",
+	"version": "0.8.13",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -13,9 +13,7 @@
 		"vscode": "^1.84.0",
 		"node": "20.19.2"
 	},
-	"enabledApiProposals": [
-		"languageModelThinkingPart"
-	],
+	"enabledApiProposals": [],
 	"author": {
 		"name": "Shofer"
 	},
@@ -185,8 +183,8 @@
 				"category": "%configuration.title%"
 			},
 			{
-				"command": "shofer.helperAgent.showInfo",
-				"title": "Helper Agent Info",
+				"command": "shofer.helperAgent.showChat",
+				"title": "Show Helper Agent Chat",
 				"category": "%configuration.title%"
 			},
 			{
@@ -509,7 +507,7 @@
 		"@google/genai": "^1.29.1",
 		"@lmstudio/sdk": "^1.1.1",
 		"@mistralai/mistralai": "^1.9.18",
-		"@modelcontextprotocol/sdk": "1.12.0",
+		"@modelcontextprotocol/sdk": "1.14.0",
 		"@qdrant/js-client-rest": "^1.14.0",
 		"@shofer/core": "workspace:^",
 		"@shofer/ipc": "workspace:^",
