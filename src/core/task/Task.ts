@@ -241,7 +241,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					const provider = this.providerRef.deref()
 					if (provider) {
 						const historyItem = await (provider as any).getTaskWithId(childId)
-						handle.status = historyItem.taskExecutionState === "completed" ? "completed" : "error"
+						handle.status = historyItem.taskExecutionState?.startsWith("completed") ? "completed" : "error"
 					}
 				} catch (_) {
 					handle.status = "error"
@@ -2429,7 +2429,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // Could be multiple resume tasks.
 
 			let askType: ShoferAsk
-			if (this.initialStatus === "completed" || lastShoferMessage?.ask === "completion_result") {
+			if (this.initialStatus?.startsWith("completed") || lastShoferMessage?.ask === "completion_result") {
 				askType = "resume_completed_task"
 			} else {
 				askType = "resume_task"

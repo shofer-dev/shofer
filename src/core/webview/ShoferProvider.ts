@@ -3634,7 +3634,7 @@ export class ShoferProvider
 			const { historyItem: childHistory } = await this.getTaskWithId(childTaskId)
 			await this.updateTaskHistory({
 				...childHistory,
-				taskExecutionState: "completed",
+				taskExecutionState: "completed_poorly",
 				completionResultSummary: completionResult,
 			})
 		} catch (err) {

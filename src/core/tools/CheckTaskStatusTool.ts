@@ -74,7 +74,7 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			let resolvedFromHistory = false
 			try {
 				const { historyItem } = await provider.getTaskWithId(task_id)
-				if (historyItem.taskExecutionState === "completed") {
+				if (historyItem.taskExecutionState?.startsWith("completed")) {
 					handle.status = "completed"
 					resolvedFromHistory = true
 				}
