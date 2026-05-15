@@ -662,32 +662,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						type: "text",
 						text: chunk.value,
 					}
-				} else {
-					// Handle thinking/reasoning content from models like mimo-v2-pro.
-					// LanguageModelThinkingPart is not in current VSCode types; we treat
-					// any non-text, non-tool-call chunk as thinking content.
-					const value = (chunk as { value?: unknown }).value
-					if (typeof value === "string" && value.trim()) {
-						// Detect structured tool_preparing marker emitted by llm-provider.
-						// Format: \x00tool_preparing\x00<toolName>\x00<byteCount>\x00
-						// Null-byte delimiter prevents false positives from real thinking text.
-						// eslint-disable-next-line no-control-regex
-						const preparingMatch = value.match(/^\x00tool_preparing\x00([^\x00]+)\x00(\d+)\x00$/)
-						if (preparingMatch) {
-							yield {
-								type: "tool_preparing",
-								toolName: preparingMatch[1],
-								byteCount: parseInt(preparingMatch[2], 10),
-							}
-						} else {
-							yield {
-								type: "reasoning",
-								text: value,
-							}
-						}
-					}
-				}
-				if (chunk instanceof vscode.LanguageModelToolCallPart) {
+				} else if (chunk instanceof vscode.LanguageModelToolCallPart) {
 					try {
 						// Diagnostic log for attempt_completion calls
 						if (chunk.name === "attempt_completion") {
@@ -754,7 +729,31 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						continue
 					}
 				} else {
-					console.warn("Shofer <Language Model API>: Unknown chunk type received:", chunk)
+					// Handle thinking/reasoning content from models like mimo-v2-pro.
+					// LanguageModelThinkingPart is not in current VSCode types; we treat
+					// any non-text, non-tool-call chunk as thinking content.
+					const value = (chunk as { value?: unknown }).value
+					if (typeof value === "string" && value.trim()) {
+						// Detect structured tool_preparing marker emitted by llm-provider.
+						// Format: \x00tool_preparing\x00<toolName>\x00<byteCount>\x00
+						// Null-byte delimiter prevents false positives from real thinking text.
+						// eslint-disable-next-line no-control-regex
+						const preparingMatch = value.match(/^\x00tool_preparing\x00([^\x00]+)\x00(\d+)\x00$/)
+						if (preparingMatch) {
+							yield {
+								type: "tool_preparing",
+								toolName: preparingMatch[1],
+								byteCount: parseInt(preparingMatch[2], 10),
+							}
+						} else {
+							yield {
+								type: "reasoning",
+								text: value,
+							}
+						}
+					} else {
+						console.warn("Shofer <Language Model API>: Unknown chunk type received:", chunk)
+					}
 				}
 			}
 
