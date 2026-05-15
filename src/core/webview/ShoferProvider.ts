@@ -284,10 +284,14 @@ export class ShoferProvider
 
 			// Create named listener functions so we can remove them later.
 			const onTaskStarted = () => this.emit(ShoferEventName.TaskStarted, instance.taskId)
-			const onTaskCompleted = (taskId: string, tokenUsage: TokenUsage, toolUsage: ToolUsage) =>
-				this.emit(ShoferEventName.TaskCompleted, taskId, tokenUsage, toolUsage)
-			const onTaskAborted = async () => {
-				this.emit(ShoferEventName.TaskAborted, instance.taskId)
+			const onTaskCompleted = (
+				taskId: string,
+				tokenUsage: TokenUsage,
+				toolUsage: ToolUsage,
+				info: import("@shofer/types").TaskCompletedInfo,
+			) => this.emit(ShoferEventName.TaskCompleted, taskId, tokenUsage, toolUsage, info)
+			const onTaskAborted = async (info: import("@shofer/types").TaskAbortedInfo) => {
+				this.emit(ShoferEventName.TaskAborted, instance.taskId, info)
 
 				try {
 					// Only rehydrate on genuine streaming failures.
@@ -1156,7 +1160,7 @@ export class ShoferProvider
 			onCreated: this.taskCreationCallback,
 			startTask: options?.startTask ?? true,
 			// Preserve the status from the history item to avoid overwriting it when the task saves messages
-			initialStatus: historyItem.taskExecutionState ?? "idle",
+			initialState: historyItem.taskState ?? { lifecycle: "idle" },
 		})
 
 		if (isRehydratingCurrentTask) {
@@ -3158,6 +3162,8 @@ export class ShoferProvider
 						state: currentManager.state,
 						stateMessage: currentManager.stateMessage,
 						isAvailable: currentManager.isHelperAgentAvailable,
+						modelId: currentManager.modelId,
+						provider: currentManager.provider,
 						contextUsage: currentManager.getContextUsage(),
 						costSnapshot: currentManager.getCostSnapshot(),
 						conversationTurnCount: currentManager.conversationTurnCount,
@@ -3179,6 +3185,37 @@ export class ShoferProvider
 
 			sendStatus()
 		}
+	}
+
+	/**
+	 * Pushes a fresh Helper Agent status snapshot to the webview. Used by the
+	 * webview status badge to populate itself on mount, since the periodic
+	 * subscription only fires on state/conversation changes.
+	 */
+	public sendHelperAgentStatus(): void {
+		const manager = this.helperAgentManager ?? HelperAgentManager.getInstance(this.context)
+		if (!manager) {
+			this.postMessageToWebview({
+				type: "helperAgentStatusUpdate",
+				text: JSON.stringify({ state: "Standby", isAvailable: false }),
+			})
+			return
+		}
+		this.postMessageToWebview({
+			type: "helperAgentStatusUpdate",
+			text: JSON.stringify({
+				state: manager.state,
+				stateMessage: manager.stateMessage,
+				isAvailable: manager.isHelperAgentAvailable,
+				modelId: manager.modelId,
+				provider: manager.provider,
+				contextUsage: manager.getContextUsage(),
+				costSnapshot: manager.getCostSnapshot(),
+				conversationTurnCount: manager.conversationTurnCount,
+				pendingQuestionCount: manager.pendingQuestionCount,
+				contextFiles: manager.contextFiles,
+			}),
+		})
 	}
 
 	/**
@@ -3635,7 +3672,7 @@ export class ShoferProvider
 			const { historyItem: childHistory } = await this.getTaskWithId(childTaskId)
 			await this.updateTaskHistory({
 				...childHistory,
-				taskExecutionState: "completed_poorly",
+				taskState: { lifecycle: "completed", rating: "poor" },
 				completionResultSummary: completionResult,
 			})
 		} catch (err) {
@@ -3784,7 +3821,7 @@ export class ShoferProvider
 				name: managedTask.name,
 
 				lastActiveTs: managedTask.lastActiveAt,
-				taskExecutionState: managedTask.state,
+				taskState: managedTask.state,
 			}
 
 			await this.updateTaskHistory(historyItem)

@@ -50,7 +50,6 @@ import {
 	CodeActionProvider,
 } from "./activate"
 import { initializeI18n } from "./i18n"
-import { initializeModelCacheRefresh } from "./api/providers/fetchers/modelCache"
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -160,239 +159,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	// ─── Helper Agent Status Bar ────────────────────────────────────────
+	// ─── Helper Agent Commands ──────────────────────────────────────────
+	// The Helper Agent's status indicator and action menu live in the
+	// Shofer chat-input toolbar (HelperAgentStatusBadge → HelperAgentPopover),
+	// not in the VS Code status bar. The commands below back the popover
+	// actions and are also exposed through the command palette.
 
-	/**
-	 * Status bar button for the Helper Agent. Sits next to the RAG indexer
-	 * button on the status bar. Shows agent state, context fill percentage,
-	 * and model name. Left-click opens the info panel (quick pick).
-	 *
-	 * IMPORTANT: The command must be registered BEFORE creating the
-	 * StatusBarItem so that code-server/VSCode resolves it correctly.
-	 */
+	/** Open the Helper Agent chat panel (invoked by the webview status badge). */
 	context.subscriptions.push(
-		vscode.commands.registerCommand("shofer.helperAgent.showInfo", async () => {
-			outputChannel.appendLine("[HelperAgent] showInfo FIRED — status bar clicked")
-			const managers = HelperAgentManager.getAllInstances()
-			if (managers.length === 0) {
-				vscode.window.showInformationMessage("Helper Agent is not available.")
-				outputChannel.appendLine("[HelperAgent] showInfo: no manager instances")
-				return
-			}
-
-			const mgr = managers[0]
-			const usage = mgr.getContextUsage()
-			const cost = mgr.getCostSnapshot()
-			const fillPct = (usage.fillFraction * 100).toFixed(1)
-
-			const items: vscode.QuickPickItem[] = [
-				{
-					label: `$(info) State: ${mgr.state}`,
-					description: mgr.stateMessage,
-				},
-				{
-					label: `$(rocket) Model: ${mgr.modelId}`,
-					description: `Provider: ${mgr.provider}`,
-				},
-				{
-					label: `$(database) Context: ${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} tokens (${fillPct}%)`,
-					description: usage.isNearlyFull ? "⚠ Nearly full" : "OK",
-				},
-				{
-					label: `$(file) Files in context: ${mgr.contextFiles.length}`,
-				},
-				{
-					label: `$(comment-discussion) Conversation turns: ${mgr.conversationTurnCount}`,
-				},
-				{
-					label: `$(credit-card) Session cost: $${cost.sessionEstimatedCostUSD.toFixed(6)}`,
-					description: `${cost.sessionInputTokens.toLocaleString()} in + ${cost.sessionOutputTokens.toLocaleString()} out tokens`,
-				},
-			]
-
-			const actions: (vscode.QuickPickItem & { action: string })[] = [
-				{
-					label: "$(comment-discussion) View Chat",
-					description: "Open the helper agent chat panel",
-					action: "chat",
-				},
-				{
-					label: "$(trash) Clear Context",
-					description: "Reset conversation to system prompt (cost tracking preserved)",
-					action: "clear",
-				},
-				{
-					label: "$(gear) Configure API",
-					description: "Open helper agent API settings",
-					action: "configure",
-				},
-				{
-					label: "$(debug-start) Start Agent",
-					description: "Start or restart the helper agent",
-					action: "start",
-				},
-			]
-
-			const pick = await vscode.window.showQuickPick(
-				[...items, { label: "", kind: vscode.QuickPickItemKind.Separator }, ...actions],
-				{
-					placeHolder: "Helper Agent — Info & Actions",
-				},
-			)
-
-			if (pick && "action" in pick) {
-				const action = (pick as any).action as string
-				switch (action) {
-					case "chat":
-						showHelperAgentChatPanel(context.extensionUri)
-						break
-					case "clear":
-						await mgr.clearContext()
-						vscode.window.showInformationMessage("Helper Agent context cleared.")
-						break
-					case "configure":
-						vscode.commands.executeCommand("workbench.action.openSettings", "shofer.helperAgent")
-						break
-					case "start":
-						await mgr.initialize()
-						vscode.window.showInformationMessage("Helper Agent re-initialized.")
-						break
-				}
-			}
+		vscode.commands.registerCommand("shofer.helperAgent.showChat", () => {
+			showHelperAgentChatPanel(context.extensionUri)
 		}),
 	)
-
-	const helperAgentStatusBar = vscode.window.createStatusBarItem(
-		vscode.StatusBarAlignment.Right,
-		99.9, // Position right after the RAG indexer (which uses 100)
-	)
-	helperAgentStatusBar.name = "Helper Agent"
-	// Use a Command object (not just a string) for reliable code-server resolution
-	helperAgentStatusBar.command = "shofer.helperAgent.showInfo"
-	helperAgentStatusBar.tooltip = "Helper Agent"
-	helperAgentStatusBar.show()
-	context.subscriptions.push(helperAgentStatusBar)
-	outputChannel.appendLine("[HelperAgent] Status bar button created (click → shofer.helperAgent.showInfo)")
-
-	/**
-	 * Blinking timer for the "Busy" state. Fires every 500ms to toggle
-	 * the icon visibility, matching the RAG indexer's blinking pattern.
-	 */
-	let helperAgentBlinkTimer: NodeJS.Timeout | null = null
-	let helperAgentBlinkVisible = true
-
-	/**
-	 * Resolves the appropriate status bar text for the current agent state.
-	 */
-	function updateHelperAgentStatusBar(): void {
-		const managers = HelperAgentManager.getAllInstances()
-		if (managers.length === 0) {
-			helperAgentStatusBar.text = "$(comment-discussion) Helper Agent"
-			helperAgentStatusBar.tooltip = "Helper Agent — not available"
-			return
-		}
-
-		const mgr = managers[0]
-		const state = mgr.state
-		const usage = mgr.getContextUsage()
-		const cost = mgr.getCostSnapshot()
-		const fillPct = (usage.fillFraction * 100).toFixed(1)
-		const pendingCount = mgr.pendingQuestionCount
-
-		// Stop any active blink timer
-		if (helperAgentBlinkTimer) {
-			clearInterval(helperAgentBlinkTimer)
-			helperAgentBlinkTimer = null
-			helperAgentBlinkVisible = true
-		}
-
-		let stateIcon: string
-		let stateText: string
-		let tooltipLines: string[] = [
-			`Model: ${mgr.modelId} (${mgr.provider})`,
-			`Tokens: ${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} (${fillPct}%)`,
-			`Cost: $${cost.sessionEstimatedCostUSD.toFixed(6)}`,
-		]
-
-		switch (state) {
-			case "Initializing":
-				stateIcon = "$(sync~spin)"
-				stateText = `Initializing...`
-				break
-			case "Ready":
-				stateIcon = "$(comment-discussion)"
-				stateText = `Ready (${fillPct}%)`
-				if (usage.isNearlyFull) {
-					stateIcon = "$(warning)"
-					stateText = `Nearly Full (${fillPct}%)`
-				}
-				break
-			case "Busy":
-				stateIcon = "$(loading~spin)"
-				stateText = `Busy (${fillPct}%)`
-				if (pendingCount > 0) {
-					stateText += ` [${pendingCount}]`
-				}
-				tooltipLines.push(`${pendingCount} question(s) queued`)
-				// Start blinking
-				helperAgentBlinkTimer = setInterval(() => {
-					helperAgentBlinkVisible = !helperAgentBlinkVisible
-					helperAgentStatusBar.text = helperAgentBlinkVisible
-						? `$(loading~spin) ${stateText}`
-						: `$(comment-discussion) ${stateText}`
-				}, 500)
-				break
-			case "Error":
-				stateIcon = "$(error)"
-				stateText = `Error`
-				tooltipLines.push(`Error: ${mgr.stateMessage}`)
-				break
-			case "Stopping":
-				stateIcon = "$(sync~spin)"
-				stateText = `Stopping...`
-				break
-			case "Standby":
-			default:
-				stateIcon = "$(circle-outline)"
-				stateText = `Standby`
-				tooltipLines.push(`Reason: ${mgr.stateMessage}`)
-				break
-		}
-
-		helperAgentStatusBar.text = `${stateIcon} ${stateText}`
-		helperAgentStatusBar.tooltip = tooltipLines.join("\n")
-	}
-
-	// Subscribe to state changes to keep the status bar up-to-date
-	for (const mgr of HelperAgentManager.getAllInstances()) {
-		context.subscriptions.push(
-			mgr.onStateChange(() => {
-				updateHelperAgentStatusBar()
-			}),
-		)
-		context.subscriptions.push(
-			mgr.onConversationUpdate(() => {
-				updateHelperAgentStatusBar()
-			}),
-		)
-	}
-
-	// Clean up blink timer on deactivation
-	context.subscriptions.push({
-		dispose: () => {
-			if (helperAgentBlinkTimer) {
-				clearInterval(helperAgentBlinkTimer)
-				helperAgentBlinkTimer = null
-			}
-		},
-	})
-
-	// Initial update
-	updateHelperAgentStatusBar()
-
-	// ─── End Helper Agent Status Bar ───────────────────────────────────
-
-	// ─── Helper Agent Commands (non-status-bar) ─────────────────────────
 
 	/** Start / restart helper agent. */
 	context.subscriptions.push(
@@ -598,9 +376,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			},
 		})
 	}
-
-	// Initialize background model cache refresh
-	initializeModelCacheRefresh()
 
 	return new API(outputChannel, provider, socketPath, enableLogging)
 }
