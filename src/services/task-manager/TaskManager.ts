@@ -140,23 +140,32 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 */
 	registerBackgroundTask(task: Task, name?: string): void {
 		const existingActive = this.activeTasks.get(task.taskId)
+		const existingManaged = this.managedTasks.get(task.taskId)
+		console.log(
+			`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) ` +
+				`existingActive=${!!existingActive} existingManaged.state=${existingManaged?.state ?? "none"} ` +
+				`task.abort=${task.abort} task.abandoned=${task.abandoned}`,
+		)
 		if (existingActive) {
 			// Already registered — update the Task instance but keep the state.
 			this.cleanupTaskEventListeners(existingActive)
 			this.activeTasks.set(task.taskId, task)
 			this.setupManagedTaskEventListeners(task)
+			console.log(`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) → reused active, state unchanged`)
 			return
 		}
 
 		// Check whether a managedTask already exists (e.g. surviving from
 		// a previous stop/clear); preserve its state so the TaskSelector
 		// doesn't flip back to "running" after a re-focus.
-		const existing = this.managedTasks.get(task.taskId)
+		const existing = existingManaged
 
 		const taskText = task.shoferMessages.find((m) => m.type === "say" && m.say === "text")?.text || ""
 		const autoName =
 			name || (taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : "New Task")
 
+		const state = existing?.state ?? (task.abandoned || task.abort ? "idle" : "running")
+		console.log(`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) → creating with state=${state}`)
 		const managedTask: ManagedTask = {
 			id: task.taskId,
 			name: existing?.name ?? autoName,
@@ -164,7 +173,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			workspace: task.cwd || "",
 			createdAt: existing?.createdAt ?? Date.now(),
 			lastActiveAt: Date.now(),
-			state: existing?.state ?? (task.abandoned || task.abort ? "idle" : "running"),
+			state,
 		}
 
 		this.managedTasks.set(managedTask.id, managedTask)
