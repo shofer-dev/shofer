@@ -452,10 +452,14 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	updateTaskExecutionState(targetTaskId: string, state: ManagedTaskState): void {
 		const managedTask = this.managedTasks.get(targetTaskId)
 		if (!managedTask) {
+			console.log(`[DIAG-STATE] updateTaskExecutionState(${targetTaskId}, ${state}) — managedTask not found`)
 			return
 		}
 
 		const prevState = managedTask.state
+		// Capture call site: 2nd stack line after this method
+		const caller = new Error().stack?.split("\n")[2]?.trim() ?? "unknown"
+		console.log(`[DIAG-STATE] updateTaskExecutionState(${targetTaskId}) ${prevState} → ${state}  caller=${caller}`)
 		managedTask.state = state
 
 		if (prevState !== state) {
