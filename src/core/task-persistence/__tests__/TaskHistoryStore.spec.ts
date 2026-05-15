@@ -157,7 +157,7 @@ describe("TaskHistoryStore", () => {
 
 			const original = makeHistoryItem({
 				id: "delegate-task",
-				status: "delegated",
+				taskState: { lifecycle: "running" },
 				delegatedToId: "child-1",
 				awaitingChildId: "child-1",
 				childIds: ["child-1"],
@@ -173,7 +173,7 @@ describe("TaskHistoryStore", () => {
 			await store.upsert(partialUpdate)
 
 			const result = store.get("delegate-task")!
-			expect(result.status).toBe("delegated")
+			expect(result.taskState).toEqual({ lifecycle: "running" })
 			expect(result.delegatedToId).toBe("child-1")
 			expect(result.awaitingChildId).toBe("child-1")
 			expect(result.childIds).toEqual(["child-1"])

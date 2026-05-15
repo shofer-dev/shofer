@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { ShoferEventName, type HistoryItem, type TaskExecutionState } from "@shofer/types"
+import { ShoferEventName, type HistoryItem, type CompletionRating } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
@@ -12,8 +12,6 @@ import { getChangedFiles } from "../file-changes/ChangedFilesService"
 import { getOutputChannel } from "../../extension"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-
-type CompletionRating = "poor" | "well" | "excellent"
 
 interface AttemptCompletionParams {
 	result: string
@@ -128,8 +126,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// like vscode-lm don't enforce strict schemas. Rather than blocking
 			// completion, we accept a missing rating with a default.
 			const ALLOWED_RATINGS = new Set(["poor", "well", "excellent"])
-			const effectiveRating = rating && ALLOWED_RATINGS.has(rating) ? rating : "poor"
-			const completionState = `completed_${effectiveRating}`
+			const effectiveRating: CompletionRating =
+				rating && ALLOWED_RATINGS.has(rating) ? (rating as CompletionRating) : "poor"
 			if (!rating || !ALLOWED_RATINGS.has(rating)) {
 				console.log(
 					`[AttemptCompletionTool.execute] Rating missing or invalid (got: ${rating}), defaulting to "poor"`,
@@ -190,7 +188,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								`[AttemptCompletionTool.execute] Blocking foreground path handled taskId=${task.taskId}`,
 							)
 							pushToolResult("")
-							this.emitTaskCompleted(task)
+							this.emitTaskCompleted(task, effectiveRating)
 							task.abort = true
 							return
 						}
@@ -214,9 +212,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 							try {
 								const fileStats = await computeFileChangeStats(task)
+								// Persist file stats + completion summary only — taskState is
+								// owned exclusively by TaskManager, which writes it in response
+								// to the TaskCompleted event emitted below.
 								await provider.updateTaskHistory({
 									...historyItem,
-									taskExecutionState: completionState as TaskExecutionState,
 									completionResultSummary: effectiveResult,
 									insertions: fileStats.insertions,
 									deletions: fileStats.deletions,
@@ -233,7 +233,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								handle.status = "completed"
 							}
 
-							this.emitTaskCompleted(task)
+							this.emitTaskCompleted(task, effectiveRating)
 							task.abort = true
 							return
 						}
@@ -255,23 +255,23 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				console.log(
 					`[AttemptCompletionTool.execute] User approved completion, emitting TaskCompleted, taskId=${task.taskId}`,
 				)
-				// Persist `status: "completed"` so the Task Selector renders the green
-				// check icon for this task even after a code-server restart (when the
-				// live runtime overlay is gone). Mirrors the background-child branch
-				// above. Failure is non-fatal — the in-flight UI still updates via the
-				// TaskCompleted event.
+				// Persist file stats + result summary. The taskState (lifecycle/rating)
+				// is owned exclusively by TaskManager and gets set when it observes
+				// the TaskCompleted event below.
 				try {
 					const provider = task.providerRef.deref() as DelegationProvider | undefined
 					if (provider) {
 						const { historyItem } = await provider.getTaskWithId(task.taskId)
-						if (historyItem && !historyItem.taskExecutionState?.startsWith("completed")) {
+						if (historyItem && historyItem.taskState?.lifecycle !== "completed") {
 							const fileStats = await computeFileChangeStats(task)
 							getOutputChannel()?.appendLine(
-								`[DIAG] [PERSIST] taskId=${task.taskId} effectiveRating=${effectiveRating} — persisting status=completed, completionRating=${effectiveRating}`,
+								`[DIAG] [PERSIST] taskId=${task.taskId} effectiveRating=${effectiveRating} — persisting completion artefacts; rating goes via TaskCompleted event`,
 							)
 							await provider.updateTaskHistory({
 								...historyItem,
-								taskExecutionState: completionState as TaskExecutionState,
+								completionResultSummary: effectiveResult,
+								insertions: fileStats.insertions,
+								deletions: fileStats.deletions,
 							})
 						} else {
 							getOutputChannel()?.appendLine(
@@ -283,10 +283,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					}
 				} catch (err) {
 					console.error(
-						`[AttemptCompletionTool] Failed to persist completed status for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
+						`[AttemptCompletionTool] Failed to persist completion artefacts for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
 					)
 				}
-				this.emitTaskCompleted(task)
+				this.emitTaskCompleted(task, effectiveRating)
 				// Set abort to stop the task loop from continuing after completion
 				task.abort = true
 				console.log(
@@ -325,14 +325,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		}
 	}
 
-	private emitTaskCompleted(task: Task): void {
+	private emitTaskCompleted(task: Task, rating: CompletionRating): void {
 		console.log(`[AttemptCompletionTool.emitTaskCompleted] Emitting TaskCompleted event, taskId=${task.taskId}`)
 		// Force final token usage update before emitting TaskCompleted.
 		// This ensures the latest stats are captured regardless of throttle timer.
 		task.emitFinalTokenUsageUpdate()
 
 		TelemetryService.instance.captureTaskCompleted(task.taskId)
-		task.emit(ShoferEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage)
+		task.emit(ShoferEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage, {
+			rating,
+			isSubtask: !!task.parentTaskId,
+		})
 		console.log(`[AttemptCompletionTool.emitTaskCompleted] TaskCompleted event emitted, taskId=${task.taskId}`)
 	}
 }

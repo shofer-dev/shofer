@@ -3,7 +3,7 @@ import { z } from "zod"
 import { ShoferEventName } from "./events.js"
 import type { ShoferSettings } from "./global-settings.js"
 import type { ShoferMessage, QueuedMessage, TokenUsage } from "./message.js"
-import type { TaskExecutionState } from "./history.js"
+import type { TaskState, CompletionRating } from "./history.js"
 import type { ToolUsage, ToolName } from "./tool.js"
 import type { StaticAppProperties, GitProperties, TelemetryProperties } from "./telemetry.js"
 import type { TodoItem } from "./todo.js"
@@ -58,11 +58,27 @@ export interface TaskProviderLike {
 	postStateToWebview(): Promise<void>
 }
 
+export type TaskAbortReason = "user" | "completed" | "error" | "abandoned"
+
+export interface TaskCompletedInfo {
+	rating: CompletionRating
+	isSubtask: boolean
+}
+
+export interface TaskAbortedInfo {
+	reason: TaskAbortReason
+}
+
 export type TaskProviderEvents = {
 	[ShoferEventName.TaskCreated]: [task: TaskLike]
 	[ShoferEventName.TaskStarted]: [taskId: string]
-	[ShoferEventName.TaskCompleted]: [taskId: string, tokenUsage: TokenUsage, toolUsage: ToolUsage]
-	[ShoferEventName.TaskAborted]: [taskId: string]
+	[ShoferEventName.TaskCompleted]: [
+		taskId: string,
+		tokenUsage: TokenUsage,
+		toolUsage: ToolUsage,
+		info: TaskCompletedInfo,
+	]
+	[ShoferEventName.TaskAborted]: [taskId: string, info: TaskAbortedInfo]
 	[ShoferEventName.TaskFocused]: [taskId: string]
 	[ShoferEventName.TaskUnfocused]: [taskId: string]
 	[ShoferEventName.TaskActive]: [taskId: string]
@@ -101,7 +117,7 @@ export interface CreateTaskOptions {
 	 */
 	initialMode?: string
 	/** Initial execution state for the task's history item. */
-	initialStatus?: TaskExecutionState
+	initialState?: TaskState
 	/**
 	 * When true, marks the task as a background child of its parent so that
 	 * `attempt_completion` does NOT trigger the synchronous delegation flow
@@ -191,8 +207,13 @@ export interface TaskLike {
 export type TaskEvents = {
 	// Task Lifecycle
 	[ShoferEventName.TaskStarted]: []
-	[ShoferEventName.TaskCompleted]: [taskId: string, tokenUsage: TokenUsage, toolUsage: ToolUsage]
-	[ShoferEventName.TaskAborted]: []
+	[ShoferEventName.TaskCompleted]: [
+		taskId: string,
+		tokenUsage: TokenUsage,
+		toolUsage: ToolUsage,
+		info: TaskCompletedInfo,
+	]
+	[ShoferEventName.TaskAborted]: [info: TaskAbortedInfo]
 	[ShoferEventName.TaskError]: [taskId: string, errorType: string]
 	[ShoferEventName.TaskFocused]: []
 	[ShoferEventName.TaskUnfocused]: []

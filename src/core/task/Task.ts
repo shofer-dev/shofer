@@ -32,7 +32,7 @@ import {
 	type ToolProgressStatus,
 	type HistoryItem,
 	type CreateTaskOptions,
-	type TaskExecutionState,
+	type TaskState,
 	type ModelInfo,
 	type ShoferApiReqCancelReason,
 	type ShoferApiReqInfo,
@@ -167,8 +167,8 @@ export interface TaskOptions extends CreateTaskOptions {
 	 * If not set, cwd defaults to workspacePath.
 	 */
 	cwd?: string
-	/** Initial status for the task's history item (e.g., "active" for child tasks) */
-	initialStatus?: TaskExecutionState
+	/** Initial execution state for the task's history item (e.g., for child tasks) */
+	initialState?: TaskState
 }
 
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
@@ -241,7 +241,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					const provider = this.providerRef.deref()
 					if (provider) {
 						const historyItem = await (provider as any).getTaskWithId(childId)
-						handle.status = historyItem.taskExecutionState?.startsWith("completed") ? "completed" : "error"
+						handle.status = historyItem.taskState?.lifecycle === "completed" ? "completed" : "error"
 					}
 				} catch (_) {
 					handle.status = "error"
@@ -561,8 +561,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private readonly TOKEN_USAGE_EMIT_INTERVAL_MS = 2000 // 2 seconds
 	private debouncedEmitTokenUsage: ReturnType<typeof debounce>
 
-	// Initial status for the task's history item (set at creation time to avoid race conditions)
-	private readonly initialStatus?: TaskExecutionState
+	// Initial execution state for the task's history item (set at creation time to avoid race conditions)
+	private readonly initialState?: TaskState
 
 	// When true, this task is a background child of another task. Persisted onto
 	// the task's HistoryItem.isBackground from the first save and used by
@@ -591,7 +591,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		initialTodos,
 		workspacePath,
 		cwd,
-		initialStatus,
+		initialState,
 		initialMode,
 		isBackground,
 		resultLength,
@@ -674,7 +674,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (!parentTask) {
 			this.costLimit = historyItem?.costLimit
 		}
-		this.initialStatus = initialStatus
+		this.initialState = initialState
 		// Prefer explicit constructor flag; otherwise inherit from history item on rehydration.
 		this.isBackground = isBackground ?? historyItem?.isBackground ?? false
 
@@ -1407,7 +1407,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				cwd: this._cwd !== this.workspacePath ? this._cwd : undefined,
 				mode: this._taskMode || defaultModeSlug, // Use the task's own mode, not the current provider mode.
 				apiConfigName: this._taskApiConfigName, // Use the task's own provider profile, not the current provider profile.
-				initialStatus: this.initialStatus,
+				initialState: this.initialState,
 				isBackground: this.isBackground,
 				costLimit: this.costLimit,
 				loadedSkills: this.loadedSkills.size > 0 ? Array.from(this.loadedSkills.keys()) : undefined,
@@ -2436,7 +2436,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				.find((m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task")) // Could be multiple resume tasks.
 
 			let askType: ShoferAsk
-			if (this.initialStatus?.startsWith("completed") || lastShoferMessage?.ask === "completion_result") {
+			if (this.initialState?.lifecycle === "completed" || lastShoferMessage?.ask === "completion_result") {
 				askType = "resume_completed_task"
 			} else {
 				askType = "resume_task"
@@ -2715,7 +2715,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Force final token usage update before abort event
 		this.emitFinalTokenUsageUpdate()
 
-		this.emit(ShoferEventName.TaskAborted)
+		// Derive abort reason: completed (post-attempt_completion cleanup),
+		// error (streaming failure), abandoned (force-abandoned), or user (default).
+		const abortReasonValue: "user" | "completed" | "error" | "abandoned" = this.didExecuteAttemptCompletion
+			? "completed"
+			: this.abortReason === "streaming_failed"
+				? "error"
+				: this.abandoned
+					? "abandoned"
+					: "user"
+		this.emit(ShoferEventName.TaskAborted, { reason: abortReasonValue })
 
 		try {
 			this.dispose() // Call the centralized dispose method

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { shoferMessageSchema, queuedMessageSchema, tokenUsageSchema } from "./message.js"
 import { modelInfoSchema } from "./model.js"
 import { toolNamesSchema, toolUsageSchema } from "./tool.js"
+import { completionRatingSchema } from "./history.js"
 
 /**
  * ShoferEventName
@@ -70,10 +71,19 @@ export const shoferEventsSchema = z.object({
 		tokenUsageSchema,
 		toolUsageSchema,
 		z.object({
+			rating: completionRatingSchema,
 			isSubtask: z.boolean(),
 		}),
 	]),
-	[ShoferEventName.TaskAborted]: z.tuple([z.string()]),
+	[ShoferEventName.TaskAborted]: z.tuple([
+		z.string(),
+		z.object({
+			// Why the task was aborted. Lets listeners decide whether the
+			// abort represents a paused/stopped task or merely cleanup
+			// after a terminal state was already set elsewhere.
+			reason: z.enum(["user", "completed", "error", "abandoned"]),
+		}),
+	]),
 	[ShoferEventName.TaskError]: z.tuple([z.string(), z.string()]), // taskId, errorType
 	[ShoferEventName.TaskFocused]: z.tuple([z.string()]),
 	[ShoferEventName.TaskUnfocused]: z.tuple([z.string()]),

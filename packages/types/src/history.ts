@@ -1,21 +1,62 @@
 import { z } from "zod"
 
 /**
- * TaskExecutionState represents the current execution state of a parallel task.
+ * TaskLifecycle: the *lifecycle phase* a task is in.
+ *
+ * Orthogonal to the agent's self-assessment of its own work (see
+ * `CompletionRating`). A task that is `completed` may additionally carry a
+ * rating (`poor` / `well` / `excellent`). Together they form `TaskState`.
+ *
+ * The lifecycle phase deliberately does not encode the rating, which keeps
+ * consumers from having to enumerate `completed_poorly | completed_well | …`
+ * every time they want to check "is this task done?".
  */
-export const taskExecutionStateSchema = z.enum([
-	"idle", // No active API calls, waiting for user
+export const taskLifecycleSchema = z.enum([
+	"idle", // No active execution; waiting or cleared
 	"running", // Actively processing (API call in progress)
-	"waiting", // Blocked — waiting for a tool/agent to complete
 	"waiting_input", // Paused, needs user approval/input
-	"paused", // Manually paused by user
+	"paused", // Manually paused by the user (non-destructive abort)
+	"completed", // Finished via attempt_completion (rating in TaskState.rating)
 	"error", // Stopped due to an error
-	"completed_poorly", // Finished — agent rated it poor
-	"completed_well", // Finished — agent rated it well
-	"completed_excellent", // Finished — agent rated it excellent
 ])
 
-export type TaskExecutionState = z.infer<typeof taskExecutionStateSchema>
+export type TaskLifecycle = z.infer<typeof taskLifecycleSchema>
+
+/**
+ * CompletionRating: agent's self-assessment of the work it just completed.
+ * Only meaningful when `lifecycle === "completed"`.
+ */
+export const completionRatingSchema = z.enum(["poor", "well", "excellent"])
+
+export type CompletionRating = z.infer<typeof completionRatingSchema>
+
+/**
+ * TaskState: the full execution state of a task.
+ *
+ * Combines lifecycle (where the task is in its life) with an optional rating
+ * (how well the task was completed). `rating` is only set when `lifecycle ===
+ * "completed"` — it is undefined for every other lifecycle phase.
+ */
+export const taskStateSchema = z.object({
+	lifecycle: taskLifecycleSchema,
+	rating: completionRatingSchema.optional(),
+})
+
+export type TaskState = z.infer<typeof taskStateSchema>
+
+/**
+ * Terminal lifecycle phases — those that survive a process restart unchanged.
+ * Transient phases (`running`, `waiting_input`) are sanitized to `idle` on
+ * restore because no live `Task` instance can plausibly still be running.
+ */
+export function isTerminalLifecycle(lifecycle: TaskLifecycle): boolean {
+	return lifecycle === "completed" || lifecycle === "error" || lifecycle === "paused"
+}
+
+/**
+ * Convenience: build the `idle` state.
+ */
+export const IDLE_TASK_STATE: TaskState = { lifecycle: "idle" }
 
 /**
  * BudgetAction defines the behaviour when a task's cost limit is exceeded.
@@ -68,7 +109,11 @@ export const historyItemSchema = z.object({
 	// Parallel task fields
 	name: z.string().optional(), // User-defined task name
 	lastActiveTs: z.number().optional(), // Track when last switched to
-	taskExecutionState: taskExecutionStateSchema.optional(), // Current execution state
+	/**
+	 * Current execution state — both lifecycle and (when completed) rating.
+	 * Replaces the legacy flat `taskExecutionState` enum.
+	 */
+	taskState: taskStateSchema.optional(),
 	// Async task fields
 	backgroundChildIds: z.array(z.string()).optional(),
 	isBackground: z.boolean().optional(),
