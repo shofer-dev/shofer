@@ -134,6 +134,18 @@ export type McpToolCallResponse = {
 					blob?: string
 				}
 		  }
+		| {
+				// `resource_link` was added to the MCP content union in
+				// @modelcontextprotocol/sdk ≥1.12 — the server returns a
+				// pointer to a resource without inlining its bytes.
+				type: "resource_link"
+				uri: string
+				name: string
+				title?: string
+				description?: string
+				mimeType?: string
+				_meta?: Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+		  }
 	>
 	isError?: boolean
 }
