@@ -140,32 +140,24 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 */
 	registerBackgroundTask(task: Task, name?: string): void {
 		const existingActive = this.activeTasks.get(task.taskId)
-		const existingManaged = this.managedTasks.get(task.taskId)
-		console.log(
-			`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) ` +
-				`existingActive=${!!existingActive} existingManaged.state=${existingManaged?.state ?? "none"} ` +
-				`task.abort=${task.abort} task.abandoned=${task.abandoned}`,
-		)
 		if (existingActive) {
 			// Already registered — update the Task instance but keep the state.
 			this.cleanupTaskEventListeners(existingActive)
 			this.activeTasks.set(task.taskId, task)
 			this.setupManagedTaskEventListeners(task)
-			console.log(`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) → reused active, state unchanged`)
 			return
 		}
 
 		// Check whether a managedTask already exists (e.g. surviving from
 		// a previous stop/clear); preserve its state so the TaskSelector
 		// doesn't flip back to "running" after a re-focus.
-		const existing = existingManaged
+		const existing = this.managedTasks.get(task.taskId)
 
 		const taskText = task.shoferMessages.find((m) => m.type === "say" && m.say === "text")?.text || ""
 		const autoName =
 			name || (taskText ? taskText.slice(0, 50).trim() + (taskText.length > 50 ? "..." : "") : "New Task")
 
 		const state = existing?.state ?? (task.abandoned || task.abort ? "idle" : "running")
-		console.log(`[DIAG-REGISTER] registerBackgroundTask(${task.taskId}) → creating with state=${state}`)
 		const managedTask: ManagedTask = {
 			id: task.taskId,
 			name: existing?.name ?? autoName,
@@ -461,14 +453,10 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	updateTaskExecutionState(targetTaskId: string, state: ManagedTaskState): void {
 		const managedTask = this.managedTasks.get(targetTaskId)
 		if (!managedTask) {
-			console.log(`[DIAG-STATE] updateTaskExecutionState(${targetTaskId}, ${state}) — managedTask not found`)
 			return
 		}
 
 		const prevState = managedTask.state
-		// Capture call site: 2nd stack line after this method
-		const caller = new Error().stack?.split("\n")[2]?.trim() ?? "unknown"
-		console.log(`[DIAG-STATE] updateTaskExecutionState(${targetTaskId}) ${prevState} → ${state}  caller=${caller}`)
 		managedTask.state = state
 
 		if (prevState !== state) {
@@ -565,7 +553,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const onComplete = (taskId: string, _tokenUsage: TokenUsage, _toolUsage: ToolUsage) => {
 			if (taskId !== targetTaskId) return
 			const provider = this.providerRef.deref()
-			const persisted = provider?.taskHistoryStore?.get?.(targetTaskId)?.taskExecutionState
+			const persisted = provider?.taskHistoryStore?.get(targetTaskId)?.taskExecutionState
 			this.updateTaskExecutionState(targetTaskId, persisted ?? "idle")
 			this.emit("managedTask:completed", targetTaskId)
 		}

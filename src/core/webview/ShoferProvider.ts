@@ -3827,7 +3827,7 @@ export class ShoferProvider
 
 			if (isTaskAlive) {
 				// Task has a live instance — swap it into the stack without stopping it
-				this.log(`[DIAG-FOCUS] focusTask(${taskId}) → LIVE path (instance exists, swapping into stack)`) // Update TaskManager focus state
+				// Update TaskManager focus state
 				try {
 					await this.taskManager.focusTask(taskId)
 					// Clear any pending notifications for this task so the
@@ -3875,7 +3875,7 @@ export class ShoferProvider
 				// focus switches (LIVE path in focusTask), avoiding the need to
 				// re-rehydrate and re-present the resume_task ask every time.
 				// Use registerBackgroundTask (not updateTaskInstance) because the
-				this.log(`[DIAG-FOCUS] focusTask(${taskId}) → DEAD path (no live instance, loading from history)`) // task may not yet exist in TaskManager's managedTasks map, and
+				// task may not yet exist in TaskManager's managedTasks map, and
 				// updateTaskInstance early-returns in that case.
 				const resumedTask = this.getCurrentTask()
 				if (resumedTask && resumedTask.taskId === taskId) {

@@ -6,8 +6,7 @@ import { z } from "zod"
 export const taskExecutionStateSchema = z.enum([
 	"idle", // No active API calls, waiting for user
 	"running", // Actively processing (API call in progress)
-	"waiting", // Blocked — waiting for a tool/agent to complete
-	"waiting_input", // Paused, needs user approval/input
+	"waiting", // Blocked — waiting for a tool/agent to complete	"waiting_input", // Paused, needs user approval/input
 	"paused", // Manually paused by user
 	"error", // Stopped due to an error
 	"completed_poorly", // Finished — agent rated it poor

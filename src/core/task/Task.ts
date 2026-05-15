@@ -1689,21 +1689,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						if (message) {
 							this.idleAsk = message
-							// Re-visiting a completed task (resume_completed_task)
-							// should not change the managed task state — it remains
-							// whatever it was at completion time.
-							if (type !== "resume_completed_task") {
-								this.emit(ShoferEventName.TaskIdle, this.taskId)
-							}
 
-							// Emit TaskError for error conditions so TaskManager can set error state
-							const errorAskTypes = [
+							// Error asks are terminal — emit TaskError instead of
+							// TaskIdle to avoid a transient idle state before the
+							// error state is set.
+							const errorAskTypes: ShoferAsk[] = [
 								"api_req_failed",
 								"mistake_limit_reached",
 								"auto_approval_max_req_reached",
 							]
 							if (errorAskTypes.includes(type)) {
 								this.emit(ShoferEventName.TaskError, this.taskId, type)
+							} else if (type !== "resume_completed_task") {
+								// Re-visiting a completed task should not change
+								// the managed task state.
+								this.emit(ShoferEventName.TaskIdle, this.taskId)
 							}
 						}
 					}, statusMutationTimeout),
