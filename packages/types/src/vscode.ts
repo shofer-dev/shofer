@@ -47,6 +47,13 @@ export const commandIds = [
 	"acceptInput",
 	"focusPanel",
 	"toggleAutoApprove",
+
+	// Helper Agent
+	"helperAgent.start",
+	"helperAgent.stop",
+	"helperAgent.clearContext",
+	"helperAgent.showChat",
+	"helperAgent.openSettings",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]
