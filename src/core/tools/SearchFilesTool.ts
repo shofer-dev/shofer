@@ -1,13 +1,27 @@
 /**
- * SearchFilesTool - Consolidated search tool using VS Code's indexed workspace.findTextInFiles API.
+ * SearchFilesTool — Performs regex/literal search across files using ripgrep.
  *
- * Replaces the old ripgrep-backed `search_files` and the separate `get_search_results` tool
- * with a single unified implementation. Supports both regex and literal text search,
- * case-sensitive/whole-word matching, file type filtering, exclusion patterns,
- * configurable context lines, and result capping.
+ * Backend: ripgrep (executed as a child process, discovered via @vscode/ripgrep).
+ * Rationale: VS Code's `workspace.findTextInFiles` API was found to have an incomplete
+ * search index in practice — certain tokens (e.g., the Go `func` keyword) were not
+ * found despite being present in files that `grep` and ripgrep locate instantly.
+ * Ripgrep provides a deterministic, filesystem-level search that doesn't depend on
+ * VS Code's internal indexing.
+ *
+ * The output format is identical to the previous `findTextInFiles`-based implementation:
+ *
+ *   Found N results.
+ *
+ *   ## relative/path/to/file
+ *     40 | context before
+ *   > 41 | MATCHING LINE
+ *     42 | context after
+ *   ----
  */
 
 import * as path from "path"
+import * as childProcess from "child_process"
+import * as readline from "readline"
 import * as vscode from "vscode"
 
 import { type ShoferSayTool } from "@shofer/types"
@@ -15,6 +29,8 @@ import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { fileExistsAtPath } from "../../utils/fs"
+import type { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -32,15 +48,218 @@ interface SearchFilesParams {
 	contextAfter?: number | null
 }
 
+interface RipgrepMatch {
+	file: string
+	lineNumber: number
+	text: string
+	isMatch: boolean
+	absoluteOffset?: number
+}
+
+interface RipgrepFileResult {
+	file: string
+	matches: RipgrepMatch[]
+}
+
 interface SearchHit {
-	uri: vscode.Uri
-	range: vscode.Range
-	preview: vscode.TextSearchResult["preview"]
+	relPath: string
+	lines: Map<number, string>
+	matchLines: Set<number>
 }
 
 const DEFAULT_MAX_RESULTS = 100
 const DEFAULT_CONTEXT_BEFORE = 1
 const DEFAULT_CONTEXT_AFTER = 1
+const MAX_LINE_LENGTH = 500
+
+// Rough multiplier for limiting ripgrep output lines. Each match produces at most
+// (beforeContext + 1 + afterContext) lines, and we add a safety margin.
+const LINES_PER_RESULT_ESTIMATE = 5
+
+const isWindows = process.platform.startsWith("win")
+const binName = isWindows ? "rg.exe" : "rg"
+
+/**
+ * Locate the ripgrep binary within the VS Code installation.
+ * Mirrors the logic in `src/services/ripgrep/index.ts`.
+ */
+async function getRipgrepBinPath(vscodeAppRoot: string): Promise<string | undefined> {
+	const checkPath = async (pkgFolder: string) => {
+		const fullPath = path.join(vscodeAppRoot, pkgFolder, binName)
+		return (await fileExistsAtPath(fullPath)) ? fullPath : undefined
+	}
+
+	return (
+		(await checkPath("node_modules/@vscode/ripgrep/bin/")) ||
+		(await checkPath("node_modules/vscode-ripgrep/bin")) ||
+		(await checkPath("node_modules.asar.unpacked/vscode-ripgrep/bin/")) ||
+		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/"))
+	)
+}
+
+/**
+ * Execute ripgrep and return its stdout.
+ * Limits output lines to prevent unbounded memory usage.
+ */
+async function execRipgrep(bin: string, args: string[], maxLines: number): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const rgProcess = childProcess.spawn(bin, args)
+		const rl = readline.createInterface({
+			input: rgProcess.stdout,
+			crlfDelay: Infinity,
+		})
+
+		let output = ""
+		let lineCount = 0
+
+		rl.on("line", (line) => {
+			if (lineCount < maxLines) {
+				output += line + "\n"
+				lineCount++
+			} else {
+				rl.close()
+				rgProcess.kill()
+			}
+		})
+
+		let errorOutput = ""
+		rgProcess.stderr.on("data", (data) => {
+			errorOutput += data.toString()
+		})
+
+		rl.on("close", () => {
+			if (errorOutput) {
+				reject(new Error(`ripgrep process error: ${errorOutput}`))
+			} else {
+				resolve(output)
+			}
+		})
+
+		rgProcess.on("error", (error) => {
+			reject(new Error(`ripgrep process error: ${error.message}`))
+		})
+	})
+}
+
+/**
+ * Build ripgrep CLI arguments from search parameters.
+ *
+ * Mapping:
+ *   --json              → structured output (always used)
+ *   -e <query>          → regex pattern (isRegex: true) or literal (isRegex: false → -F)
+ *   -i                  → case-insensitive (caseSensitive: false)
+ *   -w                  → whole-word match (wholeWord: true)
+ *   -g <glob>           → include files matching glob (fileTypes)
+ *   -g '!<glob>'        → exclude files matching glob (excludePattern)
+ *   -B <n>              → lines of context before match
+ *   -A <n>              → lines of context after match
+ *   --no-messages       → suppress error messages in output (essential for JSON parsing)
+ *   <directoryPath>     → directory to search recursively
+ */
+function buildRipgrepArgs(params: {
+	query: string
+	isRegex: boolean
+	caseSensitive: boolean
+	wholeWord: boolean
+	fileTypes?: string | null
+	excludePattern?: string | null
+	contextBefore: number
+	contextAfter: number
+	directoryPath: string
+}): string[] {
+	const {
+		query,
+		isRegex,
+		caseSensitive,
+		wholeWord,
+		fileTypes,
+		excludePattern,
+		contextBefore,
+		contextAfter,
+		directoryPath,
+	} = params
+
+	const args: string[] = ["--json", "--no-messages"]
+
+	if (isRegex) {
+		args.push("-e", query)
+	} else {
+		// Fixed-string (literal) search
+		args.push("-F", "-e", query)
+	}
+
+	if (!caseSensitive) {
+		args.push("-i")
+	}
+
+	if (wholeWord) {
+		args.push("-w")
+	}
+
+	if (fileTypes) {
+		args.push("-g", fileTypes)
+	}
+
+	if (excludePattern) {
+		// Ripgrep uses `-g '!pattern'` for exclusions
+		args.push("-g", `!${excludePattern}`)
+	}
+
+	if (contextBefore > 0) {
+		args.push("-B", String(contextBefore))
+	}
+
+	if (contextAfter > 0) {
+		args.push("-A", String(contextAfter))
+	}
+
+	args.push(directoryPath)
+
+	return args
+}
+
+/**
+ * Parse ripgrep --json output into structured results grouped by file.
+ * Handles `begin`, `match`, `context`, and `end` JSON message types.
+ */
+function parseRipgrepOutput(output: string): RipgrepFileResult[] {
+	const results: RipgrepFileResult[] = []
+	let currentFile: RipgrepFileResult | null = null
+
+	output.split("\n").forEach((line) => {
+		if (!line) return
+		try {
+			const parsed = JSON.parse(line)
+			if (parsed.type === "begin") {
+				currentFile = {
+					file: parsed.data.path.text.toString(),
+					matches: [],
+				}
+			} else if (parsed.type === "end") {
+				if (currentFile) {
+					results.push(currentFile)
+				}
+				currentFile = null
+			} else if ((parsed.type === "match" || parsed.type === "context") && currentFile) {
+				const text = parsed.data.lines.text
+				const truncatedText =
+					text.length > MAX_LINE_LENGTH ? text.substring(0, MAX_LINE_LENGTH) + " [truncated...]" : text
+
+				currentFile.matches.push({
+					file: currentFile.file,
+					lineNumber: parsed.data.line_number,
+					text: truncatedText,
+					isMatch: parsed.type === "match",
+					absoluteOffset: parsed.type === "match" ? parsed.data.absolute_offset : undefined,
+				})
+			}
+		} catch {
+			// Non-JSON lines (e.g., error messages suppressed by --no-messages) are ignored
+		}
+	})
+
+	return results
+}
 
 export class SearchFilesTool extends BaseTool<"search_files"> {
 	readonly name = "search_files" as const
@@ -97,54 +316,95 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 				return
 			}
 
-			// Pre-process query for whole-word matching (non-regex mode only; VS Code's
-			// isWordMatch handles the actual boundary matching but we also normalize the
-			// pattern so the result preview makes sense).
-			const effectiveQuery = wholeWord && !isRegex ? `\\b${this.escapeRegex(query)}\\b` : query
-			const effectiveIsRegex = isRegex || (wholeWord && !isRegex)
+			const vscodeAppRoot = vscode.env.appRoot
+			const rgPath = await getRipgrepBinPath(vscodeAppRoot)
 
-			const textQuery: vscode.TextSearchQuery = {
-				pattern: effectiveQuery,
-				isRegExp: effectiveIsRegex,
-				isCaseSensitive: caseSensitive,
-				isWordMatch: wholeWord ?? false,
+			if (!rgPath) {
+				pushToolResult("Search failed: Could not find ripgrep binary")
+				return
 			}
 
-			const searchOptions: vscode.FindTextInFilesOptions = {
-				maxResults: maxResults,
-				beforeContext: contextBefore,
-				afterContext: contextAfter,
-				include: fileTypes
-					? new vscode.RelativePattern(resolvedPath, fileTypes)
-					: new vscode.RelativePattern(resolvedPath, "**/*"),
-				exclude: excludePattern ?? undefined,
-			}
-
-			const hits: SearchHit[] = []
-			let truncated = false
-
-			await vscode.workspace.findTextInFiles(textQuery, searchOptions, (result) => {
-				if (hits.length >= maxResults) {
-					truncated = true
-					return
-				}
-				hits.push({
-					uri: result.uri,
-					range: result.ranges[0],
-					preview: result.preview,
-				})
+			const rgArgs = buildRipgrepArgs({
+				query,
+				isRegex,
+				caseSensitive,
+				wholeWord,
+				fileTypes,
+				excludePattern,
+				contextBefore,
+				contextAfter,
+				directoryPath: resolvedPath,
 			})
 
-			if (hits.length === 0) {
+			// Limit ripgrep output lines to avoid excessive memory usage.
+			// Each result contributes roughly (contextBefore + 1 + contextAfter) lines.
+			const maxRgLines = maxResults * (contextBefore + 1 + contextAfter + 1) // +1 safety margin
+
+			let rawOutput: string
+			try {
+				rawOutput = await execRipgrep(rgPath, rgArgs, maxRgLines)
+			} catch (error) {
+				console.error("Error executing ripgrep:", error)
 				pushToolResult(`No results found for: ${query}`)
 				return
 			}
 
-			const output = this.formatResults(hits, query, task.cwd, maxResults, truncated, contextBefore)
+			const fileResults = parseRipgrepOutput(rawOutput)
+
+			// Apply .shoferignore filtering if a controller is available on the task
+			const ignoreController: ShoferIgnoreController | undefined = (task as any).shoferIgnoreController
+			const filteredResults = ignoreController
+				? fileResults.filter((fr) => ignoreController.validateAccess(fr.file))
+				: fileResults
+
+			// Convert ripgrep results to SearchHit format for formatting
+			const hits = this.convertToSearchHits(filteredResults, task.cwd, contextBefore, contextAfter)
+
+			// Apply maxResults cap
+			const truncated = hits.length > maxResults
+			const cappedHits = truncated ? hits.slice(0, maxResults) : hits
+
+			if (cappedHits.length === 0) {
+				pushToolResult(`No results found for: ${query}`)
+				return
+			}
+
+			const output = this.formatResults(cappedHits, query, maxResults, truncated, contextBefore)
 			pushToolResult(output)
 		} catch (error) {
 			await handleError("searching files", error as Error)
 		}
+	}
+
+	/**
+	 * Convert ripgrep file results into SearchHit format suitable for formatting.
+	 * Groups match/context lines by file and detects non-contiguous blocks.
+	 */
+	private convertToSearchHits(
+		fileResults: RipgrepFileResult[],
+		cwd: string,
+		beforeContext: number,
+		afterContext: number,
+	): SearchHit[] {
+		const hitsByFile = new Map<string, SearchHit>()
+
+		for (const fileResult of fileResults) {
+			const relPath = getReadablePath(cwd, fileResult.file)
+			if (!hitsByFile.has(relPath)) {
+				hitsByFile.set(relPath, { relPath, lines: new Map(), matchLines: new Set() })
+			}
+			const hit = hitsByFile.get(relPath)!
+
+			for (const match of fileResult.matches) {
+				const lineNum = match.lineNumber
+				hit.lines.set(lineNum, match.text.trimEnd())
+				if (match.isMatch) {
+					hit.matchLines.add(lineNum)
+				}
+			}
+		}
+
+		return Array.from(hitsByFile.values())
 	}
 
 	/**
@@ -161,48 +421,17 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 	private formatResults(
 		hits: SearchHit[],
 		query: string,
-		cwd: string,
 		maxResults: number,
 		truncated: boolean,
 		beforeContext: number,
 	): string {
-		// Group hits by file, preserving insertion order
-		const byFile = new Map<string, { lines: Map<number, string>; matchLines: Set<number> }>()
-
-		for (const hit of hits) {
-			const relPath = getReadablePath(cwd, hit.uri.fsPath)
-			if (!byFile.has(relPath)) {
-				byFile.set(relPath, { lines: new Map(), matchLines: new Set() })
-			}
-			const file = byFile.get(relPath)!
-
-			// The match line (1-based)
-			const matchLineNumber = hit.range.start.line + 1
-			file.matchLines.add(matchLineNumber)
-
-			// Context lines from the preview.
-			// VS Code's preview.text format: beforeContext lines → match line → afterContext lines.
-			const previewLines = hit.preview.text.split("\n")
-			const matchLineIndex = Math.min(beforeContext, previewLines.length - 1)
-
-			// Extract the matching line text from the preview
-			const matchText = previewLines[matchLineIndex]?.trim() ?? ""
-			file.lines.set(matchLineNumber, matchText)
-			for (let i = 0; i < previewLines.length; i++) {
-				const lineNum = matchLineNumber - matchLineIndex + i
-				if (lineNum !== matchLineNumber) {
-					file.lines.set(lineNum, previewLines[i].trim())
-				}
-			}
-		}
-
 		const header = truncated
-			? `Found ${hits.length} results. Showing first ${maxResults} of ${hits.length} results.\n\n`
-			: `Found ${hits.length} results.\n\n`
+			? `Showing first ${maxResults} of more results.\n\n`
+			: `Found ${hits.reduce((sum, h) => sum + h.matchLines.size, 0)} results.\n\n`
 
 		const fileBlocks: string[] = []
-		for (const [relPath, file] of byFile) {
-			const sortedLines = [...file.lines.entries()].sort((a, b) => a[0] - b[0])
+		for (const hit of hits) {
+			const sortedLines = [...hit.lines.entries()].sort((a, b) => a[0] - b[0])
 
 			// Detect non-contiguous blocks (gap > 1 line number)
 			const blocks: Array<Array<[number, string]>> = []
@@ -221,23 +450,17 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 			const blockTexts = blocks.map((block) =>
 				block
 					.map(([lineNum, text]) => {
-						const prefix = file.matchLines.has(lineNum) ? ">" : " "
-						// Pad line number to 4 chars for alignment
+						const prefix = hit.matchLines.has(lineNum) ? ">" : " "
 						const paddedNum = String(lineNum).padStart(4, " ")
 						return `${prefix} ${paddedNum} | ${text}`
 					})
 					.join("\n"),
 			)
 
-			fileBlocks.push(`## ${relPath}\n${blockTexts.join("\n----\n")}`)
+			fileBlocks.push(`## ${hit.relPath}\n${blockTexts.join("\n----\n")}`)
 		}
 
 		return header + fileBlocks.join("\n\n")
-	}
-
-	/** Escape special regex characters for literal-to-regex whole-word wrapping. */
-	private escapeRegex(str: string): string {
-		return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"search_files">): Promise<void> {
