@@ -3084,7 +3084,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		let nextUserContent = userContent
 		let includeFileDetails = true
 
-		this.emit(ShoferEventName.TaskStarted)
+		// Don't emit TaskStarted for completed tasks being re-visited —
+		// the task is not starting, it's already done.
+		if (!this.initialStatus?.startsWith("completed")) {
+			this.emit(ShoferEventName.TaskStarted)
+		}
 
 		while (!this.abort) {
 			this.diagLog(
