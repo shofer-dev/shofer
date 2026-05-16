@@ -248,6 +248,33 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
+			// Drain the message queue BEFORE declaring terminal state. If the user
+			// queued one or more messages while the task was running, FIFO ordering
+			// requires that the next queued message become the continuation of this
+			// turn — not a new task and not a "Send Now" override. We dequeue one
+			// message (the head), render it as user feedback, push it as the tool
+			// result, and let the task loop continue to the next LLM iteration. The
+			// remaining queued messages stay in the queue and are drained naturally
+			// by the next `Task.ask()` (per the queue-drain branch in `Task.ask()`).
+			//
+			// This mirrors the pre-fix behavior where `task.ask("completion_result", …)`
+			// would synthesize a `messageResponse` from the queue and the tool would
+			// fall through to the user-feedback path. We do it explicitly here now
+			// that `attempt_completion` no longer asks (see the Self-Declared
+			// Terminal State Rule in AGENTS.md and `docs/message_queue.md`).
+			if (!task.messageQueueService.isEmpty()) {
+				const queued = task.messageQueueService.dequeueMessage()
+				if (queued) {
+					console.log(
+						`[AttemptCompletionTool.execute] Draining queued message instead of completing, taskId=${task.taskId}, text=${queued.text?.substring(0, 100)}`,
+					)
+					await task.say("user_feedback", queued.text ?? "", queued.images)
+					const feedbackText = `<user_message>\n${queued.text ?? ""}\n</user_message>`
+					pushToolResult(formatResponse.toolResult(feedbackText, queued.images))
+					return
+				}
+			}
+
 			// `attempt_completion` is the agent's self-declared terminal state — the
 			// rating and optional `feedback` are produced by the agent itself, so we
 			// do NOT ask the user to approve or to provide additional feedback.
