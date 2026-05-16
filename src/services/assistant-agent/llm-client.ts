@@ -54,6 +54,8 @@ export interface ToolCallRequest {
 export interface ChatResult {
 	/** Free-form text from the assistant; may be empty when only tool calls were emitted. */
 	answer: string
+	/** Concatenated reasoning/thinking output, if the model emitted any. */
+	reasoning: string
 	/** Tool calls the model wants the host to execute before continuing. */
 	toolCalls: ToolCallRequest[]
 	tokensUsed: {
@@ -65,6 +67,20 @@ export interface ChatResult {
 }
 
 /**
+ * Streaming callback fired as the model emits chunks. Used by the agent
+ * loop in `manager.ts` to mutate the in-flight assistant message in place
+ * so the chat panel can render the turn live instead of waiting for the
+ * whole reply.
+ */
+export type AgentStreamEvent =
+	| { kind: "text"; delta: string }
+	| { kind: "reasoning"; delta: string }
+	/** Fired once per tool call, after the name + (best-effort) arguments are known. */
+	| { kind: "tool_call"; toolCall: ToolCallRequest }
+
+export type AgentStreamCallback = (event: AgentStreamEvent) => void
+
+/**
  * Opts for the richer agent-loop variant of `chat()`. The system prompt is
  * passed separately (not as a leading message) so the agent loop can hold a
  * stable system prompt across iterations while the messages array grows.
@@ -74,6 +90,8 @@ export interface AgentChatOptions {
 	messages: Anthropic.Messages.MessageParam[]
 	tools?: OpenAI.Chat.ChatCompletionTool[]
 	signal?: AbortSignal
+	/** Live stream callback; called between chunks. */
+	onStream?: AgentStreamCallback
 }
 
 export class AssistantAgentLlmClient {
@@ -95,7 +113,7 @@ export class AssistantAgentLlmClient {
 	 */
 	public async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<ChatResult> {
 		const { systemPrompt, conversation } = splitSystemAndConversation(messages)
-		return this._runChat(systemPrompt, conversation, undefined, signal)
+		return this._runChat(systemPrompt, conversation, undefined, signal, undefined)
 	}
 
 	/**
@@ -104,7 +122,7 @@ export class AssistantAgentLlmClient {
 	 * The result includes any tool calls the model wants executed.
 	 */
 	public async chatWithTools(opts: AgentChatOptions): Promise<ChatResult> {
-		return this._runChat(opts.systemPrompt, opts.messages, opts.tools, opts.signal)
+		return this._runChat(opts.systemPrompt, opts.messages, opts.tools, opts.signal, opts.onStream)
 	}
 
 	private async _runChat(
@@ -112,6 +130,7 @@ export class AssistantAgentLlmClient {
 		conversation: Anthropic.Messages.MessageParam[],
 		tools: OpenAI.Chat.ChatCompletionTool[] | undefined,
 		signal: AbortSignal | undefined,
+		onStream: AgentStreamCallback | undefined,
 	): Promise<ChatResult> {
 		const modelInfo = (() => {
 			try {
@@ -126,12 +145,24 @@ export class AssistantAgentLlmClient {
 		)
 
 		let answer = ""
+		let reasoning = ""
 		let promptTokens = 0
 		let completionTokens = 0
 		// Accumulator for tool calls emitted across stream chunks. Providers
 		// either deliver a single complete `tool_call` chunk or stream the call
 		// in pieces via tool_call_start / tool_call_delta / tool_call_end.
 		const toolCallsById = new Map<string, { id: string; name: string; arguments: string }>()
+		// Tracks which tool-call ids we've already announced via onStream so
+		// each tool_call part lands in the UI exactly once.
+		const streamedToolCallIds = new Set<string>()
+
+		const emitToolCallIfReady = (id: string): void => {
+			if (!onStream || streamedToolCallIds.has(id)) return
+			const tc = toolCallsById.get(id)
+			if (!tc || !tc.name) return
+			streamedToolCallIds.add(id)
+			onStream({ kind: "tool_call", toolCall: { ...tc } })
+		}
 
 		const startedAt = Date.now()
 		let stream
@@ -159,7 +190,17 @@ export class AssistantAgentLlmClient {
 				switch (chunk.type) {
 					case "text":
 						answer += chunk.text
+						if (onStream && chunk.text) onStream({ kind: "text", delta: chunk.text })
 						break
+					case "reasoning": {
+						const c = chunk as any
+						const text: string = typeof c.text === "string" ? c.text : ""
+						if (text) {
+							reasoning += text
+							if (onStream) onStream({ kind: "reasoning", delta: text })
+						}
+						break
+					}
 					case "usage":
 						promptTokens += chunk.inputTokens ?? 0
 						completionTokens += chunk.outputTokens ?? 0
@@ -173,12 +214,14 @@ export class AssistantAgentLlmClient {
 							arguments:
 								typeof c.arguments === "string" ? c.arguments : JSON.stringify(c.arguments ?? {}),
 						})
+						emitToolCallIfReady(id)
 						break
 					}
 					case "tool_call_start": {
 						const c = chunk as any
 						const id = c.id ?? c.toolCallId ?? `tc_${toolCallsById.size}`
 						toolCallsById.set(id, { id, name: c.name ?? c.toolName ?? "", arguments: "" })
+						emitToolCallIfReady(id)
 						break
 					}
 					case "tool_call_delta": {
@@ -189,6 +232,7 @@ export class AssistantAgentLlmClient {
 							if (c.name && !entry.name) entry.name = c.name
 							entry.arguments += typeof c.arguments === "string" ? c.arguments : ""
 							toolCallsById.set(id, entry)
+							emitToolCallIfReady(id)
 						}
 						break
 					}
@@ -203,10 +247,15 @@ export class AssistantAgentLlmClient {
 							arguments:
 								typeof c.arguments === "string" ? c.arguments : JSON.stringify(c.arguments ?? {}),
 						})
+						emitToolCallIfReady(id)
 						break
 					}
-					case "tool_call_end":
+					case "tool_call_end": {
+						const c = chunk as any
+						const id = c.id ?? c.toolCallId
+						if (id) emitToolCallIfReady(id)
 						break
+					}
 					case "error":
 						logger.error(
 							`${LOG_PREFIX} chat() received error chunk: ${JSON.stringify({ message: (chunk as any).message, error: (chunk as any).error })}`,
@@ -233,6 +282,7 @@ export class AssistantAgentLlmClient {
 
 		return {
 			answer,
+			reasoning,
 			toolCalls,
 			tokensUsed: { prompt: promptTokens, completion: completionTokens, total: totalTokens },
 			estimatedCostUSD,

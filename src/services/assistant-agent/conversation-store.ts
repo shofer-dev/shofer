@@ -106,7 +106,7 @@ export class ConversationStore {
 		await fs.mkdir(dir, { recursive: true })
 
 		const data: AssistantAgentConversationData = {
-			version: CONVERSATION_STORE_VERSION as 1,
+			version: CONVERSATION_STORE_VERSION as 2,
 			workspacePath: this.workspacePath,
 			createdAt: Date.now(),
 			updatedAt: Date.now(),

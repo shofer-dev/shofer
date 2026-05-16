@@ -20,11 +20,39 @@ export type AssistantAgentState = z.infer<typeof assistantAgentStateSchema>
 
 // ─── Conversation Messages ──────────────────────────────────────────────────
 
+/**
+ * A single ordered part of an assistant message. Assistant turns can
+ * interleave reasoning ("thinking"), free-form text, and tool calls;
+ * `parts` preserves the stream order so the UI can replay the turn the
+ * way it happened. `content` remains the canonical flat-text summary
+ * (typically the concatenation of all `text` parts).
+ *
+ * `tool_call` parts mutate in place during execution: the part is
+ * appended when the LLM emits the call (`inProgress: true`, no result),
+ * then the host fills in `result` / `isError` and clears `inProgress`
+ * once the tool returns. The chat panel re-renders on each mutation.
+ */
+export const agentMessagePartSchema = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("text"), text: z.string() }),
+	z.object({ kind: z.literal("reasoning"), text: z.string() }),
+	z.object({
+		kind: z.literal("tool_call"),
+		toolCallId: z.string(),
+		name: z.string(),
+		args: z.string(), // raw JSON string as emitted by the model
+		result: z.string().optional(),
+		isError: z.boolean().optional(),
+		inProgress: z.boolean().optional(),
+	}),
+])
+export type AgentMessagePart = z.infer<typeof agentMessagePartSchema>
+
 export const agentMessageSchema = z.object({
 	id: z.string(), // UUID
 	role: z.enum(["user", "assistant", "system"]),
 	content: z.string(),
 	timestamp: z.number(), // Unix ms
+	parts: z.array(agentMessagePartSchema).optional(),
 	metadata: z
 		.object({
 			sourceTaskId: z.string().optional(),
@@ -81,7 +109,7 @@ export type AssistantAgentCostTracking = z.infer<typeof assistantAgentCostTracki
 // ─── Conversation Store ─────────────────────────────────────────────────────
 
 export const assistantAgentConversationDataSchema = z.object({
-	version: z.literal(1),
+	version: z.literal(2),
 	workspacePath: z.string(),
 	createdAt: z.number(),
 	updatedAt: z.number(),
@@ -164,7 +192,7 @@ export const DIRECTORY_TREE_MAX_CONTEXT_FRACTION = 0.1
 export const TRUNCATION_MARKER_MESSAGE = "[{N} earlier messages were truncated due to context limit]"
 
 /** Version for the persistence format. */
-export const CONVERSATION_STORE_VERSION = 1
+export const CONVERSATION_STORE_VERSION = 2
 
 // ─── System Prompt ──────────────────────────────────────────────────────────
 
