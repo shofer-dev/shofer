@@ -52,13 +52,11 @@ export const ASSISTANT_AGENT_READ_TOOLS = [
 	"rag_search",
 	"find_files",
 	"read_project_structure",
-	"view_image",
 	"list_code_usages",
 	"get_errors",
 	"get_project_setup_info",
 	"get_changed_files",
 	"lsp_search",
-	"fetch_web_page",
 ] as const
 
 export type AssistantAgentReadTool = (typeof ASSISTANT_AGENT_READ_TOOLS)[number]

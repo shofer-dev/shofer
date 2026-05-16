@@ -558,7 +558,7 @@ The assistant agent itself runs as an internal task with a **severely restricted
 
 | Tool Category     | Available? | Tools Included                                                                           |
 | ----------------- | ---------- | ---------------------------------------------------------------------------------------- |
-| **Read**          | ✓ Yes      | `read_file`, `list_files`, `grep_search`, `find_files`, `rag_search`, `read_project_structure`, `view_image`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search`, `fetch_web_page` |
+| **Read**          | ✓ Yes      | `read_file`, `list_files`, `grep_search`, `find_files`, `rag_search`, `read_project_structure`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search` |
 | **Write/Edit**    | ✗ No       | `write_to_file`, `apply_diff`, `insert_edit`, `sed`                                      |
 | **CLI/Execution** | ✗ No       | `execute_command`                                                                        |
 | **MCP**           | ✗ No       | All MCP-provided tools (browser, k3s, mimir, loki, tempo, etc.)                          |
