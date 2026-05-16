@@ -91,7 +91,7 @@ Filesystem operations on workspace files. Use this instead of `execute_command` 
 Subcommands:
 
 - `rm`: Delete a file (or directory tree when `recursive=true`).
-- `mv`: Move/rename a single file. Destination must not already exist.
+- `mv`: Move/rename a file or directory. Destination must not already exist.
 
 | Param         | Type             | Required | Description                                             |
 | ------------- | ---------------- | :------: | ------------------------------------------------------- |
@@ -100,7 +100,7 @@ Subcommands:
 | `destination` | string \| null   |    ✅    | Destination path for `mv` (required when `mv`)          |
 | `recursive`   | boolean \| null  |    ✅    | For `rm`: recursive directory delete (default: `false`) |
 
-Both endpoints of an `mv` are recorded in `FileContextTracker` as `roo_edited`, so the panel shows the source as deleted (revertable) and the destination as created (revertable).
+Both endpoints of an `mv` are recorded in `FileContextTracker` as `shofer_edited`, so the panel shows the source as deleted (revertable) and the destination as created (revertable). For directories, every contained file is individually tracked.
 
 ### `insert_edit`
 
@@ -139,14 +139,14 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 ## Search & Discovery
 
-| Tool               | Origin | Group | Always Available | Status | Description                                         |
-| ------------------ | :----: | ----- | :--------------: | :----: | --------------------------------------------------- |
-| `grep_search`      | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context      |
-| `find_files`       | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                          |
-| `list_code_usages` | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                    |
-| `rag_search`       | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)          |
-| `lsp_search`       | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback               |
-| `ask_helper_agent` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent helper agent a codebase question |
+| Tool                  | Origin | Group | Always Available | Status | Description                                            |
+| --------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------------ |
+| `grep_search`         | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context         |
+| `find_files`          | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                             |
+| `list_code_usages`    | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                       |
+| `rag_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)             |
+| `lsp_search`          | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback                  |
+| `ask_assistant_agent` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent assistant agent a codebase question |
 
 ### `grep_search`
 
@@ -202,19 +202,19 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 | `query` | string |    ✅    | Natural language search query |
 | `path`  | string |    –     | Directory scope               |
 
-### `ask_helper_agent`
+### `ask_assistant_agent`
 
-Ask a question to the persistent **helper agent** — a separate, cost-optimized tool-using agent that maintains long-term context about the codebase across questions. Use this for codebase-knowledge questions that don't require the calling task's full conversation context to be loaded.
+Ask a question to the persistent **assistant agent** — a separate, cost-optimized tool-using agent that maintains long-term context about the codebase across questions. Use this for codebase-knowledge questions that don't require the calling task's full conversation context to be loaded.
 
-The tool is synchronous: the calling task blocks until the helper returns an answer, the `timeoutMs` hard limit is reached, or the helper is cancelled. The helper agent runs its own tool loop using the read-only native tools (`read_file`, `grep_search`, `find_files`, …) under its own model configuration.
+The tool is synchronous: the calling task blocks until the assistant returns an answer, the `timeoutMs` hard limit is reached, or the assistant is cancelled. The assistant agent runs its own tool loop using the read-only native tools (`read_file`, `grep_search`, `find_files`, …) under its own model configuration.
 
-| Param              | Type             | Required | Description                                                                                                                                                        |
-| ------------------ | ---------------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `question`         | string           |    ✅    | The question to ask the helper agent.                                                                                                                              |
-| `contextFiles`     | string[] \| null |    –     | File paths the helper should preload into its context window for this question.                                                                                    |
-| `timeoutMs`        | number \| null   |    –     | **Hard** maximum wall time in milliseconds (default: 300000 = 5 minutes). On timeout the helper is aborted and a timeout error is returned.                        |
-| `softTimeoutSec`   | number \| null   |    –     | Soft recommendation (in seconds) for how long the helper should spend on the question (default: 60). Embedded as prompt guidance; not enforced via cancellation.   |
-| `softResultLength` | number \| null   |    –     | Soft recommendation (in characters) for the maximum length of the helper's final answer (default: 2000). Embedded as prompt guidance; not enforced via truncation. |
+| Param              | Type             | Required | Description                                                                                                                                                           |
+| ------------------ | ---------------- | :------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `question`         | string           |    ✅    | The question to ask the assistant agent.                                                                                                                              |
+| `contextFiles`     | string[] \| null |    –     | File paths the assistant should preload into its context window for this question.                                                                                    |
+| `timeoutMs`        | number \| null   |    –     | **Hard** maximum wall time in milliseconds (default: 300000 = 5 minutes). On timeout the assistant is aborted and a timeout error is returned.                        |
+| `softTimeoutSec`   | number \| null   |    –     | Soft recommendation (in seconds) for how long the assistant should spend on the question (default: 60). Embedded as prompt guidance; not enforced via cancellation.   |
+| `softResultLength` | number \| null   |    –     | Soft recommendation (in characters) for the maximum length of the assistant's final answer (default: 2000). Embedded as prompt guidance; not enforced via truncation. |
 
 ---
 
@@ -487,7 +487,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `rag_search`             |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
 | `lsp_search`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `fetch_web_page`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `ask_helper_agent`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `ask_assistant_agent`    |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | **Write group**          |
 | `apply_diff`             |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `write_to_file`          |    ✓ (md)    |    ✓    |        |    ✓     |        |

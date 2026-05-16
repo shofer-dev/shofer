@@ -12,9 +12,11 @@
  *
  * Subcommands:
  *  - `rm`: delete a file (or directory tree when `recursive=true`).
- *  - `mv`: move/rename a file. Both source and destination paths are
- *    captured so a Revert can resurrect the source and a Redo can re-apply
- *    the move. Cross-workspace destinations are refused.
+ *  - `mv`: move/rename a file or directory. Both source and destination
+ *    paths are captured so a Revert can resurrect the source and a Redo can
+ *    re-apply the move. For directories, all contained files are
+ *    individually tracked in the change-tracking system.
+ *    Cross-workspace destinations are refused.
  */
 
 import * as path from "path"
@@ -162,13 +164,37 @@ export class FileTool extends BaseTool<"file"> {
 			}
 
 			const srcStat = await fs.stat(absPath)
+			const relDest = toWorkspaceRel(absDest!, task.cwd)
+
 			if (srcStat.isDirectory()) {
-				pushToolResult(`Error: 'mv' on directories is not supported (got '${relPath}').`)
+				// Collect all files under the source directory.
+				const srcFiles = await collectFilesRecursive(absPath, task.cwd)
+				const relSrcPrefix = relPath + "/"
+
+				// Capture originals for every contained file.
+				for (const relSrc of srcFiles) {
+					const fAbs = path.resolve(task.cwd, relSrc)
+					const original = await readTextOrUndefined(fAbs)
+					await tracker.captureOriginal(relSrc, original)
+				}
+
+				// Perform the directory rename.
+				await fs.rename(absPath, absDest!)
+
+				// Track each file at both its old and new paths.
+				for (const relSrc of srcFiles) {
+					const suffix = relSrc.startsWith(relSrcPrefix) ? relSrc.slice(relSrcPrefix.length) : relSrc
+					const relDst = relDest + "/" + suffix
+
+					await tracker.trackFileContext(relSrc, "shofer_edited")
+					await tracker.trackFileContext(relDst, "shofer_edited")
+				}
+
+				pushToolResult(`Moved directory '${relPath}' → '${relDest}' (${srcFiles.length} file(s)).`)
 				return
 			}
 
-			const relDest = toWorkspaceRel(absDest!, task.cwd)
-
+			// File move (existing behavior).
 			// Capture pre-mutation originals for both endpoints. Source originally
 			// had content; destination originally absent (we already verified).
 			const srcOriginal = await readTextOrUndefined(absPath)
