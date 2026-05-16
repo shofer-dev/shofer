@@ -11,7 +11,7 @@ import { cn } from "@src/lib/utils"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
-import { StandardTooltip, Button } from "@src/components/ui"
+import { PopoverTrigger, StandardTooltip, Button } from "@src/components/ui"
 
 import { HelperAgentPopover, type HelperAgentStatusData } from "./HelperAgentPopover"
 
@@ -72,25 +72,27 @@ export const HelperAgentStatusBadge: React.FC<{ className?: string }> = ({ class
 	return (
 		<HelperAgentPopover status={status}>
 			<StandardTooltip content={tooltipText}>
-				<Button
-					variant="ghost"
-					size="sm"
-					aria-label={tooltipText}
-					className={cn(
-						"relative h-5 w-5 p-0",
-						"text-vscode-foreground opacity-85",
-						"hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)]",
-						"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
-						className,
-					)}>
-					<MessageCircle className="w-4 h-4" />
-					<span
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						size="sm"
+						aria-label={tooltipText}
 						className={cn(
-							"absolute top-0 right-0 w-1.5 h-1.5 rounded-full transition-colors duration-200",
-							statusColorClass,
-						)}
-					/>
-				</Button>
+							"relative h-5 w-5 p-0",
+							"text-vscode-foreground opacity-85",
+							"hover:opacity-100 hover:bg-[rgba(255,255,255,0.03)]",
+							"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
+							className,
+						)}>
+						<MessageCircle className="w-4 h-4" />
+						<span
+							className={cn(
+								"absolute top-0 right-0 w-1.5 h-1.5 rounded-full transition-colors duration-200",
+								statusColorClass,
+							)}
+						/>
+					</Button>
+				</PopoverTrigger>
 			</StandardTooltip>
 		</HelperAgentPopover>
 	)

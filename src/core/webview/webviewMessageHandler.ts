@@ -693,9 +693,17 @@ export const webviewMessageHandler = async (
 
 		case "updateSettings":
 			if (message.updatedSettings) {
+				// Track whether any helper-agent setting changed so we can
+				// re-initialize the manager after the proxy writes complete
+				// (otherwise stale config — e.g. the previous DEFAULT_MAX_CONTEXT_TOKENS
+				// or the previous API Configuration profile — keeps driving the popover).
+				let helperAgentChanged = false
 				for (const [key, value] of Object.entries(message.updatedSettings)) {
 					let newValue = value
 
+					if (key.startsWith("helperAgent")) {
+						helperAgentChanged = true
+					}
 					if (key === "language") {
 						newValue = value ?? "en"
 						changeLanguage(newValue as Language)
@@ -782,6 +790,21 @@ export const webviewMessageHandler = async (
 					}
 
 					await provider.contextProxy.setValue(key as keyof ShoferSettings, newValue)
+				}
+
+				if (helperAgentChanged) {
+					try {
+						const { HelperAgentManager } = await import("../../services/helper-agent/manager")
+						const folder = vscode.workspace.workspaceFolders?.[0]
+						if (folder) {
+							const mgr = HelperAgentManager.getInstance(provider.context, folder.uri.fsPath)
+							if (mgr) {
+								await mgr.initialize()
+							}
+						}
+					} catch (error) {
+						console.error("[HelperAgentManager] re-initialize after settings change failed:", error)
+					}
 				}
 
 				await provider.postStateToWebview()
@@ -1856,7 +1879,7 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
-		case "searchFiles": {
+		case "grepSearch": {
 			const workspacePath = getCurrentCwd()
 
 			if (!workspacePath) {
@@ -2742,14 +2765,14 @@ export const webviewMessageHandler = async (
 				case "start":
 					await vscode.commands.executeCommand("shofer.helperAgent.start")
 					break
+				case "stop":
+					await vscode.commands.executeCommand("shofer.helperAgent.stop")
+					break
 				case "clear":
 					await vscode.commands.executeCommand("shofer.helperAgent.clearContext")
 					break
 				case "chat":
 					await vscode.commands.executeCommand("shofer.helperAgent.showChat")
-					break
-				case "configure":
-					await vscode.commands.executeCommand("workbench.action.openSettings", "shofer.helperAgent")
 					break
 			}
 			break

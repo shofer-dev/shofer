@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import type { ProviderSettings } from "./provider-settings.js"
+
 // ─── Agent State ────────────────────────────────────────────────────────────
 
 /**
@@ -15,19 +17,6 @@ import { z } from "zod"
 export const helperAgentStates = ["Standby", "Initializing", "Ready", "Busy", "Error", "Stopping"] as const
 export const helperAgentStateSchema = z.enum(helperAgentStates)
 export type HelperAgentState = z.infer<typeof helperAgentStateSchema>
-
-// ─── Provider ───────────────────────────────────────────────────────────────
-
-export const helperAgentProviders = [
-	"openai",
-	"gemini",
-	"openai-compatible",
-	"anthropic",
-	"ollama",
-	"openrouter",
-] as const
-export const helperAgentProviderSchema = z.enum(helperAgentProviders)
-export type HelperAgentProvider = z.infer<typeof helperAgentProviderSchema>
 
 // ─── Conversation Messages ──────────────────────────────────────────────────
 
@@ -58,16 +47,25 @@ export type FileContextEntry = z.infer<typeof fileContextEntrySchema>
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-export const helperAgentConfigSchema = z.object({
-	enabled: z.boolean(),
-	provider: helperAgentProviderSchema,
-	modelId: z.string(),
-	apiKey: z.string(),
-	baseUrl: z.string().optional(),
-	maxContextTokens: z.number().positive(),
-	contextFillThreshold: z.number().min(0).max(1),
-})
-export type HelperAgentConfig = z.infer<typeof helperAgentConfigSchema>
+/**
+ * HelperAgentConfig — runtime configuration resolved from settings.
+ *
+ *   `apiConfigId`/`apiConfigName` identify the API Configuration profile
+ *   (managed under Settings → Providers) that supplied the credentials.
+ *   `providerSettings` is the resolved profile, fed verbatim into
+ *   `buildApiHandler` — the helper agent does NOT carry its own
+ *   per-provider keys or model ids.
+ *   `maxContextTokens` may be overridden in Settings → Helper Agent;
+ *   otherwise it is taken from the model info reported by the handler.
+ */
+export interface HelperAgentConfig {
+	enabled: boolean
+	apiConfigId: string
+	apiConfigName: string
+	providerSettings: ProviderSettings
+	maxContextTokens: number
+	contextFillThreshold: number
+}
 
 // ─── Cost Tracking ──────────────────────────────────────────────────────────
 
@@ -167,7 +165,7 @@ Your purpose is to maintain long-term knowledge about the codebase and answer qu
 ## Rules
 - Be concise and direct. Answer only what is asked.
 - You are STRICTLY READ-ONLY. You cannot modify files, run commands, or create tasks.
-- Use your available read tools (read_file, search_files, list_files, codebase_search, codebase_search_with_lsp) to explore the codebase when needed.
+- Use your available read tools (read_file, grep_search, list_files, rag_search, lsp_search) to explore the codebase when needed.
 - Your context persists across questions — you accumulate knowledge over time.
 - If you don't know something, say so rather than guessing.
 

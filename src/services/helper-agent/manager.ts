@@ -39,6 +39,8 @@ import {
 } from "@shofer/types"
 
 import { ContextProxy } from "../../core/config/ContextProxy"
+import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
+import { buildApiHandler } from "../../api"
 import { logger } from "../../utils/logging"
 
 import { HelperAgentDirectoryTree } from "./directory-tree"
@@ -157,7 +159,7 @@ export class HelperAgentManager implements vscode.Disposable {
 	}
 
 	public get isFeatureConfigured(): boolean {
-		return !!(this._config?.apiKey && this._config?.modelId)
+		return !!this._config?.apiConfigId
 	}
 
 	public get isHelperAgentAvailable(): boolean {
@@ -165,11 +167,11 @@ export class HelperAgentManager implements vscode.Disposable {
 	}
 
 	public get modelId(): string {
-		return this._config?.modelId ?? "not configured"
+		return this._config?.providerSettings.apiModelId ?? this._config?.apiConfigName ?? "not configured"
 	}
 
 	public get provider(): string {
-		return this._config?.provider ?? "unknown"
+		return this._config?.providerSettings.apiProvider ?? "unknown"
 	}
 
 	public get conversationTurnCount(): number {
@@ -263,8 +265,8 @@ export class HelperAgentManager implements vscode.Disposable {
 			const snapshot = await this._store.load()
 			this._restoreSnapshot(snapshot)
 
-			if (!config.apiKey || !config.modelId) {
-				this._setState("Error", "API key or model ID not configured")
+			if (!config.apiConfigId) {
+				this._setState("Error", "No API Configuration selected")
 				return { requiresRestart: false }
 			}
 
@@ -310,6 +312,10 @@ export class HelperAgentManager implements vscode.Disposable {
 		const llm = this._llm
 		if (!llm) throw new Error("Helper agent LLM client is not initialized")
 
+		logger.info(
+			`[HelperAgent.Manager] _processQuestion start questionLen=${question.length} contextFiles=${(contextFiles ?? []).length}`,
+		)
+
 		this._setState("Busy", "Processing question...")
 		try {
 			const recentlyModified = this._drainRecentlyModifiedFiles()
@@ -321,7 +327,13 @@ export class HelperAgentManager implements vscode.Disposable {
 			}
 
 			const messages = this._buildChatMessages(question, recentlyModified)
+			logger.info(
+				`[HelperAgent.Manager] -> llm.chat msgs=${messages.length} recentlyModified=${recentlyModified.length}`,
+			)
 			const result = await llm.chat(messages, signal)
+			logger.info(
+				`[HelperAgent.Manager] <- llm.chat answerLen=${result.answer.length} prompt=${result.tokensUsed.prompt} completion=${result.tokensUsed.completion}`,
+			)
 
 			const userMsg: AgentMessage = {
 				id: randomUUID(),
@@ -360,6 +372,10 @@ export class HelperAgentManager implements vscode.Disposable {
 			const isAbort =
 				error instanceof Error &&
 				(error.name === "AbortError" || error.name === "TimeoutError" || message.includes("aborted"))
+
+			logger.error(
+				`[HelperAgent.Manager] _processQuestion FAILED isAbort=${isAbort} error=${message}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
+			)
 
 			if (!isAbort) {
 				this._setState("Error", message)
@@ -451,37 +467,74 @@ export class HelperAgentManager implements vscode.Disposable {
 	// ─── Configuration (via ContextProxy) ────────────────────────────────
 
 	/**
-	 * Read helper-agent configuration from ContextProxy. Settings live in
-	 * GlobalState and are typed via @shofer/types; secrets are routed
-	 * through the same proxy and stored in VSCode SecretStorage.
+	 * Read helper-agent configuration from ContextProxy + ProviderSettingsManager.
+	 *
+	 * The helper agent does not own provider/model/credentials — those come
+	 * from an API Configuration profile (managed under Settings → Providers,
+	 * persisted via ProviderSettingsManager). The Settings → Helper Agent tab
+	 * only stores: enabled flag, apiConfigId link, optional context-window
+	 * override, and the context-fill threshold.
 	 */
 	private async _loadConfiguration(): Promise<HelperAgentConfig | null> {
 		const proxy = await ContextProxy.getInstance(this.context)
 
 		const enabled = proxy.getValue("helperAgentEnabled") ?? true
-		const provider = (proxy.getValue("helperAgentProvider") ?? "openai") as HelperAgentConfig["provider"]
-		const modelId = proxy.getValue("helperAgentModelId") ?? ""
-		const baseUrl = proxy.getValue("helperAgentBaseUrl") ?? undefined
-		const maxContextTokens = proxy.getValue("helperAgentMaxContextTokens") ?? DEFAULT_MAX_CONTEXT_TOKENS
-		const contextFillThreshold =
-			proxy.getValue("helperAgentContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
+		const apiConfigId = proxy.getValue("helperAgentApiConfigId") ?? ""
+		const overrideMaxContextTokens = proxy.getValue("helperAgentMaxContextTokens")
+		const contextFillThreshold = proxy.getValue("helperAgentContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
 
-		const apiKey = this._resolveApiKey(proxy, provider)
-
-		return {
-			enabled,
-			provider,
-			modelId,
-			apiKey,
-			baseUrl,
-			maxContextTokens,
-			contextFillThreshold,
+		// No profile linked → return a partial config; initialize() turns this
+		// into an Error state with a "No API Configuration selected" message.
+		if (!apiConfigId) {
+			return {
+				enabled,
+				apiConfigId: "",
+				apiConfigName: "",
+				providerSettings: {},
+				maxContextTokens: overrideMaxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS,
+				contextFillThreshold,
+			}
 		}
-	}
 
-	private _resolveApiKey(proxy: ContextProxy, provider: HelperAgentConfig["provider"]): string {
-		const key = secretKeyForProvider(provider)
-		return proxy.getSecret(key) ?? ""
+		const psm = new ProviderSettingsManager(this.context)
+		try {
+			const profile = await psm.getProfile({ id: apiConfigId })
+			// Resolve max context tokens: explicit override wins; otherwise
+			// query the model info reported by the resolved handler.
+			let resolvedMaxContextTokens = overrideMaxContextTokens
+			if (resolvedMaxContextTokens === undefined) {
+				try {
+					const handler = buildApiHandler(profile, { taskId: "shofer-helper-agent" })
+					const info = handler.getModel().info
+					resolvedMaxContextTokens = info?.contextWindow ?? DEFAULT_MAX_CONTEXT_TOKENS
+				} catch (error) {
+					logger.warn(
+						`[HelperAgent] Failed to inspect model info for context window: ${error instanceof Error ? error.message : String(error)}`,
+					)
+					resolvedMaxContextTokens = DEFAULT_MAX_CONTEXT_TOKENS
+				}
+			}
+			return {
+				enabled,
+				apiConfigId,
+				apiConfigName: profile.name,
+				providerSettings: profile,
+				maxContextTokens: resolvedMaxContextTokens,
+				contextFillThreshold,
+			}
+		} catch (error) {
+			logger.warn(
+				`[HelperAgent] API Configuration '${apiConfigId}' could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
+			)
+			return {
+				enabled,
+				apiConfigId: "",
+				apiConfigName: "",
+				providerSettings: {},
+				maxContextTokens: overrideMaxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS,
+				contextFillThreshold,
+			}
+		}
 	}
 
 	// ─── Directory Tree + File Watcher ───────────────────────────────────
@@ -594,28 +647,6 @@ export class HelperAgentManager implements vscode.Disposable {
 }
 
 // ─── Provider → Secret Key Mapping ─────────────────────────────────────
-
-type HelperAgentSecretKey =
-	| "helperAgentOpenAiKey"
-	| "helperAgentGeminiKey"
-	| "helperAgentOpenAiCompatibleKey"
-	| "helperAgentAnthropicKey"
-	| "helperAgentOllamaKey"
-	| "helperAgentOpenRouterKey"
-
-function secretKeyForProvider(provider: HelperAgentConfig["provider"]): HelperAgentSecretKey {
-	switch (provider) {
-		case "openai":
-			return "helperAgentOpenAiKey"
-		case "gemini":
-			return "helperAgentGeminiKey"
-		case "openai-compatible":
-			return "helperAgentOpenAiCompatibleKey"
-		case "anthropic":
-			return "helperAgentAnthropicKey"
-		case "ollama":
-			return "helperAgentOllamaKey"
-		case "openrouter":
-			return "helperAgentOpenRouterKey"
-	}
-}
+// (removed) The helper agent now consumes credentials from an API
+// Configuration profile via ProviderSettingsManager — no per-provider
+// helper-agent secrets exist in storage.

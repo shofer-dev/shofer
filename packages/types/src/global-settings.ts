@@ -250,11 +250,13 @@ export const globalSettingsSchema = z.object({
 	// configuration so it shares the same lifecycle and migration hooks
 	// as the rest of the extension.
 	helperAgentEnabled: z.boolean().optional(),
-	helperAgentProvider: z
-		.enum(["openai", "gemini", "openai-compatible", "anthropic", "ollama", "openrouter"])
-		.optional(),
-	helperAgentModelId: z.string().optional(),
-	helperAgentBaseUrl: z.string().optional(),
+	// ID of the API Configuration profile (managed by ProviderSettingsManager
+	// under Settings → Providers) used for helper-agent LLM calls. The
+	// profile is the single source of truth for provider/model/credentials.
+	helperAgentApiConfigId: z.string().optional(),
+	// Optional override for the helper-agent context window. When unset,
+	// the manager falls back to the model info reported by the resolved
+	// API Configuration's ApiHandler (or DEFAULT_MAX_CONTEXT_TOKENS).
 	helperAgentMaxContextTokens: z.number().int().positive().optional(),
 	helperAgentContextFillThreshold: z.number().min(0).max(1).optional(),
 })
@@ -310,13 +312,6 @@ export const SECRET_STATE_KEYS = [
 // Global secrets that are part of GlobalSettings (not ProviderSettings)
 export const GLOBAL_SECRET_KEYS = [
 	"openRouterImageApiKey", // For image generation
-	// Helper agent API keys — one per supported helper-agent provider.
-	"helperAgentOpenAiKey",
-	"helperAgentGeminiKey",
-	"helperAgentOpenAiCompatibleKey",
-	"helperAgentAnthropicKey",
-	"helperAgentOllamaKey",
-	"helperAgentOpenRouterKey",
 ] as const
 
 // Type for the actual secret storage keys

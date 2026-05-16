@@ -227,8 +227,22 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		showHelperAgentChatPanel(context.extensionUri)
 	},
 	"helperAgent.start": async () => {
+		// `initialize()` swallows configuration/connection errors and sets the
+		// manager state to "Error" rather than throwing. Surface the failure to
+		// the user instead of unconditionally claiming success.
 		const managers = HelperAgentManager.getAllInstances()
 		await Promise.all(managers.map((mgr) => mgr.initialize()))
+		const failed = managers.filter((mgr) => mgr.state === "Error")
+		if (failed.length > 0) {
+			const detail = failed[0].stateMessage || "Unknown error"
+			vscode.window.showErrorMessage(`Helper Agent failed to start: ${detail}`)
+			return
+		}
+		const standby = managers.filter((mgr) => mgr.state === "Standby")
+		if (standby.length === managers.length && managers.length > 0) {
+			vscode.window.showWarningMessage(`Helper Agent is on standby: ${standby[0].stateMessage}`)
+			return
+		}
 		vscode.window.showInformationMessage("Helper Agent started.")
 	},
 	"helperAgent.stop": () => {
@@ -247,8 +261,22 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		await Promise.all(managers.map((mgr) => mgr.clearContext()))
 		vscode.window.showInformationMessage("Helper Agent context cleared.")
 	},
-	"helperAgent.openSettings": async () => {
-		await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:shofer.shofer helperAgent")
+	"helperAgent.openSettings": () => {
+		// Helper Agent settings live in ContextProxy (Typed Settings Rule), not
+		// in package.json `configuration` contributions, so the in-app
+		// SettingsView is the single source of truth for editing them. Route
+		// through the standard `settingsButtonClicked` action with a target
+		// `section`, mirroring how `settingsButtonClicked` above works.
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+		if (!visibleProvider) {
+			return
+		}
+		visibleProvider.postMessageToWebview({
+			type: "action",
+			action: "settingsButtonClicked",
+			values: { section: "helperAgent" },
+		})
+		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
 	},
 })
 

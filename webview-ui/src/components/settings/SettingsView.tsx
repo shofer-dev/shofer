@@ -13,6 +13,7 @@ import {
 	CheckCheck,
 	GitBranch,
 	Bell,
+	MessageCircle,
 	Database,
 	SquareTerminal,
 	FlaskConical,
@@ -69,6 +70,7 @@ import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
 import { CheckpointSettings } from "./CheckpointSettings"
 import { NotificationSettings } from "./NotificationSettings"
+import { HelperAgentSettings } from "./HelperAgentSettings"
 import { ContextManagementSettings } from "./ContextManagementSettings"
 import { TerminalSettings } from "./TerminalSettings"
 import { ExperimentalSettings } from "./ExperimentalSettings"
@@ -105,6 +107,7 @@ export const sectionNames = [
 	"skills",
 	"checkpoints",
 	"notifications",
+	"helperAgent",
 	"contextManagement",
 	"terminal",
 	"modes",
@@ -210,6 +213,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		includeCurrentCost,
 		maxGitStatusFiles,
 		defaultCostLimit,
+		helperAgentEnabled,
+		helperAgentApiConfigId,
+		helperAgentMaxContextTokens,
+		helperAgentContextFillThreshold,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -433,6 +440,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					experiments,
 					customSupportPrompts,
 					disabledTools: disabledTools ?? [],
+					helperAgentEnabled: helperAgentEnabled ?? true,
+					helperAgentApiConfigId: helperAgentApiConfigId ?? "",
+					helperAgentMaxContextTokens: helperAgentMaxContextTokens,
+					helperAgentContextFillThreshold: helperAgentContextFillThreshold,
 				},
 			})
 
@@ -528,6 +539,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "mcp", icon: Server },
 			{ id: "checkpoints", icon: GitCommitVertical },
 			{ id: "notifications", icon: Bell },
+			{ id: "helperAgent", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
 			{ id: "prompts", icon: MessageSquare },
@@ -844,6 +856,18 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								ttsSpeed={ttsSpeed}
 								soundEnabled={soundEnabled}
 								soundVolume={soundVolume}
+								setCachedStateField={setCachedStateField}
+							/>
+						)}
+
+						{/* Helper Agent Section */}
+						{renderTab === "helperAgent" && (
+							<HelperAgentSettings
+								helperAgentEnabled={helperAgentEnabled}
+								helperAgentApiConfigId={helperAgentApiConfigId}
+								helperAgentMaxContextTokens={helperAgentMaxContextTokens}
+								helperAgentContextFillThreshold={helperAgentContextFillThreshold}
+								listApiConfigMeta={listApiConfigMeta ?? []}
 								setCachedStateField={setCachedStateField}
 							/>
 						)}

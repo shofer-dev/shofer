@@ -35,6 +35,7 @@
 		"tools": "Tools",
 		"checkpoints": "Checkpoints",
 		"notifications": "Notifications",
+		"helperAgent": "Helper Agent",
 		"contextManagement": "Context",
 		"terminal": "Terminal",
 		"slashCommands": "Slash Commands",
@@ -673,6 +674,27 @@
 			"label": "Enable text-to-speech",
 			"description": "When enabled, Shofer will read aloud its responses using text-to-speech.",
 			"speedLabel": "Speed"
+		}
+	},
+	"helperAgent": {
+		"enabled": {
+			"label": "Enable Helper Agent",
+			"description": "When enabled, the codebase Q&A companion runs in the background and answers questions about the workspace."
+		},
+		"apiConfigId": {
+			"label": "API Configuration",
+			"description": "Profile from Settings → Providers used for the Helper Agent's LLM calls. Provider, model and credentials all come from the selected profile.",
+			"placeholder": "Select an API Configuration",
+			"empty": "No API Configurations defined — add one under Settings → Providers."
+		},
+		"maxContextTokens": {
+			"label": "Max context tokens (override)",
+			"description": "Optional override for the Helper Agent's context window. Leave empty to inherit the value from the selected API Configuration's model.",
+			"placeholder": "Inherit from API Configuration"
+		},
+		"contextFillThreshold": {
+			"label": "Context fill threshold",
+			"description": "Fraction (0..1) of the context window at which the Helper Agent starts trimming older turns. Default 0.85."
 		}
 	},
 	"contextManagement": {
