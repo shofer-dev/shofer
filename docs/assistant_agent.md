@@ -53,7 +53,7 @@ State machine:  Standby → Initializing → Ready ⇄ Busy → Stopping → Sta
 
 | File                                                 | Lines | Role                                                                                                                                                                                                                     |
 | ---------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/services/assistant-agent/manager.ts`            | ~620  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                            |
+| `src/services/assistant-agent/manager.ts`            | ~820  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                            |
 | `src/services/assistant-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                                       |
 | `src/services/assistant-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                            |
 | `src/services/assistant-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                             |
@@ -243,24 +243,36 @@ External Task calls ask_assistant_agent tool (synchronous — task blocks until 
 When dequeued (QuestionQueue invokes the processor with an AbortSignal):
   → state → Busy
   → If contextFiles provided: read each, ContextWindow.upsertFileContext(path, content, sha256)
-  → ContextWindow.appendMessage({ role: "user", content: question })
+  → ContextWindow.enforceLimit() → LRU eviction if over budget  ← (1) pre-loop enforcement
   → Drain recentlyModifiedFiles set (from tool invocation hooks)
-  → Construct messages for AssistantAgentLlmClient:
-      [fixed system prompt]     // ASSISTANT_AGENT_SYSTEM_PROMPT + cached directory tree (~10% cap)
-      + [file contexts]         // one system message per FileContextEntry (KV-cache friendly)
-      + [recently modified notification]  // ephemeral, not persisted
-      + [conversation history]  // every prior turn (KV-cache friendly)
-      + [current question]
-  → AssistantAgentLlmClient.chat(messages, signal)
-      → buildApiHandler().createMessage(systemPrompt, otherMessages, { taskId })
-      → drains ApiStream: accumulates `text` chunks, captures `usage` chunks, surfaces `error`
-      → AbortSignal aborts between chunks
-  → ContextWindow.appendMessage({ role: "assistant", content: answer })
-  → ContextWindow.enforceLimit() → LRU eviction if over budget
-  → pricing.computeCost(handler, usage) → update _costTracking
+  → Build system prompt once (stable across iterations):
+      _buildSystemPrompt(recentlyModified, softLimits)
+        [ASSISTANT_AGENT_SYSTEM_PROMPT + directory tree (~10% cap)]
+        + [file context entries from window]
+        + [recently modified notification]
+        + [soft constraints hint]
+        + [system-role messages from window]
+  → Build initial base conversation from window:
+      _buildBaseConversation(question)
+        [user/assistant messages from window] + [current question]
+  → Agent loop (max 25 tool-call iterations):
+      for each iteration:
+        → AssistantAgentLlmClient.chatWithTools({ systemPrompt, messages: conversation, tools, signal })
+            → drains ApiStream: accumulates `text` chunks, captures `usage` chunks
+            → if toolCalls.length === 0 → got final answer, break
+        → Append assistant turn (text + tool_use blocks) to in-flight conversation
+        → Execute tool calls, append tool_result blocks to in-flight conversation
+        → ContextWindow.enforceLimit()                  ← (2) loop enforcement
+        → rebuild base from trimmed window:
+            _buildBaseConversation(question)
+            conversation.splice(0, baseLength, ...freshBase)   // refresh base, keep in-flight
+  → ContextWindow.appendMessage({ role: "user", content: question })
+  → ContextWindow.appendMessage({ role: "assistant", content: finalAnswer })
+  → ContextWindow.enforceLimit() → LRU eviction if over budget  ← (3) post-append enforcement
+  → accumulate evicted tokens into costTracking
   → ConversationStore.save(snapshot)
   → state → Ready (or stay Busy if queue non-empty)
-  → Return QuestionResult { answer, usage, costUSD, evictedTokens } to caller
+  → Return QuestionResult { answer, usage, costSnapshot, evictedTokens } to caller
 ```
 
 ### 5. File Change Handling (`file-watcher.ts`)
@@ -368,6 +380,19 @@ Integration point: `src/services/assistant-agent/directory-tree.ts` — generate
 
 The assistant agent uses **truncation, not summarization**. The context window is a ring-buffer-like structure where old content is simply dropped when the limit is reached. No summarization is ever performed — the idea is to keep the context window nearly full (configurable up to a fill threshold) with raw conversation and file content.
 
+`enforceLimit()` is called at **three points** during question processing:
+
+```
+(1) Pre-loop — in _loadFileIntoContext(), after contextFiles are upserted
+(2) Loop — at the end of each agent-loop iteration, after tool results are appended
+(3) Post-append — after the final user+assistant Q&A pair is appended to the window
+```
+
+At the loop call site (2), the base portion of the in-flight conversation is
+**refreshed from the possibly-trimmed window** via `_buildBaseConversation()`
+so the next LLM iteration benefits from the eviction immediately. The in-flight
+tool_use/tool_result turns are preserved by splicing only the base zone.
+
 ```
 Token budget = assistantAgentMaxContextTokens (user-configurable)
 Fill threshold = assistantAgentContextFillThreshold (default 0.80 = 80%)
@@ -397,6 +422,13 @@ Truncation policy (NO summarization):
   → The directory tree is part of the immutable system prompt prefix
   → Truncated content is permanently lost from the agent's memory
   → A marker message is inserted so the model knows truncation occurred
+
+Loop-time enforcement:
+  → After each iteration: enforceLimit() trims the persisted window
+  → _buildBaseConversation() rebuilds the base from the trimmed window
+  → conversation.splice(0, baseLength, ...freshBase) replaces the base zone
+  → In-flight tool_use/tool_result turns are preserved across the splice
+  → The system prompt (built once per question) remains stable
 ```
 
 ---
@@ -900,6 +932,7 @@ Phases 4 and 5 can be implemented in parallel after Phase 3 is complete.
 | 5a    | `d80dbdc8c` `feat(assistant-agent): Phase 5 — Directory Tree + File Watcher`            | 2 new, 1 modified                                                                         |
 | 5b    | `3a90b5003` `feat(assistant-agent): Phase 5b — Chat View + FileContextTracker hooks`    | 1 new, 2 modified                                                                         |
 | R     | `794e6d0ac` `shofer: refactor assistant agent into focused modules + typed plumbing`    | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)              |
+| L     | `9cb81669f` `fix(assistant-agent): enforce context budget during agent loop and after append` | 1 modified: `manager.ts` (+53/-20); split `_buildAgentPrompt`, add 3-point enforcement |
 
 _Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback` for `attempt_completion`.
 
