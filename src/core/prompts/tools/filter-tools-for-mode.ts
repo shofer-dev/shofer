@@ -5,6 +5,7 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../../shar
 import { defaultModeSlug } from "../../../shared/modes"
 import { buildMcpToolName } from "../../../utils/mcp-name"
 import type { CodeIndexManager } from "../../../services/code-index/manager"
+import type { GitIndexManager } from "../../../services/git-index/git-index-manager"
 import type { McpHub } from "../../../services/mcp/McpHub"
 import { isToolAllowedForMode } from "../../../core/tools/validateToolUse"
 
@@ -227,6 +228,7 @@ export function filterNativeToolsForMode(
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
 	codeIndexManager?: CodeIndexManager,
+	gitIndexManager?: GitIndexManager,
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
 	assistantAgentManager?: import("../../../services/assistant-agent/manager").AssistantAgentManager,
@@ -274,6 +276,14 @@ export function filterNativeToolsForMode(
 		!(codeIndexManager.isFeatureEnabled && codeIndexManager.isFeatureConfigured && codeIndexManager.isInitialized)
 	) {
 		allowedToolNames.delete("rag_search")
+	}
+
+	// Conditionally exclude git_search if feature is disabled or not configured
+	if (
+		!gitIndexManager ||
+		!(gitIndexManager.isFeatureEnabled && gitIndexManager.isFeatureConfigured && gitIndexManager.isInitialized)
+	) {
+		allowedToolNames.delete("git_search")
 	}
 
 	// Conditionally exclude ask_assistant_agent if assistant agent is not available

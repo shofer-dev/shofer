@@ -634,6 +634,20 @@ export const ChatRowContent = ({
 					</div>
 				)
 			}
+			case "gitSearch": {
+				return (
+					<div style={headerStyle}>
+						{toolIcon("search")}
+						<span style={{ fontWeight: "bold" }}>
+							<Trans
+								i18nKey="chat:gitSearch.wantsToSearch"
+								components={{ code: <code></code> }}
+								values={{ query: tool.query }}
+							/>
+						</span>
+					</div>
+				)
+			}
 			case "updateTodoList" as any: {
 				const todos = (tool as any).todos || []
 				// Get previous todos from the latest todos in the task context
@@ -1667,6 +1681,79 @@ export const ChatRowContent = ({
 					const { results = [] } = parsed?.content || {}
 
 					return <RagSearchResultsDisplay results={results} />
+				case "git_search_result":
+					let gitParsed: {
+						content: {
+							query: string
+							results: Array<{
+								commit_hash: string
+								short_hash: string
+								author: string
+								author_date: string
+								subject: string
+								body: string
+								score: number
+							}>
+						}
+					} | null = null
+
+					try {
+						if (message.text) {
+							gitParsed = JSON.parse(message.text)
+						}
+					} catch (error) {
+						console.error("Failed to parse gitSearch content:", error)
+					}
+
+					if (gitParsed && !gitParsed?.content) {
+						console.error("Invalid gitSearch content structure:", gitParsed.content)
+						return <div>Error displaying search results.</div>
+					}
+
+					const gitResults = gitParsed?.content?.results || []
+					const count = gitResults.length
+
+					return (
+						<div>
+							<div style={headerStyle}>
+								<span
+									className="codicon codicon-search"
+									style={{
+										color: "var(--vscode-foreground)",
+										marginBottom: "-1.5px",
+									}}
+								/>
+								<span style={{ fontWeight: "bold" }}>
+									{count === 1
+										? t("chat:gitSearch.didSearch_one")
+										: t("chat:gitSearch.didSearch_other", { count })}
+								</span>
+							</div>
+							<div className="border-l border-muted-foreground/30 ml-2 pl-4 pb-1 space-y-3">
+								{gitResults.map((result, idx) => (
+									<div key={idx} className="text-sm">
+										<div className="flex items-center gap-2 flex-wrap">
+											<code className="text-xs bg-vscode-textCodeBlock-background px-1 py-0.5 rounded">
+												{result.short_hash}
+											</code>
+											<span className="text-vscode-descriptionForeground">{result.subject}</span>
+										</div>
+										<div className="text-xs text-vscode-descriptionForeground mt-1">
+											{result.author} · {result.author_date}
+										</div>
+										{result.body && (
+											<div className="text-xs text-vscode-descriptionForeground/70 mt-1 whitespace-pre-wrap line-clamp-3">
+												{result.body}
+											</div>
+										)}
+										<div className="text-xs text-vscode-descriptionForeground/50 mt-1">
+											{t("chat:gitSearch.resultTooltip", { score: result.score.toFixed(3) })}
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+					)
 				case "user_edit_todos":
 					return <UpdateTodoListToolBlock userEdited onChange={() => {}} />
 				case "tool" as any:

@@ -520,6 +520,15 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "git_search":
+				if (partialArgs.query !== undefined) {
+					nativeArgs = {
+						query: partialArgs.query,
+						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
+					}
+				}
+				break
+
 			case "generate_image":
 				if (partialArgs.prompt !== undefined || partialArgs.path !== undefined) {
 					nativeArgs = {
@@ -1066,6 +1075,15 @@ export class NativeToolCallParser {
 						nativeArgs = {
 							query: args.query,
 							path: args.path,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "git_search":
+					if (args.query !== undefined) {
+						nativeArgs = {
+							query: args.query,
+							maxResults: this.coerceOptionalNumber(args.maxResults),
 						} as NativeArgsFor<TName>
 					}
 					break

@@ -280,6 +280,12 @@
 		"didSearch_other": "Found {{count}} results",
 		"resultTooltip": "Similarity score: {{score}} (click to open file)"
 	},
+	"gitSearch": {
+		"wantsToSearch": "Shofer wants to search git history for <code>{{query}}</code>",
+		"didSearch_one": "Found 1 commit",
+		"didSearch_other": "Found {{count}} commits",
+		"resultTooltip": "Similarity score: {{score}}"
+	},
 	"commandOutput": "Command Output",
 	"commandExecution": {
 		"abort": "Abort",

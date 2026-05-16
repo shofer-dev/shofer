@@ -29,7 +29,15 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 			disabledTools: ["execute_command"],
 		}
 
-		const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, settings)
+		const result = filterNativeToolsForMode(
+			nativeTools,
+			"code",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			settings,
+		)
 
 		const resultNames = result.map((t) => (t as any).function.name)
 		expect(resultNames).not.toContain("execute_command")
@@ -43,7 +51,15 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 			disabledTools: [],
 		}
 
-		const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, settings)
+		const result = filterNativeToolsForMode(
+			nativeTools,
+			"code",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			settings,
+		)
 
 		const resultNames = result.map((t) => (t as any).function.name)
 		expect(resultNames).toContain("execute_command")
@@ -55,7 +71,15 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 	it("does not remove any tools when disabledTools is undefined", () => {
 		const settings = {}
 
-		const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, settings)
+		const result = filterNativeToolsForMode(
+			nativeTools,
+			"code",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			settings,
+		)
 
 		const resultNames = result.map((t) => (t as any).function.name)
 		expect(resultNames).toContain("execute_command")
@@ -67,7 +91,15 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 			disabledTools: ["execute_command"],
 		}
 
-		const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, settings)
+		const result = filterNativeToolsForMode(
+			nativeTools,
+			"code",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			settings,
+		)
 
 		const resultNames = result.map((t) => (t as any).function.name)
 		expect(resultNames).not.toContain("execute_command")
@@ -82,7 +114,15 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 			},
 		}
 
-		const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, settings)
+		const result = filterNativeToolsForMode(
+			nativeTools,
+			"code",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			settings,
+		)
 
 		const resultNames = result.map((t) => (t as any).function.name)
 		expect(resultNames).not.toContain("search_and_replace")

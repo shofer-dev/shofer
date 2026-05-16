@@ -36,6 +36,7 @@ import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
 import { CodeIndexManager } from "./services/code-index/manager"
+import { GitIndexManager } from "./services/git-index/git-index-manager"
 import { AssistantAgentManager } from "./services/assistant-agent/manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
@@ -139,6 +140,21 @@ export async function activate(context: vscode.ExtensionContext) {
 				})
 
 				context.subscriptions.push(manager)
+			}
+
+			// Initialize git index manager for this workspace folder.
+			const gitIndexManager = GitIndexManager.getInstance(context, folder.uri.fsPath)
+
+			if (gitIndexManager) {
+				// Initialize in background; do not block extension activation
+				void gitIndexManager.initialize(contextProxy).catch((error) => {
+					const message = error instanceof Error ? error.message : String(error)
+					outputChannel.appendLine(
+						`[GitIndexManager] Error during background GitIndexManager initialization for ${folder.uri.fsPath}: ${message}`,
+					)
+				})
+
+				context.subscriptions.push(gitIndexManager)
 			}
 
 			// Initialize assistant agent manager for this workspace folder.

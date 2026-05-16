@@ -210,6 +210,7 @@ export const shoferSays = [
 	"condense_context_error",
 	"sliding_window_truncation",
 	"rag_search_result",
+	"git_search_result",
 	"user_edit_todos",
 	"too_many_tools_warning",
 	"tool",

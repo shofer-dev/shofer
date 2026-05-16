@@ -946,6 +946,7 @@ export interface ShoferSayTool {
 		| "removeFile"
 		| "moveFile"
 		| "askAssistantAgent"
+		| "gitSearch"
 	path?: string
 	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
 	fileOp?: "rm" | "mv"

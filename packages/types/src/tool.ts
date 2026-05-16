@@ -84,6 +84,8 @@ export const toolNames = [
 	"sed",
 	// Assistant Agent
 	"ask_assistant_agent",
+	// Git History Search
+	"git_search",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -153,6 +155,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	sleep: "wait / sleep",
 	sed: "regex find-and-replace on files",
 	ask_assistant_agent: "ask assistant agent",
+	git_search: "search git history",
 } as const
 
 /**
@@ -178,6 +181,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"lsp_search",
 			"fetch_web_page",
 			"ask_assistant_agent",
+			"git_search",
 		],
 	},
 	write: {
