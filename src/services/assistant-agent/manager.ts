@@ -206,6 +206,16 @@ export class AssistantAgentManager implements vscode.Disposable {
 		return this._window.maxContextTokens
 	}
 
+	/**
+	 * How `maxContextTokens` was resolved for the active configuration.
+	 * Surfaced in the popover so a user can tell whether the displayed value
+	 * comes from the model's reported `info.contextWindow`, from an explicit
+	 * override, or has not been resolved yet (agent is in Error/Standby).
+	 */
+	public get contextWindowSource(): "override" | "model-info" | "unresolved" {
+		return this._config?.contextWindowSource ?? "unresolved"
+	}
+
 	public get contextFillThreshold(): number {
 		return this._window.contextFillThreshold
 	}
@@ -679,6 +689,9 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 		// No profile linked → return a partial config; initialize() turns this
 		// into an Error state with a "No API Configuration selected" message.
+		// `contextWindowSource: "unresolved"` flags the popover that the
+		// displayed `maxContextTokens` is just a placeholder for the
+		// (about-to-be-Error) ContextWindow init, not a real model value.
 		if (!apiConfigId) {
 			return {
 				enabled,
@@ -686,48 +699,46 @@ export class AssistantAgentManager implements vscode.Disposable {
 				apiConfigName: "",
 				providerSettings: {},
 				maxContextTokens: overrideMaxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS,
+				contextWindowSource: overrideMaxContextTokens !== undefined ? "override" : "unresolved",
 				contextFillThreshold,
 			}
 		}
 
 		const psm = new ProviderSettingsManager(this.context)
-		try {
-			const profile = await psm.getProfile({ id: apiConfigId })
-			// Resolve max context tokens: explicit override wins; otherwise
-			// query the model info reported by the resolved handler.
-			let resolvedMaxContextTokens = overrideMaxContextTokens
-			if (resolvedMaxContextTokens === undefined) {
-				try {
-					const handler = buildApiHandler(profile, { taskId: "shofer-assistant-agent" })
-					const info = handler.getModel().info
-					resolvedMaxContextTokens = info?.contextWindow ?? DEFAULT_MAX_CONTEXT_TOKENS
-				} catch (error) {
-					logger.warn(
-						`[AssistantAgent] Failed to inspect model info for context window: ${error instanceof Error ? error.message : String(error)}`,
-					)
-					resolvedMaxContextTokens = DEFAULT_MAX_CONTEXT_TOKENS
-				}
+		const profile = await psm.getProfile({ id: apiConfigId })
+
+		// Resolve max context tokens: explicit override wins; otherwise
+		// query the model info reported by the resolved handler. Any failure
+		// here MUST throw so initialize() promotes the agent to Error state
+		// — silently falling back to DEFAULT_MAX_CONTEXT_TOKENS hides real
+		// configuration problems (e.g. the popover showing 128K when the
+		// linked profile actually has a 1M window).
+		let resolvedMaxContextTokens: number
+		let contextWindowSource: "override" | "model-info"
+		if (overrideMaxContextTokens !== undefined) {
+			resolvedMaxContextTokens = overrideMaxContextTokens
+			contextWindowSource = "override"
+		} else {
+			const handler = buildApiHandler(profile, { taskId: "shofer-assistant-agent" })
+			const info = handler.getModel().info
+			if (!info?.contextWindow || info.contextWindow <= 0) {
+				throw new Error(
+					`API Configuration '${profile.name}' did not report a context window. ` +
+						`Set 'Max context tokens' under Settings → Assistant Agent to override.`,
+				)
 			}
-			return {
-				enabled,
-				apiConfigId,
-				apiConfigName: profile.name,
-				providerSettings: profile,
-				maxContextTokens: resolvedMaxContextTokens,
-				contextFillThreshold,
-			}
-		} catch (error) {
-			logger.warn(
-				`[AssistantAgent] API Configuration '${apiConfigId}' could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
-			)
-			return {
-				enabled,
-				apiConfigId: "",
-				apiConfigName: "",
-				providerSettings: {},
-				maxContextTokens: overrideMaxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS,
-				contextFillThreshold,
-			}
+			resolvedMaxContextTokens = info.contextWindow
+			contextWindowSource = "model-info"
+		}
+
+		return {
+			enabled,
+			apiConfigId,
+			apiConfigName: profile.name,
+			providerSettings: profile,
+			maxContextTokens: resolvedMaxContextTokens,
+			contextWindowSource,
+			contextFillThreshold,
 		}
 	}
 
