@@ -43,6 +43,15 @@ export interface AssistantAgentStatusData {
 	modelId?: string
 	provider?: string
 	contextUsage?: { currentTokens: number; maxTokens: number; fillFraction: number; isNearlyFull?: boolean }
+	/**
+	 * How `contextUsage.maxTokens` was resolved by the manager:
+	 *  - "model-info"  → from the linked profile's `info.contextWindow`
+	 *  - "override"    → from the explicit Settings → Assistant Agent override
+	 *  - "unresolved"  → no API Configuration linked (placeholder value)
+	 * Surfaced as a sub-line on the Context row so a user can tell at a glance
+	 * why the displayed window may differ from the active provider's value.
+	 */
+	contextWindowSource?: "override" | "model-info" | "unresolved"
 	costSnapshot?: {
 		sessionEstimatedCostUSD?: number
 		sessionInputTokens?: number
@@ -122,7 +131,17 @@ export const AssistantAgentPopover: React.FC<AssistantAgentPopoverProps> = ({ ch
 							icon={<Database className="w-3.5 h-3.5" />}
 							label="Context"
 							value={`${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} (${fillPct}%)`}
-							sub={usage.isNearlyFull ? "⚠ Nearly full" : undefined}
+							sub={
+								usage.isNearlyFull
+									? "⚠ Nearly full"
+									: status.contextWindowSource === "override"
+										? "Window: explicit override (Settings → Assistant Agent)"
+										: status.contextWindowSource === "model-info"
+											? "Window: from API Configuration model info"
+											: status.contextWindowSource === "unresolved"
+												? "Window: unresolved (no API Configuration)"
+												: undefined
+							}
 						/>
 					) : null}
 					<InfoRow

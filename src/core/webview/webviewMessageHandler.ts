@@ -89,6 +89,37 @@ import {
 	handleGetWorktreeStatus,
 } from "./worktree"
 
+/**
+ * Re-initialize the Assistant Agent manager for the current workspace.
+ *
+ * Triggered by:
+ *  - Any change to an `assistantAgent*` setting (link change, override change, …).
+ *  - ANY mutation of the API Configuration profiles (save/upsert/rename/load/
+ *    delete) — the linked profile's `providerSettings` (e.g. the
+ *    `anthropicBeta1MContext` flag, the model id, or even just renaming /
+ *    re-loading a profile) directly drives the resolved context window the
+ *    popover displays. Without this hook, toggling the 1M-beta on the linked
+ *    profile would leave the manager pinned to the value it cached at
+ *    activation time.
+ *
+ * Cheap to call: `initialize()` short-circuits when nothing material changed
+ * downstream (it always rebuilds `_config` and the LLM client, but that's a
+ * single profile lookup + one model-info read).
+ */
+async function reinitializeAssistantAgent(provider: ShoferProvider): Promise<void> {
+	try {
+		const { AssistantAgentManager } = await import("../../services/assistant-agent/manager")
+		const folder = vscode.workspace.workspaceFolders?.[0]
+		if (!folder) return
+		const mgr = AssistantAgentManager.getInstance(provider.context, folder.uri.fsPath)
+		if (mgr) {
+			await mgr.initialize()
+		}
+	} catch (error) {
+		console.error("[AssistantAgentManager] re-initialize failed:", error)
+	}
+}
+
 export const webviewMessageHandler = async (
 	provider: ShoferProvider,
 	message: WebviewMessage,
@@ -794,18 +825,7 @@ export const webviewMessageHandler = async (
 				}
 
 				if (assistantAgentChanged) {
-					try {
-						const { AssistantAgentManager } = await import("../../services/assistant-agent/manager")
-						const folder = vscode.workspace.workspaceFolders?.[0]
-						if (folder) {
-							const mgr = AssistantAgentManager.getInstance(provider.context, folder.uri.fsPath)
-							if (mgr) {
-								await mgr.initialize()
-							}
-						}
-					} catch (error) {
-						console.error("[AssistantAgentManager] re-initialize after settings change failed:", error)
-					}
+					await reinitializeAssistantAgent(provider)
 				}
 
 				await provider.postStateToWebview()
@@ -1980,6 +2000,7 @@ export const webviewMessageHandler = async (
 					await provider.providerSettingsManager.saveConfig(message.text, message.apiConfiguration)
 					const listApiConfig = await provider.providerSettingsManager.listConfig()
 					await updateGlobalState("listApiConfigMeta", listApiConfig)
+					await reinitializeAssistantAgent(provider)
 				} catch (error) {
 					provider.log(
 						`Error save api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -1991,6 +2012,7 @@ export const webviewMessageHandler = async (
 		case "upsertApiConfiguration":
 			if (message.text && message.apiConfiguration) {
 				await provider.upsertProviderProfile(message.text, message.apiConfiguration)
+				await reinitializeAssistantAgent(provider)
 			}
 			break
 		case "renameApiConfiguration":
@@ -2014,6 +2036,7 @@ export const webviewMessageHandler = async (
 					// Re-activate to update the global settings related to the
 					// currently activated provider profile.
 					await provider.activateProviderProfile({ name: newName })
+					await reinitializeAssistantAgent(provider)
 				} catch (error) {
 					provider.log(
 						`Error rename api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -2027,6 +2050,7 @@ export const webviewMessageHandler = async (
 			if (message.text) {
 				try {
 					await provider.activateProviderProfile({ name: message.text })
+					await reinitializeAssistantAgent(provider)
 				} catch (error) {
 					provider.log(
 						`Error load api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -2039,6 +2063,7 @@ export const webviewMessageHandler = async (
 			if (message.text) {
 				try {
 					await provider.activateProviderProfile({ id: message.text })
+					await reinitializeAssistantAgent(provider)
 				} catch (error) {
 					provider.log(
 						`Error load api configuration by ID: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -2073,6 +2098,7 @@ export const webviewMessageHandler = async (
 				try {
 					await provider.providerSettingsManager.deleteConfig(oldName)
 					await provider.activateProviderProfile({ name: newName })
+					await reinitializeAssistantAgent(provider)
 				} catch (error) {
 					provider.log(
 						`Error delete api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
