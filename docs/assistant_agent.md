@@ -558,12 +558,11 @@ The assistant agent itself runs as an internal task with a **severely restricted
 
 | Tool Category     | Available? | Tools Included                                                                           |
 | ----------------- | ---------- | ---------------------------------------------------------------------------------------- |
-| **Read**          | ✓ Yes      | `read_file`, `list_files`, `grep_search`, `list_code_usages`, `rag_search`, `lsp_search` |
+| **Read**          | ✓ Yes      | `read_file`, `list_files`, `grep_search`, `find_files`, `rag_search`, `read_project_structure`, `view_image`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search`, `fetch_web_page` |
 | **Write/Edit**    | ✗ No       | `write_to_file`, `apply_diff`, `insert_edit`, `sed`                                      |
 | **CLI/Execution** | ✗ No       | `execute_command`                                                                        |
 | **MCP**           | ✗ No       | All MCP-provided tools (browser, k3s, mimir, loki, tempo, etc.)                          |
 | **Task Control**  | ✗ No       | `new_task`, `switch_mode`, `attempt_completion`                                          |
-| **Ask**           | ✓ Yes      | `ask_followup_question` — only as a fallback if clarification needed                     |
 
 These restrictions are enforced at the tool-filtering layer (`filter-tools-for-mode.ts`) based on a dedicated `assistant_agent` internal mode slug. The assistant agent's system prompt explicitly instructs it that it cannot make changes — it can only read and answer questions about the codebase. This ensures:
 
