@@ -51,9 +51,19 @@ import {
 const DEFAULT_QDRANT_URL = "http://localhost:6333"
 const DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
+interface GitIndexingStatus {
+	systemStatus: string
+	message?: string
+	processedItems: number
+	totalItems: number
+	currentItemUnit?: string
+	workspacePath?: string
+}
+
 interface CodeIndexPopoverProps {
 	children: React.ReactNode
 	indexingStatus: IndexingStatus
+	gitIndexingStatus?: GitIndexingStatus
 }
 
 interface LocalCodeIndexSettings {
@@ -184,6 +194,7 @@ const createValidationSchema = (provider: EmbedderProvider, t: any) => {
 export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	children,
 	indexingStatus: externalIndexingStatus,
+	gitIndexingStatus: externalGitIndexingStatus,
 }) => {
 	const SECRET_PLACEHOLDER = "••••••••••••••••"
 	const { t } = useAppTranslation()
@@ -193,6 +204,14 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	const [isSetupSettingsOpen, setIsSetupSettingsOpen] = useState(false)
 
 	const [indexingStatus, setIndexingStatus] = useState<IndexingStatus>(externalIndexingStatus)
+	const [gitIndexingStatus, setGitIndexingStatus] = useState<GitIndexingStatus>(
+		externalGitIndexingStatus ?? {
+			systemStatus: "Standby",
+			processedItems: 0,
+			totalItems: 0,
+			currentItemUnit: "commits",
+		},
+	)
 
 	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
 	const [saveError, setSaveError] = useState<string | null>(null)
@@ -237,6 +256,13 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 	useEffect(() => {
 		setIndexingStatus(externalIndexingStatus)
 	}, [externalIndexingStatus])
+
+	// Update git indexing status from parent
+	useEffect(() => {
+		if (externalGitIndexingStatus) {
+			setGitIndexingStatus(externalGitIndexingStatus)
+		}
+	}, [externalGitIndexingStatus])
 
 	// Initialize settings from global state
 	useEffect(() => {
@@ -309,6 +335,16 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 						processedItems: event.data.values.processedItems,
 						totalItems: event.data.values.totalItems,
 						currentItemUnit: event.data.values.currentItemUnit || "items",
+					})
+				}
+			} else if (event.data.type === "gitIndexingStatusUpdate") {
+				if (!event.data.values.workspacePath || event.data.values.workspacePath === cwd) {
+					setGitIndexingStatus({
+						systemStatus: event.data.values.systemStatus,
+						message: event.data.values.message || "",
+						processedItems: event.data.values.processedItems ?? 0,
+						totalItems: event.data.values.totalItems ?? 0,
+						currentItemUnit: event.data.values.currentItemUnit || "commits",
 					})
 				}
 			} else if (event.data.type === "codeIndexSettingsSaved") {
@@ -677,6 +713,106 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 									</ProgressPrimitive.Root>
 								</div>
 							)}
+						</div>
+
+						{/* Git History Section */}
+						<div className="mt-4 pt-3 border-t border-vscode-dropdown-border">
+							<h4 className="text-sm font-medium mb-2">{t("settings:codeIndex.gitHistoryTitle")}</h4>
+
+							{/* Enabled Toggle */}
+							<div className="mb-3">
+								<div className="flex items-center gap-2">
+									<VSCodeCheckbox
+										checked={codebaseIndexConfig?.codebaseIndexGitEnabled ?? false}
+										onChange={(e: any) =>
+											vscode.postMessage({
+												type: "updateSettings",
+												settings: { codebaseIndexGitEnabled: e.target.checked },
+											})
+										}>
+										<span className="font-medium">{t("settings:codeIndex.gitEnableLabel")}</span>
+									</VSCodeCheckbox>
+								</div>
+							</div>
+
+							{/* Git Status */}
+							<div className="space-y-2">
+								<div className="text-sm text-vscode-descriptionForeground">
+									<span
+										className={cn("inline-block w-3 h-3 rounded-full mr-2", {
+											"bg-gray-400": gitIndexingStatus.systemStatus === "Standby",
+											"bg-yellow-500 animate-pulse":
+												gitIndexingStatus.systemStatus === "Indexing",
+											"bg-green-500": gitIndexingStatus.systemStatus === "Indexed",
+											"bg-red-500": gitIndexingStatus.systemStatus === "Error",
+										})}
+									/>
+									{gitIndexingStatus.systemStatus === "Indexed"
+										? t("settings:codeIndex.gitIndexedStatus")
+										: gitIndexingStatus.systemStatus === "Indexing"
+											? t("settings:codeIndex.gitIndexingStatus")
+											: gitIndexingStatus.systemStatus === "Error"
+												? t("settings:codeIndex.gitErrorStatus")
+												: t("settings:codeIndex.gitStandbyStatus")}
+									{gitIndexingStatus.message ? ` - ${gitIndexingStatus.message}` : ""}
+								</div>
+							</div>
+
+							{/* Action Buttons */}
+							<div className="flex gap-2 mt-3">
+								{(codebaseIndexConfig?.codebaseIndexGitEnabled ?? false) &&
+									(gitIndexingStatus.systemStatus === "Error" ||
+										gitIndexingStatus.systemStatus === "Standby") && (
+										<Button
+											size="sm"
+											onClick={() => vscode.postMessage({ type: "startGitIndexing" })}>
+											{t("settings:codeIndex.gitStartButton")}
+										</Button>
+									)}
+
+								{(codebaseIndexConfig?.codebaseIndexGitEnabled ?? false) &&
+									gitIndexingStatus.systemStatus === "Indexing" && (
+										<Button
+											size="sm"
+											variant="destructive"
+											onClick={() => vscode.postMessage({ type: "stopGitIndexing" })}>
+											{t("settings:codeIndex.gitStopButton")}
+										</Button>
+									)}
+
+								{(codebaseIndexConfig?.codebaseIndexGitEnabled ?? false) &&
+									(gitIndexingStatus.systemStatus === "Indexed" ||
+										gitIndexingStatus.systemStatus === "Error") && (
+										<AlertDialog>
+											<AlertDialogTrigger asChild>
+												<Button size="sm" variant="secondary">
+													{t("settings:codeIndex.gitClearButton")}
+												</Button>
+											</AlertDialogTrigger>
+											<AlertDialogContent>
+												<AlertDialogHeader>
+													<AlertDialogTitle>
+														{t("settings:codeIndex.gitClearDialog.title")}
+													</AlertDialogTitle>
+													<AlertDialogDescription>
+														{t("settings:codeIndex.gitClearDialog.description")}
+													</AlertDialogDescription>
+												</AlertDialogHeader>
+												<AlertDialogFooter>
+													<AlertDialogCancel>
+														{t("settings:codeIndex.gitClearDialog.cancelButton")}
+													</AlertDialogCancel>
+													<AlertDialogAction
+														onClick={() =>
+															vscode.postMessage({ type: "clearGitIndexData" })
+														}>
+														{t("settings:codeIndex.gitClearDialog.confirmButton")}
+													</AlertDialogAction>
+												</AlertDialogFooter>
+											</AlertDialogContent>
+										</AlertDialog>
+									)}
+							</div>
 						</div>
 
 						{/* Setup Settings Disclosure */}

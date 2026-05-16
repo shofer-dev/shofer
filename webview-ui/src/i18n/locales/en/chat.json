@@ -453,7 +453,19 @@
 		"indexed": "Indexed",
 		"error": "Index error",
 		"status": "Index status",
-		"stopping": "Stopping indexing..."
+		"stopping": "Stopping indexing...",
+		"codeReady": "Code: Ready",
+		"codeIndexing": "Code: Indexing {{percentage}}%",
+		"codeIndexed": "Code: Indexed",
+		"codeError": "Code: Error",
+		"codeStatus": "Code: Status",
+		"codeStopping": "Code: Stopping...",
+		"gitReady": "Git: Ready",
+		"gitIndexing": "Git: Indexing",
+		"gitIndexed": "Git: Indexed",
+		"gitError": "Git: Error",
+		"gitStatus": "Git: Status",
+		"gitStopping": "Git: Stopping..."
 	},
 	"versionIndicator": {
 		"ariaLabel": "Version {{version}} - Click to view release notes"

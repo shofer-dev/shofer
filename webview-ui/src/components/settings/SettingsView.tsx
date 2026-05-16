@@ -14,6 +14,7 @@ import {
 	GitBranch,
 	Bell,
 	MessageCircle,
+	Archive,
 	Database,
 	SquareTerminal,
 	FlaskConical,
@@ -87,6 +88,7 @@ import McpView from "../mcp/McpView"
 import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
+import { RagIndexerSettings } from "./RagIndexerSettings"
 
 export const settingsTabsContainer = "flex flex-1 overflow-hidden [&.narrow_.tab-label]:hidden"
 export const settingsTabList =
@@ -110,6 +112,7 @@ export const sectionNames = [
 	"assistantAgent",
 	"contextManagement",
 	"terminal",
+	"codebaseIndex",
 	"modes",
 	"mcp",
 	"worktrees",
@@ -131,7 +134,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	const { t } = useAppTranslation()
 
 	const extensionState = useExtensionState()
-	const { currentApiConfigName, listApiConfigMeta, uriScheme, settingsImportedAt } = extensionState
+	const { currentApiConfigName, listApiConfigMeta, uriScheme, settingsImportedAt, codebaseIndexConfig } =
+		extensionState
 
 	const [isDiscardDialogShow, setDiscardDialogShow] = useState(false)
 	const [isChangeDetected, setChangeDetected] = useState(false)
@@ -544,6 +548,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "assistantAgent", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
+			{ id: "codebaseIndex", icon: Archive },
 			{ id: "prompts", icon: MessageSquare },
 			{ id: "worktrees", icon: GitBranch },
 			{ id: "ui", icon: Glasses },
@@ -914,6 +919,14 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								terminalZshP10k={terminalZshP10k}
 								terminalZdotdir={terminalZdotdir}
 								setCachedStateField={setCachedStateField}
+							/>
+						)}
+
+						{/* Codebase Index Section */}
+						{renderTab === "codebaseIndex" && (
+							<RagIndexerSettings
+								codebaseIndexConfig={codebaseIndexConfig}
+								setCachedStateField={setCachedStateField as any}
 							/>
 						)}
 
