@@ -515,9 +515,9 @@
 		"wantsToUse": "Shofer wants to use {{tool}}",
 		"didUse": "Shofer used {{tool}}"
 	},
-	"askHelperAgent": {
-		"wantsToAsk": "Shofer wants to ask the Helper Agent",
-		"didAsk": "Shofer asked the Helper Agent",
+	"askAssistantAgent": {
+		"wantsToAsk": "Shofer wants to ask the Assistant Agent",
+		"didAsk": "Shofer asked the Assistant Agent",
 		"answer": "Answer"
 	},
 	"retiredProvider": {

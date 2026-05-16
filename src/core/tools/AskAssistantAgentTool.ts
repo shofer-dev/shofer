@@ -1,15 +1,15 @@
 import * as vscode from "vscode"
 import { Task } from "../task/Task"
-import { HelperAgentManager } from "../../services/helper-agent/manager"
+import { AssistantAgentManager } from "../../services/assistant-agent/manager"
 import { getWorkspacePath } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { logger } from "../../utils/logging"
 
-const LOG_PREFIX = "[AskHelperAgentTool]"
+const LOG_PREFIX = "[AskAssistantAgentTool]"
 
-interface AskHelperAgentParams {
+interface AskAssistantAgentParams {
 	question: string
 	contextFiles?: string[] | null
 	timeoutMs?: number | null
@@ -17,10 +17,10 @@ interface AskHelperAgentParams {
 	softResultLength?: number | null
 }
 
-export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
-	readonly name = "ask_helper_agent" as const
+export class AskAssistantAgentTool extends BaseTool<"ask_assistant_agent"> {
+	readonly name = "ask_assistant_agent" as const
 
-	async execute(params: AskHelperAgentParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+	async execute(params: AskAssistantAgentParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 		const { question } = params
 		// `?? undefined` collapses the nullable strict-mode placeholders the
@@ -33,19 +33,19 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 		const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
 
 		if (!workspacePath) {
-			await handleError("ask_helper_agent", new Error("Could not determine workspace path."))
+			await handleError("ask_assistant_agent", new Error("Could not determine workspace path."))
 			return
 		}
 
 		if (!question) {
 			task.consecutiveMistakeCount++
 			task.didToolFailInCurrentTurn = true
-			pushToolResult(await task.sayAndCreateMissingParamError("ask_helper_agent", "question"))
+			pushToolResult(await task.sayAndCreateMissingParamError("ask_assistant_agent", "question"))
 			return
 		}
 
 		const sharedMessageProps = {
-			tool: "askHelperAgent",
+			tool: "askAssistantAgent",
 			question,
 			contextFiles: contextFiles ?? [],
 			timeoutMs: timeoutMs ?? 300000,
@@ -70,19 +70,19 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 				throw new Error("Extension context is not available.")
 			}
 
-			const manager = HelperAgentManager.getInstance(context, workspacePath)
+			const manager = AssistantAgentManager.getInstance(context, workspacePath)
 
 			if (!manager) {
-				throw new Error("HelperAgentManager is not available.")
+				throw new Error("AssistantAgentManager is not available.")
 			}
 
 			logger.info(
-				`${LOG_PREFIX} manager state=${manager.state} available=${manager.isHelperAgentAvailable} stateMessage=${JSON.stringify(manager.stateMessage)}`,
+				`${LOG_PREFIX} manager state=${manager.state} available=${manager.isAssistantAgentAvailable} stateMessage=${JSON.stringify(manager.stateMessage)}`,
 			)
 
-			if (!manager.isHelperAgentAvailable) {
+			if (!manager.isAssistantAgentAvailable) {
 				throw new Error(
-					`Helper agent is not available (state: ${manager.state}). ` +
+					`Assistant agent is not available (state: ${manager.state}). ` +
 						`Make sure it is enabled and configured in settings.`,
 				)
 			}
@@ -100,12 +100,12 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 				`${LOG_PREFIX} <- manager.askQuestion taskId=${task.taskId} durationMs=${Date.now() - startedAt} answerLen=${result.answer.length} prompt=${result.tokensUsed.prompt} completion=${result.tokensUsed.completion}`,
 			)
 
-			// Render the helper agent's answer in chat as a follow-up `tool` say
+			// Render the assistant agent's answer in chat as a follow-up `tool` say
 			// so the user can read (and expand) the response inline. Without this
-			// the chat would only show "Shofer wants to use Ask Helper Agent" and
+			// the chat would only show "Shofer wants to use Ask Assistant Agent" and
 			// the answer would be silently appended to the model's tool_result.
 			const sayPayload = {
-				tool: "askHelperAgent",
+				tool: "askAssistantAgent",
 				question,
 				answer: result.answer,
 				contextFiles: result.contextFiles ?? [],
@@ -116,7 +116,7 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 			}
 			await task.say("tool", JSON.stringify(sayPayload))
 
-			const output = `Helper Agent Answer:
+			const output = `Assistant Agent Answer:
 ${result.answer}
 
 ---
@@ -131,15 +131,15 @@ Files in context: ${result.contextFiles.length}`
 			logger.error(
 				`${LOG_PREFIX} execute() FAILED taskId=${task.taskId} error=${error?.message ?? String(error)}\n${error?.stack ?? "(no stack)"}`,
 			)
-			await handleError("ask_helper_agent", error)
+			await handleError("ask_assistant_agent", error)
 		}
 	}
 
-	override async handlePartial(task: Task, block: ToolUse<"ask_helper_agent">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"ask_assistant_agent">): Promise<void> {
 		const question: string | undefined = block.params.question
 
 		const sharedMessageProps = {
-			tool: "askHelperAgent",
+			tool: "askAssistantAgent",
 			question: question,
 		}
 
@@ -147,4 +147,4 @@ Files in context: ${result.contextFiles.length}`
 	}
 }
 
-export const askHelperAgentTool = new AskHelperAgentTool()
+export const askAssistantAgentTool = new AskAssistantAgentTool()

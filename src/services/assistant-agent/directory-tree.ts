@@ -3,8 +3,8 @@ import * as fs from "fs/promises"
 import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
 
 /**
- * HelperAgentDirectoryTree — generates a workspace `find .`-style tree
- * for injection into the helper agent's system prompt.
+ * AssistantAgentDirectoryTree — generates a workspace `find .`-style tree
+ * for injection into the assistant agent's system prompt.
  *
  * The tree is:
  * - Capped at ~10% of the context window (token estimate)
@@ -14,7 +14,7 @@ import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
  * On agent startup and after Clear Context, the tree is regenerated
  * and injected via the {directoryTree} placeholder in the system prompt.
  */
-export class HelperAgentDirectoryTree {
+export class AssistantAgentDirectoryTree {
 	private readonly _workspacePath: string
 	private readonly _maxContextTokens: number
 

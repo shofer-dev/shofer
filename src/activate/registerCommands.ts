@@ -11,8 +11,8 @@ import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
 import { handleNewTask } from "./handleTask"
 import { CodeIndexManager } from "../services/code-index/manager"
-import { HelperAgentManager } from "../services/helper-agent/manager"
-import { showHelperAgentChatPanel } from "../core/webview/HelperAgentChatProvider"
+import { AssistantAgentManager } from "../services/assistant-agent/manager"
+import { showAssistantAgentChatPanel } from "../core/webview/AssistantAgentChatProvider"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 import { defaultModeSlug } from "../shared/modes"
 import { t } from "../i18n"
@@ -218,51 +218,51 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		})
 	},
 
-	// ─── Helper Agent ──────────────────────────────────────────────────
-	// The Helper Agent's status indicator and action menu live in the
-	// Shofer chat-input toolbar (HelperAgentStatusBadge → HelperAgentPopover),
+	// ─── Assistant Agent ──────────────────────────────────────────────────
+	// The Assistant Agent's status indicator and action menu live in the
+	// Shofer chat-input toolbar (AssistantAgentStatusBadge → AssistantAgentPopover),
 	// not in the VS Code status bar. The commands below back the popover
 	// actions and are also exposed through the command palette.
-	"helperAgent.showChat": () => {
-		showHelperAgentChatPanel(context.extensionUri)
+	"assistantAgent.showChat": () => {
+		showAssistantAgentChatPanel(context.extensionUri)
 	},
-	"helperAgent.start": async () => {
+	"assistantAgent.start": async () => {
 		// `initialize()` swallows configuration/connection errors and sets the
 		// manager state to "Error" rather than throwing. Surface the failure to
 		// the user instead of unconditionally claiming success.
-		const managers = HelperAgentManager.getAllInstances()
+		const managers = AssistantAgentManager.getAllInstances()
 		await Promise.all(managers.map((mgr) => mgr.initialize()))
 		const failed = managers.filter((mgr) => mgr.state === "Error")
 		if (failed.length > 0) {
 			const detail = failed[0].stateMessage || "Unknown error"
-			vscode.window.showErrorMessage(`Helper Agent failed to start: ${detail}`)
+			vscode.window.showErrorMessage(`Assistant Agent failed to start: ${detail}`)
 			return
 		}
 		const standby = managers.filter((mgr) => mgr.state === "Standby")
 		if (standby.length === managers.length && managers.length > 0) {
-			vscode.window.showWarningMessage(`Helper Agent is on standby: ${standby[0].stateMessage}`)
+			vscode.window.showWarningMessage(`Assistant Agent is on standby: ${standby[0].stateMessage}`)
 			return
 		}
-		vscode.window.showInformationMessage("Helper Agent started.")
+		vscode.window.showInformationMessage("Assistant Agent started.")
 	},
-	"helperAgent.stop": () => {
+	"assistantAgent.stop": () => {
 		// Cancel pending work, then dispose every instance. disposeAll() calls
 		// dispose() on each, which already cancels questions and tears down
 		// watchers/emitters; the explicit cancel here is defensive in case a
 		// caller invokes stop() repeatedly.
-		for (const mgr of HelperAgentManager.getAllInstances()) {
+		for (const mgr of AssistantAgentManager.getAllInstances()) {
 			mgr.cancelAllQuestions()
 		}
-		HelperAgentManager.disposeAll()
-		vscode.window.showInformationMessage("Helper Agent stopped.")
+		AssistantAgentManager.disposeAll()
+		vscode.window.showInformationMessage("Assistant Agent stopped.")
 	},
-	"helperAgent.clearContext": async () => {
-		const managers = HelperAgentManager.getAllInstances()
+	"assistantAgent.clearContext": async () => {
+		const managers = AssistantAgentManager.getAllInstances()
 		await Promise.all(managers.map((mgr) => mgr.clearContext()))
-		vscode.window.showInformationMessage("Helper Agent context cleared.")
+		vscode.window.showInformationMessage("Assistant Agent context cleared.")
 	},
-	"helperAgent.openSettings": () => {
-		// Helper Agent settings live in ContextProxy (Typed Settings Rule), not
+	"assistantAgent.openSettings": () => {
+		// Assistant Agent settings live in ContextProxy (Typed Settings Rule), not
 		// in package.json `configuration` contributions, so the in-app
 		// SettingsView is the single source of truth for editing them. Route
 		// through the standard `settingsButtonClicked` action with a target
@@ -274,7 +274,7 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		visibleProvider.postMessageToWebview({
 			type: "action",
 			action: "settingsButtonClicked",
-			values: { section: "helperAgent" },
+			values: { section: "assistantAgent" },
 		})
 		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
 	},

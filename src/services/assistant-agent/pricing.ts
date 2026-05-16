@@ -1,5 +1,5 @@
 /**
- * pricing — cost estimation for Helper Agent LLM calls.
+ * pricing — cost estimation for Assistant Agent LLM calls.
  *
  * Prefers authoritative pricing from the underlying ApiHandler's
  * `getModel().info` (populated from each provider's pricing tables).
@@ -18,17 +18,13 @@ const FALLBACK_OUTPUT_USD_PER_MTOK = 2.0
 const TOKENS_PER_MILLION = 1_000_000
 
 /**
- * Estimate USD cost for a single Helper Agent request.
+ * Estimate USD cost for a single Assistant Agent request.
  *
  * @param handler - The active ApiHandler (used to read live model info).
  * @param promptTokens - Input tokens reported by the provider.
  * @param completionTokens - Output tokens reported by the provider.
  */
-export function estimateUsdCost(
-	handler: ApiHandler,
-	promptTokens: number,
-	completionTokens: number,
-): number {
+export function estimateUsdCost(handler: ApiHandler, promptTokens: number, completionTokens: number): number {
 	let inputRate = FALLBACK_INPUT_USD_PER_MTOK
 	let outputRate = FALLBACK_OUTPUT_USD_PER_MTOK
 

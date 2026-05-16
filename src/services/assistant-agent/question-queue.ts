@@ -1,5 +1,5 @@
 /**
- * QuestionQueue — bounded FIFO queue for Helper Agent questions.
+ * QuestionQueue — bounded FIFO queue for Assistant Agent questions.
  *
  * Serializes question processing so that only one LLM call is in flight at
  * a time. Each entry has its own timeout that covers BOTH queue wait time
@@ -83,7 +83,7 @@ export class QuestionQueue {
 	): Promise<QuestionResult> {
 		if (this._entries.length >= this._maxSize) {
 			return Promise.reject(
-				new Error(`Helper agent question queue is full (max ${this._maxSize}). Try again later.`),
+				new Error(`Assistant agent question queue is full (max ${this._maxSize}). Try again later.`),
 			)
 		}
 
@@ -94,7 +94,7 @@ export class QuestionQueue {
 				const idx = this._entries.findIndex((e) => e.resolve === wrappedResolve)
 				if (idx !== -1) {
 					this._entries.splice(idx, 1)
-					reject(new Error(`Helper agent question timed out after ${timeoutMs}ms (in queue)`))
+					reject(new Error(`Assistant agent question timed out after ${timeoutMs}ms (in queue)`))
 					return
 				}
 				// Already in flight — abort the active LLM call.
@@ -131,7 +131,7 @@ export class QuestionQueue {
 
 		const pending = this._entries.splice(0)
 		for (const entry of pending) {
-			entry.reject(new Error("Helper agent questions cancelled"))
+			entry.reject(new Error("Assistant agent questions cancelled"))
 		}
 	}
 
@@ -148,7 +148,7 @@ export class QuestionQueue {
 			const entry = this._entries.shift()!
 
 			if (Date.now() - entry.startTime > entry.timeoutMs) {
-				entry.reject(new Error(`Helper agent question timed out (queue wait for ${entry.timeoutMs}ms)`))
+				entry.reject(new Error(`Assistant agent question timed out (queue wait for ${entry.timeoutMs}ms)`))
 				continue
 			}
 

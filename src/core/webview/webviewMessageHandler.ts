@@ -693,16 +693,16 @@ export const webviewMessageHandler = async (
 
 		case "updateSettings":
 			if (message.updatedSettings) {
-				// Track whether any helper-agent setting changed so we can
+				// Track whether any assistant-agent setting changed so we can
 				// re-initialize the manager after the proxy writes complete
 				// (otherwise stale config — e.g. the previous DEFAULT_MAX_CONTEXT_TOKENS
 				// or the previous API Configuration profile — keeps driving the popover).
-				let helperAgentChanged = false
+				let assistantAgentChanged = false
 				for (const [key, value] of Object.entries(message.updatedSettings)) {
 					let newValue = value
 
-					if (key.startsWith("helperAgent")) {
-						helperAgentChanged = true
+					if (key.startsWith("assistantAgent")) {
+						assistantAgentChanged = true
 					}
 					if (key === "language") {
 						newValue = value ?? "en"
@@ -792,18 +792,18 @@ export const webviewMessageHandler = async (
 					await provider.contextProxy.setValue(key as keyof ShoferSettings, newValue)
 				}
 
-				if (helperAgentChanged) {
+				if (assistantAgentChanged) {
 					try {
-						const { HelperAgentManager } = await import("../../services/helper-agent/manager")
+						const { AssistantAgentManager } = await import("../../services/assistant-agent/manager")
 						const folder = vscode.workspace.workspaceFolders?.[0]
 						if (folder) {
-							const mgr = HelperAgentManager.getInstance(provider.context, folder.uri.fsPath)
+							const mgr = AssistantAgentManager.getInstance(provider.context, folder.uri.fsPath)
 							if (mgr) {
 								await mgr.initialize()
 							}
 						}
 					} catch (error) {
-						console.error("[HelperAgentManager] re-initialize after settings change failed:", error)
+						console.error("[AssistantAgentManager] re-initialize after settings change failed:", error)
 					}
 				}
 
@@ -2756,29 +2756,29 @@ export const webviewMessageHandler = async (
 			})
 			break
 		}
-		case "helperAgentAction": {
-			// Routes helper-agent toolbar actions from the in-webview status badge
+		case "assistantAgentAction": {
+			// Routes assistant-agent toolbar actions from the in-webview status badge
 			// to the corresponding extension commands. Used by the popover that
 			// replaced the former VS Code status bar item.
 			const action = message.text
 			switch (action) {
 				case "start":
-					await vscode.commands.executeCommand("shofer.helperAgent.start")
+					await vscode.commands.executeCommand("shofer.assistantAgent.start")
 					break
 				case "stop":
-					await vscode.commands.executeCommand("shofer.helperAgent.stop")
+					await vscode.commands.executeCommand("shofer.assistantAgent.stop")
 					break
 				case "clear":
-					await vscode.commands.executeCommand("shofer.helperAgent.clearContext")
+					await vscode.commands.executeCommand("shofer.assistantAgent.clearContext")
 					break
 				case "chat":
-					await vscode.commands.executeCommand("shofer.helperAgent.showChat")
+					await vscode.commands.executeCommand("shofer.assistantAgent.showChat")
 					break
 			}
 			break
 		}
-		case "requestHelperAgentStatus": {
-			provider.sendHelperAgentStatus()
+		case "requestAssistantAgentStatus": {
+			provider.sendAssistantAgentStatus()
 			break
 		}
 		case "requestCodeIndexSecretStatus": {

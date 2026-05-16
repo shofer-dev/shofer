@@ -27,34 +27,34 @@ This document establishes canonical names for the Shofer extension's UI componen
 
 The chat area is the primary interface shown when a task is active. It occupies the main area of the Shofer sidebar or editor tab.
 
-| Canonical Name              | File                                                                                           | Description                                                                                                         |
-| --------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **ChatView**                | [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                               | The main chat container. Owns message history (`shoferMessages`), scroll position, image state, and dialog state.   |
-| **ChatTextArea**            | [`ChatTextArea.tsx`](../webview-ui/src/components/chat/ChatTextArea.tsx)                       | The chat input bar at the bottom. Contains the text input, Send/Stop buttons, and all toolbar controls.             |
-| **ChatRow**                 | [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                                 | A single message row rendered in the chat history. Handles all message types: say, ask, tool calls, reasoning, etc. |
-| **TaskHeader**              | [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)                           | The header bar above the chat messages. Shows task name, token usage, cost, context window bar, and todo list.      |
-| **ModeSelector**            | [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx)                       | Dropdown in the chat input bar for selecting/switching the current mode (e.g., Code, Architect, Debug).             |
-| **ApiConfigSelector**       | [`ApiConfigSelector.tsx`](../webview-ui/src/components/chat/ApiConfigSelector.tsx)             | Dropdown in the chat input bar for choosing the API provider profile (e.g., "openrouter", "deepseek").              |
-| **AutoApproveDropdown**     | [`AutoApproveDropdown.tsx`](../webview-ui/src/components/chat/AutoApproveDropdown.tsx)         | Dropdown in the chat input bar that shows auto-approval category toggles scoped to the current mode.                |
-| **CommandsButton**          | [`CommandsButton.tsx`](../webview-ui/src/components/chat/CommandsButton.tsx)                   | Button in the chat input bar that opens a popover listing slash commands.                                           |
-| **SkillsButton**            | [`SkillsButton.tsx`](../webview-ui/src/components/chat/SkillsButton.tsx)                       | Button (🎓) in the chat input bar that opens a popover showing loaded and available skills.                         |
-| **WorktreeIndicator**       | [`WorktreeIndicator.tsx`](../webview-ui/src/components/chat/WorktreeIndicator.tsx)             | Chip in the chat input bar showing the current worktree branch and git status (dirty/clean).                        |
-| **IndexingStatusBadge**     | [`IndexingStatusBadge.tsx`](../webview-ui/src/components/chat/IndexingStatusBadge.tsx)         | Badge in the chat input bar showing code index status (Standby/Indexing/Indexed/Error).                             |
-| **HelperAgentStatusBadge**  | [`HelperAgentStatusBadge.tsx`](../webview-ui/src/components/chat/HelperAgentStatusBadge.tsx)   | Badge showing helper agent status.                                                                                  |
-| **ContextWindowProgress**   | [`ContextWindowProgress.tsx`](../webview-ui/src/components/chat/ContextWindowProgress.tsx)     | Horizontal bar in TaskHeader showing how much of the model's context window is used.                                |
-| **ReasoningBlock**          | [`ReasoningBlock.tsx`](../webview-ui/src/components/chat/ReasoningBlock.tsx)                   | A collapsible block showing the model's reasoning/thinking content (streamed before the final response).            |
-| **Markdown**                | [`Markdown.tsx`](../webview-ui/src/components/chat/Markdown.tsx)                               | Markdown-to-HTML renderer used for all message content. Handles code blocks, tables, and syntax highlighting.       |
-| **ProgressIndicator**       | [`ProgressIndicator.tsx`](../webview-ui/src/components/chat/ProgressIndicator.tsx)             | "Tool preparing…" spinner shown while the LLM streams tool call arguments.                                          |
-| **ErrorRow**                | [`ErrorRow.tsx`](../webview-ui/src/components/chat/ErrorRow.tsx)                               | Chat row rendered for errors.                                                                                       |
-| **WarningRow**              | [`WarningRow.tsx`](../webview-ui/src/components/chat/WarningRow.tsx)                           | Chat row rendered for warnings (e.g., retired provider, profile violations).                                        |
-| **ProfileViolationWarning** | [`ProfileViolationWarning.tsx`](../webview-ui/src/components/chat/ProfileViolationWarning.tsx) | Warning row shown when profile thresholds are violated (tool count, cost, requests).                                |
-| **CheckpointWarning**       | [`CheckpointWarning.tsx`](../webview-ui/src/components/chat/CheckpointWarning.tsx)             | Warning indicator when checkpoint initialization times out.                                                         |
-| **TodoListDisplay**         | [`TodoListDisplay.tsx`](../webview-ui/src/components/chat/TodoListDisplay.tsx)                 | Todo list rendered in the TaskHeader, showing current task's todos with completion toggles.                         |
-| **TodoChangeDisplay**       | [`TodoChangeDisplay.tsx`](../webview-ui/src/components/chat/TodoChangeDisplay.tsx)             | Inline display of a todo list change (add/remove/update) as a chat message.                                         |
-| **Mention**                 | [`Mention.tsx`](../webview-ui/src/components/chat/Mention.tsx)                                 | Renders `@file/path` and `@folder/path` mentions as clickable links that open the referenced resource.              |
-| **ContextMenu**             | [`ContextMenu.tsx`](../webview-ui/src/components/chat/ContextMenu.tsx)                         | Autocomplete/mention suggestion dropdown triggered by typing `@` in the chat input.                                 |
-| **Thumbnails**              | [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx)                         | Image thumbnail strip shown above the chat input when images are attached. Supports delete.                         |
-| **Announcement**            | [`Announcement.tsx`](../webview-ui/src/components/chat/Announcement.tsx)                       | Dismissible announcement banner shown at the top of ChatView.                                                       |
+| Canonical Name                | File                                                                                               | Description                                                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **ChatView**                  | [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                   | The main chat container. Owns message history (`shoferMessages`), scroll position, image state, and dialog state.   |
+| **ChatTextArea**              | [`ChatTextArea.tsx`](../webview-ui/src/components/chat/ChatTextArea.tsx)                           | The chat input bar at the bottom. Contains the text input, Send/Stop buttons, and all toolbar controls.             |
+| **ChatRow**                   | [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                                     | A single message row rendered in the chat history. Handles all message types: say, ask, tool calls, reasoning, etc. |
+| **TaskHeader**                | [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)                               | The header bar above the chat messages. Shows task name, token usage, cost, context window bar, and todo list.      |
+| **ModeSelector**              | [`ModeSelector.tsx`](../webview-ui/src/components/chat/ModeSelector.tsx)                           | Dropdown in the chat input bar for selecting/switching the current mode (e.g., Code, Architect, Debug).             |
+| **ApiConfigSelector**         | [`ApiConfigSelector.tsx`](../webview-ui/src/components/chat/ApiConfigSelector.tsx)                 | Dropdown in the chat input bar for choosing the API provider profile (e.g., "openrouter", "deepseek").              |
+| **AutoApproveDropdown**       | [`AutoApproveDropdown.tsx`](../webview-ui/src/components/chat/AutoApproveDropdown.tsx)             | Dropdown in the chat input bar that shows auto-approval category toggles scoped to the current mode.                |
+| **CommandsButton**            | [`CommandsButton.tsx`](../webview-ui/src/components/chat/CommandsButton.tsx)                       | Button in the chat input bar that opens a popover listing slash commands.                                           |
+| **SkillsButton**              | [`SkillsButton.tsx`](../webview-ui/src/components/chat/SkillsButton.tsx)                           | Button (🎓) in the chat input bar that opens a popover showing loaded and available skills.                         |
+| **WorktreeIndicator**         | [`WorktreeIndicator.tsx`](../webview-ui/src/components/chat/WorktreeIndicator.tsx)                 | Chip in the chat input bar showing the current worktree branch and git status (dirty/clean).                        |
+| **IndexingStatusBadge**       | [`IndexingStatusBadge.tsx`](../webview-ui/src/components/chat/IndexingStatusBadge.tsx)             | Badge in the chat input bar showing code index status (Standby/Indexing/Indexed/Error).                             |
+| **AssistantAgentStatusBadge** | [`AssistantAgentStatusBadge.tsx`](../webview-ui/src/components/chat/AssistantAgentStatusBadge.tsx) | Badge showing assistant agent status.                                                                               |
+| **ContextWindowProgress**     | [`ContextWindowProgress.tsx`](../webview-ui/src/components/chat/ContextWindowProgress.tsx)         | Horizontal bar in TaskHeader showing how much of the model's context window is used.                                |
+| **ReasoningBlock**            | [`ReasoningBlock.tsx`](../webview-ui/src/components/chat/ReasoningBlock.tsx)                       | A collapsible block showing the model's reasoning/thinking content (streamed before the final response).            |
+| **Markdown**                  | [`Markdown.tsx`](../webview-ui/src/components/chat/Markdown.tsx)                                   | Markdown-to-HTML renderer used for all message content. Handles code blocks, tables, and syntax highlighting.       |
+| **ProgressIndicator**         | [`ProgressIndicator.tsx`](../webview-ui/src/components/chat/ProgressIndicator.tsx)                 | "Tool preparing…" spinner shown while the LLM streams tool call arguments.                                          |
+| **ErrorRow**                  | [`ErrorRow.tsx`](../webview-ui/src/components/chat/ErrorRow.tsx)                                   | Chat row rendered for errors.                                                                                       |
+| **WarningRow**                | [`WarningRow.tsx`](../webview-ui/src/components/chat/WarningRow.tsx)                               | Chat row rendered for warnings (e.g., retired provider, profile violations).                                        |
+| **ProfileViolationWarning**   | [`ProfileViolationWarning.tsx`](../webview-ui/src/components/chat/ProfileViolationWarning.tsx)     | Warning row shown when profile thresholds are violated (tool count, cost, requests).                                |
+| **CheckpointWarning**         | [`CheckpointWarning.tsx`](../webview-ui/src/components/chat/CheckpointWarning.tsx)                 | Warning indicator when checkpoint initialization times out.                                                         |
+| **TodoListDisplay**           | [`TodoListDisplay.tsx`](../webview-ui/src/components/chat/TodoListDisplay.tsx)                     | Todo list rendered in the TaskHeader, showing current task's todos with completion toggles.                         |
+| **TodoChangeDisplay**         | [`TodoChangeDisplay.tsx`](../webview-ui/src/components/chat/TodoChangeDisplay.tsx)                 | Inline display of a todo list change (add/remove/update) as a chat message.                                         |
+| **Mention**                   | [`Mention.tsx`](../webview-ui/src/components/chat/Mention.tsx)                                     | Renders `@file/path` and `@folder/path` mentions as clickable links that open the referenced resource.              |
+| **ContextMenu**               | [`ContextMenu.tsx`](../webview-ui/src/components/chat/ContextMenu.tsx)                             | Autocomplete/mention suggestion dropdown triggered by typing `@` in the chat input.                                 |
+| **Thumbnails**                | [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx)                             | Image thumbnail strip shown above the chat input when images are attached. Supports delete.                         |
+| **Announcement**              | [`Announcement.tsx`](../webview-ui/src/components/chat/Announcement.tsx)                           | Dismissible announcement banner shown at the top of ChatView.                                                       |
 
 ---
 
@@ -104,7 +104,7 @@ The top-level tabs are: **chat**, **history**, **settings**, **marketplace** (fe
 | ---------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | **FileChangesPanel**         | [`FileChangesPanel.tsx`](../webview-ui/src/components/chat/FileChangesPanel.tsx)                 | Collapsible panel showing files modified by the current task, with Accept/Revert buttons per file and Accept All/Revert All. |
 | **CodeIndexPopover**         | [`CodeIndexPopover.tsx`](../webview-ui/src/components/chat/CodeIndexPopover.tsx)                 | Popover showing code indexing status and controls.                                                                           |
-| **HelperAgentPopover**       | [`HelperAgentPopover.tsx`](../webview-ui/src/components/chat/HelperAgentPopover.tsx)             | Popover for interacting with the helper agent.                                                                               |
+| **AssistantAgentPopover**    | [`AssistantAgentPopover.tsx`](../webview-ui/src/components/chat/AssistantAgentPopover.tsx)       | Popover for interacting with the assistant agent.                                                                            |
 | **ShareButton**              | [`ShareButton.tsx`](../webview-ui/src/components/chat/ShareButton.tsx)                           | Button for sharing a task (if sharing is enabled).                                                                           |
 | **BatchDiffApproval**        | [`BatchDiffApproval.tsx`](../webview-ui/src/components/chat/BatchDiffApproval.tsx)               | UI for reviewing and approving multiple diffs as a batch.                                                                    |
 | **BatchFilePermission**      | [`BatchFilePermission.tsx`](../webview-ui/src/components/chat/BatchFilePermission.tsx)           | UI for granting write permission to multiple files at once.                                                                  |
@@ -143,7 +143,7 @@ These components run in the VS Code extension host (Node.js process).
 | **ToolRepetitionDetector**       | [`ToolRepetitionDetector.ts`](../src/core/tools/ToolRepetitionDetector.ts)                    | Detects consecutive identical tool calls (a common LLM loop pattern) and triggers corrective action.                                                                   |
 | **NativeToolCallParser**         | [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts)            | Parses tool call blocks from LLM streaming responses, mapping deprecated tool names to canonical forms.                                                                |
 | **CodeIndexManager**             | _(created during extension activation)_                                                       | Manages the RAG codebase index (background indexing, querying).                                                                                                        |
-| **HelperAgent**                  | (in `services/helper-agent/`)                                                                 | Persistent agent that maintains long-term codebase context, answerable via `ask_helper_agent` tool.                                                                    |
+| **AssistantAgent**               | (in `services/assistant-agent/`)                                                              | Persistent agent that maintains long-term codebase context, answerable via `ask_assistant_agent` tool.                                                                 |
 
 ---
 
@@ -228,7 +228,7 @@ The extension host posts messages via `ShoferProvider.postMessageToWebview()`. K
 | `"changedFiles/update"`        | Updated list of files modified by the current task.                              |
 | `"condenseTaskContextStarted"` | Context condensation has begun (triggered when context window is near capacity). |
 | `"indexingStatusUpdate"`       | Code index status changed.                                                       |
-| `"helperAgentStatusUpdate"`    | Helper agent status changed.                                                     |
+| `"assistantAgentStatusUpdate"` | Assistant agent status changed.                                                  |
 | `"addContextFiles"`            | Files were dropped onto the drop zone; webview should add them as context tags.  |
 
 ### Webview → Extension (`WebviewMessage`)
@@ -295,7 +295,7 @@ Defined in [`tool.ts`](../packages/types/src/tool.ts) as the `toolNames` const. 
 - `switch_mode` — Switch to a different mode.
 - `set_task_title` — Set a descriptive title for the current task.
 - `ask_followup_question` — Ask the user a multiple-choice question.
-- `ask_helper_agent` — Query the persistent helper agent.
+- `ask_assistant_agent` — Query the persistent assistant agent.
 - `give_feedback` — Send feedback to the Shofer.Dev developers.
 
 ### Content

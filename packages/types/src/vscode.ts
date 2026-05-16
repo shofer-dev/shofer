@@ -48,12 +48,12 @@ export const commandIds = [
 	"focusPanel",
 	"toggleAutoApprove",
 
-	// Helper Agent
-	"helperAgent.start",
-	"helperAgent.stop",
-	"helperAgent.clearContext",
-	"helperAgent.showChat",
-	"helperAgent.openSettings",
+	// Assistant Agent
+	"assistantAgent.start",
+	"assistantAgent.stop",
+	"assistantAgent.clearContext",
+	"assistantAgent.showChat",
+	"assistantAgent.openSettings",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]

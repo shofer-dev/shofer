@@ -1,12 +1,12 @@
 /**
- * HelperAgentLlmClient — adapter that lets the Helper Agent talk to LLMs
+ * AssistantAgentLlmClient — adapter that lets the Assistant Agent talk to LLMs
  * through the same `buildApiHandler` abstraction the main agent uses.
  *
  * Why this exists:
  *   The original implementation hand-rolled a per-provider `fetch` switch
  *   with hardcoded endpoints, body shapes, and response parsers. That
  *   duplicated dozens of provider quirks already solved by the main
- *   agent's `ApiHandler` hierarchy. This client maps the Helper Agent's
+ *   agent's `ApiHandler` hierarchy. This client maps the Assistant Agent's
  *   curated provider list onto `ProviderSettings` and consumes the
  *   resulting `ApiStream` non-streaming style: drain the generator,
  *   accumulate text chunks, capture the final usage chunk.
@@ -15,11 +15,11 @@
  *   `ApiHandler.createMessage` does not accept an AbortSignal, so we
  *   short-circuit the generator loop when the signal fires. The
  *   underlying HTTP request may still complete in the background; this
- *   is acceptable because helper-agent cancellations are rare and the
+ *   is acceptable because assistant-agent cancellations are rare and the
  *   leaked response is bounded by the model's max output tokens.
  *
  * Pricing:
- *   Per-token cost is computed via `helper-agent/pricing.ts`, which
+ *   Per-token cost is computed via `assistant-agent/pricing.ts`, which
  *   prefers the live model info reported by the underlying handler and
  *   falls back to a coarse table for providers that don't publish it.
  */
@@ -27,16 +27,16 @@
 import type { Anthropic } from "@anthropic-ai/sdk"
 import type OpenAI from "openai"
 
-import type { HelperAgentConfig } from "@shofer/types"
+import type { AssistantAgentConfig } from "@shofer/types"
 
 import { buildApiHandler, type ApiHandler } from "../../api"
 import { estimateUsdCost } from "./pricing"
 import { logger } from "../../utils/logging"
 
-const LOG_PREFIX = "[HelperAgent.LlmClient]"
+const LOG_PREFIX = "[AssistantAgent.LlmClient]"
 
 /** Synthetic taskId used for `ApiHandlerCreateMessageMetadata`. */
-const HELPER_AGENT_TASK_ID = "shofer-helper-agent"
+const ASSISTANT_AGENT_TASK_ID = "shofer-assistant-agent"
 
 export interface ChatMessage {
 	role: "system" | "user" | "assistant"
@@ -76,13 +76,13 @@ export interface AgentChatOptions {
 	signal?: AbortSignal
 }
 
-export class HelperAgentLlmClient {
+export class AssistantAgentLlmClient {
 	private _handler: ApiHandler
-	private _config: HelperAgentConfig
+	private _config: AssistantAgentConfig
 
-	constructor(config: HelperAgentConfig) {
+	constructor(config: AssistantAgentConfig) {
 		this._config = config
-		this._handler = buildApiHandler(config.providerSettings, { taskId: HELPER_AGENT_TASK_ID })
+		this._handler = buildApiHandler(config.providerSettings, { taskId: ASSISTANT_AGENT_TASK_ID })
 	}
 
 	/**
@@ -137,7 +137,7 @@ export class HelperAgentLlmClient {
 		let stream
 		try {
 			stream = this._handler.createMessage(systemPrompt, conversation, {
-				taskId: HELPER_AGENT_TASK_ID,
+				taskId: ASSISTANT_AGENT_TASK_ID,
 				tools,
 			})
 		} catch (e) {
@@ -151,7 +151,7 @@ export class HelperAgentLlmClient {
 			for await (const chunk of stream) {
 				if (signal?.aborted) {
 					logger.warn(`${LOG_PREFIX} chat() aborted via signal after ${Date.now() - startedAt}ms`)
-					const err = new Error("Helper agent LLM call aborted")
+					const err = new Error("Assistant agent LLM call aborted")
 					err.name = "AbortError"
 					throw err
 				}
@@ -211,7 +211,7 @@ export class HelperAgentLlmClient {
 						logger.error(
 							`${LOG_PREFIX} chat() received error chunk: ${JSON.stringify({ message: (chunk as any).message, error: (chunk as any).error })}`,
 						)
-						throw new Error(`Helper agent LLM error: ${chunk.message ?? chunk.error}`)
+						throw new Error(`Assistant agent LLM error: ${chunk.message ?? chunk.error}`)
 					default:
 						break
 				}
@@ -247,7 +247,7 @@ export class HelperAgentLlmClient {
 
 /**
  * Concatenate adjacent system messages and convert user/assistant messages
- * to `Anthropic.Messages.MessageParam[]`. Helper Agent messages are plain
+ * to `Anthropic.Messages.MessageParam[]`. Assistant Agent messages are plain
  * strings, so the conversion is mechanical.
  */
 function splitSystemAndConversation(messages: ChatMessage[]): {

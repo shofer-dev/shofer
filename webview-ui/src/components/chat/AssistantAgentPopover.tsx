@@ -1,6 +1,6 @@
 /**
- * HelperAgentPopover — info + action panel that opens when the user clicks
- * the Helper Agent badge on the Shofer chat-input toolbar. Replaces the
+ * AssistantAgentPopover — info + action panel that opens when the user clicks
+ * the Assistant Agent badge on the Shofer chat-input toolbar. Replaces the
  * former VS Code status bar quick-pick menu.
  *
  * Displays:
@@ -9,12 +9,12 @@
  *  - Session cost and pending question count
  *
  * Actions:
- *  - View Chat       → shofer.helperAgent.showChat
- *  - Clear Context   → shofer.helperAgent.clearContext
+ *  - View Chat       → shofer.assistantAgent.showChat
+ *  - Clear Context   → shofer.assistantAgent.clearContext
  *  - Configure API   → workbench.action.openSettings
- *  - Start / Restart → shofer.helperAgent.start
+ *  - Start / Restart → shofer.assistantAgent.start
  *
- * Action dispatch goes through the `helperAgentAction` webview message which
+ * Action dispatch goes through the `assistantAgentAction` webview message which
  * is routed by webviewMessageHandler.ts to the corresponding extension
  * commands.
  */
@@ -36,7 +36,7 @@ import {
 import { vscode } from "@src/utils/vscode"
 import { Popover, PopoverContent, Button } from "@src/components/ui"
 
-export interface HelperAgentStatusData {
+export interface AssistantAgentStatusData {
 	state: string
 	stateMessage?: string
 	isAvailable?: boolean
@@ -53,27 +53,27 @@ export interface HelperAgentStatusData {
 	contextFiles?: string[]
 }
 
-interface HelperAgentPopoverProps {
+interface AssistantAgentPopoverProps {
 	children: React.ReactNode
-	status: HelperAgentStatusData
+	status: AssistantAgentStatusData
 }
 
 const sendAction = (action: "chat" | "clear" | "start" | "stop") => {
-	vscode.postMessage({ type: "helperAgentAction", text: action })
+	vscode.postMessage({ type: "assistantAgentAction", text: action })
 }
 
 /**
- * Open the in-app SettingsView at the Helper Agent section.
+ * Open the in-app SettingsView at the Assistant Agent section.
  * Uses the standard `settingsButtonClicked` action route consumed by App.tsx
  * (see ChatView's AutoApproveDropdown / TooManyToolsWarning for precedent),
- * NOT VS Code's native settings UI — helperAgent settings live in
+ * NOT VS Code's native settings UI — assistantAgent settings live in
  * ContextProxy, not in package.json `configuration` contributions.
  */
-const openHelperAgentSettings = () => {
-	window.postMessage({ type: "action", action: "settingsButtonClicked", values: { section: "helperAgent" } }, "*")
+const openAssistantAgentSettings = () => {
+	window.postMessage({ type: "action", action: "settingsButtonClicked", values: { section: "assistantAgent" } }, "*")
 }
 
-export const HelperAgentPopover: React.FC<HelperAgentPopoverProps> = ({ children, status }) => {
+export const AssistantAgentPopover: React.FC<AssistantAgentPopoverProps> = ({ children, status }) => {
 	const usage = status.contextUsage
 	const fillPct = usage ? (usage.fillFraction * 100).toFixed(1) : "0.0"
 	const cost = status.costSnapshot
@@ -98,7 +98,7 @@ export const HelperAgentPopover: React.FC<HelperAgentPopoverProps> = ({ children
 				<div className="px-3 py-2 border-b border-vscode-panel-border">
 					<div className="flex items-center gap-2 text-sm font-medium">
 						<MessageCircle className="w-4 h-4" />
-						<span>Helper Agent</span>
+						<span>Assistant Agent</span>
 					</div>
 				</div>
 
@@ -168,7 +168,7 @@ export const HelperAgentPopover: React.FC<HelperAgentPopoverProps> = ({ children
 					<ActionButton
 						icon={<Settings className="w-3.5 h-3.5" />}
 						label="Configure"
-						onClick={runAction(openHelperAgentSettings)}
+						onClick={runAction(openAssistantAgentSettings)}
 					/>
 					<ActionButton
 						icon={running ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}

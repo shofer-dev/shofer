@@ -1,14 +1,14 @@
 /**
- * HelperAgentManager — singleton-per-workspace orchestrator for the
- * Helper Agent (a persistent, read-only codebase Q&A companion).
+ * AssistantAgentManager — singleton-per-workspace orchestrator for the
+ * Assistant Agent (a persistent, read-only codebase Q&A companion).
  *
  * Responsibilities (delegated to focused collaborators):
  *   - persistence            → ConversationStore
  *   - request serialization  → QuestionQueue
  *   - context budget         → ContextWindow
- *   - LLM dispatch           → HelperAgentLlmClient (wraps shared ApiHandler)
- *   - workspace scan         → HelperAgentDirectoryTree
- *   - external file changes  → HelperAgentFileWatcher
+ *   - LLM dispatch           → AssistantAgentLlmClient (wraps shared ApiHandler)
+ *   - workspace scan         → AssistantAgentDirectoryTree
+ *   - external file changes  → AssistantAgentFileWatcher
  *
  * The Manager itself is a thin state machine: it owns the lifecycle, the
  * configuration, and the event emitters consumed by the webview. All
@@ -27,17 +27,17 @@ import { createHash, randomUUID } from "crypto"
 import { TelemetryService } from "@shofer/telemetry"
 import {
 	TelemetryEventName,
-	type HelperAgentState,
-	type HelperAgentConfig,
+	type AssistantAgentState,
+	type AssistantAgentConfig,
 	type AgentMessage,
 	type FileContextEntry,
 	type QuestionResult,
 	DEFAULT_MAX_CONTEXT_TOKENS,
 	DEFAULT_CONTEXT_FILL_THRESHOLD,
-	HELPER_AGENT_SYSTEM_PROMPT,
+	ASSISTANT_AGENT_SYSTEM_PROMPT,
 	QUESTION_TIMEOUT_MS,
-	DEFAULT_HELPER_SOFT_TIMEOUT_SEC,
-	DEFAULT_HELPER_SOFT_RESULT_LENGTH,
+	DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC,
+	DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH,
 } from "@shofer/types"
 
 import { ContextProxy } from "../../core/config/ContextProxy"
@@ -45,26 +45,26 @@ import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManag
 import { buildApiHandler } from "../../api"
 import { logger } from "../../utils/logging"
 
-import { HelperAgentDirectoryTree } from "./directory-tree"
-import { HelperAgentFileWatcher } from "./file-watcher"
+import { AssistantAgentDirectoryTree } from "./directory-tree"
+import { AssistantAgentFileWatcher } from "./file-watcher"
 import { ConversationStore, type ConversationSnapshot } from "./conversation-store"
 import { QuestionQueue } from "./question-queue"
 import { ContextWindow, estimateTokens } from "./context-window"
-import { HelperAgentLlmClient } from "./llm-client"
-import { HelperAgentToolExecutor, HELPER_AGENT_READ_TOOLS } from "./tool-executor"
+import { AssistantAgentLlmClient } from "./llm-client"
+import { AssistantAgentToolExecutor, ASSISTANT_AGENT_READ_TOOLS } from "./tool-executor"
 import { getNativeTools } from "../../core/prompts/tools/native-tools"
 import type { Anthropic } from "@anthropic-ai/sdk"
 import type OpenAI from "openai"
 
-export class HelperAgentManager implements vscode.Disposable {
+export class AssistantAgentManager implements vscode.Disposable {
 	// ─── Singleton Implementation ────────────────────────────────────────
 
-	private static instances = new Map<string, HelperAgentManager>()
+	private static instances = new Map<string, AssistantAgentManager>()
 
 	public static getInstance(
 		context: vscode.ExtensionContext,
 		workspacePath?: string,
-	): HelperAgentManager | undefined {
+	): AssistantAgentManager | undefined {
 		let folder: vscode.WorkspaceFolder | undefined
 
 		if (workspacePath) {
@@ -82,23 +82,23 @@ export class HelperAgentManager implements vscode.Disposable {
 			workspacePath = folder.uri.fsPath
 		}
 
-		let instance = HelperAgentManager.instances.get(workspacePath)
+		let instance = AssistantAgentManager.instances.get(workspacePath)
 		if (!instance) {
-			instance = new HelperAgentManager(workspacePath, context)
-			HelperAgentManager.instances.set(workspacePath, instance)
+			instance = new AssistantAgentManager(workspacePath, context)
+			AssistantAgentManager.instances.set(workspacePath, instance)
 		}
 		return instance
 	}
 
-	public static getAllInstances(): HelperAgentManager[] {
-		return Array.from(HelperAgentManager.instances.values())
+	public static getAllInstances(): AssistantAgentManager[] {
+		return Array.from(AssistantAgentManager.instances.values())
 	}
 
 	public static disposeAll(): void {
-		for (const instance of HelperAgentManager.instances.values()) {
+		for (const instance of AssistantAgentManager.instances.values()) {
 			instance.dispose()
 		}
-		HelperAgentManager.instances.clear()
+		AssistantAgentManager.instances.clear()
 	}
 
 	// ─── Instance Fields ─────────────────────────────────────────────────
@@ -106,26 +106,26 @@ export class HelperAgentManager implements vscode.Disposable {
 	private readonly workspacePath: string
 	private readonly context: vscode.ExtensionContext
 
-	private _state: HelperAgentState = "Standby"
+	private _state: AssistantAgentState = "Standby"
 	private _stateMessage: string = ""
-	private _config: HelperAgentConfig | null = null
+	private _config: AssistantAgentConfig | null = null
 
 	private readonly _store: ConversationStore
 	private readonly _queue: QuestionQueue
 	private readonly _window: ContextWindow
-	private _llm: HelperAgentLlmClient | null = null
+	private _llm: AssistantAgentLlmClient | null = null
 
 	/** Workspace structure scanner — feeds the system prompt. */
-	private _directoryTree: HelperAgentDirectoryTree | null = null
+	private _directoryTree: AssistantAgentDirectoryTree | null = null
 	private _directoryTreeString: string = "[No workspace structure available]"
 
 	/** External-edit detector — invalidates file context on writes. */
-	private _fileWatcher: HelperAgentFileWatcher | null = null
+	private _fileWatcher: AssistantAgentFileWatcher | null = null
 
 	/** Read-only tool dispatcher used inside the agent loop. */
-	private _toolExecutor: HelperAgentToolExecutor | null = null
+	private _toolExecutor: AssistantAgentToolExecutor | null = null
 
-	/** Cached tool catalog — the Read group minus `ask_helper_agent`. */
+	/** Cached tool catalog — the Read group minus `ask_assistant_agent`. */
 	private _toolCatalog: OpenAI.Chat.ChatCompletionTool[] | null = null
 
 	/** Hard cap on agent-loop iterations per question (tool round-trips). */
@@ -142,7 +142,7 @@ export class HelperAgentManager implements vscode.Disposable {
 		lastUpdated: Date.now(),
 	}
 
-	private _stateChangeEmitter = new vscode.EventEmitter<HelperAgentState>()
+	private _stateChangeEmitter = new vscode.EventEmitter<AssistantAgentState>()
 	public readonly onStateChange = this._stateChangeEmitter.event
 
 	private _conversationUpdateEmitter = new vscode.EventEmitter<void>()
@@ -161,7 +161,7 @@ export class HelperAgentManager implements vscode.Disposable {
 
 	// ─── Public API ──────────────────────────────────────────────────────
 
-	public get state(): HelperAgentState {
+	public get state(): AssistantAgentState {
 		return this._state
 	}
 
@@ -177,7 +177,7 @@ export class HelperAgentManager implements vscode.Disposable {
 		return !!this._config?.apiConfigId
 	}
 
-	public get isHelperAgentAvailable(): boolean {
+	public get isAssistantAgentAvailable(): boolean {
 		return this._state === "Ready" || this._state === "Busy"
 	}
 
@@ -234,7 +234,7 @@ export class HelperAgentManager implements vscode.Disposable {
 	}
 
 	/**
-	 * Notify the helper agent that a file was modified by a task tool.
+	 * Notify the assistant agent that a file was modified by a task tool.
 	 * The path is accumulated and surfaced as a hint on the next question
 	 * (no eviction → preserves the LLM provider's KV cache).
 	 */
@@ -259,7 +259,7 @@ export class HelperAgentManager implements vscode.Disposable {
 
 			const config = await this._loadConfiguration()
 			if (!config) {
-				this._setState("Standby", "Helper agent is not configured")
+				this._setState("Standby", "Assistant agent is not configured")
 				return { requiresRestart: false }
 			}
 			this._config = config
@@ -273,7 +273,7 @@ export class HelperAgentManager implements vscode.Disposable {
 			this._startFileWatcher()
 
 			if (!config.enabled) {
-				this._setState("Standby", "Helper agent is disabled")
+				this._setState("Standby", "Assistant agent is disabled")
 				return { requiresRestart: false }
 			}
 
@@ -285,14 +285,14 @@ export class HelperAgentManager implements vscode.Disposable {
 				return { requiresRestart: false }
 			}
 
-			this._llm = new HelperAgentLlmClient(config)
+			this._llm = new AssistantAgentLlmClient(config)
 
 			this._setState("Ready", "Agent is ready")
 			return { requiresRestart: false }
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
 			this._setState("Error", message)
-			TelemetryService.instance.captureEvent(TelemetryEventName.HELPER_AGENT_ERROR, {
+			TelemetryService.instance.captureEvent(TelemetryEventName.ASSISTANT_AGENT_ERROR, {
 				error: message,
 				stack: error instanceof Error ? error.stack : undefined,
 				location: "initialize",
@@ -313,10 +313,10 @@ export class HelperAgentManager implements vscode.Disposable {
 		} = {},
 	): Promise<QuestionResult> {
 		if (!this._config || !this._llm) {
-			throw new Error("Helper agent is not initialized. Call initialize() first.")
+			throw new Error("Assistant agent is not initialized. Call initialize() first.")
 		}
-		if (!this.isHelperAgentAvailable && this._state !== "Busy") {
-			throw new Error(`Helper agent is not available (state: ${this._state})`)
+		if (!this.isAssistantAgentAvailable && this._state !== "Busy") {
+			throw new Error(`Assistant agent is not available (state: ${this._state})`)
 		}
 		const { timeoutMs = QUESTION_TIMEOUT_MS, softTimeoutSec, softResultLength } = opts
 		return this._queue.enqueue(question, contextFiles, timeoutMs, {
@@ -334,10 +334,10 @@ export class HelperAgentManager implements vscode.Disposable {
 	): Promise<QuestionResult> {
 		const startTime = Date.now()
 		const llm = this._llm
-		if (!llm) throw new Error("Helper agent LLM client is not initialized")
+		if (!llm) throw new Error("Assistant agent LLM client is not initialized")
 
 		logger.info(
-			`[HelperAgent.Manager] _processQuestion start questionLen=${question.length} contextFiles=${(contextFiles ?? []).length}`,
+			`[AssistantAgent.Manager] _processQuestion start questionLen=${question.length} contextFiles=${(contextFiles ?? []).length}`,
 		)
 
 		this._setState("Busy", "Processing question...")
@@ -368,19 +368,19 @@ export class HelperAgentManager implements vscode.Disposable {
 
 			for (;;) {
 				if (signal.aborted) {
-					const err = new Error("Helper agent aborted")
+					const err = new Error("Assistant agent aborted")
 					err.name = "AbortError"
 					throw err
 				}
-				if (iterations >= HelperAgentManager.MAX_AGENT_ITERATIONS) {
+				if (iterations >= AssistantAgentManager.MAX_AGENT_ITERATIONS) {
 					finalAnswer =
 						finalAnswer ||
-						`I was unable to finish this question within ${HelperAgentManager.MAX_AGENT_ITERATIONS} tool iterations. Please narrow the scope or try again.`
+						`I was unable to finish this question within ${AssistantAgentManager.MAX_AGENT_ITERATIONS} tool iterations. Please narrow the scope or try again.`
 					break
 				}
 				iterations += 1
 				logger.info(
-					`[HelperAgent.Manager] agent-loop iter=${iterations} convLen=${conversation.length} tools=${tools.length}`,
+					`[AssistantAgent.Manager] agent-loop iter=${iterations} convLen=${conversation.length} tools=${tools.length}`,
 				)
 				const result = await llm.chatWithTools({ systemPrompt, messages: conversation, tools, signal })
 				totalPrompt += result.tokensUsed.prompt
@@ -427,7 +427,7 @@ export class HelperAgentManager implements vscode.Disposable {
 			}
 
 			logger.info(
-				`[HelperAgent.Manager] agent-loop done iters=${iterations} answerLen=${finalAnswer.length} prompt=${totalPrompt} completion=${totalCompletion}`,
+				`[AssistantAgent.Manager] agent-loop done iters=${iterations} answerLen=${finalAnswer.length} prompt=${totalPrompt} completion=${totalCompletion}`,
 			)
 
 			const userMsg: AgentMessage = {
@@ -469,7 +469,7 @@ export class HelperAgentManager implements vscode.Disposable {
 				(error.name === "AbortError" || error.name === "TimeoutError" || message.includes("aborted"))
 
 			logger.error(
-				`[HelperAgent.Manager] _processQuestion FAILED isAbort=${isAbort} error=${message}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
+				`[AssistantAgent.Manager] _processQuestion FAILED isAbort=${isAbort} error=${message}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
 			)
 
 			if (!isAbort) {
@@ -479,7 +479,7 @@ export class HelperAgentManager implements vscode.Disposable {
 				this._setState("Ready", "Agent is ready")
 			}
 
-			TelemetryService.instance.captureEvent(TelemetryEventName.HELPER_AGENT_ERROR, {
+			TelemetryService.instance.captureEvent(TelemetryEventName.ASSISTANT_AGENT_ERROR, {
 				error: message,
 				stack: error instanceof Error ? error.stack : undefined,
 				location: "askQuestion",
@@ -554,7 +554,7 @@ export class HelperAgentManager implements vscode.Disposable {
 			await this._store.save(this._snapshot())
 		} catch (error) {
 			logger.error(
-				`[HelperAgent] Failed to persist conversation: ${error instanceof Error ? error.message : String(error)}`,
+				`[AssistantAgent] Failed to persist conversation: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}
@@ -562,21 +562,22 @@ export class HelperAgentManager implements vscode.Disposable {
 	// ─── Configuration (via ContextProxy) ────────────────────────────────
 
 	/**
-	 * Read helper-agent configuration from ContextProxy + ProviderSettingsManager.
+	 * Read assistant-agent configuration from ContextProxy + ProviderSettingsManager.
 	 *
-	 * The helper agent does not own provider/model/credentials — those come
+	 * The assistant agent does not own provider/model/credentials — those come
 	 * from an API Configuration profile (managed under Settings → Providers,
-	 * persisted via ProviderSettingsManager). The Settings → Helper Agent tab
+	 * persisted via ProviderSettingsManager). The Settings → Assistant Agent tab
 	 * only stores: enabled flag, apiConfigId link, optional context-window
 	 * override, and the context-fill threshold.
 	 */
-	private async _loadConfiguration(): Promise<HelperAgentConfig | null> {
+	private async _loadConfiguration(): Promise<AssistantAgentConfig | null> {
 		const proxy = await ContextProxy.getInstance(this.context)
 
-		const enabled = proxy.getValue("helperAgentEnabled") ?? true
-		const apiConfigId = proxy.getValue("helperAgentApiConfigId") ?? ""
-		const overrideMaxContextTokens = proxy.getValue("helperAgentMaxContextTokens")
-		const contextFillThreshold = proxy.getValue("helperAgentContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
+		const enabled = proxy.getValue("assistantAgentEnabled") ?? true
+		const apiConfigId = proxy.getValue("assistantAgentApiConfigId") ?? ""
+		const overrideMaxContextTokens = proxy.getValue("assistantAgentMaxContextTokens")
+		const contextFillThreshold =
+			proxy.getValue("assistantAgentContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
 
 		// No profile linked → return a partial config; initialize() turns this
 		// into an Error state with a "No API Configuration selected" message.
@@ -599,12 +600,12 @@ export class HelperAgentManager implements vscode.Disposable {
 			let resolvedMaxContextTokens = overrideMaxContextTokens
 			if (resolvedMaxContextTokens === undefined) {
 				try {
-					const handler = buildApiHandler(profile, { taskId: "shofer-helper-agent" })
+					const handler = buildApiHandler(profile, { taskId: "shofer-assistant-agent" })
 					const info = handler.getModel().info
 					resolvedMaxContextTokens = info?.contextWindow ?? DEFAULT_MAX_CONTEXT_TOKENS
 				} catch (error) {
 					logger.warn(
-						`[HelperAgent] Failed to inspect model info for context window: ${error instanceof Error ? error.message : String(error)}`,
+						`[AssistantAgent] Failed to inspect model info for context window: ${error instanceof Error ? error.message : String(error)}`,
 					)
 					resolvedMaxContextTokens = DEFAULT_MAX_CONTEXT_TOKENS
 				}
@@ -619,7 +620,7 @@ export class HelperAgentManager implements vscode.Disposable {
 			}
 		} catch (error) {
 			logger.warn(
-				`[HelperAgent] API Configuration '${apiConfigId}' could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
+				`[AssistantAgent] API Configuration '${apiConfigId}' could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
 			)
 			return {
 				enabled,
@@ -636,11 +637,11 @@ export class HelperAgentManager implements vscode.Disposable {
 
 	private async _initDirectoryTree(): Promise<void> {
 		try {
-			this._directoryTree = new HelperAgentDirectoryTree(this.workspacePath, this._window.maxContextTokens)
+			this._directoryTree = new AssistantAgentDirectoryTree(this.workspacePath, this._window.maxContextTokens)
 			this._directoryTreeString = await this._directoryTree.generate()
 		} catch (error) {
 			logger.warn(
-				`[HelperAgent] Failed to generate directory tree: ${error instanceof Error ? error.message : String(error)}`,
+				`[AssistantAgent] Failed to generate directory tree: ${error instanceof Error ? error.message : String(error)}`,
 			)
 			this._directoryTreeString = "[Workspace directory tree unavailable]"
 		}
@@ -649,7 +650,7 @@ export class HelperAgentManager implements vscode.Disposable {
 	private _startFileWatcher(): void {
 		if (this._fileWatcher) return
 
-		this._fileWatcher = new HelperAgentFileWatcher(this.workspacePath, (filePath, event) => {
+		this._fileWatcher = new AssistantAgentFileWatcher(this.workspacePath, (filePath, event) => {
 			if (event === "deleted") {
 				this._window.removeFileContext(filePath)
 			} else {
@@ -678,7 +679,7 @@ export class HelperAgentManager implements vscode.Disposable {
 			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shoferignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
 
-		const systemPromptParts = [HELPER_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
+		const systemPromptParts = [ASSISTANT_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
 
 		for (const fc of this._window.fileContexts) {
 			systemPromptParts.push(
@@ -692,8 +693,8 @@ export class HelperAgentManager implements vscode.Disposable {
 			)
 		}
 
-		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_HELPER_SOFT_TIMEOUT_SEC
-		const softResultLength = softLimits.softResultLength ?? DEFAULT_HELPER_SOFT_RESULT_LENGTH
+		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC
+		const softResultLength = softLimits.softResultLength ?? DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH
 		systemPromptParts.push(
 			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${softTimeoutSec}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
 		)
@@ -711,13 +712,13 @@ export class HelperAgentManager implements vscode.Disposable {
 		return { systemPrompt: systemPromptParts.join("\n\n"), baseConversation }
 	}
 
-	/** Lazily construct the Read-category tool catalog (minus ask_helper_agent). */
+	/** Lazily construct the Read-category tool catalog (minus ask_assistant_agent). */
 	private _getToolCatalog(): OpenAI.Chat.ChatCompletionTool[] {
 		if (!this._toolCatalog) {
-			const allowed = new Set<string>(HELPER_AGENT_READ_TOOLS)
+			const allowed = new Set<string>(ASSISTANT_AGENT_READ_TOOLS)
 			this._toolCatalog = getNativeTools().filter((t) => t.type === "function" && allowed.has(t.function.name))
 			logger.info(
-				`[HelperAgent.Manager] tool catalog built: ${this._toolCatalog.length} tools — ${this._toolCatalog
+				`[AssistantAgent.Manager] tool catalog built: ${this._toolCatalog.length} tools — ${this._toolCatalog
 					.map((t) => (t as any).function.name)
 					.join(", ")}`,
 			)
@@ -726,9 +727,9 @@ export class HelperAgentManager implements vscode.Disposable {
 	}
 
 	/** Lazily construct the workspace-scoped tool executor. */
-	private _getToolExecutor(): HelperAgentToolExecutor {
+	private _getToolExecutor(): AssistantAgentToolExecutor {
 		if (!this._toolExecutor) {
-			this._toolExecutor = new HelperAgentToolExecutor(this.workspacePath, this.context)
+			this._toolExecutor = new AssistantAgentToolExecutor(this.workspacePath, this.context)
 		}
 		return this._toolExecutor
 	}
@@ -754,7 +755,7 @@ export class HelperAgentManager implements vscode.Disposable {
 			this._costTracking.totalTokensTruncated += this._window.consumeEvictedTokens()
 		} catch (error) {
 			logger.warn(
-				`[HelperAgent] Could not load file into context: ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+				`[AssistantAgent] Could not load file into context: ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}
@@ -770,7 +771,7 @@ export class HelperAgentManager implements vscode.Disposable {
 
 	// ─── State Management ────────────────────────────────────────────────
 
-	private _setState(newState: HelperAgentState, message: string): void {
+	private _setState(newState: AssistantAgentState, message: string): void {
 		const stateChanged = newState !== this._state || message !== this._stateMessage
 		if (stateChanged) {
 			this._state = newState
@@ -781,6 +782,6 @@ export class HelperAgentManager implements vscode.Disposable {
 }
 
 // ─── Provider → Secret Key Mapping ─────────────────────────────────────
-// (removed) The helper agent now consumes credentials from an API
+// (removed) The assistant agent now consumes credentials from an API
 // Configuration profile via ProviderSettingsManager — no per-provider
-// helper-agent secrets exist in storage.
+// assistant-agent secrets exist in storage.

@@ -258,8 +258,8 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	const { CodeIndexManager } = await import("../../services/code-index/manager")
 	const codeIndexManager = CodeIndexManager.getInstance(provider.context, cwd)
 
-	const { HelperAgentManager } = await import("../../services/helper-agent/manager")
-	const helperAgentManager = HelperAgentManager.getInstance(provider.context, cwd)
+	const { AssistantAgentManager } = await import("../../services/assistant-agent/manager")
+	const assistantAgentManager = AssistantAgentManager.getInstance(provider.context, cwd)
 
 	const filterSettings = {
 		todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
@@ -279,7 +279,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		codeIndexManager,
 		filterSettings,
 		mcpHub,
-		helperAgentManager,
+		assistantAgentManager,
 	)
 
 	const mcpTools = getMcpServerTools(mcpHub)

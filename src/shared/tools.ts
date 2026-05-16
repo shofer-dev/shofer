@@ -123,7 +123,7 @@ export type ToolParamName = (typeof toolParamNames)[number]
  * Tools not listed here will fall back to `any` for backward compatibility.
  */
 export type NativeToolArgs = {
-	ask_helper_agent: { question: string; contextFiles?: string[] | null; timeoutMs?: number | null }
+	ask_assistant_agent: { question: string; contextFiles?: string[] | null; timeoutMs?: number | null }
 	access_mcp_resource: { server_name: string; uri: string }
 	read_file: import("@shofer/types").ReadFileToolParams
 	read_command_output: { artifact_id: string; search?: string; offset?: number; limit?: number }
