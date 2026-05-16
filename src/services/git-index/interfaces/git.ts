@@ -1,4 +1,5 @@
 import type { IndexingState } from "../../code-index/interfaces/manager"
+import * as vscode from "vscode"
 
 /**
  * A parsed commit message segment ready for embedding and storage.
@@ -46,20 +47,44 @@ export interface IGitLogExtractor {
 	 * Extract commits from the git repository at `workspacePath`.
 	 *
 	 * @param workspacePath - Path to the git repository root
-	 * @param maxHistoryDays - Maximum number of days of history to extract (from config)
-	 * @param maxCommits - Hard cap on number of commits to extract (from config)
+	 * @param maxHistoryDays - Maximum number of days of history to extract
+	 * @param maxCommits - Hard cap on number of commits to extract
 	 * @returns Array of parsed commit blocks
 	 */
 	extractCommits(workspacePath: string, maxHistoryDays: number, maxCommits: number): Promise<GitCommitBlock[]>
+
+	/**
+	 * Extract commits since a specific ISO 8601 date (for incremental indexing).
+	 *
+	 * @param workspacePath - Path to the git repository root
+	 * @param sinceDate - ISO 8601 date string (e.g. "2024-01-01T00:00:00+00:00")
+	 * @returns Array of parsed commit blocks since the given date
+	 */
+	extractCommitsSince(workspacePath: string, sinceDate: string): Promise<GitCommitBlock[]>
 }
 
 /**
  * Watches for new commits to incrementally index.
- * Phase 1: no-op stub.
+ *
+ * Phase 2: polls `git log --since=<last-indexed-date>` every N minutes.
  */
-export interface IGitWatcher {
-	start(): void
+export interface IGitWatcher extends vscode.Disposable {
+	/**
+	 * Start polling for new commits.
+	 * @param getLastCommitDate - Lazy getter for the ISO 8601 date of the most
+	 *   recent indexed commit. Called on each poll tick so the watcher always
+	 *   uses the freshest boundary.
+	 */
+	start(getLastCommitDate: () => string | undefined): void
+
+	/** Stop polling. */
 	stop(): void
+
+	/** Whether the watcher is currently running. */
+	readonly isRunning: boolean
+
+	/** Event emitted when new commits are discovered. */
+	readonly onNewCommits: vscode.Event<GitCommitBlock[]>
 }
 
 /**
@@ -70,14 +95,11 @@ export interface IGitSearchService {
 	 * Search git commit history by semantic similarity.
 	 *
 	 * @param query - Natural language search query
-	 * @param minScore - Minimum cosine similarity threshold for results
+	 * @param minScore - Minimum cosine similarity threshold
 	 * @param maxResults - Maximum number of results to return
 	 * @returns Array of search results sorted by descending score
 	 */
 	search(query: string, minScore: number, maxResults: number): Promise<GitSearchResult[]>
 }
 
-/**
- * Re-export IndexingState for use by GitHistoryStateManager.
- */
 export type { IndexingState }
