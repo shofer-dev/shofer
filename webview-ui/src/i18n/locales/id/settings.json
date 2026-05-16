@@ -636,10 +636,6 @@
 			"label": "Batas konteks file workspace",
 			"description": "Jumlah maksimum file yang disertakan dalam detail direktori kerja saat ini. Nilai yang lebih tinggi memberikan lebih banyak konteks tetapi meningkatkan penggunaan token."
 		},
-		"rooignore": {
-			"label": "Tampilkan file .shoferignore'd dalam daftar dan pencarian",
-			"description": "Ketika diaktifkan, file yang cocok dengan pola di .shoferignore akan ditampilkan dalam daftar dengan simbol kunci. Ketika dinonaktifkan, file ini akan sepenuhnya disembunyikan dari daftar file dan pencarian."
-		},
 		"maxConcurrentFileReads": {
 			"label": "Batas pembacaan file bersamaan",
 			"description": "Jumlah maksimum file yang dapat diproses oleh tool 'read_file' secara bersamaan. Nilai yang lebih tinggi dapat mempercepat pembacaan beberapa file kecil tetapi meningkatkan penggunaan memori."
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "Aktifkan aturan subfolder",
 			"description": "Temukan dan muat file .shofer/rules dan AGENTS.md secara rekursif dari subdirektori. Berguna untuk monorepo dengan aturan per-paket."
+		},
+		"shoferignore": {
+			"label": "Tampilkan file .shoferignore'd dalam daftar dan pencarian",
+			"description": "Ketika diaktifkan, file yang cocok dengan pola di .shoferignore akan ditampilkan dalam daftar dengan simbol kunci. Ketika dinonaktifkan, file ini akan sepenuhnya disembunyikan dari daftar file dan pencarian."
 		}
 	},
 	"terminal": {

@@ -611,10 +611,6 @@
 			"label": "Limite de contexte des fichiers de l'espace de travail",
 			"description": "Nombre maximum de fichiers à inclure dans les détails du répertoire de travail actuel. Des valeurs plus élevées fournissent plus de contexte mais augmentent l'utilisation de token."
 		},
-		"rooignore": {
-			"label": "Afficher les fichiers .shoferignore dans les listes et recherches",
-			"description": "Lorsque cette option est activée, les fichiers correspondant aux modèles dans .shoferignore seront affichés dans les listes avec un symbole de cadenas. Lorsqu'elle est désactivée, ces fichiers seront complètement masqués des listes de fichiers et des recherches."
-		},
 		"maxReadFile": {
 			"label": "Seuil d'auto-troncature de lecture de fichier",
 			"description": "Shofer lit ce nombre de lignes lorsque le modèle omet les valeurs de début/fin. Si ce nombre est inférieur au total du fichier, Shofer génère un index des numéros de ligne des définitions de code. Cas spéciaux : -1 indique à Shofer de lire le fichier entier (sans indexation), et 0 indique de ne lire aucune ligne et de fournir uniquement les index de ligne pour un contexte minimal. Des valeurs plus basses minimisent l'utilisation initiale du contexte, permettant des lectures ultérieures de plages de lignes précises. Les requêtes avec début/fin explicites ne sont pas limitées par ce paramètre.",
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "Activer les règles des sous-dossiers",
 			"description": "Découvrir et charger récursivement les fichiers .shofer/rules et AGENTS.md depuis les sous-répertoires. Utile pour les monorepos avec des règles par package."
+		},
+		"shoferignore": {
+			"label": "Afficher les fichiers .shoferignore dans les listes et recherches",
+			"description": "Lorsque cette option est activée, les fichiers correspondant aux modèles dans .shoferignore seront affichés dans les listes avec un symbole de cadenas. Lorsqu'elle est désactivée, ces fichiers seront complètement masqués des listes de fichiers et des recherches."
 		}
 	},
 	"terminal": {

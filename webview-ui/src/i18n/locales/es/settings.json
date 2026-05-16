@@ -611,10 +611,6 @@
 			"label": "Límite de contexto de archivos del espacio de trabajo",
 			"description": "Número máximo de archivos a incluir en los detalles del directorio de trabajo actual. Valores más altos proporcionan más contexto pero aumentan el uso de token."
 		},
-		"rooignore": {
-			"label": "Mostrar archivos .shoferignore en listas y búsquedas",
-			"description": "Cuando está habilitado, los archivos que coinciden con los patrones en .shoferignore se mostrarán en listas con un símbolo de candado. Cuando está deshabilitado, estos archivos se ocultarán completamente de las listas de archivos y búsquedas."
-		},
 		"maxReadFile": {
 			"label": "Umbral de auto-truncado de lectura de archivos",
 			"description": "Shofer lee este número de líneas cuando el modelo omite valores de inicio/fin. Si este número es menor que el total del archivo, Shofer genera un índice de números de línea de las definiciones de código. Casos especiales: -1 indica a Shofer que lea el archivo completo (sin indexación), y 0 indica que no lea líneas y proporcione solo índices de línea para un contexto mínimo. Valores más bajos minimizan el uso inicial de contexto, permitiendo lecturas posteriores de rangos de líneas precisos. Las solicitudes con inicio/fin explícitos no están limitadas por esta configuración.",
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "Activar reglas de subcarpetas",
 			"description": "Descubrir y cargar recursivamente archivos .shofer/rules y AGENTS.md desde subdirectorios. Útil para monorepos con reglas por paquete."
+		},
+		"shoferignore": {
+			"label": "Mostrar archivos .shoferignore en listas y búsquedas",
+			"description": "Cuando está habilitado, los archivos que coinciden con los patrones en .shoferignore se mostrarán en listas con un símbolo de candado. Cuando está deshabilitado, estos archivos se ocultarán completamente de las listas de archivos y búsquedas."
 		}
 	},
 	"terminal": {

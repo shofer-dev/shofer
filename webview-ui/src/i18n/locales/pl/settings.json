@@ -611,10 +611,6 @@
 			"label": "Limit kontekstu plików obszaru roboczego",
 			"description": "Maksymalna liczba plików do uwzględnienia w szczegółach bieżącego katalogu roboczego. Wyższe wartości zapewniają więcej kontekstu, ale zwiększają zużycie token."
 		},
-		"rooignore": {
-			"label": "Pokaż pliki .shoferignore na listach i w wyszukiwaniach",
-			"description": "Gdy włączone, pliki pasujące do wzorców w .shoferignore będą pokazywane na listach z symbolem kłódki. Gdy wyłączone, te pliki będą całkowicie ukryte z list plików i wyszukiwań."
-		},
 		"maxReadFile": {
 			"label": "Próg automatycznego skracania odczytu pliku",
 			"description": "Shofer odczytuje tę liczbę linii, gdy model nie określa wartości początkowej/końcowej. Jeśli ta liczba jest mniejsza niż całkowita liczba linii pliku, Shofer generuje indeks numerów linii definicji kodu. Przypadki specjalne: -1 nakazuje Shofer odczytać cały plik (bez indeksowania), a 0 nakazuje nie czytać żadnych linii i dostarczyć tylko indeksy linii dla minimalnego kontekstu. Niższe wartości minimalizują początkowe użycie kontekstu, umożliwiając późniejsze precyzyjne odczyty zakresów linii. Jawne żądania początku/końca nie są ograniczone tym ustawieniem.",
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "Włącz reguły podfolderów",
 			"description": "Rekursywnie odkrywaj i ładuj pliki .shofer/rules i AGENTS.md z podkatalogów. Przydatne dla monorepo z regułami dla poszczególnych pakietów."
+		},
+		"shoferignore": {
+			"label": "Pokaż pliki .shoferignore na listach i w wyszukiwaniach",
+			"description": "Gdy włączone, pliki pasujące do wzorców w .shoferignore będą pokazywane na listach z symbolem kłódki. Gdy wyłączone, te pliki będą całkowicie ukryte z list plików i wyszukiwań."
 		}
 	},
 	"terminal": {

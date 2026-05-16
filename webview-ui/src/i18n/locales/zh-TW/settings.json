@@ -621,10 +621,6 @@
 			"label": "工作區檔案的上下文限制",
 			"description": "目前工作目錄中最多包含多少個檔案。數值越高提供的上下文越多，但 Token 用量也會增加。"
 		},
-		"rooignore": {
-			"label": "在清單和搜尋中顯示被 .shoferignore 排除的檔案",
-			"description": "啟用後，符合 .shoferignore 規則的檔案會在清單中顯示並標示鎖定圖示。停用後，這些檔案將完全從檔案清單和搜尋結果中隱藏。"
-		},
 		"maxConcurrentFileReads": {
 			"label": "並行檔案讀取限制",
 			"description": "read_file 工具可以同時處理的最大檔案數。較高的值可能會加快讀取多個小檔案的速度，但會增加記憶體使用量。"
@@ -685,6 +681,10 @@
 		"enableSubfolderRules": {
 			"label": "啟用子資料夾規則",
 			"description": "遞迴發現並載入子目錄中的 .shofer/rules 和 AGENTS.md 檔案。適用於具有每包規則的 monorepo。"
+		},
+		"shoferignore": {
+			"label": "在清單和搜尋中顯示被 .shoferignore 排除的檔案",
+			"description": "啟用後，符合 .shoferignore 規則的檔案會在清單中顯示並標示鎖定圖示。停用後，這些檔案將完全從檔案清單和搜尋結果中隱藏。"
 		}
 	},
 	"terminal": {
