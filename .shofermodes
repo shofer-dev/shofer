@@ -6,7 +6,7 @@ customModes:
     description: Translate and manage localization files.
     groups:
       - read
-      - command
+      - execute
       - - edit
         - fileRegex: (.*\.(md|ts|tsx|js|jsx)$|.*\.json$)
           description: Source code, translation files, and documentation
@@ -29,7 +29,7 @@ customModes:
     groups:
       - read
       - edit
-      - command
+      - execute
     source: project
   - slug: pr-fixer
     name: 🛠️ PR Fixer
@@ -39,7 +39,7 @@ customModes:
     groups:
       - read
       - edit
-      - command
+      - execute
       - mcp
   - slug: merge-resolver
     name: 🔀 Merge Resolver
@@ -70,7 +70,7 @@ customModes:
     groups:
       - read
       - edit
-      - command
+      - execute
       - mcp
     source: project
   - slug: docs-extractor
@@ -93,7 +93,7 @@ customModes:
       - - edit
         - fileRegex: \.shofer/extraction/.*\.(yaml|json|md)$
           description: Extraction output files only
-      - command
+      - execute
       - mcp
     source: project
   - slug: issue-investigator
@@ -103,7 +103,7 @@ customModes:
     description: Investigates GitHub issues
     groups:
       - read
-      - command
+      - execute
       - mcp
     source: project
   - slug: issue-writer
@@ -143,6 +143,6 @@ customModes:
     description: Create well-structured GitHub issues.
     groups:
       - read
-      - command
+      - execute
       - mcp
     source: project
