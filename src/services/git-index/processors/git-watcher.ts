@@ -3,10 +3,17 @@ import type { IGitWatcher, GitCommitBlock } from "../interfaces/git"
 import { GitLogExtractor } from "./git-log-extractor"
 
 /**
- * Polling interval for checking new commits, in milliseconds.
- * Default: 5 minutes.
+ * Default polling interval in milliseconds (5 minutes).
  */
 const DEFAULT_POLL_INTERVAL_MS = 5 * 60 * 1000
+
+/**
+ * Hard safety cap for incremental extraction.
+ * If the extension goes offline for a long time and a huge merge lands,
+ * an unbounded incremental scan could overwhelm the embedder. This cap
+ * limits the number of commits fetched in a single incremental poll.
+ */
+const INCREMENTAL_MAX_COMMITS = 1000
 
 /**
  * Polls for new commits to incrementally index.
@@ -23,7 +30,7 @@ export class GitWatcher implements IGitWatcher {
 	private readonly _logExtractor: GitLogExtractor
 	private _intervalId: ReturnType<typeof setInterval> | null = null
 	private _isRunning = false
-	private _pollIntervalMs: number
+	private readonly _pollIntervalMs: number
 	private _getLastCommitDate: (() => string | undefined) | null = null
 
 	private readonly _onNewCommits = new vscode.EventEmitter<GitCommitBlock[]>()
@@ -31,18 +38,16 @@ export class GitWatcher implements IGitWatcher {
 	/** Event emitted when the watcher discovers new commits to index. */
 	public readonly onNewCommits = this._onNewCommits.event
 
-	constructor(private readonly workspacePath: string) {
+	/**
+	 * @param workspacePath - Path to the workspace root
+	 * @param pollIntervalMs - Polling interval in milliseconds (from settings)
+	 */
+	constructor(
+		private readonly workspacePath: string,
+		pollIntervalMs?: number,
+	) {
 		this._logExtractor = new GitLogExtractor()
-
-		// Read polling interval from VS Code settings
-		try {
-			const configured = vscode.workspace
-				.getConfiguration("shofer")
-				.get<number>("codebaseIndexGitPollIntervalMinutes", DEFAULT_POLL_INTERVAL_MS / 60_000)
-			this._pollIntervalMs = (configured && configured > 0 ? configured : 5) * 60 * 1000
-		} catch {
-			this._pollIntervalMs = DEFAULT_POLL_INTERVAL_MS
-		}
+		this._pollIntervalMs = pollIntervalMs && pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS
 	}
 
 	/**
@@ -55,12 +60,13 @@ export class GitWatcher implements IGitWatcher {
 	start(getLastCommitDate: () => string | undefined): void {
 		if (this._isRunning) return
 
+		// Set _isRunning before firing the immediate tick so that a re-entrant
+		// call to start() before the microtask queue drains is correctly guarded.
+		this._isRunning = true
 		this._getLastCommitDate = getLastCommitDate
 
 		// Catch up: run an immediate scan for commits since last index date
 		this._pollTick().catch(() => {})
-
-		this._isRunning = true
 
 		// Schedule periodic polling
 		this._intervalId = setInterval(() => {
@@ -80,16 +86,10 @@ export class GitWatcher implements IGitWatcher {
 		this._getLastCommitDate = null
 	}
 
-	/**
-	 * Whether the watcher is currently running.
-	 */
 	public get isRunning(): boolean {
 		return this._isRunning
 	}
 
-	/**
-	 * Dispose the event emitter.
-	 */
 	public dispose(): void {
 		this.stop()
 		this._onNewCommits.dispose()
@@ -97,10 +97,6 @@ export class GitWatcher implements IGitWatcher {
 
 	// --- Private ---
 
-	/**
-	 * Run a single poll iteration: `git log --since=<currentDate>`, then emit
-	 * any new commits found.
-	 */
 	private async _pollTick(): Promise<void> {
 		const getter = this._getLastCommitDate
 		if (!getter) return
@@ -109,13 +105,20 @@ export class GitWatcher implements IGitWatcher {
 		if (!sinceDate) return
 
 		try {
-			const newCommits = await this._logExtractor.extractCommitsSince(this.workspacePath, sinceDate)
+			const newCommits = await this._logExtractor.extractCommitsSince(
+				this.workspacePath,
+				sinceDate,
+				INCREMENTAL_MAX_COMMITS,
+			)
 
 			if (newCommits.length > 0) {
 				this._onNewCommits.fire(newCommits)
 			}
 		} catch (error) {
-			console.error("[GitWatcher] Poll iteration failed:", error)
+			// Swallow — the polling loop must survive transient failures.
+			// Structured logging is deliberately omitted here to avoid
+			// coupling the git-index layer to TelemetryService. Errors
+			// during incremental indexing are non-critical.
 		}
 	}
 }

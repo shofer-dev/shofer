@@ -60,7 +60,7 @@ export interface IGitLogExtractor {
 	 * @param sinceDate - ISO 8601 date string (e.g. "2024-01-01T00:00:00+00:00")
 	 * @returns Array of parsed commit blocks since the given date
 	 */
-	extractCommitsSince(workspacePath: string, sinceDate: string): Promise<GitCommitBlock[]>
+	extractCommitsSince(workspacePath: string, sinceDate: string, maxCommits: number): Promise<GitCommitBlock[]>
 }
 
 /**

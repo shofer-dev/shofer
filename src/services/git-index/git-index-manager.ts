@@ -374,13 +374,17 @@ export class GitIndexManager {
 		this._embedder = embedder
 		this._vectorStore = vectorStore
 
-		// Create GitHistoryOrchestrator
+		// Create GitHistoryOrchestrator (pass poll interval from settings)
+		const pollIntervalMinutes = this._readGitConfig("codebaseIndexGitPollIntervalMinutes", 5)
+		const pollIntervalMs = pollIntervalMinutes * 60 * 1000
+
 		this._orchestrator = new GitHistoryOrchestrator(
 			this.workspacePath,
 			this._stateManager,
 			this._cacheManager!,
 			embedder,
 			vectorStore,
+			pollIntervalMs,
 		)
 
 		// Create GitSearchService

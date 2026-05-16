@@ -52,6 +52,7 @@ export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexOpenRouterSpecificProvider: z.string().optional(),
 	// Git history indexing fields
 	codebaseIndexGitEnabled: z.boolean().optional(),
+	codebaseIndexGitPollIntervalMinutes: z.number().optional(),
 	codebaseIndexGitMaxHistoryDays: z.number().optional(),
 	codebaseIndexGitMaxCommits: z.number().optional(),
 	codebaseIndexGitSearchMinScore: z.number().min(0).max(1).optional(),
