@@ -492,6 +492,16 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "ask_helper_agent":
+				if (partialArgs.question !== undefined) {
+					nativeArgs = {
+						question: partialArgs.question,
+						contextFiles: Array.isArray(partialArgs.contextFiles) ? partialArgs.contextFiles : undefined,
+						timeoutMs: this.coerceOptionalNumber(partialArgs.timeoutMs),
+					}
+				}
+				break
+
 			case "apply_diff":
 				if (partialArgs.path !== undefined || partialArgs.diff !== undefined) {
 					nativeArgs = {
@@ -501,7 +511,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "codebase_search":
+			case "rag_search":
 				if (partialArgs.query !== undefined) {
 					nativeArgs = {
 						query: partialArgs.query,
@@ -538,7 +548,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "search_files":
+			case "grep_search":
 				if (partialArgs.path !== undefined || partialArgs.query !== undefined) {
 					nativeArgs = {
 						path: partialArgs.path,
@@ -803,7 +813,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "codebase_search_with_lsp":
+			case "lsp_search":
 				if (partialArgs.query !== undefined) {
 					nativeArgs = {
 						query: partialArgs.query,
@@ -1041,7 +1051,17 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "codebase_search":
+				case "ask_helper_agent":
+					if (args.question !== undefined) {
+						nativeArgs = {
+							question: args.question,
+							contextFiles: Array.isArray(args.contextFiles) ? args.contextFiles : undefined,
+							timeoutMs: this.coerceOptionalNumber(args.timeoutMs),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "rag_search":
 					if (args.query !== undefined) {
 						nativeArgs = {
 							query: args.query,
@@ -1078,7 +1098,7 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "search_files":
+				case "grep_search":
 					if (args.path !== undefined && args.query !== undefined) {
 						nativeArgs = {
 							path: args.path,
@@ -1362,7 +1382,7 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "codebase_search_with_lsp":
+				case "lsp_search":
 					if (args.query !== undefined) {
 						nativeArgs = {
 							query: args.query,

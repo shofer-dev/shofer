@@ -47,7 +47,7 @@ import { CommandExecution } from "./CommandExecution"
 import { CommandExecutionError } from "./CommandExecutionError"
 import { AutoApprovedRequestLimitWarning } from "./AutoApprovedRequestLimitWarning"
 import { InProgressRow, CondensationResultRow, CondensationErrorRow, TruncationResultRow } from "./context-management"
-import CodebaseSearchResultsDisplay from "./CodebaseSearchResultsDisplay"
+import RagSearchResultsDisplay from "./RagSearchResultsDisplay"
 import { appendImages } from "@src/utils/imageUtils"
 import { McpExecution } from "./McpExecution"
 import { ChatTextArea } from "./ChatTextArea"
@@ -612,20 +612,20 @@ export const ChatRowContent = ({
 						</div>
 					</>
 				)
-			case "codebaseSearch": {
+			case "ragSearch": {
 				return (
 					<div style={headerStyle}>
 						{toolIcon("search")}
 						<span style={{ fontWeight: "bold" }}>
 							{tool.path ? (
 								<Trans
-									i18nKey="chat:codebaseSearch.wantsToSearchWithPath"
+									i18nKey="chat:ragSearch.wantsToSearchWithPath"
 									components={{ code: <code></code> }}
 									values={{ query: tool.query, path: tool.path }}
 								/>
 							) : (
 								<Trans
-									i18nKey="chat:codebaseSearch.wantsToSearch"
+									i18nKey="chat:ragSearch.wantsToSearch"
 									components={{ code: <code></code> }}
 									values={{ query: tool.query }}
 								/>
@@ -830,7 +830,7 @@ export const ChatRowContent = ({
 						</div>
 					</>
 				)
-			case "searchFiles":
+			case "grepSearch":
 				return (
 					<>
 						<div style={headerStyle}>
@@ -870,6 +870,62 @@ export const ChatRowContent = ({
 						</div>
 					</>
 				)
+			case "askHelperAgent": {
+				// Two-phase render:
+				//   - `ask` (approval): show the question we're about to send.
+				//   - `say` (after answer arrives): show the question + the
+				//     answer (markdown, expandable) + cost/duration footer.
+				const headerKey =
+					message.type === "ask" ? "chat:askHelperAgent.wantsToAsk" : "chat:askHelperAgent.didAsk"
+				const hasAnswer = typeof tool.answer === "string" && tool.answer.length > 0
+				const footerBits: string[] = []
+				if (typeof tool.durationMs === "number") footerBits.push(`${(tool.durationMs / 1000).toFixed(1)}s`)
+				if (typeof tool.tokensTotal === "number") footerBits.push(`${tool.tokensTotal} tokens`)
+				if (typeof tool.costUSD === "number") footerBits.push(`$${tool.costUSD.toFixed(4)}`)
+				if (tool.contextFiles && tool.contextFiles.length > 0)
+					footerBits.push(`${tool.contextFiles.length} file(s)`)
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("comment-discussion")}
+							<span style={{ fontWeight: "bold" }}>{t(headerKey)}</span>
+						</div>
+						{tool.question && (
+							<div className="pl-6 mb-2 text-vscode-descriptionForeground italic break-words whitespace-pre-wrap">
+								{tool.question}
+							</div>
+						)}
+						{hasAnswer && (
+							<div className="pl-6">
+								<div
+									className="border border-vscode-editorGroup-border rounded overflow-hidden cursor-pointer"
+									onClick={handleToggleExpand}>
+									<div
+										className="flex items-center justify-between px-3 py-2 group"
+										style={{ background: "var(--vscode-textCodeBlock-background)" }}>
+										<span style={{ fontWeight: 500 }}>{t("chat:askHelperAgent.answer")}</span>
+										<span
+											className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}></span>
+									</div>
+									{isExpanded && (
+										<div
+											className="px-3 py-2"
+											onClick={(e) => e.stopPropagation()}
+											style={{ borderTop: "1px solid var(--vscode-editorGroup-border)" }}>
+											<MarkdownBlock markdown={tool.answer!} />
+										</div>
+									)}
+								</div>
+								{footerBits.length > 0 && (
+									<div className="mt-1 text-xs text-vscode-descriptionForeground">
+										{footerBits.join(" · ")}
+									</div>
+								)}
+							</div>
+						)}
+					</>
+				)
+			}
 			case "switchMode":
 				return (
 					<>
@@ -1581,7 +1637,7 @@ export const ChatRowContent = ({
 						return <TruncationResultRow data={message.contextTruncation} />
 					}
 					return null
-				case "codebase_search_result":
+				case "rag_search_result":
 					let parsed: {
 						content: {
 							query: string
@@ -1600,17 +1656,17 @@ export const ChatRowContent = ({
 							parsed = JSON.parse(message.text)
 						}
 					} catch (error) {
-						console.error("Failed to parse codebaseSearch content:", error)
+						console.error("Failed to parse ragSearch content:", error)
 					}
 
 					if (parsed && !parsed?.content) {
-						console.error("Invalid codebaseSearch content structure:", parsed.content)
+						console.error("Invalid ragSearch content structure:", parsed.content)
 						return <div>Error displaying search results.</div>
 					}
 
 					const { results = [] } = parsed?.content || {}
 
-					return <CodebaseSearchResultsDisplay results={results} />
+					return <RagSearchResultsDisplay results={results} />
 				case "user_edit_todos":
 					return <UpdateTodoListToolBlock userEdited onChange={() => {}} />
 				case "tool" as any:

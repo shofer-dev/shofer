@@ -26,7 +26,10 @@ export default {
 	function: {
 		name: "ask_helper_agent",
 		description: ASK_HELPER_AGENT_DESCRIPTION,
-		strict: true,
+		// `strict: true` is intentionally omitted: it would force every listed
+		// property into `required`, which defeats the point of having truly
+		// optional `contextFiles` / `timeoutMs` parameters that the model can
+		// simply leave out of the call.
 		parameters: {
 			type: "object",
 			properties: {
