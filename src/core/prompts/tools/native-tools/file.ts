@@ -4,7 +4,7 @@ const FILE_TOOL_DESCRIPTION = `Filesystem operations on workspace files. Use thi
 
 Subcommands:
 - \`rm\`: Delete a file (or directory when \`recursive=true\`).
-- \`mv\`: Move/rename a file. Requires \`destination\`.
+- \`mv\`: Move/rename a file or directory. Requires \`destination\`.
 
 Both subcommands operate relative to the workspace root and refuse paths that escape it.`
 
