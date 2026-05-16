@@ -36,6 +36,7 @@ import {
 	type ModelInfo,
 	type ShoferApiReqCancelReason,
 	type ShoferApiReqInfo,
+	type ApiReqError,
 	type TaskHandle,
 	type CostLimit,
 	ShoferEventName,
@@ -3233,6 +3234,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				"api_req_started",
 				JSON.stringify({
 					apiProtocol,
+					model: modelId,
+					retryAttempt: currentItem.retryAttempt ?? 0,
 				}),
 			)
 
@@ -3342,6 +3345,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			this.shoferMessages[lastApiReqIndex].text = JSON.stringify({
 				apiProtocol,
+				model: modelId,
+				retryAttempt: currentItem.retryAttempt ?? 0,
 			} satisfies ShoferApiReqInfo)
 
 			await this.saveShoferMessages()
@@ -3982,6 +3987,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Shofer instance to finish aborting (error is thrown here when
 					// any function in the for loop throws due to this.abort).
 					if (!this.abandoned) {
+						// Persist structured error info for export diagnostics.
+						if (!this.abort) {
+							this.snapshotApiReqError(this.buildApiReqError(error))
+						}
+
 						// Determine cancellation reason
 						const cancelReason: ShoferApiReqCancelReason = this.abort
 							? "user_cancelled"
@@ -5137,6 +5147,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Reset the flag after using it
 		this.skipPrevResponseIdOnce = false
 
+		// Capture wire-level request metadata for export diagnostics.
+		// Persisted alongside the api_req_started entry so the JSON export
+		// can show what was actually sent to the provider.
+		const wireRequest = JSON.stringify({
+			model: this.api.getModel().id,
+			apiProtocol: getApiProtocol(
+				apiConfiguration?.apiProvider && !isRetiredProvider(apiConfiguration.apiProvider)
+					? apiConfiguration.apiProvider
+					: undefined,
+				this.api.getModel().id,
+			),
+			systemPromptLength: systemPrompt.length,
+			messageCount: cleanConversationHistory.length,
+			toolCount: allTools.length,
+			messages: cleanConversationHistory,
+			tools: allTools.length > 0 ? allTools : undefined,
+			// Include a truncated form of the system prompt for context.
+			systemPromptHead: systemPrompt.slice(0, 500),
+		})
+
 		// The provider accepts reasoning items alongside standard messages; cast to the expected parameter type.
 		const stream = this.api.createMessage(
 			systemPrompt,
@@ -5144,6 +5174,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			metadata,
 		)
 		const iterator = stream[Symbol.asyncIterator]()
+
+		// Persist the wire request into the api_req_started entry so the
+		// JSON export can surface it.
+		this.snapshotWireRequest(wireRequest)
 
 		// Set up abort handling - when the signal is aborted, clean up the controller reference
 		abortSignal.addEventListener("abort", () => {
@@ -5176,6 +5210,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} catch (error) {
 			this.isWaitingForFirstChunk = false
 			this.currentRequestAbortController = undefined
+
+			// Persist structured error info into api_req_started for export diagnostics.
+			this.snapshotApiReqError(this.buildApiReqError(error))
+
 			const isContextWindowExceededError = checkContextWindowExceededError(error)
 
 			// If it's a context window error and we haven't exceeded max retries for this error type
@@ -5244,6 +5282,55 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// 	`[Task#${this.taskId}] [STREAM_PASSTHROUGH] Yielding chunk type=${chunk?.type}, preview=${JSON.stringify(chunk)?.slice(0, 200)}`,
 			// )
 			yield chunk
+		}
+	}
+
+	/**
+	 * Persist the wire-level request metadata into the last `api_req_started`
+	 * ShoferMessage so the JSON task-export can surface what was sent.
+	 */
+	private snapshotWireRequest(wireRequest: string): void {
+		const idx = findLastIndex(this.shoferMessages, (m) => m.say === "api_req_started")
+		if (idx < 0 || !this.shoferMessages[idx]) return
+		try {
+			const existing = JSON.parse(this.shoferMessages[idx].text || "{}")
+			this.shoferMessages[idx].text = JSON.stringify({
+				...existing,
+				wireRequest,
+			})
+		} catch {
+			/* best effort */
+		}
+	}
+
+	/**
+	 * Build a structured {@link ApiReqError} payload from a thrown error for
+	 * persistence alongside the {@link ShoferApiReqInfo}.
+	 */
+	private buildApiReqError(error: unknown): ApiReqError {
+		const e = error as any
+		return {
+			message: e instanceof Error ? e.message : JSON.stringify(error),
+			type: e?.type || e?.name || undefined,
+			statusCode: typeof e?.status === "number" ? e.status : undefined,
+			stack: e instanceof Error ? e.stack : undefined,
+		}
+	}
+
+	/**
+	 * Merge a structured error payload into the last `api_req_started` message.
+	 */
+	private snapshotApiReqError(reqError: ApiReqError): void {
+		const idx = findLastIndex(this.shoferMessages, (m) => m.say === "api_req_started")
+		if (idx < 0 || !this.shoferMessages[idx]) return
+		try {
+			const existing = JSON.parse(this.shoferMessages[idx].text || "{}")
+			this.shoferMessages[idx].text = JSON.stringify({
+				...existing,
+				error: reqError,
+			})
+		} catch {
+			/* best effort */
 		}
 	}
 

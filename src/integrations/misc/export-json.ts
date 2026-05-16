@@ -42,6 +42,19 @@ export interface JsonExportCall {
 	toolCalls: JsonExportToolCall[]
 	/** Extended thinking / chain-of-thought content if present. */
 	reasoning?: string
+	/** Number of retries before this attempt (0 = first try). */
+	retryAttempt?: number
+	/** Structured error information if this call failed. */
+	error?: {
+		message: string
+		type?: string
+		statusCode?: number
+		stack?: string
+	}
+	/** Serialised wire-level request metadata captured before the call. */
+	wireRequest?: string
+	/** Present when tokens are estimated via char/4 heuristic rather than provider usage chunks. */
+	_tokensEstimated?: true
 }
 
 export interface JsonExportToolCall {
@@ -95,14 +108,23 @@ interface UiApiReqStarted {
 interface UiApiReqStartedPayload {
 	apiProtocol?: string
 	model?: string
-	inputTokens?: number
-	outputTokens?: number
-	cacheWriteTokens?: number
-	cacheReadTokens?: number
-	totalCost?: number
+	// Stored field names from ShoferApiReqInfo in Task.ts:
+	tokensIn?: number
+	tokensOut?: number
+	cacheWrites?: number
+	cacheReads?: number
+	cost?: number
 	cancelled?: boolean
 	cancelReason?: string
 	streamingFailedMessage?: string
+	retryAttempt?: number
+	error?: {
+		message: string
+		type?: string
+		statusCode?: number
+		stack?: string
+	}
+	wireRequest?: string
 }
 
 // ── Token estimation fallback ─────────────────────────────────
@@ -271,22 +293,62 @@ export function buildJsonTrace(
 				index: callIndex + 1,
 				apiProtocol: payload.apiProtocol,
 				model: payload.model,
-				inputTokens: payload.inputTokens ?? 0,
-				outputTokens: payload.outputTokens ?? 0,
-				cacheWriteTokens: payload.cacheWriteTokens ?? 0,
-				cacheReadTokens: payload.cacheReadTokens ?? 0,
-				costUsd: payload.totalCost ?? 0,
+				inputTokens: payload.tokensIn ?? 0,
+				outputTokens: payload.tokensOut ?? 0,
+				cacheWriteTokens: payload.cacheWrites ?? 0,
+				cacheReadTokens: payload.cacheReads ?? 0,
+				costUsd: payload.cost ?? 0,
 				cancelled: payload.cancelled,
 				cancelReason: payload.cancelReason,
 				streamingFailedMessage: payload.streamingFailedMessage,
 				messages: callMessages,
 				toolCalls,
 				reasoning: reasoning || undefined,
+				retryAttempt: payload.retryAttempt,
+				error: payload.error,
+				wireRequest: payload.wireRequest,
 			})
 
 			callIndex++
 			currentCallStart = i + 1
 		}
+	}
+
+	// Handle api_req_started entries that have no matching assistant messages.
+	// This covers error-only tasks where the API never returned a response,
+	// e.g. connection failures, rate limits, or empty streams.
+	// Without this, the export would show an empty `calls[]` array.
+	while (callIndex < apiReqStartedEntries.length) {
+		const reqMeta = apiReqStartedEntries[callIndex]
+		let payload: UiApiReqStartedPayload = {}
+		if (reqMeta?.text) {
+			try {
+				payload = JSON.parse(reqMeta.text)
+			} catch {
+				/* best effort */
+			}
+		}
+
+		calls.push({
+			index: callIndex + 1,
+			apiProtocol: payload.apiProtocol,
+			model: payload.model,
+			inputTokens: payload.tokensIn ?? 0,
+			outputTokens: payload.tokensOut ?? 0,
+			cacheWriteTokens: payload.cacheWrites ?? 0,
+			cacheReadTokens: payload.cacheReads ?? 0,
+			costUsd: payload.cost ?? 0,
+			cancelled: payload.cancelled,
+			cancelReason: payload.cancelReason,
+			streamingFailedMessage: payload.streamingFailedMessage,
+			messages: [],
+			toolCalls: [],
+			retryAttempt: payload.retryAttempt,
+			error: payload.error,
+			wireRequest: payload.wireRequest,
+		})
+
+		callIndex++
 	}
 
 	// If the provider did not emit `usage` chunks (common with
@@ -299,7 +361,7 @@ export function buildJsonTrace(
 			call.inputTokens = est.input
 			call.outputTokens = est.output
 			// Mark as estimated so consumers can distinguish from real values.
-			;(call as unknown as Record<string, unknown>)._tokensEstimated = true
+			call._tokensEstimated = true
 		}
 	}
 
