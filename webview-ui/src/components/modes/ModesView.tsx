@@ -103,6 +103,15 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 
 	// Resolve the effective value for a mode field: local buffer wins if initialized,
 	// otherwise fall back to the extension-state chain.
+
+	// Helper function to find a mode by slug (hoisted above useCallbacks that reference it).
+	const findModeBySlug = useCallback(
+		(searchSlug: string, modes: readonly ModeConfig[] | undefined): ModeConfig | undefined => {
+			return findCustomModeBySlug(searchSlug, modes)
+		},
+		[],
+	)
+
 	const getEffectiveRoleDefinition = useCallback(() => {
 		if (buffersInitialized) return localRoleDefinition
 		const customMode = findModeBySlug(visualMode, customModes)
@@ -236,14 +245,6 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 			},
 		})
 	}, [])
-
-	// Helper function to find a mode by slug
-	const findModeBySlug = useCallback(
-		(searchSlug: string, modes: readonly ModeConfig[] | undefined): ModeConfig | undefined => {
-			return findCustomModeBySlug(searchSlug, modes)
-		},
-		[],
-	)
 
 	const switchMode = useCallback((slug: string) => {
 		vscode.postMessage({
