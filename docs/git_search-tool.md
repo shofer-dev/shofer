@@ -227,17 +227,73 @@ These are added to [`packages/types/src/codebase-index.ts`](../packages/types/sr
 - `GitCacheManager` tracks `lastCommitDate` in addition to per-commit hashes.
 - On workspace open, catch up any new commits since last index.
 
-### Phase 3: Production Polish
+### Phase 3: UI Integration
 
-**Goal:** Configuration UI, multi-workspace hardening, observability.
+**Goal:** Surface git index status and controls in the chat UI, and consolidate all indexer configuration into Settings → RAG Indexer.
+
+---
+
+#### 3.1 ChatToolbar Status Badge — extend `IndexingStatusBadge`
+
+**Location:** `webview-ui/src/components/chat/ChatTextArea.tsx` (badge row, right side, next to the AssistantAgent badge)
+
+The existing `IndexingStatusBadge` component currently reflects only the code index state.
 
 **Changes:**
 
-- Settings UI in webview (toggle + history depth slider) — add handlers to `webviewMessageHandler.ts`.
-- Commands for start/stop/status — wire in `registerCommands.ts` + `ShoferProvider.ts`.
-- Indexing progress in status bar.
-- Structured logging via `TelemetryService`.
-- Dedicated i18n strings in `chat.json`.
+- Add a new `"gitIndexingStatusUpdate"` message type to `ExtensionMessage` (`@shofer/types`).
+- Extend `IndexingStatusBadge` to listen for `"gitIndexingStatusUpdate"` alongside the existing code-index message and derive a combined status (e.g. either indexer in progress → spinner, either in error → error icon, both idle → checkmark with combined tooltip).
+- Clicking the badge opens `CodeIndexPopover` (unchanged trigger behaviour).
+- Extension side: `GitIndexManager` emits `"gitIndexingStatusUpdate"` on state transitions, mirroring the pattern in `CodeIndexManager`.
+
+---
+
+#### 3.2 `CodeIndexPopover` — Informational Status Only
+
+**Location:** `webview-ui/src/components/chat/CodeIndexPopover.tsx`
+
+The popover should be **informational only** — no detailed configuration knobs.
+
+**Changes:**
+
+- Add a **"Git History" section** below the existing code index section showing:
+    - Enabled/disabled toggle (`codebaseIndexGitEnabled`)
+    - Status line: "Indexed N commits" / "Indexing…" / "Error"
+    - **Start / Stop / Clear** action buttons (no config sliders)
+- Keep the code index section similarly lean (enable toggle + status + Start/Stop/Clear).
+- Wire `"startGitIndexing"` / `"stopGitIndexing"` / `"clearGitIndexData"` to new `WebviewMessage` types handled in `webviewMessageHandler.ts`, and register corresponding `CommandId` entries in `registerCommands.ts` + `ShoferProvider.ts`.
+
+---
+
+#### 3.3 Settings Tab → **RAG Indexer** Section (new consolidated tab/section)
+
+**Location:** `webview-ui/src/components/settings/SettingsView.tsx`
+
+Move all detailed configuration for **both** the code index and the git index out of the status popover and into a single **"RAG Indexer"** settings section (or tab, following the existing tab pattern).
+
+**Code index settings to move here (away from popover):**
+
+- All existing sliders/inputs currently in `CodeIndexPopover` that are config (chunk size, overlap, min score, etc.)
+
+**Git index settings to add here:**
+
+- Toggle: `codebaseIndexGitEnabled`
+- Slider: history days (1–365), label "Max history"
+- Slider: max commits (100–10,000), label "Max commits"
+- Slider: poll interval (1–60 min), label "Poll interval"
+- Slider: search min score (0–1, step 0.01), label "Min similarity"
+- Slider: search max results (1–50), label "Max results"
+
+All inputs must bind to `cachedState` (Settings View Pattern — see `AGENTS.md`).
+
+---
+
+#### 3.4 Supporting Infrastructure
+
+- Wire new `WebviewMessage` types (`startGitIndexing`, `stopGitIndexing`, `clearGitIndexData`) in `webviewMessageHandler.ts`.
+- Add `CommandId` entries for start/stop/clear git index in `packages/types/src/vscode.ts`; register handlers in `registerCommands.ts`.
+- Structured logging via `TelemetryService` for indexing lifecycle events.
+- Extend `chat.json` i18n with git index popover strings (status, button labels).
 
 ---
 
