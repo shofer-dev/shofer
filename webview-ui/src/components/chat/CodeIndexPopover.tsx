@@ -726,8 +726,10 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 										checked={codebaseIndexConfig?.codebaseIndexGitEnabled ?? false}
 										onChange={(e: any) =>
 											vscode.postMessage({
-												type: "updateSettings",
-												settings: { codebaseIndexGitEnabled: e.target.checked },
+												type: "updateCodebaseIndexConfig",
+												codebaseIndexConfigPartial: {
+													codebaseIndexGitEnabled: e.target.checked,
+												},
 											})
 										}>
 										<span className="font-medium">{t("settings:codeIndex.gitEnableLabel")}</span>

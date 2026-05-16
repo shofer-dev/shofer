@@ -2722,6 +2722,33 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		case "updateCodebaseIndexConfig": {
+			// Merge a partial patch into the persisted `codebaseIndexConfig`
+			// global state (a single nested object). The popover's git-enable
+			// toggle uses this so it can flip one field without rewriting the
+			// whole config + secrets that `saveCodeIndexSettingsAtomic`
+			// requires. We must NOT route through generic `updateSettings`
+			// here: those handlers treat each key as a top-level
+			// ContextProxy entry and would write to a non-existent state
+			// slot, leaving the nested config (and the popover's bound
+			// checkbox) unchanged on the next state broadcast.
+			const patch = message.codebaseIndexConfigPartial
+			if (!patch || typeof patch !== "object") {
+				break
+			}
+			try {
+				const currentConfig = getGlobalState("codebaseIndexConfig") || {}
+				const merged = { ...currentConfig, ...patch }
+				await updateGlobalState("codebaseIndexConfig", merged)
+				await provider.postStateToWebview()
+			} catch (error) {
+				provider.log(
+					`Error updating codebaseIndexConfig: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+			break
+		}
+
 		case "requestIndexingStatus": {
 			const manager = provider.getCurrentWorkspaceCodeIndexManager()
 			if (!manager) {
@@ -3422,9 +3449,23 @@ export const webviewMessageHandler = async (
 
 			const currentTask = provider.getCurrentTask()
 			provider.log(
-				`[DIAG webviewHandler] queueMessage received: text=${messageText?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}, queueSize=${currentTask?.messageQueueService.messages.length}`,
+				`[DIAG webviewHandler] queueMessage received: text=${messageText?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}, queueSize=${currentTask?.messageQueueService.messages.length}, abort=${currentTask?.abort}`,
 			)
 			currentTask?.messageQueueService.addMessage(messageText, resolved.images)
+
+			// If the task's loop has already terminated (e.g. `attempt_completion`
+			// set `abort=true` to declare the task complete), no future `Task.ask()`
+			// will fire to drain the queue — the message would sit there forever
+			// and the user would have to click "Send Now" manually. Auto-trigger
+			// the same cancel-and-process flow that "Send Now" uses, which restarts
+			// the task loop with the dequeued message. Queueing semantics are for
+			// "task is doing work"; a completed task is not doing work.
+			if (currentTask?.abort) {
+				provider.log(
+					`[DIAG webviewHandler] queueMessage on aborted task — auto-triggering cancelAndProcessQueuedMessages, taskId=${currentTask.taskId}.${currentTask.instanceId}`,
+				)
+				await currentTask.cancelAndProcessQueuedMessages()
+			}
 			break
 		}
 		case "removeQueuedMessage": {
