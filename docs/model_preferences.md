@@ -140,7 +140,7 @@ The filtering pipeline in [`src/core/prompts/tools/filter-tools-for-mode.ts`](..
 2. **Always-available** — Add tools from `ALWAYS_AVAILABLE_TOOLS`
 3. **Permission checks** — Filter via `isToolAllowedForMode()`
 4. **Model customization** — Apply `excludedTools` (remove) and `includedTools` (add, if group allowed)
-5. **Feature gates** — Remove `codebase_search` (no index), `generate_image` (experiment off), etc.
+5. **Feature gates** — Remove `rag_search` (no index), `generate_image` (experiment off), etc.
 6. **Alias renames** — Rename canonical tools to aliases for API consistency
 
 ---

@@ -8,7 +8,7 @@
 	},
 	"toolRepetitionLimitReached": "Wygląda na to, że Shofer utknął w pętli, wielokrotnie próbując wykonać tę samą akcję ({{toolName}}). Może to wskazywać na problem z jego obecną strategią. Rozważ przeformułowanie zadania, podanie bardziej szczegółowych instrukcji lub nakierowanie go na inne podejście.",
 	"unknownToolError": "Shofer próbował użyć nieznanego narzędzia: \"{{toolName}}\". Ponowna próba...",
-	"codebaseSearch": {
+	"ragSearch": {
 		"approval": "Wyszukiwanie '{{query}}' w bazie kodu..."
 	},
 	"newTask": {

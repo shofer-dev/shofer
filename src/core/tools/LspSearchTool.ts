@@ -1,12 +1,12 @@
 /**
- * CodebaseSearchWithLspTool - Searches the codebase using the LSP workspace symbol provider.
+ * LspSearchTool - Searches the codebase using the LSP workspace symbol provider.
  *
  * Uses `vscode.executeWorkspaceSymbolProvider` to find symbols (functions, classes,
  * variables, interfaces, etc.) matching the query. Falls back to word-level text
  * search across source files when the language server is unavailable or returns
  * no results.
  *
- * Unlike CodebaseSearchTool (which uses vector embeddings via Qdrant), this tool
+ * Unlike RagSearchTool (which uses vector embeddings via Qdrant), this tool
  * requires no external infrastructure and works entirely with VS Code's built-in
  * language services.
  *
@@ -21,7 +21,7 @@ import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
-interface CodebaseSearchWithLspParams {
+interface LspSearchParams {
 	query: string
 	maxResults?: number | null
 }
@@ -34,24 +34,24 @@ const DEFAULT_MAX_RESULTS = 20
 const SOURCE_FILE_GLOB =
 	"**/*.{ts,tsx,js,jsx,go,py,rs,java,c,cpp,h,hpp,md,json,yaml,yml,toml,sql,rb,php,swift,kt,scala,sh,bash,zsh}"
 
-export class CodebaseSearchWithLspTool extends BaseTool<"codebase_search_with_lsp"> {
-	readonly name = "codebase_search_with_lsp" as const
+export class LspSearchTool extends BaseTool<"lsp_search"> {
+	readonly name = "lsp_search" as const
 
-	async execute(params: CodebaseSearchWithLspParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+	async execute(params: LspSearchParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 		const { query, maxResults } = params
 		const effectiveMax = maxResults ?? DEFAULT_MAX_RESULTS
 
 		if (!query) {
 			task.consecutiveMistakeCount++
-			task.recordToolError("codebase_search_with_lsp")
+			task.recordToolError("lsp_search")
 			task.didToolFailInCurrentTurn = true
-			pushToolResult(await task.sayAndCreateMissingParamError("codebase_search_with_lsp", "query"))
+			pushToolResult(await task.sayAndCreateMissingParamError("lsp_search", "query"))
 			return
 		}
 
 		const sharedMessageProps = {
-			tool: "codebaseSearchWithLsp",
+			tool: "lspSearch",
 			query,
 			isOutsideWorkspace: false,
 		}
@@ -99,7 +99,7 @@ export class CodebaseSearchWithLspTool extends BaseTool<"codebase_search_with_ls
 				const fallbackOutput = await this.searchTextFallback(query, effectiveMax, task.cwd)
 				pushToolResult(fallbackOutput)
 			} catch (fallbackError: any) {
-				await handleError("codebase_search_with_lsp", error)
+				await handleError("lsp_search", error)
 			}
 		}
 	}
@@ -170,11 +170,11 @@ export class CodebaseSearchWithLspTool extends BaseTool<"codebase_search_with_ls
 	/**
 	 * Handles partial/streaming tool calls for progressive UI updates.
 	 */
-	override async handlePartial(task: Task, block: ToolUse<"codebase_search_with_lsp">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"lsp_search">): Promise<void> {
 		const query: string | undefined = block.params.query
 
 		const sharedMessageProps = {
-			tool: "codebaseSearchWithLsp",
+			tool: "lspSearch",
 			query,
 			isOutsideWorkspace: false,
 		}
@@ -183,4 +183,4 @@ export class CodebaseSearchWithLspTool extends BaseTool<"codebase_search_with_ls
 	}
 }
 
-export const codebaseSearchWithLspTool = new CodebaseSearchWithLspTool()
+export const lspSearchTool = new LspSearchTool()

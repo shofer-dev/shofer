@@ -213,10 +213,10 @@ export async function checkAutoApproval({
 				"getErrors",
 				"getChangedFiles",
 				"getProjectSetupInfo",
-				// getSearchResults removed — merged into search_files
+				// getSearchResults removed — merged into grep_search
 				"readProjectStructure",
 				"listCodeUsages",
-				"codebaseSearchWithLsp",
+				"lspSearch",
 			].includes(tool?.tool)
 		) {
 			return { decision: "approve" }

@@ -100,7 +100,7 @@ A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
     ```
     In this example the mode gets ALL `browser` and `mcp` tools, but from the
     `read` group it gets ONLY `mcp--shofer--web_search` — not `read_file`,
-    `search_files`, etc.
+    `grep_search`, etc.
 
 Group definitions live in [`src/shared/tools.ts`](../src/shared/tools.ts) as
 `TOOL_GROUPS`, which maps each group name to the concrete tool IDs it grants.
@@ -143,7 +143,7 @@ Result: every tool in any of those five groups is allowed. No
 ```yaml
 - slug: reviewer
   name: 👀 Reviewer
-  tools_allowed: [read_file, search_files, list_files, list_code_definition_names]
+  tools_allowed: [read_file, grep_search, list_files, list_code_definition_names]
 ```
 
 Result: only those four tool IDs are allowed. The mode has no `groups` array,

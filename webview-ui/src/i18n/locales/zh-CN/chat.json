@@ -392,7 +392,7 @@
 			"button": "重置并继续"
 		}
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Shofer 需要搜索代码库: <code>{{query}}</code>",
 		"wantsToSearchWithPath": "Shofer 需要在 <code>{{path}}</code> 中搜索: <code>{{query}}</code>",
 		"didSearch_one": "找到 1 个结果",

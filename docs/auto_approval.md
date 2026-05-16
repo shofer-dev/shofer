@@ -85,17 +85,17 @@ These tools query in-memory editor/LSP state, fetch public URLs, or list workspa
 metadata. They cannot mutate user state and are unconditionally approved (independent
 of `alwaysAllowReadOnly`):
 
-| Tool                       | What it queries                                    |
-| -------------------------- | -------------------------------------------------- |
-| `fetch_web_page`           | Public web pages (HTTP GET only).                  |
-| `find_files`               | File-name glob matching against workspace index.   |
-| `view_image`               | Reads an image file for visual analysis.           |
-| `get_errors`               | Language-server diagnostics for open files.        |
-| `get_changed_files`        | Files modified during the current task session.    |
-| `get_project_setup_info`   | Detected languages, frameworks, and build systems. |
-| `read_project_structure`   | Directory tree of the workspace.                   |
-| `list_code_usages`         | LSP "find all references" for a symbol.            |
-| `codebase_search_with_lsp` | LSP workspace symbol search.                       |
+| Tool                     | What it queries                                    |
+| ------------------------ | -------------------------------------------------- |
+| `fetch_web_page`         | Public web pages (HTTP GET only).                  |
+| `find_files`             | File-name glob matching against workspace index.   |
+| `view_image`             | Reads an image file for visual analysis.           |
+| `get_errors`             | Language-server diagnostics for open files.        |
+| `get_changed_files`      | Files modified during the current task session.    |
+| `get_project_setup_info` | Detected languages, frameworks, and build systems. |
+| `read_project_structure` | Directory tree of the workspace.                   |
+| `list_code_usages`       | LSP "find all references" for a symbol.            |
+| `lsp_search`             | LSP workspace symbol search.                       |
 
 ---
 
@@ -120,21 +120,21 @@ Controls the `switch_mode` tool only.
 
 Controls the read-only tool actions as classified by `isReadOnlyToolAction()`:
 
-| Tool                       |
-| -------------------------- |
-| `read_file`                |
-| `list_files`               |
-| `search_files`             |
-| `codebase_search`          |
-| `codebase_search_with_lsp` |
-| `run_slash_command`        |
-| `find_files`               |
-| `view_image`               |
-| `get_errors`               |
-| `get_changed_files`        |
-| `get_project_setup_info`   |
-| `list_code_usages`         |
-| `fetch_web_page`           |
+| Tool                     |
+| ------------------------ |
+| `read_file`              |
+| `list_files`             |
+| `grep_search`            |
+| `rag_search`             |
+| `lsp_search`             |
+| `run_slash_command`      |
+| `find_files`             |
+| `view_image`             |
+| `get_errors`             |
+| `get_changed_files`      |
+| `get_project_setup_info` |
+| `list_code_usages`       |
+| `fetch_web_page`         |
 
 > **Note:** Some tools appear both here and in the unconditionally-approved list.
 > The unconditional path takes precedence — these tools are approved before the
@@ -231,7 +231,7 @@ These are **separate concepts**:
 
 A tool being in `ALWAYS_AVAILABLE_TOOLS` does **not** mean it's auto-approved. For example,
 `new_task` is always available but still requires the `alwaysAllowSubtasks` toggle for
-auto-approval. Conversely, `codebase_search` is auto-approved unconditionally but is
+auto-approval. Conversely, `rag_search` is auto-approved unconditionally but is
 **not** in `ALWAYS_AVAILABLE_TOOLS` — it's available through the mode's `read` group.
 
 ---

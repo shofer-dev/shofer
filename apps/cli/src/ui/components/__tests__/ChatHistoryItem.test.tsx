@@ -324,8 +324,8 @@ describe("ChatHistoryItem", () => {
 			const message: TUIMessage = {
 				id: "11",
 				role: "tool",
-				content: JSON.stringify({ tool: "search_files" }),
-				toolName: "search_files",
+				content: JSON.stringify({ tool: "grep_search" }),
+				toolName: "grep_search",
 				toolDisplayName: "Search Files",
 				toolDisplayOutput: "search results",
 			}

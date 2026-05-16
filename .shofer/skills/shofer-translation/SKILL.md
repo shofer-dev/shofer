@@ -111,8 +111,8 @@ React component usage:
     1. Identify where the string appears in the UI/codebase
     2. Understand the context and purpose of the string
     3. Update English translation first
-    4. Use the `search_files` tool to find JSON keys that are near new keys in English translations but do not yet exist in the other language files for `apply_diff` SEARCH context
-    5. Create appropriate translations for all other supported languages utilizing the `search_files` result using `apply_diff` without reading every file
+    4. Use the `grep_search` tool to find JSON keys that are near new keys in English translations but do not yet exist in the other language files for `apply_diff` SEARCH context
+    5. Create appropriate translations for all other supported languages utilizing the `grep_search` result using `apply_diff` without reading every file
     6. Do not output the translated text into the chat, just modify the files
     7. Validate your changes with the missing translations script
 

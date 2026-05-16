@@ -2,9 +2,9 @@ import type OpenAI from "openai"
 
 const CODEBASE_SEARCH_DESCRIPTION = `Find files most relevant to the search query using semantic search. Searches based on meaning rather than exact text matches. By default searches entire workspace. Reuse the user's exact wording unless there's a clear reason not to - their phrasing often helps semantic search. Queries MUST be in English (translate if needed).
 
-**CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use this tool FIRST before any other search or file exploration tools.** This applies throughout the entire conversation, not just at the beginning. This tool uses semantic search to find relevant code based on meaning rather than just keywords, making it far more effective than regex-based search_files for understanding implementations. Even if you've already explored some code, any new area of exploration requires codebase_search first.
+**CRITICAL: For ANY exploration of code you haven't examined yet in this conversation, you MUST use this tool FIRST before any other search or file exploration tools.** This applies throughout the entire conversation, not just at the beginning. This tool uses semantic search to find relevant code based on meaning rather than just keywords, making it far more effective than regex-based grep_search for understanding implementations. Even if you've already explored some code, any new area of exploration requires rag_search first.
 
-**⚠️ Indexing latency:** This tool queries a vector index that may not reflect the very latest code changes. File changes take at minimum 500ms (debounce) + embedding time to appear in the index. During a full workspace scan, search returns partial results. If you are looking for recently-modified code and need guaranteed fresh results, use codebase_search_with_lsp which queries the live codebase via the language server.
+**⚠️ Indexing latency:** This tool queries a vector index that may not reflect the very latest code changes. File changes take at minimum 500ms (debounce) + embedding time to appear in the index. During a full workspace scan, search returns partial results. If you are looking for recently-modified code and need guaranteed fresh results, use lsp_search which queries the live codebase via the language server.
 
 Parameters:
 - query: (required) The search query. Reuse the user's exact wording/question format unless there's a clear reason not to.
@@ -23,7 +23,7 @@ const PATH_PARAMETER_DESCRIPTION = `Optional subdirectory (relative to the works
 export default {
 	type: "function",
 	function: {
-		name: "codebase_search",
+		name: "rag_search",
 		description: CODEBASE_SEARCH_DESCRIPTION,
 		strict: true,
 		parameters: {

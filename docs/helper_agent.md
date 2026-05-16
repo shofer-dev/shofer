@@ -51,20 +51,20 @@ State machine:  Standby → Initializing → Ready ⇄ Busy → Stopping → Sta
 
 ### Key Source Files
 
-| File                                              | Lines | Role                                                                                                                                                         |
-| ------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/services/helper-agent/manager.ts`            | ~620  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters. |
-| `src/services/helper-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.            |
-| `src/services/helper-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                 |
-| `src/services/helper-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs). |
-| `src/services/helper-agent/llm-client.ts`         | ~210  | Adapter onto the shared `buildApiHandler()`. Maps the helper-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.   |
-| `src/services/helper-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.         |
-| `src/services/helper-agent/directory-tree.ts`     | ~160  | Recursive workspace scan. `find .`-style tree generation. Excludes `.shofer/worktrees/` + common ignore dirs; capped at ~10% of context window.              |
-| `src/services/helper-agent/file-watcher.ts`       | ~100  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce; skips worktrees and hidden paths. Notifies the manager which invalidates `ContextWindow` entries. |
-| `src/services/helper-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                  |
+| File                                              | Lines | Role                                                                                                                                                                                                         |
+| ------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/services/helper-agent/manager.ts`            | ~620  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                |
+| `src/services/helper-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                           |
+| `src/services/helper-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                |
+| `src/services/helper-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                 |
+| `src/services/helper-agent/llm-client.ts`         | ~210  | Adapter onto the shared `buildApiHandler()`. Maps the helper-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                   |
+| `src/services/helper-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                         |
+| `src/services/helper-agent/directory-tree.ts`     | ~160  | Recursive workspace scan. `find .`-style tree generation. Excludes `.shofer/worktrees/` + common ignore dirs; capped at ~10% of context window.                                                              |
+| `src/services/helper-agent/file-watcher.ts`       | ~100  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce; skips worktrees and hidden paths. Notifies the manager which invalidates `ContextWindow` entries.                                               |
+| `src/services/helper-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                 |
 | `packages/types/src/helper-agent.ts`              | ~180  | Zod schemas (`AgentMessage`, `FileContextEntry`, `HelperAgentConfig`, `QuestionResult`, `HelperAgentCostTracking`, `HelperAgentConversationData`); the fixed `HELPER_AGENT_SYSTEM_PROMPT`; all 11 constants. |
-| `packages/types/src/global-settings.ts`           |       | `helperAgent{Enabled,Provider,ModelId,BaseUrl,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`; six `helperAgent*Key` entries on `GLOBAL_SECRET_KEYS`. |
-| `packages/types/src/vscode.ts`                    |       | Helper-agent command ids on the typed `commandIds` array (`helperAgent.{start,stop,clearContext,showChat,openSettings}`).                                    |
+| `packages/types/src/global-settings.ts`           |       | `helperAgent{Enabled,Provider,ModelId,BaseUrl,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`; six `helperAgent*Key` entries on `GLOBAL_SECRET_KEYS`.                                 |
+| `packages/types/src/vscode.ts`                    |       | Helper-agent command ids on the typed `commandIds` array (`helperAgent.{start,stop,clearContext,showChat,openSettings}`).                                                                                    |
 
 ### Module Contracts
 
@@ -505,25 +505,25 @@ Tool schema: `src/core/prompts/tools/native-tools/ask_helper_agent.ts`
 ### Tool Availability
 
 - The `ask_helper_agent` tool is **conditionally available** only when `HelperAgentManager` is enabled + configured + in `Ready` or `Busy` state.
-- If the agent is in `Standby`, `Initializing`, `Error`, or `Stopping` state, the tool is filtered out (similar to `codebase_search` filtering).
+- If the agent is in `Standby`, `Initializing`, `Error`, or `Stopping` state, the tool is filtered out (similar to `rag_search` filtering).
 - Filter logic in `src/core/prompts/tools/filter-tools-for-mode.ts`.
 
 ### Auto-Approval
 
-The `ask_helper_agent` tool is **auto-approved by default** (like `codebase_search`), since it is read-only and uses a separate, cost-optimized model. Configured in `src/core/auto-approval/tools.ts`.
+The `ask_helper_agent` tool is **auto-approved by default** (like `rag_search`), since it is read-only and uses a separate, cost-optimized model. Configured in `src/core/auto-approval/tools.ts`.
 
 ### Helper Agent's Own Tool Restrictions
 
 The helper agent itself runs as an internal task with a **severely restricted tool set**. It is strictly read-only and cannot modify any state:
 
-| Tool Category     | Available? | Tools Included                                                                                               |
-| ----------------- | ---------- | ------------------------------------------------------------------------------------------------------------ |
-| **Read**          | ✓ Yes      | `read_file`, `list_files`, `search_files`, `list_code_usages`, `codebase_search`, `codebase_search_with_lsp` |
-| **Write/Edit**    | ✗ No       | `write_to_file`, `apply_diff`, `insert_edit`, `sed`                                                          |
-| **CLI/Execution** | ✗ No       | `execute_command`                                                                                            |
-| **MCP**           | ✗ No       | All MCP-provided tools (browser, k3s, mimir, loki, tempo, etc.)                                              |
-| **Task Control**  | ✗ No       | `new_task`, `switch_mode`, `attempt_completion`                                                              |
-| **Ask**           | ✓ Yes      | `ask_followup_question` — only as a fallback if clarification needed                                         |
+| Tool Category     | Available? | Tools Included                                                                           |
+| ----------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| **Read**          | ✓ Yes      | `read_file`, `list_files`, `grep_search`, `list_code_usages`, `rag_search`, `lsp_search` |
+| **Write/Edit**    | ✗ No       | `write_to_file`, `apply_diff`, `insert_edit`, `sed`                                      |
+| **CLI/Execution** | ✗ No       | `execute_command`                                                                        |
+| **MCP**           | ✗ No       | All MCP-provided tools (browser, k3s, mimir, loki, tempo, etc.)                          |
+| **Task Control**  | ✗ No       | `new_task`, `switch_mode`, `attempt_completion`                                          |
+| **Ask**           | ✓ Yes      | `ask_followup_question` — only as a fallback if clarification needed                     |
 
 These restrictions are enforced at the tool-filtering layer (`filter-tools-for-mode.ts`) based on a dedicated `helper_agent` internal mode slug. The helper agent's system prompt explicitly instructs it that it cannot make changes — it can only read and answer questions about the codebase. This ensures:
 
@@ -726,7 +726,7 @@ Integration point: `src/core/webview/HelperAgentChatProvider.ts` — registers a
 
 ## Comparison with RAG Indexer
 
-| Aspect               | RAG Indexer (`codebase_search`)             | Helper Agent (`ask_helper_agent`)                         |
+| Aspect               | RAG Indexer (`rag_search`)                  | Helper Agent (`ask_helper_agent`)                         |
 | -------------------- | ------------------------------------------- | --------------------------------------------------------- |
 | **Purpose**          | Semantic code search via vector embeddings  | Conversational Q&A with persistent context                |
 | **Storage**          | Qdrant (vector DB) + local hash cache       | VS Code globalStorage (JSON conversation file)            |
@@ -891,7 +891,7 @@ Phases 4 and 5 can be implemented in parallel after Phase 3 is complete.
 | 4     | `9d4c50554` `feat(helper-agent): Phase 4 — Status Bar + Info Panel + Clear Context`  | 1 modified: `extension.ts` (+189)                                                   |
 | 5a    | `d80dbdc8c` `feat(helper-agent): Phase 5 — Directory Tree + File Watcher`            | 2 new, 1 modified                                                                   |
 | 5b    | `3a90b5003` `feat(helper-agent): Phase 5b — Chat View + FileContextTracker hooks`    | 1 new, 2 modified                                                                   |
-| R     | `794e6d0ac` `shofer: refactor helper agent into focused modules + typed plumbing`     | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)        |
+| R     | `794e6d0ac` `shofer: refactor helper agent into focused modules + typed plumbing`    | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)        |
 
 _Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback` for `attempt_completion`.
 
@@ -909,42 +909,42 @@ _Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback`
 
 ### Files Created (13)
 
-| File                                                                                                                                     | Phase | Lines | Description                                                                                                                                                                            |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`packages/types/src/helper-agent.ts`](extensions/shofer/packages/types/src/helper-agent.ts:1)                                           | 1     | 176   | Zod schemas for AgentMessage, FileContextEntry, HelperAgentConfig, QuestionResult, CostTracking; HELPER_AGENT_SYSTEM_PROMPT; all 11 constants                                          |
-| [`src/services/helper-agent/manager.ts`](extensions/shofer/src/services/helper-agent/manager.ts:1)                                       | 1, R  | 621   | Singleton-per-workspace orchestrator. Owns lifecycle, config, event emitters; delegates everything else to focused collaborators.                                                      |
-| [`src/services/helper-agent/conversation-store.ts`](extensions/shofer/src/services/helper-agent/conversation-store.ts:1)                 | R     | 141   | Versioned JSON snapshot persistence. SHA-256 file-context validation on load; ENOENT-safe; discards on version mismatch.                                                               |
-| [`src/services/helper-agent/question-queue.ts`](extensions/shofer/src/services/helper-agent/question-queue.ts:1)                         | R     | 158   | Bounded FIFO with per-entry AbortSignal + timeout. Reentrant-safe drain loop. `cancelAll()` for shutdown.                                                                              |
-| [`src/services/helper-agent/context-window.ts`](extensions/shofer/src/services/helper-agent/context-window.ts:1)                         | R     | 197   | In-memory window for messages + file contexts. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs). Token estimation.                            |
-| [`src/services/helper-agent/llm-client.ts`](extensions/shofer/src/services/helper-agent/llm-client.ts:1)                                 | R     | 212   | Adapter wrapping `buildApiHandler()`. Maps the helper-agent provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                              |
-| [`src/services/helper-agent/pricing.ts`](extensions/shofer/src/services/helper-agent/pricing.ts:1)                                       | R     | 48    | Per-model USD cost from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler omits pricing.                                                      |
-| [`src/services/helper-agent/directory-tree.ts`](extensions/shofer/src/services/helper-agent/directory-tree.ts:1)                         | 5a    | 158   | Recursive workspace scan, `find .`-style tree generation, ~10% token cap, common-dir exclusion set                                                                                     |
-| [`src/services/helper-agent/file-watcher.ts`](extensions/shofer/src/services/helper-agent/file-watcher.ts:1)                             | 5a    | 106   | VSCode FileSystemWatcher wrapper, 500ms per-file debounce, worktree + hidden-path skipping                                                                                             |
-| [`src/services/helper-agent/__tests__/conversation-store.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/conversation-store.spec.ts:1) | R |  | Vitest spec for versioned persistence + hash validation.                                                                                                                              |
-| [`src/services/helper-agent/__tests__/question-queue.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/question-queue.spec.ts:1)         | R |  | Vitest spec for FIFO ordering, abort, timeout, bulk cancel.                                                                                                                            |
-| [`src/services/helper-agent/__tests__/context-window.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/context-window.spec.ts:1)         | R |  | Vitest spec for LRU eviction + token-budget enforcement.                                                                                                                              |
-| [`src/core/prompts/tools/native-tools/ask_helper_agent.ts`](extensions/shofer/src/core/prompts/tools/native-tools/ask_helper_agent.ts:1) | 2     | 51    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs                                                                                                         |
-| [`src/core/tools/AskHelperAgentTool.ts`](extensions/shofer/src/core/tools/AskHelperAgentTool.ts:1)                                       | 2     | 102   | BaseTool<"ask_helper_agent"> delegating to HelperAgentManager                                                                                                                          |
-| [`src/core/webview/HelperAgentChatProvider.ts`](extensions/shofer/src/core/webview/HelperAgentChatProvider.ts:1)                         | 5b    | 134   | Read-only WebviewPanel with conversation history, auto-refresh on state changes, accessible via status bar info panel                                                                  |
+| File                                                                                                                                                   | Phase | Lines | Description                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`packages/types/src/helper-agent.ts`](extensions/shofer/packages/types/src/helper-agent.ts:1)                                                         | 1     | 176   | Zod schemas for AgentMessage, FileContextEntry, HelperAgentConfig, QuestionResult, CostTracking; HELPER_AGENT_SYSTEM_PROMPT; all 11 constants                |
+| [`src/services/helper-agent/manager.ts`](extensions/shofer/src/services/helper-agent/manager.ts:1)                                                     | 1, R  | 621   | Singleton-per-workspace orchestrator. Owns lifecycle, config, event emitters; delegates everything else to focused collaborators.                            |
+| [`src/services/helper-agent/conversation-store.ts`](extensions/shofer/src/services/helper-agent/conversation-store.ts:1)                               | R     | 141   | Versioned JSON snapshot persistence. SHA-256 file-context validation on load; ENOENT-safe; discards on version mismatch.                                     |
+| [`src/services/helper-agent/question-queue.ts`](extensions/shofer/src/services/helper-agent/question-queue.ts:1)                                       | R     | 158   | Bounded FIFO with per-entry AbortSignal + timeout. Reentrant-safe drain loop. `cancelAll()` for shutdown.                                                    |
+| [`src/services/helper-agent/context-window.ts`](extensions/shofer/src/services/helper-agent/context-window.ts:1)                                       | R     | 197   | In-memory window for messages + file contexts. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs). Token estimation. |
+| [`src/services/helper-agent/llm-client.ts`](extensions/shofer/src/services/helper-agent/llm-client.ts:1)                                               | R     | 212   | Adapter wrapping `buildApiHandler()`. Maps the helper-agent provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                    |
+| [`src/services/helper-agent/pricing.ts`](extensions/shofer/src/services/helper-agent/pricing.ts:1)                                                     | R     | 48    | Per-model USD cost from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler omits pricing.                            |
+| [`src/services/helper-agent/directory-tree.ts`](extensions/shofer/src/services/helper-agent/directory-tree.ts:1)                                       | 5a    | 158   | Recursive workspace scan, `find .`-style tree generation, ~10% token cap, common-dir exclusion set                                                           |
+| [`src/services/helper-agent/file-watcher.ts`](extensions/shofer/src/services/helper-agent/file-watcher.ts:1)                                           | 5a    | 106   | VSCode FileSystemWatcher wrapper, 500ms per-file debounce, worktree + hidden-path skipping                                                                   |
+| [`src/services/helper-agent/__tests__/conversation-store.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/conversation-store.spec.ts:1) | R     |       | Vitest spec for versioned persistence + hash validation.                                                                                                     |
+| [`src/services/helper-agent/__tests__/question-queue.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/question-queue.spec.ts:1)         | R     |       | Vitest spec for FIFO ordering, abort, timeout, bulk cancel.                                                                                                  |
+| [`src/services/helper-agent/__tests__/context-window.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/context-window.spec.ts:1)         | R     |       | Vitest spec for LRU eviction + token-budget enforcement.                                                                                                     |
+| [`src/core/prompts/tools/native-tools/ask_helper_agent.ts`](extensions/shofer/src/core/prompts/tools/native-tools/ask_helper_agent.ts:1)               | 2     | 51    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs                                                                               |
+| [`src/core/tools/AskHelperAgentTool.ts`](extensions/shofer/src/core/tools/AskHelperAgentTool.ts:1)                                                     | 2     | 102   | BaseTool<"ask_helper_agent"> delegating to HelperAgentManager                                                                                                |
+| [`src/core/webview/HelperAgentChatProvider.ts`](extensions/shofer/src/core/webview/HelperAgentChatProvider.ts:1)                                       | 5b    | 134   | Read-only WebviewPanel with conversation history, auto-refresh on state changes, accessible via status bar info panel                                        |
 
 ### Files Modified (13)
 
-| File                                                    | Phase  | Changes                                                                                 |
-| ------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------- |
-| `packages/types/src/index.ts`                           | 1      | Added `export * from "./helper-agent.js"`                                               |
-| `packages/types/src/tool.ts`                            | 1      | Added `"ask_helper_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`     |
-| `packages/types/src/telemetry.ts`                       | 1      | Added `HELPER_AGENT_ERROR = "Helper Agent Error"` to TelemetryEventName                 |
-| `packages/types/src/global-settings.ts`                 | R      | Added 6 `helperAgent*` keys to `globalSettingsSchema`; 6 `helperAgent*Key` to `GLOBAL_SECRET_KEYS` |
-| `packages/types/src/vscode.ts`                          | R      | Added 5 helper-agent command ids to the typed `commandIds` array                        |
-| `src/shared/tools.ts`                                   | 1, fix | Added `ask_helper_agent` to `NativeToolArgs`; pre-existing fix for `toolParamNames`     |
+| File                                                    | Phase    | Changes                                                                                                                      |
+| ------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `packages/types/src/index.ts`                           | 1        | Added `export * from "./helper-agent.js"`                                                                                    |
+| `packages/types/src/tool.ts`                            | 1        | Added `"ask_helper_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`                                          |
+| `packages/types/src/telemetry.ts`                       | 1        | Added `HELPER_AGENT_ERROR = "Helper Agent Error"` to TelemetryEventName                                                      |
+| `packages/types/src/global-settings.ts`                 | R        | Added 6 `helperAgent*` keys to `globalSettingsSchema`; 6 `helperAgent*Key` to `GLOBAL_SECRET_KEYS`                           |
+| `packages/types/src/vscode.ts`                          | R        | Added 5 helper-agent command ids to the typed `commandIds` array                                                             |
+| `src/shared/tools.ts`                                   | 1, fix   | Added `ask_helper_agent` to `NativeToolArgs`; pre-existing fix for `toolParamNames`                                          |
 | `src/extension.ts`                                      | 1,4,5b,R | Per-workspace activation, disposeAll(), status bar button, chat view import; commands now registered via registerCommands.ts |
-| `src/activate/registerCommands.ts`                      | R      | Registers the 5 helper-agent commands through the typed `commandIds` plumbing           |
-| `src/core/prompts/tools/native-tools/index.ts`          | 2      | Import + registration in `getNativeTools()`                                             |
-| `src/core/assistant-message/presentAssistantMessage.ts` | 2      | Import, description, dispatch case                                                      |
-| `src/core/prompts/tools/filter-tools-for-mode.ts`       | 2      | Added `helperAgentManager` (8th parameter), conditional `ask_helper_agent` exclusion    |
-| `src/core/task/build-tools.ts`                          | 2      | Import `HelperAgentManager`, pass to `filterNativeToolsForMode`                         |
-| `src/core/auto-approval/tools.ts`                       | 2      | Added `askHelperAgent: "ask_helper_agent"` auto-approval entry                          |
-| `src/core/context-tracking/FileContextTracker.ts`       | 5b     | Added `_notifyHelperAgent()` hook on `shofer_edited` events                             |
+| `src/activate/registerCommands.ts`                      | R        | Registers the 5 helper-agent commands through the typed `commandIds` plumbing                                                |
+| `src/core/prompts/tools/native-tools/index.ts`          | 2        | Import + registration in `getNativeTools()`                                                                                  |
+| `src/core/assistant-message/presentAssistantMessage.ts` | 2        | Import, description, dispatch case                                                                                           |
+| `src/core/prompts/tools/filter-tools-for-mode.ts`       | 2        | Added `helperAgentManager` (8th parameter), conditional `ask_helper_agent` exclusion                                         |
+| `src/core/task/build-tools.ts`                          | 2        | Import `HelperAgentManager`, pass to `filterNativeToolsForMode`                                                              |
+| `src/core/auto-approval/tools.ts`                       | 2        | Added `askHelperAgent: "ask_helper_agent"` auto-approval entry                                                               |
+| `src/core/context-tracking/FileContextTracker.ts`       | 5b       | Added `_notifyHelperAgent()` hook on `shofer_edited` events                                                                  |
 
 ### Implementation Deviations from Design
 
@@ -953,14 +953,14 @@ matches the design contract: typed config via `ContextProxy`, typed `CommandId`
 plumbing, the shared `buildApiHandler()` for LLM transport, and dedicated modules
 for conversation storage, the question queue, the context window, and pricing.
 
-| Original Deviation                                                                                | Status   | Resolution                                                                                                                                                          |
-| ------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| All functionality consolidated in `manager.ts` (~1020 lines)                                      | Resolved | Split into focused modules: `conversation-store.ts`, `question-queue.ts`, `context-window.ts`, `llm-client.ts`, `pricing.ts`. `manager.ts` is now a thin orchestrator. |
-| Config read from `vscode.workspace.getConfiguration(...)` + `context.secrets.get()`               | Resolved | Reads/writes go through `ContextProxy.getInstance(context)`. Config keys added to `globalSettingsSchema`; secrets added to `GLOBAL_SECRET_KEYS`.                       |
-| `_callLLM()` did direct `fetch()` calls per provider                                              | Resolved | `HelperAgentLlmClient` wraps the shared `buildApiHandler()`. Streaming-only, abort-aware via `AbortSignal`. Adds OpenRouter + Anthropic without bespoke code.        |
-| Inline `_loadConversation()` / `_saveConversation()`                                              | Resolved | Extracted into `ConversationStore` with versioned snapshot, hash-based file-context validation, and async I/O helpers.                                              |
-| Inline `_questionQueue` array + `_processNextQuestion()`                                          | Resolved | Extracted into `QuestionQueue` with per-entry `AbortSignal`, FIFO processing, queue-size cap, and bulk cancellation.                                                |
-| Commands registered directly in `extension.ts` via `vscode.commands.registerCommand`              | Resolved | Helper agent command IDs added to `commandIds` in `packages/types/src/vscode.ts`; registered in `src/activate/registerCommands.ts` like every other command.        |
+| Original Deviation                                                                   | Status   | Resolution                                                                                                                                                             |
+| ------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All functionality consolidated in `manager.ts` (~1020 lines)                         | Resolved | Split into focused modules: `conversation-store.ts`, `question-queue.ts`, `context-window.ts`, `llm-client.ts`, `pricing.ts`. `manager.ts` is now a thin orchestrator. |
+| Config read from `vscode.workspace.getConfiguration(...)` + `context.secrets.get()`  | Resolved | Reads/writes go through `ContextProxy.getInstance(context)`. Config keys added to `globalSettingsSchema`; secrets added to `GLOBAL_SECRET_KEYS`.                       |
+| `_callLLM()` did direct `fetch()` calls per provider                                 | Resolved | `HelperAgentLlmClient` wraps the shared `buildApiHandler()`. Streaming-only, abort-aware via `AbortSignal`. Adds OpenRouter + Anthropic without bespoke code.          |
+| Inline `_loadConversation()` / `_saveConversation()`                                 | Resolved | Extracted into `ConversationStore` with versioned snapshot, hash-based file-context validation, and async I/O helpers.                                                 |
+| Inline `_questionQueue` array + `_processNextQuestion()`                             | Resolved | Extracted into `QuestionQueue` with per-entry `AbortSignal`, FIFO processing, queue-size cap, and bulk cancellation.                                                   |
+| Commands registered directly in `extension.ts` via `vscode.commands.registerCommand` | Resolved | Helper agent command IDs added to `commandIds` in `packages/types/src/vscode.ts`; registered in `src/activate/registerCommands.ts` like every other command.           |
 
 ### Deferred Items
 

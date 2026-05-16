@@ -391,7 +391,7 @@
 			"description": "Shofer ha raggiunto il limite di costo approvato automaticamente di ${{count}}. Vuoi reimpostare il costo e procedere con l'attività?"
 		}
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Shofer vuole cercare nella base di codice <code>{{query}}</code>",
 		"wantsToSearchWithPath": "Shofer vuole cercare nella base di codice <code>{{query}}</code> in <code>{{path}}</code>",
 		"didSearch_one": "Trovato 1 risultato",

@@ -52,7 +52,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "tools-only",
 					name: "Tools Only",
 					roleDefinition: "A mode with only tools_allowed.",
-					tools_allowed: ["read_file", "search_files"],
+					tools_allowed: ["read_file", "grep_search"],
 					groups: ["read"],
 				},
 			],

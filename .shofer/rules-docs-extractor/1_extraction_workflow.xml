@@ -17,7 +17,7 @@
     <step number="2">
       <title>Discover Code</title>
       <actions>
-        <action>Use codebase_search to find relevant files</action>
+        <action>Use rag_search to find relevant files</action>
         <action>Identify entry points, components, and related code</action>
         <action>Map the boundaries of the feature</action>
       </actions>

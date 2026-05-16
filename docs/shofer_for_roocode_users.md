@@ -161,27 +161,27 @@ Twelve native tools were implemented to provide functionality on par with Copilo
 
 See [`native_tools.md`](native_tools.md) for the complete tool reference.
 
-| Tool                                                                              | Description                                                                                                                                                                                     |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`codebase_search_with_lsp`](../src/core/task/tools/CodebaseSearchWithLspTool.ts) | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
-| [`create_new_workspace`](../src/core/task/tools/CreateNewWorkspaceTool.ts)        | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
-| [`fetch_web_page`](../src/core/task/tools/FetchWebPageTool.ts)                    | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
-| [`execute_command`](../src/core/task/tools/ExecuteCommandTool.ts)                 | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
-| [`list_files`](../src/core/task/tools/ListFilesTool.ts)                           | List directory contents with recursive option.                                                                                                                                                  |
-| [`search_files`](../src/core/task/tools/SearchFilesTool.ts)                       | Regex/literal search across files with context display (using VS Code's native search API). See [`search_files-tool.md`](search_files-tool.md).                                                 |
-| [`read_file`](../src/core/task/tools/ReadFileTool.ts)                             | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
-| [`write_to_file`](../src/core/task/tools/WriteToFileTool.ts)                      | Write complete file content, with automatic directory creation.                                                                                                                                 |
-| [`apply_diff`](../src/core/task/tools/ApplyDiffTool.ts)                           | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
-| [`insert_edit`](../src/core/task/tools/InsertEditTool.ts)                         | Insert text at a specific line/column position.                                                                                                                                                 |
-| [`rename_symbol`](../src/core/task/tools/RenameSymbolTool.ts)                     | Rename a symbol and all its references via LSP.                                                                                                                                                 |
-| [`list_code_usages`](../src/core/task/tools/ListCodeUsagesTool.ts)                | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
-| **[`sed`](../src/core/task/tools/SedTool.ts)**                                    | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
-| **[`file`](../src/core/task/tools/FileTool.ts)**                                  | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
-| **[`set_task_title`](../src/core/task/tools/SetTaskTitleTool.ts)**                | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
-| [`skills`](../packages/types/src/tool.ts)                                         | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
-| **[`give_feedback`](../src/core/task/tools/GiveFeedbackTool.ts)**                 | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
+| Tool                                                                       | Description                                                                                                                                                                                     |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`lsp_search`](../src/core/task/tools/LspSearchTool.ts)                    | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
+| [`create_new_workspace`](../src/core/task/tools/CreateNewWorkspaceTool.ts) | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
+| [`fetch_web_page`](../src/core/task/tools/FetchWebPageTool.ts)             | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
+| [`execute_command`](../src/core/task/tools/ExecuteCommandTool.ts)          | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
+| [`list_files`](../src/core/task/tools/ListFilesTool.ts)                    | List directory contents with recursive option.                                                                                                                                                  |
+| [`grep_search`](../src/core/task/tools/GrepSearchTool.ts)                  | Regex/literal search across files with context display (using VS Code's native search API). See [`grep_search-tool.md`](grep_search-tool.md).                                                   |
+| [`read_file`](../src/core/task/tools/ReadFileTool.ts)                      | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
+| [`write_to_file`](../src/core/task/tools/WriteToFileTool.ts)               | Write complete file content, with automatic directory creation.                                                                                                                                 |
+| [`apply_diff`](../src/core/task/tools/ApplyDiffTool.ts)                    | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
+| [`insert_edit`](../src/core/task/tools/InsertEditTool.ts)                  | Insert text at a specific line/column position.                                                                                                                                                 |
+| [`rename_symbol`](../src/core/task/tools/RenameSymbolTool.ts)              | Rename a symbol and all its references via LSP.                                                                                                                                                 |
+| [`list_code_usages`](../src/core/task/tools/ListCodeUsagesTool.ts)         | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
+| **[`sed`](../src/core/task/tools/SedTool.ts)**                             | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
+| **[`file`](../src/core/task/tools/FileTool.ts)**                           | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
+| **[`set_task_title`](../src/core/task/tools/SetTaskTitleTool.ts)**         | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
+| [`skills`](../packages/types/src/tool.ts)                                  | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
+| **[`give_feedback`](../src/core/task/tools/GiveFeedbackTool.ts)**          | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
 
-> 📸 TODO: screenshot of `codebase_search_with_lsp` results in chat
+> 📸 TODO: screenshot of `lsp_search` results in chat
 
 ---
 
@@ -245,11 +245,11 @@ The mode system was extended with scoped tool groups, per-task mode binding, and
 
 ### What Was Built
 
-| Feature                               | Description                                                                                                                                                                                                           |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scoped group entries**              | Mode groups now support `allowed`/`denied` lists per group, enabling fine-grained control. Example: a mode can allow `read` group tools but deny `search_files` specifically. See [`tool_access.md`](tool_access.md). |
-| **Per-task mode binding**             | Each task has its own mode, sticky for its lifetime. Switching tasks restores that task's mode. Starting a new task lets you choose a different mode without affecting running tasks.                                 |
-| **Sticky mode across focus switches** | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                       |
+| Feature                               | Description                                                                                                                                                                                                          |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scoped group entries**              | Mode groups now support `allowed`/`denied` lists per group, enabling fine-grained control. Example: a mode can allow `read` group tools but deny `grep_search` specifically. See [`tool_access.md`](tool_access.md). |
+| **Per-task mode binding**             | Each task has its own mode, sticky for its lifetime. Switching tasks restores that task's mode. Starting a new task lets you choose a different mode without affecting running tasks.                                |
+| **Sticky mode across focus switches** | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                      |
 
 > 📸 TODO: screenshot of mode selector dropdown showing scoped group configuration
 
@@ -394,7 +394,7 @@ These are deliberate design decisions that changed the default behavior or appea
 | [`file-change-tracking.md`](file-change-tracking.md)               | File changes panel and tracking specification    |
 | [`message_queue.md`](message_queue.md)                             | Message queue, Send Now, and per-task drafts     |
 | [`native_tools.md`](native_tools.md)                               | Complete native tools reference                  |
-| [`search_files-tool.md`](search_files-tool.md)                     | Unified search_files tool specification          |
+| [`grep_search-tool.md`](grep_search-tool.md)                       | Unified grep_search tool specification           |
 | [`shofer_special_files.md`](shofer_special_files.md)               | Special files and directories Shofer recognizes  |
 | [`skills.md`](skills.md)                                           | Skills system architecture                       |
 | [`submodule-support.md`](submodule-support.md)                     | Nested git / submodule checkpoint support        |

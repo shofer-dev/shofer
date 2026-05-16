@@ -13,7 +13,7 @@ Inspired by: https://github.com/DiscreteTom/vscode-ripgrep-utils
 Key components:
 1. getBinPath: Locates the ripgrep binary within the VSCode installation.
 2. execRipgrep: Executes the ripgrep command and returns the output.
-3. regexSearchFiles: The main function that performs regex searches on files.
+3. regexGrepSearch: The main function that performs regex searches on files.
    - Parameters:
      * cwd: The current working directory (for relative path calculation)
      * directoryPath: The directory to search in
@@ -27,7 +27,7 @@ The search results include:
 - Matches formatted with pipe characters for easy reading
 
 Usage example:
-const results = await regexSearchFiles('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts');
+const results = await regexGrepSearch('/path/to/cwd', '/path/to/search', 'TODO:', '*.ts');
 
 rel/path/to/app.ts
 │----
@@ -136,7 +136,7 @@ async function execRipgrep(bin: string, args: string[]): Promise<string> {
 	})
 }
 
-export async function regexSearchFiles(
+export async function regexGrepSearch(
 	cwd: string,
 	directoryPath: string,
 	regex: string,

@@ -27,7 +27,7 @@ export function getToolCategory(toolName: string): ToolCategory {
 		"writeToFile",
 	]
 
-	const searchTools = ["searchFiles", "search_files", "codebaseSearch", "codebase_search"]
+	const searchTools = ["grepSearch", "grep_search", "ragSearch", "rag_search"]
 	const commandTools = ["execute_command", "executeCommand"]
 	const modeTools = ["switchMode", "switch_mode", "newTask", "new_task", "finishTask"]
 	const completionTools = ["attempt_completion", "attemptCompletion", "ask_followup_question", "askFollowupQuestion"]

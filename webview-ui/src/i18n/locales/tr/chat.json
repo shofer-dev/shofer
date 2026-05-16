@@ -392,7 +392,7 @@
 			"button": "Sıfırla ve Devam Et"
 		}
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Shofer kod tabanında <code>{{query}}</code> aramak istiyor",
 		"wantsToSearchWithPath": "Shofer <code>{{path}}</code> içinde kod tabanında <code>{{query}}</code> aramak istiyor",
 		"didSearch_one": "1 sonuç bulundu",

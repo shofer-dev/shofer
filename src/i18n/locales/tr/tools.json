@@ -8,7 +8,7 @@
 	},
 	"toolRepetitionLimitReached": "Shofer bir döngüye takılmış gibi görünüyor, aynı eylemi ({{toolName}}) tekrar tekrar deniyor. Bu, mevcut stratejisinde bir sorun olduğunu gösterebilir. Görevi yeniden ifade etmeyi, daha spesifik talimatlar vermeyi veya onu farklı bir yaklaşıma yönlendirmeyi düşünün.",
 	"unknownToolError": "Shofer bilinmeyen bir araç kullanmaya çalıştı: \"{{toolName}}\". Yeniden deneniyor...",
-	"codebaseSearch": {
+	"ragSearch": {
 		"approval": "Kod tabanında '{{query}}' aranıyor..."
 	},
 	"newTask": {

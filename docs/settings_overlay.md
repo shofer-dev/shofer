@@ -669,7 +669,7 @@ The final list of tools sent to the LLM is computed by
 all native tools
   ∩  (mode.groups ∪ mode.tools_allowed ∪ ALWAYS_AVAILABLE_TOOLS)
   −  mode.tools_denied
-  −  feature-disabled tools (codebase_search, update_todo_list,
+  −  feature-disabled tools (rag_search, update_todo_list,
                               generate_image, run_slash_command,
                               access_mcp_resource if no MCP resources)
   −  global  disabledTools  (Settings → Tools)

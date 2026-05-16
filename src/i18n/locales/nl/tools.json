@@ -8,7 +8,7 @@
 	},
 	"toolRepetitionLimitReached": "Shofer lijkt vast te zitten in een lus, waarbij hij herhaaldelijk dezelfde actie ({{toolName}}) probeert. Dit kan duiden op een probleem met de huidige strategie. Overweeg de taak te herformuleren, specifiekere instructies te geven of Shofer naar een andere aanpak te leiden.",
 	"unknownToolError": "Shofer probeerde een onbekende tool te gebruiken: \"{{toolName}}\". Opnieuw proberen...",
-	"codebaseSearch": {
+	"ragSearch": {
 		"approval": "Zoeken naar '{{query}}' in codebase..."
 	},
 	"newTask": {

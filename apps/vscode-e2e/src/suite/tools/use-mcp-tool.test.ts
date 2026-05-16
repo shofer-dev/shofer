@@ -198,7 +198,7 @@ suite.skip("Shofer use_mcp_tool Tool", function () {
 			const currentContent = document.getText()
 			const modifiedContent = currentContent.replace(
 				'"alwaysAllow": []',
-				'"alwaysAllow": ["read_file", "read_multiple_files", "write_file", "edit_file", "create_directory", "list_directory", "directory_tree", "move_file", "search_files", "get_file_info", "list_allowed_directories"]',
+				'"alwaysAllow": ["read_file", "read_multiple_files", "write_file", "edit_file", "create_directory", "list_directory", "directory_tree", "move_file", "grep_search", "get_file_info", "list_allowed_directories"]',
 			)
 
 			const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length))

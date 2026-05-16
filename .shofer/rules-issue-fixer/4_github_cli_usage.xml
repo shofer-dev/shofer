@@ -64,7 +64,7 @@
     
     <command name="gh_search_code">
       <purpose>Search for code patterns on GitHub</purpose>
-      <when>Use to supplement local codebase_search</when>
+      <when>Use to supplement local rag_search</when>
       <syntax>gh search code "[search-query]" --repo [owner]/[repo]</syntax>
       <example>
         <execute_command>

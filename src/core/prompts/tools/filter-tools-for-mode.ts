@@ -216,7 +216,7 @@ export function applyModelToolCustomization(
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
  * @param experiments - Experiment flags
- * @param codeIndexManager - Code index manager for codebase_search feature check
+ * @param codeIndexManager - Code index manager for rag_search feature check
  * @param settings - Additional settings for tool filtering (includes modelInfo for model-specific customization)
  * @param mcpHub - MCP hub for checking available resources
  * @returns Filtered array of tools allowed for the mode
@@ -268,12 +268,12 @@ export function filterNativeToolsForMode(
 	)
 	allowedToolNames = customizedTools
 
-	// Conditionally exclude codebase_search if feature is disabled or not configured
+	// Conditionally exclude rag_search if feature is disabled or not configured
 	if (
 		!codeIndexManager ||
 		!(codeIndexManager.isFeatureEnabled && codeIndexManager.isFeatureConfigured && codeIndexManager.isInitialized)
 	) {
-		allowedToolNames.delete("codebase_search")
+		allowedToolNames.delete("rag_search")
 	}
 
 	// Conditionally exclude ask_helper_agent if helper agent is not available
@@ -350,7 +350,7 @@ function hasAnyMcpResources(mcpHub: McpHub): boolean {
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
  * @param experiments - Experiment flags
- * @param codeIndexManager - Code index manager for codebase_search feature check
+ * @param codeIndexManager - Code index manager for rag_search feature check
  * @param settings - Additional settings for tool filtering
  * @returns true if the tool is allowed in the mode, false otherwise
  */
@@ -367,7 +367,7 @@ export function isToolAllowedInMode(
 	// Check if it's an always-available tool
 	if (ALWAYS_AVAILABLE_TOOLS.includes(toolName)) {
 		// But still check for conditional exclusions
-		if (toolName === "codebase_search") {
+		if (toolName === "rag_search") {
 			return !!(
 				codeIndexManager &&
 				codeIndexManager.isFeatureEnabled &&
@@ -408,7 +408,7 @@ export function isToolAllowedInMode(
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
  * @param experiments - Experiment flags
- * @param codeIndexManager - Code index manager for codebase_search feature check
+ * @param codeIndexManager - Code index manager for rag_search feature check
  * @param settings - Additional settings for tool filtering
  * @returns Array of tool names that are available from the group
  */

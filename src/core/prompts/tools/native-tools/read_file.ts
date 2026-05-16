@@ -85,7 +85,7 @@ export function createReadFileTool(options: ReadFileToolOptions = {}): OpenAI.Ch
 		anchor_line: {
 			type: "integer",
 			description:
-				"1-based line number to anchor the extraction. REQUIRED for meaningful indentation mode results. The extractor finds the semantic block (function, method, class) containing this line and returns it completely. Without anchor_line, indentation mode defaults to line 1 and returns only imports/header content. Obtain anchor_line from: search results, error stack traces, definition lookups, codebase_search results, or condensed file summaries (e.g., '14--28 | export class UserService' means anchor_line=14).",
+				"1-based line number to anchor the extraction. REQUIRED for meaningful indentation mode results. The extractor finds the semantic block (function, method, class) containing this line and returns it completely. Without anchor_line, indentation mode defaults to line 1 and returns only imports/header content. Obtain anchor_line from: search results, error stack traces, definition lookups, rag_search results, or condensed file summaries (e.g., '14--28 | export class UserService' means anchor_line=14).",
 		},
 		max_levels: {
 			type: "integer",

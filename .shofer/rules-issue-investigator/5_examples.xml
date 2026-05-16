@@ -38,9 +38,9 @@
       <step number="3">
           <description>Perform initial codebase search using keywords "login", "authentication", "silent fail".</description>
           <tool_use><![CDATA[
-<codebase_search>
+<rag_search>
 <query>user login authentication silent fail</query>
-</codebase_search>
+</rag_search>
           ]]></tool_use>
           <analysis>The search results point to `src/auth/login.ts` as a highly relevant file.</analysis>
       </step>
@@ -60,9 +60,9 @@
       <step number="5">
           <description>Attempt to disprove the hypothesis by looking for other error handling mechanisms.</description>
           <tool_use><![CDATA[
-<codebase_search>
+<rag_search>
 <query>global error handling middleware Express</query>
-</codebase_search>
+</rag_search>
           ]]></tool_use>
           <analysis>No global error handling middleware seems to be in use that would override this local empty catch block. The hypothesis stands.</analysis>
       </step>

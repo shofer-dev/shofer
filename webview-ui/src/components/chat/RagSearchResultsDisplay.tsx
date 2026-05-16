@@ -1,8 +1,8 @@
 import React, { useState } from "react"
-import CodebaseSearchResult from "./CodebaseSearchResult"
+import RagSearchResult from "./RagSearchResult"
 import { Trans } from "react-i18next"
 
-interface CodebaseSearchResultsDisplayProps {
+interface RagSearchResultsDisplayProps {
 	results: Array<{
 		filePath: string
 		score: number
@@ -12,28 +12,28 @@ interface CodebaseSearchResultsDisplayProps {
 	}>
 }
 
-const CodebaseSearchResultsDisplay: React.FC<CodebaseSearchResultsDisplayProps> = ({ results }) => {
-	const [codebaseSearchResultsExpanded, setCodebaseSearchResultsExpanded] = useState(false)
+const RagSearchResultsDisplay: React.FC<RagSearchResultsDisplayProps> = ({ results }) => {
+	const [ragSearchResultsExpanded, setRagSearchResultsExpanded] = useState(false)
 
 	return (
 		<div className="flex flex-col -mt-4 gap-1">
 			<div
-				onClick={() => setCodebaseSearchResultsExpanded(!codebaseSearchResultsExpanded)}
+				onClick={() => setRagSearchResultsExpanded(!ragSearchResultsExpanded)}
 				className="cursor-pointer flex items-center justify-between px-2 py-2 border bg-[var(--vscode-editor-background)] border-[var(--vscode-editorGroup-border)]">
 				<span>
 					<Trans
-						i18nKey="chat:codebaseSearch.didSearch"
+						i18nKey="chat:ragSearch.didSearch"
 						count={results.length}
 						values={{ count: results.length }}
 					/>
 				</span>
-				<span className={`codicon codicon-chevron-${codebaseSearchResultsExpanded ? "up" : "down"}`}></span>
+				<span className={`codicon codicon-chevron-${ragSearchResultsExpanded ? "up" : "down"}`}></span>
 			</div>
 
-			{codebaseSearchResultsExpanded && (
+			{ragSearchResultsExpanded && (
 				<div className="flex flex-col gap-1">
 					{results.map((result, idx) => (
-						<CodebaseSearchResult
+						<RagSearchResult
 							key={idx}
 							filePath={result.filePath}
 							score={result.score}
@@ -49,4 +49,4 @@ const CodebaseSearchResultsDisplay: React.FC<CodebaseSearchResultsDisplayProps> 
 	)
 }
 
-export default CodebaseSearchResultsDisplay
+export default RagSearchResultsDisplay

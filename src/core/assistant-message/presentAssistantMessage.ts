@@ -23,7 +23,7 @@ import { editTool } from "../tools/EditTool"
 import { searchReplaceTool } from "../tools/SearchReplaceTool"
 import { editFileTool } from "../tools/EditFileTool"
 import { applyPatchTool } from "../tools/ApplyPatchTool"
-import { searchFilesTool } from "../tools/SearchFilesTool"
+import { grepSearchTool } from "../tools/GrepSearchTool"
 import { executeCommandTool } from "../tools/ExecuteCommandTool"
 import { useMcpToolTool } from "../tools/UseMcpToolTool"
 import { accessMcpResourceTool } from "../tools/accessMcpResourceTool"
@@ -39,8 +39,8 @@ import { skillsTool } from "../tools/SkillsTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
-import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
-import { codebaseSearchWithLspTool } from "../tools/CodebaseSearchWithLspTool"
+import { ragSearchTool } from "../tools/RagSearchTool"
+import { lspSearchTool } from "../tools/LspSearchTool"
 import { askHelperAgentTool } from "../tools/AskHelperAgentTool"
 import { createDirectoryTool } from "../tools/CreateDirectoryTool"
 import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool"
@@ -363,7 +363,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					case "apply_diff":
 						// Native-only: tool args are structured (no XML payloads).
 						return block.params?.path ? `[${block.name} for '${block.params.path}']` : `[${block.name}]`
-					case "search_files":
+					case "grep_search":
 						return `[${block.name} for '${block.params.query}'${
 							block.params.fileTypes
 								? ` in '${block.params.fileTypes}'`
@@ -396,11 +396,11 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} to '${block.params.title}']`
 					case "give_feedback":
 						return `[${block.name}]`
-					case "codebase_search":
+					case "rag_search":
 						return `[${block.name} for '${block.params.query}']`
 					case "ask_helper_agent":
 						return `[${block.name} for '${block.params.question}']`
-					case "codebase_search_with_lsp":
+					case "lsp_search":
 						return `[${block.name} for '${block.params.query}']`
 					case "read_command_output":
 						return `[${block.name} for '${block.params.artifact_id}']`
@@ -819,8 +819,8 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult,
 					})
 					break
-				case "codebase_search":
-					await codebaseSearchTool.handle(shofer, block as ToolUse<"codebase_search">, {
+				case "rag_search":
+					await ragSearchTool.handle(shofer, block as ToolUse<"rag_search">, {
 						askApproval,
 						handleError,
 						pushToolResult,
@@ -833,15 +833,15 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult,
 					})
 					break
-				case "codebase_search_with_lsp":
-					await codebaseSearchWithLspTool.handle(shofer, block as ToolUse<"codebase_search_with_lsp">, {
+				case "lsp_search":
+					await lspSearchTool.handle(shofer, block as ToolUse<"lsp_search">, {
 						askApproval,
 						handleError,
 						pushToolResult,
 					})
 					break
-				case "search_files":
-					await searchFilesTool.handle(shofer, block as ToolUse<"search_files">, {
+				case "grep_search":
+					await grepSearchTool.handle(shofer, block as ToolUse<"grep_search">, {
 						askApproval,
 						handleError,
 						pushToolResult,

@@ -371,14 +371,14 @@ describe("convertAnthropicMessageToGemini", () => {
 
 	it("should handle tool names with hyphens using toolIdToName map", () => {
 		const toolIdToName = new Map<string, string>()
-		toolIdToName.set("search-files-123", "search-files")
+		toolIdToName.set("grep-search-123", "grep-search")
 
 		const anthropicMessage: Anthropic.Messages.MessageParam = {
 			role: "user",
 			content: [
 				{
 					type: "tool_result",
-					tool_use_id: "search-files-123",
+					tool_use_id: "grep-search-123",
 					content: "found files",
 				},
 			],
@@ -392,9 +392,9 @@ describe("convertAnthropicMessageToGemini", () => {
 				parts: [
 					{
 						functionResponse: {
-							name: "search-files",
+							name: "grep-search",
 							response: {
-								name: "search-files",
+								name: "grep-search",
 								content: "found files",
 							},
 						},

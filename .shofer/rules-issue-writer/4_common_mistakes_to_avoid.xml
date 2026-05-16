@@ -77,8 +77,8 @@
     <mistake>Skipping semantic search and jumping straight to assumptions</mistake>
     <impact>Leads to misclassification and inaccurate context</impact>
     <correct_approach>
-      - Start with codebase_search on extracted keywords
-      - Refine with search_files for exact strings (errors, component names, flags)
+      - Start with rag_search on extracted keywords
+      - Refine with grep_search for exact strings (errors, component names, flags)
       - read_file only as needed to verify behavior; keep evidence internal
       - Early-stop when hits converge or you can name the exact feature/component
       - Escalate-once if signals conflict (one refined pass), then proceed

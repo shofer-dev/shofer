@@ -8,7 +8,7 @@ import { ShoferEventName, type ShoferMessage } from "@shofer/types"
 import { waitFor, sleep } from "../utils"
 import { setDefaultSuiteTimeout } from "../test-utils"
 
-suite.skip("Shofer search_files Tool", function () {
+suite.skip("Shofer grep_search Tool", function () {
 	setDefaultSuiteTimeout(this)
 
 	let workspaceDir: string
@@ -205,7 +205,7 @@ logging:
 			testFiles.readmeFile,
 			`# Search Files Test Project
 
-This project contains various file types for testing the search_files functionality.
+This project contains various file types for testing the grep_search functionality.
 
 ## File Types Included
 
@@ -303,9 +303,9 @@ The search should find matches across different file types and provide context f
 			// Check for tool execution and capture results
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
-				if (text.includes("search_files")) {
+				if (text.includes("grep_search")) {
 					toolExecuted = true
-					console.log("search_files tool executed:", text.substring(0, 200))
+					console.log("grep_search tool executed:", text.substring(0, 200))
 
 					// Extract search results from the tool execution
 					try {
@@ -344,7 +344,7 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created test files in the workspace including a JavaScript file named "${jsFileName}" that contains function definitions like "calculateTotal" and "validateUser". Use the search_files tool with the regex pattern "function\\s+\\w+" to find all function declarations in JavaScript files. The files exist in the workspace directory.`,
+				text: `I have created test files in the workspace including a JavaScript file named "${jsFileName}" that contains function definitions like "calculateTotal" and "validateUser". Use the grep_search tool with the regex pattern "function\\s+\\w+" to find all function declarations in JavaScript files. The files exist in the workspace directory.`,
 			})
 
 			console.log("Task ID:", taskId)
@@ -352,8 +352,8 @@ The search should find matches across different file types and provide context f
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed
-			assert.ok(toolExecuted, "The search_files tool should have been executed")
+			// Verify the grep_search tool was executed
+			assert.ok(toolExecuted, "The grep_search tool should have been executed")
 
 			// Verify search results were captured and contain expected content
 			assert.ok(searchResults, "Search results should have been captured from tool execution")
@@ -415,9 +415,9 @@ The search should find matches across different file types and provide context f
 			// Check for tool execution
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
-				if (text.includes("search_files")) {
+				if (text.includes("grep_search")) {
 					toolExecuted = true
-					console.log("search_files tool executed for TODO search")
+					console.log("grep_search tool executed for TODO search")
 				}
 			}
 		}
@@ -441,14 +441,14 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created test files in the workspace that contain TODO comments in JavaScript, TypeScript, and text files. Use the search_files tool with the regex pattern "TODO.*" to find all TODO items across all file types. The files exist in the workspace directory.`,
+				text: `I have created test files in the workspace that contain TODO comments in JavaScript, TypeScript, and text files. Use the grep_search tool with the regex pattern "TODO.*" to find all TODO items across all file types. The files exist in the workspace directory.`,
 			})
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed
-			assert.ok(toolExecuted, "The search_files tool should have been executed")
+			// Verify the grep_search tool was executed
+			assert.ok(toolExecuted, "The grep_search tool should have been executed")
 
 			// Verify the AI found TODO comments
 			const completionMessage = messages.find(
@@ -482,9 +482,9 @@ The search should find matches across different file types and provide context f
 			// Check for tool execution with file pattern
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
-				if (text.includes("search_files") && text.includes("*.ts")) {
+				if (text.includes("grep_search") && text.includes("*.ts")) {
 					toolExecuted = true
-					console.log("search_files tool executed with TypeScript filter")
+					console.log("grep_search tool executed with TypeScript filter")
 				}
 			}
 		}
@@ -509,14 +509,14 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `I have created test files in the workspace including a TypeScript file named "${tsFileName}" that contains interface definitions like "User" and "Product". Use the search_files tool with the regex pattern "interface\\s+\\w+" and file pattern "*.ts" to find interfaces only in TypeScript files. The files exist in the workspace directory.`,
+				text: `I have created test files in the workspace including a TypeScript file named "${tsFileName}" that contains interface definitions like "User" and "Product". Use the grep_search tool with the regex pattern "interface\\s+\\w+" and file pattern "*.ts" to find interfaces only in TypeScript files. The files exist in the workspace directory.`,
 			})
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed with file pattern
-			assert.ok(toolExecuted, "The search_files tool should have been executed with *.ts pattern")
+			// Verify the grep_search tool was executed with file pattern
+			assert.ok(toolExecuted, "The grep_search tool should have been executed with *.ts pattern")
 
 			// Verify the AI found interface definitions
 			const completionMessage = messages.find(
@@ -548,9 +548,9 @@ The search should find matches across different file types and provide context f
 			// Check for tool execution with JSON file pattern
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
-				if (text.includes("search_files") && text.includes("*.json")) {
+				if (text.includes("grep_search") && text.includes("*.json")) {
 					toolExecuted = true
-					console.log("search_files tool executed for JSON configuration search")
+					console.log("grep_search tool executed for JSON configuration search")
 				}
 			}
 		}
@@ -574,14 +574,14 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for configuration keys in JSON files. Use the search_files tool with the regex pattern '"\\w+":\\s*' and file pattern "*.json" to find all configuration keys in JSON files.`,
+				text: `Search for configuration keys in JSON files. Use the grep_search tool with the regex pattern '"\\w+":\\s*' and file pattern "*.json" to find all configuration keys in JSON files.`,
 			})
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed
-			assert.ok(toolExecuted, "The search_files tool should have been executed with JSON filter")
+			// Verify the grep_search tool was executed
+			assert.ok(toolExecuted, "The grep_search tool should have been executed with JSON filter")
 
 			// Verify the AI found configuration keys
 			const completionMessage = messages.find(
@@ -616,9 +616,9 @@ The search should find matches across different file types and provide context f
 			// Check for tool execution
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
-				if (text.includes("search_files")) {
+				if (text.includes("grep_search")) {
 					toolExecuted = true
-					console.log("search_files tool executed for nested directory search")
+					console.log("grep_search tool executed for nested directory search")
 				}
 			}
 		}
@@ -642,14 +642,14 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for utility functions in the current directory and subdirectories. Use the search_files tool with the regex pattern "function\\s+(format|debounce)" to find utility functions like formatCurrency and debounce.`,
+				text: `Search for utility functions in the current directory and subdirectories. Use the grep_search tool with the regex pattern "function\\s+(format|debounce)" to find utility functions like formatCurrency and debounce.`,
 			})
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed
-			assert.ok(toolExecuted, "The search_files tool should have been executed")
+			// Verify the grep_search tool was executed
+			assert.ok(toolExecuted, "The grep_search tool should have been executed")
 
 			// Verify the AI found utility functions in nested directories
 			const completionMessage = messages.find(
@@ -682,11 +682,11 @@ The search should find matches across different file types and provide context f
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
 				if (
-					text.includes("search_files") &&
+					text.includes("grep_search") &&
 					(text.includes("import|export") || text.includes("(import|export)"))
 				) {
 					toolExecuted = true
-					console.log("search_files tool executed with complex regex pattern")
+					console.log("grep_search tool executed with complex regex pattern")
 				}
 			}
 		}
@@ -710,14 +710,14 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for import and export statements in JavaScript and TypeScript files. Use the search_files tool with the regex pattern "(import|export).*" and file pattern "*.{js,ts}" to find all import/export statements.`,
+				text: `Search for import and export statements in JavaScript and TypeScript files. Use the grep_search tool with the regex pattern "(import|export).*" and file pattern "*.{js,ts}" to find all import/export statements.`,
 			})
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed
-			assert.ok(toolExecuted, "The search_files tool should have been executed with complex regex")
+			// Verify the grep_search tool was executed
+			assert.ok(toolExecuted, "The grep_search tool should have been executed with complex regex")
 
 			// Verify the AI found import/export statements
 			const completionMessage = messages.find(
@@ -750,9 +750,9 @@ The search should find matches across different file types and provide context f
 			// Check for tool execution and capture results
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
-				if (text.includes("search_files")) {
+				if (text.includes("grep_search")) {
 					toolExecuted = true
-					console.log("search_files tool executed for no-match search")
+					console.log("grep_search tool executed for no-match search")
 
 					// Extract search results from the tool execution
 					try {
@@ -795,14 +795,14 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for a pattern that doesn't exist in any files. Use the search_files tool with the regex pattern "nonExistentPattern12345" to search for something that won't be found.`,
+				text: `Search for a pattern that doesn't exist in any files. Use the grep_search tool with the regex pattern "nonExistentPattern12345" to search for something that won't be found.`,
 			})
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed
-			assert.ok(toolExecuted, "The search_files tool should have been executed")
+			// Verify the grep_search tool was executed
+			assert.ok(toolExecuted, "The grep_search tool should have been executed")
 
 			// Verify search results were captured and show no matches
 			assert.ok(searchResults, "Search results should have been captured from tool execution")
@@ -877,9 +877,9 @@ The search should find matches across different file types and provide context f
 			// Check for tool execution
 			if (message.type === "say" && message.say === "api_req_started") {
 				const text = message.text || ""
-				if (text.includes("search_files") && (text.includes("class") || text.includes("async"))) {
+				if (text.includes("grep_search") && (text.includes("class") || text.includes("async"))) {
 					toolExecuted = true
-					console.log("search_files tool executed for class/method search")
+					console.log("grep_search tool executed for class/method search")
 				}
 			}
 		}
@@ -903,14 +903,14 @@ The search should find matches across different file types and provide context f
 					alwaysAllowReadOnly: true,
 					alwaysAllowReadOnlyOutsideWorkspace: true,
 				},
-				text: `Search for class definitions and async methods in TypeScript files. Use the search_files tool with the regex pattern "(class\\s+\\w+|async\\s+\\w+)" and file pattern "*.ts" to find classes and async methods.`,
+				text: `Search for class definitions and async methods in TypeScript files. Use the grep_search tool with the regex pattern "(class\\s+\\w+|async\\s+\\w+)" and file pattern "*.ts" to find classes and async methods.`,
 			})
 
 			// Wait for task completion
 			await waitFor(() => taskCompleted, { timeout: 60_000 })
 
-			// Verify the search_files tool was executed
-			assert.ok(toolExecuted, "The search_files tool should have been executed")
+			// Verify the grep_search tool was executed
+			assert.ok(toolExecuted, "The grep_search tool should have been executed")
 
 			// Verify the AI found class definitions and async methods
 			const completionMessage = messages.find(

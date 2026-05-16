@@ -9,17 +9,17 @@ Shofer uses a single unified ToolGroup system as the **single source of truth** 
 
 ## The 9 Categories
 
-| #   | Category        | Purpose                                              | Example tools                                                                                           |
-| --- | --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 1   | `read`          | Read-only data access                                | `read_file`, `search_files`, `list_files`, `codebase_search`, `ide_file_read`, `ide_get_viewport_state` |
-| 2   | `write`         | Content mutations — file creation, editing, patching | `apply_diff`, `write_to_file`, `insert_edit`, `rename_symbol`                                           |
-| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `sleep`, `ide_panel_open`, `ide_editor_goto_line`             |
-| 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                          |
-| 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                                   |
-| 6   | `mode`          | Mode switching and task lifecycle                    | `switch_mode`, `new_task`                                                                               |
-| 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `list_background_tasks`                                           |
-| 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                                 |
-| 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools without a `group` field land here)                                         |
+| #   | Category        | Purpose                                              | Example tools                                                                                     |
+| --- | --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1   | `read`          | Read-only data access                                | `read_file`, `grep_search`, `list_files`, `rag_search`, `ide_file_read`, `ide_get_viewport_state` |
+| 2   | `write`         | Content mutations — file creation, editing, patching | `apply_diff`, `write_to_file`, `insert_edit`, `rename_symbol`                                     |
+| 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `sleep`, `ide_panel_open`, `ide_editor_goto_line`       |
+| 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                    |
+| 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                             |
+| 6   | `mode`          | Mode switching and task lifecycle                    | `switch_mode`, `new_task`                                                                         |
+| 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `list_background_tasks`                                     |
+| 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                           |
+| 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools without a `group` field land here)                                   |
 
 ## Where Each Tool Gets Its Group
 
@@ -29,7 +29,7 @@ Each native tool is assigned to a group in [`TOOL_GROUPS`](../packages/types/src
 
 ```typescript
 export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
-    read:        { tools: ["read_file", "search_files", ...] },
+    read:        { tools: ["read_file", "grep_search", ...] },
     write:       { tools: ["apply_diff", "write_to_file", ...], customTools: [...] },
     execute:     { tools: ["execute_command", "read_command_output", "sleep"] },
     browser:     { tools: [] },  // external LM tools from browser-tools
@@ -45,8 +45,8 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 
 Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer reads this configuration at runtime via `resolveExternalLmToolGroup()` in [`build-tools.ts`](../src/core/task/build-tools.ts).
 
-| Extension               | Config namespace                  | Tool prefix |
-| ----------------------- | --------------------------------- | ----------- |
+| Extension              | Config namespace                 | Tool prefix |
+| ---------------------- | -------------------------------- | ----------- |
 | `shofer-vscode-tools`  | `shofer.vscodeTools.toolGroups`  | `ide_`      |
 | `shofer-browser-tools` | `shofer.browserTools.toolGroups` | `browser_`  |
 

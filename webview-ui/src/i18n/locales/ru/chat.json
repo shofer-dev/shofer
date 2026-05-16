@@ -392,7 +392,7 @@
 			"description": "Ру достиг автоматически утвержденного лимита расходов в размере ${{count}}. Хотите сбросить расходы и продолжить выполнение задачи?"
 		}
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Shofer хочет выполнить поиск в кодовой базе по <code>{{query}}</code>",
 		"wantsToSearchWithPath": "Shofer хочет выполнить поиск в кодовой базе по <code>{{query}}</code> в <code>{{path}}</code>",
 		"didSearch_one": "Найден 1 результат",

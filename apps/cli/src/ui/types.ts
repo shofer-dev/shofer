@@ -3,7 +3,7 @@ import type { ShoferAsk, ShoferSay, TodoItem } from "@shofer/types"
 export type MessageRole = "system" | "user" | "assistant" | "tool" | "thinking"
 
 export interface ToolData {
-	/** Tool identifier (e.g., "readFile", "appliedDiff", "searchFiles") */
+	/** Tool identifier (e.g., "readFile", "appliedDiff", "grepSearch") */
 	tool: string
 
 	// File operation fields

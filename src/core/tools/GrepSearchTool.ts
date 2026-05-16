@@ -1,5 +1,5 @@
 /**
- * SearchFilesTool — Performs regex/literal search across files using ripgrep.
+ * GrepSearchTool — Performs regex/literal search across files using ripgrep.
  *
  * Backend: ripgrep (executed as a child process, discovered via @vscode/ripgrep).
  * Rationale: VS Code's `workspace.findTextInFiles` API was found to have an incomplete
@@ -35,7 +35,7 @@ import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
-interface SearchFilesParams {
+interface GrepSearchParams {
 	path: string
 	query: string
 	fileTypes?: string | null
@@ -261,10 +261,10 @@ function parseRipgrepOutput(output: string): RipgrepFileResult[] {
 	return results
 }
 
-export class SearchFilesTool extends BaseTool<"search_files"> {
-	readonly name = "search_files" as const
+export class GrepSearchTool extends BaseTool<"grep_search"> {
+	readonly name = "grep_search" as const
 
-	async execute(params: SearchFilesParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+	async execute(params: GrepSearchParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		const relDirPath = params.path
@@ -280,17 +280,17 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 
 		if (!relDirPath) {
 			task.consecutiveMistakeCount++
-			task.recordToolError("search_files")
+			task.recordToolError("grep_search")
 			task.didToolFailInCurrentTurn = true
-			pushToolResult(await task.sayAndCreateMissingParamError("search_files", "path"))
+			pushToolResult(await task.sayAndCreateMissingParamError("grep_search", "path"))
 			return
 		}
 
 		if (!query) {
 			task.consecutiveMistakeCount++
-			task.recordToolError("search_files")
+			task.recordToolError("grep_search")
 			task.didToolFailInCurrentTurn = true
-			pushToolResult(await task.sayAndCreateMissingParamError("search_files", "query"))
+			pushToolResult(await task.sayAndCreateMissingParamError("grep_search", "query"))
 			return
 		}
 
@@ -300,7 +300,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		const isOutsideWorkspace = isPathOutsideWorkspace(resolvedPath)
 
 		const sharedMessageProps: ShoferSayTool = {
-			tool: "searchFiles",
+			tool: "grepSearch",
 			path: getReadablePath(task.cwd, relDirPath),
 			regex: query,
 			filePattern: fileTypes ?? undefined,
@@ -463,7 +463,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		return header + fileBlocks.join("\n\n")
 	}
 
-	override async handlePartial(task: Task, block: ToolUse<"search_files">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"grep_search">): Promise<void> {
 		const relDirPath = block.params.path
 		const query = block.params.query
 
@@ -471,7 +471,7 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
 
 		const sharedMessageProps: ShoferSayTool = {
-			tool: "searchFiles",
+			tool: "grepSearch",
 			path: getReadablePath(task.cwd, relDirPath ?? ""),
 			regex: query ?? "",
 			filePattern: (block.nativeArgs?.fileTypes as string) ?? "",
@@ -483,4 +483,4 @@ export class SearchFilesTool extends BaseTool<"search_files"> {
 	}
 }
 
-export const searchFilesTool = new SearchFilesTool()
+export const grepSearchTool = new GrepSearchTool()

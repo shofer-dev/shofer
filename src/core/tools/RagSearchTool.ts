@@ -10,34 +10,34 @@ import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
-interface CodebaseSearchParams {
+interface RagSearchParams {
 	query: string
 	path?: string
 }
 
-export class CodebaseSearchTool extends BaseTool<"codebase_search"> {
-	readonly name = "codebase_search" as const
+export class RagSearchTool extends BaseTool<"rag_search"> {
+	readonly name = "rag_search" as const
 
-	async execute(params: CodebaseSearchParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+	async execute(params: RagSearchParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 		const { query, path: directoryPrefix } = params
 
 		const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
 
 		if (!workspacePath) {
-			await handleError("codebase_search", new Error("Could not determine workspace path."))
+			await handleError("rag_search", new Error("Could not determine workspace path."))
 			return
 		}
 
 		if (!query) {
 			task.consecutiveMistakeCount++
 			task.didToolFailInCurrentTurn = true
-			pushToolResult(await task.sayAndCreateMissingParamError("codebase_search", "query"))
+			pushToolResult(await task.sayAndCreateMissingParamError("rag_search", "query"))
 			return
 		}
 
 		const sharedMessageProps = {
-			tool: "codebaseSearch",
+			tool: "ragSearch",
 			query: query,
 			path: directoryPrefix,
 			isOutsideWorkspace: false,
@@ -106,8 +106,8 @@ export class CodebaseSearchTool extends BaseTool<"codebase_search"> {
 				})
 			})
 
-			const payload = { tool: "codebaseSearch", content: jsonResult }
-			await task.say("codebase_search_result", JSON.stringify(payload))
+			const payload = { tool: "ragSearch", content: jsonResult }
+			await task.say("rag_search_result", JSON.stringify(payload))
 
 			const output = `Query: ${query}
 Results:
@@ -124,16 +124,16 @@ Code Chunk: ${result.codeChunk}
 
 			pushToolResult(output)
 		} catch (error: any) {
-			await handleError("codebase_search", error)
+			await handleError("rag_search", error)
 		}
 	}
 
-	override async handlePartial(task: Task, block: ToolUse<"codebase_search">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"rag_search">): Promise<void> {
 		const query: string | undefined = block.params.query
 		const directoryPrefix: string | undefined = block.params.path
 
 		const sharedMessageProps = {
-			tool: "codebaseSearch",
+			tool: "ragSearch",
 			query: query,
 			path: directoryPrefix,
 			isOutsideWorkspace: false,
@@ -143,4 +143,4 @@ Code Chunk: ${result.codeChunk}
 	}
 }
 
-export const codebaseSearchTool = new CodebaseSearchTool()
+export const ragSearchTool = new RagSearchTool()
