@@ -26,12 +26,13 @@
 
 import type { Anthropic } from "@anthropic-ai/sdk"
 
-import type { HelperAgentConfig, HelperAgentProvider } from "@shofer/types"
-import type { ProviderSettings, ProviderName } from "@shofer/types"
+import type { HelperAgentConfig } from "@shofer/types"
 
 import { buildApiHandler, type ApiHandler } from "../../api"
-import { logger } from "../../utils/logging"
 import { estimateUsdCost } from "./pricing"
+import { logger } from "../../utils/logging"
+
+const LOG_PREFIX = "[HelperAgent.LlmClient]"
 
 /** Synthetic taskId used for `ApiHandlerCreateMessageMetadata`. */
 const HELPER_AGENT_TASK_ID = "shofer-helper-agent"
@@ -57,7 +58,7 @@ export class HelperAgentLlmClient {
 
 	constructor(config: HelperAgentConfig) {
 		this._config = config
-		this._handler = buildApiHandler(toProviderSettings(config), { taskId: HELPER_AGENT_TASK_ID })
+		this._handler = buildApiHandler(config.providerSettings, { taskId: HELPER_AGENT_TASK_ID })
 	}
 
 	/**
@@ -71,38 +72,72 @@ export class HelperAgentLlmClient {
 	public async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<ChatResult> {
 		const { systemPrompt, conversation } = splitSystemAndConversation(messages)
 
+		const modelInfo = (() => {
+			try {
+				const m = this._handler.getModel()
+				return `${m.id} ctx=${m.info?.contextWindow ?? "?"}`
+			} catch (e) {
+				return `(getModel failed: ${e instanceof Error ? e.message : String(e)})`
+			}
+		})()
+		logger.info(
+			`${LOG_PREFIX} chat() start provider=${this._config.providerSettings.apiProvider} model=${modelInfo} systemLen=${systemPrompt.length} convLen=${conversation.length}`,
+		)
+
 		let answer = ""
 		let promptTokens = 0
 		let completionTokens = 0
 
-		const stream = this._handler.createMessage(systemPrompt, conversation, { taskId: HELPER_AGENT_TASK_ID })
+		const startedAt = Date.now()
+		let stream
+		try {
+			stream = this._handler.createMessage(systemPrompt, conversation, { taskId: HELPER_AGENT_TASK_ID })
+		} catch (e) {
+			logger.error(
+				`${LOG_PREFIX} chat() createMessage threw synchronously: ${e instanceof Error ? e.message : String(e)}\n${e instanceof Error ? (e.stack ?? "") : ""}`,
+			)
+			throw e
+		}
 
-		for await (const chunk of stream) {
-			if (signal?.aborted) {
-				const err = new Error("Helper agent LLM call aborted")
-				err.name = "AbortError"
-				throw err
-			}
+		try {
+			for await (const chunk of stream) {
+				if (signal?.aborted) {
+					logger.warn(`${LOG_PREFIX} chat() aborted via signal after ${Date.now() - startedAt}ms`)
+					const err = new Error("Helper agent LLM call aborted")
+					err.name = "AbortError"
+					throw err
+				}
 
-			switch (chunk.type) {
-				case "text":
-					answer += chunk.text
-					break
-				case "usage":
-					promptTokens += chunk.inputTokens ?? 0
-					completionTokens += chunk.outputTokens ?? 0
-					break
-				case "error":
-					throw new Error(`Helper agent LLM error: ${chunk.message ?? chunk.error}`)
-				default:
-					// reasoning / tool_call / grounding chunks are not used by
-					// the helper agent (it is a chat-only Q&A surface).
-					break
+				switch (chunk.type) {
+					case "text":
+						answer += chunk.text
+						break
+					case "usage":
+						promptTokens += chunk.inputTokens ?? 0
+						completionTokens += chunk.outputTokens ?? 0
+						break
+					case "error":
+						logger.error(
+							`${LOG_PREFIX} chat() received error chunk: ${JSON.stringify({ message: (chunk as any).message, error: (chunk as any).error })}`,
+						)
+						throw new Error(`Helper agent LLM error: ${chunk.message ?? chunk.error}`)
+					default:
+						break
+				}
 			}
+		} catch (e) {
+			logger.error(
+				`${LOG_PREFIX} chat() stream FAILED after ${Date.now() - startedAt}ms answerLen=${answer.length} error=${e instanceof Error ? e.message : String(e)}\n${e instanceof Error ? (e.stack ?? "") : ""}`,
+			)
+			throw e
 		}
 
 		const totalTokens = promptTokens + completionTokens
 		const estimatedCostUSD = estimateUsdCost(this._handler, promptTokens, completionTokens)
+
+		logger.info(
+			`${LOG_PREFIX} chat() done in ${Date.now() - startedAt}ms answerLen=${answer.length} prompt=${promptTokens} completion=${completionTokens} cost=$${estimatedCostUSD.toFixed(6)}`,
+		)
 
 		return {
 			answer,
@@ -138,75 +173,4 @@ function splitSystemAndConversation(messages: ChatMessage[]): {
 	}
 
 	return { systemPrompt: systemParts.join("\n\n"), conversation }
-}
-
-/**
- * Map the Helper Agent's curated provider list to a `ProviderSettings`
- * record understood by `buildApiHandler`. The Helper Agent intentionally
- * exposes a small subset of providers; this is the single place that
- * knows how to translate them.
- */
-function toProviderSettings(config: HelperAgentConfig): ProviderSettings {
-	const { provider, modelId, apiKey, baseUrl } = config
-
-	const apiProvider = mapProvider(provider)
-
-	switch (apiProvider) {
-		case "openai":
-			return {
-				apiProvider,
-				openAiApiKey: apiKey,
-				openAiBaseUrl: baseUrl,
-				openAiModelId: modelId,
-				openAiStreamingEnabled: true,
-			}
-		case "gemini":
-			return {
-				apiProvider,
-				geminiApiKey: apiKey,
-				googleGeminiBaseUrl: baseUrl,
-				apiModelId: modelId,
-			}
-		case "anthropic":
-			return {
-				apiProvider,
-				apiKey,
-				anthropicBaseUrl: baseUrl,
-				apiModelId: modelId,
-			}
-		case "ollama":
-			return {
-				apiProvider,
-				ollamaApiKey: apiKey,
-				ollamaBaseUrl: baseUrl,
-				ollamaModelId: modelId,
-			}
-		case "openrouter":
-			return {
-				apiProvider,
-				openRouterApiKey: apiKey,
-				openRouterModelId: modelId,
-			}
-		default: {
-			// Should be unreachable; mapProvider only returns the cases above.
-			logger.warn(`[HelperAgent.LlmClient] Unhandled provider mapping: ${apiProvider}`)
-			return { apiProvider }
-		}
-	}
-}
-
-function mapProvider(provider: HelperAgentProvider): ProviderName {
-	switch (provider) {
-		case "openai":
-		case "openai-compatible":
-			return "openai"
-		case "gemini":
-			return "gemini"
-		case "anthropic":
-			return "anthropic"
-		case "ollama":
-			return "ollama"
-		case "openrouter":
-			return "openrouter"
-	}
 }

@@ -24,6 +24,7 @@ import {
 	Trash2,
 	Settings,
 	Play,
+	Square,
 	Info,
 	Cpu,
 	Database,
@@ -33,7 +34,7 @@ import {
 } from "lucide-react"
 
 import { vscode } from "@src/utils/vscode"
-import { Popover, PopoverContent, PopoverTrigger, Button } from "@src/components/ui"
+import { Popover, PopoverContent, Button } from "@src/components/ui"
 
 export interface HelperAgentStatusData {
 	state: string
@@ -57,18 +58,39 @@ interface HelperAgentPopoverProps {
 	status: HelperAgentStatusData
 }
 
-const sendAction = (action: "chat" | "clear" | "configure" | "start") => {
+const sendAction = (action: "chat" | "clear" | "start" | "stop") => {
 	vscode.postMessage({ type: "helperAgentAction", text: action })
+}
+
+/**
+ * Open the in-app SettingsView at the Helper Agent section.
+ * Uses the standard `settingsButtonClicked` action route consumed by App.tsx
+ * (see ChatView's AutoApproveDropdown / TooManyToolsWarning for precedent),
+ * NOT VS Code's native settings UI — helperAgent settings live in
+ * ContextProxy, not in package.json `configuration` contributions.
+ */
+const openHelperAgentSettings = () => {
+	window.postMessage({ type: "action", action: "settingsButtonClicked", values: { section: "helperAgent" } }, "*")
 }
 
 export const HelperAgentPopover: React.FC<HelperAgentPopoverProps> = ({ children, status }) => {
 	const usage = status.contextUsage
 	const fillPct = usage ? (usage.fillFraction * 100).toFixed(1) : "0.0"
 	const cost = status.costSnapshot
+	// Controlled so action handlers can dismiss the popover after dispatching.
+	const [open, setOpen] = React.useState(false)
+	const runAction = (fn: () => void) => () => {
+		fn()
+		setOpen(false)
+	}
+	// Any state in which the manager is alive (initializing, processing, or
+	// ready to take questions) is considered "running" so the toggle reads
+	// "Stop Agent". Standby/Error → "Start Agent".
+	const running = status.state === "Ready" || status.state === "Busy" || status.state === "Initializing"
 
 	return (
-		<Popover>
-			<PopoverTrigger asChild>{children}</PopoverTrigger>
+		<Popover open={open} onOpenChange={setOpen}>
+			{children}
 			<PopoverContent
 				align="end"
 				side="top"
@@ -136,22 +158,22 @@ export const HelperAgentPopover: React.FC<HelperAgentPopoverProps> = ({ children
 					<ActionButton
 						icon={<MessageCircle className="w-3.5 h-3.5" />}
 						label="View Chat"
-						onClick={() => sendAction("chat")}
+						onClick={runAction(() => sendAction("chat"))}
 					/>
 					<ActionButton
 						icon={<Trash2 className="w-3.5 h-3.5" />}
 						label="Clear Context"
-						onClick={() => sendAction("clear")}
+						onClick={runAction(() => sendAction("clear"))}
 					/>
 					<ActionButton
 						icon={<Settings className="w-3.5 h-3.5" />}
-						label="Configure API"
-						onClick={() => sendAction("configure")}
+						label="Configure"
+						onClick={runAction(openHelperAgentSettings)}
 					/>
 					<ActionButton
-						icon={<Play className="w-3.5 h-3.5" />}
-						label="Start Agent"
-						onClick={() => sendAction("start")}
+						icon={running ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+						label={running ? "Stop Agent" : "Start Agent"}
+						onClick={runAction(() => sendAction(running ? "stop" : "start"))}
 					/>
 				</div>
 			</PopoverContent>

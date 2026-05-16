@@ -2541,6 +2541,10 @@ export class ShoferProvider
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
 			lockApiConfigAcrossModes,
+			helperAgentEnabled,
+			helperAgentApiConfigId,
+			helperAgentMaxContextTokens,
+			helperAgentContextFillThreshold,
 		} = await this.getState()
 
 		let cloudOrganizations: any[] = []
@@ -2686,6 +2690,10 @@ export class ShoferProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
+			helperAgentEnabled: helperAgentEnabled ?? true,
+			helperAgentApiConfigId,
+			helperAgentMaxContextTokens,
+			helperAgentContextFillThreshold,
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
@@ -2905,6 +2913,10 @@ export class ShoferProvider
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
+			helperAgentEnabled: stateValues.helperAgentEnabled,
+			helperAgentApiConfigId: stateValues.helperAgentApiConfigId,
+			helperAgentMaxContextTokens: stateValues.helperAgentMaxContextTokens,
+			helperAgentContextFillThreshold: stateValues.helperAgentContextFillThreshold,
 		}
 	}
 
