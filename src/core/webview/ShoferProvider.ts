@@ -73,6 +73,7 @@ import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckpointService"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
+import { GitIndexManager } from "../../services/git-index/git-index-manager"
 import { AssistantAgentManager } from "../../services/assistant-agent/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
@@ -137,6 +138,8 @@ export class ShoferProvider
 	private shoferStack: Task[] = []
 	private codeIndexStatusSubscription?: vscode.Disposable
 	private codeIndexManager?: CodeIndexManager
+	private gitIndexStatusSubscription?: vscode.Disposable
+	private gitIndexManager?: GitIndexManager
 	private assistantAgentStatusSubscription?: vscode.Disposable
 	private assistantAgentManager?: AssistantAgentManager
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
@@ -912,6 +915,9 @@ export class ShoferProvider
 		// Initialize code index status subscription for the current workspace.
 		this.updateCodeIndexStatusSubscription()
 
+		// Initialize git index status subscription for the current workspace.
+		this.updateGitIndexStatusSubscription()
+
 		// Initialize assistant agent status subscription.
 		this.updateAssistantAgentStatusSubscription()
 
@@ -920,6 +926,7 @@ export class ShoferProvider
 		const activeEditorSubscription = vscode.window.onDidChangeActiveTextEditor(() => {
 			// Update subscription when workspace might have changed.
 			this.updateCodeIndexStatusSubscription()
+			this.updateGitIndexStatusSubscription()
 		})
 		this.webviewDisposables.push(activeEditorSubscription)
 
@@ -958,6 +965,7 @@ export class ShoferProvider
 					this.clearWebviewResources()
 					// Reset current workspace manager reference when view is disposed
 					this.codeIndexManager = undefined
+					this.gitIndexManager = undefined
 					this.assistantAgentManager = undefined
 				}
 			},
@@ -2671,6 +2679,12 @@ export class ShoferProvider
 				codebaseIndexBedrockRegion: codebaseIndexConfig?.codebaseIndexBedrockRegion,
 				codebaseIndexBedrockProfile: codebaseIndexConfig?.codebaseIndexBedrockProfile,
 				codebaseIndexOpenRouterSpecificProvider: codebaseIndexConfig?.codebaseIndexOpenRouterSpecificProvider,
+				codebaseIndexGitEnabled: codebaseIndexConfig?.codebaseIndexGitEnabled ?? false,
+				codebaseIndexGitMaxHistoryDays: codebaseIndexConfig?.codebaseIndexGitMaxHistoryDays ?? 365,
+				codebaseIndexGitMaxCommits: codebaseIndexConfig?.codebaseIndexGitMaxCommits ?? 10000,
+				codebaseIndexGitPollIntervalMinutes: codebaseIndexConfig?.codebaseIndexGitPollIntervalMinutes ?? 5,
+				codebaseIndexGitSearchMinScore: codebaseIndexConfig?.codebaseIndexGitSearchMinScore ?? 0.4,
+				codebaseIndexGitSearchMaxResults: codebaseIndexConfig?.codebaseIndexGitSearchMaxResults ?? 20,
 			},
 			// Only set mdmCompliant if there's an actual MDM policy
 			// undefined means no MDM policy, true means compliant, false means non-compliant
@@ -2902,6 +2916,14 @@ export class ShoferProvider
 				codebaseIndexBedrockProfile: stateValues.codebaseIndexConfig?.codebaseIndexBedrockProfile,
 				codebaseIndexOpenRouterSpecificProvider:
 					stateValues.codebaseIndexConfig?.codebaseIndexOpenRouterSpecificProvider,
+				codebaseIndexGitEnabled: stateValues.codebaseIndexConfig?.codebaseIndexGitEnabled ?? false,
+				codebaseIndexGitMaxHistoryDays: stateValues.codebaseIndexConfig?.codebaseIndexGitMaxHistoryDays ?? 365,
+				codebaseIndexGitMaxCommits: stateValues.codebaseIndexConfig?.codebaseIndexGitMaxCommits ?? 10000,
+				codebaseIndexGitPollIntervalMinutes:
+					stateValues.codebaseIndexConfig?.codebaseIndexGitPollIntervalMinutes ?? 5,
+				codebaseIndexGitSearchMinScore: stateValues.codebaseIndexConfig?.codebaseIndexGitSearchMinScore ?? 0.4,
+				codebaseIndexGitSearchMaxResults:
+					stateValues.codebaseIndexConfig?.codebaseIndexGitSearchMaxResults ?? 20,
 			},
 			profileThresholds: stateValues.profileThresholds ?? {},
 			lockApiConfigAcrossModes: this.context.workspaceState.get("lockApiConfigAcrossModes", false),
@@ -3146,6 +3168,64 @@ export class ShoferProvider
 			this.postMessageToWebview({
 				type: "indexingStatusUpdate",
 				values: currentManager.getCurrentStatus(),
+			})
+		}
+	}
+
+	/**
+	 * Updates the git index status subscription to listen to the current workspace manager.
+	 * Follows the same pattern as updateCodeIndexStatusSubscription.
+	 */
+	private updateGitIndexStatusSubscription(): void {
+		const currentManager = GitIndexManager.getInstance(this.context)
+
+		if (currentManager === this.gitIndexManager) {
+			return
+		}
+
+		if (this.gitIndexStatusSubscription) {
+			this.gitIndexStatusSubscription.dispose()
+			this.gitIndexStatusSubscription = undefined
+		}
+
+		this.gitIndexManager = currentManager
+
+		if (currentManager) {
+			this.gitIndexStatusSubscription = currentManager.onProgressUpdate(
+				(update: { systemStatus: string; message?: string }) => {
+					if (currentManager !== GitIndexManager.getInstance(this.context)) {
+						return
+					}
+					this.postMessageToWebview({
+						type: "gitIndexingStatusUpdate",
+						values: {
+							systemStatus: update.systemStatus,
+							message: update.message ?? "",
+							processedItems: 0,
+							totalItems: 0,
+							currentItemUnit: "commits",
+							workspacePath: currentManager.workspacePath,
+						},
+					})
+				},
+			)
+
+			if (this.view) {
+				this.webviewDisposables.push(this.gitIndexStatusSubscription)
+			}
+
+			// Send initial status
+			const status = currentManager.getCurrentStatus()
+			this.postMessageToWebview({
+				type: "gitIndexingStatusUpdate",
+				values: {
+					systemStatus: status.systemStatus,
+					message: status.message ?? "",
+					processedItems: 0,
+					totalItems: 0,
+					currentItemUnit: "commits",
+					workspacePath: currentManager.workspacePath,
+				},
 			})
 		}
 	}

@@ -109,7 +109,7 @@ export class GitIndexManager {
 
 	// --- Instance Members ---
 
-	private readonly workspacePath: string
+	public readonly workspacePath: string
 	private readonly _folderUri: vscode.Uri
 	private readonly context: vscode.ExtensionContext
 
@@ -157,7 +157,6 @@ export class GitIndexManager {
 	public get isFeatureConfigured(): boolean {
 		return this._configManager?.isFeatureConfigured ?? false
 	}
-
 	/** Whether the manager has been initialized successfully. */
 	public get isInitialized(): boolean {
 		return this._isInitialized

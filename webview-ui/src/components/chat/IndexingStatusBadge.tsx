@@ -16,6 +16,22 @@ interface IndexingStatusBadgeProps {
 	className?: string
 }
 
+interface GitIndexingStatus {
+	systemStatus: string
+	message?: string
+	processedItems: number
+	totalItems: number
+	currentItemUnit?: string
+	workspacePath?: string
+}
+
+/**
+ * Displays the combined RAG indexing status (code index + git index) as a
+ * small database icon with a colored dot in the chat toolbar.
+ *
+ * Clicking the badge opens {@link CodeIndexPopover} which now includes both
+ * the code index and git index sections.
+ */
 export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ className }) => {
 	const { t } = useAppTranslation()
 	const { cwd } = useExtensionState()
@@ -27,16 +43,31 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 		currentItemUnit: "items",
 	})
 
+	const [gitIndexingStatus, setGitIndexingStatus] = useState<GitIndexingStatus>({
+		systemStatus: "Standby",
+		processedItems: 0,
+		totalItems: 0,
+		currentItemUnit: "commits",
+	})
+
 	useEffect(() => {
-		// Request initial indexing status.
+		// Request initial indexing status for both indexes.
 		vscode.postMessage({ type: "requestIndexingStatus" })
+		vscode.postMessage({ type: "requestGitIndexingStatus" })
 
 		// Set up message listener for status updates.
-		const handleMessage = (event: MessageEvent<IndexingStatusUpdateMessage>) => {
+		const handleMessage = (
+			event: MessageEvent<IndexingStatusUpdateMessage | { type: string; values: GitIndexingStatus }>,
+		) => {
 			if (event.data.type === "indexingStatusUpdate") {
 				const status = event.data.values
 				if (!status.workspacePath || status.workspacePath === cwd) {
 					setIndexingStatus(status)
+				}
+			} else if (event.data.type === "gitIndexingStatusUpdate") {
+				const gitStatus = event.data.values
+				if (!gitStatus.workspacePath || gitStatus.workspacePath === cwd) {
+					setGitIndexingStatus(gitStatus)
 				}
 			}
 		}
@@ -56,37 +87,74 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 		[indexingStatus.processedItems, indexingStatus.totalItems],
 	)
 
+	/** Derive a combined status for the dot color and tooltip. */
+	const combinedStatus = useMemo(() => {
+		const codeState = indexingStatus.systemStatus
+		const gitState = gitIndexingStatus.systemStatus
+
+		// Priority: Error > Indexing/Stopping > Standby/Indexed
+		if (codeState === "Error" || gitState === "Error") {
+			return { state: "Error" as const, colorClass: "bg-red-500" }
+		}
+		if (codeState === "Indexing" || gitState === "Indexing") {
+			return { state: "Indexing" as const, colorClass: "bg-yellow-500 animate-pulse" }
+		}
+		if (codeState === "Stopping" || gitState === "Stopping") {
+			return { state: "Stopping" as const, colorClass: "bg-amber-500 animate-pulse" }
+		}
+		return { state: "Idle" as const, colorClass: "bg-green-500" }
+	}, [indexingStatus.systemStatus, gitIndexingStatus.systemStatus])
+
 	const tooltipText = useMemo(() => {
+		const parts: string[] = []
+
+		// Code index status
 		switch (indexingStatus.systemStatus) {
 			case "Standby":
-				return t("chat:indexingStatus.ready")
+				parts.push(t("chat:indexingStatus.codeReady"))
+				break
 			case "Indexing":
-				return t("chat:indexingStatus.indexing", { percentage: progressPercentage })
+				parts.push(t("chat:indexingStatus.codeIndexing", { percentage: progressPercentage }))
+				break
 			case "Indexed":
-				return t("chat:indexingStatus.indexed")
+				parts.push(t("chat:indexingStatus.codeIndexed"))
+				break
 			case "Stopping":
-				return t("chat:indexingStatus.stopping")
+				parts.push(t("chat:indexingStatus.codeStopping"))
+				break
 			case "Error":
-				return t("chat:indexingStatus.error")
+				parts.push(t("chat:indexingStatus.codeError"))
+				break
 			default:
-				return t("chat:indexingStatus.status")
-		}
-	}, [indexingStatus.systemStatus, progressPercentage, t])
-
-	const statusColorClass = useMemo(() => {
-		const statusColors = {
-			Standby: "bg-vscode-descriptionForeground/60",
-			Indexing: "bg-yellow-500 animate-pulse",
-			Indexed: "bg-green-500",
-			Stopping: "bg-amber-500 animate-pulse",
-			Error: "bg-red-500",
+				parts.push(t("chat:indexingStatus.codeStatus"))
 		}
 
-		return statusColors[indexingStatus.systemStatus as keyof typeof statusColors] || statusColors.Standby
-	}, [indexingStatus.systemStatus])
+		// Git index status
+		switch (gitIndexingStatus.systemStatus) {
+			case "Standby":
+				parts.push(t("chat:indexingStatus.gitReady"))
+				break
+			case "Indexing":
+				parts.push(t("chat:indexingStatus.gitIndexing"))
+				break
+			case "Indexed":
+				parts.push(t("chat:indexingStatus.gitIndexed"))
+				break
+			case "Stopping":
+				parts.push(t("chat:indexingStatus.gitStopping"))
+				break
+			case "Error":
+				parts.push(t("chat:indexingStatus.gitError"))
+				break
+			default:
+				parts.push(t("chat:indexingStatus.gitStatus"))
+		}
+
+		return parts.join("\n")
+	}, [indexingStatus.systemStatus, gitIndexingStatus.systemStatus, progressPercentage, t])
 
 	return (
-		<CodeIndexPopover indexingStatus={indexingStatus}>
+		<CodeIndexPopover indexingStatus={indexingStatus} gitIndexingStatus={gitIndexingStatus}>
 			<StandardTooltip content={tooltipText}>
 				<PopoverTrigger asChild>
 					<Button
@@ -104,7 +172,7 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 						<span
 							className={cn(
 								"absolute top-0 right-0 w-1.5 h-1.5 rounded-full transition-colors duration-200",
-								statusColorClass,
+								combinedStatus.colorClass,
 							)}
 						/>
 					</Button>

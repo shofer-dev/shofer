@@ -45,6 +45,7 @@ import { type RouterName, toRouterName } from "../../shared/api"
 import { MessageEnhancer } from "./messageEnhancer"
 
 import { CodeIndexManager } from "../../services/code-index/manager"
+import { GitIndexManager } from "../../services/git-index/git-index-manager"
 import { checkExistKey } from "../../shared/checkExistApiConfig"
 import { experimentDefault } from "../../shared/experiments"
 import { Terminal } from "../../integrations/terminal/Terminal"
@@ -2951,6 +2952,100 @@ export const webviewMessageHandler = async (
 						error: error instanceof Error ? error.message : String(error),
 					},
 				})
+			}
+			break
+		}
+		case "startGitIndexing": {
+			try {
+				const manager = GitIndexManager.getInstance(provider.context)
+				if (!manager) {
+					provider.log("Cannot start git indexing: No workspace folder open")
+					return
+				}
+
+				if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
+					await manager.initialize(provider.contextProxy)
+
+					const currentState = manager.state
+					if (currentState === "Standby" || currentState === "Error") {
+						manager.startIndexing()
+					}
+				}
+			} catch (error) {
+				provider.log(`Error starting git indexing: ${error instanceof Error ? error.message : String(error)}`)
+			}
+			break
+		}
+		case "stopGitIndexing": {
+			try {
+				const manager = GitIndexManager.getInstance(provider.context)
+				if (!manager) {
+					provider.log("Cannot stop git indexing: No workspace folder open")
+					return
+				}
+				manager.stopIndexing()
+				provider.postMessageToWebview({
+					type: "gitIndexingStatusUpdate",
+					values: {
+						systemStatus: manager.state,
+						message: "",
+						processedItems: 0,
+						totalItems: 0,
+						currentItemUnit: "commits",
+						workspacePath: manager.workspacePath,
+					},
+				})
+			} catch (error) {
+				provider.log(`Error stopping git indexing: ${error instanceof Error ? error.message : String(error)}`)
+			}
+			break
+		}
+		case "clearGitIndexData": {
+			try {
+				const manager = GitIndexManager.getInstance(provider.context)
+				if (!manager) {
+					provider.log("Cannot clear git index data: No workspace folder open")
+					provider.postMessageToWebview({
+						type: "gitIndexCleared",
+						values: { success: false, error: "No workspace folder open" },
+					})
+					return
+				}
+				await manager.clearIndexData()
+				provider.postMessageToWebview({ type: "gitIndexCleared", values: { success: true } })
+			} catch (error) {
+				provider.log(`Error clearing git index data: ${error instanceof Error ? error.message : String(error)}`)
+				provider.postMessageToWebview({
+					type: "gitIndexCleared",
+					values: {
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				})
+			}
+			break
+		}
+		case "requestGitIndexingStatus": {
+			try {
+				const manager = GitIndexManager.getInstance(provider.context)
+				if (manager) {
+					const status = manager.getCurrentStatus()
+					provider.postMessageToWebview({
+						type: "gitIndexingStatusUpdate",
+						values: {
+							systemStatus: status.systemStatus,
+							message: status.message ?? "",
+							processedItems: 0,
+							totalItems: 0,
+							currentItemUnit: "commits",
+							workspacePath: manager.workspacePath,
+						},
+					})
+				}
+			} catch (error) {
+				provider.log(
+					`Error requesting git indexing status: ${error instanceof Error ? error.message : String(error)}`,
+				)
 			}
 			break
 		}

@@ -11,6 +11,7 @@ import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
 import { handleNewTask } from "./handleTask"
 import { CodeIndexManager } from "../services/code-index/manager"
+import { GitIndexManager } from "../services/git-index/git-index-manager"
 import { AssistantAgentManager } from "../services/assistant-agent/manager"
 import { showAssistantAgentChatPanel } from "../core/webview/AssistantAgentChatProvider"
 import { importSettingsWithFeedback } from "../core/config/importExport"
@@ -277,6 +278,39 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 			values: { section: "assistantAgent" },
 		})
 		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
+	},
+	// ─── Git Index ────────────────────────────────────────────────────────
+	startGitIndexing: async () => {
+		const manager = GitIndexManager.getInstance(context)
+		if (!manager) {
+			vscode.window.showErrorMessage("Cannot start git indexing: No workspace folder open.")
+			return
+		}
+		if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
+			await manager.initialize(provider.contextProxy)
+			manager.startIndexing()
+			vscode.window.showInformationMessage("Git history indexing started.")
+		} else {
+			vscode.window.showWarningMessage(
+				"Git indexing is not enabled or not configured. Check Settings → RAG Indexer.",
+			)
+		}
+	},
+	stopGitIndexing: () => {
+		const manager = GitIndexManager.getInstance(context)
+		if (manager) {
+			manager.stopIndexing()
+			vscode.window.showInformationMessage("Git history indexing stopped.")
+		}
+	},
+	clearGitIndexData: async () => {
+		const manager = GitIndexManager.getInstance(context)
+		if (!manager) {
+			vscode.window.showErrorMessage("Cannot clear git index: No workspace folder open.")
+			return
+		}
+		await manager.clearIndexData()
+		vscode.window.showInformationMessage("Git history index cleared.")
 	},
 })
 

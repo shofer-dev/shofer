@@ -43,6 +43,7 @@
 		"ui": "UI",
 		"experimental": "Experimental",
 		"language": "Language",
+		"codebaseIndex": "RAG Indexer",
 		"about": "About Shofer"
 	},
 	"about": {
@@ -281,7 +282,27 @@
 		"stoppingButton": "Stopping...",
 		"workspaceToggleLabel": "Enable indexing for this workspace",
 		"workspaceDisabledMessage": "Indexing is configured but not enabled for this workspace.",
-		"autoEnableDefaultLabel": "Auto-enable indexing for new workspaces"
+		"autoEnableDefaultLabel": "Auto-enable indexing for new workspaces",
+		"gitHistoryTitle": "Git History",
+		"gitEnableLabel": "Enable git history indexing",
+		"gitIndexedStatus": "Indexed all commits",
+		"gitIndexingStatus": "Indexing commits...",
+		"gitErrorStatus": "Index error",
+		"gitStandbyStatus": "Standby",
+		"gitStartButton": "Start Indexing",
+		"gitStopButton": "Stop Indexing",
+		"gitClearButton": "Clear Index",
+		"gitMaxHistoryDaysLabel": "Max history (days)",
+		"gitMaxCommitsLabel": "Max commits",
+		"gitPollIntervalLabel": "Poll interval (minutes)",
+		"gitSearchMinScoreLabel": "Min similarity score",
+		"gitSearchMaxResultsLabel": "Max search results",
+		"gitClearDialog": {
+			"title": "Clear Git History Index",
+			"description": "This will delete all indexed commit messages from the vector store. This action cannot be undone.",
+			"cancelButton": "Cancel",
+			"confirmButton": "Clear Index"
+		}
 	},
 	"tools": {
 		"description": "Manage which tools are available to the AI assistant. Disabled tools will not be sent to the model and cannot be called during tasks.",

@@ -54,6 +54,11 @@ export const commandIds = [
 	"assistantAgent.clearContext",
 	"assistantAgent.showChat",
 	"assistantAgent.openSettings",
+
+	// Git Index
+	"startGitIndexing",
+	"stopGitIndexing",
+	"clearGitIndexData",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]
