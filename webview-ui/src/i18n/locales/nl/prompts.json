@@ -24,9 +24,14 @@
 		"allowedFiles": "Toegestane bestanden:",
 		"toolNames": {
 			"read": "Bestanden lezen",
-			"edit": "Bestanden bewerken",
-			"command": "Commando's uitvoeren",
-			"mcp": "MCP gebruiken"
+			"mcp": "MCP gebruiken",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "Geen"
 	},

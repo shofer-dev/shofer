@@ -169,8 +169,8 @@ describe("CustomModesSettings", () => {
 		})
 	})
 
-	describe("deprecated tool group migration", () => {
-		it("now keeps valid 'browser' group when validating custom modes settings", () => {
+	describe("canonical tool group validation", () => {
+		it("should accept canonical group names", () => {
 			const result = customModesSettingsSchema.parse({
 				customModes: [
 					{
@@ -184,7 +184,7 @@ describe("CustomModesSettings", () => {
 			expect(result.customModes[0].groups).toEqual(["read", "write"])
 		})
 
-		it("now keeps valid 'browser' in modes (no longer deprecated) in settings", () => {
+		it("should accept multiple modes with browser and execute groups", () => {
 			const result = customModesSettingsSchema.parse({
 				customModes: [
 					{

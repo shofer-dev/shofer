@@ -24,9 +24,14 @@
 		"allowedFiles": "允许操作的文件：",
 		"toolNames": {
 			"read": "读取文件",
-			"edit": "编辑文件",
-			"command": "运行命令",
-			"mcp": "MCP服务"
+			"mcp": "MCP服务",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "无"
 	},

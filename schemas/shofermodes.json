@@ -41,10 +41,7 @@
 					},
 					"source": {
 						"type": "string",
-						"enum": [
-							"global",
-							"project"
-						]
+						"enum": ["global", "project"]
 					},
 					"provider": {
 						"type": "string"
@@ -64,10 +61,7 @@
 										"mode",
 										"subtasks",
 										"questions",
-										"uncategorized",
-										"edit",
-										"command",
-										"modes"
+										"uncategorized"
 									]
 								},
 								{
@@ -86,10 +80,7 @@
 												"mode",
 												"subtasks",
 												"questions",
-												"uncategorized",
-												"edit",
-												"command",
-												"modes"
+												"uncategorized"
 											]
 										},
 										{
@@ -121,26 +112,17 @@
 									"type": "string"
 								}
 							},
-							"required": [
-								"relativePath"
-							],
+							"required": ["relativePath"],
 							"additionalProperties": false
 						}
 					}
 				},
-				"required": [
-					"slug",
-					"name",
-					"roleDefinition",
-					"groups"
-				],
+				"required": ["slug", "name", "roleDefinition", "groups"],
 				"additionalProperties": false
 			}
 		}
 	},
-	"required": [
-		"customModes"
-	],
+	"required": ["customModes"],
 	"additionalProperties": false,
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"$id": "https://github.com/shofer-dev/shofer/blob/main/schemas/shofermodes.json",

@@ -24,9 +24,14 @@
 		"allowedFiles": "Dozwolone pliki:",
 		"toolNames": {
 			"read": "Czytaj pliki",
-			"edit": "Edytuj pliki",
-			"command": "Uruchamiaj polecenia",
-			"mcp": "Używaj MCP"
+			"mcp": "Używaj MCP",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "Brak"
 	},

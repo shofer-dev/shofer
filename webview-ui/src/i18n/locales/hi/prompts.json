@@ -24,9 +24,14 @@
 		"allowedFiles": "अनुमत फाइलें:",
 		"toolNames": {
 			"read": "फाइलें पढ़ें",
-			"edit": "फाइलें संपादित करें",
-			"command": "कमांड्स चलाएँ",
-			"mcp": "MCP का उपयोग करें"
+			"mcp": "MCP का उपयोग करें",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "कोई नहीं"
 	},
