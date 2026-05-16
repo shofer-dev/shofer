@@ -149,7 +149,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			task.consecutiveMistakeCount = 0
 
-			// Apply hard safety cap only.  The parent's resultLength is a soft
+			// Apply hard safety cap only.  The parent's softResultLength is a soft
 			// suggestion communicated via the SUBTASK CONSTRAINTS system prompt —
 			// the subtask should keep its result within budget but we don't
 			// hard-truncate here.  The MAX_SUBTASK_RESULT_LENGTH cap prevents

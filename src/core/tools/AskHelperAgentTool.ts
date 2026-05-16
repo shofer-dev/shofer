@@ -13,7 +13,7 @@ interface AskHelperAgentParams {
 	question: string
 	contextFiles?: string[] | null
 	timeoutMs?: number | null
-	softTimeoutMs?: number | null
+	softTimeoutSec?: number | null
 	softResultLength?: number | null
 }
 
@@ -27,7 +27,7 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 		// model passes for "no value" so the downstream defaults apply.
 		const contextFiles = params.contextFiles ?? undefined
 		const timeoutMs = params.timeoutMs ?? undefined
-		const softTimeoutMs = params.softTimeoutMs ?? undefined
+		const softTimeoutSec = params.softTimeoutSec ?? undefined
 		const softResultLength = params.softResultLength ?? undefined
 
 		const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
@@ -88,12 +88,12 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 			}
 
 			logger.info(
-				`${LOG_PREFIX} -> manager.askQuestion taskId=${task.taskId} softTimeoutMs=${softTimeoutMs ?? "default"} softResultLength=${softResultLength ?? "default"}`,
+				`${LOG_PREFIX} -> manager.askQuestion taskId=${task.taskId} softTimeoutSec=${softTimeoutSec ?? "default"} softResultLength=${softResultLength ?? "default"}`,
 			)
 			const startedAt = Date.now()
 			const result = await manager.askQuestion(question, contextFiles, {
 				timeoutMs,
-				softTimeoutMs,
+				softTimeoutSec,
 				softResultLength,
 			})
 			logger.info(

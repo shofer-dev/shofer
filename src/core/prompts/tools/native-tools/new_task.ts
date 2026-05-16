@@ -16,9 +16,9 @@ const TODOS_PARAMETER_DESCRIPTION = `Optional initial todo list written as a mar
 
 const IS_BACKGROUND_PARAMETER_DESCRIPTION = `When true, start the child task in the background and return immediately without blocking the parent. Defaults to false (synchronous delegation).`
 
-const RESULT_LENGTH_PARAMETER_DESCRIPTION = `Soft suggestion for how many characters the parent is willing to accept as the completion result. The subtask should aim to keep its attempt_completion result within this budget by summarizing concisely, but it is not a hard limit — the parent may handle longer results. Hard safety cap: 100000 characters.`
+const SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION = `Soft suggestion for how many characters the parent is willing to accept as the completion result. The subtask should aim to keep its attempt_completion result within this budget by summarizing concisely, but it is not a hard limit — the parent may handle longer results. Hard safety cap: 100000 characters.`
 
-const ESTIMATED_TIMEOUT_PARAMETER_DESCRIPTION = `Soft guidance (in seconds) for how long the parent expects to wait for this subtask. Not a hard deadline; the parent may wait longer and the child may take longer. Use this to pace your work accordingly.`
+const SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION = `Soft guidance (in seconds) for how long the parent expects to wait for this subtask. Not a hard deadline; the parent may wait longer and the child may take longer. Use this to pace your work accordingly.`
 
 export default {
 	type: "function",
@@ -45,16 +45,16 @@ export default {
 					type: ["boolean", "null"],
 					description: IS_BACKGROUND_PARAMETER_DESCRIPTION,
 				},
-				result_length: {
+				softResultLength: {
 					type: "number",
-					description: RESULT_LENGTH_PARAMETER_DESCRIPTION,
+					description: SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION,
 				},
-				estimated_timeout: {
+				softTimeoutSec: {
 					type: "number",
-					description: ESTIMATED_TIMEOUT_PARAMETER_DESCRIPTION,
+					description: SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION,
 				},
 			},
-			required: ["mode", "message", "todos", "is_background", "result_length", "estimated_timeout"],
+			required: ["mode", "message", "todos", "is_background", "softResultLength", "softTimeoutSec"],
 			additionalProperties: false,
 		},
 	},

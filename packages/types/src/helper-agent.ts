@@ -139,7 +139,7 @@ export const QUESTION_TIMEOUT_MS = 300_000
  * the prompt, NOT a hard cancellation — see {@link QUESTION_TIMEOUT_MS}
  * for the hard limit.
  */
-export const DEFAULT_HELPER_SOFT_TIMEOUT_MS = 60_000
+export const DEFAULT_HELPER_SOFT_TIMEOUT_SEC = 60
 
 /**
  * Default soft cap (characters) recommended to the helper agent for its

@@ -22,8 +22,8 @@ import { MAX_QUESTION_QUEUE_SIZE, QUESTION_TIMEOUT_MS, type QuestionResult } fro
  *  processor so it can embed them in the LLM prompt. NEVER enforced by the
  *  queue itself — the only hard timeout is the per-entry `timeoutMs`. */
 export interface QuestionSoftLimits {
-	/** Recommended max wall time (milliseconds) for the agent to spend. */
-	softTimeoutMs?: number
+	/** Recommended max wall time (seconds) for the agent to spend. */
+	softTimeoutSec?: number
 	/** Recommended max length (characters) of the final answer. */
 	softResultLength?: number
 }
