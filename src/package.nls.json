@@ -43,7 +43,6 @@
 	"settings.enableLlmProviderIntegration.description": "Enable integration with the Shofer LLM Model Provider extension (requires llm-provider to be installed). When enabled, the vscode-lm provider queries shofer.llm.getModelPricing and shofer.llm.getRequestCost for per-token pricing and per-conversation cost tracking — required for cost-limit enforcement and accurate API Cost display. When disabled (default), only token counts are available.",
 	"settings.maximumIndexedFilesForFileSearch.description": "Maximum number of files to index for the @-file search feature. Higher values provide better search results in large projects but may consume more memory. Default: 10000.",
 	"settings.newTaskRequireTodos.description": "Require todos parameter when creating new tasks with the new_task tool",
-	"settings.useAgentRules.description": "Enable loading AGENTS.md files for agent-specific rules (see https://agent-rules.org/)",
 	"settings.vsCodeLmModelSelector.description": "Settings for the VSCode Language Model API",
 	"settings.vsCodeLmModelSelector.family.description": "The family of the language model (e.g., gpt-4)",
 	"settings.vsCodeLmModelSelector.vendor.description": "The vendor of the language model (e.g., copilot)",

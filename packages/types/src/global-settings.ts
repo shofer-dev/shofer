@@ -166,6 +166,7 @@ export const globalSettingsSchema = z.object({
 	maxWorkspaceFiles: z.number().optional(),
 	showShoferIgnoredFiles: z.boolean().optional(),
 	enableSubfolderRules: z.boolean().optional(),
+	useAgentRules: z.boolean().optional(),
 	maxImageFileSize: z.number().optional(),
 	maxTotalImageSize: z.number().optional(),
 
@@ -244,21 +245,21 @@ export const globalSettingsSchema = z.object({
 	 */
 	enableLlmProviderIntegration: z.boolean().optional(),
 
-	// ─── Helper Agent ──────────────────────────────────────────────────
+	// ─── Assistant Agent ──────────────────────────────────────────────────
 	// Persistent codebase Q&A companion. Configuration is stored in
 	// GlobalState (typed via ContextProxy) instead of vscode workspace
 	// configuration so it shares the same lifecycle and migration hooks
 	// as the rest of the extension.
-	helperAgentEnabled: z.boolean().optional(),
+	assistantAgentEnabled: z.boolean().optional(),
 	// ID of the API Configuration profile (managed by ProviderSettingsManager
-	// under Settings → Providers) used for helper-agent LLM calls. The
+	// under Settings → Providers) used for assistant-agent LLM calls. The
 	// profile is the single source of truth for provider/model/credentials.
-	helperAgentApiConfigId: z.string().optional(),
-	// Optional override for the helper-agent context window. When unset,
+	assistantAgentApiConfigId: z.string().optional(),
+	// Optional override for the assistant-agent context window. When unset,
 	// the manager falls back to the model info reported by the resolved
 	// API Configuration's ApiHandler (or DEFAULT_MAX_CONTEXT_TOKENS).
-	helperAgentMaxContextTokens: z.number().int().positive().optional(),
-	helperAgentContextFillThreshold: z.number().min(0).max(1).optional(),
+	assistantAgentMaxContextTokens: z.number().int().positive().optional(),
+	assistantAgentContextFillThreshold: z.number().min(0).max(1).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

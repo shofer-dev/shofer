@@ -18,6 +18,7 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 		experiments,
 		language,
 		enableSubfolderRules,
+		useAgentRules,
 	} = await provider.getState()
 
 	const diffStrategy = new MultiSearchReplaceDiffStrategy()
@@ -54,7 +55,7 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 		shoferIgnoreInstructions,
 		{
 			todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
-			useAgentRules: vscode.workspace.getConfiguration(Package.name).get<boolean>("useAgentRules") ?? true,
+			useAgentRules: useAgentRules ?? true,
 			enableSubfolderRules: enableSubfolderRules ?? false,
 			newTaskRequireTodos: vscode.workspace
 				.getConfiguration(Package.name)

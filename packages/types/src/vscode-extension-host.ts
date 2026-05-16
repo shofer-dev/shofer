@@ -88,7 +88,7 @@ export interface ExtensionMessage {
 		| "singleRouterModelFetchResponse"
 		| "shoferCreditBalance"
 		| "indexingStatusUpdate"
-		| "helperAgentStatusUpdate"
+		| "assistantAgentStatusUpdate"
 		| "indexCleared"
 		| "codebaseIndexConfig"
 		| "marketplaceInstallResult"
@@ -358,10 +358,10 @@ export type ExtensionState = Pick<
 	| "requestDelaySeconds"
 	| "disabledTools"
 	| "defaultCostLimit"
-	| "helperAgentEnabled"
-	| "helperAgentApiConfigId"
-	| "helperAgentMaxContextTokens"
-	| "helperAgentContextFillThreshold"
+	| "assistantAgentEnabled"
+	| "assistantAgentApiConfigId"
+	| "assistantAgentMaxContextTokens"
+	| "assistantAgentContextFillThreshold"
 > & {
 	lockApiConfigAcrossModes?: boolean
 	version: string
@@ -383,6 +383,7 @@ export type ExtensionState = Pick<
 	maxWorkspaceFiles: number // Maximum number of files to include in current working directory details (0-500)
 	showShoferIgnoredFiles: boolean // Whether to show .shoferignore'd files in listings
 	enableSubfolderRules: boolean // Whether to load rules from subdirectories
+	useAgentRules: boolean // Whether to load AGENTS.md files for agent-specific rules
 	maxReadFileLine?: number // Maximum line limit for read_file tool (-1 for default)
 	maxImageFileSize: number // Maximum size of image files to process in MB
 	maxTotalImageSize: number // Maximum total size for all images in a single read operation in MB
@@ -625,8 +626,8 @@ export interface WebviewMessage {
 		| "clearIndexData"
 		| "indexingStatusUpdate"
 		| "indexCleared"
-		| "helperAgentAction"
-		| "requestHelperAgentStatus"
+		| "assistantAgentAction"
+		| "requestAssistantAgentStatus"
 		| "toggleWorkspaceIndexing"
 		| "setAutoEnableDefault"
 		| "focusPanelRequest"
@@ -944,7 +945,7 @@ export interface ShoferSayTool {
 		| "insertEdit"
 		| "removeFile"
 		| "moveFile"
-		| "askHelperAgent"
+		| "askAssistantAgent"
 	path?: string
 	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
 	fileOp?: "rm" | "mv"
@@ -1024,9 +1025,9 @@ export interface ShoferSayTool {
 		status: string
 		created_at?: number
 	}>
-	// Properties for ask_helper_agent. The `question` field above carries the
-	// prompt sent to the helper agent; these carry the answer + metadata that
-	// only become known after the helper agent responds (emitted via a follow-up
+	// Properties for ask_assistant_agent. The `question` field above carries the
+	// prompt sent to the assistant agent; these carry the answer + metadata that
+	// only become known after the assistant agent responds (emitted via a follow-up
 	// `task.say("tool", ...)` once the call returns).
 	answer?: string
 	contextFiles?: string[]
