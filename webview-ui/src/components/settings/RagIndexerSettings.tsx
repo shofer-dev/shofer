@@ -4,6 +4,7 @@ import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { SectionHeader } from "./SectionHeader"
 import { SearchableSetting } from "./SearchableSetting"
+import { CodeIndexConfigForm } from "./CodeIndexConfigForm"
 import { Slider } from "@src/components/ui"
 
 interface CodebaseIndexConfig {
@@ -53,6 +54,12 @@ export const RagIndexerSettings: React.FC<RagIndexerSettingsProps> = ({ codebase
 			<SectionHeader>{t("settings:sections.codebaseIndex")}</SectionHeader>
 
 			<div className="space-y-6">
+				{/* ── Code Index ── */}
+				<div>
+					<h3 className="text-base font-semibold mb-3">{t("settings:codeIndex.title")}</h3>
+					<CodeIndexConfigForm />
+				</div>
+
 				{/* ── Git History Index ── */}
 				<div>
 					<h3 className="text-base font-semibold mb-3">{t("settings:codeIndex.gitHistoryTitle")}</h3>
