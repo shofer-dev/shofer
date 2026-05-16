@@ -1,13 +1,13 @@
 /**
- * HelperAgentSettings — settings tab for the persistent codebase Q&A
- * companion (the "helper agent").
+ * AssistantAgentSettings — settings tab for the persistent codebase Q&A
+ * companion (the "assistant agent").
  *
- * The helper agent does not own its own provider/model/credentials. It
+ * The assistant agent does not own its own provider/model/credentials. It
  * links to one of the API Configuration profiles managed under
  * Settings → Providers (i.e. the same profile system used by the main
  * agent and the condensing pipeline). This tab only lets the user:
  *
- *   - Enable/disable the helper agent.
+ *   - Enable/disable the assistant agent.
  *   - Pick which API Configuration profile it should use.
  *   - Optionally override the context-window size (otherwise the model
  *     info reported by the resolved profile is used).
@@ -33,35 +33,35 @@ interface ApiConfigMeta {
 	modelId?: string
 }
 
-type HelperAgentSettingsProps = HTMLAttributes<HTMLDivElement> & {
-	helperAgentEnabled?: boolean
-	helperAgentApiConfigId?: string
-	helperAgentMaxContextTokens?: number
-	helperAgentContextFillThreshold?: number
+type AssistantAgentSettingsProps = HTMLAttributes<HTMLDivElement> & {
+	assistantAgentEnabled?: boolean
+	assistantAgentApiConfigId?: string
+	assistantAgentMaxContextTokens?: number
+	assistantAgentContextFillThreshold?: number
 	listApiConfigMeta: ApiConfigMeta[]
 	setCachedStateField: SetCachedStateField<
-		| "helperAgentEnabled"
-		| "helperAgentApiConfigId"
-		| "helperAgentMaxContextTokens"
-		| "helperAgentContextFillThreshold"
+		| "assistantAgentEnabled"
+		| "assistantAgentApiConfigId"
+		| "assistantAgentMaxContextTokens"
+		| "assistantAgentContextFillThreshold"
 	>
 }
 
 /** Default context-fill threshold (85%) used when none is configured. */
 const DEFAULT_CONTEXT_FILL_THRESHOLD = 0.85
 
-export const HelperAgentSettings = ({
-	helperAgentEnabled,
-	helperAgentApiConfigId,
-	helperAgentMaxContextTokens,
-	helperAgentContextFillThreshold,
+export const AssistantAgentSettings = ({
+	assistantAgentEnabled,
+	assistantAgentApiConfigId,
+	assistantAgentMaxContextTokens,
+	assistantAgentContextFillThreshold,
 	listApiConfigMeta,
 	setCachedStateField,
 	...props
-}: HelperAgentSettingsProps) => {
+}: AssistantAgentSettingsProps) => {
 	const { t } = useAppTranslation()
 
-	const selectedProfile = listApiConfigMeta.find((c) => c.id === helperAgentApiConfigId)
+	const selectedProfile = listApiConfigMeta.find((c) => c.id === assistantAgentApiConfigId)
 	const profileSummary = selectedProfile
 		? [selectedProfile.apiProvider, selectedProfile.modelId].filter(Boolean).join(" • ")
 		: ""
@@ -71,41 +71,41 @@ export const HelperAgentSettings = ({
 			<SectionHeader>
 				<div className="flex items-center gap-2">
 					<MessageCircle className="w-4" />
-					<div>{t("settings:sections.helperAgent")}</div>
+					<div>{t("settings:sections.assistantAgent")}</div>
 				</div>
 			</SectionHeader>
 
 			<Section>
 				<SearchableSetting
-					settingId="helperAgent-enabled"
-					section="helperAgent"
-					label={t("settings:helperAgent.enabled.label")}>
+					settingId="assistantAgent-enabled"
+					section="assistantAgent"
+					label={t("settings:assistantAgent.enabled.label")}>
 					<VSCodeCheckbox
-						checked={helperAgentEnabled ?? true}
-						onChange={(e: any) => setCachedStateField("helperAgentEnabled", e.target.checked)}
-						data-testid="helper-agent-enabled-checkbox">
-						<span className="font-medium">{t("settings:helperAgent.enabled.label")}</span>
+						checked={assistantAgentEnabled ?? true}
+						onChange={(e: any) => setCachedStateField("assistantAgentEnabled", e.target.checked)}
+						data-testid="assistant-agent-enabled-checkbox">
+						<span className="font-medium">{t("settings:assistantAgent.enabled.label")}</span>
 					</VSCodeCheckbox>
 					<div className="text-vscode-descriptionForeground text-sm mt-1">
-						{t("settings:helperAgent.enabled.description")}
+						{t("settings:assistantAgent.enabled.description")}
 					</div>
 				</SearchableSetting>
 
 				<SearchableSetting
-					settingId="helperAgent-apiConfigId"
-					section="helperAgent"
-					label={t("settings:helperAgent.apiConfigId.label")}>
-					<label className="block font-medium mb-1">{t("settings:helperAgent.apiConfigId.label")}</label>
+					settingId="assistantAgent-apiConfigId"
+					section="assistantAgent"
+					label={t("settings:assistantAgent.apiConfigId.label")}>
+					<label className="block font-medium mb-1">{t("settings:assistantAgent.apiConfigId.label")}</label>
 					<Select
-						value={helperAgentApiConfigId || ""}
-						onValueChange={(value) => setCachedStateField("helperAgentApiConfigId", value)}>
-						<SelectTrigger className="w-full" data-testid="helper-agent-api-config-select">
-							<SelectValue placeholder={t("settings:helperAgent.apiConfigId.placeholder")} />
+						value={assistantAgentApiConfigId || ""}
+						onValueChange={(value) => setCachedStateField("assistantAgentApiConfigId", value)}>
+						<SelectTrigger className="w-full" data-testid="assistant-agent-api-config-select">
+							<SelectValue placeholder={t("settings:assistantAgent.apiConfigId.placeholder")} />
 						</SelectTrigger>
 						<SelectContent>
 							{listApiConfigMeta.length === 0 ? (
 								<SelectItem value="__none__" disabled>
-									{t("settings:helperAgent.apiConfigId.empty")}
+									{t("settings:assistantAgent.apiConfigId.empty")}
 								</SelectItem>
 							) : (
 								listApiConfigMeta.map((config) => (
@@ -118,60 +118,62 @@ export const HelperAgentSettings = ({
 						</SelectContent>
 					</Select>
 					<div className="text-vscode-descriptionForeground text-sm mt-1">
-						{t("settings:helperAgent.apiConfigId.description")}
+						{t("settings:assistantAgent.apiConfigId.description")}
 						{profileSummary ? <div className="mt-1 italic">{profileSummary}</div> : null}
 					</div>
 				</SearchableSetting>
 
 				<SearchableSetting
-					settingId="helperAgent-maxContextTokens"
-					section="helperAgent"
-					label={t("settings:helperAgent.maxContextTokens.label")}>
+					settingId="assistantAgent-maxContextTokens"
+					section="assistantAgent"
+					label={t("settings:assistantAgent.maxContextTokens.label")}>
 					<VSCodeTextField
-						value={helperAgentMaxContextTokens === undefined ? "" : String(helperAgentMaxContextTokens)}
+						value={
+							assistantAgentMaxContextTokens === undefined ? "" : String(assistantAgentMaxContextTokens)
+						}
 						className="w-full"
 						onInput={(e: any) => {
 							const raw = e.target.value as string
 							if (raw.trim() === "") {
-								setCachedStateField("helperAgentMaxContextTokens", undefined as unknown as number)
+								setCachedStateField("assistantAgentMaxContextTokens", undefined as unknown as number)
 								return
 							}
 							const parsed = Number(raw)
 							if (Number.isFinite(parsed) && parsed > 0) {
-								setCachedStateField("helperAgentMaxContextTokens", Math.floor(parsed))
+								setCachedStateField("assistantAgentMaxContextTokens", Math.floor(parsed))
 							}
 						}}
-						placeholder={t("settings:helperAgent.maxContextTokens.placeholder")}
-						data-testid="helper-agent-max-context-tokens-input">
+						placeholder={t("settings:assistantAgent.maxContextTokens.placeholder")}
+						data-testid="assistant-agent-max-context-tokens-input">
 						<label className="block font-medium mb-1">
-							{t("settings:helperAgent.maxContextTokens.label")}
+							{t("settings:assistantAgent.maxContextTokens.label")}
 						</label>
 					</VSCodeTextField>
 					<div className="text-vscode-descriptionForeground text-sm mt-1">
-						{t("settings:helperAgent.maxContextTokens.description")}
+						{t("settings:assistantAgent.maxContextTokens.description")}
 					</div>
 				</SearchableSetting>
 
 				<SearchableSetting
-					settingId="helperAgent-contextFillThreshold"
-					section="helperAgent"
-					label={t("settings:helperAgent.contextFillThreshold.label")}>
+					settingId="assistantAgent-contextFillThreshold"
+					section="assistantAgent"
+					label={t("settings:assistantAgent.contextFillThreshold.label")}>
 					<VSCodeTextField
-						value={String(helperAgentContextFillThreshold ?? DEFAULT_CONTEXT_FILL_THRESHOLD)}
+						value={String(assistantAgentContextFillThreshold ?? DEFAULT_CONTEXT_FILL_THRESHOLD)}
 						className="w-full"
 						onInput={(e: any) => {
 							const parsed = Number(e.target.value)
 							if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 1) {
-								setCachedStateField("helperAgentContextFillThreshold", parsed)
+								setCachedStateField("assistantAgentContextFillThreshold", parsed)
 							}
 						}}
-						data-testid="helper-agent-context-fill-threshold-input">
+						data-testid="assistant-agent-context-fill-threshold-input">
 						<label className="block font-medium mb-1">
-							{t("settings:helperAgent.contextFillThreshold.label")}
+							{t("settings:assistantAgent.contextFillThreshold.label")}
 						</label>
 					</VSCodeTextField>
 					<div className="text-vscode-descriptionForeground text-sm mt-1">
-						{t("settings:helperAgent.contextFillThreshold.description")}
+						{t("settings:assistantAgent.contextFillThreshold.description")}
 					</div>
 				</SearchableSetting>
 			</Section>

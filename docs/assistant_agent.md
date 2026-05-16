@@ -1,8 +1,8 @@
-# Helper Agent — Design & Implementation
+# Assistant Agent — Design & Implementation
 
 ## Purpose
 
-The Helper Agent is a **persistent, long-context LLM companion** that lives alongside the RAG indexer. Unlike per-task agents that are ephemeral and destroyed when a task terminates, the Helper Agent survives across tasks and even VSCode restarts. It runs on a **cheap model with a very large context window**, allowing it to accumulate codebase knowledge over time and answer simple questions that other agents (running in their own tasks) can leverage without re-loading the entire codebase. It is exposed to agents as the `ask_helper_agent` native tool.
+The Assistant Agent is a **persistent, long-context LLM companion** that lives alongside the RAG indexer. Unlike per-task agents that are ephemeral and destroyed when a task terminates, the Assistant Agent survives across tasks and even VSCode restarts. It runs on a **cheap model with a very large context window**, allowing it to accumulate codebase knowledge over time and answer simple questions that other agents (running in their own tasks) can leverage without re-loading the entire codebase. It is exposed to agents as the `ask_assistant_agent` native tool.
 
 The key design principles:
 
@@ -13,19 +13,19 @@ The key design principles:
 - **KV-cache preserving** — the context window is append-only during normal operation. Files are never evicted when modified by tasks; instead a "recently modified" notification is attached to the next question. This keeps the LLM provider's attention cache warm, minimizing token costs and latency.
 - **Cold start** — context window starts empty on first launch; fills organically as tasks ask questions.
 - **Truncation, not summarization** — when the context window fills up, oldest messages are simply dropped. No lossy compression or summarization is ever applied, keeping the remaining context pristine.
-- **Strictly read-only** — the helper agent has **no access** to code-writing tools, CLI commands, or MCP tools. It can only use the "Read" category of native tools (file reading, search, LSP symbol lookup). This is a hard constraint enforced by tool filtering.
-- **Fixed system prompt** — the helper agent's system prompt is internally defined and not user-configurable. It instructs the agent to be a concise, read-only codebase Q&A assistant. The prompt includes a snapshot of the workspace directory/file hierarchy (like `find .` output), capped at ~10% of the context window, with `.shoferignore`-excluded files omitted.
+- **Strictly read-only** — the assistant agent has **no access** to code-writing tools, CLI commands, or MCP tools. It can only use the "Read" category of native tools (file reading, search, LSP symbol lookup). This is a hard constraint enforced by tool filtering.
+- **Fixed system prompt** — the assistant agent's system prompt is internally defined and not user-configurable. It instructs the agent to be a concise, read-only codebase Q&A assistant. The prompt includes a snapshot of the workspace directory/file hierarchy (like `find .` output), capped at ~10% of the context window, with `.shoferignore`-excluded files omitted.
 
 ---
 
 ## Architecture
 
-`HelperAgentManager` is a thin orchestrator that owns the lifecycle, the
+`AssistantAgentManager` is a thin orchestrator that owns the lifecycle, the
 configuration, and the event emitters consumed by the webview. All heavy
 lifting lives in focused single-responsibility collaborators it composes:
 
 ```
-HelperAgentManager (singleton per workspace, vscode.Disposable)
+AssistantAgentManager (singleton per workspace, vscode.Disposable)
  │
  ├── ConversationStore           — versioned JSON snapshot persistence
  │                                 (SHA-256 file-context validation, ENOENT-safe)
@@ -33,10 +33,10 @@ HelperAgentManager (singleton per workspace, vscode.Disposable)
  │                                 (serializes question processing; bulk cancel)
  ├── ContextWindow                — token budget + LRU eviction
  │                                 (file contexts evicted before message pairs)
- ├── HelperAgentLlmClient         — wraps shared `buildApiHandler()` ApiHandler
+ ├── AssistantAgentLlmClient         — wraps shared `buildApiHandler()` ApiHandler
  │                                 (streaming, abort-aware, full provider catalog)
- ├── HelperAgentDirectoryTree     — workspace scanner, ~10% context-window cap
- ├── HelperAgentFileWatcher       — VSCode FileSystemWatcher, 500ms debounce
+ ├── AssistantAgentDirectoryTree     — workspace scanner, ~10% context-window cap
+ ├── AssistantAgentFileWatcher       — VSCode FileSystemWatcher, 500ms debounce
  └── pricing                       — per-model USD cost from ApiHandler.getModel()
 
 Configuration & secrets are read through `ContextProxy` so the helper
@@ -51,20 +51,20 @@ State machine:  Standby → Initializing → Ready ⇄ Busy → Stopping → Sta
 
 ### Key Source Files
 
-| File                                              | Lines | Role                                                                                                                                                                                                         |
-| ------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/services/helper-agent/manager.ts`            | ~620  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                |
-| `src/services/helper-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                           |
-| `src/services/helper-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                |
-| `src/services/helper-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                 |
-| `src/services/helper-agent/llm-client.ts`         | ~210  | Adapter onto the shared `buildApiHandler()`. Maps the helper-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                   |
-| `src/services/helper-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                         |
-| `src/services/helper-agent/directory-tree.ts`     | ~160  | Recursive workspace scan. `find .`-style tree generation. Excludes `.shofer/worktrees/` + common ignore dirs; capped at ~10% of context window.                                                              |
-| `src/services/helper-agent/file-watcher.ts`       | ~100  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce; skips worktrees and hidden paths. Notifies the manager which invalidates `ContextWindow` entries.                                               |
-| `src/services/helper-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                 |
-| `packages/types/src/helper-agent.ts`              | ~180  | Zod schemas (`AgentMessage`, `FileContextEntry`, `HelperAgentConfig`, `QuestionResult`, `HelperAgentCostTracking`, `HelperAgentConversationData`); the fixed `HELPER_AGENT_SYSTEM_PROMPT`; all 11 constants. |
-| `packages/types/src/global-settings.ts`           |       | `helperAgent{Enabled,Provider,ModelId,BaseUrl,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`; six `helperAgent*Key` entries on `GLOBAL_SECRET_KEYS`.                                 |
-| `packages/types/src/vscode.ts`                    |       | Helper-agent command ids on the typed `commandIds` array (`helperAgent.{start,stop,clearContext,showChat,openSettings}`).                                                                                    |
+| File                                                 | Lines | Role                                                                                                                                                                                                                     |
+| ---------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/services/assistant-agent/manager.ts`            | ~620  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                            |
+| `src/services/assistant-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                                       |
+| `src/services/assistant-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                            |
+| `src/services/assistant-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                             |
+| `src/services/assistant-agent/llm-client.ts`         | ~210  | Adapter onto the shared `buildApiHandler()`. Maps the assistant-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                            |
+| `src/services/assistant-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                                     |
+| `src/services/assistant-agent/directory-tree.ts`     | ~160  | Recursive workspace scan. `find .`-style tree generation. Excludes `.shofer/worktrees/` + common ignore dirs; capped at ~10% of context window.                                                                          |
+| `src/services/assistant-agent/file-watcher.ts`       | ~100  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce; skips worktrees and hidden paths. Notifies the manager which invalidates `ContextWindow` entries.                                                           |
+| `src/services/assistant-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                             |
+| `packages/types/src/assistant-agent.ts`              | ~180  | Zod schemas (`AgentMessage`, `FileContextEntry`, `AssistantAgentConfig`, `QuestionResult`, `AssistantAgentCostTracking`, `AssistantAgentConversationData`); the fixed `ASSISTANT_AGENT_SYSTEM_PROMPT`; all 11 constants. |
+| `packages/types/src/global-settings.ts`              |       | `assistantAgent{Enabled,Provider,ModelId,BaseUrl,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`; six `assistantAgent*Key` entries on `GLOBAL_SECRET_KEYS`.                                       |
+| `packages/types/src/vscode.ts`                       |       | Assistant-agent command ids on the typed `commandIds` array (`assistantAgent.{start,stop,clearContext,showChat,openSettings}`).                                                                                          |
 
 ### Module Contracts
 
@@ -76,9 +76,9 @@ shape of each module:
 - **`ConversationStore`** — `load(): Promise<ConversationSnapshot>`, `save(snapshot)`, `filePath` getter. Snapshot shape: `{ version, messages, fileContexts, costTracking }`. Discards on version mismatch (no migrations).
 - **`QuestionQueue`** — `setProcessor(fn)`, `enqueue(question, contextFiles?, timeoutMs?, softLimits?): Promise<QuestionResult>`, `cancelAll()`, `pendingCount`, `isProcessing`. `softLimits` carries `{ softTimeoutSec?, softResultLength? }` — prompt-embedded recommendations, not enforced. Processor signature: `(question, contextFiles, signal, softLimits) => Promise<QuestionResult>`.
 - **`ContextWindow`** — `configure(opts)`, `restore(messages, fileContexts)`, `clear()`, `appendMessage`, `upsertFileContext`, `removeFileContext`, `invalidateFileContext`, `enforceLimit()`, `getUsage()`, `consumeEvictedTokens()`. Plus getters used by the Manager: `messages`, `fileContexts`, `fileContextPaths`, `estimatedTokenCount`, `maxContextTokens`, `contextFillThreshold`, `isNearlyFull`.
-- **`HelperAgentLlmClient`** — constructor builds an `ApiHandler` via `buildApiHandler(toProviderSettings(config), { taskId: HELPER_AGENT_TASK_ID })`. `chat(messages, signal?): Promise<ChatResult>` drains `ApiStream`, accumulating `text` chunks into the answer and `usage` chunks into prompt/completion tokens; cooperatively aborts between chunks via the `AbortSignal`.
-- **`HelperAgentDirectoryTree`** — `generate(): Promise<string>` returning the formatted tree string capped at `DIRECTORY_TREE_MAX_CONTEXT_FRACTION * maxContextTokens`.
-- **`HelperAgentFileWatcher`** — constructor takes `(workspacePath, onChange)`; `dispose()`; debounces per file path.
+- **`AssistantAgentLlmClient`** — constructor builds an `ApiHandler` via `buildApiHandler(toProviderSettings(config), { taskId: ASSISTANT_AGENT_TASK_ID })`. `chat(messages, signal?): Promise<ChatResult>` drains `ApiStream`, accumulating `text` chunks into the answer and `usage` chunks into prompt/completion tokens; cooperatively aborts between chunks via the `AbortSignal`.
+- **`AssistantAgentDirectoryTree`** — `generate(): Promise<string>` returning the formatted tree string capped at `DIRECTORY_TREE_MAX_CONTEXT_FRACTION * maxContextTokens`.
+- **`AssistantAgentFileWatcher`** — constructor takes `(workspacePath, onChange)`; `dispose()`; debounces per file path.
 
 ### Data Types
 
@@ -109,7 +109,7 @@ shape of each module:
 }
 ```
 
-**`HelperAgentConfig`**:
+**`AssistantAgentConfig`**:
 
 ```typescript
 {
@@ -123,11 +123,11 @@ shape of each module:
 }
 ```
 
-The system prompt is **not configurable** — it is hardcoded in the service and instructs the helper agent to act as a concise, read-only codebase Q&A assistant. The prompt includes a **workspace directory tree** snapshot (see [Directory Tree Injection](#7-directory-tree-injection-directorytreets)).
+The system prompt is **not configurable** — it is hardcoded in the service and instructs the assistant agent to act as a concise, read-only codebase Q&A assistant. The prompt includes a **workspace directory tree** snapshot (see [Directory Tree Injection](#7-directory-tree-injection-directorytreets)).
 
 The only user-configurable properties are the **API configuration** (provider, model, credentials) and the **Clear Context** action (which resets the conversation to just the system prompt and regenerates the directory tree).
 
-**`QuestionResult`** — response from the helper agent:
+**`QuestionResult`** — response from the assistant agent:
 
 ```typescript
 {
@@ -195,7 +195,7 @@ State transitions:
 During extension activation, for each workspace folder:
 
 ```
-HelperAgentManager.getInstance(context, folder.uri.fsPath)
+AssistantAgentManager.getInstance(context, folder.uri.fsPath)
   → manager.initialize(contextProxy)   // non-blocking, runs in background
 ```
 
@@ -203,13 +203,13 @@ HelperAgentManager.getInstance(context, folder.uri.fsPath)
 
 ```
 Manager.initialize()
-  → loadConfigFromContextProxy()  // reads helperAgent* state keys + secrets
+  → loadConfigFromContextProxy()  // reads assistantAgent* state keys + secrets
   → check: enabled? configured?
   → ConversationStore.load() → snapshot { version, messages, fileContexts, costTracking }
       version mismatch → discard (no migrations)
   → ContextWindow.configure({ maxContextTokens, contextFillThreshold })
   → ContextWindow.restore(snapshot.messages, validatedFileContexts)
-  → instantiate HelperAgentLlmClient (wraps buildApiHandler)
+  → instantiate AssistantAgentLlmClient (wraps buildApiHandler)
   → startAgent()
 ```
 
@@ -221,16 +221,16 @@ for each FileContextEntry restored from snapshot:
   if hash matches → keep in window
   if hash differs or ENOENT → drop (ContextWindow.removeFileContext)
 
-HelperAgentDirectoryTree.generate() → cached tree string
-new HelperAgentFileWatcher(workspacePath, onFileChanged)
+AssistantAgentDirectoryTree.generate() → cached tree string
+new AssistantAgentFileWatcher(workspacePath, onFileChanged)
 state → Ready
 ```
 
 ### 4. Question Handling (`manager.ts` → `_processQuestion()` via `QuestionQueue`)
 
 ```
-External Task calls ask_helper_agent tool (synchronous — task blocks until answer or timeout)
-  → HelperAgentTool.invoke({ question, contextFiles?, timeoutMs?, softTimeoutSec?, softResultLength? })
+External Task calls ask_assistant_agent tool (synchronous — task blocks until answer or timeout)
+  → AssistantAgentTool.invoke({ question, contextFiles?, timeoutMs?, softTimeoutSec?, softResultLength? })
   → Start a single timeout timer covering the ENTIRE duration (queue wait + LLM processing)
   → QuestionQueue.enqueue({ question, sourceTaskId, timeoutMs, softTimeoutSec, softResultLength })
   → Wait for queue position (if agent is Busy) — timeout is running
@@ -245,13 +245,13 @@ When dequeued (QuestionQueue invokes the processor with an AbortSignal):
   → If contextFiles provided: read each, ContextWindow.upsertFileContext(path, content, sha256)
   → ContextWindow.appendMessage({ role: "user", content: question })
   → Drain recentlyModifiedFiles set (from tool invocation hooks)
-  → Construct messages for HelperAgentLlmClient:
-      [fixed system prompt]     // HELPER_AGENT_SYSTEM_PROMPT + cached directory tree (~10% cap)
+  → Construct messages for AssistantAgentLlmClient:
+      [fixed system prompt]     // ASSISTANT_AGENT_SYSTEM_PROMPT + cached directory tree (~10% cap)
       + [file contexts]         // one system message per FileContextEntry (KV-cache friendly)
       + [recently modified notification]  // ephemeral, not persisted
       + [conversation history]  // every prior turn (KV-cache friendly)
       + [current question]
-  → HelperAgentLlmClient.chat(messages, signal)
+  → AssistantAgentLlmClient.chat(messages, signal)
       → buildApiHandler().createMessage(systemPrompt, otherMessages, { taskId })
       → drains ApiStream: accumulates `text` chunks, captures `usage` chunks, surfaces `error`
       → AbortSignal aborts between chunks
@@ -265,7 +265,7 @@ When dequeued (QuestionQueue invokes the processor with an AbortSignal):
 
 ### 5. File Change Handling (`file-watcher.ts`)
 
-The helper agent stays aware of file modifications through **two complementary mechanisms**:
+The assistant agent stays aware of file modifications through **two complementary mechanisms**:
 
 #### 5a. File System Watcher (`vscode.workspace.createFileSystemWatcher`)
 
@@ -286,12 +286,12 @@ FileSystemWatcher detects change (create/modify/delete)
 
 Detects changes made by Shofer tasks through native tools. **Critically, files are NOT evicted from context** when modified — evicting and re-adding a file would invalidate the LLM provider's KV cache (attention cache), forcing a costly recomputation of the entire context window on the next request.
 
-Instead, the helper agent accumulates a list of **recently modified file paths** and attaches it to each question. This preserves the KV cache while keeping the agent informed:
+Instead, the assistant agent accumulates a list of **recently modified file paths** and attaches it to each question. This preserves the KV cache while keeping the agent informed:
 
 ```
 Task tool modifies file (write_to_file, apply_diff, insert_edit, sed, file rm/mv, rename_symbol)
   → Tool execution completes successfully
-  → HelperAgentManager.onFileModifiedByTask(filePath)  // hook invoked
+  → AssistantAgentManager.onFileModifiedByTask(filePath)  // hook invoked
   → Check against .shoferignore — skip if ignored
   → Check against .shofer/worktrees/ — skip worktree files
   → Add filePath to recentlyModifiedFiles set          // NO eviction — KV cache preserved
@@ -305,7 +305,7 @@ Question dequeued from queue
   → Attach as metadata to the question:
       "[Note: the following files have been modified since you last read them:
         src/foo.ts, src/bar.ts. Consider re-reading them if relevant to this question.]"
-  → List is also passed to the helper agent's LLM call as a system-level hint
+  → List is also passed to the assistant agent's LLM call as a system-level hint
   → The model can then use read_file to re-read stale files if needed
   → recentlyModifiedFiles set is cleared after being attached
 ```
@@ -314,10 +314,10 @@ This approach:
 
 - **Preserves the KV cache** — the existing context window is never mutated, so the LLM provider can reuse cached attention computations, keeping requests fast and cheap.
 - **Informs without forcing** — the model knows which files are stale and can decide whether to re-read them based on relevance to the current question.
-- **Aligns with worktree best practices** — since tasks normally operate in worktrees (`.shofer/worktrees/<name>/`), main-branch files are rarely modified directly. The primary case where files appear in this list is after a worktree merge back into master. The helper agent does not depend on git — it just sees "file X was modified."
+- **Aligns with worktree best practices** — since tasks normally operate in worktrees (`.shofer/worktrees/<name>/`), main-branch files are rarely modified directly. The primary case where files appear in this list is after a worktree merge back into master. The assistant agent does not depend on git — it just sees "file X was modified."
 - **Clears on use** — the set is drained after each question, so stale notifications don't accumulate across questions.
 
-Integration point: `HelperAgentManager` subscribes to tool execution events (filtered by `"shofer_edited"` source) via [`FileContextTracker.trackFileContext`](src/core/context-tracking/FileContextTracker.ts:39) or an equivalent centralized event bus emitted by the tool execution pipeline.
+Integration point: `AssistantAgentManager` subscribes to tool execution events (filtered by `"shofer_edited"` source) via [`FileContextTracker.trackFileContext`](src/core/context-tracking/FileContextTracker.ts:39) or an equivalent centralized event bus emitted by the tool execution pipeline.
 
 ```
 
@@ -325,7 +325,7 @@ Integration point: `HelperAgentManager` subscribes to tool execution events (fil
 
 ### 7. Directory Tree Injection (`directory-tree.ts`)
 
-On agent startup (and after Clear Context), the helper agent scans the workspace and injects a directory/file hierarchy into the system prompt. This gives the agent immediate awareness of the project structure without needing to call `list_files` on every question.
+On agent startup (and after Clear Context), the assistant agent scans the workspace and injects a directory/file hierarchy into the system prompt. This gives the agent immediate awareness of the project structure without needing to call `list_files` on every question.
 
 ```
 startAgent() or clearContext():
@@ -362,15 +362,15 @@ The directory tree is:
 - **Excludes** `.shoferignore`-listed paths and `.shofer/worktrees/` directories
 - **Provides immediate orientation** — the agent knows the project layout without tool calls
 
-Integration point: `src/services/helper-agent/directory-tree.ts` — generates and token-counts the tree.
+Integration point: `src/services/assistant-agent/directory-tree.ts` — generates and token-counts the tree.
 
 ### 8. Context Window Management (`context-window.ts`)
 
-The helper agent uses **truncation, not summarization**. The context window is a ring-buffer-like structure where old content is simply dropped when the limit is reached. No summarization is ever performed — the idea is to keep the context window nearly full (configurable up to a fill threshold) with raw conversation and file content.
+The assistant agent uses **truncation, not summarization**. The context window is a ring-buffer-like structure where old content is simply dropped when the limit is reached. No summarization is ever performed — the idea is to keep the context window nearly full (configurable up to a fill threshold) with raw conversation and file content.
 
 ```
-Token budget = helperAgentMaxContextTokens (user-configurable)
-Fill threshold = helperAgentContextFillThreshold (default 0.80 = 80%)
+Token budget = assistantAgentMaxContextTokens (user-configurable)
+Fill threshold = assistantAgentContextFillThreshold (default 0.80 = 80%)
 
 Warning zone:
   → When current_tokens > fill_threshold * maxContextTokens:
@@ -403,12 +403,12 @@ Truncation policy (NO summarization):
 
 ## Storage Topology
 
-| Data                      | Storage Location                                                                                                | Survives Reboot?                             |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| **Conversation history**  | VS Code globalStorage: `~/.config/Code/User/globalStorage/shofer.dev/shofer-helper-agent-<workspace-hash>.json` | ✓ Yes — persisted alongside VS Code settings |
-| **File context registry** | Same JSON file as conversation history (nested under `fileContexts` key)                                        | ✓ Yes — persisted in globalStorage           |
-| **API keys & secrets**    | VS Code `SecretStorage` (keyed as `helperAgentOpenAiKey`, `helperAgentGeminiKey`, etc.)                         | ✓ Yes — OS-level credential store            |
-| **Configuration**         | VS Code `globalState` (via `ContextProxy`)                                                                      | ✓ Yes — synced with VS Code settings         |
+| Data                      | Storage Location                                                                                                   | Survives Reboot?                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| **Conversation history**  | VS Code globalStorage: `~/.config/Code/User/globalStorage/shofer.dev/shofer-assistant-agent-<workspace-hash>.json` | ✓ Yes — persisted alongside VS Code settings |
+| **File context registry** | Same JSON file as conversation history (nested under `fileContexts` key)                                           | ✓ Yes — persisted in globalStorage           |
+| **API keys & secrets**    | VS Code `SecretStorage` (keyed as `assistantAgentOpenAiKey`, `assistantAgentGeminiKey`, etc.)                      | ✓ Yes — OS-level credential store            |
+| **Configuration**         | VS Code `globalState` (via `ContextProxy`)                                                                         | ✓ Yes — synced with VS Code settings         |
 
 ### Persistence Format
 
@@ -470,22 +470,22 @@ No restart of the agent is needed — it rehydrates automatically on extension a
 
 ## Tool Integration
 
-### `ask_helper_agent` — Native Tool
+### `ask_assistant_agent` — Native Tool
 
-A new native tool exposed to all tasks. The tool is **synchronous (blocking)** — the calling task waits until the helper agent finishes processing the question and returns an answer, or until the optional timeout expires. On timeout, processing is **aborted** but any partial work (file reads, partial response) already added to the context window is **retained** to preserve the LLM provider's KV cache.
+A new native tool exposed to all tasks. The tool is **synchronous (blocking)** — the calling task waits until the assistant agent finishes processing the question and returns an answer, or until the optional timeout expires. On timeout, processing is **aborted** but any partial work (file reads, partial response) already added to the context window is **retained** to preserve the LLM provider's KV cache.
 
 ```
-Tool: ask_helper_agent
-Description: Ask a question to the persistent helper agent that maintains
+Tool: ask_assistant_agent
+Description: Ask a question to the persistent assistant agent that maintains
              long-term context about the codebase. This is a synchronous tool —
              the calling task will block until the answer is returned or the
              timeout is reached. Use this for simple questions about the code
              that don't require the full task context to be loaded.
 
 Parameters:
-  - question (string, required): The question to ask the helper agent.
+  - question (string, required): The question to ask the assistant agent.
   - contextFiles (string[], optional): File paths that are relevant
-    to this question. The helper agent will load these into its
+    to this question. The assistant agent will load these into its
     context window if they aren't already present.
   - timeoutMs (number, optional): HARD maximum time to wait for an
     answer in milliseconds. Defaults to 300000 (5 minutes). If the
@@ -493,36 +493,36 @@ Parameters:
     already added to the context window is retained (to preserve KV
     cache), and the tool returns a timeout error.
   - softTimeoutSec (number, optional): SOFT recommendation in seconds
-    for how long the helper should spend on this question (default:
-    DEFAULT_HELPER_SOFT_TIMEOUT_SEC = 60). Embedded in the helper's
+    for how long the assistant should spend on this question (default:
+    DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC = 60). Embedded in the assistant's
     prompt as guidance; not enforced via cancellation.
   - softResultLength (number, optional): SOFT recommendation in
-    characters for the maximum length of the helper's final answer
-    (default: DEFAULT_HELPER_SOFT_RESULT_LENGTH = 2000). Embedded in
+    characters for the maximum length of the assistant's final answer
+    (default: DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH = 2000). Embedded in
     the prompt as guidance; not enforced via truncation.
 
 Returns:
-  - answer (string): The helper agent's response.
+  - answer (string): The assistant agent's response.
   - tokensUsed (object): Token counts for the request.
-  - contextFiles (string[]): Files currently in the helper's context.
+  - contextFiles (string[]): Files currently in the assistant's context.
 ```
 
-Tool implementation: `src/core/tools/HelperAgentTool.ts`
-Tool schema: `src/core/prompts/tools/native-tools/ask_helper_agent.ts`
+Tool implementation: `src/core/tools/AssistantAgentTool.ts`
+Tool schema: `src/core/prompts/tools/native-tools/ask_assistant_agent.ts`
 
 ### Tool Availability
 
-- The `ask_helper_agent` tool is **conditionally available** only when `HelperAgentManager` is enabled + configured + in `Ready` or `Busy` state.
+- The `ask_assistant_agent` tool is **conditionally available** only when `AssistantAgentManager` is enabled + configured + in `Ready` or `Busy` state.
 - If the agent is in `Standby`, `Initializing`, `Error`, or `Stopping` state, the tool is filtered out (similar to `rag_search` filtering).
 - Filter logic in `src/core/prompts/tools/filter-tools-for-mode.ts`.
 
 ### Auto-Approval
 
-The `ask_helper_agent` tool is **auto-approved by default** (like `rag_search`), since it is read-only and uses a separate, cost-optimized model. Configured in `src/core/auto-approval/tools.ts`.
+The `ask_assistant_agent` tool is **auto-approved by default** (like `rag_search`), since it is read-only and uses a separate, cost-optimized model. Configured in `src/core/auto-approval/tools.ts`.
 
-### Helper Agent's Own Tool Restrictions
+### Assistant Agent's Own Tool Restrictions
 
-The helper agent itself runs as an internal task with a **severely restricted tool set**. It is strictly read-only and cannot modify any state:
+The assistant agent itself runs as an internal task with a **severely restricted tool set**. It is strictly read-only and cannot modify any state:
 
 | Tool Category     | Available? | Tools Included                                                                           |
 | ----------------- | ---------- | ---------------------------------------------------------------------------------------- |
@@ -533,11 +533,11 @@ The helper agent itself runs as an internal task with a **severely restricted to
 | **Task Control**  | ✗ No       | `new_task`, `switch_mode`, `attempt_completion`                                          |
 | **Ask**           | ✓ Yes      | `ask_followup_question` — only as a fallback if clarification needed                     |
 
-These restrictions are enforced at the tool-filtering layer (`filter-tools-for-mode.ts`) based on a dedicated `helper_agent` internal mode slug. The helper agent's system prompt explicitly instructs it that it cannot make changes — it can only read and answer questions about the codebase. This ensures:
+These restrictions are enforced at the tool-filtering layer (`filter-tools-for-mode.ts`) based on a dedicated `assistant_agent` internal mode slug. The assistant agent's system prompt explicitly instructs it that it cannot make changes — it can only read and answer questions about the codebase. This ensures:
 
-- **Safety** — no accidental code modifications from the helper
+- **Safety** — no accidental code modifications from the assistant
 - **Cost control** — the cheap model is never used for expensive operations
-- **Predictability** — callers know the helper agent's response is purely informational
+- **Predictability** — callers know the assistant agent's response is purely informational
 
 ---
 
@@ -545,61 +545,61 @@ These restrictions are enforced at the tool-filtering layer (`filter-tools-for-m
 
 ### Extension Host
 
-| Point      | File                                          | Details                                                                                               |
-| ---------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Activation | `src/extension.ts`                            | Creates `HelperAgentManager` per workspace folder, initializes in background                          |
-| Chat View  | `src/core/webview/HelperAgentChatProvider.ts` | Registers webview panel for the helper agent chat view; streams live responses                        |
-| Provider   | `src/core/webview/ShoferProvider.ts`          | Subscribes to `onAgentStateChange` to push helper agent status to webview                             |
-| Status Bar | `src/activate/registerStatusBar.ts`           | Registers status bar button next to RAG indexer, shows agent state + model name                       |
-| Commands   | `src/activate/registerCommands.ts`            | Registers `helperAgent.start`, `helperAgent.stop`, `helperAgent.clearContext`, `helperAgent.showChat` |
+| Point      | File                                             | Details                                                                                                           |
+| ---------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Activation | `src/extension.ts`                               | Creates `AssistantAgentManager` per workspace folder, initializes in background                                   |
+| Chat View  | `src/core/webview/AssistantAgentChatProvider.ts` | Registers webview panel for the assistant agent chat view; streams live responses                                 |
+| Provider   | `src/core/webview/ShoferProvider.ts`             | Subscribes to `onAgentStateChange` to push assistant agent status to webview                                      |
+| Status Bar | `src/activate/registerStatusBar.ts`              | Registers status bar button next to RAG indexer, shows agent state + model name                                   |
+| Commands   | `src/activate/registerCommands.ts`               | Registers `assistantAgent.start`, `assistantAgent.stop`, `assistantAgent.clearContext`, `assistantAgent.showChat` |
 
 ### Settings & Webview
 
-| Point            | File                                        | Details                                                                    |
-| ---------------- | ------------------------------------------- | -------------------------------------------------------------------------- |
-| Settings save    | `src/core/webview/webviewMessageHandler.ts` | `saveHelperAgentSettingsAtomic` → saves secrets + `handleSettingsChange()` |
-| Status request   | `webviewMessageHandler.ts`                  | `requestHelperAgentStatus`                                                 |
-| Start/stop/clear | `webviewMessageHandler.ts`                  | `startHelperAgent`, `stopHelperAgent`, `clearHelperAgentContext`           |
-| Secret status    | `webviewMessageHandler.ts`                  | `requestHelperAgentSecretStatus`                                           |
+| Point            | File                                        | Details                                                                       |
+| ---------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| Settings save    | `src/core/webview/webviewMessageHandler.ts` | `saveAssistantAgentSettingsAtomic` → saves secrets + `handleSettingsChange()` |
+| Status request   | `webviewMessageHandler.ts`                  | `requestAssistantAgentStatus`                                                 |
+| Start/stop/clear | `webviewMessageHandler.ts`                  | `startAssistantAgent`, `stopAssistantAgent`, `clearAssistantAgentContext`     |
+| Secret status    | `webviewMessageHandler.ts`                  | `requestAssistantAgentSecretStatus`                                           |
 
 ### Tool System
 
-| Point             | File                                                    | Details                                                                |
-| ----------------- | ------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Tool registration | `src/core/task/build-tools.ts`                          | Gets `HelperAgentManager` for current workspace, passes to tool filter |
-| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts`       | Removes `ask_helper_agent` if agent is disabled/unconfigured/not-ready |
-| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts` | Routes to `HelperAgentTool`                                            |
-| Auto-approval     | `src/core/auto-approval/tools.ts`                       | `askHelperAgent` is auto-approved by default                           |
-| System prompt     | `src/core/prompts/system.ts`                            | Includes helper agent status + model info in system prompt context     |
+| Point             | File                                                    | Details                                                                   |
+| ----------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Tool registration | `src/core/task/build-tools.ts`                          | Gets `AssistantAgentManager` for current workspace, passes to tool filter |
+| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts`       | Removes `ask_assistant_agent` if agent is disabled/unconfigured/not-ready |
+| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts` | Routes to `AssistantAgentTool`                                            |
+| Auto-approval     | `src/core/auto-approval/tools.ts`                       | `askAssistantAgent` is auto-approved by default                           |
+| System prompt     | `src/core/prompts/system.ts`                            | Includes assistant agent status + model info in system prompt context     |
 
 ### Configuration Schema
 
-State keys live on the extension-wide `globalSettingsSchema` in `packages/types/src/global-settings.ts`; secret keys are listed in `GLOBAL_SECRET_KEYS` in the same file. Both are accessed through the typed `ContextProxy` (`getValue` / `getSecret` / `setValue`) — the helper agent never calls `vscode.workspace.getConfiguration` or `context.secrets` directly.
+State keys live on the extension-wide `globalSettingsSchema` in `packages/types/src/global-settings.ts`; secret keys are listed in `GLOBAL_SECRET_KEYS` in the same file. Both are accessed through the typed `ContextProxy` (`getValue` / `getSecret` / `setValue`) — the assistant agent never calls `vscode.workspace.getConfiguration` or `context.secrets` directly.
 
 ```typescript
 // globalSettingsSchema (state, persisted in globalState)
-helperAgentEnabled: boolean
-helperAgentProvider: "openai" | "gemini" | "openai-compatible" | "anthropic" | "ollama" | "openrouter"
-helperAgentModelId: string
-helperAgentBaseUrl?: string                // openai-compatible / ollama only
-helperAgentMaxContextTokens: number        // default DEFAULT_MAX_CONTEXT_TOKENS (128_000)
-helperAgentContextFillThreshold: number    // 0.0–1.0, default 0.80
+assistantAgentEnabled: boolean
+assistantAgentProvider: "openai" | "gemini" | "openai-compatible" | "anthropic" | "ollama" | "openrouter"
+assistantAgentModelId: string
+assistantAgentBaseUrl?: string                // openai-compatible / ollama only
+assistantAgentMaxContextTokens: number        // default DEFAULT_MAX_CONTEXT_TOKENS (128_000)
+assistantAgentContextFillThreshold: number    // 0.0–1.0, default 0.80
 
 // GLOBAL_SECRET_KEYS (secrets, persisted in SecretStorage)
-helperAgentOpenAiKey | helperAgentGeminiKey | helperAgentOpenAiCompatibleKey
-  | helperAgentAnthropicKey | helperAgentOllamaKey | helperAgentOpenRouterKey
+assistantAgentOpenAiKey | assistantAgentGeminiKey | assistantAgentOpenAiCompatibleKey
+  | assistantAgentAnthropicKey | assistantAgentOllamaKey | assistantAgentOpenRouterKey
 ```
 
-The Zod runtime schemas for the on-disk conversation snapshot — `helperAgentConfigSchema`, `agentMessageSchema`, `fileContextEntrySchema`, `helperAgentCostTrackingSchema`, `helperAgentConversationDataSchema`, `questionResultSchema` — live in `packages/types/src/helper-agent.ts`. The fixed `HELPER_AGENT_SYSTEM_PROMPT` is also defined there.
+The Zod runtime schemas for the on-disk conversation snapshot — `assistantAgentConfigSchema`, `agentMessageSchema`, `fileContextEntrySchema`, `assistantAgentCostTrackingSchema`, `assistantAgentConversationDataSchema`, `questionResultSchema` — live in `packages/types/src/assistant-agent.ts`. The fixed `ASSISTANT_AGENT_SYSTEM_PROMPT` is also defined there.
 
 The system prompt is **not exposed** in settings — it is internally defined. The only user-facing controls are the API configuration dropdown and the **Clear Context** button.
 
 ### Cost Tracking
 
-The helper agent tracks cumulative token usage and estimated cost across its entire lifecycle:
+The assistant agent tracks cumulative token usage and estimated cost across its entire lifecycle:
 
 ```typescript
-interface HelperAgentCostTracking {
+interface AssistantAgentCostTracking {
 	totalInputTokens: number
 	totalOutputTokens: number
 	totalTokensTruncated: number // tokens dropped by truncation
@@ -618,7 +618,7 @@ Cost is calculated in `pricing.ts` from `ApiHandler.getModel().info.{inputPrice,
 
 ## Key Constants
 
-All exported from `packages/types/src/helper-agent.ts`:
+All exported from `packages/types/src/assistant-agent.ts`:
 
 | Constant                              | Value                                                          | Purpose                                                               |
 | ------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -638,7 +638,7 @@ All exported from `packages/types/src/helper-agent.ts`:
 
 ## Multi-Workspace Support
 
-`HelperAgentManager` uses the same **singleton-per-workspace** pattern as `CodeIndexManager`, via `Map<string, HelperAgentManager>` keyed by `workspacePath`. Each workspace gets its own:
+`AssistantAgentManager` uses the same **singleton-per-workspace** pattern as `CodeIndexManager`, via `Map<string, AssistantAgentManager>` keyed by `workspacePath`. Each workspace gets its own:
 
 - Independent conversation history
 - Independent file context registry
@@ -651,23 +651,23 @@ All exported from `packages/types/src/helper-agent.ts`:
 
 Shofer uses **embedded worktrees** — per-task git worktrees created under `.shofer/worktrees/<name>/` within the main workspace. Each worktree represents a different git branch, allowing tasks to work in isolation.
 
-The helper agent interacts with worktrees as follows:
+The assistant agent interacts with worktrees as follows:
 
-- **Exclusion from context**: The helper agent **never loads files from `.shofer/worktrees/`** directories. These represent ephemeral, task-scoped branches whose content is transient and would pollute the persistent context with unrelated branch state. This exclusion is enforced by `.shoferignore` patterns and additionally by a hardcoded path filter in the file watcher and lazy-load paths.
+- **Exclusion from context**: The assistant agent **never loads files from `.shofer/worktrees/`** directories. These represent ephemeral, task-scoped branches whose content is transient and would pollute the persistent context with unrelated branch state. This exclusion is enforced by `.shoferignore` patterns and additionally by a hardcoded path filter in the file watcher and lazy-load paths.
 
-- **File path disambiguation**: Since worktree files live at `.shofer/worktrees/<name>/src/foo.ts` while main-branch files live at `src/foo.ts`, they are naturally distinct paths. The helper agent's context only ever contains main-workspace file paths.
+- **File path disambiguation**: Since worktree files live at `.shofer/worktrees/<name>/src/foo.ts` while main-branch files live at `src/foo.ts`, they are naturally distinct paths. The assistant agent's context only ever contains main-workspace file paths.
 
-- **Worktree file watcher**: The `HelperAgentFileWatcher` watches the entire workspace but skips events for paths under `.shofer/worktrees/`. Changes within worktrees do not trigger context eviction.
+- **Worktree file watcher**: The `AssistantAgentFileWatcher` watches the entire workspace but skips events for paths under `.shofer/worktrees/`. Changes within worktrees do not trigger context eviction.
 
-- **One helper agent per workspace**: Since all worktrees share the same VS Code window (embedded model), there is a single helper agent serving all tasks regardless of which worktree they operate in. The helper agent's knowledge represents the **main branch** state, not individual worktree branches.
+- **One assistant agent per workspace**: Since all worktrees share the same VS Code window (embedded model), there is a single assistant agent serving all tasks regardless of which worktree they operate in. The assistant agent's knowledge represents the **main branch** state, not individual worktree branches.
 
-- **Worktree creation/deletion**: When a worktree is created or deleted, the helper agent ignores those directory changes entirely — they fall under the excluded paths.
+- **Worktree creation/deletion**: When a worktree is created or deleted, the assistant agent ignores those directory changes entirely — they fall under the excluded paths.
 
 ---
 
 ## UI: Status Bar Button
 
-The Helper Agent status bar button sits **next to the RAG indexer button** on the status bar. It displays:
+The Assistant Agent status bar button sits **next to the RAG indexer button** on the status bar. It displays:
 
 - **Icon**: A chat bubble or brain icon (distinct from RAG's database icon)
 - **Blinking behavior**: The icon **blinks** when the agent is `Busy` (processing a question), matching the RAG indexer's blinking pattern during indexing.
@@ -691,9 +691,9 @@ The Helper Agent status bar button sits **next to the RAG indexer button** on th
         - **Configure API** — opens the API configuration settings
 - **Tooltip**: Shows model name, token usage (`12.5K / 128K`), fill percentage, and estimated cost
 
-### Helper Agent Chat View
+### Assistant Agent Chat View
 
-A dedicated **chat panel** lets the user observe everything the helper agent is doing in real time. It is accessible from:
+A dedicated **chat panel** lets the user observe everything the assistant agent is doing in real time. It is accessible from:
 
 - The status bar info panel: **"View Chat"** action (left-click the status bar button, then select "View Chat")
 - A dedicated VS Code webview panel (similar to the Shofer task chat UI)
@@ -716,9 +716,9 @@ The chat view displays:
     - Token usage bar (fill percentage)
     - Estimated cost breakdown
 
-The chat view is **read-only** — the user cannot send messages directly to the helper agent. All messages come from tasks via the `ask_helper_agent` tool. This keeps the interaction model simple and prevents the user from accidentally polluting the context window.
+The chat view is **read-only** — the user cannot send messages directly to the assistant agent. All messages come from tasks via the `ask_assistant_agent` tool. This keeps the interaction model simple and prevents the user from accidentally polluting the context window.
 
-Integration point: `src/core/webview/HelperAgentChatProvider.ts` — registers a webview panel provider that subscribes to conversation store updates and streams live responses via `EventEmitter`.
+Integration point: `src/core/webview/AssistantAgentChatProvider.ts` — registers a webview panel provider that subscribes to conversation store updates and streams live responses via `EventEmitter`.
 
 ---
 
@@ -728,13 +728,13 @@ Integration point: `src/core/webview/HelperAgentChatProvider.ts` — registers a
 - **Recovery**: `recoverFromError()` clears all service instances and the LLM provider, forcing a clean re-initialization on next `startAgent()`.
 - **Conversation preservation**: Conversation history is saved after every successful question/answer pair. If the agent crashes mid-question, the conversation state from before the question is preserved.
 - **Token overflow**: If the context window is exceeded, `ContextWindow.enforceLimit()` truncates oldest file contexts (by `lastReferencedAt`) and then oldest user/assistant turn pairs before failing the request. Truncated content is permanently lost — no summarization is retained.
-- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.HELPER_AGENT_ERROR, {...})` with location context.
+- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.ASSISTANT_AGENT_ERROR, {...})` with location context.
 
 ---
 
 ## Comparison with RAG Indexer
 
-| Aspect               | RAG Indexer (`rag_search`)                  | Helper Agent (`ask_helper_agent`)                         |
+| Aspect               | RAG Indexer (`rag_search`)                  | Assistant Agent (`ask_assistant_agent`)                   |
 | -------------------- | ------------------------------------------- | --------------------------------------------------------- |
 | **Purpose**          | Semantic code search via vector embeddings  | Conversational Q&A with persistent context                |
 | **Storage**          | Qdrant (vector DB) + local hash cache       | VS Code globalStorage (JSON conversation file)            |
@@ -756,22 +756,22 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 
 ### Phase 1: Core Manager + Configuration (Minimal Viable Agent)
 
-**Goal:** The helper agent can be configured, initialized, and can answer a single question via direct API call. No tool integration yet — testable via VS Code commands.
+**Goal:** The assistant agent can be configured, initialized, and can answer a single question via direct API call. No tool integration yet — testable via VS Code commands.
 
 **Files to create/modify:**
 | File | Action | Notes |
 |------|--------|-------|
-| `packages/types/src/helper-agent.ts` | Create | Zod schemas, TypeScript interfaces, constants |
-| `packages/types/src/index.ts` | Modify | Add `export * from "./helper-agent.js"` |
-| `packages/types/src/tool.ts` | Modify | Add `"ask_helper_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read` |
-| `src/services/helper-agent/manager.ts` | Create | Singleton Manager with `initialize()`, `askQuestion()`, conversation persistence, LLM calling (OpenAI-compatible + Gemini) |
+| `packages/types/src/assistant-agent.ts` | Create | Zod schemas, TypeScript interfaces, constants |
+| `packages/types/src/index.ts` | Modify | Add `export * from "./assistant-agent.js"` |
+| `packages/types/src/tool.ts` | Modify | Add `"ask_assistant_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read` |
+| `src/services/assistant-agent/manager.ts` | Create | Singleton Manager with `initialize()`, `askQuestion()`, conversation persistence, LLM calling (OpenAI-compatible + Gemini) |
 | `src/extension.ts` | Modify | Import, create per-workspace instances, background `initialize()`, `disposeAll()` in deactivate |
-| `src/shared/tools.ts` | Modify | Add `ask_helper_agent` to `NativeToolArgs` |
+| `src/shared/tools.ts` | Modify | Add `ask_assistant_agent` to `NativeToolArgs` |
 
 **What works at end of Phase 1:**
 
-- User sets `helperAgentEnabled`, provider, model, API key via settings
-- Extension activation creates `HelperAgentManager` per workspace
+- User sets `assistantAgentEnabled`, provider, model, API key via settings
+- Extension activation creates `AssistantAgentManager` per workspace
 - `manager.initialize()` loads config + persisted conversation
 - `manager.askQuestion("what is X?")` → returns answer from LLM
 - Conversation persists across VSCode restarts
@@ -783,25 +783,25 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 
 ### Phase 2: Native Tool + Tool System Integration
 
-**Goal:** Tasks can call `ask_helper_agent` via the native tool system. The tool is conditionally available based on helper agent state.
+**Goal:** Tasks can call `ask_assistant_agent` via the native tool system. The tool is conditionally available based on assistant agent state.
 
 **Files to create/modify:**
 | File | Action | Notes |
 |------|--------|-------|
-| `src/core/prompts/tools/native-tools/ask_helper_agent.ts` | Create | OpenAI tool schema (description, parameters) |
+| `src/core/prompts/tools/native-tools/ask_assistant_agent.ts` | Create | OpenAI tool schema (description, parameters) |
 | `src/core/prompts/tools/native-tools/index.ts` | Modify | Import + register in `getNativeTools()` |
-| `src/core/tools/AskHelperAgentTool.ts` | Create | `BaseTool<"ask_helper_agent">` implementation |
-| `src/core/assistant-message/presentAssistantMessage.ts` | Modify | Import + dispatch case for `"ask_helper_agent"` |
-| `src/core/prompts/tools/filter-tools-for-mode.ts` | Modify | Add `helperAgentManager` parameter, conditional exclusion logic |
-| `src/core/task/build-tools.ts` | Modify | Import `HelperAgentManager`, pass to `filterNativeToolsForMode` |
-| `src/core/auto-approval/tools.ts` | Modify | Add `askHelperAgent` to auto-approved tools |
-| `src/services/helper-agent/manager.ts` | Modify | Add `isHelperAgentAvailable` getter |
+| `src/core/tools/AskAssistantAgentTool.ts` | Create | `BaseTool<"ask_assistant_agent">` implementation |
+| `src/core/assistant-message/presentAssistantMessage.ts` | Modify | Import + dispatch case for `"ask_assistant_agent"` |
+| `src/core/prompts/tools/filter-tools-for-mode.ts` | Modify | Add `assistantAgentManager` parameter, conditional exclusion logic |
+| `src/core/task/build-tools.ts` | Modify | Import `AssistantAgentManager`, pass to `filterNativeToolsForMode` |
+| `src/core/auto-approval/tools.ts` | Modify | Add `askAssistantAgent` to auto-approved tools |
+| `src/services/assistant-agent/manager.ts` | Modify | Add `isAssistantAgentAvailable` getter |
 
 **What works at end of Phase 2:**
 
-- `ask_helper_agent` appears in the agent's tool set when helper is enabled+configured+initialized
+- `ask_assistant_agent` appears in the agent's tool set when helper is enabled+configured+initialized
 - Tool is auto-approved (read-only, separate model)
-- Tool is filtered out when helper agent is disabled/unconfigured
+- Tool is filtered out when assistant agent is disabled/unconfigured
 
 **Out of scope for Phase 2:** Timeout handling, recently-modified file notifications, status bar UI.
 
@@ -814,13 +814,13 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 **Files to modify:**
 | File | Action | Notes |
 |------|--------|-------|
-| `src/services/helper-agent/manager.ts` | Modify | Add question queue, timeout handling, `notifyFileModified()`, `recentlyModifiedFiles` set, abort support |
-| `src/core/tools/AskHelperAgentTool.ts` | Modify | Pass `timeoutMs`, handle timeout errors gracefully |
+| `src/services/assistant-agent/manager.ts` | Modify | Add question queue, timeout handling, `notifyFileModified()`, `recentlyModifiedFiles` set, abort support |
+| `src/core/tools/AskAssistantAgentTool.ts` | Modify | Pass `timeoutMs`, handle timeout errors gracefully |
 
 **What works at end of Phase 3:**
 
 - Multiple tasks can ask questions concurrently; they serialize via FIFO
-- Each `ask_helper_agent` call blocks up to `timeoutMs` (default 5 min)
+- Each `ask_assistant_agent` call blocks up to `timeoutMs` (default 5 min)
 - Timeout fires during queue wait OR LLM processing
 - On timeout: LLM call aborted, partial work retained in context, error returned
 - `manager.notifyFileModified(filePath)` hooks exist (wired in Phase 5)
@@ -835,13 +835,13 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 **Files to create/modify:**
 | File | Action | Notes |
 |------|--------|-------|
-| `src/extension.ts` | Modify | Register helper agent status bar button (blinking pattern, left-click info panel) |
-| `src/services/helper-agent/manager.ts` | Modify | Add `getContextUsage()`, `clearContext()`, `onStateChange`/`onConversationUpdate` events |
-| `src/activate/registerCommands.ts` | Modify | Register `helperAgent.start`, `helperAgent.stop`, `helperAgent.clearContext`, `helperAgent.showInfo` |
+| `src/extension.ts` | Modify | Register assistant agent status bar button (blinking pattern, left-click info panel) |
+| `src/services/assistant-agent/manager.ts` | Modify | Add `getContextUsage()`, `clearContext()`, `onStateChange`/`onConversationUpdate` events |
+| `src/activate/registerCommands.ts` | Modify | Register `assistantAgent.start`, `assistantAgent.stop`, `assistantAgent.clearContext`, `assistantAgent.showInfo` |
 
 **What works at end of Phase 4:**
 
-- Status bar shows helper agent state + fill percentage
+- Status bar shows assistant agent state + fill percentage
 - Icon blinks when Busy (matching RAG pattern)
 - Left-click opens info panel: status, model, token usage bar, fill %, cost, files in context
 - Clear Context button resets conversation to system prompt (cost tracking preserved)
@@ -856,12 +856,12 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 **Files to create/modify:**
 | File | Action | Notes |
 |------|--------|-------|
-| `src/services/helper-agent/directory-tree.ts` | Create | Scan workspace, generate `find .`-style tree, exclude `.shoferignore` + worktree paths, cap at 10% of context window |
-| `src/services/helper-agent/file-watcher.ts` | Create | VSCode FileSystemWatcher wrapper, 500ms debounce, notify ContextWindow |
-| `src/services/helper-agent/manager.ts` | Modify | Integrate directory tree into system prompt on init + Clear Context, integrate file watcher, hook `notifyFileModified` from tool execution pipeline |
-| `src/core/webview/HelperAgentChatProvider.ts` | Create | Webview panel provider for read-only chat view |
+| `src/services/assistant-agent/directory-tree.ts` | Create | Scan workspace, generate `find .`-style tree, exclude `.shoferignore` + worktree paths, cap at 10% of context window |
+| `src/services/assistant-agent/file-watcher.ts` | Create | VSCode FileSystemWatcher wrapper, 500ms debounce, notify ContextWindow |
+| `src/services/assistant-agent/manager.ts` | Modify | Integrate directory tree into system prompt on init + Clear Context, integrate file watcher, hook `notifyFileModified` from tool execution pipeline |
+| `src/core/webview/AssistantAgentChatProvider.ts` | Create | Webview panel provider for read-only chat view |
 | `src/core/webview/ShoferProvider.ts` | Modify | Register chat view provider, subscribe to events |
-| `src/core/context-tracking/FileContextTracker.ts` | Modify | Emit events on file modification that `HelperAgentManager` subscribes to |
+| `src/core/context-tracking/FileContextTracker.ts` | Modify | Emit events on file modification that `AssistantAgentManager` subscribes to |
 
 **What works at end of Phase 5:**
 
@@ -869,7 +869,7 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 - File watcher detects external changes (lazy re-read on next reference)
 - Tool-based file modifications trigger `notifyFileModified()` → accumulated for next question
 - Chat view panel shows live conversation (read-only, agent-to-agent)
-- `FileContextTracker` events wired to helper agent
+- `FileContextTracker` events wired to assistant agent
 
 ---
 
@@ -891,15 +891,15 @@ Phases 4 and 5 can be implemented in parallel after Phase 3 is complete.
 
 ### Commit History
 
-| Phase | Commit                                                                               | Files Changed                                                                       |
-| ----- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| 1     | `3a26139d5` `feat(helper-agent): Phase 1 — Core Manager + Configuration`             | 2 new: `packages/types/src/helper-agent.ts`, `src/services/helper-agent/manager.ts` |
-| 2     | `d1309e281` `feat(helper-agent): Phase 2 — Native Tool + Tool System Integration`    | 2 new, 5 modified                                                                   |
-| 3     | `4bab12a81` `feat(helper-agent): Phase 3 — Queue + Timeout + KV-Cache Notifications` | 1 modified: `manager.ts` (+256/-63)                                                 |
-| 4     | `9d4c50554` `feat(helper-agent): Phase 4 — Status Bar + Info Panel + Clear Context`  | 1 modified: `extension.ts` (+189)                                                   |
-| 5a    | `d80dbdc8c` `feat(helper-agent): Phase 5 — Directory Tree + File Watcher`            | 2 new, 1 modified                                                                   |
-| 5b    | `3a90b5003` `feat(helper-agent): Phase 5b — Chat View + FileContextTracker hooks`    | 1 new, 2 modified                                                                   |
-| R     | `794e6d0ac` `shofer: refactor helper agent into focused modules + typed plumbing`    | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)        |
+| Phase | Commit                                                                                  | Files Changed                                                                             |
+| ----- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 1     | `3a26139d5` `feat(assistant-agent): Phase 1 — Core Manager + Configuration`             | 2 new: `packages/types/src/assistant-agent.ts`, `src/services/assistant-agent/manager.ts` |
+| 2     | `d1309e281` `feat(assistant-agent): Phase 2 — Native Tool + Tool System Integration`    | 2 new, 5 modified                                                                         |
+| 3     | `4bab12a81` `feat(assistant-agent): Phase 3 — Queue + Timeout + KV-Cache Notifications` | 1 modified: `manager.ts` (+256/-63)                                                       |
+| 4     | `9d4c50554` `feat(assistant-agent): Phase 4 — Status Bar + Info Panel + Clear Context`  | 1 modified: `extension.ts` (+189)                                                         |
+| 5a    | `d80dbdc8c` `feat(assistant-agent): Phase 5 — Directory Tree + File Watcher`            | 2 new, 1 modified                                                                         |
+| 5b    | `3a90b5003` `feat(assistant-agent): Phase 5b — Chat View + FileContextTracker hooks`    | 1 new, 2 modified                                                                         |
+| R     | `794e6d0ac` `shofer: refactor assistant agent into focused modules + typed plumbing`    | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)              |
 
 _Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback` for `attempt_completion`.
 
@@ -917,42 +917,42 @@ _Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback`
 
 ### Files Created (13)
 
-| File                                                                                                                                                   | Phase | Lines | Description                                                                                                                                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`packages/types/src/helper-agent.ts`](extensions/shofer/packages/types/src/helper-agent.ts:1)                                                         | 1     | 176   | Zod schemas for AgentMessage, FileContextEntry, HelperAgentConfig, QuestionResult, CostTracking; HELPER_AGENT_SYSTEM_PROMPT; all 11 constants                |
-| [`src/services/helper-agent/manager.ts`](extensions/shofer/src/services/helper-agent/manager.ts:1)                                                     | 1, R  | 621   | Singleton-per-workspace orchestrator. Owns lifecycle, config, event emitters; delegates everything else to focused collaborators.                            |
-| [`src/services/helper-agent/conversation-store.ts`](extensions/shofer/src/services/helper-agent/conversation-store.ts:1)                               | R     | 141   | Versioned JSON snapshot persistence. SHA-256 file-context validation on load; ENOENT-safe; discards on version mismatch.                                     |
-| [`src/services/helper-agent/question-queue.ts`](extensions/shofer/src/services/helper-agent/question-queue.ts:1)                                       | R     | 158   | Bounded FIFO with per-entry AbortSignal + timeout. Reentrant-safe drain loop. `cancelAll()` for shutdown.                                                    |
-| [`src/services/helper-agent/context-window.ts`](extensions/shofer/src/services/helper-agent/context-window.ts:1)                                       | R     | 197   | In-memory window for messages + file contexts. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs). Token estimation. |
-| [`src/services/helper-agent/llm-client.ts`](extensions/shofer/src/services/helper-agent/llm-client.ts:1)                                               | R     | 212   | Adapter wrapping `buildApiHandler()`. Maps the helper-agent provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                    |
-| [`src/services/helper-agent/pricing.ts`](extensions/shofer/src/services/helper-agent/pricing.ts:1)                                                     | R     | 48    | Per-model USD cost from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler omits pricing.                            |
-| [`src/services/helper-agent/directory-tree.ts`](extensions/shofer/src/services/helper-agent/directory-tree.ts:1)                                       | 5a    | 158   | Recursive workspace scan, `find .`-style tree generation, ~10% token cap, common-dir exclusion set                                                           |
-| [`src/services/helper-agent/file-watcher.ts`](extensions/shofer/src/services/helper-agent/file-watcher.ts:1)                                           | 5a    | 106   | VSCode FileSystemWatcher wrapper, 500ms per-file debounce, worktree + hidden-path skipping                                                                   |
-| [`src/services/helper-agent/__tests__/conversation-store.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/conversation-store.spec.ts:1) | R     |       | Vitest spec for versioned persistence + hash validation.                                                                                                     |
-| [`src/services/helper-agent/__tests__/question-queue.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/question-queue.spec.ts:1)         | R     |       | Vitest spec for FIFO ordering, abort, timeout, bulk cancel.                                                                                                  |
-| [`src/services/helper-agent/__tests__/context-window.spec.ts`](extensions/shofer/src/services/helper-agent/__tests__/context-window.spec.ts:1)         | R     |       | Vitest spec for LRU eviction + token-budget enforcement.                                                                                                     |
-| [`src/core/prompts/tools/native-tools/ask_helper_agent.ts`](extensions/shofer/src/core/prompts/tools/native-tools/ask_helper_agent.ts:1)               | 2     | 51    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs                                                                               |
-| [`src/core/tools/AskHelperAgentTool.ts`](extensions/shofer/src/core/tools/AskHelperAgentTool.ts:1)                                                     | 2     | 102   | BaseTool<"ask_helper_agent"> delegating to HelperAgentManager                                                                                                |
-| [`src/core/webview/HelperAgentChatProvider.ts`](extensions/shofer/src/core/webview/HelperAgentChatProvider.ts:1)                                       | 5b    | 134   | Read-only WebviewPanel with conversation history, auto-refresh on state changes, accessible via status bar info panel                                        |
+| File                                                                                                                                                         | Phase | Lines | Description                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`packages/types/src/assistant-agent.ts`](extensions/shofer/packages/types/src/assistant-agent.ts:1)                                                         | 1     | 176   | Zod schemas for AgentMessage, FileContextEntry, AssistantAgentConfig, QuestionResult, CostTracking; ASSISTANT_AGENT_SYSTEM_PROMPT; all 11 constants          |
+| [`src/services/assistant-agent/manager.ts`](extensions/shofer/src/services/assistant-agent/manager.ts:1)                                                     | 1, R  | 621   | Singleton-per-workspace orchestrator. Owns lifecycle, config, event emitters; delegates everything else to focused collaborators.                            |
+| [`src/services/assistant-agent/conversation-store.ts`](extensions/shofer/src/services/assistant-agent/conversation-store.ts:1)                               | R     | 141   | Versioned JSON snapshot persistence. SHA-256 file-context validation on load; ENOENT-safe; discards on version mismatch.                                     |
+| [`src/services/assistant-agent/question-queue.ts`](extensions/shofer/src/services/assistant-agent/question-queue.ts:1)                                       | R     | 158   | Bounded FIFO with per-entry AbortSignal + timeout. Reentrant-safe drain loop. `cancelAll()` for shutdown.                                                    |
+| [`src/services/assistant-agent/context-window.ts`](extensions/shofer/src/services/assistant-agent/context-window.ts:1)                                       | R     | 197   | In-memory window for messages + file contexts. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs). Token estimation. |
+| [`src/services/assistant-agent/llm-client.ts`](extensions/shofer/src/services/assistant-agent/llm-client.ts:1)                                               | R     | 212   | Adapter wrapping `buildApiHandler()`. Maps the assistant-agent provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                 |
+| [`src/services/assistant-agent/pricing.ts`](extensions/shofer/src/services/assistant-agent/pricing.ts:1)                                                     | R     | 48    | Per-model USD cost from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler omits pricing.                            |
+| [`src/services/assistant-agent/directory-tree.ts`](extensions/shofer/src/services/assistant-agent/directory-tree.ts:1)                                       | 5a    | 158   | Recursive workspace scan, `find .`-style tree generation, ~10% token cap, common-dir exclusion set                                                           |
+| [`src/services/assistant-agent/file-watcher.ts`](extensions/shofer/src/services/assistant-agent/file-watcher.ts:1)                                           | 5a    | 106   | VSCode FileSystemWatcher wrapper, 500ms per-file debounce, worktree + hidden-path skipping                                                                   |
+| [`src/services/assistant-agent/__tests__/conversation-store.spec.ts`](extensions/shofer/src/services/assistant-agent/__tests__/conversation-store.spec.ts:1) | R     |       | Vitest spec for versioned persistence + hash validation.                                                                                                     |
+| [`src/services/assistant-agent/__tests__/question-queue.spec.ts`](extensions/shofer/src/services/assistant-agent/__tests__/question-queue.spec.ts:1)         | R     |       | Vitest spec for FIFO ordering, abort, timeout, bulk cancel.                                                                                                  |
+| [`src/services/assistant-agent/__tests__/context-window.spec.ts`](extensions/shofer/src/services/assistant-agent/__tests__/context-window.spec.ts:1)         | R     |       | Vitest spec for LRU eviction + token-budget enforcement.                                                                                                     |
+| [`src/core/prompts/tools/native-tools/ask_assistant_agent.ts`](extensions/shofer/src/core/prompts/tools/native-tools/ask_assistant_agent.ts:1)               | 2     | 51    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs                                                                               |
+| [`src/core/tools/AskAssistantAgentTool.ts`](extensions/shofer/src/core/tools/AskAssistantAgentTool.ts:1)                                                     | 2     | 102   | BaseTool<"ask_assistant_agent"> delegating to AssistantAgentManager                                                                                          |
+| [`src/core/webview/AssistantAgentChatProvider.ts`](extensions/shofer/src/core/webview/AssistantAgentChatProvider.ts:1)                                       | 5b    | 134   | Read-only WebviewPanel with conversation history, auto-refresh on state changes, accessible via status bar info panel                                        |
 
 ### Files Modified (13)
 
 | File                                                    | Phase    | Changes                                                                                                                      |
 | ------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `packages/types/src/index.ts`                           | 1        | Added `export * from "./helper-agent.js"`                                                                                    |
-| `packages/types/src/tool.ts`                            | 1        | Added `"ask_helper_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`                                          |
-| `packages/types/src/telemetry.ts`                       | 1        | Added `HELPER_AGENT_ERROR = "Helper Agent Error"` to TelemetryEventName                                                      |
-| `packages/types/src/global-settings.ts`                 | R        | Added 6 `helperAgent*` keys to `globalSettingsSchema`; 6 `helperAgent*Key` to `GLOBAL_SECRET_KEYS`                           |
-| `packages/types/src/vscode.ts`                          | R        | Added 5 helper-agent command ids to the typed `commandIds` array                                                             |
-| `src/shared/tools.ts`                                   | 1, fix   | Added `ask_helper_agent` to `NativeToolArgs`; pre-existing fix for `toolParamNames`                                          |
+| `packages/types/src/index.ts`                           | 1        | Added `export * from "./assistant-agent.js"`                                                                                 |
+| `packages/types/src/tool.ts`                            | 1        | Added `"ask_assistant_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`                                       |
+| `packages/types/src/telemetry.ts`                       | 1        | Added `ASSISTANT_AGENT_ERROR = "Assistant Agent Error"` to TelemetryEventName                                                |
+| `packages/types/src/global-settings.ts`                 | R        | Added 6 `assistantAgent*` keys to `globalSettingsSchema`; 6 `assistantAgent*Key` to `GLOBAL_SECRET_KEYS`                     |
+| `packages/types/src/vscode.ts`                          | R        | Added 5 assistant-agent command ids to the typed `commandIds` array                                                          |
+| `src/shared/tools.ts`                                   | 1, fix   | Added `ask_assistant_agent` to `NativeToolArgs`; pre-existing fix for `toolParamNames`                                       |
 | `src/extension.ts`                                      | 1,4,5b,R | Per-workspace activation, disposeAll(), status bar button, chat view import; commands now registered via registerCommands.ts |
-| `src/activate/registerCommands.ts`                      | R        | Registers the 5 helper-agent commands through the typed `commandIds` plumbing                                                |
+| `src/activate/registerCommands.ts`                      | R        | Registers the 5 assistant-agent commands through the typed `commandIds` plumbing                                             |
 | `src/core/prompts/tools/native-tools/index.ts`          | 2        | Import + registration in `getNativeTools()`                                                                                  |
 | `src/core/assistant-message/presentAssistantMessage.ts` | 2        | Import, description, dispatch case                                                                                           |
-| `src/core/prompts/tools/filter-tools-for-mode.ts`       | 2        | Added `helperAgentManager` (8th parameter), conditional `ask_helper_agent` exclusion                                         |
-| `src/core/task/build-tools.ts`                          | 2        | Import `HelperAgentManager`, pass to `filterNativeToolsForMode`                                                              |
-| `src/core/auto-approval/tools.ts`                       | 2        | Added `askHelperAgent: "ask_helper_agent"` auto-approval entry                                                               |
-| `src/core/context-tracking/FileContextTracker.ts`       | 5b       | Added `_notifyHelperAgent()` hook on `shofer_edited` events                                                                  |
+| `src/core/prompts/tools/filter-tools-for-mode.ts`       | 2        | Added `assistantAgentManager` (8th parameter), conditional `ask_assistant_agent` exclusion                                   |
+| `src/core/task/build-tools.ts`                          | 2        | Import `AssistantAgentManager`, pass to `filterNativeToolsForMode`                                                           |
+| `src/core/auto-approval/tools.ts`                       | 2        | Added `askAssistantAgent: "ask_assistant_agent"` auto-approval entry                                                         |
+| `src/core/context-tracking/FileContextTracker.ts`       | 5b       | Added `_notifyAssistantAgent()` hook on `shofer_edited` events                                                               |
 
 ### Implementation Deviations from Design
 
@@ -965,18 +965,18 @@ for conversation storage, the question queue, the context window, and pricing.
 | ------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | All functionality consolidated in `manager.ts` (~1020 lines)                         | Resolved | Split into focused modules: `conversation-store.ts`, `question-queue.ts`, `context-window.ts`, `llm-client.ts`, `pricing.ts`. `manager.ts` is now a thin orchestrator. |
 | Config read from `vscode.workspace.getConfiguration(...)` + `context.secrets.get()`  | Resolved | Reads/writes go through `ContextProxy.getInstance(context)`. Config keys added to `globalSettingsSchema`; secrets added to `GLOBAL_SECRET_KEYS`.                       |
-| `_callLLM()` did direct `fetch()` calls per provider                                 | Resolved | `HelperAgentLlmClient` wraps the shared `buildApiHandler()`. Streaming-only, abort-aware via `AbortSignal`. Adds OpenRouter + Anthropic without bespoke code.          |
+| `_callLLM()` did direct `fetch()` calls per provider                                 | Resolved | `AssistantAgentLlmClient` wraps the shared `buildApiHandler()`. Streaming-only, abort-aware via `AbortSignal`. Adds OpenRouter + Anthropic without bespoke code.       |
 | Inline `_loadConversation()` / `_saveConversation()`                                 | Resolved | Extracted into `ConversationStore` with versioned snapshot, hash-based file-context validation, and async I/O helpers.                                                 |
 | Inline `_questionQueue` array + `_processNextQuestion()`                             | Resolved | Extracted into `QuestionQueue` with per-entry `AbortSignal`, FIFO processing, queue-size cap, and bulk cancellation.                                                   |
-| Commands registered directly in `extension.ts` via `vscode.commands.registerCommand` | Resolved | Helper agent command IDs added to `commandIds` in `packages/types/src/vscode.ts`; registered in `src/activate/registerCommands.ts` like every other command.           |
+| Commands registered directly in `extension.ts` via `vscode.commands.registerCommand` | Resolved | Assistant agent command IDs added to `commandIds` in `packages/types/src/vscode.ts`; registered in `src/activate/registerCommands.ts` like every other command.        |
 
 ### Deferred Items
 
-| Item                                                                      | Design Reference                 | Reason                                                                                                                          |
-| ------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `ShoferProvider.ts` — subscribe to helper agent events                    | Phase 5 Integration Points table | Would push helper agent status/events to the Shofer webview. A separate wiring pass after the core tool pipeline is stabilized. |
-| `webviewMessageHandler.ts` — settings save, status request, secret status | Integration Points table         | Settings UI integration for the webview.                                                                                        |
-| `system.ts` — helper agent status in system prompt context                | Integration Points table         | Inclusion of helper agent availability + model info in the task agent's system prompt.                                          |
+| Item                                                                      | Design Reference                 | Reason                                                                                                                             |
+| ------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `ShoferProvider.ts` — subscribe to assistant agent events                 | Phase 5 Integration Points table | Would push assistant agent status/events to the Shofer webview. A separate wiring pass after the core tool pipeline is stabilized. |
+| `webviewMessageHandler.ts` — settings save, status request, secret status | Integration Points table         | Settings UI integration for the webview.                                                                                           |
+| `system.ts` — assistant agent status in system prompt context             | Integration Points table         | Inclusion of assistant agent availability + model info in the task agent's system prompt.                                          |
 
 ### Build Verification
 

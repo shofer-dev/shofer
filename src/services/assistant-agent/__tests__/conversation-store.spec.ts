@@ -9,7 +9,7 @@ import type { AgentMessage, FileContextEntry } from "@shofer/types"
 let tmpDir: string
 
 beforeEach(async () => {
-	tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "helper-agent-store-"))
+	tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "assistant-agent-store-"))
 })
 
 afterEach(async () => {
@@ -88,8 +88,8 @@ describe("ConversationStore", () => {
 		expect(stats.isDirectory()).toBe(true)
 	})
 
-	it("places the file at <storage>/shofer-helper-agent-<hash>.json", async () => {
+	it("places the file at <storage>/shofer-assistant-agent-<hash>.json", async () => {
 		const store = new ConversationStore(tmpDir, tmpDir)
-		expect(store.filePath).toMatch(/shofer-helper-agent-[0-9a-f]{16}\.json$/)
+		expect(store.filePath).toMatch(/shofer-assistant-agent-[0-9a-f]{16}\.json$/)
 	})
 })

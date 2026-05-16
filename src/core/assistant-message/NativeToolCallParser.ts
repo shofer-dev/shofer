@@ -492,7 +492,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "ask_helper_agent":
+			case "ask_assistant_agent":
 				if (partialArgs.question !== undefined) {
 					nativeArgs = {
 						question: partialArgs.question,
@@ -1051,7 +1051,7 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "ask_helper_agent":
+				case "ask_assistant_agent":
 					if (args.question !== undefined) {
 						nativeArgs = {
 							question: args.question,

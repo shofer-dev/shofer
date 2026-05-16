@@ -82,8 +82,8 @@ export const toolNames = [
 	"list_background_tasks",
 	"sleep",
 	"sed",
-	// Helper Agent
-	"ask_helper_agent",
+	// Assistant Agent
+	"ask_assistant_agent",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -152,7 +152,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	list_background_tasks: "list background tasks",
 	sleep: "wait / sleep",
 	sed: "regex find-and-replace on files",
-	ask_helper_agent: "ask helper agent",
+	ask_assistant_agent: "ask assistant agent",
 } as const
 
 /**
@@ -177,7 +177,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"get_changed_files",
 			"lsp_search",
 			"fetch_web_page",
-			"ask_helper_agent",
+			"ask_assistant_agent",
 		],
 	},
 	write: {

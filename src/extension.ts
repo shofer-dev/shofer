@@ -36,7 +36,7 @@ import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
 import { CodeIndexManager } from "./services/code-index/manager"
-import { HelperAgentManager } from "./services/helper-agent/manager"
+import { AssistantAgentManager } from "./services/assistant-agent/manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -141,26 +141,26 @@ export async function activate(context: vscode.ExtensionContext) {
 				context.subscriptions.push(manager)
 			}
 
-			// Initialize helper agent manager for this workspace folder.
-			const helperAgentManager = HelperAgentManager.getInstance(context, folder.uri.fsPath)
+			// Initialize assistant agent manager for this workspace folder.
+			const assistantAgentManager = AssistantAgentManager.getInstance(context, folder.uri.fsPath)
 
-			if (helperAgentManager) {
+			if (assistantAgentManager) {
 				// Initialize in background; do not block extension activation
-				void helperAgentManager.initialize().catch((error) => {
+				void assistantAgentManager.initialize().catch((error) => {
 					const message = error instanceof Error ? error.message : String(error)
 					outputChannel.appendLine(
-						`[HelperAgentManager] Error during initialization for ${folder.uri.fsPath}: ${message}`,
+						`[AssistantAgentManager] Error during initialization for ${folder.uri.fsPath}: ${message}`,
 					)
 				})
 
-				context.subscriptions.push(helperAgentManager)
+				context.subscriptions.push(assistantAgentManager)
 			}
 		}
 	}
 
-	// ─── Helper Agent ──────────────────────────────────────────────────
-	// The Helper Agent's status indicator and action menu live in the
-	// Shofer chat-input toolbar (HelperAgentStatusBadge → HelperAgentPopover),
+	// ─── Assistant Agent ──────────────────────────────────────────────────
+	// The Assistant Agent's status indicator and action menu live in the
+	// Shofer chat-input toolbar (AssistantAgentStatusBadge → AssistantAgentPopover),
 	// not in the VS Code status bar. Commands are registered through
 	// registerCommands() (typed CommandId system) below.
 
@@ -176,7 +176,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
-	// ─── End Helper Agent Chat View ───────────────────────────────────
+	// ─── End Assistant Agent Chat View ───────────────────────────────────
 
 	// Native TreeView used as a reliable file drop target.  See
 	// ContextDropZoneProvider for rationale.  Registered collapsed-by-default
@@ -340,7 +340,7 @@ export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
 	await McpServerManager.cleanup(extensionContext)
-	HelperAgentManager.disposeAll()
+	AssistantAgentManager.disposeAll()
 	CodeIndexManager.disposeAll()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()

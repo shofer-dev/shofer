@@ -2,14 +2,14 @@ import * as vscode from "vscode"
 import * as path from "path"
 
 /**
- * HelperAgentFileWatcher — watches workspace files for external changes
+ * AssistantAgentFileWatcher — watches workspace files for external changes
  * (changes not originating from Shofer tools).
  *
  * Detects create/modify/delete events and notifies the manager so
  * it can evict stale file context entries. Uses VSCode's built-in
  * FileSystemWatcher with debouncing per file.
  */
-export class HelperAgentFileWatcher {
+export class AssistantAgentFileWatcher {
 	private readonly _workspacePath: string
 	private readonly _onFileChanged: (filePath: string, event: "changed" | "deleted") => void
 	private _watcher?: vscode.FileSystemWatcher

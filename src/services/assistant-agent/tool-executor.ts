@@ -1,7 +1,7 @@
 /**
- * HelperAgentToolExecutor — read-only tool dispatcher for the Helper Agent.
+ * AssistantAgentToolExecutor — read-only tool dispatcher for the Assistant Agent.
  *
- * The Helper Agent runs outside the main `Task` plumbing (no chat UI, no
+ * The Assistant Agent runs outside the main `Task` plumbing (no chat UI, no
  * approval flow, no file-context tracker), so it cannot reuse the
  * `BaseTool` implementations directly — those are tightly coupled to
  * `Task` (consecutiveMistakeCount, providerRef, fileContextTracker,
@@ -12,7 +12,7 @@
  * the model to consume in the next turn of the agent loop.
  *
  * Only Read-category tools are exposed (TOOL_GROUPS.read in
- * packages/types/src/tool.ts), minus `ask_helper_agent` itself to prevent
+ * packages/types/src/tool.ts), minus `ask_assistant_agent` itself to prevent
  * recursion. Every implementation is read-only and side-effect-free with
  * respect to workspace files.
  */
@@ -28,7 +28,7 @@ import { listFiles as globListFiles } from "../glob/list-files"
 import { CodeIndexManager } from "../code-index/manager"
 import { logger } from "../../utils/logging"
 
-const LOG_PREFIX = "[HelperAgent.ToolExecutor]"
+const LOG_PREFIX = "[AssistantAgent.ToolExecutor]"
 
 /** Maximum bytes returned for a single tool call; over this we truncate. */
 const MAX_TOOL_OUTPUT_BYTES = 200_000
@@ -44,8 +44,8 @@ export interface ToolExecutionResult {
 	isError?: boolean
 }
 
-/** Set of tool names the helper agent is allowed to call. */
-export const HELPER_AGENT_READ_TOOLS = [
+/** Set of tool names the assistant agent is allowed to call. */
+export const ASSISTANT_AGENT_READ_TOOLS = [
 	"read_file",
 	"grep_search",
 	"list_files",
@@ -61,9 +61,9 @@ export const HELPER_AGENT_READ_TOOLS = [
 	"fetch_web_page",
 ] as const
 
-export type HelperAgentReadTool = (typeof HELPER_AGENT_READ_TOOLS)[number]
+export type AssistantAgentReadTool = (typeof ASSISTANT_AGENT_READ_TOOLS)[number]
 
-export class HelperAgentToolExecutor {
+export class AssistantAgentToolExecutor {
 	private readonly _cwd: string
 	private readonly _context: vscode.ExtensionContext
 
@@ -133,7 +133,7 @@ export class HelperAgentToolExecutor {
 					result = await this._fetchWebPage(args, signal)
 					break
 				default:
-					result = { isError: true, content: `Tool '${name}' is not available to the helper agent.` }
+					result = { isError: true, content: `Tool '${name}' is not available to the assistant agent.` }
 			}
 			result.content = truncateOutput(result.content)
 			logger.info(
@@ -247,10 +247,10 @@ export class HelperAgentToolExecutor {
 		const abs = path.resolve(this._cwd, args.path)
 		const stat = await fs.stat(abs)
 		// Returning a base64 image as part of a tool_result string is not ideal,
-		// but the helper agent currently does not surface multimodal content
+		// but the assistant agent currently does not surface multimodal content
 		// blocks back to the model. We return metadata + a note instead.
 		return {
-			content: `Image file ${args.path} (${stat.size} bytes). The helper agent does not currently support inline image rendering; describe the image's role from context instead.`,
+			content: `Image file ${args.path} (${stat.size} bytes). The assistant agent does not currently support inline image rendering; describe the image's role from context instead.`,
 		}
 	}
 

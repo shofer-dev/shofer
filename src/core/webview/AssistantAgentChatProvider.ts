@@ -1,32 +1,32 @@
 import * as vscode from "vscode"
-import { HelperAgentManager } from "../../services/helper-agent/manager"
+import { AssistantAgentManager } from "../../services/assistant-agent/manager"
 import type { AgentMessage } from "@shofer/types"
 
 /**
- * Open (or reveal) a read-only webview panel showing the helper agent's
+ * Open (or reveal) a read-only webview panel showing the assistant agent's
  * conversation history. Called from the status bar info panel "View Chat"
  * action. The user cannot send messages — all messages come from tasks
- * via the `ask_helper_agent` tool.
+ * via the `ask_assistant_agent` tool.
  */
-export function showHelperAgentChatPanel(extensionUri: vscode.Uri): void {
-	const existing = HelperAgentChatPanel.current
+export function showAssistantAgentChatPanel(extensionUri: vscode.Uri): void {
+	const existing = AssistantAgentChatPanel.current
 	if (existing) {
 		existing.reveal()
 		return
 	}
-	HelperAgentChatPanel.createOrShow(extensionUri)
+	AssistantAgentChatPanel.createOrShow(extensionUri)
 }
 
-class HelperAgentChatPanel {
-	static current: HelperAgentChatPanel | undefined
+class AssistantAgentChatPanel {
+	static current: AssistantAgentChatPanel | undefined
 
 	private readonly _panel: vscode.WebviewPanel
 	private readonly _extensionUri: vscode.Uri
 
 	static createOrShow(extensionUri: vscode.Uri): void {
 		const panel = vscode.window.createWebviewPanel(
-			"shofer.helperAgentChat",
-			"Helper Agent Chat",
+			"shofer.assistantAgentChat",
+			"Assistant Agent Chat",
 			{ viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
 			{
 				enableScripts: false,
@@ -34,7 +34,7 @@ class HelperAgentChatPanel {
 			},
 		)
 
-		HelperAgentChatPanel.current = new HelperAgentChatPanel(panel, extensionUri)
+		AssistantAgentChatPanel.current = new AssistantAgentChatPanel(panel, extensionUri)
 	}
 
 	private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
@@ -44,11 +44,11 @@ class HelperAgentChatPanel {
 		this._render()
 
 		this._panel.onDidDispose(() => {
-			HelperAgentChatPanel.current = undefined
+			AssistantAgentChatPanel.current = undefined
 		})
 
 		// Refresh on conversation updates from all managers
-		for (const mgr of HelperAgentManager.getAllInstances()) {
+		for (const mgr of AssistantAgentManager.getAllInstances()) {
 			mgr.onConversationUpdate(() => this._render())
 			mgr.onStateChange(() => this._render())
 		}
@@ -59,7 +59,7 @@ class HelperAgentChatPanel {
 	}
 
 	private _render(): void {
-		const managers = HelperAgentManager.getAllInstances()
+		const managers = AssistantAgentManager.getAllInstances()
 		let messages: ReadonlyArray<AgentMessage> = []
 		let state = "Standby"
 		let contextUsage = { currentTokens: 0, maxTokens: 0, fillFraction: 0, isNearlyFull: false }
@@ -97,13 +97,13 @@ class HelperAgentChatPanel {
 
 		const emptySection =
 			messages.length === 0
-				? `<div class="empty">No conversation history yet.<br>Tasks will ask questions via the ask_helper_agent tool.</div>`
+				? `<div class="empty">No conversation history yet.<br>Tasks will ask questions via the ask_assistant_agent tool.</div>`
 				: ""
 
 		return [
 			`<!DOCTYPE html>`,
 			`<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">`,
-			`<title>Helper Agent Chat</title>`,
+			`<title>Assistant Agent Chat</title>`,
 			`<style>`,
 			`  body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 16px; }`,
 			`  .header { border-bottom: 1px solid var(--vscode-widget-border); padding-bottom: 8px; margin-bottom: 16px; }`,
