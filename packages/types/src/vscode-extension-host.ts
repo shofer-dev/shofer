@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import type { CodebaseIndexConfig } from "./codebase-index.js"
 import type { GlobalSettings, ShoferSettings } from "./global-settings.js"
 import type { ProviderSettings, ProviderSettingsEntry } from "./provider-settings.js"
 import type { HistoryItem, CostLimit, TaskState } from "./history.js"
@@ -655,6 +656,7 @@ export interface WebviewMessage {
 		| "checkRulesDirectory"
 		| "checkRulesDirectoryResult"
 		| "saveCodeIndexSettingsAtomic"
+		| "updateCodebaseIndexConfig"
 		| "requestCodeIndexSecretStatus"
 		| "requestCommands"
 		| "openCommandFile"
@@ -821,6 +823,16 @@ export interface WebviewMessage {
 		codebaseIndexVercelAiGatewayApiKey?: string
 		codebaseIndexOpenRouterApiKey?: string
 	}
+	/**
+	 * Partial codebase-index config patch.
+	 *
+	 * Used by `updateCodebaseIndexConfig` to merge a small subset of fields
+	 * (e.g. just `codebaseIndexGitEnabled` toggled from the popover) into the
+	 * persisted `codebaseIndexConfig` global state without touching unrelated
+	 * fields or rewriting any secrets — unlike `saveCodeIndexSettingsAtomic`
+	 * which expects the full settings object and reinitializes the manager.
+	 */
+	codebaseIndexConfigPartial?: Partial<CodebaseIndexConfig>
 	updatedSettings?: ShoferSettings
 	/** Task configuration applied via `createTask()` when starting a cloud task. */
 	taskConfiguration?: ShoferSettings
