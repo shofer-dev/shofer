@@ -73,7 +73,7 @@ import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckpointService"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
-import { HelperAgentManager } from "../../services/helper-agent/manager"
+import { AssistantAgentManager } from "../../services/assistant-agent/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
 
@@ -137,8 +137,8 @@ export class ShoferProvider
 	private shoferStack: Task[] = []
 	private codeIndexStatusSubscription?: vscode.Disposable
 	private codeIndexManager?: CodeIndexManager
-	private helperAgentStatusSubscription?: vscode.Disposable
-	private helperAgentManager?: HelperAgentManager
+	private assistantAgentStatusSubscription?: vscode.Disposable
+	private assistantAgentManager?: AssistantAgentManager
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
@@ -912,8 +912,8 @@ export class ShoferProvider
 		// Initialize code index status subscription for the current workspace.
 		this.updateCodeIndexStatusSubscription()
 
-		// Initialize helper agent status subscription.
-		this.updateHelperAgentStatusSubscription()
+		// Initialize assistant agent status subscription.
+		this.updateAssistantAgentStatusSubscription()
 
 		// Listen for active editor changes to update code index status for the
 		// current workspace.
@@ -958,7 +958,7 @@ export class ShoferProvider
 					this.clearWebviewResources()
 					// Reset current workspace manager reference when view is disposed
 					this.codeIndexManager = undefined
-					this.helperAgentManager = undefined
+					this.assistantAgentManager = undefined
 				}
 			},
 			null,
@@ -2511,6 +2511,7 @@ export class ShoferProvider
 			telemetrySetting,
 			showShoferIgnoredFiles,
 			enableSubfolderRules,
+			useAgentRules,
 			language,
 			maxImageFileSize,
 			maxTotalImageSize,
@@ -2541,10 +2542,10 @@ export class ShoferProvider
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
 			lockApiConfigAcrossModes,
-			helperAgentEnabled,
-			helperAgentApiConfigId,
-			helperAgentMaxContextTokens,
-			helperAgentContextFillThreshold,
+			assistantAgentEnabled,
+			assistantAgentApiConfigId,
+			assistantAgentMaxContextTokens,
+			assistantAgentContextFillThreshold,
 		} = await this.getState()
 
 		let cloudOrganizations: any[] = []
@@ -2638,6 +2639,7 @@ export class ShoferProvider
 			machineId,
 			showShoferIgnoredFiles: showShoferIgnoredFiles ?? false,
 			enableSubfolderRules: enableSubfolderRules ?? false,
+			useAgentRules: useAgentRules ?? true,
 			language: language ?? formatLanguage(vscode.env.language),
 			renderContext: this.renderContext,
 			maxImageFileSize: maxImageFileSize ?? 5,
@@ -2690,10 +2692,10 @@ export class ShoferProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
-			helperAgentEnabled: helperAgentEnabled ?? true,
-			helperAgentApiConfigId,
-			helperAgentMaxContextTokens,
-			helperAgentContextFillThreshold,
+			assistantAgentEnabled: assistantAgentEnabled ?? true,
+			assistantAgentApiConfigId,
+			assistantAgentMaxContextTokens,
+			assistantAgentContextFillThreshold,
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
@@ -2868,6 +2870,7 @@ export class ShoferProvider
 			telemetrySetting: stateValues.telemetrySetting || "unset",
 			showShoferIgnoredFiles: stateValues.showShoferIgnoredFiles ?? false,
 			enableSubfolderRules: stateValues.enableSubfolderRules ?? false,
+			useAgentRules: stateValues.useAgentRules ?? true,
 			maxImageFileSize: stateValues.maxImageFileSize ?? 5,
 			maxTotalImageSize: stateValues.maxTotalImageSize ?? 20,
 			historyPreviewCollapsed: stateValues.historyPreviewCollapsed ?? false,
@@ -2913,10 +2916,10 @@ export class ShoferProvider
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
-			helperAgentEnabled: stateValues.helperAgentEnabled,
-			helperAgentApiConfigId: stateValues.helperAgentApiConfigId,
-			helperAgentMaxContextTokens: stateValues.helperAgentMaxContextTokens,
-			helperAgentContextFillThreshold: stateValues.helperAgentContextFillThreshold,
+			assistantAgentEnabled: stateValues.assistantAgentEnabled,
+			assistantAgentApiConfigId: stateValues.assistantAgentApiConfigId,
+			assistantAgentMaxContextTokens: stateValues.assistantAgentMaxContextTokens,
+			assistantAgentContextFillThreshold: stateValues.assistantAgentContextFillThreshold,
 		}
 	}
 
@@ -3148,32 +3151,32 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Updates the helper agent status subscription to push status to the webview.
+	 * Updates the assistant agent status subscription to push status to the webview.
 	 * Follows the same pattern as updateCodeIndexStatusSubscription.
 	 */
-	private updateHelperAgentStatusSubscription(): void {
-		const currentManager = HelperAgentManager.getInstance(this.context)
+	private updateAssistantAgentStatusSubscription(): void {
+		const currentManager = AssistantAgentManager.getInstance(this.context)
 
-		if (currentManager === this.helperAgentManager) {
+		if (currentManager === this.assistantAgentManager) {
 			return
 		}
 
-		if (this.helperAgentStatusSubscription) {
-			this.helperAgentStatusSubscription.dispose()
-			this.helperAgentStatusSubscription = undefined
+		if (this.assistantAgentStatusSubscription) {
+			this.assistantAgentStatusSubscription.dispose()
+			this.assistantAgentStatusSubscription = undefined
 		}
 
-		this.helperAgentManager = currentManager
+		this.assistantAgentManager = currentManager
 
 		if (currentManager) {
 			const sendStatus = () => {
-				if (currentManager !== this.helperAgentManager) return
+				if (currentManager !== this.assistantAgentManager) return
 				this.postMessageToWebview({
-					type: "helperAgentStatusUpdate",
+					type: "assistantAgentStatusUpdate",
 					text: JSON.stringify({
 						state: currentManager.state,
 						stateMessage: currentManager.stateMessage,
-						isAvailable: currentManager.isHelperAgentAvailable,
+						isAvailable: currentManager.isAssistantAgentAvailable,
 						modelId: currentManager.modelId,
 						provider: currentManager.provider,
 						contextUsage: currentManager.getContextUsage(),
@@ -3189,10 +3192,10 @@ export class ShoferProvider
 			// into a single disposable so both are cleaned up on re-subscribe.
 			const stateSubscription = currentManager.onStateChange(() => sendStatus())
 			const convSubscription = currentManager.onConversationUpdate(() => sendStatus())
-			this.helperAgentStatusSubscription = vscode.Disposable.from(stateSubscription, convSubscription)
+			this.assistantAgentStatusSubscription = vscode.Disposable.from(stateSubscription, convSubscription)
 
 			if (this.view) {
-				this.webviewDisposables.push(this.helperAgentStatusSubscription)
+				this.webviewDisposables.push(this.assistantAgentStatusSubscription)
 			}
 
 			sendStatus()
@@ -3200,25 +3203,25 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Pushes a fresh Helper Agent status snapshot to the webview. Used by the
+	 * Pushes a fresh Assistant Agent status snapshot to the webview. Used by the
 	 * webview status badge to populate itself on mount, since the periodic
 	 * subscription only fires on state/conversation changes.
 	 */
-	public sendHelperAgentStatus(): void {
-		const manager = this.helperAgentManager ?? HelperAgentManager.getInstance(this.context)
+	public sendAssistantAgentStatus(): void {
+		const manager = this.assistantAgentManager ?? AssistantAgentManager.getInstance(this.context)
 		if (!manager) {
 			this.postMessageToWebview({
-				type: "helperAgentStatusUpdate",
+				type: "assistantAgentStatusUpdate",
 				text: JSON.stringify({ state: "Standby", isAvailable: false }),
 			})
 			return
 		}
 		this.postMessageToWebview({
-			type: "helperAgentStatusUpdate",
+			type: "assistantAgentStatusUpdate",
 			text: JSON.stringify({
 				state: manager.state,
 				stateMessage: manager.stateMessage,
-				isAvailable: manager.isHelperAgentAvailable,
+				isAvailable: manager.isAssistantAgentAvailable,
 				modelId: manager.modelId,
 				provider: manager.provider,
 				contextUsage: manager.getContextUsage(),

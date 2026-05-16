@@ -4598,6 +4598,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			language,
 			apiConfiguration,
 			enableSubfolderRules,
+			useAgentRules,
 		} = state ?? {}
 
 		return await (async () => {
@@ -4629,8 +4630,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				shoferIgnoreInstructions,
 				{
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
-					useAgentRules:
-						vscode.workspace.getConfiguration(Package.name).get<boolean>("useAgentRules") ?? true,
+					useAgentRules: useAgentRules ?? true,
 					enableSubfolderRules: enableSubfolderRules ?? false,
 					newTaskRequireTodos: vscode.workspace
 						.getConfiguration(Package.name)

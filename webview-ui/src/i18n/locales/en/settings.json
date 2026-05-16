@@ -35,7 +35,7 @@
 		"tools": "Tools",
 		"checkpoints": "Checkpoints",
 		"notifications": "Notifications",
-		"helperAgent": "Helper Agent",
+		"assistantAgent": "Assistant Agent",
 		"contextManagement": "Context",
 		"terminal": "Terminal",
 		"slashCommands": "Slash Commands",
@@ -679,25 +679,25 @@
 			"speedLabel": "Speed"
 		}
 	},
-	"helperAgent": {
+	"assistantAgent": {
 		"enabled": {
-			"label": "Enable Helper Agent",
+			"label": "Enable Assistant Agent",
 			"description": "When enabled, the codebase Q&A companion runs in the background and answers questions about the workspace."
 		},
 		"apiConfigId": {
 			"label": "API Configuration",
-			"description": "Profile from Settings → Providers used for the Helper Agent's LLM calls. Provider, model and credentials all come from the selected profile.",
+			"description": "Profile from Settings → Providers used for the Assistant Agent's LLM calls. Provider, model and credentials all come from the selected profile.",
 			"placeholder": "Select an API Configuration",
 			"empty": "No API Configurations defined — add one under Settings → Providers."
 		},
 		"maxContextTokens": {
 			"label": "Max context tokens (override)",
-			"description": "Optional override for the Helper Agent's context window. Leave empty to inherit the value from the selected API Configuration's model.",
+			"description": "Optional override for the Assistant Agent's context window. Leave empty to inherit the value from the selected API Configuration's model.",
 			"placeholder": "Inherit from API Configuration"
 		},
 		"contextFillThreshold": {
 			"label": "Context fill threshold",
-			"description": "Fraction (0..1) of the context window at which the Helper Agent starts trimming older turns. Default 0.85."
+			"description": "Fraction (0..1) of the context window at which the Assistant Agent starts trimming older turns. Default 0.85."
 		}
 	},
 	"contextManagement": {
@@ -790,6 +790,10 @@
 		"enableSubfolderRules": {
 			"label": "Enable subfolder rules",
 			"description": "Recursively discover and load .shofer/rules and AGENTS.md files from subdirectories. Useful for monorepos with per-package rules."
+		},
+		"useAgentRules": {
+			"label": "Use Agent Rules",
+			"description": "Load AGENTS.md (or AGENT.md) files from the workspace root for agent-specific rules, per the Agent Rules standard (https://agent-rules.org/). When enabled, content from AGENTS.md files is injected into the system prompt at task start."
 		},
 		"shoferignore": {
 			"label": "Show .shoferignore'd files in lists and searches",

@@ -34,6 +34,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	maxWorkspaceFiles: number
 	showShoferIgnoredFiles?: boolean
 	enableSubfolderRules?: boolean
+	useAgentRules?: boolean
 	maxImageFileSize?: number
 	maxTotalImageSize?: number
 	profileThresholds?: Record<string, number>
@@ -53,6 +54,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "maxWorkspaceFiles"
 		| "showShoferIgnoredFiles"
 		| "enableSubfolderRules"
+		| "useAgentRules"
 		| "maxImageFileSize"
 		| "maxTotalImageSize"
 		| "profileThresholds"
@@ -74,6 +76,7 @@ export const ContextManagementSettings = ({
 	maxWorkspaceFiles,
 	showShoferIgnoredFiles,
 	enableSubfolderRules,
+	useAgentRules,
 	setCachedStateField,
 	maxImageFileSize,
 	maxTotalImageSize,
@@ -247,6 +250,23 @@ export const ContextManagementSettings = ({
 					</VSCodeCheckbox>
 					<div className="text-vscode-descriptionForeground text-sm mt-1 mb-3">
 						{t("settings:contextManagement.enableSubfolderRules.description")}
+					</div>
+				</SearchableSetting>
+
+				<SearchableSetting
+					settingId="context-use-agent-rules"
+					section="contextManagement"
+					label={t("settings:contextManagement.useAgentRules.label")}>
+					<VSCodeCheckbox
+						checked={useAgentRules}
+						onChange={(e: any) => setCachedStateField("useAgentRules", e.target.checked)}
+						data-testid="use-agent-rules-checkbox">
+						<label className="block font-medium mb-1">
+							{t("settings:contextManagement.useAgentRules.label")}
+						</label>
+					</VSCodeCheckbox>
+					<div className="text-vscode-descriptionForeground text-sm mt-1 mb-3">
+						{t("settings:contextManagement.useAgentRules.description")}
 					</div>
 				</SearchableSetting>
 

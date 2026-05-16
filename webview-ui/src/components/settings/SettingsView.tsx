@@ -70,7 +70,7 @@ import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
 import { CheckpointSettings } from "./CheckpointSettings"
 import { NotificationSettings } from "./NotificationSettings"
-import { HelperAgentSettings } from "./HelperAgentSettings"
+import { AssistantAgentSettings } from "./AssistantAgentSettings"
 import { ContextManagementSettings } from "./ContextManagementSettings"
 import { TerminalSettings } from "./TerminalSettings"
 import { ExperimentalSettings } from "./ExperimentalSettings"
@@ -107,7 +107,7 @@ export const sectionNames = [
 	"skills",
 	"checkpoints",
 	"notifications",
-	"helperAgent",
+	"assistantAgent",
 	"contextManagement",
 	"terminal",
 	"modes",
@@ -195,6 +195,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		writeDelayMs,
 		showShoferIgnoredFiles,
 		enableSubfolderRules,
+		useAgentRules,
 		maxImageFileSize,
 		maxTotalImageSize,
 		customSupportPrompts,
@@ -213,10 +214,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		includeCurrentCost,
 		maxGitStatusFiles,
 		defaultCostLimit,
-		helperAgentEnabled,
-		helperAgentApiConfigId,
-		helperAgentMaxContextTokens,
-		helperAgentContextFillThreshold,
+		assistantAgentEnabled,
+		assistantAgentApiConfigId,
+		assistantAgentMaxContextTokens,
+		assistantAgentContextFillThreshold,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -418,6 +419,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					maxWorkspaceFiles: Math.min(Math.max(0, maxWorkspaceFiles ?? 200), 500),
 					showShoferIgnoredFiles: showShoferIgnoredFiles ?? true,
 					enableSubfolderRules: enableSubfolderRules ?? false,
+					useAgentRules: useAgentRules ?? true,
 					maxImageFileSize: maxImageFileSize ?? 5,
 					maxTotalImageSize: maxTotalImageSize ?? 20,
 					includeDiagnosticMessages:
@@ -440,10 +442,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					experiments,
 					customSupportPrompts,
 					disabledTools: disabledTools ?? [],
-					helperAgentEnabled: helperAgentEnabled ?? true,
-					helperAgentApiConfigId: helperAgentApiConfigId ?? "",
-					helperAgentMaxContextTokens: helperAgentMaxContextTokens,
-					helperAgentContextFillThreshold: helperAgentContextFillThreshold,
+					assistantAgentEnabled: assistantAgentEnabled ?? true,
+					assistantAgentApiConfigId: assistantAgentApiConfigId ?? "",
+					assistantAgentMaxContextTokens: assistantAgentMaxContextTokens,
+					assistantAgentContextFillThreshold: assistantAgentContextFillThreshold,
 				},
 			})
 
@@ -539,7 +541,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "mcp", icon: Server },
 			{ id: "checkpoints", icon: GitCommitVertical },
 			{ id: "notifications", icon: Bell },
-			{ id: "helperAgent", icon: MessageCircle },
+			{ id: "assistantAgent", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
 			{ id: "prompts", icon: MessageSquare },
@@ -860,13 +862,13 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							/>
 						)}
 
-						{/* Helper Agent Section */}
-						{renderTab === "helperAgent" && (
-							<HelperAgentSettings
-								helperAgentEnabled={helperAgentEnabled}
-								helperAgentApiConfigId={helperAgentApiConfigId}
-								helperAgentMaxContextTokens={helperAgentMaxContextTokens}
-								helperAgentContextFillThreshold={helperAgentContextFillThreshold}
+						{/* Assistant Agent Section */}
+						{renderTab === "assistantAgent" && (
+							<AssistantAgentSettings
+								assistantAgentEnabled={assistantAgentEnabled}
+								assistantAgentApiConfigId={assistantAgentApiConfigId}
+								assistantAgentMaxContextTokens={assistantAgentMaxContextTokens}
+								assistantAgentContextFillThreshold={assistantAgentContextFillThreshold}
 								listApiConfigMeta={listApiConfigMeta ?? []}
 								setCachedStateField={setCachedStateField}
 							/>
@@ -882,6 +884,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								maxWorkspaceFiles={maxWorkspaceFiles ?? 200}
 								showShoferIgnoredFiles={showShoferIgnoredFiles}
 								enableSubfolderRules={enableSubfolderRules}
+								useAgentRules={useAgentRules}
 								maxImageFileSize={maxImageFileSize}
 								maxTotalImageSize={maxTotalImageSize}
 								profileThresholds={profileThresholds}
