@@ -351,7 +351,8 @@ export class AssistantAgentManager implements vscode.Disposable {
 			}
 
 			// ── Build the agent loop's prompt + initial conversation ───────
-			const { systemPrompt, baseConversation } = this._buildAgentPrompt(question, recentlyModified, softLimits)
+			const systemPrompt = this._buildSystemPrompt(recentlyModified, softLimits)
+			let baseConversation = this._buildBaseConversation(question)
 			const tools = this._getToolCatalog()
 			const executor = this._getToolExecutor()
 
@@ -359,6 +360,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 			// (text + tool_use blocks) and user (tool_result blocks) turns.
 			// Only the original question + final assistant text are persisted.
 			const conversation: Anthropic.Messages.MessageParam[] = [...baseConversation]
+			let baseLength = baseConversation.length
 
 			let totalPrompt = 0
 			let totalCompletion = 0
@@ -424,6 +426,17 @@ export class AssistantAgentManager implements vscode.Disposable {
 					})
 				}
 				conversation.push({ role: "user", content: toolResultBlocks })
+
+				// Enforce the context budget after each iteration so the
+				// persisted window stays trimmed. Then refresh the base
+				// portion of the in-flight conversation so the next
+				// iteration's LLM call benefits from the eviction.
+				this._window.enforceLimit()
+				this._costTracking.totalTokensTruncated += this._window.consumeEvictedTokens()
+
+				const freshBase = this._buildBaseConversation(question)
+				conversation.splice(0, baseLength, ...freshBase)
+				baseLength = freshBase.length
 			}
 
 			logger.info(
@@ -446,6 +459,11 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 			this._window.appendMessage(userMsg)
 			this._window.appendMessage(assistantMsg)
+
+			// Enforce limit after appending — prevents unbounded growth
+			// between questions when no contextFiles are loaded.
+			this._window.enforceLimit()
+			this._costTracking.totalTokensTruncated += this._window.consumeEvictedTokens()
 
 			this._accumulateCost(totalPrompt, totalCompletion, totalCost)
 
@@ -664,52 +682,67 @@ export class AssistantAgentManager implements vscode.Disposable {
 	// ─── Message Construction ────────────────────────────────────────────
 
 	/**
-	 * Build the system prompt + base conversation array for an agent-loop
-	 * iteration. The system prompt is held stable across iterations; the
-	 * conversation grows with tool_use / tool_result blocks. File-context
-	 * markers and the prior persisted Q&A history are embedded as plain
-	 * user/assistant text turns.
+	 * Build the system prompt for the assistant agent. This is stable across
+	 * all iterations of a single question — directory tree, file contexts,
+	 * recently-modified hints, and soft constraints don't change mid-loop.
+	 *
+	 * System-role messages from the persisted window are also folded in so
+	 * truncation markers and other system notes survive trimming.
 	 */
-	private _buildAgentPrompt(
-		question: string,
+	private _buildSystemPrompt(
 		recentlyModifiedFiles: string[],
 		softLimits: { softTimeoutSec?: number; softResultLength?: number } = {},
-	): { systemPrompt: string; baseConversation: Anthropic.Messages.MessageParam[] } {
+	): string {
 		const treeContent = this._directoryTreeString
 			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shoferignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
 
-		const systemPromptParts = [ASSISTANT_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
+		const parts = [ASSISTANT_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
 
 		for (const fc of this._window.fileContexts) {
-			systemPromptParts.push(
+			parts.push(
 				`[File context: ${fc.filePath}]\n(Content hash: ${fc.contentHash}, tokens: ~${fc.tokenEstimate})`,
 			)
 		}
 
 		if (recentlyModifiedFiles.length > 0) {
-			systemPromptParts.push(
+			parts.push(
 				`[Note: the following files have been modified since you last read them: ${recentlyModifiedFiles.join(", ")}. Consider re-reading them if relevant to this question.]`,
 			)
 		}
 
 		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC
 		const softResultLength = softLimits.softResultLength ?? DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH
-		systemPromptParts.push(
+		parts.push(
 			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${softTimeoutSec}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
 		)
 
-		const baseConversation: Anthropic.Messages.MessageParam[] = []
+		// Fold in system-role messages from the persisted window (e.g.
+		// truncation markers, file-context notes) so they survive trimming.
 		for (const msg of this._window.messages) {
 			if (msg.role === "system") {
-				systemPromptParts.push(msg.content)
-				continue
+				parts.push(msg.content)
 			}
-			baseConversation.push({ role: msg.role as "user" | "assistant", content: msg.content })
 		}
 
-		baseConversation.push({ role: "user", content: question })
-		return { systemPrompt: systemPromptParts.join("\n\n"), baseConversation }
+		return parts.join("\n\n")
+	}
+
+	/**
+	 * Build the base conversation array from the persisted window messages
+	 * plus the current question. This is refreshable — after
+	 * enforceLimit() trims the window, a fresh call produces a shorter
+	 * base that leaves more room for in-flight tool results.
+	 */
+	private _buildBaseConversation(question: string): Anthropic.Messages.MessageParam[] {
+		const conv: Anthropic.Messages.MessageParam[] = []
+		for (const msg of this._window.messages) {
+			if (msg.role !== "system") {
+				conv.push({ role: msg.role as "user" | "assistant", content: msg.content })
+			}
+		}
+		conv.push({ role: "user", content: question })
+		return conv
 	}
 
 	/** Lazily construct the Read-category tool catalog (minus ask_assistant_agent). */
