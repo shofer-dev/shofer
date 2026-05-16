@@ -10,8 +10,9 @@ import { GitWatcher } from "./processors/git-watcher"
 import { GitCacheManager } from "./git-cache-manager"
 
 import { BATCH_SEGMENT_THRESHOLD } from "../code-index/constants"
-import { TelemetryService } from "@shofer/telemetry"
-import { TelemetryEventName } from "@shofer/types"
+import { logger } from "../../utils/logging"
+
+const LOG_PREFIX = "[GitHistoryOrchestrator]"
 
 /**
  * UUID v5 namespace for git commit block Qdrant point IDs.
@@ -26,6 +27,11 @@ const DEFAULT_GIT_MAX_HISTORY_DAYS = 365
 const DEFAULT_GIT_MAX_COMMITS = 10000
 
 /**
+ * Default poll interval in milliseconds (5 minutes).
+ */
+const DEFAULT_POLL_INTERVAL_MS = 5 * 60 * 1000
+
+/**
  * Drives the git history indexing pipeline: extract → embed → upsert.
  *
  * Coordinates between GitLogExtractor, GitCacheManager, the embedder,
@@ -36,9 +42,10 @@ const DEFAULT_GIT_MAX_COMMITS = 10000
  */
 export class GitHistoryOrchestrator {
 	private readonly _logExtractor: GitLogExtractor
-	private readonly _watcher: GitWatcher
+	private _watcher: GitWatcher | null = null
 	private _isProcessing = false
 	private _watcherSubscription: { dispose(): void } | null = null
+	private readonly _pollIntervalMs: number
 
 	constructor(
 		private readonly workspacePath: string,
@@ -46,9 +53,10 @@ export class GitHistoryOrchestrator {
 		private readonly cacheManager: GitCacheManager,
 		private readonly embedder: IEmbedder,
 		private readonly vectorStore: IVectorStore,
+		pollIntervalMs?: number,
 	) {
 		this._logExtractor = new GitLogExtractor()
-		this._watcher = new GitWatcher(workspacePath)
+		this._pollIntervalMs = pollIntervalMs && pollIntervalMs > 0 ? pollIntervalMs : DEFAULT_POLL_INTERVAL_MS
 	}
 
 	/**
@@ -80,13 +88,19 @@ export class GitHistoryOrchestrator {
 		const effectiveMaxCommits = maxCommits > 0 ? maxCommits : DEFAULT_GIT_MAX_COMMITS
 
 		try {
-			// 1. Catch-up: if we have a lastCommitDate, pull new commits first
+			// 1. Ensure the vector store collection exists before any upserts.
+			//    This handles the case where clearIndexData() was called but
+			//    lastCommitDate is still in cache — without initialize(), the
+			//    catch-up path would attempt upserts into a non-existent collection.
+			await this.vectorStore.initialize()
+
+			// 2. Catch-up: if we have a lastCommitDate, pull new commits first
 			const lastDate = this.cacheManager.lastCommitDate
 			if (lastDate) {
 				await this._catchUpIncremental(lastDate)
 			}
 
-			// 2. Full scan: extract all commits within the configured window
+			// 3. Full scan: extract all commits within the configured window
 			this.stateManager.setSystemState("Indexing", "Extracting git commit history...")
 
 			const commits = await this._logExtractor.extractCommits(
@@ -97,19 +111,15 @@ export class GitHistoryOrchestrator {
 
 			if (commits.length === 0) {
 				this.stateManager.setSystemState("Indexed", "No commits found to index.")
-
-				// Start watcher anyway — there may be commits in the future
 				this._startWatcher()
 				return
 			}
 
-			// 3. Filter by cache — skip commits whose content hash is unchanged
+			// 4. Filter by cache — skip commits whose content hash is unchanged
 			const newCommits = commits.filter((c) => !this.cacheManager.isUnchanged(c.commit_hash, c.contentHash))
 
 			if (newCommits.length === 0) {
 				this.stateManager.setSystemState("Indexed", "All commits already indexed (no changes).")
-
-				// Update lastCommitDate to the most recent known commit even if unchanged
 				this.cacheManager.updateLastCommitDateFromBatch(commits)
 				await this.cacheManager.persist()
 				this._startWatcher()
@@ -117,9 +127,6 @@ export class GitHistoryOrchestrator {
 			}
 
 			this.stateManager.setSystemState("Indexing", `Indexing ${newCommits.length} commits...`)
-
-			// 4. Initialize vector store collection
-			await this.vectorStore.initialize()
 
 			// 5. Process in batches
 			await this._processBatches(newCommits)
@@ -136,15 +143,10 @@ export class GitHistoryOrchestrator {
 			const message = error instanceof Error ? error.message : String(error)
 			this.stateManager.setSystemState("Error", message)
 
-			try {
-				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-					error: message,
-					stack: error instanceof Error ? error.stack : undefined,
-					location: "GitHistoryOrchestrator.startIndexing",
-				})
-			} catch {
-				// Telemetry may not be initialized yet.
-			}
+			logger.error(`${LOG_PREFIX} startIndexing failed: ${message}`, {
+				ctx: "git-index",
+				error: error instanceof Error ? error.message : String(error),
+			})
 
 			throw error
 		} finally {
@@ -172,10 +174,20 @@ export class GitHistoryOrchestrator {
 
 	/**
 	 * Catch up on commits that landed since the last index date.
+	 * Best-effort: failures are logged and swallowed; the full scan will pick
+	 * up any missed commits.
 	 */
 	private async _catchUpIncremental(sinceDate: string): Promise<void> {
+		// Guard against concurrent processing (defensive — currently only
+		// called from startIndexing which already sets _isProcessing).
+		if (this._isProcessing) return
+
 		try {
-			const incrementalCommits = await this._logExtractor.extractCommitsSince(this.workspacePath, sinceDate)
+			const incrementalCommits = await this._logExtractor.extractCommitsSince(
+				this.workspacePath,
+				sinceDate,
+				500, // Safety cap for catch-up
+			)
 
 			if (incrementalCommits.length === 0) return
 
@@ -187,12 +199,12 @@ export class GitHistoryOrchestrator {
 				await this._processBatches(newCommits)
 			}
 
-			// Update lastCommitDate even if nothing was new (avoid re-scanning old commits)
 			this.cacheManager.updateLastCommitDateFromBatch(incrementalCommits)
 			await this.cacheManager.persist()
 		} catch (error) {
-			// Catch-up is best-effort; log and continue to full scan
-			console.warn("[GitHistoryOrchestrator] Incremental catch-up failed:", error)
+			logger.warn(`${LOG_PREFIX} Incremental catch-up failed (non-critical): ${error}`, {
+				ctx: "git-index",
+			})
 		}
 	}
 
@@ -205,7 +217,6 @@ export class GitHistoryOrchestrator {
 		for (let i = 0; i < commits.length; i += batchSize) {
 			const batch = commits.slice(i, i + batchSize)
 
-			// Create embeddings for the batch
 			const contentTexts = batch.map((c) => c.content)
 			const embeddingResponse = await this.embedder.createEmbeddings(contentTexts)
 			const vectors = embeddingResponse?.embeddings
@@ -214,7 +225,6 @@ export class GitHistoryOrchestrator {
 				throw new Error("Failed to create embeddings for git commits.")
 			}
 
-			// Create Qdrant points (uuidv5 is a top-level static import)
 			const points = batch.map((commit, index) => ({
 				id: uuidv5(commit.commit_hash, QDRANT_GIT_NAMESPACE),
 				vector: vectors[index],
@@ -228,10 +238,8 @@ export class GitHistoryOrchestrator {
 				},
 			}))
 
-			// Upsert to Qdrant
 			await this.vectorStore.upsertPoints(points)
 
-			// Update cache immediately so partial progress is protected
 			batch.forEach((c) => this.cacheManager.setHash(c.commit_hash, c.contentHash))
 			this.cacheManager.updateLastCommitDateFromBatch(batch)
 		}
@@ -242,6 +250,10 @@ export class GitHistoryOrchestrator {
 	 */
 	private _startWatcher(): void {
 		this._stopWatcher()
+
+		if (!this._watcher) {
+			this._watcher = new GitWatcher(this.workspacePath, this._pollIntervalMs)
+		}
 
 		this._watcherSubscription = this._watcher.onNewCommits(async (commits: GitCommitBlock[]) => {
 			if (this._isProcessing) return
@@ -258,8 +270,10 @@ export class GitHistoryOrchestrator {
 					this.stateManager.setSystemState("Indexed", `Indexed ${newCommits.length} new commits.`)
 				}
 			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error)
-				console.error("[GitHistoryOrchestrator] Watcher incremental index failed:", message)
+				logger.error(`${LOG_PREFIX} Watcher incremental index failed: ${error}`, {
+					ctx: "git-index",
+					error: error instanceof Error ? error.message : String(error),
+				})
 			} finally {
 				this._isProcessing = false
 			}
@@ -276,6 +290,6 @@ export class GitHistoryOrchestrator {
 			this._watcherSubscription.dispose()
 			this._watcherSubscription = null
 		}
-		this._watcher.stop()
+		this._watcher?.stop()
 	}
 }

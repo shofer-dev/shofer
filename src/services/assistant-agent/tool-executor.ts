@@ -26,6 +26,7 @@ import { extractTextFromFile, addLineNumbers } from "../../integrations/misc/ext
 import { regexGrepSearch } from "../ripgrep"
 import { listFiles as globListFiles } from "../glob/list-files"
 import { CodeIndexManager } from "../code-index/manager"
+import { GitIndexManager } from "../git-index/git-index-manager"
 import { logger } from "../../utils/logging"
 
 const LOG_PREFIX = "[AssistantAgent.ToolExecutor]"
@@ -50,6 +51,7 @@ export const ASSISTANT_AGENT_READ_TOOLS = [
 	"grep_search",
 	"list_files",
 	"rag_search",
+	"git_search",
 	"find_files",
 	"read_project_structure",
 	"list_code_usages",
@@ -105,6 +107,9 @@ export class AssistantAgentToolExecutor {
 					break
 				case "rag_search":
 					result = await this._ragSearch(args)
+					break
+				case "git_search":
+					result = await this._gitSearch(args)
 					break
 				case "read_project_structure":
 					result = await this._readProjectStructure(args)
@@ -211,6 +216,22 @@ export class AssistantAgentToolExecutor {
 				.map(
 					(r: any, i: number) =>
 						`[${i + 1}] ${r.payload?.filePath ?? "?"}:${r.payload?.startLine ?? "?"}-${r.payload?.endLine ?? "?"} (score=${r.score?.toFixed(3) ?? "?"})\n${(r.payload?.codeChunk ?? "").slice(0, 800)}`,
+				)
+				.join("\n\n"),
+		}
+	}
+
+	private async _gitSearch(args: { query?: string }): Promise<ToolExecutionResult> {
+		if (!args.query) return { isError: true, content: "Missing required parameter 'query'." }
+		const mgr = GitIndexManager.getInstance(this._context, this._cwd)
+		if (!mgr) return { isError: true, content: "Git index manager is not available for this workspace." }
+		const results = await mgr.searchIndex(args.query)
+		if (!results || results.length === 0) return { content: "No results found." }
+		return {
+			content: results
+				.map(
+					(r, i) =>
+						`[${i + 1}] ${r.payload.short_hash} (${r.payload.commit_hash}) | ${r.payload.author_date} | ${r.payload.author}\n${r.payload.subject}${r.payload.body ? "\n" + r.payload.body.slice(0, 500) : ""} | score=${r.score.toFixed(3)}`,
 				)
 				.join("\n\n"),
 		}

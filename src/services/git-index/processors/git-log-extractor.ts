@@ -40,8 +40,12 @@ export class GitLogExtractor implements IGitLogExtractor {
 	 * Extract commits since a specific ISO 8601 date (for incremental indexing).
 	 * No cap on commit count — incremental scans are expected to be small.
 	 */
-	async extractCommitsSince(workspacePath: string, sinceDate: string): Promise<GitCommitBlock[]> {
-		const args = this._buildLogArgs(`--since=${sinceDate}`)
+	/**
+	 * Extract commits since a specific ISO 8601 date (for incremental indexing).
+	 * @param maxCommits - Hard cap on number of commits returned (safety ceiling).
+	 */
+	async extractCommitsSince(workspacePath: string, sinceDate: string, maxCommits: number): Promise<GitCommitBlock[]> {
+		const args = this._buildLogArgs(`--since=${sinceDate}`, `--max-count=${maxCommits}`)
 		return this._executeLog(workspacePath, args)
 	}
 
