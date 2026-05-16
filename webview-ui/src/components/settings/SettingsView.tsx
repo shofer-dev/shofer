@@ -918,7 +918,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 						)}
 
 						{/* Modes Section */}
-						{renderTab === "modes" && <ModesView />}
+						{renderTab === "modes" && (
+							<ModesView
+								cachedCustomInstructions={cachedState.customInstructions}
+								setCachedStateField={setCachedStateField}
+							/>
+						)}
 
 						{/* MCP Section */}
 						{renderTab === "mcp" && <McpView />}

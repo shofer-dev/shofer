@@ -51,6 +51,7 @@ import {
 } from "@src/components/ui"
 import { DeleteModeDialog } from "@src/components/modes/DeleteModeDialog"
 import { useEscapeKey } from "@src/hooks/useEscapeKey"
+import { SetCachedStateField } from "@src/components/settings/types"
 
 // Get all available groups that should show in prompts view
 const availableGroups = (Object.keys(TOOL_GROUPS) as ToolGroup[]).filter((group) => !TOOL_GROUPS[group].alwaysAvailable)
@@ -64,7 +65,12 @@ function getGroupName(group: GroupEntry): ToolGroup {
 	return (Array.isArray(group) ? group[0] : group) as ToolGroup
 }
 
-const ModesView = () => {
+type ModesViewProps = {
+	cachedCustomInstructions?: string
+	setCachedStateField?: SetCachedStateField<"customInstructions">
+}
+
+const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewProps = {}) => {
 	const { t } = useAppTranslation()
 
 	const {
@@ -83,6 +89,75 @@ const ModesView = () => {
 	// 2. Not syncing with the backend mode state (which would cause flickering)
 	// 3. Still sending the mode change to the backend for persistence
 	const [visualMode, setVisualMode] = useState(mode)
+
+	// Local buffers for text fields to prevent race conditions with live extension state
+	// during task execution. These isolate user edits from ContextProxy updates.
+	const [localRoleDefinition, setLocalRoleDefinition] = useState("")
+	const [localDescription, setLocalDescription] = useState("")
+	const [localWhenToUse, setLocalWhenToUse] = useState("")
+	const [localModeCustomInstructions, setLocalModeCustomInstructions] = useState("")
+	const [localGlobalCustomInstructions, setLocalGlobalCustomInstructions] = useState("")
+
+	// Track whether local buffers have been initialized for the current mode
+	const [buffersInitialized, setBuffersInitialized] = useState(false)
+
+	// Resolve the effective value for a mode field: local buffer wins if initialized,
+	// otherwise fall back to the extension-state chain.
+	const getEffectiveRoleDefinition = useCallback(() => {
+		if (buffersInitialized) return localRoleDefinition
+		const customMode = findModeBySlug(visualMode, customModes)
+		const prompt = customModePrompts?.[visualMode] as PromptComponent
+		return customMode?.roleDefinition ?? prompt?.roleDefinition ?? getRoleDefinition(visualMode)
+	}, [buffersInitialized, localRoleDefinition, visualMode, customModes, customModePrompts, findModeBySlug])
+
+	const getEffectiveDescription = useCallback(() => {
+		if (buffersInitialized) return localDescription
+		const customMode = findModeBySlug(visualMode, customModes)
+		const prompt = customModePrompts?.[visualMode] as PromptComponent
+		return customMode?.description ?? prompt?.description ?? getDescription(visualMode)
+	}, [buffersInitialized, localDescription, visualMode, customModes, customModePrompts, findModeBySlug])
+
+	const getEffectiveWhenToUse = useCallback(() => {
+		if (buffersInitialized) return localWhenToUse
+		const customMode = findModeBySlug(visualMode, customModes)
+		const prompt = customModePrompts?.[visualMode] as PromptComponent
+		return customMode?.whenToUse ?? prompt?.whenToUse ?? getWhenToUse(visualMode)
+	}, [buffersInitialized, localWhenToUse, visualMode, customModes, customModePrompts, findModeBySlug])
+
+	const getEffectiveModeCustomInstructions = useCallback(() => {
+		if (buffersInitialized) return localModeCustomInstructions
+		const customMode = findModeBySlug(visualMode, customModes)
+		const prompt = customModePrompts?.[visualMode] as PromptComponent
+		return (
+			customMode?.customInstructions ??
+			prompt?.customInstructions ??
+			getCustomInstructions(visualMode, customModes)
+		)
+	}, [buffersInitialized, localModeCustomInstructions, visualMode, customModes, customModePrompts, findModeBySlug])
+
+	const getEffectiveGlobalCustomInstructions = useCallback(() => {
+		if (buffersInitialized) return localGlobalCustomInstructions
+		return cachedCustomInstructions ?? customInstructions ?? ""
+	}, [buffersInitialized, localGlobalCustomInstructions, cachedCustomInstructions, customInstructions])
+
+	// Initialize local buffers from extension state when the selected mode changes
+	useEffect(() => {
+		const customMode = findModeBySlug(visualMode, customModes)
+		const prompt = customModePrompts?.[visualMode] as PromptComponent
+		setLocalRoleDefinition(
+			customMode?.roleDefinition ?? prompt?.roleDefinition ?? getRoleDefinition(visualMode) ?? "",
+		)
+		setLocalDescription(customMode?.description ?? prompt?.description ?? getDescription(visualMode) ?? "")
+		setLocalWhenToUse(customMode?.whenToUse ?? prompt?.whenToUse ?? getWhenToUse(visualMode) ?? "")
+		setLocalModeCustomInstructions(
+			customMode?.customInstructions ??
+				prompt?.customInstructions ??
+				getCustomInstructions(visualMode, customModes) ??
+				"",
+		)
+		setLocalGlobalCustomInstructions(cachedCustomInstructions ?? customInstructions ?? "")
+		setBuffersInitialized(true)
+	}, [visualMode, customModes, customModePrompts, cachedCustomInstructions, customInstructions, findModeBySlug])
 
 	// Build modes fresh each render so search reflects inline rename updates immediately
 	const modes = getAllModes(customModes)
@@ -583,6 +658,23 @@ const ModesView = () => {
 		const updatedPrompt = { ...existingPrompt }
 		delete updatedPrompt[type] // Remove the field entirely to ensure it reloads from defaults
 
+		// Clear the corresponding local buffer so the UI shows the default immediately
+		switch (type) {
+			case "roleDefinition":
+				setLocalRoleDefinition(getRoleDefinition(modeSlug) ?? "")
+				break
+			case "description":
+				setLocalDescription(getDescription(modeSlug) ?? "")
+				break
+			case "whenToUse":
+				setLocalWhenToUse(getWhenToUse(modeSlug) ?? "")
+				break
+			case "customInstructions":
+				setLocalModeCustomInstructions(getCustomInstructions(modeSlug, customModes) ?? "")
+				break
+		}
+		setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
+
 		vscode.postMessage({
 			type: "updatePrompt",
 			promptMode: modeSlug,
@@ -962,25 +1054,22 @@ const ModesView = () => {
 					</div>
 					<VSCodeTextArea
 						resize="vertical"
-						value={(() => {
-							const customMode = findModeBySlug(visualMode, customModes)
-							const prompt = customModePrompts?.[visualMode] as PromptComponent
-							return customMode?.roleDefinition ?? prompt?.roleDefinition ?? getRoleDefinition(visualMode)
-						})()}
+						value={getEffectiveRoleDefinition()}
 						onChange={(e) => {
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
+							// Update local buffer immediately for responsive UX
+							setLocalRoleDefinition(value)
+							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
 							const customMode = findModeBySlug(visualMode, customModes)
 							if (customMode) {
-								// For custom modes, update the JSON file
 								updateCustomMode(visualMode, {
 									...customMode,
 									roleDefinition: value.trim() || "",
 									source: customMode.source || "global",
 								})
 							} else {
-								// For built-in modes, update the prompts
 								updateAgentPrompt(visualMode, {
 									roleDefinition: value.trim() || undefined,
 								})
@@ -1017,25 +1106,21 @@ const ModesView = () => {
 						{t("prompts:description.description")}
 					</div>
 					<VSCodeTextField
-						value={(() => {
-							const customMode = findModeBySlug(visualMode, customModes)
-							const prompt = customModePrompts?.[visualMode] as PromptComponent
-							return customMode?.description ?? prompt?.description ?? getDescription(visualMode)
-						})()}
+						value={getEffectiveDescription()}
 						onChange={(e) => {
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
+							setLocalDescription(value)
+							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
 							const customMode = findModeBySlug(visualMode, customModes)
 							if (customMode) {
-								// For custom modes, update the JSON file
 								updateCustomMode(visualMode, {
 									...customMode,
 									description: value.trim() || undefined,
 									source: customMode.source || "global",
 								})
 							} else {
-								// For built-in modes, update the prompts
 								updateAgentPrompt(visualMode, {
 									description: value.trim() || undefined,
 								})
@@ -1072,25 +1157,21 @@ const ModesView = () => {
 					</div>
 					<VSCodeTextArea
 						resize="vertical"
-						value={(() => {
-							const customMode = findModeBySlug(visualMode, customModes)
-							const prompt = customModePrompts?.[visualMode] as PromptComponent
-							return customMode?.whenToUse ?? prompt?.whenToUse ?? getWhenToUse(visualMode)
-						})()}
+						value={getEffectiveWhenToUse()}
 						onChange={(e) => {
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
+							setLocalWhenToUse(value)
+							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
 							const customMode = findModeBySlug(visualMode, customModes)
 							if (customMode) {
-								// For custom modes, update the JSON file
 								updateCustomMode(visualMode, {
 									...customMode,
 									whenToUse: value.trim() || undefined,
 									source: customMode.source || "global",
 								})
 							} else {
-								// For built-in modes, update the prompts
 								updateAgentPrompt(visualMode, {
 									whenToUse: value.trim() || undefined,
 								})
@@ -1219,30 +1300,21 @@ const ModesView = () => {
 					</div>
 					<VSCodeTextArea
 						resize="vertical"
-						value={(() => {
-							const customMode = findModeBySlug(visualMode, customModes)
-							const prompt = customModePrompts?.[visualMode] as PromptComponent
-							return (
-								customMode?.customInstructions ??
-								prompt?.customInstructions ??
-								getCustomInstructions(visualMode, customModes)
-							)
-						})()}
+						value={getEffectiveModeCustomInstructions()}
 						onChange={(e) => {
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
+							setLocalModeCustomInstructions(value)
+							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
 							const customMode = findModeBySlug(visualMode, customModes)
 							if (customMode) {
-								// For custom modes, update the JSON file
 								updateCustomMode(visualMode, {
 									...customMode,
-									// Preserve empty string; only treat null/undefined as unset
 									customInstructions: value ?? undefined,
 									source: customMode.source || "global",
 								})
 							} else {
-								// For built-in modes, update the prompts
 								const existingPrompt = customModePrompts?.[visualMode] as PromptComponent
 								updateAgentPrompt(visualMode, {
 									...existingPrompt,
@@ -1348,11 +1420,14 @@ const ModesView = () => {
 					</div>
 					<VSCodeTextArea
 						resize="vertical"
-						value={customInstructions || ""}
+						value={getEffectiveGlobalCustomInstructions()}
 						onChange={(e) => {
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
+							// Update local buffers for both ModesView and SettingsView's cachedState
+							setLocalGlobalCustomInstructions(value)
+							setCachedStateField?.("customInstructions", value)
 							setCustomInstructions(value ?? undefined)
 							vscode.postMessage({
 								type: "customInstructions",
