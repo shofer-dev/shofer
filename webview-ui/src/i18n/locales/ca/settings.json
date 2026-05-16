@@ -611,10 +611,6 @@
 			"label": "Límit de context de fitxers de l'espai de treball",
 			"description": "Nombre màxim de fitxers a incloure als detalls del directori de treball actual. Valors més alts proporcionen més context però augmenten l'ús de token."
 		},
-		"rooignore": {
-			"label": "Mostrar fitxers .shoferignore en llistes i cerques",
-			"description": "Quan està habilitat, els fitxers que coincideixen amb els patrons a .shoferignore es mostraran en llistes amb un símbol de cadenat. Quan està deshabilitat, aquests fitxers s'ocultaran completament de les llistes de fitxers i cerques."
-		},
 		"maxReadFile": {
 			"label": "Llindar d'auto-truncament de lectura de fitxers",
 			"description": "Shofer llegeix aquest nombre de línies quan el model omet els valors d'inici/final. Si aquest nombre és menor que el total del fitxer, Shofer genera un índex de números de línia de les definicions de codi. Casos especials: -1 indica a Shofer que llegeixi tot el fitxer (sense indexació), i 0 indica que no llegeixi cap línia i proporcioni només índexs de línia per a un context mínim. Valors més baixos minimitzen l'ús inicial de context, permetent lectures posteriors de rangs de línies precisos. Les sol·licituds amb inici/final explícits no estan limitades per aquesta configuració.",
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "Activa les regles dels subdirectoris",
 			"description": "Descobreix i carrega recursivament fitxers .shofer/rules i AGENTS.md des de subdirectoris. Útil per a monorepos amb regles per paquet."
+		},
+		"shoferignore": {
+			"label": "Mostrar fitxers .shoferignore en llistes i cerques",
+			"description": "Quan està habilitat, els fitxers que coincideixen amb els patrons a .shoferignore es mostraran en llistes amb un símbol de cadenat. Quan està deshabilitat, aquests fitxers s'ocultaran completament de les llistes de fitxers i cerques."
 		}
 	},
 	"terminal": {

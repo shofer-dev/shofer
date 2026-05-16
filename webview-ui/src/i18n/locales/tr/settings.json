@@ -611,10 +611,6 @@
 			"label": "Çalışma alanı dosyaları bağlam sınırı",
 			"description": "Mevcut çalışma dizini ayrıntılarına dahil edilecek maksimum dosya sayısı. Daha yüksek değerler daha fazla bağlam sağlar ancak token kullanımını artırır."
 		},
-		"rooignore": {
-			"label": "Listelerde ve aramalarda .shoferignore dosyalarını göster",
-			"description": "Etkinleştirildiğinde, .shoferignore'daki desenlerle eşleşen dosyalar kilit sembolü ile listelerde gösterilecektir. Devre dışı bırakıldığında, bu dosyalar dosya listelerinden ve aramalardan tamamen gizlenecektir."
-		},
 		"maxReadFile": {
 			"label": "Dosya okuma otomatik kısaltma eşiği",
 			"description": "Model başlangıç/bitiş değerlerini belirtmediğinde Shofer bu sayıda satırı okur. Bu sayı dosyanın toplam satır sayısından azsa, Shofer kod tanımlamalarının satır numarası dizinini oluşturur. Özel durumlar: -1, Shofer'ya tüm dosyayı okumasını (dizinleme olmadan), 0 ise hiç satır okumamasını ve minimum bağlam için yalnızca satır dizinleri sağlamasını belirtir. Düşük değerler başlangıç bağlam kullanımını en aza indirir ve sonraki hassas satır aralığı okumalarına olanak tanır. Açık başlangıç/bitiş istekleri bu ayarla sınırlı değildir.",
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "Alt klasör kurallarını etkinleştir",
 			"description": "Alt dizinlerden .shofer/rules ve AGENTS.md dosyalarını yinelemeli olarak keşfet ve yükle. Paket başına kuralları olan monorepo'lar için kullanışlı."
+		},
+		"shoferignore": {
+			"label": "Listelerde ve aramalarda .shoferignore dosyalarını göster",
+			"description": "Etkinleştirildiğinde, .shoferignore'daki desenlerle eşleşen dosyalar kilit sembolü ile listelerde gösterilecektir. Devre dışı bırakıldığında, bu dosyalar dosya listelerinden ve aramalardan tamamen gizlenecektir."
 		}
 	},
 	"terminal": {

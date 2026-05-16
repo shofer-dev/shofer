@@ -611,10 +611,6 @@
 			"label": "工作区文件限制",
 			"description": "允许纳入上下文的最大文件数（值越大消耗token越多）"
 		},
-		"rooignore": {
-			"label": "在列表和搜索中显示 .shoferignore 文件",
-			"description": "启用后，与 .shoferignore 中模式匹配的文件将在列表中显示锁定符号。禁用时，这些文件将从文件列表和搜索中完全隐藏。"
-		},
 		"maxReadFile": {
 			"label": "文件读取自动截断阈值",
 			"description": "自动读取文件行数设置：-1=完整读取 0=仅生成行号索引，较小值可节省token，支持后续使用行号进行读取。 <0>了解更多</0>",
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "启用子文件夹规则",
 			"description": "递归发现并加载子目录中的 .shofer/rules 和 AGENTS.md 文件。适用于具有每包规则的 monorepo。"
+		},
+		"shoferignore": {
+			"label": "在列表和搜索中显示 .shoferignore 文件",
+			"description": "启用后，与 .shoferignore 中模式匹配的文件将在列表中显示锁定符号。禁用时，这些文件将从文件列表和搜索中完全隐藏。"
 		}
 	},
 	"terminal": {

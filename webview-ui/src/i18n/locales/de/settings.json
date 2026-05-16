@@ -611,10 +611,6 @@
 			"label": "Workspace-Dateien Kontextlimit",
 			"description": "Maximale Anzahl von Dateien, die in den Details des aktuellen Arbeitsverzeichnisses enthalten sein sollen. Höhere Werte bieten mehr Kontext, erhöhen aber den Token-Verbrauch."
 		},
-		"rooignore": {
-			"label": ".shoferignore-Dateien in Listen und Suchen anzeigen",
-			"description": "Wenn aktiviert, werden Dateien, die mit Mustern in .shoferignore übereinstimmen, in Listen mit einem Schlosssymbol angezeigt. Wenn deaktiviert, werden diese Dateien vollständig aus Dateilisten und Suchen ausgeblendet."
-		},
 		"maxConcurrentFileReads": {
 			"label": "Gleichzeitige Dateilesungen Limit",
 			"description": "Maximale Anzahl von Dateien, die das 'read_file'-Tool gleichzeitig verarbeiten kann. Höhere Werte können das Lesen mehrerer kleiner Dateien beschleunigen, erhöhen aber den Speicherverbrauch."
@@ -675,6 +671,10 @@
 		"enableSubfolderRules": {
 			"label": "Unterordner-Regeln aktivieren",
 			"description": "Rekursiv .shofer/rules und AGENTS.md-Dateien aus Unterverzeichnissen laden. Nützlich für Monorepos mit paketspezifischen Regeln."
+		},
+		"shoferignore": {
+			"label": ".shoferignore-Dateien in Listen und Suchen anzeigen",
+			"description": "Wenn aktiviert, werden Dateien, die mit Mustern in .shoferignore übereinstimmen, in Listen mit einem Schlosssymbol angezeigt. Wenn deaktiviert, werden diese Dateien vollständig aus Dateilisten und Suchen ausgeblendet."
 		}
 	},
 	"terminal": {
