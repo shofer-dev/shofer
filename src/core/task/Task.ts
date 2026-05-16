@@ -263,18 +263,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	/**
 	 * Maximum characters the parent will accept as the completion result.
-	 * Set by {@link NewTaskTool} via {@link CreateTaskOptions.resultLength} when a parent
+	 * Set by {@link NewTaskTool} via {@link CreateTaskOptions.softResultLength} when a parent
 	 * spawns a child task. The child's {@link attempt_completion} tool enforces this.
 	 * If undefined, no result length constraint applies (top-level tasks).
 	 */
-	resultLength?: number
+	softResultLength?: number
 
 	/**
 	 * Soft guidance (in seconds) for how long the parent expects to wait.
-	 * Set by {@link NewTaskTool} via {@link CreateTaskOptions.estimatedTimeout}.
+	 * Set by {@link NewTaskTool} via {@link CreateTaskOptions.softTimeoutSec}.
 	 * Not a hard deadline — informational only. If undefined, no time guidance applies.
 	 */
-	estimatedTimeout?: number
+	softTimeoutSec?: number
 
 	/**
 	 * The mode associated with this task. Persisted across sessions
@@ -595,8 +595,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		initialState,
 		initialMode,
 		isBackground,
-		resultLength,
-		estimatedTimeout,
+		softResultLength,
+		softTimeoutSec,
 	}: TaskOptions) {
 		super()
 
@@ -667,8 +667,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.parentTask = parentTask
 		this.rootTask = rootTask
 		this.taskNumber = taskNumber
-		this.resultLength = resultLength
-		this.estimatedTimeout = estimatedTimeout
+		this.softResultLength = softResultLength
+		this.softTimeoutSec = softTimeoutSec
 		// Restore the cost limit from history ONLY for root tasks. Subtasks
 		// resolve their effective limit via resolveCostLimit() and never carry
 		// their own — keeping a single source of truth on the root.
@@ -4644,21 +4644,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// Inject subtask constraints when this is a child task with a result length
 			// and/or estimated timeout specified by the parent.
-			if (this.parentTaskId && (this.resultLength || this.estimatedTimeout)) {
+			if (this.parentTaskId && (this.softResultLength || this.softTimeoutSec)) {
 				const constraints: string[] = []
 				constraints.push("SUBTASK CONSTRAINTS")
 				constraints.push("")
-				if (this.resultLength) {
+				if (this.softResultLength) {
 					constraints.push(
-						`- Result length suggestion: ${this.resultLength} characters (soft guidance — aim to keep your attempt_completion result within this budget by summarizing concisely; the parent may accept longer results).`,
+						`- Result length suggestion: ${this.softResultLength} characters (soft guidance — aim to keep your attempt_completion result within this budget by summarizing concisely; the parent may accept longer results).`,
 					)
 					constraints.push(
 						`  Hard safety cap: ${MAX_SUBTASK_RESULT_LENGTH} characters (results exceeding this will be truncated).`,
 					)
 				}
-				if (this.estimatedTimeout) {
+				if (this.softTimeoutSec) {
 					constraints.push(
-						`- Estimated timeout: ${this.estimatedTimeout} seconds (soft guidance — the parent may wait longer and you may take longer). Pace your work accordingly.`,
+						`- Estimated timeout: ${this.softTimeoutSec} seconds (soft guidance — the parent may wait longer and you may take longer). Pace your work accordingly.`,
 					)
 				}
 				return systemPrompt + "\n\n====\n\n" + constraints.join("\n")

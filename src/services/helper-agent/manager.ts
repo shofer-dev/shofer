@@ -36,7 +36,7 @@ import {
 	DEFAULT_CONTEXT_FILL_THRESHOLD,
 	HELPER_AGENT_SYSTEM_PROMPT,
 	QUESTION_TIMEOUT_MS,
-	DEFAULT_HELPER_SOFT_TIMEOUT_MS,
+	DEFAULT_HELPER_SOFT_TIMEOUT_SEC,
 	DEFAULT_HELPER_SOFT_RESULT_LENGTH,
 } from "@shofer/types"
 
@@ -308,7 +308,7 @@ export class HelperAgentManager implements vscode.Disposable {
 		contextFiles?: string[],
 		opts: {
 			timeoutMs?: number
-			softTimeoutMs?: number
+			softTimeoutSec?: number
 			softResultLength?: number
 		} = {},
 	): Promise<QuestionResult> {
@@ -318,9 +318,9 @@ export class HelperAgentManager implements vscode.Disposable {
 		if (!this.isHelperAgentAvailable && this._state !== "Busy") {
 			throw new Error(`Helper agent is not available (state: ${this._state})`)
 		}
-		const { timeoutMs = QUESTION_TIMEOUT_MS, softTimeoutMs, softResultLength } = opts
+		const { timeoutMs = QUESTION_TIMEOUT_MS, softTimeoutSec, softResultLength } = opts
 		return this._queue.enqueue(question, contextFiles, timeoutMs, {
-			softTimeoutMs,
+			softTimeoutSec,
 			softResultLength,
 		})
 	}
@@ -330,7 +330,7 @@ export class HelperAgentManager implements vscode.Disposable {
 		question: string,
 		contextFiles: string[] | undefined,
 		signal: AbortSignal,
-		softLimits: { softTimeoutMs?: number; softResultLength?: number } = {},
+		softLimits: { softTimeoutSec?: number; softResultLength?: number } = {},
 	): Promise<QuestionResult> {
 		const startTime = Date.now()
 		const llm = this._llm
@@ -672,7 +672,7 @@ export class HelperAgentManager implements vscode.Disposable {
 	private _buildAgentPrompt(
 		question: string,
 		recentlyModifiedFiles: string[],
-		softLimits: { softTimeoutMs?: number; softResultLength?: number } = {},
+		softLimits: { softTimeoutSec?: number; softResultLength?: number } = {},
 	): { systemPrompt: string; baseConversation: Anthropic.Messages.MessageParam[] } {
 		const treeContent = this._directoryTreeString
 			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shoferignore and .gitignore patterns are respected.]`
@@ -692,10 +692,10 @@ export class HelperAgentManager implements vscode.Disposable {
 			)
 		}
 
-		const softTimeoutMs = softLimits.softTimeoutMs ?? DEFAULT_HELPER_SOFT_TIMEOUT_MS
+		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_HELPER_SOFT_TIMEOUT_SEC
 		const softResultLength = softLimits.softResultLength ?? DEFAULT_HELPER_SOFT_RESULT_LENGTH
 		systemPromptParts.push(
-			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${Math.round(softTimeoutMs / 1000)}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
+			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${softTimeoutSec}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
 		)
 
 		const baseConversation: Anthropic.Messages.MessageParam[] = []

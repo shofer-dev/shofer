@@ -18,8 +18,8 @@ interface NewTaskParams {
 	todos?: string
 	is_background?: boolean | string | number | null
 	task_id?: string
-	result_length?: number
-	estimated_timeout?: number
+	softResultLength?: number
+	softTimeoutSec?: number
 }
 
 /** Hard safety cap for subtask completion result length, in characters. */
@@ -29,7 +29,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { mode, message, todos, result_length, estimated_timeout } = params
+		const { mode, message, todos, softResultLength, softTimeoutSec } = params
 		// Normalize is_background across the various representations LLMs emit
 		// ("true"/"false", 0/1, native boolean, etc.). Absent/unrecognized → false.
 		const is_background = parseToolBoolean(params.is_background) ?? false
@@ -55,34 +55,34 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				return
 			}
 
-			// Validate result_length: mandatory, must be a positive integer.
+			// Validate softResultLength: mandatory, must be a positive integer.
 			if (
-				result_length === undefined ||
-				result_length === null ||
-				!Number.isFinite(result_length) ||
-				result_length <= 0 ||
-				!Number.isInteger(result_length)
+				softResultLength === undefined ||
+				softResultLength === null ||
+				!Number.isFinite(softResultLength) ||
+				softResultLength <= 0 ||
+				!Number.isInteger(softResultLength)
 			) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("new_task")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "result_length"))
+				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "softResultLength"))
 				return
 			}
 			// Clamp to hard cap.
-			const clampedResultLength = Math.min(result_length, MAX_SUBTASK_RESULT_LENGTH)
+			const clampedResultLength = Math.min(softResultLength, MAX_SUBTASK_RESULT_LENGTH)
 
-			// Validate estimated_timeout: mandatory, must be a positive number.
+			// Validate softTimeoutSec: mandatory, must be a positive number.
 			if (
-				estimated_timeout === undefined ||
-				estimated_timeout === null ||
-				!Number.isFinite(estimated_timeout) ||
-				estimated_timeout <= 0
+				softTimeoutSec === undefined ||
+				softTimeoutSec === null ||
+				!Number.isFinite(softTimeoutSec) ||
+				softTimeoutSec <= 0
 			) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("new_task")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "estimated_timeout"))
+				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "softTimeoutSec"))
 				return
 			}
 
@@ -208,8 +208,8 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						// the background-completion path rather than the foreground-resume path.
 						isBackground: true,
 						// Pass result length and estimated timeout to the child task.
-						resultLength: clampedResultLength,
-						estimatedTimeout: estimated_timeout,
+						softResultLength: clampedResultLength,
+						softTimeoutSec: softTimeoutSec,
 					},
 					undefined, // configuration
 					undefined,
@@ -267,8 +267,8 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						// openInStack=true (default): child is pushed onto shoferStack on top of parent.
 						openInStack: true,
 						// Pass result length and estimated timeout to the child task.
-						resultLength: clampedResultLength,
-						estimatedTimeout: estimated_timeout,
+						softResultLength: clampedResultLength,
+						softTimeoutSec: softTimeoutSec,
 					},
 					undefined, // configuration
 					undefined,

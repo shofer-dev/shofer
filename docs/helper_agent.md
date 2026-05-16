@@ -74,7 +74,7 @@ testing is achieved by constructor injection at the spec level. The public
 shape of each module:
 
 - **`ConversationStore`** — `load(): Promise<ConversationSnapshot>`, `save(snapshot)`, `filePath` getter. Snapshot shape: `{ version, messages, fileContexts, costTracking }`. Discards on version mismatch (no migrations).
-- **`QuestionQueue`** — `setProcessor(fn)`, `enqueue(question, contextFiles?, timeoutMs?): Promise<QuestionResult>`, `cancelAll()`, `pendingCount`, `isProcessing`. Processor signature: `(question, contextFiles, signal) => Promise<QuestionResult>`.
+- **`QuestionQueue`** — `setProcessor(fn)`, `enqueue(question, contextFiles?, timeoutMs?, softLimits?): Promise<QuestionResult>`, `cancelAll()`, `pendingCount`, `isProcessing`. `softLimits` carries `{ softTimeoutSec?, softResultLength? }` — prompt-embedded recommendations, not enforced. Processor signature: `(question, contextFiles, signal, softLimits) => Promise<QuestionResult>`.
 - **`ContextWindow`** — `configure(opts)`, `restore(messages, fileContexts)`, `clear()`, `appendMessage`, `upsertFileContext`, `removeFileContext`, `invalidateFileContext`, `enforceLimit()`, `getUsage()`, `consumeEvictedTokens()`. Plus getters used by the Manager: `messages`, `fileContexts`, `fileContextPaths`, `estimatedTokenCount`, `maxContextTokens`, `contextFillThreshold`, `isNearlyFull`.
 - **`HelperAgentLlmClient`** — constructor builds an `ApiHandler` via `buildApiHandler(toProviderSettings(config), { taskId: HELPER_AGENT_TASK_ID })`. `chat(messages, signal?): Promise<ChatResult>` drains `ApiStream`, accumulating `text` chunks into the answer and `usage` chunks into prompt/completion tokens; cooperatively aborts between chunks via the `AbortSignal`.
 - **`HelperAgentDirectoryTree`** — `generate(): Promise<string>` returning the formatted tree string capped at `DIRECTORY_TREE_MAX_CONTEXT_FRACTION * maxContextTokens`.
@@ -230,9 +230,9 @@ state → Ready
 
 ```
 External Task calls ask_helper_agent tool (synchronous — task blocks until answer or timeout)
-  → HelperAgentTool.invoke({ question, contextFiles?, timeoutMs? })
+  → HelperAgentTool.invoke({ question, contextFiles?, timeoutMs?, softTimeoutSec?, softResultLength? })
   → Start a single timeout timer covering the ENTIRE duration (queue wait + LLM processing)
-  → QuestionQueue.enqueue({ question, sourceTaskId, timeoutMs })
+  → QuestionQueue.enqueue({ question, sourceTaskId, timeoutMs, softTimeoutSec, softResultLength })
   → Wait for queue position (if agent is Busy) — timeout is running
   → If timeout fires at any point (during queue wait OR during LLM call):
       abort the LLM call via AbortController (if in progress)
@@ -487,11 +487,19 @@ Parameters:
   - contextFiles (string[], optional): File paths that are relevant
     to this question. The helper agent will load these into its
     context window if they aren't already present.
-  - timeoutMs (number, optional): Maximum time to wait for an answer
-    in milliseconds. Defaults to 300000 (5 minutes). If the timeout
-    is exceeded, processing is aborted, any partial work already
-    added to the context window is retained (to preserve KV cache),
-    and the tool returns a timeout error.
+  - timeoutMs (number, optional): HARD maximum time to wait for an
+    answer in milliseconds. Defaults to 300000 (5 minutes). If the
+    timeout is exceeded, processing is aborted, any partial work
+    already added to the context window is retained (to preserve KV
+    cache), and the tool returns a timeout error.
+  - softTimeoutSec (number, optional): SOFT recommendation in seconds
+    for how long the helper should spend on this question (default:
+    DEFAULT_HELPER_SOFT_TIMEOUT_SEC = 60). Embedded in the helper's
+    prompt as guidance; not enforced via cancellation.
+  - softResultLength (number, optional): SOFT recommendation in
+    characters for the maximum length of the helper's final answer
+    (default: DEFAULT_HELPER_SOFT_RESULT_LENGTH = 2000). Embedded in
+    the prompt as guidance; not enforced via truncation.
 
 Returns:
   - answer (string): The helper agent's response.

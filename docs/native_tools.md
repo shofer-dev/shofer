@@ -139,13 +139,14 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 ## Search & Discovery
 
-| Tool               | Origin | Group | Always Available | Status | Description                                    |
-| ------------------ | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
-| `grep_search`      | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context |
-| `find_files`       | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                     |
-| `list_code_usages` | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)               |
-| `rag_search`       | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)     |
-| `lsp_search`       | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback          |
+| Tool               | Origin | Group | Always Available | Status | Description                                         |
+| ------------------ | :----: | ----- | :--------------: | :----: | --------------------------------------------------- |
+| `grep_search`      | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context      |
+| `find_files`       | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                          |
+| `list_code_usages` | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                    |
+| `rag_search`       | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)          |
+| `lsp_search`       | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback               |
+| `ask_helper_agent` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent helper agent a codebase question |
 
 ### `grep_search`
 
@@ -200,6 +201,20 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 | ------- | ------ | :------: | ----------------------------- |
 | `query` | string |    ✅    | Natural language search query |
 | `path`  | string |    –     | Directory scope               |
+
+### `ask_helper_agent`
+
+Ask a question to the persistent **helper agent** — a separate, cost-optimized tool-using agent that maintains long-term context about the codebase across questions. Use this for codebase-knowledge questions that don't require the calling task's full conversation context to be loaded.
+
+The tool is synchronous: the calling task blocks until the helper returns an answer, the `timeoutMs` hard limit is reached, or the helper is cancelled. The helper agent runs its own tool loop using the read-only native tools (`read_file`, `grep_search`, `find_files`, …) under its own model configuration.
+
+| Param              | Type             | Required | Description                                                                                                                                                        |
+| ------------------ | ---------------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `question`         | string           |    ✅    | The question to ask the helper agent.                                                                                                                              |
+| `contextFiles`     | string[] \| null |    –     | File paths the helper should preload into its context window for this question.                                                                                    |
+| `timeoutMs`        | number \| null   |    –     | **Hard** maximum wall time in milliseconds (default: 300000 = 5 minutes). On timeout the helper is aborted and a timeout error is returned.                        |
+| `softTimeoutSec`   | number \| null   |    –     | Soft recommendation (in seconds) for how long the helper should spend on the question (default: 60). Embedded as prompt guidance; not enforced via cancellation.   |
+| `softResultLength` | number \| null   |    –     | Soft recommendation (in characters) for the maximum length of the helper's final answer (default: 2000). Embedded as prompt guidance; not enforced via truncation. |
 
 ---
 
@@ -327,12 +342,14 @@ Create a new task instance in the chosen mode. Supports two execution models:
 - **Synchronous (default):** The parent blocks until the child completes. Must be called alone — no other tools in the same turn.
 - **Background (`is_background=true`):** The child starts immediately and runs concurrently. The parent receives the child's `task_id` and continues without blocking. Use `check_task_status` or `wait_for_task` to retrieve results later.
 
-| Param           | Type    | Required | Description                                                          |
-| --------------- | ------- | :------: | -------------------------------------------------------------------- |
-| `mode`          | string  |    ✅    | Mode slug (e.g., `code`, `debug`)                                    |
-| `message`       | string  |    ✅    | Initial instructions for the child task                              |
-| `todos`         | string  |    –     | Initial markdown checklist for the child                             |
-| `is_background` | boolean |    –     | When `true`, run child concurrently and return `task_id` immediately |
+| Param              | Type    | Required | Description                                                                                                                                |
+| ------------------ | ------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`             | string  |    ✅    | Mode slug (e.g., `code`, `debug`)                                                                                                          |
+| `message`          | string  |    ✅    | Initial instructions for the child task                                                                                                    |
+| `todos`            | string  |    –     | Initial markdown checklist for the child                                                                                                   |
+| `is_background`    | boolean |    –     | When `true`, run child concurrently and return `task_id` immediately                                                                       |
+| `softResultLength` | number  |    ✅    | Soft suggestion for max characters of the subtask's completion result. Hard safety cap: 100000 characters (results beyond this truncated). |
+| `softTimeoutSec`   | number  |    ✅    | Soft guidance (in seconds) for how long the parent expects to wait. Informational only — not enforced.                                     |
 
 ### `check_task_status`
 
@@ -470,6 +487,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `rag_search`             |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
 | `lsp_search`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | `fetch_web_page`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `ask_helper_agent`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
 | **Write group**          |
 | `apply_diff`             |    ✓ (md)    |    ✓    |        |    ✓     |        |
 | `write_to_file`          |    ✓ (md)    |    ✓    |        |    ✓     |        |

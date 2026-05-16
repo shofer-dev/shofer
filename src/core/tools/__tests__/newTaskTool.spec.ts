@@ -122,16 +122,16 @@ import * as vscode from "vscode"
  * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.
  * `is_background` is forwarded so the tool's boolean normalisation runs correctly.
  *
- * Injects default values for the now-mandatory `result_length` and
- * `estimated_timeout` parameters unless the test already provides them, so
+ * Injects default values for the now-mandatory `softResultLength` and
+ * `softTimeoutSec` parameters unless the test already provides them, so
  * the existing test cases (which predate those parameters) continue to exercise
  * the post-validation code paths.
  */
 const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
 	const paramsWithDefaults = {
 		...block.params,
-		result_length: (block.params as any).result_length ?? 1000,
-		estimated_timeout: (block.params as any).estimated_timeout ?? 60,
+		softResultLength: (block.params as any).softResultLength ?? 1000,
+		softTimeoutSec: (block.params as any).softTimeoutSec ?? 60,
 	}
 	return {
 		...block,
@@ -141,8 +141,8 @@ const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
 			message: paramsWithDefaults.message,
 			todos: paramsWithDefaults.todos,
 			is_background: paramsWithDefaults.is_background,
-			result_length: paramsWithDefaults.result_length,
-			estimated_timeout: paramsWithDefaults.estimated_timeout,
+			softResultLength: paramsWithDefaults.softResultLength,
+			softTimeoutSec: paramsWithDefaults.softTimeoutSec,
 		} as unknown as NativeToolArgs["new_task"],
 	}
 }
