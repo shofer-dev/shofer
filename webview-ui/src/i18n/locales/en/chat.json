@@ -273,7 +273,7 @@
 		"wantsToSearchOutsideWorkspace": "Shofer wants to search this directory (outside workspace) for <code>{{regex}}</code>",
 		"didSearchOutsideWorkspace": "Shofer searched this directory (outside workspace) for <code>{{regex}}</code>"
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Shofer wants to search the codebase for <code>{{query}}</code>",
 		"wantsToSearchWithPath": "Shofer wants to search the codebase for <code>{{query}}</code> in <code>{{path}}</code>",
 		"didSearch_one": "Found 1 result",
@@ -514,6 +514,11 @@
 	"genericTool": {
 		"wantsToUse": "Shofer wants to use {{tool}}",
 		"didUse": "Shofer used {{tool}}"
+	},
+	"askHelperAgent": {
+		"wantsToAsk": "Shofer wants to ask the Helper Agent",
+		"didAsk": "Shofer asked the Helper Agent",
+		"answer": "Answer"
 	},
 	"retiredProvider": {
 		"title": "Provider no longer supported",

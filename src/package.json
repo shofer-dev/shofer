@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer-dev",
-	"version": "0.10.2",
+	"version": "0.11.6",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -13,7 +13,9 @@
 		"vscode": "^1.84.0",
 		"node": "20.19.2"
 	},
-	"enabledApiProposals": [],
+	"enabledApiProposals": [
+		"languageModelThinkingPart"
+	],
 	"author": {
 		"name": "Shofer"
 	},

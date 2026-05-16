@@ -5,11 +5,14 @@ import { getWorkspacePath } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { logger } from "../../utils/logging"
+
+const LOG_PREFIX = "[AskHelperAgentTool]"
 
 interface AskHelperAgentParams {
 	question: string
-	contextFiles?: string[]
-	timeoutMs?: number
+	contextFiles?: string[] | null
+	timeoutMs?: number | null
 }
 
 export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
@@ -17,7 +20,11 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 
 	async execute(params: AskHelperAgentParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
-		const { question, contextFiles, timeoutMs } = params
+		const { question } = params
+		// `?? undefined` collapses the nullable strict-mode placeholders the
+		// model passes for "no value" so the downstream defaults apply.
+		const contextFiles = params.contextFiles ?? undefined
+		const timeoutMs = params.timeoutMs ?? undefined
 
 		const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
 
@@ -40,8 +47,13 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 			timeoutMs: timeoutMs ?? 300000,
 		}
 
+		logger.info(
+			`${LOG_PREFIX} execute() invoked taskId=${task.taskId} questionLen=${question.length} contextFiles=${(contextFiles ?? []).length} timeoutMs=${timeoutMs ?? "default"}`,
+		)
+
 		const didApprove = await askApproval("tool", JSON.stringify(sharedMessageProps))
 		if (!didApprove) {
+			logger.info(`${LOG_PREFIX} approval denied taskId=${task.taskId}`)
 			pushToolResult(formatResponse.toolDenied())
 			return
 		}
@@ -60,6 +72,10 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 				throw new Error("HelperAgentManager is not available.")
 			}
 
+			logger.info(
+				`${LOG_PREFIX} manager state=${manager.state} available=${manager.isHelperAgentAvailable} stateMessage=${JSON.stringify(manager.stateMessage)}`,
+			)
+
 			if (!manager.isHelperAgentAvailable) {
 				throw new Error(
 					`Helper agent is not available (state: ${manager.state}). ` +
@@ -67,9 +83,28 @@ export class AskHelperAgentTool extends BaseTool<"ask_helper_agent"> {
 				)
 			}
 
-			pushToolResult(`Asking the helper agent: "${question}"...`)
-
+			logger.info(`${LOG_PREFIX} -> manager.askQuestion taskId=${task.taskId}`)
+			const startedAt = Date.now()
 			const result = await manager.askQuestion(question, contextFiles, timeoutMs)
+			logger.info(
+				`${LOG_PREFIX} <- manager.askQuestion taskId=${task.taskId} durationMs=${Date.now() - startedAt} answerLen=${result.answer.length} prompt=${result.tokensUsed.prompt} completion=${result.tokensUsed.completion}`,
+			)
+
+			// Render the helper agent's answer in chat as a follow-up `tool` say
+			// so the user can read (and expand) the response inline. Without this
+			// the chat would only show "Shofer wants to use Ask Helper Agent" and
+			// the answer would be silently appended to the model's tool_result.
+			const sayPayload = {
+				tool: "askHelperAgent",
+				question,
+				answer: result.answer,
+				contextFiles: result.contextFiles ?? [],
+				timeoutMs: timeoutMs ?? 300000,
+				durationMs: result.durationMs,
+				tokensTotal: result.tokensUsed.total,
+				costUSD: result.costSnapshot.sessionEstimatedCostUSD,
+			}
+			await task.say("tool", JSON.stringify(sayPayload))
 
 			const output = `Helper Agent Answer:
 ${result.answer}
@@ -83,6 +118,9 @@ Files in context: ${result.contextFiles.length}`
 
 			pushToolResult(output)
 		} catch (error: any) {
+			logger.error(
+				`${LOG_PREFIX} execute() FAILED taskId=${task.taskId} error=${error?.message ?? String(error)}\n${error?.stack ?? "(no stack)"}`,
+			)
 			await handleError("ask_helper_agent", error)
 		}
 	}

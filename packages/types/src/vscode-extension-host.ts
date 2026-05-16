@@ -358,6 +358,10 @@ export type ExtensionState = Pick<
 	| "requestDelaySeconds"
 	| "disabledTools"
 	| "defaultCostLimit"
+	| "helperAgentEnabled"
+	| "helperAgentApiConfigId"
+	| "helperAgentMaxContextTokens"
+	| "helperAgentContextFillThreshold"
 > & {
 	lockApiConfigAcrossModes?: boolean
 	version: string
@@ -602,7 +606,7 @@ export interface WebviewMessage {
 		| "deleteMcpServer"
 		| "codebaseIndexEnabled"
 		| "telemetrySetting"
-		| "searchFiles"
+		| "grepSearch"
 		| "toggleApiConfigPin"
 		| "hasOpenedModeSelector"
 		| "lockApiConfigAcrossModes"
@@ -903,13 +907,13 @@ export interface ShoferSayTool {
 		| "editedExistingFile"
 		| "appliedDiff"
 		| "newFileCreated"
-		| "codebaseSearch"
-		| "codebaseSearchWithLsp"
+		| "ragSearch"
+		| "lspSearch"
 		| "readFile"
 		| "readCommandOutput"
 		| "listFilesTopLevel"
 		| "listFilesRecursive"
-		| "searchFiles"
+		| "grepSearch"
 		| "switchMode"
 		| "newTask"
 		| "finishTask"
@@ -930,7 +934,7 @@ export interface ShoferSayTool {
 		| "getErrors"
 		| "getChangedFiles"
 		| "getProjectSetupInfo"
-		// getSearchResults removed — merged into search_files
+		// getSearchResults removed — merged into grep_search
 		| "readProjectStructure"
 		| "listCodeUsages"
 		| "fetchWebPage"
@@ -940,6 +944,7 @@ export interface ShoferSayTool {
 		| "insertEdit"
 		| "removeFile"
 		| "moveFile"
+		| "askHelperAgent"
 	path?: string
 	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
 	fileOp?: "rm" | "mv"
@@ -1019,6 +1024,16 @@ export interface ShoferSayTool {
 		status: string
 		created_at?: number
 	}>
+	// Properties for ask_helper_agent. The `question` field above carries the
+	// prompt sent to the helper agent; these carry the answer + metadata that
+	// only become known after the helper agent responds (emitted via a follow-up
+	// `task.say("tool", ...)` once the call returns).
+	answer?: string
+	contextFiles?: string[]
+	timeoutMs?: number
+	durationMs?: number
+	tokensTotal?: number
+	costUSD?: number
 }
 
 export interface ShoferAskUseMcpServer {
@@ -1048,6 +1063,25 @@ export interface ShoferApiReqInfo {
 	cancelReason?: ShoferApiReqCancelReason
 	streamingFailedMessage?: string
 	apiProtocol?: "anthropic" | "openai"
+	model?: string
+	/** Number of times this request has been retried before this attempt. */
+	retryAttempt?: number
+	/** Structured error information when this API call fails. */
+	error?: ApiReqError
+	/** Serialised wire-level request metadata captured before the call. */
+	wireRequest?: string
 }
 
 export type ShoferApiReqCancelReason = "streaming_failed" | "user_cancelled"
+
+/** Structured error info for a failed API call. */
+export interface ApiReqError {
+	/** Human-readable error message. */
+	message: string
+	/** Provider-reported error type or code (e.g. "rate_limit_error", "invalid_request_error"). */
+	type?: string
+	/** HTTP status code if available. */
+	statusCode?: number
+	/** Stack trace at the point of the error. */
+	stack?: string
+}

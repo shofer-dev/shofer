@@ -123,7 +123,7 @@ export type ToolParamName = (typeof toolParamNames)[number]
  * Tools not listed here will fall back to `any` for backward compatibility.
  */
 export type NativeToolArgs = {
-	ask_helper_agent: { question: string; contextFiles?: string[]; timeoutMs?: number }
+	ask_helper_agent: { question: string; contextFiles?: string[] | null; timeoutMs?: number | null }
 	access_mcp_resource: { server_name: string; uri: string }
 	read_file: import("@shofer/types").ReadFileToolParams
 	read_command_output: { artifact_id: string; search?: string; offset?: number; limit?: number }
@@ -152,11 +152,11 @@ export type NativeToolArgs = {
 		question: string
 		follow_up: Array<{ text: string; mode?: string }>
 	}
-	codebase_search: { query: string; path?: string }
+	rag_search: { query: string; path?: string }
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skills: { skill: string; args?: string }
-	search_files: {
+	grep_search: {
 		path: string
 		query: string
 		fileTypes?: string | null
@@ -183,13 +183,13 @@ export type NativeToolArgs = {
 	get_changed_files: Record<string, never>
 	get_errors: { filePaths?: string[] | null }
 	get_project_setup_info: Record<string, never>
-	// get_search_results removed — merged into search_files
+	// get_search_results removed — merged into grep_search
 	insert_edit: { filePath: string; line: number; column?: number | null; text: string }
 	list_code_usages: { filePath: string; line: number; column: number }
 	read_project_structure: { maxDepth?: number | null; includeHidden?: boolean | null }
 	rename_symbol: { filePath: string; line: number; column: number; newName: string }
 	view_image: { filePath: string }
-	codebase_search_with_lsp: { query: string; maxResults?: number | null }
+	lsp_search: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }
 	// Add more tools as they are migrated to native protocol
@@ -274,13 +274,13 @@ export interface WriteToFileToolUse extends ToolUse<"write_to_file"> {
 	params: Partial<Pick<Record<ToolParamName, string>, "path" | "content">>
 }
 
-export interface CodebaseSearchToolUse extends ToolUse<"codebase_search"> {
-	name: "codebase_search"
+export interface RagSearchToolUse extends ToolUse<"rag_search"> {
+	name: "rag_search"
 	params: Partial<Pick<Record<ToolParamName, string>, "query" | "path">>
 }
 
-export interface SearchFilesToolUse extends ToolUse<"search_files"> {
-	name: "search_files"
+export interface GrepSearchToolUse extends ToolUse<"grep_search"> {
+	name: "grep_search"
 	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern">>
 }
 
