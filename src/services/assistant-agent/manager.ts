@@ -30,6 +30,7 @@ import {
 	type AssistantAgentState,
 	type AssistantAgentConfig,
 	type AgentMessage,
+	type AgentMessagePart,
 	type FileContextEntry,
 	type QuestionResult,
 	DEFAULT_MAX_CONTEXT_TOKENS,
@@ -362,6 +363,45 @@ export class AssistantAgentManager implements vscode.Disposable {
 			const conversation: Anthropic.Messages.MessageParam[] = [...baseConversation]
 			let baseLength = baseConversation.length
 
+			// ── Construct the persisted user + assistant messages UP FRONT ─
+			// so the chat panel can stream the turn live. We mutate
+			// `assistantMsg.parts` in place as text / reasoning / tool calls
+			// arrive, firing `_conversationUpdateEmitter` after each event.
+			const userMsg: AgentMessage = {
+				id: randomUUID(),
+				role: "user",
+				content: question,
+				timestamp: Date.now(),
+				parts: [{ kind: "text", text: question }],
+				metadata: { fileReferences: contextFiles },
+			}
+			const assistantMsg: AgentMessage = {
+				id: randomUUID(),
+				role: "assistant",
+				content: "",
+				timestamp: Date.now(),
+				parts: [],
+			}
+			this._window.appendMessage(userMsg)
+			this._window.appendMessage(assistantMsg)
+			this._conversationUpdateEmitter.fire()
+
+			// Helpers that mutate assistantMsg.parts in place and fan out to
+			// the chat panel. `appendStreamingText` coalesces adjacent
+			// deltas of the same kind into one part so the UI gets a single
+			// growing block rather than one part per chunk.
+			const parts = assistantMsg.parts as AgentMessagePart[]
+			const appendStreamingText = (kind: "text" | "reasoning", delta: string): void => {
+				if (!delta) return
+				const last = parts[parts.length - 1]
+				if (last && last.kind === kind) {
+					last.text += delta
+				} else {
+					parts.push({ kind, text: delta })
+				}
+				this._conversationUpdateEmitter.fire()
+			}
+
 			let totalPrompt = 0
 			let totalCompletion = 0
 			let totalCost = 0
@@ -384,7 +424,34 @@ export class AssistantAgentManager implements vscode.Disposable {
 				logger.info(
 					`[AssistantAgent.Manager] agent-loop iter=${iterations} convLen=${conversation.length} tools=${tools.length}`,
 				)
-				const result = await llm.chatWithTools({ systemPrompt, messages: conversation, tools, signal })
+				const result = await llm.chatWithTools({
+					systemPrompt,
+					messages: conversation,
+					tools,
+					signal,
+					onStream: (event) => {
+						switch (event.kind) {
+							case "text":
+								appendStreamingText("text", event.delta)
+								break
+							case "reasoning":
+								appendStreamingText("reasoning", event.delta)
+								break
+							case "tool_call":
+								// Push a placeholder part; result/isError get
+								// filled in once the executor returns.
+								parts.push({
+									kind: "tool_call",
+									toolCallId: event.toolCall.id,
+									name: event.toolCall.name,
+									args: event.toolCall.arguments,
+									inProgress: true,
+								})
+								this._conversationUpdateEmitter.fire()
+								break
+						}
+					},
+				})
 				totalPrompt += result.tokensUsed.prompt
 				totalCompletion += result.tokensUsed.completion
 				totalCost += result.estimatedCostUSD
@@ -424,6 +491,19 @@ export class AssistantAgentManager implements vscode.Disposable {
 						content: exec.content,
 						is_error: exec.isError ?? false,
 					})
+
+					// Patch the in-flight tool_call part with the result so
+					// the chat panel can collapse the spinner and show the
+					// outcome live.
+					const part = parts.find((p) => p.kind === "tool_call" && p.toolCallId === tc.id) as
+						| Extract<AgentMessagePart, { kind: "tool_call" }>
+						| undefined
+					if (part) {
+						part.result = exec.content
+						part.isError = exec.isError ?? false
+						part.inProgress = false
+						this._conversationUpdateEmitter.fire()
+					}
 				}
 				conversation.push({ role: "user", content: toolResultBlocks })
 
@@ -443,22 +523,22 @@ export class AssistantAgentManager implements vscode.Disposable {
 				`[AssistantAgent.Manager] agent-loop done iters=${iterations} answerLen=${finalAnswer.length} prompt=${totalPrompt} completion=${totalCompletion}`,
 			)
 
-			const userMsg: AgentMessage = {
-				id: randomUUID(),
-				role: "user",
-				content: question,
-				timestamp: Date.now(),
-				metadata: { fileReferences: contextFiles },
+			// Finalize the in-flight assistant message. `finalAnswer` is the
+			// text from the LAST iteration only (the model's closing answer
+			// after all tool calls). If streaming already pushed it into
+			// `parts`, we don't duplicate; otherwise append it now.
+			assistantMsg.content = finalAnswer
+			if (finalAnswer) {
+				const last = parts[parts.length - 1]
+				if (!(last && last.kind === "text" && last.text === finalAnswer)) {
+					// The streaming callback should have already appended
+					// this text. If it didn't (e.g. provider skipped text
+					// chunks and only delivered tool_calls then a final
+					// `answer` blob), add it now so the panel shows it.
+					const hasText = parts.some((p) => p.kind === "text" && p.text.includes(finalAnswer))
+					if (!hasText) parts.push({ kind: "text", text: finalAnswer })
+				}
 			}
-			const assistantMsg: AgentMessage = {
-				id: randomUUID(),
-				role: "assistant",
-				content: finalAnswer,
-				timestamp: Date.now(),
-			}
-
-			this._window.appendMessage(userMsg)
-			this._window.appendMessage(assistantMsg)
 
 			// Enforce limit after appending — prevents unbounded growth
 			// between questions when no contextFiles are loaded.
