@@ -5,8 +5,10 @@ import crypto from "crypto"
  * Current schema version of the git index cache file.
  * Increment when the cache structure changes so stale/corrupt caches
  * are detected and discarded rather than silently used.
+ *
+ * v1 → v2: added lastCommitDate field for incremental indexing.
  */
-const GIT_CACHE_SCHEMA_VERSION = 1
+const GIT_CACHE_SCHEMA_VERSION = 2
 
 /**
  * Serialized cache structure with a schema version field.
@@ -16,6 +18,8 @@ const GIT_CACHE_SCHEMA_VERSION = 1
 interface GitCachePayload {
 	version: number
 	hashes: Record<string, string>
+	/** ISO 8601 date string of the most recent indexed commit (Phase 2). */
+	lastCommitDate?: string
 }
 
 /**
@@ -24,15 +28,16 @@ interface GitCachePayload {
  * Tracks content hashes of already-indexed commits so that re-indexing
  * can skip unchanged commits. The cache is keyed by the workspace path
  * hash to isolate different workspaces.
+ *
+ * Phase 2: also tracks `lastCommitDate` — the author date of the most
+ * recent commit that was indexed. Used by GitWatcher for incremental
+ * `git log --since=<lastCommitDate>` polling.
  */
 export class GitCacheManager {
 	private readonly _cachePath: vscode.Uri
 	private _contentHashes: Record<string, string> = {}
+	private _lastCommitDate: string | undefined
 
-	/**
-	 * @param context - VS Code extension context
-	 * @param workspacePath - Path to the workspace
-	 */
 	constructor(context: vscode.ExtensionContext, workspacePath: string) {
 		const wsHash = crypto.createHash("sha256").update(workspacePath).digest("hex").substring(0, 16)
 		this._cachePath = vscode.Uri.joinPath(context.globalStorageUri, `git-index-cache-${wsHash}.json`)
@@ -49,12 +54,14 @@ export class GitCacheManager {
 
 			if (payload.version === GIT_CACHE_SCHEMA_VERSION && payload.hashes) {
 				this._contentHashes = payload.hashes
+				this._lastCommitDate = payload.lastCommitDate ?? undefined
 			} else {
-				// Stale or corrupt — discard and start fresh
 				this._contentHashes = {}
+				this._lastCommitDate = undefined
 			}
 		} catch {
 			this._contentHashes = {}
+			this._lastCommitDate = undefined
 		}
 	}
 
@@ -65,6 +72,7 @@ export class GitCacheManager {
 		const payload: GitCachePayload = {
 			version: GIT_CACHE_SCHEMA_VERSION,
 			hashes: this._contentHashes,
+			lastCommitDate: this._lastCommitDate,
 		}
 		const data = Buffer.from(JSON.stringify(payload), "utf-8")
 		await vscode.workspace.fs.writeFile(this._cachePath, data)
@@ -82,6 +90,26 @@ export class GitCacheManager {
 	 */
 	setHash(commitHash: string, contentHash: string): void {
 		this._contentHashes[commitHash] = contentHash
+	}
+
+	/**
+	 * Get the ISO 8601 date of the most recent indexed commit,
+	 * or undefined if no commits have been indexed yet.
+	 */
+	get lastCommitDate(): string | undefined {
+		return this._lastCommitDate
+	}
+
+	/**
+	 * Update the last commit date from a batch of commits.
+	 * Tracks the most recent `author_date` across all processed commits.
+	 */
+	updateLastCommitDateFromBatch(commits: Array<{ author_date: string }>): void {
+		for (const commit of commits) {
+			if (!this._lastCommitDate || commit.author_date > this._lastCommitDate) {
+				this._lastCommitDate = commit.author_date
+			}
+		}
 	}
 
 	/**

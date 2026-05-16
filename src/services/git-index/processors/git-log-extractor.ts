@@ -32,19 +32,38 @@ const MAX_CONTENT_LENGTH = 8000
  */
 export class GitLogExtractor implements IGitLogExtractor {
 	async extractCommits(workspacePath: string, maxHistoryDays: number, maxCommits: number): Promise<GitCommitBlock[]> {
+		const args = this._buildLogArgs(`--since=${maxHistoryDays} days ago`, `--max-count=${maxCommits}`)
+		return this._executeLog(workspacePath, args)
+	}
+
+	/**
+	 * Extract commits since a specific ISO 8601 date (for incremental indexing).
+	 * No cap on commit count — incremental scans are expected to be small.
+	 */
+	async extractCommitsSince(workspacePath: string, sinceDate: string): Promise<GitCommitBlock[]> {
+		const args = this._buildLogArgs(`--since=${sinceDate}`)
+		return this._executeLog(workspacePath, args)
+	}
+
+	// --- Private ---
+
+	/**
+	 * Build the common `git log` argument array.
+	 * @param sinceArg - The `--since=` argument value
+	 * @param extraArgs - Additional optional args (e.g. `--max-count=N`)
+	 */
+	private _buildLogArgs(sinceArg: string, ...extraArgs: string[]): string[] {
+		const formatStr = `%H${FIELD_SEPARATOR}%h${FIELD_SEPARATOR}%an <%ae>${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}${COMMIT_TERMINATOR}`
+		return ["log", `--format=${formatStr}`, sinceArg, ...extraArgs, "--encoding=UTF-8"]
+	}
+
+	/**
+	 * Execute `git log` with the given args and parse the output.
+	 */
+	private async _executeLog(workspacePath: string, args: string[]): Promise<GitCommitBlock[]> {
 		// NOTE: --encoding=UTF-8 forces UTF-8 output. Invalid characters are
 		// replaced with U+FFFD (replacement character) so the parser never
 		// encounters raw byte sequences it cannot decode.
-		const formatStr = `%H${FIELD_SEPARATOR}%h${FIELD_SEPARATOR}%an <%ae>${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}${COMMIT_TERMINATOR}`
-
-		const args = [
-			"log",
-			`--format=${formatStr}`,
-			`--since=${maxHistoryDays} days ago`,
-			`--max-count=${maxCommits}`,
-			"--encoding=UTF-8",
-		]
-
 		try {
 			const { stdout } = await execFileAsync("git", args, {
 				cwd: workspacePath,
