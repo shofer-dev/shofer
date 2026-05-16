@@ -258,6 +258,9 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	const { CodeIndexManager } = await import("../../services/code-index/manager")
 	const codeIndexManager = CodeIndexManager.getInstance(provider.context, cwd)
 
+	const { GitIndexManager } = await import("../../services/git-index/git-index-manager")
+	const gitIndexManager = GitIndexManager.getInstance(provider.context, cwd)
+
 	const { AssistantAgentManager } = await import("../../services/assistant-agent/manager")
 	const assistantAgentManager = AssistantAgentManager.getInstance(provider.context, cwd)
 
@@ -277,6 +280,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		customModes,
 		experiments,
 		codeIndexManager,
+		gitIndexManager,
 		filterSettings,
 		mcpHub,
 		assistantAgentManager,

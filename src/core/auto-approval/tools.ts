@@ -18,6 +18,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	listFilesRecursive: "list_files",
 	grepSearch: "grep_search",
 	ragSearch: "rag_search",
+	gitSearch: "git_search",
 	lspSearch: "lsp_search",
 	findFiles: "find_files",
 	viewImage: "view_image",

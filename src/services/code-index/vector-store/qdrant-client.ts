@@ -22,9 +22,12 @@ export class QdrantVectorStore implements IVectorStore {
 	/**
 	 * Creates a new Qdrant vector store
 	 * @param workspacePath Path to the workspace
-	 * @param url Optional URL to the Qdrant server
+	 * @param url Qdrant server URL
+	 * @param vectorSize Embedding vector dimension
+	 * @param apiKey Optional Qdrant API key
+	 * @param collectionPrefix Optional collection name prefix (default: "ws-")
 	 */
-	constructor(workspacePath: string, url: string, vectorSize: number, apiKey?: string) {
+	constructor(workspacePath: string, url: string, vectorSize: number, apiKey?: string, collectionPrefix = "ws-") {
 		// Parse the URL to determine the appropriate QdrantClient configuration
 		const parsedUrl = this.parseQdrantUrl(url)
 
@@ -80,7 +83,7 @@ export class QdrantVectorStore implements IVectorStore {
 		// Generate collection name from workspace path
 		const hash = createHash("sha256").update(workspacePath).digest("hex")
 		this.vectorSize = vectorSize
-		this.collectionName = `ws-${hash.substring(0, 16)}`
+		this.collectionName = `${collectionPrefix}${hash.substring(0, 16)}`
 	}
 
 	/**

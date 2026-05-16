@@ -5,6 +5,7 @@ import applyPatch from "./apply_patch"
 import askFollowupQuestion from "./ask_followup_question"
 import attemptCompletion from "./attempt_completion"
 import ragSearch from "./rag_search"
+import gitSearch from "./git_search"
 import lspSearch from "./lsp_search"
 import createDirectory from "./create_directory"
 import createNewWorkspace from "./create_new_workspace"
@@ -77,6 +78,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		askFollowupQuestion,
 		attemptCompletion,
 		ragSearch,
+		gitSearch,
 		lspSearch,
 		createDirectory,
 		createNewWorkspace,

@@ -50,6 +50,12 @@ export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexBedrockProfile: z.string().optional(),
 	// OpenRouter specific fields
 	codebaseIndexOpenRouterSpecificProvider: z.string().optional(),
+	// Git history indexing fields
+	codebaseIndexGitEnabled: z.boolean().optional(),
+	codebaseIndexGitMaxHistoryDays: z.number().optional(),
+	codebaseIndexGitMaxCommits: z.number().optional(),
+	codebaseIndexGitSearchMinScore: z.number().min(0).max(1).optional(),
+	codebaseIndexGitSearchMaxResults: z.number().optional(),
 })
 
 export type CodebaseIndexConfig = z.infer<typeof codebaseIndexConfigSchema>

@@ -111,6 +111,7 @@ export const toolParamNames = [
 	"pattern",
 	"replacement",
 	"global",
+	"maxResults", // git_search parameter
 	// attempt_completion rating + feedback
 	"rating",
 	"feedback",
@@ -192,6 +193,7 @@ export type NativeToolArgs = {
 	lsp_search: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }
+	git_search: { query: string; maxResults?: number | null }
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -282,6 +284,11 @@ export interface RagSearchToolUse extends ToolUse<"rag_search"> {
 export interface GrepSearchToolUse extends ToolUse<"grep_search"> {
 	name: "grep_search"
 	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern">>
+}
+
+export interface GitSearchToolUse extends ToolUse<"git_search"> {
+	name: "git_search"
+	params: Partial<Pick<Record<ToolParamName, string>, "query" | "maxResults">>
 }
 
 export interface ListFilesToolUse extends ToolUse<"list_files"> {

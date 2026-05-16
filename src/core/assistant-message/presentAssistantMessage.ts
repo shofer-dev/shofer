@@ -40,6 +40,7 @@ import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { ragSearchTool } from "../tools/RagSearchTool"
+import { gitSearchTool } from "../tools/GitSearchTool"
 import { lspSearchTool } from "../tools/LspSearchTool"
 import { askAssistantAgentTool } from "../tools/AskAssistantAgentTool"
 import { createDirectoryTool } from "../tools/CreateDirectoryTool"
@@ -397,6 +398,8 @@ export async function presentAssistantMessage(shofer: Task) {
 					case "give_feedback":
 						return `[${block.name}]`
 					case "rag_search":
+						return `[${block.name} for '${block.params.query}']`
+					case "git_search":
 						return `[${block.name} for '${block.params.query}']`
 					case "ask_assistant_agent":
 						return `[${block.name} for '${block.params.question}']`
@@ -821,6 +824,13 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "rag_search":
 					await ragSearchTool.handle(shofer, block as ToolUse<"rag_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "git_search":
+					await gitSearchTool.handle(shofer, block as ToolUse<"git_search">, {
 						askApproval,
 						handleError,
 						pushToolResult,
