@@ -120,10 +120,19 @@ interface JsonExportCall {
 	cancelled?: boolean
 	cancelReason?: string
 	streamingFailedMessage?: string
-	messages: MessageParam[] // Anthropic-format messages for this call
+	messages: MessageParam[] // Anthropic-format messages for this call (empty `[]` for error-only calls)
 	toolCalls: JsonExportToolCall[] // Tool calls from the assistant message
 	reasoning?: string // Extracted reasoning / thinking
 	_tokensEstimated?: true // Present when tokens are char/4 heuristic
+	retryAttempt?: number // Number of retries before this attempt (0 = first try)
+	error?: {
+		// Structured error info when this call failed
+		message: string
+		type?: string // e.g. "rate_limit_error", "invalid_request_error"
+		statusCode?: number // HTTP status code
+		stack?: string // Stack trace
+	}
+	wireRequest?: string // Serialised wire-level request metadata (JSON)
 }
 
 interface JsonExportToolCall {
@@ -179,6 +188,28 @@ interface JsonExportToolCall {
 ### Token Estimation
 
 When the LLM provider does not emit `usage` chunks in streaming mode (e.g., some OpenAI-compatible providers), token counts are estimated using a character/4 heuristic and the call is marked with `"_tokensEstimated": true`. When usage data is available from the provider, real values are used without this flag.
+
+### Error Calls
+
+API calls that fail entirely (connection errors, rate limits, empty streams) are still included as call entries. These entries have:
+
+- Empty `messages: []` and `toolCalls: []`
+- Structured `error` object with `message`, `type`, `statusCode`, and `stack`
+- `wireRequest` showing what was about to be sent
+- `retryAttempt` indicating how many retries preceded this attempt
+
+This ensures the trace shows every attempted API call, not just the successful ones.
+
+### Wire Request
+
+Each call may include a `wireRequest` field — a serialised JSON snapshot captured just before the HTTP call. It contains:
+
+- The model ID and API protocol
+- System prompt length and a truncated head (first 500 chars)
+- Number of messages and tools sent
+- The full normalised message payload and tool definitions
+
+This is useful for diagnosing what data was actually transmitted to the provider, especially when comparing against error responses.
 
 ### Source
 
