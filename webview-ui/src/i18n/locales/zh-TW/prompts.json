@@ -24,9 +24,14 @@
 		"allowedFiles": "允許的檔案：",
 		"toolNames": {
 			"read": "讀取檔案",
-			"edit": "編輯檔案",
-			"command": "執行命令",
-			"mcp": "使用 MCP"
+			"mcp": "使用 MCP",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "無"
 	},

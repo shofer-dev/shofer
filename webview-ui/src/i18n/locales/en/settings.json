@@ -298,10 +298,13 @@
 		"groups": {
 			"essential": "Essential (always available)",
 			"read": "Read",
-			"edit": "Edit",
-			"command": "Command",
+			"write": "Write",
+			"execute": "Run",
 			"mcp": "MCP",
-			"modes": "Modes",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
 			"uncategorized": "Uncategorized"
 		}
 	},

@@ -8,13 +8,10 @@
 import { z } from "zod"
 import { zodToJsonSchema } from "zod-to-json-schema"
 
-import { toolGroups, deprecatedToolGroups } from "./tool.js"
+import { toolGroups } from "./tool.js"
 import { groupOptionsSchema, modeConfigObjectSchema } from "./mode.js"
 
-// Build a ToolGroup enum that includes deprecated groups so existing configs
-// still validate.
-const allToolGroups = [...toolGroups, ...Object.keys(deprecatedToolGroups)] as [string, ...string[]]
-const allToolGroupsSchema = z.enum(allToolGroups)
+const allToolGroupsSchema = z.enum(toolGroups)
 
 // Build a GroupEntry schema that uses the extended tool group list.
 const groupEntrySchema = z.union([allToolGroupsSchema, z.tuple([allToolGroupsSchema, groupOptionsSchema])])

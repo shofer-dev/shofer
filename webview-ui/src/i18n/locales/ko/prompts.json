@@ -24,9 +24,14 @@
 		"allowedFiles": "허용된 파일:",
 		"toolNames": {
 			"read": "파일 읽기",
-			"edit": "파일 편집",
-			"command": "명령 실행",
-			"mcp": "MCP 사용"
+			"mcp": "MCP 사용",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "없음"
 	},

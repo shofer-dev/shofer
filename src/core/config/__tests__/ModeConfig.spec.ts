@@ -249,43 +249,53 @@ describe("CustomModeSchema", () => {
 		})
 	})
 
-	describe("deprecated tool group migration", () => {
-		it("should strip deprecated 'browser' string group from mode config", () => {
+	describe("canonical tool group validation", () => {
+		it("should accept canonical group names as-is", () => {
 			const result = modeConfigSchema.parse({
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
 				groups: ["read", "write"],
 			})
-			expect(result.groups).toEqual(["read", "edit"])
+			expect(result.groups).toEqual(["read", "write"])
 		})
 
-		it("should strip deprecated 'browser' tuple group from mode config", () => {
+		it("should accept browser group with options", () => {
 			const result = modeConfigSchema.parse({
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read", ["browser", { fileRegex: ".*", description: "test" }], "edit"],
+				groups: ["read", ["browser", { fileRegex: ".*", description: "test" }]],
 			})
-			expect(result.groups).toEqual(["read", "edit"])
+			expect(result.groups).toEqual(["read", ["browser", { fileRegex: ".*", description: "test" }]])
 		})
 
-		it("should handle mode config where all groups are deprecated", () => {
+		it("should accept browser-only mode", () => {
 			const result = modeConfigSchema.parse({
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
 				groups: ["browser"],
 			})
-			expect(result.groups).toEqual([])
+			expect(result.groups).toEqual(["browser"])
 		})
 
-		it("should still reject other invalid group names", () => {
+		it("should reject invalid group names", () => {
 			const result = modeConfigSchema.safeParse({
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
 				groups: ["read", "nonexistent"],
+			})
+			expect(result.success).toBe(false)
+		})
+
+		it("should reject deprecated group names", () => {
+			const result = modeConfigSchema.safeParse({
+				slug: "test-mode",
+				name: "Test Mode",
+				roleDefinition: "Test role",
+				groups: ["read", "edit"],
 			})
 			expect(result.success).toBe(false)
 		})

@@ -24,9 +24,14 @@
 		"allowedFiles": "Разрешённые файлы:",
 		"toolNames": {
 			"read": "Чтение файлов",
-			"edit": "Редактирование файлов",
-			"command": "Выполнять команды",
-			"mcp": "Использовать MCP"
+			"mcp": "Использовать MCP",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "Отсутствуют"
 	},

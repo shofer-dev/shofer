@@ -128,20 +128,6 @@ These tools bypass mode filtering entirely:
 
 `attempt_completion`, `update_todo_list`, `run_slash_command`, `skill`, `set_task_title`
 
-## Backward Compatibility
-
-### Renamed groups
-
-Old group names in user config files are automatically remapped:
-
-| Old name  | New name  |
-| --------- | --------- |
-| `edit`    | `write`   |
-| `command` | `execute` |
-| `modes`   | `mode`    |
-
-The `browser` group was previously deprecated and stripped from configs; it is now a valid first-class group.
-
 ### MCP tools without group
 
 Tools without an explicit `group` field continue to work — they default to `uncategorized` and are subject to each mode's `uncategorized` inclusion.

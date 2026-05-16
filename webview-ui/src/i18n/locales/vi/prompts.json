@@ -24,9 +24,14 @@
 		"allowedFiles": "Tệp được phép:",
 		"toolNames": {
 			"read": "Đọc tệp",
-			"edit": "Chỉnh sửa tệp",
-			"command": "Chạy lệnh",
-			"mcp": "Sử dụng MCP"
+			"mcp": "Sử dụng MCP",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "Không có"
 	},

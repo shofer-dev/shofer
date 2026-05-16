@@ -24,9 +24,14 @@
 		"allowedFiles": "İzin verilen dosyalar:",
 		"toolNames": {
 			"read": "Dosyaları Oku",
-			"edit": "Dosyaları Düzenle",
-			"command": "Komutları Çalıştır",
-			"mcp": "MCP Kullan"
+			"mcp": "MCP Kullan",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "Yok"
 	},

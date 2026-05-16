@@ -24,9 +24,14 @@
 		"allowedFiles": "Erlaubte Dateien:",
 		"toolNames": {
 			"read": "Dateien lesen",
-			"edit": "Dateien bearbeiten",
-			"command": "Befehle ausführen",
-			"mcp": "MCP verwenden"
+			"mcp": "MCP verwenden",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "Keine"
 	},

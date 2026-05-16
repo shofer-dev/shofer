@@ -27,25 +27,6 @@ export const toolGroups = [
 
 export const toolGroupsSchema = z.enum(toolGroups)
 
-/**
- * Tool groups that have been renamed or removed but may still exist in user config files.
- * Used by schema preprocessing to silently map/remove them before validation,
- * preventing errors for users with older configs.
- */
-export const deprecatedToolGroups: Record<string, string | null> = {
-	edit: "write", // renamed
-	command: "execute", // renamed
-	modes: "mode", // renamed
-}
-
-/**
- * Tool names that have been renamed but may still exist in LLM outputs or older configs.
- * Used by the NativeToolCallParser to map old tool names to their current canonical forms.
- */
-export const deprecatedToolNames: Record<string, string> = {
-	skill_load: "skills", // renamed
-}
-
 export type ToolGroup = z.infer<typeof toolGroupsSchema>
 
 /**

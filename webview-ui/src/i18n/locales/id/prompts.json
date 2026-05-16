@@ -24,9 +24,14 @@
 		"allowedFiles": "File yang diizinkan:",
 		"toolNames": {
 			"read": "Baca File",
-			"edit": "Edit File",
-			"command": "Jalankan Perintah",
-			"mcp": "Gunakan MCP"
+			"mcp": "Gunakan MCP",
+			"write": "Write Files",
+			"execute": "Run Commands",
+			"browser": "Browser",
+			"mode": "Mode",
+			"subtasks": "Subtasks",
+			"questions": "Questions",
+			"uncategorized": "Uncategorized"
 		},
 		"noTools": "Tidak Ada"
 	},
