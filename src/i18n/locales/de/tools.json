@@ -8,7 +8,7 @@
 	},
 	"toolRepetitionLimitReached": "Shofer scheint in einer Schleife festzustecken und versucht wiederholt dieselbe Aktion ({{toolName}}). Dies könnte auf ein Problem mit der aktuellen Strategie hindeuten. Überlege dir, die Aufgabe umzuformulieren, genauere Anweisungen zu geben oder Shofer zu einem anderen Ansatz zu führen.",
 	"unknownToolError": "Shofer hat versucht, ein unbekanntes Tool zu verwenden: \"{{toolName}}\". Wiederhole Versuch...",
-	"codebaseSearch": {
+	"ragSearch": {
 		"approval": "Suche nach '{{query}}' im Codebase..."
 	},
 	"newTask": {

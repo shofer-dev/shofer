@@ -295,7 +295,7 @@ function AppInner({ createExtensionHost, ...extensionHostOptions }: TUIAppProps)
 			if (!sendToExtension) {
 				return
 			}
-			sendToExtension({ type: "searchFiles", query })
+			sendToExtension({ type: "grepSearch", query })
 		},
 		[sendToExtension],
 	)

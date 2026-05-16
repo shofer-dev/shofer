@@ -8,7 +8,7 @@
 	},
 	"toolRepetitionLimitReached": "Shofer parece estar preso em um loop, tentando a mesma ação ({{toolName}}) repetidamente. Isso pode indicar um problema com sua estratégia atual. Considere reformular a tarefa, fornecer instruções mais específicas ou guiá-lo para uma abordagem diferente.",
 	"unknownToolError": "Shofer tentou usar uma ferramenta desconhecida: \"{{toolName}}\". Tentando novamente...",
-	"codebaseSearch": {
+	"ragSearch": {
 		"approval": "Pesquisando '{{query}}' na base de código..."
 	},
 	"newTask": {

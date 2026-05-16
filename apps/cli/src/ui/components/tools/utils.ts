@@ -64,10 +64,10 @@ export function getToolDisplayName(toolName: string): string {
 		writeToFile: "Write File",
 
 		// Search operations
-		searchFiles: "Search Files",
-		search_files: "Search Files",
-		codebaseSearch: "Codebase Search",
-		codebase_search: "Codebase Search",
+		grepSearch: "Search Files",
+		grep_search: "Search Files",
+		ragSearch: "Codebase Search",
+		rag_search: "Codebase Search",
 
 		// Command operations
 		execute_command: "Execute Command",
@@ -116,10 +116,10 @@ export function getToolIconName(toolName: string): IconName {
 		writeToFile: "file-edit",
 
 		// Search operations
-		searchFiles: "search",
-		search_files: "search",
-		codebaseSearch: "search",
-		codebase_search: "search",
+		grepSearch: "search",
+		grep_search: "search",
+		ragSearch: "search",
+		rag_search: "search",
 
 		// Command operations
 		execute_command: "terminal",

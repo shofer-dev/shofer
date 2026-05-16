@@ -54,7 +54,7 @@ const CONTEXT_AFTER_PARAMETER_DESCRIPTION = `Lines of context to show after each
 export default {
 	type: "function",
 	function: {
-		name: "search_files",
+		name: "grep_search",
 		description: SEARCH_FILES_DESCRIPTION,
 		strict: true,
 		parameters: {

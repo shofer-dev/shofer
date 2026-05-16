@@ -139,15 +139,15 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 ## Search & Discovery
 
-| Tool                       | Origin | Group | Always Available | Status | Description                                    |
-| -------------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
-| `search_files`             | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context |
-| `find_files`               | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                     |
-| `list_code_usages`         | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)               |
-| `codebase_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)     |
-| `codebase_search_with_lsp` | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback          |
+| Tool               | Origin | Group | Always Available | Status | Description                                    |
+| ------------------ | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
+| `grep_search`      | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context |
+| `find_files`       | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                     |
+| `list_code_usages` | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)               |
+| `rag_search`       | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)     |
+| `lsp_search`       | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback          |
 
-### `search_files`
+### `grep_search`
 
 Unified search using VS Code's indexed `workspace.findTextInFiles` API. Supports both regex and literal text search, case-sensitive/whole-word matching, file type filtering, exclusion patterns, configurable context lines, and result capping. Replaces the former `get_search_results` tool.
 
@@ -183,7 +183,7 @@ Finds all references of a symbol using VS Code's LSP reference provider.
 | `line`     | number |    ✅    | 1-based line number        |
 | `column`   | number |    ✅    | 1-based column number      |
 
-### `codebase_search_with_lsp`
+### `lsp_search`
 
 Searches the codebase using the LSP workspace symbol provider. Falls back to word-level text search when no language server is available. Requires no external infrastructure.
 
@@ -192,7 +192,7 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 | `query`      | string         |    ✅    | Symbol name or text to search for   |
 | `maxResults` | number \| null |    ✅    | Max results to return (default: 20) |
 
-### `codebase_search`
+### `rag_search`
 
 🔒 Requires code index to be enabled, configured, and initialized.
 
@@ -454,50 +454,50 @@ These are alternative edit tool implementations selectable per-model. They map t
 
 Checkmark (✓) means the tool is available in that mode by default.
 
-| Tool                       | 🏗️ Architect | 💻 Code | ❓ Ask | 🪲 Debug | Always |
-| -------------------------- | :----------: | :-----: | :----: | :------: | :----: |
-| **Read group**             |
-| `read_file`                |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `search_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_files`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `find_files`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `read_project_structure`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `view_image`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_code_usages`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_errors`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_project_setup_info`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_changed_files`        |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `codebase_search`          |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| `codebase_search_with_lsp` |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `fetch_web_page`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| **Write group**            |
-| `apply_diff`               |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `write_to_file`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `insert_edit`              |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `rename_symbol`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `create_directory`         |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `create_new_workspace`     |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `sed`                      |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `generate_image`           |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
-| **Execute group**          |
-| `execute_command`          |              |    ✓    |        |    ✓     |        |
-| `read_command_output`      |              |    ✓    |        |    ✓     |        |
-| **MCP group**              |
-| `use_mcp_tool`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `access_mcp_resource`      |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| **Always available**       |
-| `ask_followup_question`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `attempt_completion`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `switch_mode`              |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `new_task`                 |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `update_todo_list`         |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `check_task_status`        |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `wait_for_task`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `list_background_tasks`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `skill`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `set_task_title`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `give_feedback`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `run_slash_command`        |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
+| Tool                     | 🏗️ Architect | 💻 Code | ❓ Ask | 🪲 Debug | Always |
+| ------------------------ | :----------: | :-----: | :----: | :------: | :----: |
+| **Read group**           |
+| `read_file`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `grep_search`            |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `list_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `find_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `read_project_structure` |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `view_image`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `list_code_usages`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_errors`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_project_setup_info` |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_changed_files`      |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `rag_search`             |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
+| `lsp_search`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `fetch_web_page`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| **Write group**          |
+| `apply_diff`             |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `write_to_file`          |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `insert_edit`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `rename_symbol`          |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `create_directory`       |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `create_new_workspace`   |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `sed`                    |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `generate_image`         |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
+| **Execute group**        |
+| `execute_command`        |              |    ✓    |        |    ✓     |        |
+| `read_command_output`    |              |    ✓    |        |    ✓     |        |
+| **MCP group**            |
+| `use_mcp_tool`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `access_mcp_resource`    |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
+| **Always available**     |
+| `ask_followup_question`  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `attempt_completion`     |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `switch_mode`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `new_task`               |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `update_todo_list`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `check_task_status`      |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `wait_for_task`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `list_background_tasks`  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `skill`                  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `set_task_title`         |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `give_feedback`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `run_slash_command`      |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
 
 **Notes:**
 

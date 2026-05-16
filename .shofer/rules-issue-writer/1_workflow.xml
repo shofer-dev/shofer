@@ -147,15 +147,15 @@
         Discovery workflow (respect one-tool-per-message):
         1) Extract keywords, component names, error phrases, and concepts from the user's message or latest reply.
         2) Run semantic search:
-        <codebase_search>
+        <rag_search>
         <query>[Keywords from user's description or latest reply]</query>
-        </codebase_search>
+        </rag_search>
 
         3) Refine with targeted regex where helpful:
-        <search_files>
+        <grep_search>
         <path>.</path>
         <regex>[exact error strings|component names|feature flags]</regex>
-        </search_files>
+        </grep_search>
 
         4) Read key files for verification when necessary:
         <read_file>

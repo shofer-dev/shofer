@@ -1,4 +1,4 @@
-// npx vitest core/webview/__tests__/webviewMessageHandler.searchFiles.spec.ts
+// npx vitest core/webview/__tests__/webviewMessageHandler.grepSearch.spec.ts
 
 import type { Mock } from "vitest"
 
@@ -23,7 +23,7 @@ vi.mock("vscode", () => ({
 	},
 }))
 
-describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () => {
+describe("webviewMessageHandler - grepSearch with ShoferIgnore filtering", () => {
 	let mockShoferProvider: ShoferProvider
 	let mockFilterPaths: Mock
 	let mockDispose: Mock
@@ -70,7 +70,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		;(mockShoferProvider.getCurrentTask as Mock).mockReturnValue(null)
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "index",
 			requestId: "test-request-123",
 		})
@@ -106,7 +106,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		;(mockShoferProvider.getCurrentTask as Mock).mockReturnValue(null)
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "index",
 			requestId: "test-request-456",
 		})
@@ -147,7 +147,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		})
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "index",
 			requestId: "test-request-789",
 		})
@@ -172,7 +172,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		} as unknown as ShoferProvider
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "test",
 			requestId: "test-request-error",
 		})
@@ -196,7 +196,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		;(mockShoferProvider.getCurrentTask as Mock).mockReturnValue(null)
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "test",
 			requestId: "test-request-fail",
 		})
@@ -225,7 +225,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		;(mockShoferProvider.getCurrentTask as Mock).mockReturnValue(null)
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "index",
 			requestId: "test-request-default",
 		})
@@ -251,7 +251,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		;(mockShoferProvider.getCurrentTask as Mock).mockReturnValue(null)
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "index",
 			requestId: "test-request-dispose",
 		})
@@ -284,7 +284,7 @@ describe("webviewMessageHandler - searchFiles with ShoferIgnore filtering", () =
 		})
 
 		await webviewMessageHandler(mockShoferProvider, {
-			type: "searchFiles",
+			type: "grepSearch",
 			query: "index",
 			requestId: "test-request-no-dispose",
 		})

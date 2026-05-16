@@ -263,10 +263,10 @@ describe("LanguageModelTextPart", () => {
 
 describe("LanguageModelToolCallPart", () => {
 	it("should create tool call part", () => {
-		const part = new LanguageModelToolCallPart("call-123", "searchFiles", { query: "test" })
+		const part = new LanguageModelToolCallPart("call-123", "grepSearch", { query: "test" })
 
 		expect(part.callId).toBe("call-123")
-		expect(part.name).toBe("searchFiles")
+		expect(part.name).toBe("grepSearch")
 		expect(part.input).toEqual({ query: "test" })
 	})
 })

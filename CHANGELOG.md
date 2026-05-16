@@ -4,7 +4,7 @@
 
 ### Features
 
-- **Unified search_files tool**: Consolidated `search_files` and `get_search_results` into a single tool using VSCode's `workspace.findTextInFiles` API as the sole backend, replacing the old ripgrep-based implementation. The tool now supports `query` (both regex and literal text), `fileTypes`, `excludePattern`, `isRegex`, `caseSensitive`, `wholeWord`, and `maxResults`.
+- **Unified grep_search tool**: Consolidated `grep_search` and `get_search_results` into a single tool using VSCode's `workspace.findTextInFiles` API as the sole backend, replacing the old ripgrep-based implementation. The tool now supports `query` (both regex and literal text), `fileTypes`, `excludePattern`, `isRegex`, `caseSensitive`, `wholeWord`, and `maxResults`.
 - **TaskSelector archive & pin**: Added archive and pin features to the TaskSelector panel. Tasks can be archived (hidden from the main list) and pinned (kept at top), with explicit unpin/unarchive actions.
 - **Collapsible parent-child task hierarchy**: TaskSelector now renders parent-child task relationships as a collapsible tree, making it easier to navigate subtask hierarchies.
 - **TaskSelector polish**: Removed pause/play buttons and the current-task tick indicator from TaskSelector for a cleaner, simpler UI.
@@ -199,7 +199,7 @@
 ### Features
 
 - **Parallel task management**: Implemented multi-task architecture enabling multiple concurrent tasks (Copilot-like). Each task runs independently with its own LLM conversation, state, and history.
-- **12 native tools from workspace-tools**: Ported 12 native tool schemas from the `workspace-tools` extension, including `codebase_search_with_lsp` (LSP-based symbol search), `create_new_workspace`, `fetch_web_page`, and others.
+- **12 native tools from workspace-tools**: Ported 12 native tool schemas from the `workspace-tools` extension, including `lsp_search` (LSP-based symbol search), `create_new_workspace`, `fetch_web_page`, and others.
 - **Native tool handlers**: Implemented full tool execution handlers for all 12 ported tools.
 - **Task state indicators**: Added visual state indicators showing each task's status (running, paused, error, completed).
 - **Task notifications**: Webview notifications keep users informed of background task state changes.
@@ -1261,7 +1261,7 @@
 
 ## [3.29.5] - 2025-11-01
 
-- Fix: Resolve Qdrant codebase_search error by adding keyword index for type field (#8963 by @rossdonald, PR by @app/roomote)
+- Fix: Resolve Qdrant rag_search error by adding keyword index for type field (#8963 by @rossdonald, PR by @app/roomote)
 - Fix cost and token tracking between provider styles to ensure accurate usage metrics (thanks @mrubens!)
 
 ## [3.29.4] - 2025-10-30
@@ -1317,7 +1317,7 @@
 - Add token-budget based file reading with intelligent preview to avoid context overruns (thanks @daniel-lxs!)
 - Enable browser-use tool for all image-capable models (#8116 by @hannesrudolph, PR by @app/roomote!)
 - Add dynamic model loading for Shofer Router (thanks @app/roomote!)
-- Fix: Respect nested .gitignore files in search_files (#7921 by @hannesrudolph, PR by @daniel-lxs)
+- Fix: Respect nested .gitignore files in grep_search (#7921 by @hannesrudolph, PR by @daniel-lxs)
 - Fix: Preserve trailing newlines in stripLineNumbers for apply_diff (#8020 by @liyi3c, PR by @app/roomote)
 - Fix: Exclude max tokens field for models that don't support it in export (#7944 by @hannesrudolph, PR by @elianiva)
 - Retry API requests on stream failures instead of aborting task (thanks @daniel-lxs!)
@@ -1712,7 +1712,7 @@
 - Add an API for resuming tasks by ID (thanks @mrubens!)
 - Emit event when a task ask requires interaction (thanks @cte!)
 - Make enhance with task history default to true (thanks @liwilliam2021!)
-- Fix: Use shofer.cwd as primary source for workspace path in codebaseSearchTool (thanks @NaccOll!)
+- Fix: Use shofer.cwd as primary source for workspace path in ragSearchTool (thanks @NaccOll!)
 - Hotfix multiple folder workspace checkpoint (thanks @NaccOll!)
 
 ## [3.25.15] - 2025-08-14
@@ -1758,7 +1758,7 @@
 - Add: IO Intelligence Provider support (thanks @ertan2002!)
 - Fix: MCP startup issues and remove refresh notifications (thanks @hannesrudolph!)
 - Fix: Improvements to GPT-5 OpenAI provider configuration (thanks @hannesrudolph!)
-- Fix: Clarify codebase_search path parameter as optional and improve tool descriptions (thanks @app/roomote!)
+- Fix: Clarify rag_search path parameter as optional and improve tool descriptions (thanks @app/roomote!)
 - Fix: Bedrock provider workaround for LiteLLM passthrough issues (thanks @jr!)
 - Fix: Token usage and cost being underreported on cancelled requests (thanks @chrarnoldus!)
 
@@ -1777,7 +1777,7 @@
 ## [3.25.8] - 2025-08-06
 
 - Fix: Prevent disabled MCP servers from starting processes and show correct status (#6036 by @hannesrudolph, PR by @app/roomote)
-- Fix: Handle current directory path "." correctly in codebase_search tool (#6514 by @hannesrudolph, PR by @app/roomote)
+- Fix: Handle current directory path "." correctly in rag_search tool (#6514 by @hannesrudolph, PR by @app/roomote)
 - Fix: Trim whitespace from OpenAI base URL to fix model detection (#6559 by @vauhochzett, PR by @app/roomote)
 - Feat: Reduce Gemini 2.5 Pro minimum thinking budget to 128 (thanks @app/roomote!)
 - Fix: Improve handling of net::ERR_ABORTED errors in URL fetching (#6632 by @QuinsZouls, PR by @app/roomote)
@@ -2235,7 +2235,7 @@
 
 ## [3.20.2] - 2025-06-13
 
-- Limit search_files to only look within the workspace for improved security
+- Limit grep_search to only look within the workspace for improved security
 - Force tar-fs >=2.1.3 for security vulnerability fix
 - Add cache breakpoints for custom vertex models on Unbound (thanks @pugazhendhi-m!)
 - Reapply reasoning for bedrock with fix (thanks @daniel-lxs!)
@@ -2311,7 +2311,7 @@
 - Fix FileSystemWatcher leak in ShoferIgnoreController (thanks @kiwina!)
 - Fix clipboard memory leak by clearing setTimeout in useCopyToClipboard (thanks @kiwina!)
 - Fix ShoferProvider instance cleanup (thanks @xyOz-dev!)
-- Enforce codebase_search as primary tool for code understanding tasks (thanks @hannesrudolph!)
+- Enforce rag_search as primary tool for code understanding tasks (thanks @hannesrudolph!)
 - Improve Docker setup for evals
 - Move evals into pnpm workspace, switch from SQLite to Postgres
 - Refactor MCP to use getDefaultEnvironment for stdio client transport (thanks @samhvw8!)
@@ -2923,7 +2923,7 @@
 - More consistent @-mention lookups of files and folders
 - Consolidate code actions into a submenu (thanks samhvw8!)
 - Fix MCP error logging (thanks aheizi!)
-- Improvements to search_files tool formatting and logic (thanks KJ7LNW!)
+- Improvements to grep_search tool formatting and logic (thanks KJ7LNW!)
 - Fix changelog formatting in GitHub Releases (thanks pdecat!)
 - Add fake provider for integration tests (thanks franekp!)
 - Reflect Cross-region inference option in ap-xx region (thanks Yoshino-Yukitaro!)

@@ -268,7 +268,7 @@
 		"didViewRecursiveOutsideWorkspace": "Shofer melihat semua file secara rekursif di direktori ini (di luar workspace)",
 		"wantsToViewMultipleDirectories": "Shofer ingin melihat beberapa direktori"
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Shofer ingin mencari codebase untuk <code>{{query}}</code>",
 		"wantsToSearchWithPath": "Shofer ingin mencari codebase untuk <code>{{query}}</code> di <code>{{path}}</code>",
 		"didSearch_one": "Ditemukan 1 hasil",

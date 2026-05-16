@@ -11,14 +11,14 @@
     <discovery>
       <tool_calls>
         <![CDATA[
-<codebase_search>
+<rag_search>
 <query>dark theme submit button visibility</query>
-</codebase_search>
+</rag_search>
 
-<search_files>
+<grep_search>
 <path>.</path>
 <regex>Submit|button|dark|theme</regex>
-</search_files>
+</grep_search>
         ]]>
       </tool_calls>
       <notes>
@@ -50,9 +50,9 @@ Affects users creating new runs with dark theme enabled; the button appears low-
     <discovery>
       <tool_calls>
         <![CDATA[
-<codebase_search>
+<rag_search>
 <query>Copy Run confirmation</query>
-</codebase_search>
+</rag_search>
         ]]>
       </tool_calls>
       <notes>

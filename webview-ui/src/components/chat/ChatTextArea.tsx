@@ -658,7 +658,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 								// Send message to extension to search files.
 								vscode.postMessage({
-									type: "searchFiles",
+									type: "grepSearch",
 									query: unescapeSpaces(query),
 									requestId: reqId,
 								})

@@ -69,7 +69,7 @@
   <step number="3">
     <name>Explore Codebase and Related Files</name>
     <instructions>
-      Use codebase_search FIRST to understand the codebase structure and find ALL related files:
+      Use rag_search FIRST to understand the codebase structure and find ALL related files:
       
       For Bug Fixes:
       - Search for the broken functionality
@@ -100,7 +100,7 @@
       Then use other tools:
       - list_code_definition_names to understand file structure
       - read_file to examine specific implementations (read multiple files at once)
-      - search_files for specific patterns or error messages
+      - grep_search for specific patterns or error messages
       
       Also use GitHub CLI to check recent changes:
       <execute_command>

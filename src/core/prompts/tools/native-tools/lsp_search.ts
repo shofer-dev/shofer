@@ -1,12 +1,12 @@
 /**
- * Schema for codebase_search_with_lsp tool.
+ * Schema for lsp_search tool.
  *
  * Uses the LSP workspace symbol provider (vscode.executeWorkspaceSymbolProvider)
  * to find symbols (functions, classes, variables, etc.) matching a query.
  * Falls back to word-level text search when the language server is unavailable
  * or returns no results.
  *
- * Unlike codebase_search (which uses vector embeddings via Qdrant), this tool
+ * Unlike rag_search (which uses vector embeddings via Qdrant), this tool
  * requires no external infrastructure — it works entirely with VS Code's
  * built-in language services.
  */
@@ -16,7 +16,7 @@ const DESCRIPTION = `Search the codebase for symbols (functions, classes, variab
 
 Falls back to word-level text search across source files when no language server is available or no symbols match.
 
-Unlike codebase_search (semantic/embedding-based), this tool requires no external infrastructure and works with VS Code's built-in language services.
+Unlike rag_search (semantic/embedding-based), this tool requires no external infrastructure and works with VS Code's built-in language services.
 
 Parameters:
 - query: (required) The symbol or text to search for. Can be a function name, class name, variable name, or a natural-language description that will be matched against file contents as a fallback.
@@ -31,7 +31,7 @@ Example: Broader search
 export default {
 	type: "function",
 	function: {
-		name: "codebase_search_with_lsp",
+		name: "lsp_search",
 		description: DESCRIPTION,
 		strict: true,
 		parameters: {

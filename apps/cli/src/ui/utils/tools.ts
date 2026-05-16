@@ -142,7 +142,7 @@ export function formatToolOutput(toolInfo: Record<string, unknown>): string {
 			return `✏️ ${diffPath || "(no path)"}`
 		}
 
-		case "search_files": {
+		case "grep_search": {
 			const searchPath = toolInfo.path as string
 			const regex = toolInfo.regex as string
 			return `🔍 "${regex}" in ${searchPath || "."}`

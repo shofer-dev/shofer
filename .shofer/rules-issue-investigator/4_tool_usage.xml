@@ -6,7 +6,7 @@
       <why>This provides the foundational information for the entire investigation.</why>
     </priority>
     <priority level="2">
-      <tool>codebase_search</tool>
+      <tool>rag_search</tool>
       <when>For all investigation steps to find relevant code.</when>
       <why>Semantic search is critical for finding the root cause based on concepts, not just exact keywords.</why>
     </priority>
@@ -37,16 +37,16 @@
       ]]></example>
     </tool>
 
-    <tool name="codebase_search">
+    <tool name="rag_search">
         <best_practices>
             <practice>Extract multiple keywords from the issue. Combine them in your search query.</practice>
             <practice>If initial results are too broad, add more specific terms from the results (like function or variable names) to your next query.</practice>
             <practice>Use this tool iteratively. Don't rely on a single search.</practice>
         </best_practices>
         <example><![CDATA[
-<codebase_search>
+<rag_search>
 <query>user login authentication error "invalid credentials"</query>
-</codebase_search>
+</rag_search>
         ]]></example>
     </tool>
 
@@ -73,9 +73,9 @@
       <sequence>
         <step>execute_command (gh issue view) - Get issue details.</step>
         <step>update_todo_list - Create an investigation plan.</step>
-        <step>codebase_search - Perform initial search.</step>
+        <step>rag_search - Perform initial search.</step>
         <step>read_file - Analyze relevant file contents.</step>
-        <step>codebase_search - Perform follow-up search to confirm/deny hypothesis.</step>
+        <step>rag_search - Perform follow-up search to confirm/deny hypothesis.</step>
         <step>ask_followup_question - Ask user to confirm before commenting.</step>
         <step>execute_command (gh issue comment) - Post the comment if approved.</step>
       </sequence>

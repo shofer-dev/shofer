@@ -130,10 +130,10 @@ Each `Task` maintains a `loadedSkills: Map<string,string>` (skill name → SKILL
 
 Two new built-in slash commands:
 
-| Command              | Description                                                                                                                         |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `/loaded`            | Lists currently loaded skills for the task (name + description)                                                                     |
-| `/search <keywords>` | Searches SKILL.md files — RAG semantic search via `codebase_search` scoped to `.shofer/skills`, falling back to `search_files` grep |
+| Command              | Description                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `/loaded`            | Lists currently loaded skills for the task (name + description)                                                               |
+| `/search <keywords>` | Searches SKILL.md files — RAG semantic search via `rag_search` scoped to `.shofer/skills`, falling back to `grep_search` grep |
 
 **Skill data** (from [`SkillMetadata`](extensions/shofer/packages/types/src/skills.ts:5)):
 

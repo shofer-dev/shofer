@@ -391,7 +391,7 @@
 			"button": "Reiniciar y continuar"
 		}
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Shofer quiere buscar en la base de código <code>{{query}}</code>",
 		"wantsToSearchWithPath": "Shofer quiere buscar en la base de código <code>{{query}}</code> en <code>{{path}}</code>",
 		"didSearch_one": "Se encontró 1 resultado",

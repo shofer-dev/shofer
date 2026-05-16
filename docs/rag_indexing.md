@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shofer's code indexing is a **semantic code search** system (RAG — Retrieval-Augmented Generation) that uses **vector embeddings** stored in **Qdrant** to let the AI agent search codebases by meaning rather than just keywords. It lives under `src/services/code-index/` and is exposed to the AI as the `codebase_search` native tool. A lighter companion tool `codebase_search_with_lsp` uses VS Code's built-in Language Server Protocol workspace symbol provider and requires no external infrastructure.
+Shofer's code indexing is a **semantic code search** system (RAG — Retrieval-Augmented Generation) that uses **vector embeddings** stored in **Qdrant** to let the AI agent search codebases by meaning rather than just keywords. It lives under `src/services/code-index/` and is exposed to the AI as the `rag_search` native tool. A lighter companion tool `lsp_search` uses VS Code's built-in Language Server Protocol workspace symbol provider and requires no external infrastructure.
 
 ---
 
@@ -151,11 +151,11 @@ vectorStore.initialize() → create Qdrant collection if needed
 
 The system uses **two separate storage locations** for different kinds of data:
 
-| Data                                      | Storage Location                                                                                                                                | Survives Reboot?                                |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                       | ✓ Yes — persisted on Kubernetes PVC             |
+| Data                                      | Storage Location                                                                                                                            | Survives Reboot?                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                    | ✓ Yes — persisted on Kubernetes PVC             |
 | **File hash cache** (SHA-256 per file)    | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
-| **Metadata marker** (`indexing_complete`) | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                    | ✓ Yes — persisted in Qdrant                     |
+| **Metadata marker** (`indexing_complete`) | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                | ✓ Yes — persisted in Qdrant                     |
 
 #### Hash Cache Location
 
@@ -200,7 +200,7 @@ After a system reboot, **no restart of indexing is needed** because:
 
 The hash cache is the only component that may not survive a reboot depending on system configuration. The Qdrant PVC is the durable store of record.
 
-### 4. Search (`CodebaseSearchTool.ts` → `search-service.ts`)
+### 4. Search (`RagSearchTool.ts` → `search-service.ts`)
 
 ```
 User query string
@@ -213,20 +213,20 @@ User query string
 
 ## Two Search Tools
 
-### `codebase_search` — Semantic (embedding-based)
+### `rag_search` — Semantic (embedding-based)
 
 - Requires Qdrant + embedding provider configuration.
 - Uses vector cosine similarity search.
-- Tool implementation: `src/core/tools/CodebaseSearchTool.ts`.
-- Tool schema: `src/core/prompts/tools/native-tools/codebase_search.ts`.
+- Tool implementation: `src/core/tools/RagSearchTool.ts`.
+- Tool schema: `src/core/prompts/tools/native-tools/rag_search.ts`.
 - Conditionally available only when `CodeIndexManager` is enabled + configured + initialized (see `filter-tools-for-mode.ts:271-277`).
 
-### `codebase_search_with_lsp` — Symbol-based (LSP)
+### `lsp_search` — Symbol-based (LSP)
 
 - Uses `vscode.executeWorkspaceSymbolProvider` with word-level text fallback.
 - No external infrastructure required — works out of the box.
-- Tool implementation: `src/core/tools/CodebaseSearchWithLspTool.ts`.
-- Tool schema: `src/core/prompts/tools/native-tools/codebase_search_with_lsp.ts`.
+- Tool implementation: `src/core/tools/LspSearchTool.ts`.
+- Tool schema: `src/core/prompts/tools/native-tools/lsp_search.ts`.
 - Always available to the agent.
 
 ---
@@ -253,13 +253,13 @@ User query string
 
 ### Tool System
 
-| Point             | File                                                            | Details                                                                      |
-| ----------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Tool registration | `src/core/task/build-tools.ts:96-123`                           | Gets `CodeIndexManager` for current workspace, passes to tool filter         |
-| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts:271-277`       | Removes `codebase_search` if indexing is disabled/unconfigured/uninitialized |
-| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts:780-788` | Routes to `CodebaseSearchTool` or `CodebaseSearchWithLspTool`                |
-| Auto-approval     | `src/core/auto-approval/tools.ts:14`                            | `codebaseSearch` is auto-approved by default                                 |
-| System prompt     | `src/core/prompts/system.ts:72`                                 | Includes indexing status in system prompt context                            |
+| Point             | File                                                            | Details                                                                 |
+| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Tool registration | `src/core/task/build-tools.ts:96-123`                           | Gets `CodeIndexManager` for current workspace, passes to tool filter    |
+| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts:271-277`       | Removes `rag_search` if indexing is disabled/unconfigured/uninitialized |
+| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts:780-788` | Routes to `RagSearchTool` or `LspSearchTool`                            |
+| Auto-approval     | `src/core/auto-approval/tools.ts:14`                            | `ragSearch` is auto-approved by default                                 |
+| System prompt     | `src/core/prompts/system.ts:72`                                 | Includes indexing status in system prompt context                       |
 
 ### Configuration Schema
 

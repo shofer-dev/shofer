@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { vscode } from "@src/utils/vscode"
 import { StandardTooltip } from "@/components/ui"
 
-interface CodebaseSearchResultProps {
+interface RagSearchResultProps {
 	filePath: string
 	score: number
 	startLine: number
@@ -12,7 +12,7 @@ interface CodebaseSearchResultProps {
 	language: string
 }
 
-const CodebaseSearchResult: React.FC<CodebaseSearchResultProps> = ({ filePath, score, startLine, endLine }) => {
+const RagSearchResult: React.FC<RagSearchResultProps> = ({ filePath, score, startLine, endLine }) => {
 	const { t } = useTranslation("chat")
 
 	const handleClick = () => {
@@ -27,7 +27,7 @@ const CodebaseSearchResult: React.FC<CodebaseSearchResultProps> = ({ filePath, s
 	}
 
 	return (
-		<StandardTooltip content={t("codebaseSearch.resultTooltip", { score: score.toFixed(3) })}>
+		<StandardTooltip content={t("ragSearch.resultTooltip", { score: score.toFixed(3) })}>
 			<div
 				onClick={handleClick}
 				className="p-2 border border-[var(--vscode-editorGroup-border)] cursor-pointer hover:bg-secondary hover:text-white">
@@ -47,4 +47,4 @@ const CodebaseSearchResult: React.FC<CodebaseSearchResultProps> = ({ filePath, s
 	)
 }
 
-export default CodebaseSearchResult
+export default RagSearchResult

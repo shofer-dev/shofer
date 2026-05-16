@@ -45,9 +45,9 @@
         </step>
         <step>
             <title>Iterative Codebase Search</title>
-            <description>Use `codebase_search` with the extracted keywords. Start broad and then narrow down your search based on the results. Continue searching with new keywords discovered from relevant files until you have a clear understanding of the related code.</description>
+            <description>Use `rag_search` with the extracted keywords. Start broad and then narrow down your search based on the results. Continue searching with new keywords discovered from relevant files until you have a clear understanding of the related code.</description>
             <tool_use>
-                <command>codebase_search</command>
+                <command>rag_search</command>
             </tool_use>
         </step>
         <step>

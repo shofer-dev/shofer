@@ -106,12 +106,12 @@ describe("mode-validator", () => {
 						name: "Tools Only Mode",
 						roleDefinition: "Custom role",
 						groups: [],
-						tools_allowed: ["read_file", "search_files"],
+						tools_allowed: ["read_file", "grep_search"],
 					},
 				]
 				// Should allow tools from the explicit tools list
 				expect(isToolAllowedForMode("read_file", "tools-only-mode", customModes)).toBe(true)
-				expect(isToolAllowedForMode("search_files", "tools-only-mode", customModes)).toBe(true)
+				expect(isToolAllowedForMode("grep_search", "tools-only-mode", customModes)).toBe(true)
 				// Should not allow tools not in the list
 				expect(isToolAllowedForMode("write_to_file", "tools-only-mode", customModes)).toBe(false)
 				expect(isToolAllowedForMode("execute_command", "tools-only-mode", customModes)).toBe(false)
@@ -129,7 +129,7 @@ describe("mode-validator", () => {
 				// Should allow the whitelisted tool
 				expect(isToolAllowedForMode("read_file", "tools-alone-mode", customModes)).toBe(true)
 				// Should not allow tools not in the list
-				expect(isToolAllowedForMode("search_files", "tools-alone-mode", customModes)).toBe(false)
+				expect(isToolAllowedForMode("grep_search", "tools-alone-mode", customModes)).toBe(false)
 			})
 
 			it("allows tools when both groups and tools_allowed are present (OR semantics)", () => {
@@ -144,7 +144,7 @@ describe("mode-validator", () => {
 				]
 				// Should allow tools from groups
 				expect(isToolAllowedForMode("read_file", "or-mode", customModes)).toBe(true)
-				expect(isToolAllowedForMode("search_files", "or-mode", customModes)).toBe(true)
+				expect(isToolAllowedForMode("grep_search", "or-mode", customModes)).toBe(true)
 				// Should allow tools from tools_allowed whitelist (even though not in groups)
 				expect(isToolAllowedForMode("execute_command", "or-mode", customModes)).toBe(true)
 				expect(isToolAllowedForMode("read_command_output", "or-mode", customModes)).toBe(true)
@@ -179,7 +179,7 @@ describe("mode-validator", () => {
 				]
 				// Tools in groups should be allowed
 				expect(isToolAllowedForMode("read_file", "deny-mode", customModes)).toBe(true)
-				expect(isToolAllowedForMode("search_files", "deny-mode", customModes)).toBe(true)
+				expect(isToolAllowedForMode("grep_search", "deny-mode", customModes)).toBe(true)
 				// Denied tools should be blocked even if group allows them
 				expect(isToolAllowedForMode("execute_command", "deny-mode", customModes)).toBe(false)
 				// Non-group tools should still be blocked
@@ -311,7 +311,7 @@ describe("mode-validator", () => {
 		})
 
 		it("blocks tool when disabledTools is converted to toolRequirements", () => {
-			const disabledTools = ["execute_command", "search_files"]
+			const disabledTools = ["execute_command", "grep_search"]
 			const toolRequirements = disabledTools.reduce(
 				(acc: Record<string, boolean>, tool: string) => {
 					acc[tool] = false
@@ -323,8 +323,8 @@ describe("mode-validator", () => {
 			expect(() => validateToolUse("execute_command", codeMode, [], toolRequirements)).toThrow(
 				'Tool "execute_command" is not allowed in code mode.',
 			)
-			expect(() => validateToolUse("search_files", codeMode, [], toolRequirements)).toThrow(
-				'Tool "search_files" is not allowed in code mode.',
+			expect(() => validateToolUse("grep_search", codeMode, [], toolRequirements)).toThrow(
+				'Tool "grep_search" is not allowed in code mode.',
 			)
 		})
 

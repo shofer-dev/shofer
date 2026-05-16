@@ -181,7 +181,7 @@ export function isAgentRunningAsk(ask: ShoferAsk): ask is AgentRunningAsk {
  * - `diff_error`: Error occurred while applying a diff/patch
  * - `condense_context`: Context condensation/summarization has started
  * - `condense_context_error`: Error occurred during context condensation
- * - `codebase_search_result`: Results from searching the codebase
+ * - `rag_search_result`: Results from searching the codebase
  * - `too_many_tools_warning`: Warning that too many MCP tools are enabled, which may confuse the LLM
  */
 export const shoferSays = [
@@ -209,7 +209,7 @@ export const shoferSays = [
 	"condense_context",
 	"condense_context_error",
 	"sliding_window_truncation",
-	"codebase_search_result",
+	"rag_search_result",
 	"user_edit_todos",
 	"too_many_tools_warning",
 	"tool",

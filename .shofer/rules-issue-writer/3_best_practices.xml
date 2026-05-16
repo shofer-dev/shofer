@@ -75,7 +75,7 @@
       - Escalate-once if signals conflict; run one refined batch, then proceed.
     </principles>
     <tool_sequence>
-      1) codebase_search → 2) search_files → 3) read_file (as needed)
+      1) rag_search → 2) grep_search → 3) read_file (as needed)
     </tool_sequence>
     <scoping>
       In monorepos, scope searches to the selected package when the context is clear; otherwise ask for the relevant package/app if ambiguous.

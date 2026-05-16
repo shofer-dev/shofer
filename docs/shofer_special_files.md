@@ -37,7 +37,7 @@ The `.agents/` directory (Agent Skills standard) is also discovered at both leve
 
 Controls which files the LLM can access through its tools. Applies to:
 
-- **Read tools**: `read_file`, `search_files`, `list_files`, `find_files`
+- **Read tools**: `read_file`, `grep_search`, `list_files`, `find_files`
 - **Write tools**: `write_to_file`, `edit_file`, `apply_diff`, `apply_patch`, `search_replace`, `sed`, `generate_image`
 - **Execute tools**: `execute_command` (blocks file-reading commands like `cat`, `grep`, `head`, `tail`, `sed`, `awk`, `Get-Content`, `Select-String`, `gc`, `sls`, `type`, `less`, `more` that reference ignored files)
 - **@-mentions**: Ignored files return `"(File is ignored by .shoferignore)"`; directory attachments filter or mark them with 🔒

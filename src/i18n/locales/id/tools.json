@@ -8,10 +8,10 @@
 	},
 	"toolRepetitionLimitReached": "Shofer tampaknya terjebak dalam loop, mencoba aksi yang sama ({{toolName}}) berulang kali. Ini mungkin menunjukkan masalah dengan strategi saat ini. Pertimbangkan untuk mengubah frasa tugas, memberikan instruksi yang lebih spesifik, atau mengarahkannya ke pendekatan yang berbeda.",
 	"unknownToolError": "Shofer mencoba menggunakan alat yang tidak dikenal: \"{{toolName}}\". Mencoba lagi...",
-	"codebaseSearch": {
+	"ragSearch": {
 		"approval": "Mencari '{{query}}' di codebase..."
 	},
-	"searchFiles": {
+	"grepSearch": {
 		"workspaceBoundaryError": "Tidak dapat mencari di luar workspace. Path '{{path}}' berada di luar workspace saat ini."
 	},
 	"newTask": {

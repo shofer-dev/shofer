@@ -1,5 +1,5 @@
 /**
- * Tests for SearchFilesTool — the consolidated search tool using ripgrep.
+ * Tests for GrepSearchTool — the consolidated search tool using ripgrep.
  *
  * Coverage:
  *  - Input validation: missing path / missing query
@@ -46,7 +46,7 @@ vi.mock("vscode", async () => {
 
 // ─── SUT ──────────────────────────────────────────────────────────────────────
 
-import { SearchFilesTool } from "../SearchFilesTool"
+import { GrepSearchTool } from "../GrepSearchTool"
 import type { Task } from "../../task/Task"
 import type { ToolUse } from "../../../shared/tools"
 
@@ -182,18 +182,18 @@ function setupRgStderrError() {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe("SearchFilesTool", () => {
-	let tool: SearchFilesTool
+describe("GrepSearchTool", () => {
+	let tool: GrepSearchTool
 
 	beforeEach(() => {
-		tool = new SearchFilesTool()
+		tool = new GrepSearchTool()
 		vi.clearAllMocks()
 	})
 
 	// ── name ───────────────────────────────────────────────────────────────
 
 	it("has the correct tool name", () => {
-		expect(tool.name).toBe("search_files")
+		expect(tool.name).toBe("grep_search")
 	})
 
 	// ── Input validation ───────────────────────────────────────────────────
@@ -479,15 +479,15 @@ describe("SearchFilesTool", () => {
 		it("sends shofer say tool message with resolved path", async () => {
 			const task = createMockTask({ cwd: "/home/project" })
 			const block = {
-				name: "search_files" as const,
+				name: "grep_search" as const,
 				params: { path: "src/app", query: "" },
 				nativeArgs: { fileTypes: "*.ts" },
 				partial: true,
-			} as unknown as ToolUse<"search_files">
+			} as unknown as ToolUse<"grep_search">
 
 			await tool.handlePartial(task, block)
 
-			expect(task.ask).toHaveBeenCalledWith("tool", expect.stringContaining("searchFiles"), true)
+			expect(task.ask).toHaveBeenCalledWith("tool", expect.stringContaining("grepSearch"), true)
 		})
 	})
 })

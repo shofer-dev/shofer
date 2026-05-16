@@ -1,4 +1,4 @@
-# `search_files` Tool — Design & Reference
+# `grep_search` Tool — Design & Reference
 
 ## Purpose
 
@@ -168,13 +168,13 @@ Defaults: `isRegex=true`, `caseSensitive=false`, `wholeWord=false`, `fileTypes=n
 
 ## Implementation
 
-| File                                                                                                                           | Status                           |
-| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
-| [`src/core/tools/SearchFilesTool.ts`](extensions/shofer/src/core/tools/SearchFilesTool.ts)                                     | ✅ Implemented (ripgrep backend) |
-| [`src/core/prompts/tools/native-tools/search_files.ts`](extensions/shofer/src/core/prompts/tools/native-tools/search_files.ts) | ✅ Schema (unchanged)            |
-| [`src/core/prompts/tools/native-tools/index.ts`](extensions/shofer/src/core/prompts/tools/native-tools/index.ts)               | ✅ Registered                    |
-| [`src/core/assistant-message/NativeToolCallParser.ts`](extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts)   | ✅ Maps all 10 params            |
-| [`src/core/tools/__tests__/SearchFilesTool.spec.ts`](extensions/shofer/src/core/tools/__tests__/SearchFilesTool.spec.ts)       | ✅ Updated for ripgrep           |
+| File                                                                                                                         | Status                           |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| [`src/core/tools/GrepSearchTool.ts`](extensions/shofer/src/core/tools/GrepSearchTool.ts)                                     | ✅ Implemented (ripgrep backend) |
+| [`src/core/prompts/tools/native-tools/grep_search.ts`](extensions/shofer/src/core/prompts/tools/native-tools/grep_search.ts) | ✅ Schema (unchanged)            |
+| [`src/core/prompts/tools/native-tools/index.ts`](extensions/shofer/src/core/prompts/tools/native-tools/index.ts)             | ✅ Registered                    |
+| [`src/core/assistant-message/NativeToolCallParser.ts`](extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts) | ✅ Maps all 10 params            |
+| [`src/core/tools/__tests__/GrepSearchTool.spec.ts`](extensions/shofer/src/core/tools/__tests__/GrepSearchTool.spec.ts)       | ✅ Updated for ripgrep           |
 
 ### Files NOT Modified
 

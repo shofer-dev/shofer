@@ -4,8 +4,8 @@ import { apply_diff } from "./apply_diff"
 import applyPatch from "./apply_patch"
 import askFollowupQuestion from "./ask_followup_question"
 import attemptCompletion from "./attempt_completion"
-import codebaseSearch from "./codebase_search"
-import codebaseSearchWithLsp from "./codebase_search_with_lsp"
+import ragSearch from "./rag_search"
+import lspSearch from "./lsp_search"
 import createDirectory from "./create_directory"
 import createNewWorkspace from "./create_new_workspace"
 import editTool from "./edit"
@@ -17,7 +17,7 @@ import generateImage from "./generate_image"
 import getChangedFiles from "./get_changed_files"
 import getErrors from "./get_errors"
 import getProjectSetupInfo from "./get_project_setup_info"
-// get_search_results removed — merged into search_files
+// get_search_results removed — merged into grep_search
 import insertEdit from "./insert_edit"
 import listCodeUsages from "./list_code_usages"
 import listFiles from "./list_files"
@@ -31,7 +31,7 @@ import runSlashCommand from "./run_slash_command"
 import skillsToolDef from "./skills"
 import searchReplace from "./search_replace"
 import edit_file from "./edit_file"
-import searchFiles from "./search_files"
+import grepSearch from "./grep_search"
 import switchMode from "./switch_mode"
 import updateTodoList from "./update_todo_list"
 import setTaskTitle from "./set_task_title"
@@ -76,8 +76,8 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		applyPatch,
 		askFollowupQuestion,
 		attemptCompletion,
-		codebaseSearch,
-		codebaseSearchWithLsp,
+		ragSearch,
+		lspSearch,
 		createDirectory,
 		createNewWorkspace,
 		executeCommand,
@@ -88,7 +88,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		getChangedFiles,
 		getErrors,
 		getProjectSetupInfo,
-		// get_search_results removed — merged into search_files
+		// get_search_results removed — merged into grep_search
 		insertEdit,
 		listCodeUsages,
 		listFiles,
@@ -102,7 +102,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		searchReplace,
 		edit_file,
 		editTool,
-		searchFiles,
+		grepSearch,
 		switchMode,
 		setTaskTitle,
 		giveFeedback,

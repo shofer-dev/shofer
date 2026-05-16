@@ -391,7 +391,7 @@
 			"button": "재설정 후 계속하기"
 		}
 	},
-	"codebaseSearch": {
+	"ragSearch": {
 		"wantsToSearch": "Roo가 코드베이스에서 <code>{{query}}</code>을(를) 검색하고 싶어합니다",
 		"wantsToSearchWithPath": "Roo가 <code>{{path}}</code>에서 <code>{{query}}</code>을(를) 검색하고 싶어합니다",
 		"didSearch_one": "1개의 결과를 찾았습니다",
