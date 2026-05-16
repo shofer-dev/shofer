@@ -308,6 +308,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		includeCurrentTime: true,
 		includeCurrentCost: true,
 		lockApiConfigAcrossModes: false,
+		useAgentRules: false,
 		// Parallel task management
 		parallelTasks: [],
 		focusedTaskId: null,
