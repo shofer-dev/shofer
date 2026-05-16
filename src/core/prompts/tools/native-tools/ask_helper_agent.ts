@@ -1,4 +1,5 @@
 import type OpenAI from "openai"
+import { DEFAULT_HELPER_SOFT_TIMEOUT_MS, DEFAULT_HELPER_SOFT_RESULT_LENGTH } from "@shofer/types"
 
 const ASK_HELPER_AGENT_DESCRIPTION = `Ask a question to the persistent helper agent that maintains long-term context about the codebase. The helper agent runs on a separate, cost-optimized model and accumulates codebase knowledge over time. Use this for simple questions about the code that don't require the full task context to be loaded.
 
@@ -7,19 +8,28 @@ This tool is synchronous — the calling task will block until the answer is ret
 Parameters:
 - question (string, required): The question to ask the helper agent.
 - contextFiles (string[], optional): File paths that are relevant to this question. The helper agent will load these into its context window if they aren't already present.
-- timeoutMs (number, optional): Maximum time to wait for an answer in milliseconds. Defaults to 300000 (5 minutes). If the timeout is exceeded, processing is aborted and the tool returns a timeout error.
+- timeoutMs (number, optional): Maximum time to wait for an answer in milliseconds. Defaults to 300000 (5 minutes). If the timeout is exceeded, processing is aborted and the tool returns a timeout error. This is a HARD limit.
+- softTimeoutMs (number, optional): Soft recommendation in milliseconds for how long the helper agent should spend on this question (default: ${DEFAULT_HELPER_SOFT_TIMEOUT_MS}). Embedded in the prompt as guidance — the agent will try to wrap up around that time but is NOT cancelled.
+- softResultLength (number, optional): Soft recommendation in characters for the maximum length of the helper agent's final answer (default: ${DEFAULT_HELPER_SOFT_RESULT_LENGTH}). The agent will aim to keep its answer under that size but is NOT post-truncated.
 
 Example: Asking about a codebase structure
 { "question": "What does the UserService class do and where is it defined?" }
 
 Example: Asking with context files
-{ "question": "How does the auth middleware work?", "contextFiles": ["src/middleware/auth.ts"] }`
+{ "question": "How does the auth middleware work?", "contextFiles": ["src/middleware/auth.ts"] }
+
+Example: Asking with soft constraints (quick + terse)
+{ "question": "List the public methods of FooService.", "softTimeoutMs": 20000, "softResultLength": 500 }`
 
 const QUESTION_PARAMETER_DESCRIPTION = `The question to ask the helper agent`
 
 const CONTEXT_FILES_PARAMETER_DESCRIPTION = `Optional file paths that are relevant to this question. The helper agent will load these into its context window.`
 
-const TIMEOUT_MS_PARAMETER_DESCRIPTION = `Maximum time to wait for an answer in milliseconds (default: 300000 = 5 minutes)`
+const TIMEOUT_MS_PARAMETER_DESCRIPTION = `Maximum time to wait for an answer in milliseconds (default: 300000 = 5 minutes). HARD limit.`
+
+const SOFT_TIMEOUT_MS_PARAMETER_DESCRIPTION = `Soft recommendation in milliseconds for how long the helper agent should spend on this question (default: ${DEFAULT_HELPER_SOFT_TIMEOUT_MS}). Embedded in the prompt as guidance; not enforced as cancellation.`
+
+const SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION = `Soft recommendation in characters for the maximum length of the helper agent's final answer (default: ${DEFAULT_HELPER_SOFT_RESULT_LENGTH}). Embedded in the prompt as guidance; not enforced via truncation.`
 
 export default {
 	type: "function",
@@ -28,8 +38,9 @@ export default {
 		description: ASK_HELPER_AGENT_DESCRIPTION,
 		// `strict: true` is intentionally omitted: it would force every listed
 		// property into `required`, which defeats the point of having truly
-		// optional `contextFiles` / `timeoutMs` parameters that the model can
-		// simply leave out of the call.
+		// optional `contextFiles` / `timeoutMs` / `softTimeoutMs` /
+		// `softResultLength` parameters that the model can simply leave out
+		// of the call.
 		parameters: {
 			type: "object",
 			properties: {
@@ -45,6 +56,14 @@ export default {
 				timeoutMs: {
 					type: "number",
 					description: TIMEOUT_MS_PARAMETER_DESCRIPTION,
+				},
+				softTimeoutMs: {
+					type: "number",
+					description: SOFT_TIMEOUT_MS_PARAMETER_DESCRIPTION,
+				},
+				softResultLength: {
+					type: "number",
+					description: SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION,
 				},
 			},
 			required: ["question"],

@@ -36,6 +36,8 @@ import {
 	DEFAULT_CONTEXT_FILL_THRESHOLD,
 	HELPER_AGENT_SYSTEM_PROMPT,
 	QUESTION_TIMEOUT_MS,
+	DEFAULT_HELPER_SOFT_TIMEOUT_MS,
+	DEFAULT_HELPER_SOFT_RESULT_LENGTH,
 } from "@shofer/types"
 
 import { ContextProxy } from "../../core/config/ContextProxy"
@@ -48,7 +50,11 @@ import { HelperAgentFileWatcher } from "./file-watcher"
 import { ConversationStore, type ConversationSnapshot } from "./conversation-store"
 import { QuestionQueue } from "./question-queue"
 import { ContextWindow, estimateTokens } from "./context-window"
-import { HelperAgentLlmClient, type ChatMessage } from "./llm-client"
+import { HelperAgentLlmClient } from "./llm-client"
+import { HelperAgentToolExecutor, HELPER_AGENT_READ_TOOLS } from "./tool-executor"
+import { getNativeTools } from "../../core/prompts/tools/native-tools"
+import type { Anthropic } from "@anthropic-ai/sdk"
+import type OpenAI from "openai"
 
 export class HelperAgentManager implements vscode.Disposable {
 	// ─── Singleton Implementation ────────────────────────────────────────
@@ -116,6 +122,15 @@ export class HelperAgentManager implements vscode.Disposable {
 	/** External-edit detector — invalidates file context on writes. */
 	private _fileWatcher: HelperAgentFileWatcher | null = null
 
+	/** Read-only tool dispatcher used inside the agent loop. */
+	private _toolExecutor: HelperAgentToolExecutor | null = null
+
+	/** Cached tool catalog — the Read group minus `ask_helper_agent`. */
+	private _toolCatalog: OpenAI.Chat.ChatCompletionTool[] | null = null
+
+	/** Hard cap on agent-loop iterations per question (tool round-trips). */
+	private static readonly MAX_AGENT_ITERATIONS = 25
+
 	/** Files modified by tasks since last question (KV-cache preserving hint). */
 	private _recentlyModifiedFiles = new Set<string>()
 
@@ -141,7 +156,7 @@ export class HelperAgentManager implements vscode.Disposable {
 		this._store = new ConversationStore(workspacePath, context.globalStorageUri.fsPath)
 		this._window = new ContextWindow()
 		this._queue = new QuestionQueue()
-		this._queue.setProcessor((q, files, signal) => this._processQuestion(q, files, signal))
+		this._queue.setProcessor((q, files, signal, softLimits) => this._processQuestion(q, files, signal, softLimits))
 	}
 
 	// ─── Public API ──────────────────────────────────────────────────────
@@ -291,7 +306,11 @@ export class HelperAgentManager implements vscode.Disposable {
 	public async askQuestion(
 		question: string,
 		contextFiles?: string[],
-		timeoutMs: number = QUESTION_TIMEOUT_MS,
+		opts: {
+			timeoutMs?: number
+			softTimeoutMs?: number
+			softResultLength?: number
+		} = {},
 	): Promise<QuestionResult> {
 		if (!this._config || !this._llm) {
 			throw new Error("Helper agent is not initialized. Call initialize() first.")
@@ -299,7 +318,11 @@ export class HelperAgentManager implements vscode.Disposable {
 		if (!this.isHelperAgentAvailable && this._state !== "Busy") {
 			throw new Error(`Helper agent is not available (state: ${this._state})`)
 		}
-		return this._queue.enqueue(question, contextFiles, timeoutMs)
+		const { timeoutMs = QUESTION_TIMEOUT_MS, softTimeoutMs, softResultLength } = opts
+		return this._queue.enqueue(question, contextFiles, timeoutMs, {
+			softTimeoutMs,
+			softResultLength,
+		})
 	}
 
 	/** Queue processor — runs one question end-to-end. */
@@ -307,6 +330,7 @@ export class HelperAgentManager implements vscode.Disposable {
 		question: string,
 		contextFiles: string[] | undefined,
 		signal: AbortSignal,
+		softLimits: { softTimeoutMs?: number; softResultLength?: number } = {},
 	): Promise<QuestionResult> {
 		const startTime = Date.now()
 		const llm = this._llm
@@ -326,13 +350,84 @@ export class HelperAgentManager implements vscode.Disposable {
 				}
 			}
 
-			const messages = this._buildChatMessages(question, recentlyModified)
+			// ── Build the agent loop's prompt + initial conversation ───────
+			const { systemPrompt, baseConversation } = this._buildAgentPrompt(question, recentlyModified, softLimits)
+			const tools = this._getToolCatalog()
+			const executor = this._getToolExecutor()
+
+			// In-flight conversation grows across iterations with assistant
+			// (text + tool_use blocks) and user (tool_result blocks) turns.
+			// Only the original question + final assistant text are persisted.
+			const conversation: Anthropic.Messages.MessageParam[] = [...baseConversation]
+
+			let totalPrompt = 0
+			let totalCompletion = 0
+			let totalCost = 0
+			let finalAnswer = ""
+			let iterations = 0
+
+			for (;;) {
+				if (signal.aborted) {
+					const err = new Error("Helper agent aborted")
+					err.name = "AbortError"
+					throw err
+				}
+				if (iterations >= HelperAgentManager.MAX_AGENT_ITERATIONS) {
+					finalAnswer =
+						finalAnswer ||
+						`I was unable to finish this question within ${HelperAgentManager.MAX_AGENT_ITERATIONS} tool iterations. Please narrow the scope or try again.`
+					break
+				}
+				iterations += 1
+				logger.info(
+					`[HelperAgent.Manager] agent-loop iter=${iterations} convLen=${conversation.length} tools=${tools.length}`,
+				)
+				const result = await llm.chatWithTools({ systemPrompt, messages: conversation, tools, signal })
+				totalPrompt += result.tokensUsed.prompt
+				totalCompletion += result.tokensUsed.completion
+				totalCost += result.estimatedCostUSD
+
+				if (result.toolCalls.length === 0) {
+					finalAnswer = result.answer
+					break
+				}
+
+				// Append assistant turn carrying both any text and tool_use blocks.
+				const assistantBlocks: Anthropic.Messages.ContentBlockParam[] = []
+				if (result.answer) assistantBlocks.push({ type: "text", text: result.answer })
+				for (const tc of result.toolCalls) {
+					let parsedInput: unknown = {}
+					try {
+						parsedInput = tc.arguments ? JSON.parse(tc.arguments) : {}
+					} catch {
+						parsedInput = { _raw: tc.arguments }
+					}
+					assistantBlocks.push({
+						type: "tool_use",
+						id: tc.id,
+						name: tc.name,
+						input: parsedInput as Record<string, unknown>,
+					})
+				}
+				conversation.push({ role: "assistant", content: assistantBlocks })
+
+				// Execute every tool call sequentially and bundle the
+				// results into a single user turn (Anthropic convention).
+				const toolResultBlocks: Anthropic.Messages.ContentBlockParam[] = []
+				for (const tc of result.toolCalls) {
+					const exec = await executor.execute(tc.name, tc.arguments, signal)
+					toolResultBlocks.push({
+						type: "tool_result",
+						tool_use_id: tc.id,
+						content: exec.content,
+						is_error: exec.isError ?? false,
+					})
+				}
+				conversation.push({ role: "user", content: toolResultBlocks })
+			}
+
 			logger.info(
-				`[HelperAgent.Manager] -> llm.chat msgs=${messages.length} recentlyModified=${recentlyModified.length}`,
-			)
-			const result = await llm.chat(messages, signal)
-			logger.info(
-				`[HelperAgent.Manager] <- llm.chat answerLen=${result.answer.length} prompt=${result.tokensUsed.prompt} completion=${result.tokensUsed.completion}`,
+				`[HelperAgent.Manager] agent-loop done iters=${iterations} answerLen=${finalAnswer.length} prompt=${totalPrompt} completion=${totalCompletion}`,
 			)
 
 			const userMsg: AgentMessage = {
@@ -345,14 +440,14 @@ export class HelperAgentManager implements vscode.Disposable {
 			const assistantMsg: AgentMessage = {
 				id: randomUUID(),
 				role: "assistant",
-				content: result.answer,
+				content: finalAnswer,
 				timestamp: Date.now(),
 			}
 
 			this._window.appendMessage(userMsg)
 			this._window.appendMessage(assistantMsg)
 
-			this._accumulateCost(result.tokensUsed.prompt, result.tokensUsed.completion, result.estimatedCostUSD)
+			this._accumulateCost(totalPrompt, totalCompletion, totalCost)
 
 			await this._persist()
 			this._conversationUpdateEmitter.fire()
@@ -360,8 +455,8 @@ export class HelperAgentManager implements vscode.Disposable {
 			this._setState("Ready", "Agent is ready")
 
 			return {
-				answer: result.answer,
-				tokensUsed: result.tokensUsed,
+				answer: finalAnswer,
+				tokensUsed: { prompt: totalPrompt, completion: totalCompletion, total: totalPrompt + totalCompletion },
 				contextUsage: this._window.getUsage(),
 				costSnapshot: this.getCostSnapshot(),
 				contextFiles: this._window.fileContextPaths,
@@ -567,36 +662,75 @@ export class HelperAgentManager implements vscode.Disposable {
 
 	// ─── Message Construction ────────────────────────────────────────────
 
-	private _buildChatMessages(question: string, recentlyModifiedFiles: string[]): ChatMessage[] {
-		const messages: ChatMessage[] = []
-
+	/**
+	 * Build the system prompt + base conversation array for an agent-loop
+	 * iteration. The system prompt is held stable across iterations; the
+	 * conversation grows with tool_use / tool_result blocks. File-context
+	 * markers and the prior persisted Q&A history are embedded as plain
+	 * user/assistant text turns.
+	 */
+	private _buildAgentPrompt(
+		question: string,
+		recentlyModifiedFiles: string[],
+		softLimits: { softTimeoutMs?: number; softResultLength?: number } = {},
+	): { systemPrompt: string; baseConversation: Anthropic.Messages.MessageParam[] } {
 		const treeContent = this._directoryTreeString
-			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shogerignore and .gitignore patterns are respected.]`
+			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shoferignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
-		const systemPrompt = HELPER_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)
-		messages.push({ role: "system", content: systemPrompt })
+
+		const systemPromptParts = [HELPER_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
 
 		for (const fc of this._window.fileContexts) {
-			messages.push({
-				role: "system",
-				content: `[File context: ${fc.filePath}]\n(Content hash: ${fc.contentHash}, tokens: ~${fc.tokenEstimate})`,
-			})
-		}
-
-		for (const msg of this._window.messages) {
-			messages.push({ role: msg.role, content: msg.content })
+			systemPromptParts.push(
+				`[File context: ${fc.filePath}]\n(Content hash: ${fc.contentHash}, tokens: ~${fc.tokenEstimate})`,
+			)
 		}
 
 		if (recentlyModifiedFiles.length > 0) {
-			const fileList = recentlyModifiedFiles.join(", ")
-			messages.push({
-				role: "system",
-				content: `[Note: the following files have been modified since you last read them: ${fileList}. Consider re-reading them if relevant to this question.]`,
-			})
+			systemPromptParts.push(
+				`[Note: the following files have been modified since you last read them: ${recentlyModifiedFiles.join(", ")}. Consider re-reading them if relevant to this question.]`,
+			)
 		}
 
-		messages.push({ role: "user", content: question })
-		return messages
+		const softTimeoutMs = softLimits.softTimeoutMs ?? DEFAULT_HELPER_SOFT_TIMEOUT_MS
+		const softResultLength = softLimits.softResultLength ?? DEFAULT_HELPER_SOFT_RESULT_LENGTH
+		systemPromptParts.push(
+			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${Math.round(softTimeoutMs / 1000)}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
+		)
+
+		const baseConversation: Anthropic.Messages.MessageParam[] = []
+		for (const msg of this._window.messages) {
+			if (msg.role === "system") {
+				systemPromptParts.push(msg.content)
+				continue
+			}
+			baseConversation.push({ role: msg.role as "user" | "assistant", content: msg.content })
+		}
+
+		baseConversation.push({ role: "user", content: question })
+		return { systemPrompt: systemPromptParts.join("\n\n"), baseConversation }
+	}
+
+	/** Lazily construct the Read-category tool catalog (minus ask_helper_agent). */
+	private _getToolCatalog(): OpenAI.Chat.ChatCompletionTool[] {
+		if (!this._toolCatalog) {
+			const allowed = new Set<string>(HELPER_AGENT_READ_TOOLS)
+			this._toolCatalog = getNativeTools().filter((t) => t.type === "function" && allowed.has(t.function.name))
+			logger.info(
+				`[HelperAgent.Manager] tool catalog built: ${this._toolCatalog.length} tools — ${this._toolCatalog
+					.map((t) => (t as any).function.name)
+					.join(", ")}`,
+			)
+		}
+		return this._toolCatalog
+	}
+
+	/** Lazily construct the workspace-scoped tool executor. */
+	private _getToolExecutor(): HelperAgentToolExecutor {
+		if (!this._toolExecutor) {
+			this._toolExecutor = new HelperAgentToolExecutor(this.workspacePath, this.context)
+		}
+		return this._toolExecutor
 	}
 
 	// ─── File Context ────────────────────────────────────────────────────

@@ -16,23 +16,31 @@
  * AbortSignal so it can wire it through to its underlying LLM client.
  */
 
-import {
-	MAX_QUESTION_QUEUE_SIZE,
-	QUESTION_TIMEOUT_MS,
-	type QuestionResult,
-} from "@shofer/types"
+import { MAX_QUESTION_QUEUE_SIZE, QUESTION_TIMEOUT_MS, type QuestionResult } from "@shofer/types"
+
+/** Soft (advisory) limits attached to a queued question. Forwarded to the
+ *  processor so it can embed them in the LLM prompt. NEVER enforced by the
+ *  queue itself — the only hard timeout is the per-entry `timeoutMs`. */
+export interface QuestionSoftLimits {
+	/** Recommended max wall time (milliseconds) for the agent to spend. */
+	softTimeoutMs?: number
+	/** Recommended max length (characters) of the final answer. */
+	softResultLength?: number
+}
 
 /** Function the queue calls to actually process a question. */
 export type QuestionProcessor = (
 	question: string,
 	contextFiles: string[] | undefined,
 	signal: AbortSignal,
+	softLimits: QuestionSoftLimits,
 ) => Promise<QuestionResult>
 
 interface QueueEntry {
 	question: string
 	contextFiles?: string[]
 	timeoutMs: number
+	softLimits: QuestionSoftLimits
 	startTime: number
 	resolve: (result: QuestionResult) => void
 	reject: (error: Error) => void
@@ -71,6 +79,7 @@ export class QuestionQueue {
 		question: string,
 		contextFiles?: string[],
 		timeoutMs: number = QUESTION_TIMEOUT_MS,
+		softLimits: QuestionSoftLimits = {},
 	): Promise<QuestionResult> {
 		if (this._entries.length >= this._maxSize) {
 			return Promise.reject(
@@ -105,6 +114,7 @@ export class QuestionQueue {
 				question,
 				contextFiles,
 				timeoutMs,
+				softLimits,
 				startTime,
 				resolve: wrappedResolve,
 				reject: wrappedReject,
@@ -145,7 +155,12 @@ export class QuestionQueue {
 			this._isProcessing = true
 			this._activeAbortController = new AbortController()
 			try {
-				const result = await processor(entry.question, entry.contextFiles, this._activeAbortController.signal)
+				const result = await processor(
+					entry.question,
+					entry.contextFiles,
+					this._activeAbortController.signal,
+					entry.softLimits,
+				)
 				entry.resolve(result)
 			} catch (error) {
 				entry.reject(error instanceof Error ? error : new Error(String(error)))

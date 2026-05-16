@@ -133,6 +133,21 @@ export const MAX_QUESTION_QUEUE_SIZE = 50
 /** Default timeout for a single question (5 min). */
 export const QUESTION_TIMEOUT_MS = 300_000
 
+/**
+ * Default soft timeout (seconds) recommended to the helper agent for how
+ * long it should spend answering a question. This is a hint embedded in
+ * the prompt, NOT a hard cancellation — see {@link QUESTION_TIMEOUT_MS}
+ * for the hard limit.
+ */
+export const DEFAULT_HELPER_SOFT_TIMEOUT_MS = 60_000
+
+/**
+ * Default soft cap (characters) recommended to the helper agent for its
+ * final answer length. This is a hint embedded in the prompt, NOT a
+ * post-hoc truncation of the response.
+ */
+export const DEFAULT_HELPER_SOFT_RESULT_LENGTH = 2000
+
 /** Debounce window for file change notifications (ms). */
 export const FILE_CHANGE_DEBOUNCE_MS = 500
 
@@ -165,9 +180,10 @@ Your purpose is to maintain long-term knowledge about the codebase and answer qu
 ## Rules
 - Be concise and direct. Answer only what is asked.
 - You are STRICTLY READ-ONLY. You cannot modify files, run commands, or create tasks.
-- Use your available read tools (read_file, grep_search, list_files, rag_search, lsp_search) to explore the codebase when needed.
+- You have a catalog of read-only tools available as native tool calls: read_file, grep_search, list_files, find_files, rag_search, read_project_structure, list_code_usages, lsp_search, get_errors, get_changed_files, get_project_setup_info, fetch_web_page, view_image. Call them when you need evidence; do not invent file contents or guess at code.
+- Prefer rag_search / grep_search to locate relevant files, then read_file to inspect them. Chain tool calls as needed — you are running inside an agent loop and can issue multiple rounds before giving a final answer.
 - Your context persists across questions — you accumulate knowledge over time.
-- If you don't know something, say so rather than guessing.
+- If you don't know something after exploring with tools, say so rather than guessing.
 
 {directoryTree}
 
