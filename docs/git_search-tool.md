@@ -172,7 +172,7 @@ These are added to [`packages/types/src/codebase-index.ts`](../packages/types/sr
 
 ## Phased Implementation Plan
 
-### Phase 1: Core Indexing + Search (MVP)
+### Phase 1: Core Indexing + Search (MVP) ✅ Complete
 
 **Goal:** Single-workspace, full-scan-only, working search tool.
 
@@ -217,7 +217,7 @@ These are added to [`packages/types/src/codebase-index.ts`](../packages/types/sr
 7. **Commit message chunking**: Whole commit messages are embedded as single units. No splitting within a commit. If a single message is too large (>8K tokens), it is truncated.
 8. **Config gating**: `git_search` is only available when `codebaseIndexGitEnabled === true` AND the code index infrastructure is configured (embedder + Qdrant URL).
 
-### Phase 2: Incremental Updates
+### Phase 2: Incremental Updates ✅ Complete
 
 **Goal:** Watch for new commits, index only changes.
 
@@ -227,9 +227,16 @@ These are added to [`packages/types/src/codebase-index.ts`](../packages/types/sr
 - `GitCacheManager` tracks `lastCommitDate` in addition to per-commit hashes.
 - On workspace open, catch up any new commits since last index.
 
-### Phase 3: UI Integration
+### Phase 3: UI Integration ✅ Complete
 
 **Goal:** Surface git index status and controls in the chat UI, and consolidate all indexer configuration into Settings → RAG Indexer.
+
+**Deviations from plan:**
+
+- **3.1 badge location**: The badge was already in `ChatTextArea.tsx`; no location change was needed. `IndexingStatusBadge` received the git status via an internal `useEffect` + `window.addEventListener` (same pattern as code-index), not via a prop from ChatTextArea.
+- **3.2 enable toggle in popover**: The popover enable toggle posts `updateSettings` immediately on change (not buffered through `cachedState`). This matches the existing code-index enable toggle behaviour in the same popover — it's intentional for the transient popover overlay vs. the SettingsView where the full buffer/Save cycle applies.
+- **3.3 code index knobs not yet migrated**: The plan called for moving all code-index sliders from `CodeIndexPopover` into the new "RAG Indexer" settings tab. Only the git index sliders were added; existing code-index config sliders remain in `CodeIndexPopover`. This migration is deferred.
+- **3.4 TelemetryService not yet added**: Structured telemetry for git index lifecycle events is deferred.
 
 ---
 
