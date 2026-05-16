@@ -18,7 +18,7 @@ CodeIndexManager (singleton per workspace)
  ├── CodeIndexOrchestrator        — drives the indexing workflow (scan → watch)
  │    ├── DirectoryScanner        — walks files, parses, batches embeddings, upserts to Qdrant
  │    │    └── CodeParser         — tree-sitter based AST parsing → CodeBlock[]
- │    └── FileWatcher             — chokidar-based watcher for incremental re-indexing
+ │    └── FileWatcher             — VS Code `FileSystemWatcher` (`vscode.workspace.createFileSystemWatcher`) for incremental re-indexing
  └── CodeIndexSearchService       — embeds query → cosine search against Qdrant
 ```
 
@@ -43,9 +43,9 @@ CodeIndexManager (singleton per workspace)
 All interfaces are defined under `src/services/code-index/interfaces/`:
 
 - **`IEmbedder`** (`embedder.ts`) — `createEmbeddings(texts, model?)`, `validateConfiguration()`
-- **`IVectorStore`** (`vector-store.ts`) — `initialize()`, `upsertPoints()`, `search()`, `deletePointsByFilePath()`, `hasIndexedData()`, `markIndexingComplete/Incomplete()`
+- **`IVectorStore`** (`vector-store.ts`) — `initialize()`, `upsertPoints()`, `search()`, `deletePointsByFilePath()`, `deletePointsByMultipleFilePaths()`, `hasIndexedData()`, `markIndexingComplete/Incomplete()`, `clearCollection()`, `deleteCollection()`, `collectionExists()`
 - **`ICodeParser`** (`file-processor.ts`) — `parseFile(filePath, options?)` → `CodeBlock[]`
-- **`IFileWatcher`** (`file-processor.ts`) — `initialize()`, events: `onDidStartBatchProcessing`, `onBatchProgressUpdate`, `onDidFinishBatchProcessing`
+- **`IFileWatcher`** (`file-processor.ts`) — `initialize()`, `processFile()`, events: `onDidStartBatchProcessing`, `onBatchProgressUpdate`, `onDidFinishBatchProcessing`
 - **`ICodeIndexManager`** (`manager.ts`) — public API contract
 
 ### Data Types
@@ -71,12 +71,8 @@ All interfaces are defined under `src/services/code-index/interfaces/`:
 {
 	id: string | number
 	score: number
-	payload: {
-		filePath: string
-		codeChunk: string
-		startLine: number
-		endLine: number
-	}
+	payload?: Payload | null
+	// Payload: { filePath: string, codeChunk: string, startLine: number, endLine: number, ... }
 }
 ```
 
@@ -103,7 +99,7 @@ Provider selection is stored in `codebaseIndexEmbedderProvider` setting. Model I
 
 ## Data Flow: Indexing Pipeline
 
-### 1. Activation (`extension.ts:182-203`)
+### 1. Activation (`extension.ts:126-142`)
 
 During extension activation, for each workspace folder:
 
@@ -235,30 +231,30 @@ User query string
 
 ### Extension Host
 
-| Point      | File                                     | Details                                                                    |
-| ---------- | ---------------------------------------- | -------------------------------------------------------------------------- |
-| Activation | `src/extension.ts:182-203`               | Creates `CodeIndexManager` per workspace folder, initializes in background |
-| Provider   | `src/core/webview/ShoferProvider.ts:972` | Subscribes to `onProgressUpdate` to push indexing status to webview        |
-| Commands   | `src/activate/registerCommands.ts:214`   | Registers commands that reference `CodeIndexManager`                       |
+| Point      | File                                           | Details                                                                                                   |
+| ---------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Activation | `src/extension.ts:126-142`                     | Creates `CodeIndexManager` per workspace folder, initializes in background                                |
+| Provider   | `src/core/webview/ShoferProvider.ts:3106-3139` | `updateCodeIndexStatusSubscription()` subscribes to `onProgressUpdate` to push indexing status to webview |
+| Commands   | `src/activate/registerCommands.ts:289`         | Registers commands that reference `CodeIndexManager`                                                      |
 
 ### Settings & Webview
 
-| Point            | File                                             | Details                                                                     |
-| ---------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |
-| Settings save    | `src/core/webview/webviewMessageHandler.ts:2549` | `saveCodeIndexSettingsAtomic` → saves secrets + `handleSettingsChange()`    |
-| Status request   | `webviewMessageHandler.ts:2709`                  | `requestIndexingStatus`                                                     |
-| Start/stop/clear | `webviewMessageHandler.ts:2773-2892`             | `startIndexing`, `stopIndexing`, `clearIndexData`, `toggleCodeIndexEnabled` |
-| Secret status    | `webviewMessageHandler.ts:2744`                  | `requestCodeIndexSecretStatus`                                              |
-| Status display   | `ShoferProvider.ts:2859-2904`                    | `getCurrentWorkspaceCodeIndexManager()`, subscribes to progress updates     |
+| Point            | File                                 | Details                                                                     |
+| ---------------- | ------------------------------------ | --------------------------------------------------------------------------- |
+| Settings save    | `webviewMessageHandler.ts:2562`      | `saveCodeIndexSettingsAtomic` → saves secrets + `handleSettingsChange()`    |
+| Status request   | `webviewMessageHandler.ts:2724`      | `requestIndexingStatus`                                                     |
+| Start/stop/clear | `webviewMessageHandler.ts:2812-2898` | `startIndexing`, `stopIndexing`, `clearIndexData`, `toggleCodeIndexEnabled` |
+| Secret status    | `webviewMessageHandler.ts:2784`      | `requestCodeIndexSecretStatus`                                              |
+| Status display   | `ShoferProvider.ts:3099-3139`        | `getCurrentWorkspaceCodeIndexManager()`, subscribes to progress updates     |
 
 ### Tool System
 
 | Point             | File                                                            | Details                                                                 |
 | ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Tool registration | `src/core/task/build-tools.ts:96-123`                           | Gets `CodeIndexManager` for current workspace, passes to tool filter    |
+| Tool registration | `src/core/task/build-tools.ts:258-259`                          | Gets `CodeIndexManager` for current workspace, passes to tool filter    |
 | Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts:271-277`       | Removes `rag_search` if indexing is disabled/unconfigured/uninitialized |
-| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts:780-788` | Routes to `RagSearchTool` or `LspSearchTool`                            |
-| Auto-approval     | `src/core/auto-approval/tools.ts:14`                            | `ragSearch` is auto-approved by default                                 |
+| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts:822-828` | Routes to `RagSearchTool` or `LspSearchTool`                            |
+| Auto-approval     | `src/core/auto-approval/tools.ts:20`                            | `ragSearch` is auto-approved by default                                 |
 | System prompt     | `src/core/prompts/system.ts:72`                                 | Includes indexing status in system prompt context                       |
 
 ### Configuration Schema
@@ -276,13 +272,22 @@ codebaseIndexEmbedderProvider: "openai" |
 	"vercel-ai-gateway" |
 	"bedrock" |
 	"openrouter"
+codebaseIndexEmbedderBaseUrl: string // base URL override (OpenAI-compatible)
 codebaseIndexEmbedderModelId: string
 codebaseIndexEmbedderModelDimension: number
 codebaseIndexSearchMinScore: number // 0–1, default 0.4
 codebaseIndexSearchMaxResults: number // 10–200, default 50
+// OpenAI Compatible specific
+codebaseIndexOpenAiCompatibleBaseUrl: string
+codebaseIndexOpenAiCompatibleModelDimension: number
+// Bedrock specific
+codebaseIndexBedrockRegion: string
+codebaseIndexBedrockProfile: string
+// OpenRouter specific
+codebaseIndexOpenRouterSpecificProvider: string
 ```
 
-Secrets are stored via VS Code's `SecretStorage` (keyed as `codeIndexOpenAiKey`, `codeIndexQdrantApiKey`, etc.).
+Secrets are stored via VS Code's `SecretStorage` (keyed as `codeIndexOpenAiKey`, `codeIndexQdrantApiKey`, `codebaseIndexOpenAiCompatibleApiKey`, `codebaseIndexGeminiApiKey`, `codebaseIndexMistralApiKey`, `codebaseIndexVercelAiGatewayApiKey`, `codebaseIndexOpenRouterApiKey`).
 
 ---
 
@@ -303,6 +308,7 @@ Defined in `src/services/code-index/constants/index.ts`:
 | `BATCH_PROCESSING_CONCURRENCY`    | 10     | Parallel embedding batch processing               |
 | `MAX_PENDING_BATCHES`             | 20     | Backpressure limit on pending embedding batches   |
 | `MAX_BATCH_RETRIES`               | 3      | Retry count for failed embedding batches          |
+| `INITIAL_RETRY_DELAY_MS`          | 500    | Initial delay before first batch retry (ms)       |
 | `DEFAULT_SEARCH_MIN_SCORE`        | 0.4    | Cosine similarity threshold for search results    |
 | `DEFAULT_MAX_SEARCH_RESULTS`      | 50     | Default max number of search results              |
 
@@ -331,10 +337,10 @@ Standby ──startIndexing()──→ Indexing ──scan complete──→ Ind
    │                    stopIndexing()              file changes
    │                           │                          │
    └─────────────────────── Stopping              Incremental scan
-                               │                          │
-                          (aborted)                    Indexing
-                                                       │
-        Error ←─── any failure ─────────────────────────┘
-          │
-          └──recoverFromError()──→ Standby (clean slate)
+                                │                          │
+                           (aborted)                    Indexing
+                                                        │
+         Error ←─── any failure ─────────────────────────┘
+           │
+           └──recoverFromError()──→ Standby (clean slate)
 ```
