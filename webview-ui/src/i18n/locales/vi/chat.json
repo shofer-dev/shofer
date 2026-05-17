@@ -98,18 +98,12 @@
 	"enqueueMessage": "Thêm tin nhắn vào hàng đợi (sẽ gửi sau khi nhiệm vụ hiện tại hoàn tất)",
 	"scrollToBottom": "Cuộn xuống cuối cuộc trò chuyện",
 	"about": "Shofer là một đội ngũ phát triển AI đầy đủ trong trình chỉnh sửa của bạn.",
-	"docs": "Kiểm tra <DocsLink>tài liệu</DocsLink> của chúng tôi để tìm hiểu thêm.",
-	"onboarding": "Danh sách nhiệm vụ của bạn trong không gian làm việc này đang trống.",
-	"rooTips": {
-		"customizableModes": {
-			"title": "Chế độ có thể tùy chỉnh",
-			"description": "Các nhân vật chuyên biệt luôn bám sát nhiệm vụ và mang lại hiệu quả."
-		},
-		"modelAgnostic": {
-			"title": "Mang theo mô hình của riêng bạn",
-			"description": "Sử dụng khóa nhà cung cấp của riêng bạn hoặc thậm chí chạy suy luận cục bộ — không phụ phí, không khóa, không hạn chế"
-		}
+	"docs": {
+		"readme": "README — official docs",
+		"roocode": "Coming from Roo-Code? — improvements & migration guide",
+		"copilot": "Coming from Copilot? — improvements & migration guide"
 	},
+	"onboarding": "Danh sách nhiệm vụ của bạn trong không gian làm việc này đang trống.",
 	"selectMode": "Chọn chế độ tương tác",
 	"selectApiConfig": "Chọn cấu hình API",
 	"lockApiConfigAcrossModes": "Khóa cấu hình API cho tất cả chế độ trong workspace này",

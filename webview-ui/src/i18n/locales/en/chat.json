@@ -137,19 +137,13 @@
 		"placeholder": "Edit your message..."
 	},
 	"scrollToBottom": "Scroll to bottom of chat",
-	"about": "Shofer is a whole AI dev team in your editor",
-	"docs": "Check our <DocsLink>docs</DocsLink> to get started",
-	"onboarding": "What would you like to do?",
-	"rooTips": {
-		"customizableModes": {
-			"title": "Customizable modes that don't swerve",
-			"description": "Specialized personas that stay on-task and deliver."
-		},
-		"modelAgnostic": {
-			"title": "Bring your own model, no markup or lock-in",
-			"description": "Use your own provider key or even run local inference — Shofer doesn't charge for it"
-		}
+	"about": "State-of-the-art open-source AI coding.",
+	"docs": {
+		"readme": "README — official docs",
+		"roocode": "Coming from Roo-Code? — improvements & migration guide",
+		"copilot": "Coming from Copilot? — improvements & migration guide"
 	},
+	"onboarding": "What would you like to do?",
 	"selectMode": "Select mode for interaction",
 	"selectApiConfig": "Select API configuration",
 	"lockApiConfigAcrossModes": "Lock API configuration across all modes in this workspace",

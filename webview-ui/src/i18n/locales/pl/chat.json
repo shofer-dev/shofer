@@ -98,18 +98,12 @@
 	"enqueueMessage": "Dodaj wiadomość do kolejki (zostanie wysłana po zakończeniu bieżącego zadania)",
 	"scrollToBottom": "Przewiń do dołu czatu",
 	"about": "Shofer to cały zespół deweloperów AI w Twoim edytorze.",
-	"docs": "Sprawdź naszą <DocsLink>dokumentację</DocsLink>, aby dowiedzieć się więcej.",
-	"onboarding": "Twoja lista zadań w tym obszarze roboczym jest pusta.",
-	"rooTips": {
-		"customizableModes": {
-			"title": "Konfigurowalne tryby",
-			"description": "Wyspecjalizowane persony, które trzymają się zadania i dostarczają."
-		},
-		"modelAgnostic": {
-			"title": "Przynieś własny model",
-			"description": "Użyj własnego klucza dostawcy lub nawet uruchom lokalne wnioskowanie — bez narzutów, bez blokad, bez ograniczeń"
-		}
+	"docs": {
+		"readme": "README — official docs",
+		"roocode": "Coming from Roo-Code? — improvements & migration guide",
+		"copilot": "Coming from Copilot? — improvements & migration guide"
 	},
+	"onboarding": "Twoja lista zadań w tym obszarze roboczym jest pusta.",
 	"selectMode": "Wybierz tryb interakcji",
 	"selectApiConfig": "Wybierz konfigurację API",
 	"lockApiConfigAcrossModes": "Zablokuj konfigurację API dla wszystkich trybów w tym obszarze roboczym",

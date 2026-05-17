@@ -128,18 +128,12 @@
 	"enqueueMessage": "Tambahkan pesan ke antrean (akan dikirim setelah tugas saat ini selesai)",
 	"scrollToBottom": "Gulir ke bawah chat",
 	"about": "Shofer adalah seluruh tim pengembang AI di editor Anda.",
-	"docs": "Lihat <DocsLink>dokumentasi</DocsLink> kami untuk mempelajari lebih lanjut.",
-	"onboarding": "Daftar tugas Anda di ruang kerja ini kosong.",
-	"rooTips": {
-		"customizableModes": {
-			"title": "Mode yang dapat disesuaikan",
-			"description": "Persona khusus yang tetap mengerjakan tugas dan memberikan hasil."
-		},
-		"modelAgnostic": {
-			"title": "Bawa model Anda sendiri",
-			"description": "Gunakan kunci penyedia Anda sendiri atau bahkan jalankan inferensi lokal — tanpa markup, tanpa lock-in, tanpa batasan"
-		}
+	"docs": {
+		"readme": "README — official docs",
+		"roocode": "Coming from Roo-Code? — improvements & migration guide",
+		"copilot": "Coming from Copilot? — improvements & migration guide"
 	},
+	"onboarding": "Daftar tugas Anda di ruang kerja ini kosong.",
 	"selectMode": "Pilih mode untuk interaksi",
 	"selectApiConfig": "Pilih konfigurasi API",
 	"lockApiConfigAcrossModes": "Kunci konfigurasi API di semua mode dalam workspace ini",
