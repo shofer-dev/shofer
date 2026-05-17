@@ -19,6 +19,8 @@ export default defineConfig({
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
 			"@src": path.resolve(__dirname, "./src"),
+			"@shofer/shared": path.resolve(__dirname, "../src/shared"),
+			"@shofer/types": path.resolve(__dirname, "../packages/types/src"),
 			"@shofer": path.resolve(__dirname, "../src/shared"),
 			// Mock the vscode module for tests since it's not available outside
 			// VS Code extension context.
