@@ -386,12 +386,14 @@ export class ShoferProvider
 				const legacyHistory = this.context.globalState.get<HistoryItem[]>("taskHistory") ?? []
 
 				if (legacyHistory.length > 0) {
-					this.log(`[initializeTaskHistoryStore] Migrating ${legacyHistory.length} entries from globalState`)
+					this.debug(
+						`[initializeTaskHistoryStore] Migrating ${legacyHistory.length} entries from globalState`,
+					)
 					await this.taskHistoryStore.migrateFromGlobalState(legacyHistory)
 				}
 
 				await this.context.globalState.update(migrationKey, true)
-				this.log("[initializeTaskHistoryStore] Migration complete")
+				this.debug("[initializeTaskHistoryStore] Migration complete")
 			}
 
 			this.taskHistoryStoreInitialized = true
@@ -428,7 +430,7 @@ export class ShoferProvider
 					.map((item) => item.id)
 
 				if (expiredIds.length > 0) {
-					this.log(`Auto-deleting ${expiredIds.length} expired archived tasks`)
+					this.debug(`Auto-deleting ${expiredIds.length} expired archived tasks`)
 					await this.taskHistoryStore.deleteMany(expiredIds)
 				}
 			} catch (error) {
@@ -557,7 +559,7 @@ export class ShoferProvider
 							...parentHistory,
 							awaitingChildId: undefined,
 						})
-						this.log(
+						this.debug(
 							`[ShoferProvider#removeShoferFromStack] Repaired parent ${parentTaskId} metadata: delegated → active (child ${childTaskId} removed)`,
 						)
 					}
@@ -589,7 +591,7 @@ export class ShoferProvider
 
 		if (task) {
 			task.emit(ShoferEventName.TaskUnfocused)
-			this.log(
+			this.debug(
 				`[ShoferProvider#popFromStackWithoutAborting] Task ${task.taskId}.${task.instanceId} removed from stack (still running in background)`,
 			)
 		}
@@ -626,7 +628,7 @@ export class ShoferProvider
 		// Create timeout for automatic cleanup
 		const timeoutId = setTimeout(() => {
 			this.clearPendingEditOperation(operationId)
-			this.log(`[setPendingEditOperation] Automatically cleared stale pending operation: ${operationId}`)
+			this.debug(`[setPendingEditOperation] Automatically cleared stale pending operation: ${operationId}`)
 		}, ShoferProvider.PENDING_OPERATION_TIMEOUT_MS)
 
 		// Store the operation
@@ -636,7 +638,7 @@ export class ShoferProvider
 			createdAt: Date.now(),
 		})
 
-		this.log(`[setPendingEditOperation] Set pending operation: ${operationId}`)
+		this.debug(`[setPendingEditOperation] Set pending operation: ${operationId}`)
 	}
 
 	/**
@@ -654,7 +656,7 @@ export class ShoferProvider
 		if (operation) {
 			clearTimeout(operation.timeoutId)
 			this.pendingOperations.delete(operationId)
-			this.log(`[clearPendingEditOperation] Cleared pending operation: ${operationId}`)
+			this.debug(`[clearPendingEditOperation] Cleared pending operation: ${operationId}`)
 			return true
 		}
 		return false
@@ -668,7 +670,7 @@ export class ShoferProvider
 			clearTimeout(operation.timeoutId)
 		}
 		this.pendingOperations.clear()
-		this.log(`[clearAllPendingEditOperations] Cleared all pending operations`)
+		this.debug(`[clearAllPendingEditOperations] Cleared all pending operations`)
 	}
 
 	/*
@@ -691,22 +693,17 @@ export class ShoferProvider
 		}
 
 		this._disposed = true
-		this.log("Disposing ShoferProvider...")
 
 		// Clear all tasks from the stack.
 		while (this.shoferStack.length > 0) {
 			await this.removeShoferFromStack()
 		}
 
-		this.log("Cleared all tasks")
-
 		// Clear all pending edit operations to prevent memory leaks
 		this.clearAllPendingEditOperations()
-		this.log("Cleared pending operations")
 
 		if (this.view && "dispose" in this.view) {
 			this.view.dispose()
-			this.log("Disposed webview")
 		}
 
 		this.clearWebviewResources()
@@ -735,7 +732,7 @@ export class ShoferProvider
 
 		this.taskHistoryStore.dispose()
 		this.flushGlobalStateWriteThrough()
-		this.log("Disposed all disposables")
+		// Disposed
 		ShoferProvider.activeInstances.delete(this)
 
 		// Clean up any event listeners attached to this provider
@@ -1022,7 +1019,7 @@ export class ShoferProvider
 		if (!isRehydratingCurrentTask) {
 			const liveInstance = this.taskManager.getManagedTaskInstance(historyItem.id)
 			if (liveInstance && !liveInstance.abandoned && !liveInstance.abort) {
-				this.log(
+				this.debug(
 					`[createTaskWithHistoryItem] Live instance ${historyItem.id}.${liveInstance.instanceId} ` +
 						`already exists; swapping into stack instead of rehydrating ` +
 						`(caller stack: ${new Error().stack?.split("\n").slice(2, 6).join(" | ")})`,
@@ -1204,13 +1201,13 @@ export class ShoferProvider
 			// Perform preparation tasks and set up event listeners
 			await this.performPreparationTasks(task)
 
-			this.log(
+			this.debug(
 				`[createTaskWithHistoryItem] rehydrated task ${task.taskId}.${task.instanceId} in-place (flicker-free)`,
 			)
 		} else {
 			await this.addShoferToStack(task)
 
-			this.log(
+			this.debug(
 				`[createTaskWithHistoryItem] ${task.parentTask ? "child" : "parent"} task ${task.taskId}.${task.instanceId} instantiated`,
 			)
 		}
@@ -1221,7 +1218,7 @@ export class ShoferProvider
 		if (pendingEdit) {
 			this.clearPendingEditOperation(operationId) // Clear the pending edit
 
-			this.log(`[createTaskWithHistoryItem] Processing pending edit after checkpoint restoration`)
+			this.debug(`[createTaskWithHistoryItem] Processing pending edit after checkpoint restoration`)
 
 			// Process the pending edit after a short delay to ensure the task is fully initialized
 			setTimeout(async () => {
@@ -1347,7 +1344,7 @@ export class ShoferProvider
 				try {
 					const { getChangedFiles } = await import("../file-changes/ChangedFilesService")
 					const payload = await getChangedFiles(task)
-					this.log(
+					this.debug(
 						`[ShoferProvider#pushChangedFilesUpdate] task=${task.taskId} entries=${payload.entries.length} backend=${payload.backend}`,
 					)
 					await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
@@ -2985,7 +2982,7 @@ export class ShoferProvider
 				const items = this.taskHistoryStore.getAll()
 				await this.updateGlobalState("taskHistory", items)
 			} catch (err) {
-				this.log(
+				this.debug(
 					`[scheduleGlobalStateWriteThrough] Failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
@@ -3003,7 +3000,7 @@ export class ShoferProvider
 
 		const items = this.taskHistoryStore.getAll()
 		this.updateGlobalState("taskHistory", items).catch((err) => {
-			this.log(`[flushGlobalStateWriteThrough] Failed: ${err instanceof Error ? err.message : String(err)}`)
+			this.debug(`[flushGlobalStateWriteThrough] Failed: ${err instanceof Error ? err.message : String(err)}`)
 		})
 	}
 
@@ -3084,6 +3081,14 @@ export class ShoferProvider
 	public log(message: string) {
 		this.outputChannel.appendLine(message)
 		console.log(message)
+	}
+
+	/** Debug-level logging: only emitted when process.env.DEBUG is set. */
+	public debug(message: string) {
+		if (process.env.DEBUG) {
+			this.outputChannel.appendLine(message)
+			console.log(message)
+		}
 	}
 
 	// getters
@@ -3489,7 +3494,7 @@ export class ShoferProvider
 		}
 		task.start()
 
-		this.log(
+		this.debug(
 			`[createTask] ${task.parentTask ? "child" : "parent"} task ${task.taskId}.${task.instanceId} instantiated`,
 		)
 
@@ -3522,7 +3527,7 @@ export class ShoferProvider
 			// but task history has not been persisted yet. Cancelling should still
 			// abort safely; we just skip post-cancel rehydration in that case.
 			if (error instanceof Error && error.message === "Task not found") {
-				this.log(`[cancelTask] task history missing for ${task.taskId}; skipping rehydrate`)
+				this.debug(`[cancelTask] task history missing for ${task.taskId}; skipping rehydrate`)
 			} else {
 				throw error
 			}
@@ -3567,7 +3572,7 @@ export class ShoferProvider
 		// Defensive safeguard: if current instance already changed, skip rehydrate
 		const current = this.getCurrentTask()
 		if (current && current.instanceId !== originalInstanceId) {
-			this.log(
+			this.debug(
 				`[cancelTask] Skipping rehydrate: current instance ${current.instanceId} != original ${originalInstanceId}`,
 			)
 			return
@@ -3577,7 +3582,7 @@ export class ShoferProvider
 		{
 			const currentAfterCheck = this.getCurrentTask()
 			if (currentAfterCheck && currentAfterCheck.instanceId !== originalInstanceId) {
-				this.log(
+				this.debug(
 					`[cancelTask] Skipping rehydrate after final check: current instance ${currentAfterCheck.instanceId} != original ${originalInstanceId}`,
 				)
 				return
@@ -3760,7 +3765,7 @@ export class ShoferProvider
 		}
 		this.blockingChildResolvers.delete(childTaskId)
 
-		this.log(`[resumeBlockingParent] childTaskId=${childTaskId} completed, resuming parentTaskId=${parentTaskId}`)
+		this.debug(`[resumeBlockingParent] childTaskId=${childTaskId} completed, resuming parentTaskId=${parentTaskId}`)
 
 		// 1) Update child history to "completed".
 		try {
@@ -3771,7 +3776,7 @@ export class ShoferProvider
 				completionResultSummary: completionResult,
 			})
 		} catch (err) {
-			this.log(`[resumeBlockingParent] Failed to update child history (non-fatal): ${err}`)
+			this.debug(`[resumeBlockingParent] Failed to update child history (non-fatal): ${err}`)
 		}
 
 		// 2) Update parent history: clear delegation fields, mark active.
@@ -3786,7 +3791,7 @@ export class ShoferProvider
 				childIds,
 			})
 		} catch (err) {
-			this.log(`[resumeBlockingParent] Failed to update parent history (non-fatal): ${err}`)
+			this.debug(`[resumeBlockingParent] Failed to update parent history (non-fatal): ${err}`)
 		}
 
 		// 3) Pop child from the stack (the parent is revealed below it).
@@ -3808,7 +3813,7 @@ export class ShoferProvider
 		// 6) Fire the resolver to unblock the parent's NewTaskTool.execute() await.
 		resolver(completionResult)
 
-		this.log(`[resumeBlockingParent] DONE parentTaskId=${parentTaskId}, childTaskId=${childTaskId}`)
+		this.debug(`[resumeBlockingParent] DONE parentTaskId=${parentTaskId}, childTaskId=${childTaskId}`)
 		return true
 	}
 
@@ -3925,7 +3930,7 @@ export class ShoferProvider
 			await this.postStateToWebview()
 			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 
-			this.log(`Created managed task: ${managedTask.id} (${managedTask.name})`)
+			this.debug(`Created managed task: ${managedTask.id} (${managedTask.name})`)
 		} catch (error) {
 			// Restore the old task to the stack if creation failed
 			if (poppedTask) {
@@ -3949,7 +3954,7 @@ export class ShoferProvider
 			// Check if we already have this task focused
 			const currentTask = this.getCurrentTask()
 			if (currentTask?.taskId === taskId) {
-				this.log(`[focusTask] Task ${taskId} is already focused`)
+				this.debug(`[focusTask] Task ${taskId} is already focused`)
 				return
 			}
 
@@ -3996,7 +4001,7 @@ export class ShoferProvider
 				if (liveTask) {
 					// Clean up the dead instance from activeTasks
 					this.taskManager.removeManagedTaskInstance(taskId)
-					this.log(`[focusTask] Removed stale task instance ${taskId} from activeTasks`)
+					this.debug(`[focusTask] Removed stale task instance ${taskId} from activeTasks`)
 				}
 				// Dismiss any stale notifications for the task being focused
 				this.clearTaskNotification(taskId)
@@ -4068,7 +4073,7 @@ export class ShoferProvider
 			// in TaskManager via updateTaskInstance.
 			const task = this.taskManager.getManagedTaskInstance(taskId)
 			if (!task) {
-				this.log(`[resumeManagedTask] No task instance found for ${taskId}`)
+				this.debug(`[resumeManagedTask] No task instance found for ${taskId}`)
 				return
 			}
 
@@ -4092,7 +4097,7 @@ export class ShoferProvider
 			// (e.g. already completed or aborted before we could attach).
 			const cleanupTimeout = setTimeout(() => {
 				task.off(ShoferEventName.TaskResumable, onResumable)
-				this.log(`[resumeManagedTask] Timed out waiting for resume_task for ${taskId}`)
+				this.debug(`[resumeManagedTask] Timed out waiting for resume_task for ${taskId}`)
 			}, 30_000)
 
 			const clearCleanup = () => clearTimeout(cleanupTimeout)
