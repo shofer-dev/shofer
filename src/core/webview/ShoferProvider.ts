@@ -1053,6 +1053,7 @@ export class ShoferProvider
 					// Task may not be in managedTasks map (e.g. external-API
 					// created); non-fatal.
 				}
+				await liveInstance.messagesReady
 				await this.postStateToWebview()
 				return liveInstance
 			}
@@ -1166,6 +1167,20 @@ export class ShoferProvider
 		const { apiConfiguration, enableCheckpoints, checkpointTimeout, experiments, cloudUserInfo, taskSyncEnabled } =
 			await this.getState()
 
+		// LLM hint: Preload-before-publish fix for the task-switch home-screen
+		// flash. We construct the Task with `startTask: false` so the
+		// constructor does NOT fire-and-forget `resumeTaskFromHistory()`. We
+		// then explicitly preload `shoferMessages` from disk via
+		// `preloadShoferMessages()` BEFORE the task is pushed onto
+		// `shoferStack` (i.e. before it becomes `getCurrentTask()`), guaranteeing
+		// that any concurrent `postStateToWebview()` call landing in the
+		// rehydration window (e.g. from a background task's
+		// `addToShoferMessages`, or from an unrelated webview round-trip) reads
+		// a non-empty messages array and the home screen never wins a render.
+		// Finally we trigger the resume turn via `startFromHistory()` AFTER the
+		// task is on the stack. See [todos/task-switch-home-screen-flash.md].
+		const originalStartTask = options?.startTask ?? true
+
 		const task = new Task({
 			provider: this,
 			apiConfiguration,
@@ -1179,10 +1194,16 @@ export class ShoferProvider
 			taskNumber: historyItem.number,
 			workspacePath: historyItem.workspace,
 			onCreated: this.taskCreationCallback,
-			startTask: options?.startTask ?? true,
+			startTask: false,
 			// Preserve the status from the history item to avoid overwriting it when the task saves messages
 			initialState: historyItem.taskState ?? { lifecycle: "idle" },
 		})
+
+		// Populate `shoferMessages` (and `apiConversationHistory`) on the new
+		// task BEFORE it is observable as `getCurrentTask()`. This is the
+		// critical ordering: addShoferToStack / in-place swap below must see a
+		// task whose messages are already non-empty.
+		await task.preloadShoferMessages()
 
 		if (isRehydratingCurrentTask) {
 			// Replace the current task in-place to avoid UI flicker
@@ -1269,6 +1290,20 @@ export class ShoferProvider
 					this.log(`[createTaskWithHistoryItem] Error processing pending edit: ${error}`)
 				}
 			}, 100) // Small delay to ensure task is fully ready
+		}
+
+		// `messagesReady` is already resolved here because we preloaded above
+		// before publishing the task. Kept as a defensive await in case future
+		// code paths reintroduce a load that runs after `addShoferToStack`.
+		await task.messagesReady
+
+		// Now that the task is published on the stack with populated
+		// `shoferMessages`, drive the resume turn (present the resume_task
+		// ask, run the loop on user response). For `Task.create()` callers
+		// (CLI / external API) that pass `startTask: false`, leave the task
+		// dormant.
+		if (originalStartTask) {
+			task.startFromHistory()
 		}
 
 		return task
@@ -2161,6 +2196,17 @@ export class ShoferProvider
 			await this.createTaskWithHistoryItem(historyItem, { keepCurrentTask: options?.keepCurrentTask }) // Clears existing task unless keepCurrentTask is true.
 		}
 
+		// LLM hint: Push the new task's (already-preloaded) shoferMessages to
+		// the webview BEFORE the chatButtonClicked action navigates it to the
+		// chat view. Without this, when the user clicks a task from the home
+		// screen (where the webview's cached shoferMessages is []), the
+		// chatButtonClicked navigation lands on an empty chat → ChatView
+		// renders the home screen for a frame until resumeTaskFromHistory's
+		// eventual ask() triggers its own postStateToWebview. The
+		// preload-before-publish step in createTaskWithHistoryItem guarantees
+		// this push carries the populated history.
+		await this.postStateToWebview()
+
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 	}
 
@@ -2616,7 +2662,33 @@ export class ShoferProvider
 				}
 				return stored ? { ...stored, costLimit: liveCostLimit } : undefined
 			})(),
-			shoferMessages: currentTask?.shoferMessages || [],
+			shoferMessages: (() => {
+				const msgs = currentTask?.shoferMessages || []
+				// LLM hint: diagnostic for the task-switch home-screen flash.
+				// Fires when we are about to broadcast an empty messages array
+				// for a task that hasn't completed history preload yet — this
+				// is exactly the state that renders the home screen for one
+				// frame mid-task-switch. With the preload-before-publish fix
+				// in `createTaskWithHistoryItem`, this should never fire under
+				// normal task-switch flows. If it does, the stack trace
+				// identifies the offending state-push caller. Gated on DEBUG
+				// to keep release logs clean.
+				if (
+					process.env.DEBUG &&
+					currentTask &&
+					msgs.length === 0 &&
+					currentTask.isHistoryPreloaded === false &&
+					currentTask.metadata?.task !== undefined
+				) {
+					this.debug(
+						`[home-screen-flash] postStateToWebview about to send shoferMessages=[] for ` +
+							`unloaded history task ${currentTask.taskId}.${currentTask.instanceId} ` +
+							`(isInitialized=${currentTask.isInitialized}). ` +
+							`Caller: ${new Error().stack?.split("\n").slice(2, 6).join(" | ")}`,
+					)
+				}
+				return msgs
+			})(),
 			currentTaskTodos: currentTask?.todoList || [],
 			messageQueue: currentTask?.messageQueueService?.messages ?? [],
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),

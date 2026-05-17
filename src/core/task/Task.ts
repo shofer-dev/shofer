@@ -451,6 +451,39 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	apiConversationHistory: ApiMessage[] = []
 	shoferMessages: ShoferMessage[] = []
 
+	/**
+	 * Promise that resolves when `shoferMessages` has been populated.
+	 *
+	 * For history-resume tasks, resolves after `resumeTaskFromHistory()` loads
+	 * messages from disk. For new tasks, resolves after `startTask()` posts the
+	 * first user message. For non-started tasks (`startTask: false`), resolves
+	 * immediately.
+	 *
+	 * Used by `createTaskWithHistoryItem` to defer `postStateToWebview` until
+	 * messages are available, preventing the home-screen flash when switching
+	 * focus to a history task before its messages have loaded.
+	 */
+	messagesReady: Promise<void>
+
+	private _messagesReadyResolve!: () => void
+
+	/**
+	 * True once `shoferMessages` and `apiConversationHistory` have been loaded
+	 * from disk and sanitized. Set by either `preloadShoferMessages()` (called
+	 * explicitly by `createTaskWithHistoryItem` BEFORE the task is published as
+	 * `getCurrentTask()`) or by `resumeTaskFromHistory()` on its own.
+	 *
+	 * Used by `resumeTaskFromHistory()` to skip the load+sanitize prefix when
+	 * the messages were already preloaded, avoiding redundant disk I/O and
+	 * guaranteeing the same array is observed by both code paths.
+	 */
+	private historyPreloaded: boolean = false
+
+	/** Read-only accessor for diagnostics (see ShoferProvider home-screen-flash log). */
+	public get isHistoryPreloaded(): boolean {
+		return this.historyPreloaded
+	}
+
 	// Ask
 	private askResponse?: ShoferAskResponse
 	private askResponseText?: string
@@ -760,6 +793,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		onCreated?.(this)
 
+		// Set up messages-ready promise.
+		// - `startTask: false`: resolve immediately (no message loading).
+		// - `startTask` with `task`/`images`: resolved inside `startTask()` after
+		//    the first user message is posted.
+		// - `startTask` with `historyItem`: resolved inside
+		//    `resumeTaskFromHistory()` after messages are loaded from disk.
+		let resolveMessagesReady: () => void
+		this.messagesReady = new Promise<void>((resolve) => {
+			resolveMessagesReady = resolve
+		})
+		this._messagesReadyResolve = resolveMessagesReady!
+
 		if (startTask) {
 			this._started = true
 			if (task || images) {
@@ -767,8 +812,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			} else if (historyItem) {
 				this.resumeTaskFromHistory()
 			} else {
+				this._messagesReadyResolve()
 				throw new Error("Either historyItem or task/images must be provided")
 			}
+		} else {
+			this._messagesReadyResolve()
 		}
 	}
 
@@ -2324,6 +2372,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 
 			await this.say("text", task, images)
+			this._messagesReadyResolve()
 
 			// Check for too many MCP tools and warn the user
 			const { enabledToolCount, enabledServerCount } = await this.getEnabledMcpToolsCount()
@@ -2371,58 +2420,98 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * Load and sanitize this task's persisted `shoferMessages` and
+	 * `apiConversationHistory` from disk into memory, idempotently.
+	 *
+	 * MUST be called by `createTaskWithHistoryItem` BEFORE the task is pushed
+	 * onto `shoferStack` (i.e. before it becomes `getCurrentTask()`), so that
+	 * any concurrent `postStateToWebview()` triggered during the rehydration
+	 * window (e.g. a background task's `addToShoferMessages`, or an unrelated
+	 * webview round-trip) reads a non-empty `shoferMessages` and the home
+	 * screen never wins a render.
+	 *
+	 * Idempotent: safe to call multiple times; only the first call performs
+	 * I/O. `resumeTaskFromHistory()` checks the same `historyPreloaded` flag
+	 * and skips its own load prefix when this has already run.
+	 */
+	public async preloadShoferMessages(): Promise<void> {
+		if (this.historyPreloaded) {
+			return
+		}
+
+		const modifiedShoferMessages = await this.getSavedShoferMessages()
+
+		// Remove any resume messages that may have been added before.
+		const lastRelevantMessageIndex = findLastIndex(
+			modifiedShoferMessages,
+			(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"),
+		)
+
+		if (lastRelevantMessageIndex !== -1) {
+			modifiedShoferMessages.splice(lastRelevantMessageIndex + 1)
+		}
+
+		// Remove any trailing reasoning-only UI messages that were not part of the persisted API conversation
+		while (modifiedShoferMessages.length > 0) {
+			const last = modifiedShoferMessages[modifiedShoferMessages.length - 1]
+			if (last.type === "say" && last.say === "reasoning") {
+				modifiedShoferMessages.pop()
+			} else {
+				break
+			}
+		}
+
+		// Since we don't use `api_req_finished` anymore, we need to check if the
+		// last `api_req_started` has a cost value, if it doesn't and no
+		// cancellation reason to present, then we remove it since it indicates
+		// an api request without any partial content streamed.
+		const lastApiReqStartedIndex = findLastIndex(
+			modifiedShoferMessages,
+			(m) => m.type === "say" && m.say === "api_req_started",
+		)
+
+		if (lastApiReqStartedIndex !== -1) {
+			const lastApiReqStarted = modifiedShoferMessages[lastApiReqStartedIndex]
+			const { cost, cancelReason }: ShoferApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
+
+			if (cost === undefined && cancelReason === undefined) {
+				modifiedShoferMessages.splice(lastApiReqStartedIndex, 1)
+			}
+		}
+
+		await this.overwriteShoferMessages(modifiedShoferMessages)
+		this.shoferMessages = await this.getSavedShoferMessages()
+		// Make sure that the api conversation history can be resumed by the API,
+		// even if it goes out of sync with shofer messages.
+		this.apiConversationHistory = await this.getSavedApiConversationHistory()
+
+		this.historyPreloaded = true
+		this._messagesReadyResolve()
+	}
+
+	/**
+	 * Public entry point for callers that constructed a Task with
+	 * `startTask: false`, preloaded its messages via `preloadShoferMessages()`,
+	 * pushed it onto the stack, and now want to drive the resume turn
+	 * (present the resume_task ask, run the loop on user response).
+	 *
+	 * Mirrors the historyItem branch of the constructor's start-on-construct
+	 * logic. Idempotent: subsequent calls are no-ops.
+	 */
+	public startFromHistory(): void {
+		if (this._started) {
+			return
+		}
+		this._started = true
+		void this.resumeTaskFromHistory()
+	}
+
 	private async resumeTaskFromHistory() {
 		try {
-			const modifiedShoferMessages = await this.getSavedShoferMessages()
-
-			// Remove any resume messages that may have been added before.
-			const lastRelevantMessageIndex = findLastIndex(
-				modifiedShoferMessages,
-				(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"),
-			)
-
-			if (lastRelevantMessageIndex !== -1) {
-				modifiedShoferMessages.splice(lastRelevantMessageIndex + 1)
+			if (!this.historyPreloaded) {
+				await this.preloadShoferMessages()
 			}
-
-			// Remove any trailing reasoning-only UI messages that were not part of the persisted API conversation
-			while (modifiedShoferMessages.length > 0) {
-				const last = modifiedShoferMessages[modifiedShoferMessages.length - 1]
-				if (last.type === "say" && last.say === "reasoning") {
-					modifiedShoferMessages.pop()
-				} else {
-					break
-				}
-			}
-
-			// Since we don't use `api_req_finished` anymore, we need to check if the
-			// last `api_req_started` has a cost value, if it doesn't and no
-			// cancellation reason to present, then we remove it since it indicates
-			// an api request without any partial content streamed.
-			const lastApiReqStartedIndex = findLastIndex(
-				modifiedShoferMessages,
-				(m) => m.type === "say" && m.say === "api_req_started",
-			)
-
-			if (lastApiReqStartedIndex !== -1) {
-				const lastApiReqStarted = modifiedShoferMessages[lastApiReqStartedIndex]
-				const { cost, cancelReason }: ShoferApiReqInfo = JSON.parse(lastApiReqStarted.text || "{}")
-
-				if (cost === undefined && cancelReason === undefined) {
-					modifiedShoferMessages.splice(lastApiReqStartedIndex, 1)
-				}
-			}
-
-			await this.overwriteShoferMessages(modifiedShoferMessages)
-			this.shoferMessages = await this.getSavedShoferMessages()
-
-			// Now present the shofer messages to the user and ask if they want to
-			// resume (NOTE: we ran into a bug before where the
-			// apiConversationHistory wouldn't be initialized when opening a old
-			// task, and it was because we were waiting for resume).
-			// This is important in case the user deletes messages without resuming
-			// the task first.
-			this.apiConversationHistory = await this.getSavedApiConversationHistory()
 
 			const lastShoferMessage = this.shoferMessages
 				.slice()
@@ -2632,6 +2721,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await this._runTaskLoop(newUserContent)
 			}
 		} catch (error) {
+			// Ensure `messagesReady` is always resolved to unblock
+			// `createTaskWithHistoryItem` so it doesn't hang forever.
+			this._messagesReadyResolve()
+
 			// Resume and cancellation can race when users issue repeated cancels.
 			// Treat intentional abort/abandon flows as expected and avoid process-level crashes.
 			if (this.abandoned === true || this.abort === true || this.abortReason === "user_cancelled") {
