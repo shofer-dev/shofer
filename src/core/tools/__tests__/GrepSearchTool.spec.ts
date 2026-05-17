@@ -16,9 +16,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ─── Mocks (hoisted) ──────────────────────────────────────────────────────────
 
-const { mockSpawn, mockCreateInterface } = vi.hoisted(() => ({
+const { mockSpawn, mockCreateInterface, mockFileExistsAtPath } = vi.hoisted(() => ({
 	mockSpawn: vi.fn(),
 	mockCreateInterface: vi.fn(),
+	// Hoisted so it can be re-applied in beforeEach after vi.clearAllMocks() wipes
+	// the mockResolvedValue set in the vi.mock() factory.
+	mockFileExistsAtPath: vi.fn(),
 }))
 
 vi.mock("child_process", async () => {
@@ -31,10 +34,14 @@ vi.mock("readline", async () => {
 	return { ...actual, createInterface: mockCreateInterface }
 })
 
-vi.mock("../../utils/fs", async () => {
-	const actual = await vi.importActual("../../utils/fs")
-	return { ...actual, fileExistsAtPath: vi.fn().mockResolvedValue(true) }
-})
+vi.mock("../../../utils/fs", () => ({
+	// Synchronous factory avoids the async importActual timing issue that caused
+	// the mock to be applied after GrepSearchTool's module-level import ran.
+	// Path is relative to THIS test file (src/core/tools/__tests__/), so
+	// ../../../utils/fs correctly resolves to src/utils/fs — the same module
+	// that GrepSearchTool.ts imports via ../../utils/fs.
+	fileExistsAtPath: mockFileExistsAtPath,
+}))
 
 vi.mock("vscode", async () => {
 	const actual = await vi.importActual("vscode")
@@ -82,31 +89,35 @@ function createCallbacks(): CallbackMocks {
 
 /**
  * Create mock ripgrep JSON lines as would be written to stdout.
+ * Each file gets a proper begin → [matches/context] → end block so that
+ * parseRipgrepOutput sees one currentFile at a time without overwriting.
  */
 function makeRgOutput(matches: Array<{ file: string; line: number; text: string; type: "match" | "context" }>): string {
 	const lines: string[] = []
-	const pendingClose = new Set<string>()
 
+	// Group by file, preserving insertion order.
+	const byFile = new Map<string, typeof matches>()
 	for (const m of matches) {
-		if (!pendingClose.has(m.file)) {
-			pendingClose.add(m.file)
-			lines.push(JSON.stringify({ type: "begin", data: { path: { text: m.file } } }))
-		}
-		lines.push(
-			JSON.stringify({
-				type: m.type,
-				data: {
-					path: { text: m.file },
-					line_number: m.line,
-					lines: { text: m.text + "\n" },
-					...(m.type === "match" ? { absolute_offset: m.line } : {}),
-				},
-			}),
-		)
+		if (!byFile.has(m.file)) byFile.set(m.file, [])
+		byFile.get(m.file)!.push(m)
 	}
 
-	for (const f of pendingClose) {
-		lines.push(JSON.stringify({ type: "end", data: { path: { text: f } } }))
+	for (const [file, fileMatches] of byFile) {
+		lines.push(JSON.stringify({ type: "begin", data: { path: { text: file } } }))
+		for (const m of fileMatches) {
+			lines.push(
+				JSON.stringify({
+					type: m.type,
+					data: {
+						path: { text: m.file },
+						line_number: m.line,
+						lines: { text: m.text + "\n" },
+						...(m.type === "match" ? { absolute_offset: m.line } : {}),
+					},
+				}),
+			)
+		}
+		lines.push(JSON.stringify({ type: "end", data: { path: { text: file } } }))
 	}
 
 	return lines.join("\n") + "\n"
@@ -188,6 +199,9 @@ describe("GrepSearchTool", () => {
 	beforeEach(() => {
 		tool = new GrepSearchTool()
 		vi.clearAllMocks()
+		// Re-apply default after clearAllMocks, which resets implementations set
+		// via mockReturnValue/mockResolvedValue on hoisted vi.fn() instances.
+		mockFileExistsAtPath.mockResolvedValue(true)
 	})
 
 	// ── name ───────────────────────────────────────────────────────────────
@@ -470,6 +484,88 @@ describe("GrepSearchTool", () => {
 			await tool.execute({ path: "src", query: "test" }, task, callbacks)
 
 			expect(callbacks.pushToolResult).toHaveBeenCalledWith("No results found for: test")
+		})
+	})
+
+	// ── .shoferignore filtering ────────────────────────────────────────────
+
+	describe(".shoferignore filtering", () => {
+		it("passes --ignore-file to ripgrep when the ignore controller has content", async () => {
+			const ignoreController = {
+				shoferIgnoreContent: "secret/\n",
+				validateAccess: vi.fn().mockReturnValue(true),
+			}
+			const task = createMockTask({ cwd: "/workspace", shoferIgnoreController: ignoreController as any })
+			const callbacks = createCallbacks()
+			setupRgReturn([])
+
+			await tool.execute({ path: "src", query: "test" }, task, callbacks)
+
+			const args = mockSpawn.mock.calls[0][1] as string[]
+			const ignoreFileIdx = args.indexOf("--ignore-file")
+			expect(ignoreFileIdx).toBeGreaterThan(-1)
+			expect(args[ignoreFileIdx + 1]).toBe("/workspace/.shoferignore")
+		})
+
+		it("does NOT pass --ignore-file when the ignore controller has no content (file absent)", async () => {
+			const ignoreController = {
+				shoferIgnoreContent: undefined,
+				validateAccess: vi.fn().mockReturnValue(true),
+			}
+			const task = createMockTask({ shoferIgnoreController: ignoreController as any })
+			const callbacks = createCallbacks()
+			setupRgReturn([])
+
+			await tool.execute({ path: "src", query: "test" }, task, callbacks)
+
+			const args = mockSpawn.mock.calls[0][1] as string[]
+			expect(args).not.toContain("--ignore-file")
+		})
+
+		it("does NOT pass --ignore-file when shoferIgnoreController is absent", async () => {
+			const task = createMockTask({ shoferIgnoreController: undefined })
+			const callbacks = createCallbacks()
+			setupRgReturn([])
+
+			await tool.execute({ path: "src", query: "test" }, task, callbacks)
+
+			const args = mockSpawn.mock.calls[0][1] as string[]
+			expect(args).not.toContain("--ignore-file")
+		})
+
+		it("post-filters out files where validateAccess returns false (safety net)", async () => {
+			const ignoredFile = "/workspace/secret/config.ts"
+			const allowedFile = "/workspace/src/index.ts"
+			const ignoreController = {
+				shoferIgnoreContent: "secret/\n",
+				validateAccess: vi.fn((filePath: string) => !filePath.includes("secret")),
+			}
+			const task = createMockTask({ shoferIgnoreController: ignoreController as any })
+			const callbacks = createCallbacks()
+			setupRgReturn([
+				{ file: ignoredFile, line: 1, text: "ignored match", type: "match" },
+				{ file: allowedFile, line: 5, text: "allowed match", type: "match" },
+			])
+
+			await tool.execute({ path: ".", query: "match" }, task, callbacks)
+
+			const result = callbacks.pushToolResult.mock.calls[0][0] as string
+			expect(result).not.toContain("secret/config.ts")
+			expect(result).toContain("src/index.ts")
+		})
+
+		it("returns no results when all ripgrep hits are in ignored files", async () => {
+			const ignoreController = {
+				shoferIgnoreContent: "secret/\n",
+				validateAccess: vi.fn().mockReturnValue(false),
+			}
+			const task = createMockTask({ shoferIgnoreController: ignoreController as any })
+			const callbacks = createCallbacks()
+			setupRgReturn([{ file: "/workspace/secret/data.ts", line: 1, text: "sensitive", type: "match" }])
+
+			await tool.execute({ path: ".", query: "sensitive" }, task, callbacks)
+
+			expect(callbacks.pushToolResult).toHaveBeenCalledWith("No results found for: sensitive")
 		})
 	})
 
