@@ -59,6 +59,9 @@ export const commandIds = [
 	"startGitIndexing",
 	"stopGitIndexing",
 	"clearGitIndexData",
+
+	// Webview
+	"refreshWebview",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]

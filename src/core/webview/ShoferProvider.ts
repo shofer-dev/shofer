@@ -987,6 +987,22 @@ export class ShoferProvider
 		}
 	}
 
+	/**
+	 * Forces a full re-render of the webview by resetting the HTML content.
+	 * Useful for recovering from white-page rendering failures without restarting VS Code.
+	 */
+	public async refreshWebview(): Promise<void> {
+		if (!this.view) {
+			return
+		}
+		// Clearing then re-assigning forces VS Code to tear down and rebuild the webview frame.
+		this.view.webview.html = ""
+		this.view.webview.html =
+			this.contextProxy.extensionMode === vscode.ExtensionMode.Development
+				? await this.getHMRHtmlContent(this.view.webview)
+				: await this.getHtmlContent(this.view.webview)
+	}
+
 	public async createTaskWithHistoryItem(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
 		options?: { startTask?: boolean; keepCurrentTask?: boolean },
