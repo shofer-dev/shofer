@@ -166,6 +166,12 @@ function buildRipgrepArgs(params: {
 	contextBefore: number
 	contextAfter: number
 	directoryPath: string
+	/**
+	 * Absolute path to a .shoferignore file. When provided, ripgrep will respect
+	 * the file's patterns natively (via --ignore-file), ensuring ignored paths are
+	 * excluded at the search level rather than only in the post-filter pass.
+	 */
+	shoferIgnoreFile?: string
 }): string[] {
 	const {
 		query,
@@ -177,6 +183,7 @@ function buildRipgrepArgs(params: {
 		contextBefore,
 		contextAfter,
 		directoryPath,
+		shoferIgnoreFile,
 	} = params
 
 	const args: string[] = ["--json", "--no-messages"]
@@ -203,6 +210,14 @@ function buildRipgrepArgs(params: {
 	if (excludePattern) {
 		// Ripgrep uses `-g '!pattern'` for exclusions
 		args.push("-g", `!${excludePattern}`)
+	}
+
+	// Teach ripgrep about .shoferignore patterns directly so ignored files are
+	// excluded at the search level, not just in the post-filter pass. This
+	// prevents ignored files from consuming the maxLines budget and silently
+	// crowding out legitimate results.
+	if (shoferIgnoreFile) {
+		args.push("--ignore-file", shoferIgnoreFile)
 	}
 
 	if (contextBefore > 0) {
@@ -316,6 +331,10 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 				return
 			}
 
+			// Resolve the ignoreController once so both the --ignore-file path and
+			// the post-filter below share the same reference.
+			const ignoreController: ShoferIgnoreController | undefined = task.shoferIgnoreController
+
 			const vscodeAppRoot = vscode.env.appRoot
 			const rgPath = await getRipgrepBinPath(vscodeAppRoot)
 
@@ -323,6 +342,14 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 				pushToolResult("Search failed: Could not find ripgrep binary")
 				return
 			}
+
+			// If .shoferignore is loaded, pass it directly to ripgrep so ignored
+			// files are excluded at the search level. The post-filter below is kept
+			// as a safety net, but without this flag ripgrep would scan ignored
+			// files and their output could exhaust the maxLines budget before any
+			// legitimate results are captured.
+			const shoferIgnoreFile =
+				ignoreController?.shoferIgnoreContent !== undefined ? path.join(task.cwd, ".shoferignore") : undefined
 
 			const rgArgs = buildRipgrepArgs({
 				query,
@@ -334,11 +361,15 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 				contextBefore,
 				contextAfter,
 				directoryPath: resolvedPath,
+				shoferIgnoreFile,
 			})
 
-			// Limit ripgrep output lines to avoid excessive memory usage.
-			// Each result contributes roughly (contextBefore + 1 + contextAfter) lines.
-			const maxRgLines = maxResults * (contextBefore + 1 + contextAfter + 1) // +1 safety margin
+			// Fetch 2× maxResults worth of ripgrep output so the post-processing
+			// hit count can exceed maxResults and the truncation flag fires.
+			// Each ripgrep JSON result block is: begin(1) + contextBefore + match(1)
+			// + contextAfter + end(1) lines.
+			const linesPerResult = 1 + contextBefore + 1 + contextAfter + 1
+			const maxRgLines = 2 * maxResults * linesPerResult
 
 			let rawOutput: string
 			try {
@@ -351,8 +382,10 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 
 			const fileResults = parseRipgrepOutput(rawOutput)
 
-			// Apply .shoferignore filtering if a controller is available on the task
-			const ignoreController: ShoferIgnoreController | undefined = (task as any).shoferIgnoreController
+			// Post-filter: remove any results from files that .shoferignore should
+			// exclude. This is a safety net for cases where ripgrep's --ignore-file
+			// did not eliminate a path (e.g. controller not yet initialised when the
+			// task started, or the file was created after ripgrep launched).
 			const filteredResults = ignoreController
 				? fileResults.filter((fr) => ignoreController.validateAccess(fr.file))
 				: fileResults
