@@ -258,11 +258,16 @@ export class FileWatcher implements IFileWatcher {
 		pathsToExplicitlyDelete: string[],
 	): Promise<{
 		pointsForBatchUpsert: PointStruct[]
-		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string }>
+		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string; mtimeMs?: number; size?: number }>
 		processedCount: number
 	}> {
 		const pointsForBatchUpsert: PointStruct[] = []
-		const successfullyProcessedForUpsert: Array<{ path: string; newHash?: string }> = []
+		const successfullyProcessedForUpsert: Array<{
+			path: string
+			newHash?: string
+			mtimeMs?: number
+			size?: number
+		}> = []
 		const filesToProcessConcurrently = [...filesToUpsertDetails]
 
 		for (let i = 0; i < filesToProcessConcurrently.length; i += this.FILE_PROCESSING_CONCURRENCY_LIMIT) {
@@ -301,9 +306,18 @@ export class FileWatcher implements IFileWatcher {
 						} else if (result.status === "processed_for_batching" && result.pointsToUpsert) {
 							pointsForBatchUpsert.push(...result.pointsToUpsert)
 							if (result.path && result.newHash) {
-								successfullyProcessedForUpsert.push({ path: result.path, newHash: result.newHash })
+								successfullyProcessedForUpsert.push({
+									path: result.path,
+									newHash: result.newHash,
+									mtimeMs: result.newMtimeMs,
+									size: result.newSize,
+								})
 							} else if (result.path && !result.newHash) {
-								successfullyProcessedForUpsert.push({ path: result.path })
+								successfullyProcessedForUpsert.push({
+									path: result.path,
+									mtimeMs: result.newMtimeMs,
+									size: result.newSize,
+								})
 							}
 						} else {
 							batchResults.push({
@@ -352,7 +366,7 @@ export class FileWatcher implements IFileWatcher {
 
 	private async _executeBatchUpsertOperations(
 		pointsForBatchUpsert: PointStruct[],
-		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string }>,
+		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string; mtimeMs?: number; size?: number }>,
 		batchResults: FileProcessingResult[],
 		overallBatchError?: Error,
 	): Promise<Error | undefined> {
@@ -389,9 +403,13 @@ export class FileWatcher implements IFileWatcher {
 					}
 				}
 
-				for (const { path, newHash } of successfullyProcessedForUpsert) {
-					if (newHash) {
-						this.cacheManager.updateHash(path, newHash)
+				for (const { path, newHash, mtimeMs, size } of successfullyProcessedForUpsert) {
+					if (newHash && mtimeMs !== undefined && size !== undefined) {
+						this.cacheManager.updateEntry(path, {
+							hash: newHash,
+							mtimeMs,
+							size,
+						})
 					}
 					batchResults.push({ path, status: "success" })
 				}
@@ -533,7 +551,7 @@ export class FileWatcher implements IFileWatcher {
 				}
 			}
 
-			// Check file size
+			// Stat the file for size and mtime + size for cache entry
 			const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath))
 			if (fileStat.size > MAX_FILE_SIZE_BYTES) {
 				return {
@@ -550,8 +568,15 @@ export class FileWatcher implements IFileWatcher {
 			// Calculate hash
 			const newHash = createHash("sha256").update(content).digest("hex")
 
-			// Check if file has changed
-			if (this.cacheManager.getHash(filePath) === newHash) {
+			// Check if file has changed using the full cache entry
+			const cached = this.cacheManager.getEntry(filePath)
+			if (cached?.hash === newHash) {
+				// mtime may have changed — update the cache entry so fast-path works next time
+				this.cacheManager.updateEntry(filePath, {
+					hash: newHash,
+					mtimeMs: fileStat.mtime,
+					size: fileStat.size,
+				})
 				return {
 					path: filePath,
 					status: "skipped" as const,
@@ -590,6 +615,8 @@ export class FileWatcher implements IFileWatcher {
 				path: filePath,
 				status: "processed_for_batching" as const,
 				newHash,
+				newMtimeMs: fileStat.mtime,
+				newSize: fileStat.size,
 				pointsToUpsert,
 			}
 		} catch (error) {
