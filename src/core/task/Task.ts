@@ -1049,15 +1049,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return [instance, promise]
 	}
 
-	/** Route diagnostic logs through the provider's OutputChannel so they appear in the OUTPUT panel. */
-	private diagLog(message: string) {
-		const provider = this.providerRef.deref()
-		if (provider) {
-			provider.log(message)
-		} else {
-			console.log(message)
-		}
-	}
+	/** No-op: diagnostic logging disabled. */
+	private diagLog(_message: string) {}
 
 	// API Messages
 
@@ -2824,14 +2817,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this._costLimitEnforcementFiredForRequest = false
 		const provider = this.providerRef.deref()
 		if (this._costLimitBypassed) {
-			provider?.log?.(`[Task#${this.taskId}] [DIAG cost-limit] snapshot: bypassed, skipping`)
 			return
 		}
 		const { root, limit } = this.resolveCostLimit()
 		if (!limit || limit.maxUsd <= 0) {
-			provider?.log?.(
-				`[Task#${this.taskId}] [DIAG cost-limit] snapshot: no limit configured (root=${root.taskId}, limit=${JSON.stringify(limit)})`,
-			)
 			return
 		}
 		if (!provider) return
@@ -2840,9 +2829,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				provider.getTaskWithId(id).then((r) => r.historyItem),
 			)
 			this._priorAggregateUsd = aggregated.totalCost
-			provider.log?.(
-				`[Task#${this.taskId}] [DIAG cost-limit] snapshot: priorAggregate=${aggregated.totalCost.toFixed(6)}, limit=${limit.maxUsd}, action=${limit.action}, root=${root.taskId}`,
-			)
 		} catch (err) {
 			provider.log?.(
 				`[Task#${this.taskId}] snapshotPriorAggregateForCostLimit: failed for root ${root.taskId}: ${err instanceof Error ? err.message : String(err)}`,
@@ -2865,27 +2851,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * shares behaviour with the post-stream `checkCostLimit`.
 	 */
 	private async checkInFlightCostLimit(currentRequestCostUsd: number | undefined): Promise<void> {
-		const provider = this.providerRef.deref()
 		if (this._costLimitBypassed) return
 		if (this._costLimitEnforcementFiredForRequest) return
 		if (this._priorAggregateUsd === undefined) {
-			provider?.log?.(
-				`[Task#${this.taskId}] [DIAG cost-limit] in-flight: skipping (prior snapshot undefined; either no limit or snapshot failed)`,
-			)
 			return
 		}
 		if (currentRequestCostUsd === undefined || !Number.isFinite(currentRequestCostUsd)) {
-			provider?.log?.(
-				`[Task#${this.taskId}] [DIAG cost-limit] in-flight: skipping (no per-request cost reported by provider; chunk.totalCost=${currentRequestCostUsd})`,
-			)
 			return
 		}
 		const { root, limit } = this.resolveCostLimit()
 		if (!limit || limit.maxUsd <= 0) return
 		const spent = this._priorAggregateUsd + currentRequestCostUsd
-		provider?.log?.(
-			`[Task#${this.taskId}] [DIAG cost-limit] in-flight: prior=${this._priorAggregateUsd.toFixed(6)} + thisReq=${currentRequestCostUsd.toFixed(6)} = spent=${spent.toFixed(6)}, limit=${limit.maxUsd}, willFire=${spent >= limit.maxUsd}`,
-		)
 		if (spent < limit.maxUsd) return
 		// Latch so subsequent chunks in the same request don't re-fire.
 		this._costLimitEnforcementFiredForRequest = true
@@ -2899,10 +2875,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * identical regardless of which gate fires first.
 	 */
 	private async enforceCostLimit(root: Task, limit: CostLimit, spent: number): Promise<void> {
-		const provider = this.providerRef.deref()
-		provider?.log?.(
-			`[Task#${this.taskId}] [DIAG cost-limit] enforce: action=${limit.action}, spent=${spent.toFixed(6)}, limit=${limit.maxUsd}, root=${root.taskId}`,
-		)
 		TelemetryService.instance.captureBudgetExceeded(this.taskId, {
 			rootTaskId: root.taskId,
 			limitUsd: limit.maxUsd,

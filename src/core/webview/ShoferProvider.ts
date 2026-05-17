@@ -3512,7 +3512,6 @@ export class ShoferProvider
 		// (cancelAndProcessQueuedMessages) already handles the case where
 		// the user genuinely wants to send queued messages.
 		// const queuedMessages = [...task.messageQueueService.messages]
-		this.log(`[DIAG cancelTask] abort=${task.abort}, abandoned=${task.abandoned}, isStreaming=${task.isStreaming}`)
 
 		let historyItem: HistoryItem | undefined
 		try {
@@ -3593,7 +3592,6 @@ export class ShoferProvider
 		await this.createTaskWithHistoryItem({ ...historyItem, rootTask, parentTask })
 
 		const newTask = this.getCurrentTask()
-		this.log(`[DIAG cancelTask] after rehydration: newTask=${newTask?.taskId}.${newTask?.instanceId}`)
 	}
 
 	// Clear the current task without treating it as a subtask.
