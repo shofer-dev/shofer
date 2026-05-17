@@ -57,7 +57,13 @@ vi.mock("vscode", () => ({
 	},
 }))
 
-vi.mock("../../../../core/ignore/ShoferIgnoreController")
+vi.mock("../../../../core/ignore/ShoferIgnoreController", () => ({
+	ShoferIgnoreController: vi.fn().mockImplementation(() => ({
+		initialize: vi.fn().mockResolvedValue(undefined),
+		filterPaths: vi.fn((paths: string[]) => paths),
+		validateAccess: vi.fn().mockReturnValue(true),
+	})),
+}))
 vi.mock("ignore")
 
 // Override the Jest-based mock with a vitest-compatible version
@@ -533,6 +539,17 @@ describe("DirectoryScanner", () => {
 
 			// Embedder should NOT have been called
 			expect(mockEmbedder.createEmbeddings).not.toHaveBeenCalled()
+		})
+	})
+
+	// ── Phase 2: scanSpecificFiles + deleteSpecificFiles ──
+
+	describe("deleteSpecificFiles", () => {
+		it("should delete from Qdrant and cache", async () => {
+			await scanner.deleteSpecificFiles(["test/deleted.js"])
+
+			expect(mockVectorStore.deletePointsByFilePath).toHaveBeenCalledWith("test/deleted.js")
+			expect(mockCacheManager.deleteHash).toHaveBeenCalledWith("test/deleted.js")
 		})
 	})
 })

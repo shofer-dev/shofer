@@ -24,19 +24,20 @@ CodeIndexManager (singleton per workspace)
 
 ### Key Source Files
 
-| File                                                    | Role                                                                                                                                                  |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/services/code-index/manager.ts`                    | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.   |
-| `src/services/code-index/orchestrator.ts`               | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortController`.                                                       |
-| `src/services/code-index/service-factory.ts`            | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                               |
-| `src/services/code-index/processors/scanner.ts`         | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.     |
-| `src/services/code-index/processors/parser.ts`          | Uses **web-tree-sitter** for AST-aware parsing. Falls back to line-based chunking for unsupported languages. Also handles Markdown via custom parser. |
-| `src/services/code-index/search-service.ts`             | Embeds query text → searches Qdrant with configurable min score & max results.                                                                        |
-| `src/services/code-index/config-manager.ts`             | Reads settings from `ContextProxy` (global state + secrets). Detects config changes requiring restart.                                                |
-| `src/services/code-index/state-manager.ts`              | `vscode.EventEmitter`-based progress reporting to UI.                                                                                                 |
-| `src/services/code-index/cache-manager.ts`              | Persists file hashes (SHA-256) to skip unchanged files during scans.                                                                                  |
-| `src/services/code-index/vector-store/qdrant-client.ts` | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per workspace.                                                               |
-| `packages/types/src/codebase-index.ts`                  | Zod schemas for config, shared constants.                                                                                                             |
+| File                                                    | Role                                                                                                                                                    |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/code-index/manager.ts`                    | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.     |
+| `src/services/code-index/orchestrator.ts`               | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortController`. Phase 2: git-aware short-circuit before directory walk. |
+| `src/services/code-index/service-factory.ts`            | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                                 |
+| `src/services/code-index/git/git-source.ts`             | Thin wrapper around VS Code built-in Git extension API. Provides `diffSince()`, `discoverSubmodules()`, `diffSubmoduleSince()`.                         |
+| `src/services/code-index/processors/scanner.ts`         | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.       |
+| `src/services/code-index/processors/parser.ts`          | Uses **web-tree-sitter** for AST-aware parsing. Falls back to line-based chunking for unsupported languages. Also handles Markdown via custom parser.   |
+| `src/services/code-index/search-service.ts`             | Embeds query text → searches Qdrant with configurable min score & max results.                                                                          |
+| `src/services/code-index/config-manager.ts`             | Reads settings from `ContextProxy` (global state + secrets). Detects config changes requiring restart.                                                  |
+| `src/services/code-index/state-manager.ts`              | `vscode.EventEmitter`-based progress reporting to UI.                                                                                                   |
+| `src/services/code-index/cache-manager.ts`              | Persists file cache (v2: hash + mtimeMs + size) to skip unchanged files during scans.                                                                   |
+| `src/services/code-index/vector-store/qdrant-client.ts` | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per workspace. Stores metadata with commit info.                               |
+| `packages/types/src/codebase-index.ts`                  | Zod schemas for config, shared constants, and cache entries.                                                                                            |
 
 ### Interfaces
 
@@ -124,9 +125,18 @@ ConfigManager.loadConfiguration()
 
 ```
 vectorStore.initialize() → create Qdrant collection if needed
-  → if existing data: incremental scan (skip unchanged via cache)
+  → if existing data:
+      Phase 2 (Git-aware narrowing): getMetadata() → getRepository()
+        → if repo && lastIndexedCommit:
+            diffSince(lastIndexedCommit) → changed + deleted
+            + dirtyChanges (unstaged/staged/untracked)
+            + submodule: diffSubmoduleSince(storedCommit) → changed + deleted
+            → scanner.scanSpecificFiles(changed) + deleteSpecificFiles(deleted)
+            → markIndexingComplete(HEAD, submoduleCommits)
+            → skip directory walk
+        → else: fall through to Phase 1 incremental scan
   → if no data: full scan
-  → scanner.scanDirectory():
+  → scanner.scanDirectory():   (Layer A fallback)
       listFiles() → filter by extensions, .gitignore, .shoferignore
       → for each file (parallel, concurrency=10):
           stat() → get mtimeMs + size
@@ -150,11 +160,11 @@ vectorStore.initialize() → create Qdrant collection if needed
 
 The system uses **two separate storage locations** for different kinds of data:
 
-| Data                                                | Storage Location                                                                                                                            | Survives Reboot?                                |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Vector embeddings** (in Qdrant)                   | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                    | ✓ Yes — persisted on Kubernetes PVC             |
-| **File cache** (v2: hash + mtimeMs + size per file) | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
-| **Metadata marker** (`indexing_complete`)           | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                | ✓ Yes — persisted in Qdrant                     |
+| Data                                                                               | Storage Location                                                                                                                            | Survives Reboot?                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Vector embeddings** (in Qdrant)                                                  | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                    | ✓ Yes — persisted on Kubernetes PVC             |
+| **File cache** (v2: hash + mtimeMs + size per file)                                | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
+| **Metadata marker** (`indexing_complete`, `lastIndexedCommit`, `submoduleCommits`) | Qdrant collection — a special point with `type: "metadata"` and indexing status + git commit info                                           | ✓ Yes — persisted in Qdrant                     |
 
 #### Cache Location & Format
 
@@ -202,6 +212,31 @@ After a reboot, when `CodeIndexManager.initialize()` runs:
 
 The critical dependency: **incremental scans require the cache file to be present**. Without it, the system cannot determine which files are unchanged → treats all files as new/changed → re-embeds everything, even though Qdrant already contains the vectors. The Phase 1 mtime+size fast-path makes startup reconciliation O(changed files) instead of O(workspace files) — on a workspace where nothing changed, zero `readFile` calls are made.
 
+#### Phase 2: Git-Aware Narrowing
+
+When a git repository is detected, the orchestrator bypasses the directory walk entirely:
+
+```
+4. getMetadata() → read lastIndexedCommit, submoduleCommits from Qdrant
+5. if repo && lastIndexedCommit:
+     git diffSince(lastIndexedCommit) → main-repo changed + deleted
+     + dirtyChanges (unstaged/staged/untracked files)
+     + for each submodule:
+         if storedCommit != currentCommit:
+             diffSubmoduleSince(storedCommit) → changed + deleted
+     → scanner.scanSpecificFiles(changed) + scanner.deleteSpecificFiles(deleted)
+     → markIndexingComplete(HEAD, submoduleCommits)
+     → return (skip full directory walk)
+   else:
+     fall through to Layer A (Phase 1 fast-path full directory walk)
+```
+
+**Submodule support**: `GitSource.discoverSubmodules()` finds child repositories tracked by VS Code. For each submodule, the orchestrator compares the stored commit against the current HEAD. If they differ, it diffs the submodule from the stored commit. New submodules (no stored commit) are included in the directory walk via the Layer A fallback.
+
+**Fallbacks**: If `diffSince` throws ("bad object", missing commit), or the git extension is unavailable, or `lastIndexedCommit` is absent from metadata — the orchestrator falls through to the existing Phase 1 incremental scan.
+
+On a 50k-file repo with 3 dirty files, startup reconciliation now issues one `git diff` + one status query and processes 3 files — no directory walk at all.
+
 #### Reboot Behavior
 
 After a system reboot, **no restart of indexing is needed** because:
@@ -212,6 +247,20 @@ After a system reboot, **no restart of indexing is needed** because:
 - ⚠ If hash cache was lost/deleted → full re-embed (vectors re-created but identical)
 
 The hash cache is the only component that may not survive a reboot depending on system configuration. The Qdrant PVC is the durable store of record.
+
+#### Startup Reconciliation Layers (summary)
+
+The startup reconciliation pipeline is organised as three layers, each strictly more selective than the next. A layer falls through to the next when its inputs are missing or its assumptions fail.
+
+| Layer                                       | Candidate set                                                                                                                                         | Fallback trigger                                                                                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **B. Git-aware narrowing** (Phase 2)        | `git diff <lastIndexedCommit> HEAD` ∪ working-tree dirty changes ∪ per-submodule diff                                                                 | git extension unavailable, `lastIndexedCommit` missing from Qdrant metadata, `diffSince` throws ("bad object"), or a new submodule is discovered |
+| **A. Versioned mtime+size cache** (Phase 1) | every file in workspace, but only `stat()` per file — no read, no hash, no parse, when `entry.mtimeMs === stats.mtimeMs && entry.size === stats.size` | cache v1 (or older) on disk → version-mismatch discards cache and re-scans                                                                       |
+| **Hash check** (legacy, final tiebreaker)   | files that failed layer A (mtime/size changed) — `readFile` + SHA-256, skip if hash matches cache                                                     | none — always available                                                                                                                          |
+
+Per the **Versioned Snapshot Rule** and **No Backward Compatibility Unless Asked** rule, schema bumps (cache `version`, Qdrant metadata fields) discard old state rather than migrate. Each layer was shipped as its own minor-version bump.
+
+Phase 3 (an "optimistic `Indexed` state" that flips the badge green immediately and reconciles in the background) is tracked in [`todos/code-indexer-optimistic-indexed.md`](../../../todos/code-indexer-optimistic-indexed.md).
 
 ### 4. Search (`RagSearchTool.ts` → `search-service.ts`)
 

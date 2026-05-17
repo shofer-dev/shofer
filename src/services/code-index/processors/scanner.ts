@@ -546,4 +546,242 @@ export class DirectoryScanner implements IDirectoryScanner {
 			}
 		}
 	}
+
+	/**
+	 * Scans a specific set of files (Phase 2 — git-aware narrowing).
+	 * Reuses the same per-file pipeline as scanDirectory (stat → cache check →
+	 * parse → embed → upsert) but operates on an explicit list of paths instead
+	 * of walking the directory tree.
+	 *
+	 * Only files matching scannerExtensions and passing .shoferignore/.gitignore
+	 * filters are processed.
+	 *
+	 * @param workspacePath — absolute workspace root
+	 * @param paths — absolute file paths to scan
+	 */
+	public async scanSpecificFiles(
+		workspacePath: string,
+		paths: string[],
+		onError?: (error: Error) => void,
+		onBlocksIndexed?: (indexedCount: number) => void,
+		onFileParsed?: (fileBlockCount: number) => void,
+		signal?: AbortSignal,
+	): Promise<{ stats: { processed: number; skipped: number }; totalBlockCount: number }> {
+		// Ensure ShoferIgnoreController is cached
+		if (!this.shoferIgnoreController) {
+			this.shoferIgnoreController = new ShoferIgnoreController(workspacePath)
+			await this.shoferIgnoreController.initialize()
+		}
+
+		// Filter by supported extensions, .shoferignore, .gitignore, and ignored directories
+		const supportedPaths = paths.filter((filePath) => {
+			const ext = path.extname(filePath).toLowerCase()
+			const relativeFilePath = generateRelativeFilePath(filePath, workspacePath)
+
+			if (isPathInIgnoredDirectory(relativeFilePath)) return false
+			return scannerExtensions.includes(ext) && !this.ignoreInstance.ignores(relativeFilePath)
+		})
+
+		// Filter by .shoferignore
+		const allowedPaths = this.shoferIgnoreController.filterPaths(supportedPaths)
+
+		let processedCount = 0
+		let skippedCount = 0
+		let totalBlockCount = 0
+
+		const parseLimiter = pLimit(PARSING_CONCURRENCY)
+		const batchLimiter = pLimit(BATCH_PROCESSING_CONCURRENCY)
+		const mutex = new Mutex()
+
+		let currentBatchBlocks: CodeBlock[] = []
+		let currentBatchTexts: string[] = []
+		let currentBatchFileInfos: {
+			filePath: string
+			fileHash: string
+			isNew: boolean
+			mtimeMs: number
+			size: number
+		}[] = []
+		const activeBatchPromises = new Set<Promise<void>>()
+		let pendingBatchCount = 0
+
+		const parsePromises = allowedPaths.map((filePath) =>
+			parseLimiter(async () => {
+				if (signal?.aborted) return
+
+				try {
+					const stats = await stat(filePath)
+					if (stats.size > MAX_FILE_SIZE_BYTES) {
+						skippedCount++
+						return
+					}
+
+					const cached = this.cacheManager.getEntry(filePath)
+					if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+						skippedCount++
+						return
+					}
+
+					const content = await vscode.workspace.fs
+						.readFile(vscode.Uri.file(filePath))
+						.then((buffer) => Buffer.from(buffer).toString("utf-8"))
+
+					const currentFileHash = createHash("sha256").update(content).digest("hex")
+					const isNewFile = !cached
+
+					if (cached && cached.hash === currentFileHash) {
+						this.cacheManager.updateEntry(filePath, {
+							hash: currentFileHash,
+							mtimeMs: stats.mtimeMs,
+							size: stats.size,
+						})
+						skippedCount++
+						return
+					}
+
+					const blocks = await this.codeParser.parseFile(filePath, { content, fileHash: currentFileHash })
+					const fileBlockCount = blocks.length
+					onFileParsed?.(fileBlockCount)
+					processedCount++
+
+					if (this.embedder && this.qdrantClient && blocks.length > 0) {
+						let addedBlocksFromFile = false
+						for (const block of blocks) {
+							const trimmedContent = block.content.trim()
+							if (trimmedContent) {
+								const release = await mutex.acquire()
+								try {
+									currentBatchBlocks.push(block)
+									currentBatchTexts.push(trimmedContent)
+									addedBlocksFromFile = true
+
+									if (signal?.aborted) throw new DOMException("Indexing aborted", "AbortError")
+
+									if (currentBatchBlocks.length >= this.batchSegmentThreshold) {
+										while (pendingBatchCount >= MAX_PENDING_BATCHES) {
+											if (signal?.aborted)
+												throw new DOMException("Indexing aborted", "AbortError")
+											await Promise.race(activeBatchPromises)
+										}
+
+										const batchBlocks = [...currentBatchBlocks]
+										const batchTexts = [...currentBatchTexts]
+										const batchFileInfos = [...currentBatchFileInfos]
+										currentBatchBlocks = []
+										currentBatchTexts = []
+										currentBatchFileInfos = []
+										pendingBatchCount++
+
+										const batchPromise = batchLimiter(() =>
+											this.processBatch(
+												batchBlocks,
+												batchTexts,
+												batchFileInfos,
+												workspacePath,
+												onError,
+												onBlocksIndexed,
+											),
+										)
+										activeBatchPromises.add(batchPromise)
+										batchPromise.finally(() => {
+											activeBatchPromises.delete(batchPromise)
+											pendingBatchCount--
+										})
+									}
+								} finally {
+									release()
+								}
+							}
+						}
+
+						if (addedBlocksFromFile) {
+							const release = await mutex.acquire()
+							try {
+								totalBlockCount += fileBlockCount
+								currentBatchFileInfos.push({
+									filePath,
+									fileHash: currentFileHash,
+									isNew: isNewFile,
+									mtimeMs: stats.mtimeMs,
+									size: stats.size,
+								})
+							} finally {
+								release()
+							}
+						}
+					} else {
+						this.cacheManager.updateEntry(filePath, {
+							hash: currentFileHash,
+							mtimeMs: stats.mtimeMs,
+							size: stats.size,
+						})
+					}
+				} catch (error) {
+					if (error instanceof DOMException && error.name === "AbortError") throw error
+					console.error(`Error processing file ${filePath}:`, error)
+					if (onError) {
+						onError(error instanceof Error ? error : new Error(String(error)))
+					}
+				}
+			}),
+		)
+
+		await Promise.all(parsePromises)
+
+		if (signal?.aborted) {
+			return { stats: { processed: processedCount, skipped: skippedCount }, totalBlockCount }
+		}
+
+		// Drain remaining batch
+		if (currentBatchBlocks.length > 0) {
+			const release = await mutex.acquire()
+			try {
+				const batchBlocks = [...currentBatchBlocks]
+				const batchTexts = [...currentBatchTexts]
+				const batchFileInfos = [...currentBatchFileInfos]
+				currentBatchBlocks = []
+				currentBatchTexts = []
+				currentBatchFileInfos = []
+				pendingBatchCount++
+
+				const batchPromise = batchLimiter(() =>
+					this.processBatch(batchBlocks, batchTexts, batchFileInfos, workspacePath, onError, onBlocksIndexed),
+				)
+				activeBatchPromises.add(batchPromise)
+				batchPromise.finally(() => {
+					activeBatchPromises.delete(batchPromise)
+					pendingBatchCount--
+				})
+			} finally {
+				release()
+			}
+		}
+
+		await Promise.all(activeBatchPromises)
+
+		return {
+			stats: { processed: processedCount, skipped: skippedCount },
+			totalBlockCount,
+		}
+	}
+
+	/**
+	 * Deletes points and cache entries for a specific set of deleted files
+	 * (Phase 2 — git-aware narrowing).
+	 *
+	 * @param paths — absolute file paths to delete from Qdrant and cache
+	 */
+	public async deleteSpecificFiles(paths: string[]): Promise<void> {
+		for (const filePath of paths) {
+			if (this.qdrantClient) {
+				try {
+					await this.qdrantClient.deletePointsByFilePath(filePath)
+				} catch {
+					// Best-effort — log but don't throw
+					console.error(`[DirectoryScanner] Failed to delete points for deleted file: ${filePath}`)
+				}
+			}
+			this.cacheManager.deleteHash(filePath)
+		}
+	}
 }

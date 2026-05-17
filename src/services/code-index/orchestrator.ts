@@ -5,6 +5,7 @@ import { CodeIndexStateManager, IndexingState } from "./state-manager"
 import { IFileWatcher, IVectorStore, BatchProcessingSummary } from "./interfaces"
 import { DirectoryScanner } from "./processors"
 import { CacheManager } from "./cache-manager"
+import { GitSource } from "./git/git-source"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { t } from "../../i18n"
@@ -25,6 +26,7 @@ export class CodeIndexOrchestrator {
 		private readonly vectorStore: IVectorStore,
 		private readonly scanner: DirectoryScanner,
 		private readonly fileWatcher: IFileWatcher,
+		private readonly gitSource: GitSource = new GitSource(),
 	) {}
 
 	/**
@@ -152,9 +154,7 @@ export class CodeIndexOrchestrator {
 				)
 				this.stateManager.setSystemState("Indexing", "Checking for new or modified files...")
 
-				// Mark as incomplete at the start of incremental scan
-				await this.vectorStore.markIndexingIncomplete()
-
+				// ── Shared state (declared here so both Phase 2 and Layer A can reference) ──
 				let cumulativeBlocksIndexed = 0
 				let cumulativeBlocksFoundSoFar = 0
 				let batchErrors: Error[] = []
@@ -168,6 +168,122 @@ export class CodeIndexOrchestrator {
 					cumulativeBlocksIndexed += indexedCount
 					this.stateManager.reportBlockIndexingProgress(cumulativeBlocksIndexed, cumulativeBlocksFoundSoFar)
 				}
+
+				// ── Phase 2: Git-aware narrowing ───────────────────────────
+				// Try to diff only the files changed since the last Indexed state
+				// instead of walking the entire workspace.
+				const folderUri = vscode.Uri.file(this.workspacePath)
+				const repo = this.gitSource.getRepository(folderUri)
+				const meta = await this.vectorStore.getMetadata()
+
+				if (repo && meta?.lastIndexedCommit) {
+					try {
+						const currentCommit = this.gitSource.getHeadCommit(repo)
+						let allChanged: string[] = []
+						let allDeleted: string[] = []
+
+						// Main repo diff
+						const mainDiff = await this.gitSource.diffSince(repo, meta.lastIndexedCommit)
+						allChanged.push(...mainDiff.changed)
+						allDeleted.push(...mainDiff.deleted)
+
+						// Also include current dirty state (unstaged + staged + untracked)
+						const dirtyDiff = this.gitSource.getDirtyChanges(repo)
+						allChanged.push(...dirtyDiff.changed)
+						allDeleted.push(...dirtyDiff.deleted)
+
+						// ── Submodule reconciliation ────────────────────────────
+						const submoduleCommits = this.gitSource.getSubmoduleCommits(repo)
+						const storedSubCommits = meta.submoduleCommits ?? {}
+
+						for (const [subPath, currentSubCommit] of Object.entries(submoduleCommits)) {
+							const storedSubCommit = storedSubCommits[subPath]
+							if (storedSubCommit && storedSubCommit === currentSubCommit) {
+								continue
+							}
+							try {
+								if (storedSubCommit) {
+									const subDiff = await this.gitSource.diffSubmoduleSince(
+										repo,
+										subPath,
+										storedSubCommit,
+									)
+									// Normalize prefix using path.sep for cross-platform safety
+									const subPrefix = subPath.endsWith(path.sep) ? subPath : subPath + path.sep
+									allChanged.push(...subDiff.changed.filter((p) => p.startsWith(subPrefix)))
+									allDeleted.push(...subDiff.deleted.filter((p) => p.startsWith(subPrefix)))
+								} else {
+									// New submodule with no stored commit — throw to fall
+									// through to the Layer A full directory walk so nothing is missed.
+									throw new Error(
+										`New submodule detected: ${subPath}. Falling back to full incremental scan.`,
+									)
+								}
+							} catch (e) {
+								console.warn(
+									`[CodeIndexOrchestrator] Submodule diff failed for ${subPath}: ` +
+										(e instanceof Error ? e.message : String(e)),
+								)
+								throw e // propagate to the outer catch → Layer A fallback
+							}
+						}
+
+						// Deduplicate
+						const changedSet = new Set(allChanged)
+						const deletedSet = new Set(allDeleted)
+
+						if (changedSet.size > 0 || deletedSet.size > 0) {
+							console.log(
+								`[CodeIndexOrchestrator] Git diff: ${changedSet.size} changed, ${deletedSet.size} deleted since ${meta.lastIndexedCommit.slice(0, 8)}`,
+							)
+
+							if (changedSet.size > 0) {
+								await this.scanner.scanSpecificFiles(
+									this.workspacePath,
+									Array.from(changedSet),
+									(batchError: Error) => {
+										batchErrors.push(batchError)
+									},
+									handleBlocksIndexed,
+									handleFileParsed,
+									signal,
+								)
+							}
+
+							if (deletedSet.size > 0) {
+								await this.scanner.deleteSpecificFiles(Array.from(deletedSet))
+							}
+
+							if (signal.aborted) {
+								await this.cacheManager.flush()
+								this.stopWatcher()
+								this.stateManager.setSystemState(
+									"Standby",
+									t("embeddings:orchestrator.indexingStopped"),
+								)
+								return
+							}
+
+							await this._startWatcher()
+							await this.vectorStore.markIndexingComplete(currentCommit, submoduleCommits)
+							this.stateManager.setSystemState("Indexed", t("embeddings:orchestrator.fileWatcherStarted"))
+							return
+						}
+					} catch (e) {
+						console.warn(
+							`[CodeIndexOrchestrator] Git diff failed, falling back to full incremental scan: ` +
+								(e instanceof Error ? e.message : String(e)),
+						)
+						TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
+							error: e instanceof Error ? e.message : String(e),
+							location: "startIndexing:gitDiff",
+						})
+					}
+				}
+				// ── End Phase 2 ───────────────────────────────────────────
+
+				// Layer A: full incremental scan (Phase 1 fast-path)
+				await this.vectorStore.markIndexingIncomplete()
 
 				// Run incremental scan - scanner will skip unchanged files using cache
 				const result = await this.scanner.scanDirectory(
@@ -207,7 +323,10 @@ export class CodeIndexOrchestrator {
 				await this._startWatcher()
 
 				// Mark indexing as complete after successful incremental scan
-				await this.vectorStore.markIndexingComplete()
+				// Reuse folderUri & repo from the Phase 2 block above
+				const headCommit = repo ? this.gitSource.getHeadCommit(repo) : undefined
+				const subCommits = repo ? this.gitSource.getSubmoduleCommits(repo) : undefined
+				await this.vectorStore.markIndexingComplete(headCommit, subCommits)
 
 				this.stateManager.setSystemState("Indexed", t("embeddings:orchestrator.fileWatcherStarted"))
 			} else {
@@ -296,7 +415,12 @@ export class CodeIndexOrchestrator {
 				await this._startWatcher()
 
 				// Mark indexing as complete after successful full scan
-				await this.vectorStore.markIndexingComplete()
+				// Include commit info if available (for next startup's git-aware narrowing)
+				const fullFolderUri = vscode.Uri.file(this.workspacePath)
+				const fullRepo = this.gitSource.getRepository(fullFolderUri)
+				const fullHeadCommit = fullRepo ? this.gitSource.getHeadCommit(fullRepo) : undefined
+				const fullSubCommits = fullRepo ? this.gitSource.getSubmoduleCommits(fullRepo) : undefined
+				await this.vectorStore.markIndexingComplete(fullHeadCommit, fullSubCommits)
 
 				this.stateManager.setSystemState("Indexed", t("embeddings:orchestrator.fileWatcherStarted"))
 			}

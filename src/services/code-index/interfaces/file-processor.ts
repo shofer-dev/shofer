@@ -45,6 +45,28 @@ export interface IDirectoryScanner {
 		}
 		totalBlockCount: number
 	}>
+
+	/**
+	 * Scans specific files (Phase 2 — git-aware narrowing).
+	 * Reuses the same per-file pipeline but operates on an explicit list.
+	 */
+	scanSpecificFiles(
+		workspacePath: string,
+		paths: string[],
+		onError?: (error: Error) => void,
+		onBlocksIndexed?: (indexedCount: number) => void,
+		onFileParsed?: (fileBlockCount: number) => void,
+		signal?: AbortSignal,
+	): Promise<{
+		stats: { processed: number; skipped: number }
+		totalBlockCount: number
+	}>
+
+	/**
+	 * Deletes points and cache entries for specific deleted files
+	 * (Phase 2 — git-aware narrowing).
+	 */
+	deleteSpecificFiles(paths: string[]): Promise<void>
 }
 
 /**
