@@ -210,27 +210,31 @@
 		@apply underline;
 	}
 
-	/* Custom smooth bounce animation for Shofer hero */
-	@keyframes smooth-bounce {
+	/* Road-cruise animation — gentle float + subtle sway for the Shofer hero logo.
+	   Simulates the logo cruising along a road with mild suspension bob. */
+	@keyframes road-cruise {
 		0% {
-			transform: translateY(0);
+			transform: translate(0, 0);
 		}
-		25% {
-			transform: translateY(-25%);
+		20% {
+			transform: translate(3px, -4px);
 		}
-		50% {
-			transform: translateY(0);
+		40% {
+			transform: translate(1px, -2px);
 		}
-		75% {
-			transform: translateY(-12.5%);
+		60% {
+			transform: translate(-2px, -4px);
+		}
+		80% {
+			transform: translate(-1px, -1px);
 		}
 		100% {
-			transform: translateY(0);
+			transform: translate(0, 0);
 		}
 	}
 
-	.animate-smooth-bounce {
-		animation: smooth-bounce 1s ease-in-out infinite;
+	.animate-road-cruise {
+		animation: road-cruise 2.5s ease-in-out infinite;
 	}
 }
 
@@ -548,17 +552,34 @@ input[cmdk-input]:focus {
 	background-color: color-mix(in srgb, var(--vscode-editorGroup-border) 100%, transparent);
 }
 
-@keyframes ground-slide {
+/* Road lane-marker animations — parallax scrolling for the Shofer hero road.
+   Fast markers (foreground) move quicker than slow markers (background)
+   to create a depth illusion of forward motion. */
+
+@keyframes lane-marker-fast {
 	0% {
 		transform: translateX(0);
 	}
 	100% {
-		transform: translateX(-30px);
+		transform: translateX(-48px);
 	}
 }
 
-.animate-ground-slide {
-	animation: ground-slide 1s linear infinite;
+.animate-lane-marker-fast {
+	animation: lane-marker-fast 0.8s linear infinite;
+}
+
+@keyframes lane-marker-slow {
+	0% {
+		transform: translateX(0);
+	}
+	100% {
+		transform: translateX(-20px);
+	}
+}
+
+.animate-lane-marker-slow {
+	animation: lane-marker-slow 2.2s linear infinite;
 }
 
 @keyframes sun {
