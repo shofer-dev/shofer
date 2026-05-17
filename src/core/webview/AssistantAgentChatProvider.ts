@@ -220,6 +220,11 @@ class AssistantAgentChatPanel {
   .md pre code { background: transparent; padding: 0; }
   .md a { color: var(--vscode-textLink-foreground); }
   .md blockquote { border-left: 3px solid var(--vscode-widget-border); padding-left: 8px; opacity: 0.85; margin: 0.4em 0; }
+  .md table { border-collapse: collapse; margin: 0.4em 0; display: block; overflow-x: auto; max-width: 100%; }
+  .md th, .md td { border: 1px solid var(--vscode-widget-border); padding: 4px 8px; text-align: left; vertical-align: top; }
+  .md th { background: var(--vscode-textBlockQuote-background); font-weight: 600; }
+  .md td.align-right, .md th.align-right { text-align: right; }
+  .md td.align-center, .md th.align-center { text-align: center; }
 
   .empty { text-align: center; opacity: 0.5; margin-top: 40px; }
 </style>
@@ -316,12 +321,50 @@ class AssistantAgentChatPanel {
         out.push("<blockquote>" + renderMarkdown(buf.join("\\n")) + "</blockquote>");
         continue;
       }
+      // GFM table: a header row followed by a |---|---| separator row.
+      // We split on unescaped pipes and trim cells; alignment colons in
+      // the separator row drive per-column align-left/center/right.
+      if (/^\\s*\\|.*\\|\\s*$/.test(line) && i + 1 < lines.length && /^\\s*\\|?\\s*:?-{2,}:?(\\s*\\|\\s*:?-{2,}:?)*\\s*\\|?\\s*$/.test(lines[i + 1])) {
+        const splitRow = (row) => {
+          const trimmed = row.replace(/^\\s*\\|/, "").replace(/\\|\\s*$/, "");
+          return trimmed.split(/\\|/).map((c) => c.trim());
+        };
+        const headers = splitRow(line);
+        const sepCells = splitRow(lines[i + 1]);
+        const aligns = sepCells.map((c) => {
+          const left = c.startsWith(":");
+          const right = c.endsWith(":");
+          return right && left ? "center" : right ? "right" : left ? "left" : "";
+        });
+        const alignAttr = (idx) => aligns[idx] ? ' class="align-' + aligns[idx] + '"' : "";
+        i += 2;
+        const bodyRows = [];
+        while (i < lines.length && /^\\s*\\|.*\\|\\s*$/.test(lines[i])) {
+          bodyRows.push(splitRow(lines[i]));
+          i++;
+        }
+        let html = "<table><thead><tr>";
+        for (let c = 0; c < headers.length; c++) {
+          html += "<th" + alignAttr(c) + ">" + renderInline(headers[c]) + "</th>";
+        }
+        html += "</tr></thead><tbody>";
+        for (const row of bodyRows) {
+          html += "<tr>";
+          for (let c = 0; c < headers.length; c++) {
+            html += "<td" + alignAttr(c) + ">" + renderInline(row[c] || "") + "</td>";
+          }
+          html += "</tr>";
+        }
+        html += "</tbody></table>";
+        out.push(html);
+        continue;
+      }
       // blank line
       if (/^\\s*$/.test(line)) { i++; continue; }
       // paragraph: gather until blank/structural boundary
       const buf = [line];
       i++;
-      while (i < lines.length && !/^\\s*$/.test(lines[i]) && !/^\`\`\`/.test(lines[i]) && !/^#{1,4}\\s/.test(lines[i]) && !/^\\s*[-*+]\\s+/.test(lines[i]) && !/^\\s*\\d+\\.\\s+/.test(lines[i]) && !/^>\\s?/.test(lines[i])) {
+      while (i < lines.length && !/^\\s*$/.test(lines[i]) && !/^\`\`\`/.test(lines[i]) && !/^#{1,4}\\s/.test(lines[i]) && !/^\\s*[-*+]\\s+/.test(lines[i]) && !/^\\s*\\d+\\.\\s+/.test(lines[i]) && !/^>\\s?/.test(lines[i]) && !/^\\s*\\|.*\\|\\s*$/.test(lines[i])) {
         buf.push(lines[i]); i++;
       }
       out.push("<p>" + renderInline(buf.join(" ")) + "</p>");
