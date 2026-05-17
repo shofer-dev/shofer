@@ -1,6 +1,8 @@
 import * as path from "path"
 import * as os from "os"
 import fs from "fs/promises"
+import * as childProcess from "child_process"
+import * as readline from "readline"
 
 /**
  * Gets the global .shofer directory path based on the current platform
@@ -192,12 +194,24 @@ export async function readFileIfExists(filePath: string): Promise<string | null>
 export async function discoverSubfolderRooDirectories(cwd: string): Promise<string[]> {
 	try {
 		// Dynamic import to avoid vscode dependency at module load time
-		// This is necessary because file-search.ts imports vscode, which is not
-		// available in the webview context
-		const { executeRipgrep } = await import("../search/file-search")
+		// (file-search.ts → vscode, which is unavailable in the webview context).
+		// We only need the ripgrep binary locator here, not executeRipgrep — the
+		// latter caps results at 500, which is wrong for `.shofer/` discovery
+		// in repos where the root .shofer/ holds large generated content
+		// (e.g. agent worktree snapshots). When the cap fires, every result is
+		// from the root .shofer/ (which we discard anyway via the
+		// rootShoferDir filter below) and no subfolder .shofer/ ever surfaces.
+		const { getBinPath } = await import("../ripgrep")
+		const vscode = await import("vscode")
+		const rgPath = await getBinPath(vscode.env.appRoot)
+		if (!rgPath) {
+			return []
+		}
 
-		// Use ripgrep to find any file inside any .shofer directory
-		// This efficiently discovers all .shofer folders regardless of their content
+		// `-g '!/.shofer/**'` is anchored to the search root (cwd) and skips
+		// the root .shofer/ entirely so its file count cannot starve the
+		// subfolder hits. We still need `-g '**/.shofer/**'` to include any
+		// nested .shofer/ at arbitrary depth.
 		const args = [
 			"--files",
 			"--hidden",
@@ -205,32 +219,44 @@ export async function discoverSubfolderRooDirectories(cwd: string): Promise<stri
 			"-g",
 			"**/.shofer/**",
 			"-g",
+			"!/.shofer/**",
+			"-g",
 			"!node_modules/**",
 			"-g",
 			"!.git/**",
 			cwd,
 		]
 
-		const results = await executeRipgrep({ args, workspacePath: cwd })
-
-		// Extract unique .shofer directory paths
 		const shoferDirs = new Set<string>()
-		const rootShoferDir = path.join(cwd, ".shofer")
 
-		for (const result of results) {
-			// Match paths like "subfolder/.shofer/anything" or "subfolder/nested/.shofer/anything"
-			// Handle both forward slashes (Unix) and backslashes (Windows)
-			const match = result.path.match(/^(.+?)[/\\]\.shofer[/\\]/)
-			if (match) {
-				const shoferDir = path.join(cwd, match[1], ".shofer")
-				// Exclude the root .shofer directory (already handled by getProjectShoferDirectoryForCwd)
-				if (shoferDir !== rootShoferDir) {
-					shoferDirs.add(shoferDir)
+		await new Promise<void>((resolve, reject) => {
+			const proc = childProcess.spawn(rgPath, args)
+			const rl = readline.createInterface({ input: proc.stdout, crlfDelay: Infinity })
+
+			rl.on("line", (line) => {
+				// Stream-dedupe into the directory set so memory stays O(#.shofer dirs)
+				// regardless of how many files live inside any one .shofer/ dir.
+				const rel = path.relative(cwd, line)
+				const match = rel.match(/^(.+?)[/\\]\.shofer(?:[/\\]|$)/)
+				if (match) {
+					shoferDirs.add(path.join(cwd, match[1], ".shofer"))
 				}
-			}
-		}
+			})
 
-		// Return sorted alphabetically
+			let errorOutput = ""
+			proc.stderr.on("data", (d) => {
+				errorOutput += d.toString()
+			})
+			rl.on("close", () => {
+				if (errorOutput && shoferDirs.size === 0) {
+					reject(new Error(`ripgrep process error: ${errorOutput}`))
+				} else {
+					resolve()
+				}
+			})
+			proc.on("error", (err) => reject(err))
+		})
+
 		return Array.from(shoferDirs).sort()
 	} catch (error) {
 		// If discovery fails (e.g., ripgrep not available), return empty array
