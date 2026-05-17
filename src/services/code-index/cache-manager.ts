@@ -4,18 +4,25 @@ import { ICacheManager } from "./interfaces/cache"
 import debounce from "lodash.debounce"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { TelemetryService } from "@shofer/telemetry"
-import { TelemetryEventName } from "@shofer/types"
+import { TelemetryEventName, codebaseIndexCacheSchema, type CodebaseIndexCacheEntry } from "@shofer/types"
 
 /**
- * Manages the cache for code indexing
+ * Manages the cache for code indexing.
+ *
+ * Stores a versioned on-disk cache mapping file paths to { hash, mtimeMs, size } entries.
+ * Uses a stat()-only fast-path: when mtime+size match the cached values the scanner
+ * skips reading and hashing the file entirely.
+ *
+ * Per the Versioned Snapshot Rule, a mismatch on the version field discards the entire
+ * cache and triggers a fresh full scan — no migration.
  */
 export class CacheManager implements ICacheManager {
 	private cachePath: vscode.Uri
-	private fileHashes: Record<string, string> = {}
+	/** In-memory map of relative file path → cache entry */
+	private entries: Record<string, CodebaseIndexCacheEntry> = {}
 	private _debouncedSaveCache: () => void
 
 	/**
-	 * Creates a new cache manager
 	 * @param context VS Code extension context
 	 * @param workspacePath Path to the workspace
 	 */
@@ -33,28 +40,35 @@ export class CacheManager implements ICacheManager {
 	}
 
 	/**
-	 * Initializes the cache manager by loading the cache file
+	 * Loads the cache from disk. Validates against the v2 schema via safeParse;
+	 * on version mismatch or parse failure discards the cache and starts fresh.
 	 */
 	async initialize(): Promise<void> {
 		try {
 			const cacheData = await vscode.workspace.fs.readFile(this.cachePath)
-			this.fileHashes = JSON.parse(cacheData.toString())
-		} catch (error) {
-			this.fileHashes = {}
-			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined,
-				location: "initialize",
-			})
+			const raw = JSON.parse(cacheData.toString())
+			const parsed = codebaseIndexCacheSchema.safeParse(raw)
+			if (parsed.success) {
+				this.entries = parsed.data.entries
+			} else {
+				// Version mismatch or corrupt data — discard and re-scan
+				this.entries = {}
+			}
+		} catch {
+			// File not found, empty, or unreadable — start fresh
+			this.entries = {}
 		}
 	}
 
 	/**
-	 * Saves the cache to disk
+	 * Saves the cache to disk in version 2 format.
 	 */
 	private async _performSave(): Promise<void> {
 		try {
-			await safeWriteJson(this.cachePath.fsPath, this.fileHashes)
+			await safeWriteJson(this.cachePath.fsPath, {
+				version: 2,
+				entries: this.entries,
+			})
 		} catch (error) {
 			console.error("Failed to save cache:", error)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
@@ -66,12 +80,12 @@ export class CacheManager implements ICacheManager {
 	}
 
 	/**
-	 * Clears the cache file by writing an empty object to it
+	 * Clears the cache file and the in-memory entry map.
 	 */
 	async clearCacheFile(): Promise<void> {
 		try {
-			await safeWriteJson(this.cachePath.fsPath, {})
-			this.fileHashes = {}
+			await safeWriteJson(this.cachePath.fsPath, { version: 2, entries: {} })
+			this.entries = {}
 		} catch (error) {
 			console.error("Failed to clear cache file:", error, this.cachePath)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
@@ -82,32 +96,36 @@ export class CacheManager implements ICacheManager {
 		}
 	}
 
+	// ── Entry-level accessors ──
+
 	/**
-	 * Gets the hash for a file path
-	 * @param filePath Path to the file
-	 * @returns The hash for the file or undefined if not found
+	 * Returns the full cache entry for a file path, or undefined if not cached.
 	 */
-	getHash(filePath: string): string | undefined {
-		return this.fileHashes[filePath]
+	getEntry(filePath: string): CodebaseIndexCacheEntry | undefined {
+		return this.entries[filePath]
 	}
 
 	/**
-	 * Updates the hash for a file path
-	 * @param filePath Path to the file
-	 * @param hash New hash value
+	 * Updates the cache entry for a file path and schedules a debounced save.
 	 */
-	updateHash(filePath: string, hash: string): void {
-		this.fileHashes[filePath] = hash
+	updateEntry(filePath: string, entry: CodebaseIndexCacheEntry): void {
+		this.entries[filePath] = entry
 		this._debouncedSaveCache()
 	}
 
 	/**
-	 * Deletes the hash for a file path
-	 * @param filePath Path to the file
+	 * Deletes the cache entry for a file path.
 	 */
 	deleteHash(filePath: string): void {
-		delete this.fileHashes[filePath]
+		delete this.entries[filePath]
 		this._debouncedSaveCache()
+	}
+
+	/**
+	 * Returns all cached file paths (for deleted-file detection).
+	 */
+	getAllPaths(): string[] {
+		return Object.keys(this.entries)
 	}
 
 	/**
@@ -115,13 +133,5 @@ export class CacheManager implements ICacheManager {
 	 */
 	async flush(): Promise<void> {
 		await this._performSave()
-	}
-
-	/**
-	 * Gets a copy of all file hashes
-	 * @returns A copy of the file hashes record
-	 */
-	getAllHashes(): Record<string, string> {
-		return { ...this.fileHashes }
 	}
 }

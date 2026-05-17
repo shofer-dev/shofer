@@ -95,3 +95,29 @@ export const codebaseIndexProviderSchema = z.object({
 })
 
 export type CodebaseIndexProvider = z.infer<typeof codebaseIndexProviderSchema>
+
+/**
+ * Codebase Index Cache (Phase 1: versioned mtime+size cache)
+ *
+ * Per the Versioned Snapshot Rule, the on-disk cache is wrapped in a
+ * versioned container. On version mismatch or parse failure the cache
+ * is discarded and a fresh full scan is triggered.
+ *
+ * CacheEntry stores the file hash, mtime (ms), and size (bytes) so the
+ * scanner can skip files whose mtime+size match without reading or
+ * hashing the contents.
+ */
+export const codebaseIndexCacheEntrySchema = z.object({
+	hash: z.string(),
+	mtimeMs: z.number(),
+	size: z.number(),
+})
+
+export type CodebaseIndexCacheEntry = z.infer<typeof codebaseIndexCacheEntrySchema>
+
+export const codebaseIndexCacheSchema = z.object({
+	version: z.literal(2),
+	entries: z.record(z.string(), codebaseIndexCacheEntrySchema),
+})
+
+export type CodebaseIndexCache = z.infer<typeof codebaseIndexCacheSchema>

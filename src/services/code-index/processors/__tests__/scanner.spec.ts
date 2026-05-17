@@ -93,12 +93,12 @@ describe("DirectoryScanner", () => {
 			parseFile: vi.fn().mockResolvedValue([]),
 		}
 		mockCacheManager = {
-			getHash: vi.fn().mockReturnValue(undefined),
-			getAllHashes: vi.fn().mockReturnValue({}),
-			updateHash: vi.fn().mockResolvedValue(undefined),
 			deleteHash: vi.fn().mockResolvedValue(undefined),
 			initialize: vi.fn().mockResolvedValue(undefined),
 			clearCacheFile: vi.fn().mockResolvedValue(undefined),
+			getEntry: vi.fn().mockReturnValue(undefined),
+			updateEntry: vi.fn(),
+			getAllPaths: vi.fn().mockReturnValue([]),
 		}
 		mockIgnoreInstance = {
 			ignores: vi.fn().mockReturnValue(false),
@@ -219,7 +219,7 @@ describe("DirectoryScanner", () => {
 		})
 
 		it("should delete points for removed files", async () => {
-			;(mockCacheManager.getAllHashes as any).mockReturnValue({ "old/file.js": "old-hash" })
+			;(mockCacheManager.getAllPaths as any).mockReturnValue(["old/file.js"])
 
 			await scanner.scanDirectory("/test")
 			expect(mockVectorStore.deletePointsByFilePath).toHaveBeenCalledWith("old/file.js")
@@ -446,7 +446,7 @@ describe("DirectoryScanner", () => {
 			vi.mocked(listFiles).mockResolvedValue([[], false])
 
 			// Set up cached files that would normally be detected as deleted
-			;(mockCacheManager.getAllHashes as any).mockReturnValue({ "old/file.js": "old-hash" })
+			;(mockCacheManager.getAllPaths as any).mockReturnValue(["old/file.js"])
 
 			// Create an already-aborted signal
 			const controller = new AbortController()
@@ -456,6 +456,83 @@ describe("DirectoryScanner", () => {
 
 			// Deleted file cleanup should not have run
 			expect(mockVectorStore.deletePointsByFilePath).not.toHaveBeenCalled()
+		})
+
+		// ── Phase 1: mtime+size fast-path tests ──
+
+		it("should skip file with matching mtime+size without calling readFile", async () => {
+			const { listFiles } = await import("../../../glob/list-files")
+			vi.mocked(listFiles).mockResolvedValue([["test/file1.js"], false])
+
+			// Return a stat with specific mtimeMs/size
+			const statWithTime = { ...mockStats, mtimeMs: 999999, size: 4096 }
+			vi.mocked(stat).mockResolvedValue(statWithTime)
+
+			// getEntry returns a matching cache entry (same mtime+size)
+			;(mockCacheManager.getEntry as any).mockReturnValue({
+				hash: "old-hash",
+				mtimeMs: 999999,
+				size: 4096,
+			})
+
+			// Reset readFile call count before the test
+			const vscodeMock = await import("vscode")
+			;(vscodeMock.workspace.fs.readFile as any).mockClear()
+
+			const result = await scanner.scanDirectory("/test")
+
+			// File should be skipped (counted as skipped)
+			expect(result.stats.skipped).toBe(1)
+
+			// readFile should NOT have been called — this is the key assertion
+			expect(vscodeMock.workspace.fs.readFile).not.toHaveBeenCalled()
+
+			// parseFile should NOT have been called
+			expect(mockCodeParser.parseFile).not.toHaveBeenCalled()
+		})
+
+		it("should re-hash when mtime changed but content matches, update cache entry, and not re-embed", async () => {
+			const { listFiles } = await import("../../../glob/list-files")
+			vi.mocked(listFiles).mockResolvedValue([["test/file1.js"], false])
+
+			// mtimeMs changed (from 999999 to 1000000) but size unchanged
+			const newStats = { ...mockStats, mtimeMs: 1000000, size: 4096 }
+			vi.mocked(stat).mockResolvedValue(newStats)
+
+			// Return mock file content that hashes to a specific value
+			const fileContent = "function foo() {}"
+			const { createHash } = await import("crypto")
+			const contentHash = createHash("sha256").update(fileContent).digest("hex")
+
+			// Override readFile to return the mock content
+			const vscodeMock = await import("vscode")
+			;(vscodeMock.workspace.fs.readFile as any).mockResolvedValue(Buffer.from(fileContent))
+
+			// getEntry returns old entry: different mtimeMs but same hash as current content
+			;(mockCacheManager.getEntry as any).mockReturnValue({
+				hash: contentHash, // hash matches despite mtime change
+				mtimeMs: 999999,
+				size: 4096,
+			})
+
+			const result = await scanner.scanDirectory("/test")
+
+			// Should be skipped
+			expect(result.stats.skipped).toBe(1)
+			expect(result.stats.processed).toBe(0)
+
+			// cacheManager.updateEntry should have been called with new mtimeMs
+			expect(mockCacheManager.updateEntry).toHaveBeenCalledWith("test/file1.js", {
+				hash: contentHash,
+				mtimeMs: 1000000,
+				size: 4096,
+			})
+
+			// parseFile should NOT have been called (no re-embedding)
+			expect(mockCodeParser.parseFile).not.toHaveBeenCalled()
+
+			// Embedder should NOT have been called
+			expect(mockEmbedder.createEmbeddings).not.toHaveBeenCalled()
 		})
 	})
 })

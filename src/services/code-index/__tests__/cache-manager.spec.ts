@@ -38,6 +38,19 @@ vitest.mock("@shofer/telemetry", () => ({
 	},
 }))
 
+// Build a valid v2 cache payload for tests
+function makeV2Cache(entries: Record<string, { hash: string; mtimeMs?: number; size?: number }>) {
+	const result: Record<string, { hash: string; mtimeMs: number; size: number }> = {}
+	for (const [path, entry] of Object.entries(entries)) {
+		result[path] = {
+			hash: entry.hash,
+			mtimeMs: entry.mtimeMs ?? 1234567890000,
+			size: entry.size ?? 1024,
+		}
+	}
+	return { version: 2, entries: result }
+}
+
 describe("CacheManager", () => {
 	let mockContext: vscode.ExtensionContext
 	let mockWorkspacePath: string
@@ -78,15 +91,48 @@ describe("CacheManager", () => {
 	})
 
 	describe("initialize", () => {
-		it("should load existing cache file successfully", async () => {
-			const mockCache = { "file1.ts": "hash1", "file2.ts": "hash2" }
-			const mockBuffer = Buffer.from(JSON.stringify(mockCache))
+		it("should load existing v2 cache file successfully", async () => {
+			const mockEntries = {
+				"file1.ts": { hash: "hash1", mtimeMs: 100, size: 200 },
+				"file2.ts": { hash: "hash2", mtimeMs: 300, size: 400 },
+			}
+			const mockPayload = makeV2Cache(mockEntries)
+			const mockBuffer = Buffer.from(JSON.stringify(mockPayload))
 			;(vscode.workspace.fs.readFile as Mock).mockResolvedValue(mockBuffer)
 
 			await cacheManager.initialize()
 
 			expect(vscode.workspace.fs.readFile).toHaveBeenCalledWith(mockCachePath)
-			expect(cacheManager.getAllHashes()).toEqual(mockCache)
+
+			// getEntry returns full entry
+			expect(cacheManager.getEntry("file1.ts")).toEqual(mockEntries["file1.ts"])
+			expect(cacheManager.getEntry("file2.ts")).toEqual(mockEntries["file2.ts"])
+
+			// getAllPaths returns keys
+			expect(cacheManager.getAllPaths()).toEqual(["file1.ts", "file2.ts"])
+		})
+
+		it("should discard cache on version mismatch (old v1 format)", async () => {
+			const oldCache = { "file1.ts": "hash1", "file2.ts": "hash2" }
+			const mockBuffer = Buffer.from(JSON.stringify(oldCache))
+			;(vscode.workspace.fs.readFile as Mock).mockResolvedValue(mockBuffer)
+
+			await cacheManager.initialize()
+
+			// Schema mismatch → entries should be empty
+			expect(cacheManager.getEntry("file1.ts")).toBeUndefined()
+			expect(cacheManager.getAllPaths()).toEqual([])
+		})
+
+		it("should discard cache on parse failure (corrupted JSON)", async () => {
+			const mockBuffer = Buffer.from("{ not valid json")
+			;(vscode.workspace.fs.readFile as Mock).mockResolvedValue(mockBuffer)
+
+			// Should not throw
+			await cacheManager.initialize()
+
+			expect(cacheManager.getEntry("file1.ts")).toBeUndefined()
+			expect(cacheManager.getAllPaths()).toEqual([])
 		})
 
 		it("should handle missing cache file by creating empty cache", async () => {
@@ -94,66 +140,70 @@ describe("CacheManager", () => {
 
 			await cacheManager.initialize()
 
-			expect(cacheManager.getAllHashes()).toEqual({})
+			expect(cacheManager.getEntry("file1.ts")).toBeUndefined()
+			expect(cacheManager.getAllPaths()).toEqual([])
 		})
 	})
 
-	describe("hash management", () => {
-		it("should update hash and trigger save", () => {
+	describe("entry management (v2)", () => {
+		it("should update entry and trigger save with proper version wrapper", () => {
 			const filePath = "test.ts"
-			const hash = "testhash"
+			const entry = { hash: "testhash", mtimeMs: 1234567890000, size: 2048 }
 
-			cacheManager.updateHash(filePath, hash)
+			cacheManager.updateEntry(filePath, entry)
 
-			expect(cacheManager.getHash(filePath)).toBe(hash)
+			expect(cacheManager.getEntry(filePath)).toEqual(entry)
+			expect(cacheManager.getAllPaths()).toEqual([filePath])
+
+			// Verify the saved data has version 2 wrapper
 			expect(safeWriteJson).toHaveBeenCalled()
+			const savedData = (safeWriteJson as Mock).mock.calls[0][1]
+			expect(savedData.version).toBe(2)
+			expect(savedData.entries[filePath]).toEqual(entry)
 		})
 
-		it("should delete hash and trigger save", () => {
+		it("should delete entry and trigger save", () => {
 			const filePath = "test.ts"
-			const hash = "testhash"
+			const entry = { hash: "testhash", mtimeMs: 1234567890000, size: 2048 }
 
-			cacheManager.updateHash(filePath, hash)
+			cacheManager.updateEntry(filePath, entry)
 			cacheManager.deleteHash(filePath)
 
-			expect(cacheManager.getHash(filePath)).toBeUndefined()
+			expect(cacheManager.getEntry(filePath)).toBeUndefined()
+			expect(cacheManager.getAllPaths()).toEqual([])
 			expect(safeWriteJson).toHaveBeenCalled()
 		})
 
-		it("should return shallow copy of hashes", () => {
-			const filePath = "test.ts"
-			const hash = "testhash"
+		it("should return undefined for unknown file in getEntry", () => {
+			expect(cacheManager.getEntry("nonexistent.ts")).toBeUndefined()
+		})
 
-			cacheManager.updateHash(filePath, hash)
-			const hashes = cacheManager.getAllHashes()
+		it("getAllPaths should return all cached paths", () => {
+			cacheManager.updateEntry("a.ts", { hash: "h1", mtimeMs: 100, size: 200 })
+			cacheManager.updateEntry("b.ts", { hash: "h2", mtimeMs: 300, size: 400 })
 
-			// Modify the returned object
-			hashes[filePath] = "modified"
-
-			// Original should remain unchanged
-			expect(cacheManager.getHash(filePath)).toBe(hash)
+			expect(cacheManager.getAllPaths()).toEqual(["a.ts", "b.ts"])
 		})
 	})
 
 	describe("saving", () => {
-		it("should save cache to disk with correct data", async () => {
-			const filePath = "test.ts"
-			const hash = "testhash"
-
-			cacheManager.updateHash(filePath, hash)
+		it("should save cache to disk with correct v2 data", async () => {
+			cacheManager.updateEntry("test.ts", { hash: "testhash", mtimeMs: 100, size: 200 })
 
 			expect(safeWriteJson).toHaveBeenCalledWith(mockCachePath.fsPath, expect.any(Object))
 
-			// Verify the saved data
 			const savedData = (safeWriteJson as Mock).mock.calls[0][1]
-			expect(savedData).toEqual({ [filePath]: hash })
+			expect(savedData).toEqual({
+				version: 2,
+				entries: { "test.ts": { hash: "testhash", mtimeMs: 100, size: 200 } },
+			})
 		})
 
 		it("should handle save errors gracefully", async () => {
 			const consoleErrorSpy = vitest.spyOn(console, "error").mockImplementation(() => {})
 			;(safeWriteJson as Mock).mockRejectedValue(new Error("Save failed"))
 
-			cacheManager.updateHash("test.ts", "hash")
+			cacheManager.updateEntry("test.ts", { hash: "hash", mtimeMs: 100, size: 200 })
 
 			// Wait for any pending promises
 			await new Promise((resolve) => setTimeout(resolve, 0))
@@ -166,7 +216,7 @@ describe("CacheManager", () => {
 
 	describe("clearCacheFile", () => {
 		it("should clear cache file and reset state", async () => {
-			cacheManager.updateHash("test.ts", "hash")
+			cacheManager.updateEntry("test.ts", { hash: "hash", mtimeMs: 100, size: 200 })
 
 			// Reset the mock to ensure safeWriteJson succeeds for clearCacheFile
 			;(safeWriteJson as Mock).mockClear()
@@ -174,8 +224,9 @@ describe("CacheManager", () => {
 
 			await cacheManager.clearCacheFile()
 
-			expect(safeWriteJson).toHaveBeenCalledWith(mockCachePath.fsPath, {})
-			expect(cacheManager.getAllHashes()).toEqual({})
+			expect(safeWriteJson).toHaveBeenCalledWith(mockCachePath.fsPath, { version: 2, entries: {} })
+			expect(cacheManager.getEntry("test.ts")).toBeUndefined()
+			expect(cacheManager.getAllPaths()).toEqual([])
 		})
 
 		it("should handle clear errors gracefully", async () => {

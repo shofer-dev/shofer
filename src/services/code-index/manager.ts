@@ -27,6 +27,7 @@ export class CodeIndexManager {
 	private _orchestrator: CodeIndexOrchestrator | undefined
 	private _searchService: CodeIndexSearchService | undefined
 	private _cacheManager: CacheManager | undefined
+	private _shoferIgnoreController: ShoferIgnoreController | undefined
 
 	// Flag to prevent race conditions during error recovery
 	private _isRecoveringFromError = false
@@ -390,16 +391,18 @@ export class CodeIndexManager {
 			})
 		}
 
-		// Create ShoferIgnoreController instance
-		const shoferIgnoreController = new ShoferIgnoreController(workspacePath)
-		await shoferIgnoreController.initialize()
+		// Create ShoferIgnoreController instance (cached — created only once per workspace)
+		if (!this._shoferIgnoreController) {
+			this._shoferIgnoreController = new ShoferIgnoreController(workspacePath)
+			await this._shoferIgnoreController.initialize()
+		}
 
 		// (Re)Create shared service instances
 		const { embedder, vectorStore, scanner, fileWatcher } = this._serviceFactory.createServices(
 			this.context,
 			this._cacheManager!,
 			ignoreInstance,
-			shoferIgnoreController,
+			this._shoferIgnoreController,
 		)
 
 		// Validate embedder configuration before proceeding
