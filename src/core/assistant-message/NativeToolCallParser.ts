@@ -516,6 +516,7 @@ export class NativeToolCallParser {
 					nativeArgs = {
 						query: partialArgs.query,
 						path: partialArgs.path,
+						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
 					}
 				}
 				break
@@ -1075,6 +1076,7 @@ export class NativeToolCallParser {
 						nativeArgs = {
 							query: args.query,
 							path: args.path,
+							maxResults: this.coerceOptionalNumber(args.maxResults),
 						} as NativeArgsFor<TName>
 					}
 					break

@@ -111,7 +111,7 @@ export const toolParamNames = [
 	"pattern",
 	"replacement",
 	"global",
-	"maxResults", // git_search parameter
+	"maxResults", // result cap for grep_search / git_search / rag_search (see helpers/searchCap.ts)
 	// attempt_completion rating + feedback
 	"rating",
 	"feedback",
@@ -153,7 +153,7 @@ export type NativeToolArgs = {
 		question: string
 		follow_up: Array<{ text: string; mode?: string }>
 	}
-	rag_search: { query: string; path?: string }
+	rag_search: { query: string; path?: string; maxResults?: number | null }
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skills: { skill: string; args?: string }
@@ -278,7 +278,7 @@ export interface WriteToFileToolUse extends ToolUse<"write_to_file"> {
 
 export interface RagSearchToolUse extends ToolUse<"rag_search"> {
 	name: "rag_search"
-	params: Partial<Pick<Record<ToolParamName, string>, "query" | "path">>
+	params: Partial<Pick<Record<ToolParamName, string>, "query" | "path" | "maxResults">>
 }
 
 export interface GrepSearchToolUse extends ToolUse<"grep_search"> {

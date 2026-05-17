@@ -277,9 +277,12 @@ export class GitIndexManager {
 	 * Searches the git commit history index for relevant entries.
 	 *
 	 * @param query - Natural language search query
+	 * @param maxResults - Optional override for the result cap. When omitted,
+	 *   falls back to the user-configurable `codebaseIndexGitSearchMaxResults`
+	 *   setting (or DEFAULT_GIT_SEARCH_MAX_RESULTS).
 	 * @returns Array of search results sorted by descending score
 	 */
-	public async searchIndex(query: string): Promise<GitSearchResult[]> {
+	public async searchIndex(query: string, maxResults?: number): Promise<GitSearchResult[]> {
 		if (!this._searchService) {
 			throw new Error("Git search service is not available. Call initialize() first.")
 		}
@@ -293,9 +296,15 @@ export class GitIndexManager {
 		}
 
 		const minScore = this._readGitConfig("codebaseIndexGitSearchMinScore", DEFAULT_GIT_SEARCH_MIN_SCORE)
-		const maxResults = this._readGitConfig("codebaseIndexGitSearchMaxResults", DEFAULT_GIT_SEARCH_MAX_RESULTS)
+		// Tool-supplied `maxResults` always wins over the setting-derived default —
+		// the tool layer is responsible for clamping to its public ceiling before
+		// calling in here, so we trust the value as-is.
+		const effectiveMax =
+			maxResults !== undefined
+				? maxResults
+				: this._readGitConfig("codebaseIndexGitSearchMaxResults", DEFAULT_GIT_SEARCH_MAX_RESULTS)
 
-		return this._searchService.search(query, minScore, maxResults)
+		return this._searchService.search(query, minScore, effectiveMax)
 	}
 
 	/**
