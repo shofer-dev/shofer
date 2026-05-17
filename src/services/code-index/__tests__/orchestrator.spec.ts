@@ -6,6 +6,9 @@ vi.mock("vscode", () => {
 	const path = require("path")
 	const testWorkspacePath = path.join(path.sep, "test", "workspace")
 	return {
+		Uri: {
+			file: (p: string) => ({ fsPath: p }),
+		},
 		window: {
 			activeTextEditor: null,
 		},
@@ -332,5 +335,168 @@ describe("CodeIndexOrchestrator - stopIndexing", () => {
 		expect(cacheManager.clearCacheFile).not.toHaveBeenCalled()
 		// Collection should NOT be cleared on user-initiated stop
 		expect(vectorStore.clearCollection).not.toHaveBeenCalled()
+	})
+})
+
+// ── Phase 2: Git-aware narrowing ──────────────────────────────────────
+
+describe("CodeIndexOrchestrator — Phase 2 git-aware narrowing", () => {
+	const workspacePath = "/test/workspace"
+
+	let configManager: any
+	let stateManager: any
+	let cacheManager: any
+	let vectorStore: any
+	let scanner: any
+	let fileWatcher: any
+	let gitSource: any
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+
+		configManager = { isFeatureConfigured: true }
+		let currentState = "Standby"
+		stateManager = {
+			get state() {
+				return currentState
+			},
+			setSystemState: vi.fn().mockImplementation((s: string) => {
+				currentState = s
+			}),
+			reportFileQueueProgress: vi.fn(),
+			reportBlockIndexingProgress: vi.fn(),
+		}
+		cacheManager = {
+			clearCacheFile: vi.fn().mockResolvedValue(undefined),
+			flush: vi.fn().mockResolvedValue(undefined),
+		}
+		vectorStore = {
+			initialize: vi.fn().mockResolvedValue(false), // collection already exists
+			hasIndexedData: vi.fn().mockResolvedValue(true),
+			markIndexingIncomplete: vi.fn().mockResolvedValue(undefined),
+			markIndexingComplete: vi.fn().mockResolvedValue(undefined),
+			getMetadata: vi.fn().mockResolvedValue(undefined),
+			clearCollection: vi.fn().mockResolvedValue(undefined),
+		}
+		scanner = {
+			scanDirectory: vi.fn().mockResolvedValue({
+				stats: { processed: 0, skipped: 0 },
+				totalBlockCount: 0,
+			}),
+			scanSpecificFiles: vi.fn().mockResolvedValue({
+				stats: { processed: 0, skipped: 0 },
+				totalBlockCount: 0,
+			}),
+			deleteSpecificFiles: vi.fn().mockResolvedValue(undefined),
+		}
+		fileWatcher = {
+			initialize: vi.fn().mockResolvedValue(undefined),
+			onDidStartBatchProcessing: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+			onBatchProgressUpdate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+			onDidFinishBatchProcessing: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+			dispose: vi.fn(),
+		}
+		gitSource = {
+			getRepository: vi.fn().mockReturnValue(undefined),
+			getHeadCommit: vi.fn().mockReturnValue(undefined),
+			diffSince: vi.fn(),
+			getDirtyChanges: vi.fn().mockReturnValue({ changed: [], deleted: [] }),
+			getSubmoduleCommits: vi.fn().mockReturnValue({}),
+			diffSubmoduleSince: vi.fn(),
+		}
+	})
+
+	function createOrchestrator() {
+		return new CodeIndexOrchestrator(
+			configManager,
+			stateManager,
+			workspacePath,
+			cacheManager,
+			vectorStore,
+			scanner,
+			fileWatcher,
+			gitSource,
+		)
+	}
+
+	it("should call scanSpecificFiles and deleteSpecificFiles when git diff returns changes", async () => {
+		const repoStub = { rootUri: { fsPath: workspacePath }, state: {} }
+		gitSource.getRepository.mockReturnValue(repoStub)
+		gitSource.getHeadCommit.mockReturnValue("def5678")
+		vectorStore.getMetadata.mockResolvedValue({
+			indexing_complete: true,
+			lastIndexedCommit: "abc1234",
+			lastIndexedAt: Date.now() - 60000,
+		})
+		gitSource.diffSince.mockResolvedValue({
+			changed: ["/test/workspace/src/a.ts"],
+			deleted: ["/test/workspace/src/b.ts"],
+		})
+		gitSource.getDirtyChanges.mockReturnValue({
+			changed: ["/test/workspace/src/c.ts"],
+			deleted: [],
+		})
+
+		const orchestrator = createOrchestrator()
+		await orchestrator.startIndexing()
+
+		expect(scanner.scanSpecificFiles).toHaveBeenCalledWith(
+			workspacePath,
+			expect.arrayContaining(["/test/workspace/src/a.ts", "/test/workspace/src/c.ts"]),
+			expect.any(Function),
+			expect.any(Function),
+			expect.any(Function),
+			expect.any(AbortSignal),
+		)
+		expect(scanner.deleteSpecificFiles).toHaveBeenCalledWith(expect.arrayContaining(["/test/workspace/src/b.ts"]))
+		// scanDirectory should NOT have been called
+		expect(scanner.scanDirectory).not.toHaveBeenCalled()
+		// markIndexingComplete should have commit info
+		expect(vectorStore.markIndexingComplete).toHaveBeenCalledWith("def5678", {})
+	})
+
+	it("should fall through to full incremental scan when lastIndexedCommit is missing", async () => {
+		const repoStub = { rootUri: { fsPath: workspacePath }, state: {} }
+		gitSource.getRepository.mockReturnValue(repoStub)
+		vectorStore.getMetadata.mockResolvedValue({
+			indexing_complete: true,
+			// no lastIndexedCommit
+		})
+
+		const orchestrator = createOrchestrator()
+		await orchestrator.startIndexing()
+
+		// Layer A fallback: scanDirectory should have been called
+		expect(scanner.scanDirectory).toHaveBeenCalled()
+		expect(scanner.scanSpecificFiles).not.toHaveBeenCalled()
+	})
+
+	it("should fall through to full incremental scan when diffSince throws", async () => {
+		const repoStub = { rootUri: { fsPath: workspacePath }, state: {} }
+		gitSource.getRepository.mockReturnValue(repoStub)
+		gitSource.getHeadCommit.mockReturnValue("def5678")
+		vectorStore.getMetadata.mockResolvedValue({
+			indexing_complete: true,
+			lastIndexedCommit: "abc1234",
+		})
+		gitSource.diffSince.mockRejectedValue(new Error("bad object"))
+
+		const orchestrator = createOrchestrator()
+		await orchestrator.startIndexing()
+
+		// Fallback: scanDirectory should have been called
+		expect(scanner.scanDirectory).toHaveBeenCalled()
+		expect(scanner.scanSpecificFiles).not.toHaveBeenCalled()
+	})
+
+	it("should fall through when repo is undefined (non-git workspace)", async () => {
+		gitSource.getRepository.mockReturnValue(undefined)
+
+		const orchestrator = createOrchestrator()
+		await orchestrator.startIndexing()
+
+		// Layer A fallback
+		expect(scanner.scanDirectory).toHaveBeenCalled()
+		expect(scanner.scanSpecificFiles).not.toHaveBeenCalled()
 	})
 })

@@ -7,6 +7,22 @@ export type PointStruct = {
 	payload: Record<string, any>
 }
 
+/**
+ * Metadata stored alongside indexed vectors (a special point with type: "metadata").
+ * Used by the git-aware narrowing layer (Phase 2) to diff only changed files.
+ */
+export interface IndexingMetadata {
+	indexing_complete: boolean
+	started_at?: number
+	completed_at?: number
+	/** HEAD commit sha at the last successful Indexed transition. */
+	lastIndexedCommit?: string
+	/** Epoch ms of the last successful Indexed transition. */
+	lastIndexedAt?: number
+	/** Submodule path → HEAD commit sha at the last Indexed transition. */
+	submoduleCommits?: Record<string, string>
+}
+
 export interface IVectorStore {
 	/**
 	 * Initializes the vector store
@@ -70,16 +86,21 @@ export interface IVectorStore {
 	hasIndexedData(): Promise<boolean>
 
 	/**
-	 * Marks the indexing process as complete by storing metadata
-	 * Should be called after a successful full workspace scan or incremental scan
+	 * Marks the indexing process as complete by storing metadata.
+	 * @param commit Optional current HEAD commit sha for git-aware narrowing.
+	 * @param submoduleCommits Optional submodule path → HEAD commit map.
 	 */
-	markIndexingComplete(): Promise<void>
+	markIndexingComplete(commit?: string, submoduleCommits?: Record<string, string>): Promise<void>
 
 	/**
-	 * Marks the indexing process as incomplete by storing metadata
-	 * Should be called at the start of indexing to indicate work in progress
+	 * Marks the indexing process as incomplete by storing metadata.
 	 */
 	markIndexingIncomplete(): Promise<void>
+
+	/**
+	 * Returns the indexing metadata point, or undefined if none exists.
+	 */
+	getMetadata(): Promise<IndexingMetadata | undefined>
 }
 
 export interface VectorStoreSearchResult {

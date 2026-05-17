@@ -2,7 +2,7 @@ import { QdrantClient, Schemas } from "@qdrant/js-client-rest"
 import { createHash } from "crypto"
 import * as path from "path"
 import { v5 as uuidv5 } from "uuid"
-import { IVectorStore } from "../interfaces/vector-store"
+import { IVectorStore, type IndexingMetadata } from "../interfaces/vector-store"
 import { Payload, VectorStoreSearchResult } from "../interfaces"
 import { DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_SEARCH_MIN_SCORE, QDRANT_CODE_BLOCK_NAMESPACE } from "../constants"
 import { t } from "../../../i18n"
@@ -661,25 +661,33 @@ export class QdrantVectorStore implements IVectorStore {
 	}
 
 	/**
-	 * Marks the indexing process as complete by storing metadata
-	 * Should be called after a successful full workspace scan or incremental scan
+	 * Marks the indexing process as complete by storing metadata.
+	 * @param commit Optional current HEAD commit sha for git-aware narrowing.
+	 * @param submoduleCommits Optional submodule path → HEAD commit map.
 	 */
-	async markIndexingComplete(): Promise<void> {
+	async markIndexingComplete(commit?: string, submoduleCommits?: Record<string, string>): Promise<void> {
 		try {
-			// Create a metadata point with a deterministic UUID to mark indexing as complete
-			// Use uuidv5 to generate a consistent UUID from a constant string
 			const metadataId = uuidv5("__indexing_metadata__", QDRANT_CODE_BLOCK_NAMESPACE)
+
+			const payload: Record<string, any> = {
+				type: "metadata",
+				indexing_complete: true,
+				completed_at: Date.now(),
+			}
+			if (commit) {
+				payload.lastIndexedCommit = commit
+				payload.lastIndexedAt = Date.now()
+			}
+			if (submoduleCommits && Object.keys(submoduleCommits).length > 0) {
+				payload.submoduleCommits = submoduleCommits
+			}
 
 			await this.client.upsert(this.collectionName, {
 				points: [
 					{
 						id: metadataId,
 						vector: new Array(this.vectorSize).fill(0),
-						payload: {
-							type: "metadata",
-							indexing_complete: true,
-							completed_at: Date.now(),
-						},
+						payload,
 					},
 				],
 				wait: true,
@@ -719,6 +727,35 @@ export class QdrantVectorStore implements IVectorStore {
 		} catch (error) {
 			console.error("[QdrantVectorStore] Failed to mark indexing as incomplete:", error)
 			throw error
+		}
+	}
+
+	/**
+	 * Returns the indexing metadata point, or undefined if none exists.
+	 */
+	async getMetadata(): Promise<IndexingMetadata | undefined> {
+		try {
+			const metadataId = uuidv5("__indexing_metadata__", QDRANT_CODE_BLOCK_NAMESPACE)
+			const metadataPoints = await this.client.retrieve(this.collectionName, {
+				ids: [metadataId],
+				with_payload: true,
+			})
+
+			if (metadataPoints.length === 0) return undefined
+
+			const payload = metadataPoints[0].payload as Record<string, any> | undefined
+			if (!payload) return undefined
+
+			return {
+				indexing_complete: payload.indexing_complete === true,
+				started_at: payload.started_at,
+				completed_at: payload.completed_at,
+				lastIndexedCommit: payload.lastIndexedCommit,
+				lastIndexedAt: payload.lastIndexedAt,
+				submoduleCommits: payload.submoduleCommits,
+			}
+		} catch {
+			return undefined
 		}
 	}
 }
