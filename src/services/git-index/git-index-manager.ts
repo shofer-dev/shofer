@@ -361,13 +361,22 @@ export class GitIndexManager {
 			throw new Error("Qdrant URL is not configured.")
 		}
 
-		// Create a git-specific Qdrant vector store (git- prefix instead of ws-)
+		// Create a git-specific Qdrant vector store (git- prefix instead of ws-).
+		// We MUST pass a git-specific payload schema; the default code-index
+		// schema would (a) restrict `with_payload.include` to filePath/codeChunk/…
+		// (stripping every commit field on the way back from Qdrant) and
+		// (b) reject the resulting empty payload in `isPayloadValid`, leaving the
+		// search service with zero results despite a fully populated collection.
 		const vectorStore = new QdrantVectorStore(
 			this.workspacePath,
 			config.qdrantUrl,
 			vectorSize,
 			config.qdrantApiKey,
 			GIT_COLLECTION_PREFIX,
+			{
+				required: ["commit_hash", "subject"],
+				include: ["commit_hash", "short_hash", "author", "author_date", "subject", "body"],
+			},
 		)
 
 		this._embedder = embedder
