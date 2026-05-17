@@ -8,6 +8,32 @@ import { DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_SEARCH_MIN_SCORE, QDRANT_CODE_BLOCK
 import { t } from "../../../i18n"
 
 /**
+ * Describes the payload schema for a Qdrant collection. Used by `search()` both
+ * to scope the fields returned by Qdrant (`with_payload.include`) and to gate
+ * which points are considered valid at the application layer (`isPayloadValid`).
+ *
+ * Two collection types currently exist:
+ *  - code-index collections (default) store `{ filePath, codeChunk, startLine, endLine, pathSegments }`.
+ *  - git-index collections store `{ commit_hash, short_hash, author, author_date, subject, body }`.
+ *
+ * Without per-collection schemas the search path silently drops every git
+ * commit (the hard-coded code-index include list strips commit fields, and
+ * `isPayloadValid` rejects the resulting empty payload), which is exactly the
+ * bug that produced "No relevant commits found" on a populated git index.
+ */
+export interface QdrantPayloadSchema {
+	/** Keys that MUST be present on a returned point for it to be considered valid. */
+	required: string[]
+	/** Keys to request via `with_payload.include` when querying. */
+	include: string[]
+}
+
+const DEFAULT_CODE_INDEX_PAYLOAD_SCHEMA: QdrantPayloadSchema = {
+	required: ["filePath", "codeChunk", "startLine", "endLine"],
+	include: ["filePath", "codeChunk", "startLine", "endLine", "pathSegments"],
+}
+
+/**
  * Qdrant implementation of the vector store interface
  */
 export class QdrantVectorStore implements IVectorStore {
@@ -18,6 +44,7 @@ export class QdrantVectorStore implements IVectorStore {
 	private readonly collectionName: string
 	private readonly qdrantUrl: string = "http://localhost:6333"
 	private readonly workspacePath: string
+	private readonly payloadSchema: QdrantPayloadSchema
 
 	/**
 	 * Creates a new Qdrant vector store
@@ -26,8 +53,19 @@ export class QdrantVectorStore implements IVectorStore {
 	 * @param vectorSize Embedding vector dimension
 	 * @param apiKey Optional Qdrant API key
 	 * @param collectionPrefix Optional collection name prefix (default: "ws-")
+	 * @param payloadSchema Optional payload schema describing which fields are
+	 *        required for validity and which fields to fetch on search. Defaults
+	 *        to the code-index schema; the git index passes its own schema so
+	 *        commit-message points are not stripped/dropped on the search path.
 	 */
-	constructor(workspacePath: string, url: string, vectorSize: number, apiKey?: string, collectionPrefix = "ws-") {
+	constructor(
+		workspacePath: string,
+		url: string,
+		vectorSize: number,
+		apiKey?: string,
+		collectionPrefix = "ws-",
+		payloadSchema: QdrantPayloadSchema = DEFAULT_CODE_INDEX_PAYLOAD_SCHEMA,
+	) {
 		// Parse the URL to determine the appropriate QdrantClient configuration
 		const parsedUrl = this.parseQdrantUrl(url)
 
@@ -84,6 +122,7 @@ export class QdrantVectorStore implements IVectorStore {
 		const hash = createHash("sha256").update(workspacePath).digest("hex")
 		this.vectorSize = vectorSize
 		this.collectionName = `${collectionPrefix}${hash.substring(0, 16)}`
+		this.payloadSchema = payloadSchema
 	}
 
 	/**
@@ -386,9 +425,7 @@ export class QdrantVectorStore implements IVectorStore {
 		if (!payload) {
 			return false
 		}
-		const validKeys = ["filePath", "codeChunk", "startLine", "endLine"]
-		const hasValidKeys = validKeys.every((key) => key in payload)
-		return hasValidKeys
+		return this.payloadSchema.required.every((key) => key in payload)
 	}
 
 	/**
@@ -456,7 +493,7 @@ export class QdrantVectorStore implements IVectorStore {
 					exact: false,
 				},
 				with_payload: {
-					include: ["filePath", "codeChunk", "startLine", "endLine", "pathSegments"],
+					include: this.payloadSchema.include,
 				},
 			}
 
