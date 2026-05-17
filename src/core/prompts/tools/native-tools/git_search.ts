@@ -29,7 +29,8 @@ export default {
 				},
 				maxResults: {
 					type: ["number", "null"],
-					description: "Maximum number of results (default 20, max 50).",
+					description:
+						"Maximum number of results (default 20, silently clamped to 50). Pass null to use the default.",
 				},
 			},
 			required: ["query", "maxResults"],

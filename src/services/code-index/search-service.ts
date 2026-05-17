@@ -21,18 +21,25 @@ export class CodeIndexSearchService {
 	/**
 	 * Searches the code index for relevant content.
 	 * @param query The search query
-	 * @param limit Maximum number of results to return
 	 * @param directoryPrefix Optional directory path to filter results by
+	 * @param maxResults Optional override for the result cap. When omitted,
+	 *   falls back to the user-configurable `currentSearchMaxResults` setting.
+	 *   Tool-supplied values are trusted as-is — the tool layer is responsible
+	 *   for clamping to its public ceiling.
 	 * @returns Array of search results
 	 * @throws Error if the service is not properly configured or ready
 	 */
-	public async searchIndex(query: string, directoryPrefix?: string): Promise<VectorStoreSearchResult[]> {
+	public async searchIndex(
+		query: string,
+		directoryPrefix?: string,
+		maxResults?: number,
+	): Promise<VectorStoreSearchResult[]> {
 		if (!this.configManager.isFeatureEnabled || !this.configManager.isFeatureConfigured) {
 			throw new Error("Code index feature is disabled or not configured.")
 		}
 
 		const minScore = this.configManager.currentSearchMinScore
-		const maxResults = this.configManager.currentSearchMaxResults
+		const effectiveMax = maxResults !== undefined ? maxResults : this.configManager.currentSearchMaxResults
 
 		const currentState = this.stateManager.getCurrentStatus().systemStatus
 		if (currentState !== "Indexed" && currentState !== "Indexing") {
@@ -55,7 +62,7 @@ export class CodeIndexSearchService {
 			}
 
 			// Perform search
-			const results = await this.vectorStore.search(vector, normalizedPrefix, minScore, maxResults)
+			const results = await this.vectorStore.search(vector, normalizedPrefix, minScore, effectiveMax)
 			return results
 		} catch (error) {
 			console.error("[CodeIndexSearchService] Error during search:", error)

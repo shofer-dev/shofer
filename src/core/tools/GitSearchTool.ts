@@ -6,6 +6,7 @@ import type { GitSearchResult } from "../../services/git-index/interfaces/git"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { GIT_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
 
 interface GitSearchParams {
 	query: string
@@ -23,7 +24,11 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 
 	async execute(params: GitSearchParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
-		const { query, maxResults } = params
+		const { query } = params
+		// Resolve through the shared cap (default 20, hard ceiling 50) so the
+		// behaviour matches grep_search / rag_search exactly. Invalid model-supplied
+		// values (NaN, 0, negative, absurdly large) collapse to the safe default.
+		const maxResults = resolveMaxResults(params.maxResults, GIT_SEARCH_CAP)
 
 		try {
 			const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
@@ -74,7 +79,10 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 			let searchResults: GitSearchResult[]
 
 			try {
-				searchResults = await manager.searchIndex(query)
+				// Over-fetch by 1 so we can reliably detect truncation: if Qdrant returns
+				// maxResults+1 hits we know at least one more existed and the LLM should
+				// see the "Showing first N of more results." hint.
+				searchResults = await manager.searchIndex(query, maxResults + 1)
 			} catch (searchError: any) {
 				if (
 					searchError.message?.includes("Not found") ||
@@ -95,9 +103,13 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 				return
 			}
 
+			const truncated = searchResults.length > maxResults
+			const cappedResults = truncated ? searchResults.slice(0, maxResults) : searchResults
+
 			const jsonResult = {
 				query,
-				results: searchResults.map((result) => ({
+				truncated,
+				results: cappedResults.map((result) => ({
 					commit_hash: result.payload.commit_hash,
 					short_hash: result.payload.short_hash,
 					author: result.payload.author,
@@ -111,7 +123,15 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 			const payload = { tool: "gitSearch", content: jsonResult }
 			await task.say("git_search_result", JSON.stringify(payload))
 
-			const output = `Query: ${query}
+			const header = formatTruncationHeader({
+				totalShown: jsonResult.results.length,
+				maxResults,
+				truncated,
+				noun: "commits",
+			})
+
+			const output = `${header}
+Query: ${query}
 Results:
 ${jsonResult.results
 	.map(

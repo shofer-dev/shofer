@@ -9,16 +9,19 @@ const CODEBASE_SEARCH_DESCRIPTION = `Find files most relevant to the search quer
 Parameters:
 - query: (required) The search query. Reuse the user's exact wording/question format unless there's a clear reason not to.
 - path: (optional) Limit search to specific subdirectory (relative to the current workspace directory). Leave empty for entire workspace.
+- maxResults: (optional) Maximum number of code snippets to return. Defaults to 10; silently capped at 50. **For semantic search, lowering the minimum-score threshold (a setting, not a tool parameter) is usually more useful than raising this cap** — if relevant results aren't appearing, refine the query rather than asking for more results.
 
 Example: Searching for user authentication code
-{ "query": "User login and password hashing", "path": "src/auth" }
+{ "query": "User login and password hashing", "path": "src/auth", "maxResults": null }
 
 Example: Searching entire workspace
-{ "query": "database connection pooling", "path": null }`
+{ "query": "database connection pooling", "path": null, "maxResults": null }`
 
 const QUERY_PARAMETER_DESCRIPTION = `Meaning-based search query describing the information you need`
 
 const PATH_PARAMETER_DESCRIPTION = `Optional subdirectory (relative to the workspace) to limit the search scope`
+
+const MAX_RESULTS_PARAMETER_DESCRIPTION = `Optional cap on returned snippets (default 10, silently clamped to 50). Pass null to use the default.`
 
 export default {
 	type: "function",
@@ -37,8 +40,12 @@ export default {
 					type: ["string", "null"],
 					description: PATH_PARAMETER_DESCRIPTION,
 				},
+				maxResults: {
+					type: ["number", "null"],
+					description: MAX_RESULTS_PARAMETER_DESCRIPTION,
+				},
 			},
-			required: ["query", "path"],
+			required: ["query", "path", "maxResults"],
 			additionalProperties: false,
 		},
 	},

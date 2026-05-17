@@ -9,10 +9,12 @@ import { VectorStoreSearchResult } from "../../services/code-index/interfaces"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { RAG_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
 
 interface RagSearchParams {
 	query: string
 	path?: string
+	maxResults?: number | null
 }
 
 export class RagSearchTool extends BaseTool<"rag_search"> {
@@ -21,6 +23,11 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 	async execute(params: RagSearchParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 		const { query, path: directoryPrefix } = params
+		// Resolve through the shared cap (default 10, hard ceiling 50). Note that
+		// for semantic search lowering `minScore` is often more useful than raising
+		// this cap — the user-configurable `currentSearchMinScore` setting controls
+		// that and is intentionally NOT exposed here.
+		const maxResults = resolveMaxResults(params.maxResults, RAG_SEARCH_CAP)
 
 		const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
 
@@ -70,18 +77,29 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 				throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
 			}
 
-			const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, directoryPrefix)
+			// Over-fetch by 1 so we can detect truncation reliably and surface the
+			// "Showing first N of more results." hint to the LLM.
+			const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(
+				query,
+				directoryPrefix,
+				maxResults + 1,
+			)
 
 			if (!searchResults || searchResults.length === 0) {
 				pushToolResult(`No relevant code snippets found for the query: "${query}"`)
 				return
 			}
 
+			const truncated = searchResults.length > maxResults
+			const cappedResults = truncated ? searchResults.slice(0, maxResults) : searchResults
+
 			const jsonResult = {
 				query,
+				truncated,
 				results: [],
 			} as {
 				query: string
+				truncated: boolean
 				results: Array<{
 					filePath: string
 					score: number
@@ -91,7 +109,7 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 				}>
 			}
 
-			searchResults.forEach((result) => {
+			cappedResults.forEach((result) => {
 				if (!result.payload) return
 				if (!("filePath" in result.payload)) return
 
@@ -109,7 +127,15 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 			const payload = { tool: "ragSearch", content: jsonResult }
 			await task.say("rag_search_result", JSON.stringify(payload))
 
-			const output = `Query: ${query}
+			const header = formatTruncationHeader({
+				totalShown: jsonResult.results.length,
+				maxResults,
+				truncated,
+				noun: "code snippets",
+			})
+
+			const output = `${header}
+Query: ${query}
 Results:
 
 ${jsonResult.results

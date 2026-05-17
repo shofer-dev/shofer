@@ -34,6 +34,7 @@ import type { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { GREP_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
 
 interface GrepSearchParams {
 	path: string
@@ -67,7 +68,6 @@ interface SearchHit {
 	matchLines: Set<number>
 }
 
-const DEFAULT_MAX_RESULTS = 100
 const DEFAULT_CONTEXT_BEFORE = 1
 const DEFAULT_CONTEXT_AFTER = 1
 const MAX_LINE_LENGTH = 500
@@ -289,7 +289,10 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 		const isRegex = params.isRegex ?? true
 		const caseSensitive = params.caseSensitive ?? false
 		const wholeWord = params.wholeWord ?? false
-		const maxResults = params.maxResults ?? DEFAULT_MAX_RESULTS
+		// Resolve through the shared cap so an absurd or invalid model-supplied value
+		// (NaN / 0 / negative / 10_000) is normalised to a safe integer within
+		// GREP_SEARCH_CAP. Keeps the policy identical to git_search and rag_search.
+		const maxResults = resolveMaxResults(params.maxResults, GREP_SEARCH_CAP)
 		const contextBefore = params.contextBefore ?? DEFAULT_CONTEXT_BEFORE
 		const contextAfter = params.contextAfter ?? DEFAULT_CONTEXT_AFTER
 
@@ -458,9 +461,8 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 		truncated: boolean,
 		beforeContext: number,
 	): string {
-		const header = truncated
-			? `Showing first ${maxResults} of more results.\n\n`
-			: `Found ${hits.reduce((sum, h) => sum + h.matchLines.size, 0)} results.\n\n`
+		const totalShown = hits.reduce((sum, h) => sum + h.matchLines.size, 0)
+		const header = formatTruncationHeader({ totalShown, maxResults, truncated }) + "\n\n"
 
 		const fileBlocks: string[] = []
 		for (const hit of hits) {
