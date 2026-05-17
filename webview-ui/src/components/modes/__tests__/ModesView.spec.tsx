@@ -1,7 +1,8 @@
 // npx vitest src/components/modes/__tests__/ModesView.spec.tsx
 
+import { createRef } from "react"
 import { render, screen, fireEvent, waitFor } from "@/utils/test-utils"
-import ModesView from "../ModesView"
+import ModesView, { type ModesViewRef } from "../ModesView"
 import { ExtensionStateContext } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
 
@@ -91,28 +92,52 @@ describe("PromptsView", () => {
 		})
 	})
 
-	it("handles prompt changes correctly", async () => {
-		renderPromptsView()
+	it("buffers prompt changes locally and only persists on commitBuffers", async () => {
+		// Per the AGENTS.md "Settings View Pattern", text edits in ModesView are
+		// held in a local override map and only flushed to the host on Save (which
+		// SettingsView triggers via the ModesViewRef.commitBuffers() handle). This
+		// test pins that contract: typing must NOT post, commit MUST post.
+		const ref = createRef<ModesViewRef>()
+		render(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState } as any}>
+				<ModesView ref={ref} />
+			</ExtensionStateContext.Provider>,
+		)
 
-		// Get the textarea
 		const textarea = await waitFor(() => screen.getByTestId("code-prompt-textarea"))
 
-		// Simulate VSCode TextArea change event
 		const changeEvent = new CustomEvent("change", {
-			detail: {
-				target: {
-					value: "New prompt value",
-				},
-			},
+			detail: { target: { value: "New prompt value" } },
 		})
-
 		fireEvent(textarea, changeEvent)
+
+		// Typing must NOT post — the override is buffered locally.
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "updatePrompt" }))
+
+		// Save (simulated via the imperative handle) flushes the buffer.
+		ref.current?.commitBuffers()
 
 		expect(vscode.postMessage).toHaveBeenCalledWith({
 			type: "updatePrompt",
 			promptMode: "code",
 			customPrompt: { roleDefinition: "New prompt value" },
 		})
+	})
+
+	it("discardBuffers drops pending edits without posting", async () => {
+		const ref = createRef<ModesViewRef>()
+		render(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState } as any}>
+				<ModesView ref={ref} />
+			</ExtensionStateContext.Provider>,
+		)
+
+		const textarea = await waitFor(() => screen.getByTestId("code-prompt-textarea"))
+		fireEvent(textarea, new CustomEvent("change", { detail: { target: { value: "throwaway" } } }))
+
+		ref.current?.discardBuffers()
+
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "updatePrompt" }))
 	})
 
 	it("resets role definition only for built-in modes", async () => {
@@ -201,34 +226,31 @@ describe("PromptsView", () => {
 		expect(screen.getByTestId("custom-mode-description-textfield")).toBeInTheDocument()
 	})
 
-	it("handles clearing custom instructions correctly", async () => {
-		const setCustomInstructions = vitest.fn()
-		renderPromptsView({
-			...mockExtensionState,
-			customInstructions: "Initial instructions",
-			setCustomInstructions,
-		})
+	it("buffers global custom instructions and persists empty string on commitBuffers", async () => {
+		// Clearing global custom instructions follows the same buffered-commit
+		// contract as per-mode edits. The empty string must be preserved on commit
+		// (not coerced to undefined) so the host can distinguish "explicitly empty"
+		// from "unchanged".
+		const ref = createRef<ModesViewRef>()
+		render(
+			<ExtensionStateContext.Provider
+				value={{ ...mockExtensionState, customInstructions: "Initial instructions" } as any}>
+				<ModesView ref={ref} />
+			</ExtensionStateContext.Provider>,
+		)
 
 		const textarea = screen.getByTestId("global-custom-instructions-textarea")
+		Object.defineProperty(textarea, "value", { writable: true, value: "" })
+		fireEvent(textarea, new Event("change", { bubbles: true }))
 
-		// Simulate VSCode TextArea change event with empty value
-		// We need to simulate both the CustomEvent format and regular event format
-		// since the component handles both
-		Object.defineProperty(textarea, "value", {
-			writable: true,
-			value: "",
-		})
+		// Typing/clearing must NOT post immediately.
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "customInstructions" }))
 
-		const changeEvent = new Event("change", { bubbles: true })
-		fireEvent(textarea, changeEvent)
+		ref.current?.commitBuffers()
 
-		// The component calls setCustomInstructions with value ?? undefined
-		// With nullish coalescing, empty string is preserved (not treated as nullish)
-		expect(setCustomInstructions).toHaveBeenCalledWith("")
-		// The postMessage call will have multiple calls, we need to check the right one
 		expect(vscode.postMessage).toHaveBeenCalledWith({
 			type: "customInstructions",
-			text: "", // empty string is now preserved with ?? operator
+			text: "",
 		})
 	})
 
@@ -263,5 +285,49 @@ describe("PromptsView", () => {
 
 		// Verify popover remains closed
 		expect(selectTrigger).toHaveAttribute("aria-expanded", "false")
+	})
+
+	it("does not revert typed text when extensionState re-renders with a new context value", async () => {
+		// Regression for the bug where every host state push (~1s during a task)
+		// reset the local text buffer and overwrote in-flight user typing. The
+		// override-map design must keep the user's edit visible across context
+		// re-renders that do not change the field being edited.
+		const ref = createRef<ModesViewRef>()
+		const { rerender } = render(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState } as any}>
+				<ModesView ref={ref} />
+			</ExtensionStateContext.Provider>,
+		)
+
+		const textarea = (await waitFor(() => screen.getByTestId("code-prompt-textarea"))) as HTMLTextAreaElement
+		fireEvent(textarea, new CustomEvent("change", { detail: { target: { value: "User typed value" } } }))
+
+		// Simulate a host state push that produces a brand-new context object
+		// reference but does not change the role-definition field for `code`.
+		rerender(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState, mode: "code" } as any}>
+				<ModesView ref={ref} />
+			</ExtensionStateContext.Provider>,
+		)
+
+		const textareaAfter = (await waitFor(() => screen.getByTestId("code-prompt-textarea"))) as HTMLTextAreaElement
+		expect(textareaAfter.value).toBe("User typed value")
+	})
+
+	it("fires onModesDirty the first time any field diverges from source-of-truth", async () => {
+		// Save-button enabling in SettingsView is driven by this callback. The
+		// previous implementation never mutated cachedState on type, so the
+		// callback (then absent) never fired and Save stayed disabled.
+		const onModesDirty = vitest.fn()
+		render(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState } as any}>
+				<ModesView onModesDirty={onModesDirty} />
+			</ExtensionStateContext.Provider>,
+		)
+
+		const textarea = await waitFor(() => screen.getByTestId("code-prompt-textarea"))
+		fireEvent(textarea, new CustomEvent("change", { detail: { target: { value: "dirty" } } }))
+
+		expect(onModesDirty).toHaveBeenCalled()
 	})
 })
