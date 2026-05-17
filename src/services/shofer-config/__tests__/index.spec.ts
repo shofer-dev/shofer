@@ -1,11 +1,13 @@
 import * as path from "path"
+import { EventEmitter, Readable } from "stream"
 
 // Use vi.hoisted to ensure mocks are available during hoisting
-const { mockStat, mockReadFile, mockHomedir, mockExecuteRipgrep } = vi.hoisted(() => ({
+const { mockStat, mockReadFile, mockHomedir, mockSpawn, mockGetBinPath } = vi.hoisted(() => ({
 	mockStat: vi.fn(),
 	mockReadFile: vi.fn(),
 	mockHomedir: vi.fn(),
-	mockExecuteRipgrep: vi.fn(),
+	mockSpawn: vi.fn(),
+	mockGetBinPath: vi.fn(),
 }))
 
 // Mock fs/promises module
@@ -21,10 +23,45 @@ vi.mock("os", () => ({
 	homedir: mockHomedir,
 }))
 
-// Mock executeRipgrep from search service
-vi.mock("../../search/file-search", () => ({
-	executeRipgrep: mockExecuteRipgrep,
+// Mock child_process for the inline ripgrep call
+vi.mock("child_process", () => ({
+	spawn: mockSpawn,
 }))
+
+// Mock the ripgrep binary locator
+vi.mock("../../ripgrep", () => ({
+	getBinPath: mockGetBinPath,
+}))
+
+// Mock vscode (only env.appRoot is needed in this module)
+vi.mock("vscode", () => ({
+	env: { appRoot: "/mock/vscode" },
+}))
+
+/**
+ * Helper: drive the mocked rg child process with a fixed list of file paths.
+ * Mirrors the streaming contract: stdout emits newline-separated lines, then
+ * 'close' fires. `errorMessage` simulates a stderr-only failure path.
+ */
+function mockRipgrepLines(lines: string[], errorMessage?: string) {
+	mockSpawn.mockImplementationOnce(() => {
+		const stdout = Readable.from(lines.length > 0 ? lines.join("\n") + "\n" : "")
+		const stderr = new Readable({ read() {} })
+		const proc = new EventEmitter() as EventEmitter & {
+			stdout: Readable
+			stderr: Readable
+		}
+		proc.stdout = stdout
+		proc.stderr = stderr
+		queueMicrotask(() => {
+			if (errorMessage) {
+				stderr.push(errorMessage)
+			}
+			stderr.push(null)
+		})
+		return proc
+	})
+}
 
 import {
 	getGlobalShoferDirectory,
@@ -45,6 +82,7 @@ describe("ShoferConfigService", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockHomedir.mockReturnValue("/mock/home")
+		mockGetBinPath.mockResolvedValue("/mock/rg")
 	})
 
 	afterEach(() => {
@@ -332,7 +370,7 @@ describe("ShoferConfigService", () => {
 
 	describe("discoverSubfolderRooDirectories", () => {
 		it("should return empty array when no subfolder .shofer directories found", async () => {
-			mockExecuteRipgrep.mockResolvedValue([])
+			mockRipgrepLines([])
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
 
@@ -340,10 +378,9 @@ describe("ShoferConfigService", () => {
 		})
 
 		it("should discover .shofer directories from subfolders", async () => {
-			// Find any file inside .shofer directories
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: "package-a/.shofer/rules/rule.md", type: "file" },
-				{ path: "package-b/.shofer/rules-code/rule.md", type: "file" },
+			mockRipgrepLines([
+				"/project/path/package-a/.shofer/rules/rule.md",
+				"/project/path/package-b/.shofer/rules-code/rule.md",
 			])
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
@@ -355,10 +392,10 @@ describe("ShoferConfigService", () => {
 		})
 
 		it("should sort discovered directories alphabetically", async () => {
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: "zebra/.shofer/rules/rule.md", type: "file" },
-				{ path: "apple/.shofer/rules/rule.md", type: "file" },
-				{ path: "mango/.shofer/rules/rule.md", type: "file" },
+			mockRipgrepLines([
+				"/project/path/zebra/.shofer/rules/rule.md",
+				"/project/path/apple/.shofer/rules/rule.md",
+				"/project/path/mango/.shofer/rules/rule.md",
 			])
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
@@ -370,23 +407,41 @@ describe("ShoferConfigService", () => {
 			])
 		})
 
-		it("should exclude root .shofer directory", async () => {
-			// This would match the root .shofer, which should be excluded
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: ".shofer/rules/rule.md", type: "file" }, // This is root - should be excluded
-				{ path: "subfolder/.shofer/rules/rule.md", type: "file" },
+		it("should exclude root .shofer directory even if ripgrep glob is bypassed", async () => {
+			// Defensive: the rg `-g '!/.shofer/**'` exclusion is the primary
+			// gate, but the post-regex (which requires at least one path
+			// component before `.shofer`) also rejects root entries.
+			mockRipgrepLines([
+				"/project/path/.shofer/rules/rule.md", // root — must be skipped
+				"/project/path/subfolder/.shofer/rules/rule.md",
 			])
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
 
-			// Should only include subfolder, not root
 			expect(result).toEqual([path.join("/project/path", "subfolder", ".shofer")])
 		})
 
+		it("should not be starved by a large root .shofer containing many files", async () => {
+			// Regression: previously executeRipgrep capped results at 500 and
+			// the root .shofer/worktrees/* snapshots ate the entire window,
+			// so subfolder .shofer/ never surfaced. With the dedicated
+			// streaming + anchored exclusion, this scenario must still find
+			// the subfolder hit even when followed by thousands of other lines.
+			const lines = [
+				"/project/path/extensions/shofer/.shofer/rules/rule.md",
+				...Array.from({ length: 5000 }, (_, i) => `/project/path/.shofer/worktrees/snap-${i}/file.go`),
+			]
+			mockRipgrepLines(lines)
+
+			const result = await discoverSubfolderRooDirectories("/project/path")
+
+			expect(result).toEqual([path.join("/project/path", "extensions", "shofer", ".shofer")])
+		})
+
 		it("should handle nested subdirectories", async () => {
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: "packages/core/.shofer/rules/rule.md", type: "file" },
-				{ path: "packages/utils/.shofer/rules-code/rule.md", type: "file" },
+			mockRipgrepLines([
+				"/project/path/packages/core/.shofer/rules/rule.md",
+				"/project/path/packages/utils/.shofer/rules-code/rule.md",
 			])
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
@@ -398,7 +453,7 @@ describe("ShoferConfigService", () => {
 		})
 
 		it("should return empty array on ripgrep error", async () => {
-			mockExecuteRipgrep.mockRejectedValue(new Error("ripgrep failed"))
+			mockRipgrepLines([], "ripgrep failed")
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
 
@@ -406,25 +461,23 @@ describe("ShoferConfigService", () => {
 		})
 
 		it("should deduplicate .shofer directories from multiple files", async () => {
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: "package-a/.shofer/rules/rule1.md", type: "file" },
-				{ path: "package-a/.shofer/rules/rule2.md", type: "file" },
-				{ path: "package-a/.shofer/rules-code/rule3.md", type: "file" },
+			mockRipgrepLines([
+				"/project/path/package-a/.shofer/rules/rule1.md",
+				"/project/path/package-a/.shofer/rules/rule2.md",
+				"/project/path/package-a/.shofer/rules-code/rule3.md",
 			])
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
 
-			// Should only include package-a/.shofer once
 			expect(result).toEqual([path.join("/project/path", "package-a", ".shofer")])
 		})
 
 		it("should discover .shofer directories with any content", async () => {
-			// Should find .shofer directories regardless of what's inside them
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: "package-a/.shofer/rules/rule.md", type: "file" },
-				{ path: "package-b/.shofer/rules-code/code-rule.md", type: "file" },
-				{ path: "package-c/.shofer/rules-architect/arch-rule.md", type: "file" },
-				{ path: "package-d/.shofer/config/settings.json", type: "file" },
+			mockRipgrepLines([
+				"/project/path/package-a/.shofer/rules/rule.md",
+				"/project/path/package-b/.shofer/rules-code/code-rule.md",
+				"/project/path/package-c/.shofer/rules-architect/arch-rule.md",
+				"/project/path/package-d/.shofer/config/settings.json",
 			])
 
 			const result = await discoverSubfolderRooDirectories("/project/path")
@@ -440,19 +493,19 @@ describe("ShoferConfigService", () => {
 
 	describe("getAllRooDirectoriesForCwd", () => {
 		it("should return global, project, and subfolder directories", async () => {
-			mockExecuteRipgrep.mockResolvedValueOnce([{ path: "subfolder/.shofer/rules/rule.md", type: "file" }])
+			mockRipgrepLines(["/project/path/subfolder/.shofer/rules/rule.md"])
 
 			const result = await getAllRooDirectoriesForCwd("/project/path")
 
 			expect(result).toEqual([
-				path.join("/mock/home", ".shofer"), // global
-				path.join("/project/path", ".shofer"), // project
-				path.join("/project/path", "subfolder", ".shofer"), // subfolder
+				path.join("/mock/home", ".shofer"),
+				path.join("/project/path", ".shofer"),
+				path.join("/project/path", "subfolder", ".shofer"),
 			])
 		})
 
 		it("should return only global and project when no subfolders", async () => {
-			mockExecuteRipgrep.mockResolvedValue([])
+			mockRipgrepLines([])
 
 			const result = await getAllRooDirectoriesForCwd("/project/path")
 
@@ -460,17 +513,14 @@ describe("ShoferConfigService", () => {
 		})
 
 		it("should maintain order: global, project, subfolders (alphabetically)", async () => {
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: "zebra/.shofer/rules/rule.md", type: "file" },
-				{ path: "apple/.shofer/rules/rule.md", type: "file" },
-			])
+			mockRipgrepLines(["/project/path/zebra/.shofer/rules/rule.md", "/project/path/apple/.shofer/rules/rule.md"])
 
 			const result = await getAllRooDirectoriesForCwd("/project/path")
 
 			expect(result).toEqual([
-				path.join("/mock/home", ".shofer"), // global first
-				path.join("/project/path", ".shofer"), // project second
-				path.join("/project/path", "apple", ".shofer"), // subfolders alphabetically
+				path.join("/mock/home", ".shofer"),
+				path.join("/project/path", ".shofer"),
+				path.join("/project/path", "apple", ".shofer"),
 				path.join("/project/path", "zebra", ".shofer"),
 			])
 		})
@@ -478,18 +528,15 @@ describe("ShoferConfigService", () => {
 
 	describe("getAgentsDirectoriesForCwd", () => {
 		it("should return root directory and parent directories of subfolder .shofer dirs", async () => {
-			mockExecuteRipgrep.mockResolvedValueOnce([{ path: "package-a/.shofer/rules/rule.md", type: "file" }])
+			mockRipgrepLines(["/project/path/package-a/.shofer/rules/rule.md"])
 
 			const result = await getAgentsDirectoriesForCwd("/project/path")
 
-			expect(result).toEqual([
-				"/project/path", // root
-				path.join("/project/path", "package-a"), // parent of .shofer
-			])
+			expect(result).toEqual(["/project/path", path.join("/project/path", "package-a")])
 		})
 
 		it("should always include root even when no subfolders", async () => {
-			mockExecuteRipgrep.mockResolvedValue([])
+			mockRipgrepLines([])
 
 			const result = await getAgentsDirectoriesForCwd("/project/path")
 
@@ -497,10 +544,10 @@ describe("ShoferConfigService", () => {
 		})
 
 		it("should include multiple subfolder parent directories", async () => {
-			mockExecuteRipgrep.mockResolvedValueOnce([
-				{ path: "package-a/.shofer/rules/rule.md", type: "file" },
-				{ path: "package-b/.shofer/rules-code/rule.md", type: "file" },
-				{ path: "packages/core/.shofer/rules/rule.md", type: "file" },
+			mockRipgrepLines([
+				"/project/path/package-a/.shofer/rules/rule.md",
+				"/project/path/package-b/.shofer/rules-code/rule.md",
+				"/project/path/packages/core/.shofer/rules/rule.md",
 			])
 
 			const result = await getAgentsDirectoriesForCwd("/project/path")
