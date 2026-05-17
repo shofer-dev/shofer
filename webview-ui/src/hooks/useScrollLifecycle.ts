@@ -314,8 +314,8 @@ export function useScrollLifecycle({
 	// -----------------------------------------------------------------------
 
 	const followOutputCallback = useCallback((): "auto" | false => {
-		return scrollPhase === "USER_BROWSING_HISTORY" ? false : "auto"
-	}, [scrollPhase])
+		return scrollPhaseRef.current === "USER_BROWSING_HISTORY" ? false : "auto"
+	}, [])
 
 	// -----------------------------------------------------------------------
 	// Virtuoso callback: atBottomStateChange
