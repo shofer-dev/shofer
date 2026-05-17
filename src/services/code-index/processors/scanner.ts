@@ -33,6 +33,7 @@ import { Package } from "../../../shared/package"
 
 export class DirectoryScanner implements IDirectoryScanner {
 	private readonly batchSegmentThreshold: number
+	private shoferIgnoreController: ShoferIgnoreController | undefined
 
 	constructor(
 		private readonly embedder: IEmbedder,
@@ -41,7 +42,9 @@ export class DirectoryScanner implements IDirectoryScanner {
 		private readonly cacheManager: CacheManager,
 		private readonly ignoreInstance: Ignore,
 		batchSegmentThreshold?: number,
+		shoferIgnoreController?: ShoferIgnoreController,
 	) {
+		this.shoferIgnoreController = shoferIgnoreController
 		// Get the configurable batch size from VSCode settings, fallback to default
 		// If not provided in constructor, try to get from VSCode settings
 		if (batchSegmentThreshold !== undefined) {
@@ -83,13 +86,14 @@ export class DirectoryScanner implements IDirectoryScanner {
 		// Filter out directories (marked with trailing '/')
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
 
-		// Initialize ShoferIgnoreController if not provided
-		const ignoreController = new ShoferIgnoreController(directoryPath)
-
-		await ignoreController.initialize()
+		// Use cached ShoferIgnoreController or create one if not provided
+		if (!this.shoferIgnoreController) {
+			this.shoferIgnoreController = new ShoferIgnoreController(directoryPath)
+			await this.shoferIgnoreController.initialize()
+		}
 
 		// Filter paths using .shoferignore
-		const allowedPaths = ignoreController.filterPaths(filePaths)
+		const allowedPaths = this.shoferIgnoreController.filterPaths(filePaths)
 
 		// Filter by supported extensions, ignore patterns, and excluded directories
 		const supportedPaths = allowedPaths.filter((filePath) => {
@@ -118,7 +122,13 @@ export class DirectoryScanner implements IDirectoryScanner {
 		// Shared batch accumulators (protected by mutex)
 		let currentBatchBlocks: CodeBlock[] = []
 		let currentBatchTexts: string[] = []
-		let currentBatchFileInfos: { filePath: string; fileHash: string; isNew: boolean }[] = []
+		let currentBatchFileInfos: {
+			filePath: string
+			fileHash: string
+			isNew: boolean
+			mtimeMs: number
+			size: number
+		}[] = []
 		const activeBatchPromises = new Set<Promise<void>>()
 		let pendingBatchCount = 0
 
@@ -132,10 +142,19 @@ export class DirectoryScanner implements IDirectoryScanner {
 				if (signal?.aborted) return
 
 				try {
-					// Check file size
+					// Phase 1 fast-path: stat() only — skip read+hash when mtime+size match
 					const stats = await stat(filePath)
 					if (stats.size > MAX_FILE_SIZE_BYTES) {
 						skippedCount++ // Skip large files
+						return
+					}
+
+					const cached = this.cacheManager.getEntry(filePath)
+
+					if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+						// File unchanged — no read, no hash, no parse
+						processedFiles.add(filePath)
+						skippedCount++
 						return
 					}
 
@@ -148,11 +167,15 @@ export class DirectoryScanner implements IDirectoryScanner {
 					const currentFileHash = createHash("sha256").update(content).digest("hex")
 					processedFiles.add(filePath)
 
-					// Check against cache
-					const cachedFileHash = this.cacheManager.getHash(filePath)
-					const isNewFile = !cachedFileHash
-					if (cachedFileHash === currentFileHash) {
-						// File is unchanged
+					// Check against cache — hash match means content unchanged
+					const isNewFile = !cached
+					if (cached && cached.hash === currentFileHash) {
+						// mtime changed but content identical (e.g. touch, rebase, rsync -t)
+						this.cacheManager.updateEntry(filePath, {
+							hash: currentFileHash,
+							mtimeMs: stats.mtimeMs,
+							size: stats.size,
+						})
 						skippedCount++
 						return
 					}
@@ -236,14 +259,20 @@ export class DirectoryScanner implements IDirectoryScanner {
 									filePath,
 									fileHash: currentFileHash,
 									isNew: isNewFile,
+									mtimeMs: stats.mtimeMs,
+									size: stats.size,
 								})
 							} finally {
 								release()
 							}
 						}
 					} else {
-						// Only update hash if not being processed in a batch
-						await this.cacheManager.updateHash(filePath, currentFileHash)
+						// Only update cache if not being processed in a batch
+						this.cacheManager.updateEntry(filePath, {
+							hash: currentFileHash,
+							mtimeMs: stats.mtimeMs,
+							size: stats.size,
+						})
 					}
 				} catch (error) {
 					// Re-throw AbortError — it's not a file processing error, just a user-initiated stop
@@ -330,8 +359,8 @@ export class DirectoryScanner implements IDirectoryScanner {
 		}
 
 		// Handle deleted files
-		const oldHashes = this.cacheManager.getAllHashes()
-		for (const cachedFilePath of Object.keys(oldHashes)) {
+		const oldPaths = this.cacheManager.getAllPaths()
+		for (const cachedFilePath of oldPaths) {
 			if (!processedFiles.has(cachedFilePath)) {
 				// File was deleted or is no longer supported/indexed
 				if (this.qdrantClient) {
@@ -387,7 +416,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 	private async processBatch(
 		batchBlocks: CodeBlock[],
 		batchTexts: string[],
-		batchFileInfos: { filePath: string; fileHash: string; isNew: boolean }[],
+		batchFileInfos: { filePath: string; fileHash: string; isNew: boolean; mtimeMs: number; size: number }[],
 		scanWorkspace: string,
 		onError?: (error: Error) => void,
 		onBlocksIndexed?: (indexedCount: number) => void,
@@ -469,9 +498,13 @@ export class DirectoryScanner implements IDirectoryScanner {
 				await this.qdrantClient.upsertPoints(points)
 				onBlocksIndexed?.(batchBlocks.length)
 
-				// Update hashes for successfully processed files in this batch
+				// Update cache entries for successfully processed files in this batch
 				for (const fileInfo of batchFileInfos) {
-					await this.cacheManager.updateHash(fileInfo.filePath, fileInfo.fileHash)
+					this.cacheManager.updateEntry(fileInfo.filePath, {
+						hash: fileInfo.fileHash,
+						mtimeMs: fileInfo.mtimeMs,
+						size: fileInfo.size,
+					})
 				}
 				success = true
 			} catch (error) {
