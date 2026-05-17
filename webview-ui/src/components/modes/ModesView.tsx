@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react"
 import {
 	VSCodeCheckbox,
 	VSCodeRadioGroup,
@@ -14,7 +14,6 @@ import { ChevronDown, X, Upload, Download } from "lucide-react"
 import { ModeConfig, GroupEntry, PromptComponent, ToolGroup, modeConfigSchema } from "@shofer/types"
 
 import {
-	Mode,
 	getRoleDefinition,
 	getWhenToUse,
 	getDescription,
@@ -51,7 +50,6 @@ import {
 } from "@src/components/ui"
 import { DeleteModeDialog } from "@src/components/modes/DeleteModeDialog"
 import { useEscapeKey } from "@src/hooks/useEscapeKey"
-import { SetCachedStateField } from "@src/components/settings/types"
 
 // Get all available groups that should show in prompts view
 const availableGroups = (Object.keys(TOOL_GROUPS) as ToolGroup[]).filter((group) => !TOOL_GROUPS[group].alwaysAvailable)
@@ -65,23 +63,46 @@ function getGroupName(group: GroupEntry): ToolGroup {
 	return (Array.isArray(group) ? group[0] : group) as ToolGroup
 }
 
-type ModesViewProps = {
-	cachedCustomInstructions?: string
-	setCachedStateField?: SetCachedStateField<"customInstructions">
+/**
+ * The four per-mode text fields that the user can edit in the Modes settings tab.
+ * Held as overrides until the user clicks Save in `SettingsView`.
+ */
+type ModeTextOverride = {
+	roleDefinition?: string
+	description?: string
+	whenToUse?: string
+	customInstructions?: string
 }
 
-const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewProps = {}) => {
+/**
+ * Imperative handle exposed to `SettingsView` so the Save / Discard flow can commit
+ * or drop the pending text-edit buffers held inside `ModesView`.
+ *
+ * `commitBuffers()` posts the appropriate `updateCustomMode` / `updatePrompt` /
+ * `customInstructions` messages and clears all overrides. `discardBuffers()`
+ * drops all overrides without persisting.
+ */
+export type ModesViewRef = {
+	commitBuffers: () => void
+	discardBuffers: () => void
+}
+
+type ModesViewProps = {
+	/**
+	 * Fired the first moment any text buffer diverges from its source-of-truth.
+	 * `SettingsView` wires this to `setChangeDetected(true)` so the Save button
+	 * enables. The "back to clean" transition is driven explicitly by `commitBuffers`
+	 * / `discardBuffers` (called from `handleSubmit` / discard-dialog), so we do
+	 * not need a "dirty → clean" callback.
+	 */
+	onModesDirty?: () => void
+}
+
+const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, ref) => {
 	const { t } = useAppTranslation()
 
-	const {
-		customModePrompts,
-		listApiConfigMeta,
-		currentApiConfigName,
-		mode,
-		customInstructions,
-		setCustomInstructions,
-		customModes,
-	} = useExtensionState()
+	const { customModePrompts, listApiConfigMeta, currentApiConfigName, mode, customInstructions, customModes } =
+		useExtensionState()
 
 	// Use a local state to track the visually active mode
 	// This prevents flickering when switching modes rapidly by:
@@ -90,19 +111,15 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 	// 3. Still sending the mode change to the backend for persistence
 	const [visualMode, setVisualMode] = useState(mode)
 
-	// Local buffers for text fields to prevent race conditions with live extension state
-	// during task execution. These isolate user edits from ContextProxy updates.
-	const [localRoleDefinition, setLocalRoleDefinition] = useState("")
-	const [localDescription, setLocalDescription] = useState("")
-	const [localWhenToUse, setLocalWhenToUse] = useState("")
-	const [localModeCustomInstructions, setLocalModeCustomInstructions] = useState("")
-	const [localGlobalCustomInstructions, setLocalGlobalCustomInstructions] = useState("")
-
-	// Track whether local buffers have been initialized for the current mode
-	const [buffersInitialized, setBuffersInitialized] = useState(false)
-
-	// Resolve the effective value for a mode field: local buffer wins if initialized,
-	// otherwise fall back to the extension-state chain.
+	// Per-mode overrides for the four editable text fields. Keyed by mode slug.
+	// Reads merge `modeOverrides[slug]` over the live extension-state chain, so
+	// edits are isolated from periodic `ContextProxy` state pushes (which would
+	// otherwise reset the textbox value mid-typing — see AGENTS.md
+	// "Settings View Pattern").
+	const [modeOverrides, setModeOverrides] = useState<Record<string, ModeTextOverride>>({})
+	// Override for the global "Custom Instructions for All Modes" field. `undefined`
+	// means "no edit; show live value".
+	const [globalCIOverride, setGlobalCIOverride] = useState<string | undefined>(undefined)
 
 	// Helper function to find a mode by slug (hoisted above useCallbacks that reference it).
 	const findModeBySlug = useCallback(
@@ -112,61 +129,167 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 		[],
 	)
 
+	const markDirty = useCallback(() => {
+		onModesDirty?.()
+	}, [onModesDirty])
+
+	// Merge an override field for `slug` and notify the parent that buffers are dirty.
+	const setModeOverrideField = useCallback(
+		<K extends keyof ModeTextOverride>(slug: string, field: K, value: ModeTextOverride[K]) => {
+			setModeOverrides((prev) => {
+				const next: Record<string, ModeTextOverride> = { ...prev }
+				next[slug] = { ...(prev[slug] ?? {}), [field]: value }
+				return next
+			})
+			markDirty()
+		},
+		[markDirty],
+	)
+
+	// Clear an override field (used by the "reset to default" buttons so the textbox
+	// snaps back to the live/default value).
+	const clearModeOverrideField = useCallback((slug: string, field: keyof ModeTextOverride) => {
+		setModeOverrides((prev) => {
+			if (!prev[slug] || prev[slug][field] === undefined) return prev
+			const nextEntry: ModeTextOverride = { ...prev[slug] }
+			delete nextEntry[field]
+			const next: Record<string, ModeTextOverride> = { ...prev }
+			if (Object.keys(nextEntry).length === 0) {
+				delete next[slug]
+			} else {
+				next[slug] = nextEntry
+			}
+			return next
+		})
+	}, [])
+
 	const getEffectiveRoleDefinition = useCallback(() => {
-		if (buffersInitialized) return localRoleDefinition
+		const override = modeOverrides[visualMode]?.roleDefinition
+		if (override !== undefined) return override
 		const customMode = findModeBySlug(visualMode, customModes)
 		const prompt = customModePrompts?.[visualMode] as PromptComponent
-		return customMode?.roleDefinition ?? prompt?.roleDefinition ?? getRoleDefinition(visualMode)
-	}, [buffersInitialized, localRoleDefinition, visualMode, customModes, customModePrompts, findModeBySlug])
+		return customMode?.roleDefinition ?? prompt?.roleDefinition ?? getRoleDefinition(visualMode) ?? ""
+	}, [modeOverrides, visualMode, customModes, customModePrompts, findModeBySlug])
 
 	const getEffectiveDescription = useCallback(() => {
-		if (buffersInitialized) return localDescription
+		const override = modeOverrides[visualMode]?.description
+		if (override !== undefined) return override
 		const customMode = findModeBySlug(visualMode, customModes)
 		const prompt = customModePrompts?.[visualMode] as PromptComponent
-		return customMode?.description ?? prompt?.description ?? getDescription(visualMode)
-	}, [buffersInitialized, localDescription, visualMode, customModes, customModePrompts, findModeBySlug])
+		return customMode?.description ?? prompt?.description ?? getDescription(visualMode) ?? ""
+	}, [modeOverrides, visualMode, customModes, customModePrompts, findModeBySlug])
 
 	const getEffectiveWhenToUse = useCallback(() => {
-		if (buffersInitialized) return localWhenToUse
+		const override = modeOverrides[visualMode]?.whenToUse
+		if (override !== undefined) return override
 		const customMode = findModeBySlug(visualMode, customModes)
 		const prompt = customModePrompts?.[visualMode] as PromptComponent
-		return customMode?.whenToUse ?? prompt?.whenToUse ?? getWhenToUse(visualMode)
-	}, [buffersInitialized, localWhenToUse, visualMode, customModes, customModePrompts, findModeBySlug])
+		return customMode?.whenToUse ?? prompt?.whenToUse ?? getWhenToUse(visualMode) ?? ""
+	}, [modeOverrides, visualMode, customModes, customModePrompts, findModeBySlug])
 
 	const getEffectiveModeCustomInstructions = useCallback(() => {
-		if (buffersInitialized) return localModeCustomInstructions
+		const override = modeOverrides[visualMode]?.customInstructions
+		if (override !== undefined) return override
 		const customMode = findModeBySlug(visualMode, customModes)
 		const prompt = customModePrompts?.[visualMode] as PromptComponent
 		return (
 			customMode?.customInstructions ??
 			prompt?.customInstructions ??
-			getCustomInstructions(visualMode, customModes)
+			getCustomInstructions(visualMode, customModes) ??
+			""
 		)
-	}, [buffersInitialized, localModeCustomInstructions, visualMode, customModes, customModePrompts, findModeBySlug])
+	}, [modeOverrides, visualMode, customModes, customModePrompts, findModeBySlug])
 
 	const getEffectiveGlobalCustomInstructions = useCallback(() => {
-		if (buffersInitialized) return localGlobalCustomInstructions
-		return cachedCustomInstructions ?? customInstructions ?? ""
-	}, [buffersInitialized, localGlobalCustomInstructions, cachedCustomInstructions, customInstructions])
+		return globalCIOverride ?? customInstructions ?? ""
+	}, [globalCIOverride, customInstructions])
 
-	// Initialize local buffers from extension state when the selected mode changes
+	// Keep refs to the latest customModes / customModePrompts so the imperative
+	// `commitBuffers` handle (registered once via `useImperativeHandle`) always
+	// merges overrides over the freshest live state, without depending on every
+	// state push to re-register the handle.
+	const customModesRefForCommit = useRef(customModes)
+	const customModePromptsRefForCommit = useRef(customModePrompts)
 	useEffect(() => {
-		const customMode = findModeBySlug(visualMode, customModes)
-		const prompt = customModePrompts?.[visualMode] as PromptComponent
-		setLocalRoleDefinition(
-			customMode?.roleDefinition ?? prompt?.roleDefinition ?? getRoleDefinition(visualMode) ?? "",
-		)
-		setLocalDescription(customMode?.description ?? prompt?.description ?? getDescription(visualMode) ?? "")
-		setLocalWhenToUse(customMode?.whenToUse ?? prompt?.whenToUse ?? getWhenToUse(visualMode) ?? "")
-		setLocalModeCustomInstructions(
-			customMode?.customInstructions ??
-				prompt?.customInstructions ??
-				getCustomInstructions(visualMode, customModes) ??
-				"",
-		)
-		setLocalGlobalCustomInstructions(cachedCustomInstructions ?? customInstructions ?? "")
-		setBuffersInitialized(true)
-	}, [visualMode, customModes, customModePrompts, cachedCustomInstructions, customInstructions, findModeBySlug])
+		customModesRefForCommit.current = customModes
+	}, [customModes])
+	useEffect(() => {
+		customModePromptsRefForCommit.current = customModePrompts
+	}, [customModePrompts])
+	const modeOverridesRef = useRef(modeOverrides)
+	const globalCIOverrideRef = useRef(globalCIOverride)
+	useEffect(() => {
+		modeOverridesRef.current = modeOverrides
+	}, [modeOverrides])
+	useEffect(() => {
+		globalCIOverrideRef.current = globalCIOverride
+	}, [globalCIOverride])
+
+	useImperativeHandle(
+		ref,
+		(): ModesViewRef => ({
+			commitBuffers: () => {
+				const overrides = modeOverridesRef.current
+				const liveModes = customModesRefForCommit.current
+				const livePrompts = customModePromptsRefForCommit.current
+				for (const [slug, fields] of Object.entries(overrides)) {
+					const customMode = findCustomModeBySlug(slug, liveModes)
+					if (customMode) {
+						// Custom mode: persist the merged ModeConfig.
+						const merged: ModeConfig = {
+							...customMode,
+							source: customMode.source || "global",
+						}
+						if (fields.roleDefinition !== undefined) {
+							merged.roleDefinition = fields.roleDefinition.trim() || ""
+						}
+						if (fields.description !== undefined) {
+							merged.description = fields.description.trim() || undefined
+						}
+						if (fields.whenToUse !== undefined) {
+							merged.whenToUse = fields.whenToUse.trim() || undefined
+						}
+						if (fields.customInstructions !== undefined) {
+							merged.customInstructions = fields.customInstructions || undefined
+						}
+						vscode.postMessage({ type: "updateCustomMode", slug, modeConfig: merged })
+					} else {
+						// Built-in mode: persist as a `customModePrompts` override.
+						const existing = (livePrompts?.[slug] as PromptComponent) ?? {}
+						const merged: PromptComponent = { ...existing }
+						if (fields.roleDefinition !== undefined) {
+							const trimmed = fields.roleDefinition.trim()
+							merged.roleDefinition =
+								trimmed === getRoleDefinition(slug) ? undefined : trimmed || undefined
+						}
+						if (fields.description !== undefined) {
+							const trimmed = fields.description.trim()
+							merged.description = trimmed === getDescription(slug) ? undefined : trimmed || undefined
+						}
+						if (fields.whenToUse !== undefined) {
+							const trimmed = fields.whenToUse.trim()
+							merged.whenToUse = trimmed === getWhenToUse(slug) ? undefined : trimmed || undefined
+						}
+						if (fields.customInstructions !== undefined) {
+							merged.customInstructions = fields.customInstructions.trim() || undefined
+						}
+						vscode.postMessage({ type: "updatePrompt", promptMode: slug, customPrompt: merged })
+					}
+				}
+				const gci = globalCIOverrideRef.current
+				if (gci !== undefined) {
+					vscode.postMessage({ type: "customInstructions", text: gci })
+				}
+				setModeOverrides({})
+				setGlobalCIOverride(undefined)
+			},
+			discardBuffers: () => {
+				setModeOverrides({})
+				setGlobalCIOverride(undefined)
+			},
+		}),
+		[],
+	)
 
 	// Build modes fresh each render so search reflects inline rename updates immediately
 	const modes = getAllModes(customModes)
@@ -208,31 +331,6 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 	const displayModes = (modes || []).map((m) => (localRenames[m.slug] ? { ...m, name: localRenames[m.slug] } : m))
 
 	// Direct update functions
-	const updateAgentPrompt = useCallback(
-		(mode: Mode, promptData: PromptComponent) => {
-			const existingPrompt = customModePrompts?.[mode] as PromptComponent
-			const updatedPrompt = { ...existingPrompt, ...promptData }
-
-			// Only include properties that differ from defaults
-			if (updatedPrompt.roleDefinition === getRoleDefinition(mode)) {
-				delete updatedPrompt.roleDefinition
-			}
-			if (updatedPrompt.description === getDescription(mode)) {
-				delete updatedPrompt.description
-			}
-			if (updatedPrompt.whenToUse === getWhenToUse(mode)) {
-				delete updatedPrompt.whenToUse
-			}
-
-			vscode.postMessage({
-				type: "updatePrompt",
-				promptMode: mode,
-				customPrompt: updatedPrompt,
-			})
-		},
-		[customModePrompts],
-	)
-
 	const updateCustomMode = useCallback((slug: string, modeConfig: ModeConfig) => {
 		const source = modeConfig.source || "global"
 
@@ -654,27 +752,13 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 		modeSlug: string,
 		type: "roleDefinition" | "description" | "whenToUse" | "customInstructions",
 	) => {
-		// Only reset for built-in modes
+		// Reset is an explicit, instant action: drop any pending edit for this field
+		// and tell the host to remove the override so the default reloads on next render.
+		clearModeOverrideField(modeSlug, type)
+
 		const existingPrompt = customModePrompts?.[modeSlug] as PromptComponent
 		const updatedPrompt = { ...existingPrompt }
-		delete updatedPrompt[type] // Remove the field entirely to ensure it reloads from defaults
-
-		// Clear the corresponding local buffer so the UI shows the default immediately
-		switch (type) {
-			case "roleDefinition":
-				setLocalRoleDefinition(getRoleDefinition(modeSlug) ?? "")
-				break
-			case "description":
-				setLocalDescription(getDescription(modeSlug) ?? "")
-				break
-			case "whenToUse":
-				setLocalWhenToUse(getWhenToUse(modeSlug) ?? "")
-				break
-			case "customInstructions":
-				setLocalModeCustomInstructions(getCustomInstructions(modeSlug, customModes) ?? "")
-				break
-		}
-		setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
+		delete updatedPrompt[type]
 
 		vscode.postMessage({
 			type: "updatePrompt",
@@ -1060,21 +1144,8 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
-							// Update local buffer immediately for responsive UX
-							setLocalRoleDefinition(value)
-							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
-							const customMode = findModeBySlug(visualMode, customModes)
-							if (customMode) {
-								updateCustomMode(visualMode, {
-									...customMode,
-									roleDefinition: value.trim() || "",
-									source: customMode.source || "global",
-								})
-							} else {
-								updateAgentPrompt(visualMode, {
-									roleDefinition: value.trim() || undefined,
-								})
-							}
+							// Buffer the edit; SettingsView's Save will commit via commitBuffers().
+							setModeOverrideField(visualMode, "roleDefinition", value)
 						}}
 						className="w-full"
 						rows={5}
@@ -1112,20 +1183,7 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
-							setLocalDescription(value)
-							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
-							const customMode = findModeBySlug(visualMode, customModes)
-							if (customMode) {
-								updateCustomMode(visualMode, {
-									...customMode,
-									description: value.trim() || undefined,
-									source: customMode.source || "global",
-								})
-							} else {
-								updateAgentPrompt(visualMode, {
-									description: value.trim() || undefined,
-								})
-							}
+							setModeOverrideField(visualMode, "description", value)
 						}}
 						className="w-full"
 						data-testid={`${getCurrentMode()?.slug || "code"}-description-textfield`}
@@ -1163,20 +1221,7 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
-							setLocalWhenToUse(value)
-							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
-							const customMode = findModeBySlug(visualMode, customModes)
-							if (customMode) {
-								updateCustomMode(visualMode, {
-									...customMode,
-									whenToUse: value.trim() || undefined,
-									source: customMode.source || "global",
-								})
-							} else {
-								updateAgentPrompt(visualMode, {
-									whenToUse: value.trim() || undefined,
-								})
-							}
+							setModeOverrideField(visualMode, "whenToUse", value)
 						}}
 						className="w-full"
 						rows={4}
@@ -1306,22 +1351,7 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
-							setLocalModeCustomInstructions(value)
-							setCachedStateField?.("customInstructions", localGlobalCustomInstructions)
-							const customMode = findModeBySlug(visualMode, customModes)
-							if (customMode) {
-								updateCustomMode(visualMode, {
-									...customMode,
-									customInstructions: value ?? undefined,
-									source: customMode.source || "global",
-								})
-							} else {
-								const existingPrompt = customModePrompts?.[visualMode] as PromptComponent
-								updateAgentPrompt(visualMode, {
-									...existingPrompt,
-									customInstructions: value.trim() || undefined,
-								})
-							}
+							setModeOverrideField(visualMode, "customInstructions", value)
 						}}
 						rows={10}
 						className="w-full"
@@ -1426,14 +1456,9 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 							const value =
 								(e as unknown as CustomEvent)?.detail?.target?.value ??
 								((e as any).target as HTMLTextAreaElement).value
-							// Update local buffers for both ModesView and SettingsView's cachedState
-							setLocalGlobalCustomInstructions(value)
-							setCachedStateField?.("customInstructions", value)
-							setCustomInstructions(value ?? undefined)
-							vscode.postMessage({
-								type: "customInstructions",
-								text: value ?? undefined,
-							})
+							// Buffer the edit; commitBuffers() will persist on Save.
+							setGlobalCIOverride(value)
+							markDirty()
 						}}
 						rows={4}
 						className="w-full"
@@ -1777,6 +1802,8 @@ const ModesView = ({ cachedCustomInstructions, setCachedStateField }: ModesViewP
 			/>
 		</div>
 	)
-}
+})
+
+ModesView.displayName = "ModesView"
 
 export default ModesView

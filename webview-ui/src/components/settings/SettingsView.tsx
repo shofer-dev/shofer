@@ -83,7 +83,7 @@ import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { SkillsSettings } from "./SkillsSettings"
 import { ToolsSettings } from "./ToolsSettings"
 import { UISettings } from "./UISettings"
-import ModesView from "../modes/ModesView"
+import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
 import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
@@ -153,6 +153,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 	const prevApiConfigName = useRef(currentApiConfigName)
 	const confirmDialogHandler = useRef<() => void>()
+	// Imperative handle to ModesView so the Save / Discard flow can commit or drop
+	// the per-mode text buffers it holds internally (see ModesView.commitBuffers
+	// for why those buffers are not folded into SettingsView's cachedState).
+	const modesViewRef = useRef<ModesViewRef>(null)
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
 
@@ -459,6 +463,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			vscode.postMessage({ type: "telemetrySetting", text: telemetrySetting })
 			vscode.postMessage({ type: "debugSetting", bool: cachedState.debug })
 
+			// Commit buffered Modes-tab text edits (role/description/whenToUse/customInstructions
+			// per mode + global customInstructions) — these are held inside ModesView per the
+			// AGENTS.md "Settings View Pattern" and only persisted on Save.
+			modesViewRef.current?.commitBuffers()
+
 			setChangeDetected(false)
 		}
 	}
@@ -483,6 +492,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 				// Discard changes: Reset state and flag
 				setCachedState(extensionState) // Revert to original state
 				setChangeDetected(false) // Reset change flag
+				// Also drop any per-mode text buffers held inside ModesView.
+				modesViewRef.current?.discardBuffers()
 				confirmDialogHandler.current?.() // Execute the pending action (e.g., tab switch)
 			}
 			// If confirm is false (Cancel), do nothing, dialog closes automatically
@@ -932,10 +943,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* Modes Section */}
 						{renderTab === "modes" && (
-							<ModesView
-								cachedCustomInstructions={cachedState.customInstructions}
-								setCachedStateField={setCachedStateField}
-							/>
+							<ModesView ref={modesViewRef} onModesDirty={() => setChangeDetected(true)} />
 						)}
 
 						{/* MCP Section */}
