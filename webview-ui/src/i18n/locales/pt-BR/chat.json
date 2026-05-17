@@ -98,18 +98,12 @@
 	"enqueueMessage": "Adicionar mensagem à fila (será enviada após a conclusão da tarefa atual)",
 	"scrollToBottom": "Rolar para o final do chat",
 	"about": "Shofer é uma equipe inteira de desenvolvimento de IA em seu editor.",
-	"docs": "Confira nossa <DocsLink>documentação</DocsLink> para saber mais.",
-	"onboarding": "Sua lista de tarefas neste espaço de trabalho está vazia.",
-	"rooTips": {
-		"customizableModes": {
-			"title": "Modos personalizáveis",
-			"description": "Personas especializadas que mantêm o foco na tarefa e entregam resultados."
-		},
-		"modelAgnostic": {
-			"title": "Traga seu próprio modelo",
-			"description": "Use sua própria chave de provedor ou até mesmo execute inferência local — sem acréscimos, sem aprisionamento, sem restrições"
-		}
+	"docs": {
+		"readme": "README — official docs",
+		"roocode": "Coming from Roo-Code? — improvements & migration guide",
+		"copilot": "Coming from Copilot? — improvements & migration guide"
 	},
+	"onboarding": "Sua lista de tarefas neste espaço de trabalho está vazia.",
 	"selectMode": "Selecionar modo de interação",
 	"selectApiConfig": "Selecionar configuração da API",
 	"lockApiConfigAcrossModes": "Bloquear configuração da API em todos os modos neste workspace",

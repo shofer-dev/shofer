@@ -98,18 +98,12 @@
 	"enqueueMessage": "メッセージをキューに追加（現在のタスク完了後に送信されます）",
 	"scrollToBottom": "チャットの最下部にスクロール",
 	"about": "Shoferは、エディタに常駐するAI開発チームです。",
-	"docs": "詳細については、<DocsLink>ドキュメント</DocsLink>をご確認ください。",
-	"onboarding": "このワークスペースのタスクリストは空です。",
-	"rooTips": {
-		"customizableModes": {
-			"title": "カスタマイズ可能なモード",
-			"description": "タスクに集中し、成果を出す専門のペルソナ。"
-		},
-		"modelAgnostic": {
-			"title": "独自のモデルを持ち込む",
-			"description": "独自のプロバイダーキーを使用したり、ローカルで推論を実行したりできます — マークアップ、ロックイン、制限はありません"
-		}
+	"docs": {
+		"readme": "README — official docs",
+		"roocode": "Coming from Roo-Code? — improvements & migration guide",
+		"copilot": "Coming from Copilot? — improvements & migration guide"
 	},
+	"onboarding": "このワークスペースのタスクリストは空です。",
 	"selectMode": "対話モードを選択",
 	"selectApiConfig": "API構成を選択",
 	"lockApiConfigAcrossModes": "このワークスペースのすべてのモードでAPI構成をロック",

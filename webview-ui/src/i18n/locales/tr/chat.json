@@ -98,18 +98,12 @@
 	"enqueueMessage": "Mesajı kuyruğa ekle (mevcut görev tamamlandıktan sonra gönderilecek)",
 	"scrollToBottom": "Sohbetin altına kaydır",
 	"about": "Shofer, düzenleyicinizdeki bütün bir yapay zeka geliştirme ekibidir.",
-	"docs": "Daha fazla bilgi için <DocsLink>belgelerimize</DocsLink> göz atın.",
-	"onboarding": "Bu çalışma alanındaki görev listeniz boş.",
-	"rooTips": {
-		"customizableModes": {
-			"title": "Özelleştirilebilir modlar",
-			"description": "Göreve odaklanan ve sonuç veren özel kişilikler."
-		},
-		"modelAgnostic": {
-			"title": "Kendi modelinizi getirin",
-			"description": "Kendi sağlayıcı anahtarınızı kullanın veya hatta yerel çıkarım yapın — ek ücret yok, kilitlenme yok, kısıtlama yok"
-		}
+	"docs": {
+		"readme": "README — official docs",
+		"roocode": "Coming from Roo-Code? — improvements & migration guide",
+		"copilot": "Coming from Copilot? — improvements & migration guide"
 	},
+	"onboarding": "Bu çalışma alanındaki görev listeniz boş.",
 	"selectMode": "Etkileşim modunu seçin",
 	"selectApiConfig": "API yapılandırmasını seçin",
 	"lockApiConfigAcrossModes": "Bu çalışma alanındaki tüm modlarda API yapılandırmasını kilitle",
