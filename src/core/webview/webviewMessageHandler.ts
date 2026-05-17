@@ -2745,23 +2745,79 @@ export const webviewMessageHandler = async (
 
 		case "updateCodebaseIndexConfig": {
 			// Merge a partial patch into the persisted `codebaseIndexConfig`
-			// global state (a single nested object). The popover's git-enable
-			// toggle uses this so it can flip one field without rewriting the
-			// whole config + secrets that `saveCodeIndexSettingsAtomic`
-			// requires. We must NOT route through generic `updateSettings`
-			// here: those handlers treat each key as a top-level
-			// ContextProxy entry and would write to a non-existent state
-			// slot, leaving the nested config (and the popover's bound
-			// checkbox) unchanged on the next state broadcast.
+			// global state (a single nested object). The popover's
+			// code-enable + git-enable toggles use this so they can flip one
+			// field without rewriting the whole config + secrets that
+			// `saveCodeIndexSettingsAtomic` requires. We must NOT route
+			// through generic `updateSettings` here: those handlers treat
+			// each key as a top-level ContextProxy entry and would write to
+			// a non-existent state slot, leaving the nested config (and the
+			// popover's bound checkbox) unchanged on the next state
+			// broadcast.
+			//
+			// In addition to persisting, this handler is the single
+			// lifecycle entry point for the popover's enable toggles: when
+			// `codebaseIndexEnabled` or `codebaseIndexGitEnabled` flips we
+			// drive the respective manager's `handleSettingsChange` so
+			// indexing starts/stops immediately without an explicit "Start"
+			// button. This is the UX the popover relies on after the
+			// dedicated start/stop buttons were removed.
 			const patch = message.codebaseIndexConfigPartial
 			if (!patch || typeof patch !== "object") {
 				break
 			}
 			try {
 				const currentConfig = getGlobalState("codebaseIndexConfig") || {}
+				const codeEnableFlipped =
+					"codebaseIndexEnabled" in patch &&
+					Boolean(patch.codebaseIndexEnabled) !== Boolean(currentConfig.codebaseIndexEnabled)
+				const gitEnableFlipped =
+					"codebaseIndexGitEnabled" in patch &&
+					Boolean(patch.codebaseIndexGitEnabled) !== Boolean(currentConfig.codebaseIndexGitEnabled)
 				const merged = { ...currentConfig, ...patch }
 				await updateGlobalState("codebaseIndexConfig", merged)
 				await provider.postStateToWebview()
+
+				if (codeEnableFlipped) {
+					const codeManager = provider.getCurrentWorkspaceCodeIndexManager()
+					if (codeManager) {
+						try {
+							await codeManager.handleSettingsChange()
+							await provider.postMessageToWebview({
+								type: "indexingStatusUpdate",
+								values: codeManager.getCurrentStatus(),
+							})
+						} catch (error) {
+							provider.log(
+								`Error toggling code indexing: ${error instanceof Error ? error.message : String(error)}`,
+							)
+						}
+					}
+				}
+
+				if (gitEnableFlipped) {
+					const gitManager = GitIndexManager.getInstance(provider.context)
+					if (gitManager) {
+						try {
+							await gitManager.handleSettingsChange(provider.contextProxy)
+							await provider.postMessageToWebview({
+								type: "gitIndexingStatusUpdate",
+								values: {
+									systemStatus: gitManager.state,
+									message: "",
+									processedItems: 0,
+									totalItems: 0,
+									currentItemUnit: "commits",
+									workspacePath: gitManager.workspacePath,
+								},
+							})
+						} catch (error) {
+							provider.log(
+								`Error toggling git indexing: ${error instanceof Error ? error.message : String(error)}`,
+							)
+						}
+					}
+				}
 			} catch (error) {
 				provider.log(
 					`Error updating codebaseIndexConfig: ${error instanceof Error ? error.message : String(error)}`,
@@ -2858,64 +2914,6 @@ export const webviewMessageHandler = async (
 			})
 			break
 		}
-		case "startIndexing": {
-			try {
-				const manager = provider.getCurrentWorkspaceCodeIndexManager()
-				if (!manager) {
-					provider.postMessageToWebview({
-						type: "indexingStatusUpdate",
-						values: {
-							systemStatus: "Error",
-							message: t("embeddings:orchestrator.indexingRequiresWorkspace"),
-							processedItems: 0,
-							totalItems: 0,
-							currentItemUnit: "items",
-						},
-					})
-					provider.log("Cannot start indexing: No workspace folder open")
-					return
-				}
-
-				// "Start Indexing" implicitly enables the workspace
-				await manager.setWorkspaceEnabled(true)
-
-				if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
-					await manager.initialize(provider.contextProxy)
-
-					const currentState = manager.state
-					if (currentState === "Standby" || currentState === "Error") {
-						manager.startIndexing()
-
-						if (!manager.isInitialized) {
-							await manager.initialize(provider.contextProxy)
-							if (manager.state === "Standby" || manager.state === "Error") {
-								manager.startIndexing()
-							}
-						}
-					}
-				}
-			} catch (error) {
-				provider.log(`Error starting indexing: ${error instanceof Error ? error.message : String(error)}`)
-			}
-			break
-		}
-		case "stopIndexing": {
-			try {
-				const manager = provider.getCurrentWorkspaceCodeIndexManager()
-				if (!manager) {
-					provider.log("Cannot stop indexing: No workspace folder open")
-					return
-				}
-				manager.stopIndexing()
-				provider.postMessageToWebview({
-					type: "indexingStatusUpdate",
-					values: manager.getCurrentStatus(),
-				})
-			} catch (error) {
-				provider.log(`Error stopping indexing: ${error instanceof Error ? error.message : String(error)}`)
-			}
-			break
-		}
 		case "toggleWorkspaceIndexing": {
 			try {
 				const manager = provider.getCurrentWorkspaceCodeIndexManager()
@@ -3000,51 +2998,6 @@ export const webviewMessageHandler = async (
 						error: error instanceof Error ? error.message : String(error),
 					},
 				})
-			}
-			break
-		}
-		case "startGitIndexing": {
-			try {
-				const manager = GitIndexManager.getInstance(provider.context)
-				if (!manager) {
-					provider.log("Cannot start git indexing: No workspace folder open")
-					return
-				}
-
-				if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
-					await manager.initialize(provider.contextProxy)
-
-					const currentState = manager.state
-					if (currentState === "Standby" || currentState === "Error") {
-						manager.startIndexing()
-					}
-				}
-			} catch (error) {
-				provider.log(`Error starting git indexing: ${error instanceof Error ? error.message : String(error)}`)
-			}
-			break
-		}
-		case "stopGitIndexing": {
-			try {
-				const manager = GitIndexManager.getInstance(provider.context)
-				if (!manager) {
-					provider.log("Cannot stop git indexing: No workspace folder open")
-					return
-				}
-				manager.stopIndexing()
-				provider.postMessageToWebview({
-					type: "gitIndexingStatusUpdate",
-					values: {
-						systemStatus: manager.state,
-						message: "",
-						processedItems: 0,
-						totalItems: 0,
-						currentItemUnit: "commits",
-						workspacePath: manager.workspacePath,
-					},
-				})
-			} catch (error) {
-				provider.log(`Error stopping git indexing: ${error instanceof Error ? error.message : String(error)}`)
 			}
 			break
 		}

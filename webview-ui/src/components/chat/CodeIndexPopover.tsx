@@ -272,28 +272,10 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 								</div>
 							</div>
 
-							{/* Action Buttons */}
+							{/* Action Buttons: only Clear remains. Start/Stop dropped — indexing
+							   begins automatically when the user enables the feature above and
+							   restarts on extension activation via GitIndexManager.initialize(). */}
 							<div className="flex gap-2 mt-3">
-								{(codebaseIndexConfig?.codebaseIndexGitEnabled ?? false) &&
-									(gitIndexingStatus.systemStatus === "Error" ||
-										gitIndexingStatus.systemStatus === "Standby") && (
-										<Button
-											size="sm"
-											onClick={() => vscode.postMessage({ type: "startGitIndexing" })}>
-											{t("settings:codeIndex.gitStartButton")}
-										</Button>
-									)}
-
-								{(codebaseIndexConfig?.codebaseIndexGitEnabled ?? false) &&
-									gitIndexingStatus.systemStatus === "Indexing" && (
-										<Button
-											size="sm"
-											variant="destructive"
-											onClick={() => vscode.postMessage({ type: "stopGitIndexing" })}>
-											{t("settings:codeIndex.gitStopButton")}
-										</Button>
-									)}
-
 								{(codebaseIndexConfig?.codebaseIndexGitEnabled ?? false) &&
 									(gitIndexingStatus.systemStatus === "Indexed" ||
 										gitIndexingStatus.systemStatus === "Error") && (
@@ -381,30 +363,10 @@ export const CodeIndexPopover: React.FC<CodeIndexPopoverProps> = ({
 							</p>
 						)}
 
-						{/* Action Buttons */}
+						{/* Action Buttons: only Clear remains. Start/Stop dropped —
+						   indexing begins automatically when the user enables the feature
+						   above and restarts on extension activation. */}
 						<div className="flex items-center gap-2 pt-6">
-							{codebaseIndexEnabled &&
-								(indexingStatus.systemStatus === "Error" ||
-									indexingStatus.systemStatus === "Standby") && (
-									<Button onClick={() => vscode.postMessage({ type: "startIndexing" })}>
-										{t("settings:codeIndex.startIndexingButton")}
-									</Button>
-								)}
-
-							{codebaseIndexEnabled && indexingStatus.systemStatus === "Indexing" && (
-								<Button
-									variant="destructive"
-									onClick={() => vscode.postMessage({ type: "stopIndexing" })}>
-									{t("settings:codeIndex.stopIndexingButton")}
-								</Button>
-							)}
-
-							{codebaseIndexEnabled && indexingStatus.systemStatus === "Stopping" && (
-								<Button variant="destructive" disabled>
-									{t("settings:codeIndex.stoppingButton")}
-								</Button>
-							)}
-
 							{codebaseIndexEnabled &&
 								(indexingStatus.systemStatus === "Indexed" ||
 									indexingStatus.systemStatus === "Error") && (

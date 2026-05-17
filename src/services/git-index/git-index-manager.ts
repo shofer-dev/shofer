@@ -209,6 +209,15 @@ export class GitIndexManager {
 		await this._recreateServices()
 
 		this._isInitialized = true
+
+		// 7. Auto-start indexing — mirrors CodeIndexManager.initialize() so that
+		// the git index begins building on extension activation (and on any
+		// later transition into enabled+configured+git-repo) without requiring
+		// an explicit user click. Fire-and-forget: startIndexing kicks off a
+		// long-running background pipeline and reports progress via events.
+		void this.startIndexing().catch(() => {
+			// State + telemetry already captured inside startIndexing()
+		})
 	}
 
 	/**
@@ -314,6 +323,76 @@ export class GitIndexManager {
 		return {
 			systemStatus: this._stateManager.state,
 			message: this._stateManager.message,
+		}
+	}
+
+	/**
+	 * Reacts to a change in persisted git-index settings (e.g. the user
+	 * toggling `codebaseIndexGitEnabled` in the popover).
+	 *
+	 * Mirrors {@link CodeIndexManager.handleSettingsChange}: re-loads the
+	 * config, then drives the state machine into one of four buckets:
+	 *  - feature disabled        → stop indexing, go Standby
+	 *  - first-time enable       → initialize() (which itself auto-starts)
+	 *  - config change requiring restart on an already-initialized manager
+	 *                            → recreate services and restart indexing
+	 *  - no-op change            → leave the running indexer alone
+	 *
+	 * Called from the webview-message handler when the user flips the git
+	 * enable toggle so indexing starts/stops immediately without an extra
+	 * explicit Start button.
+	 */
+	public async handleSettingsChange(contextProxy: ContextProxy): Promise<void> {
+		// First-time enable: defer to initialize() which sets up services AND
+		// kicks off indexing in one shot.
+		if (!this._isInitialized) {
+			await this.initialize(contextProxy)
+			return
+		}
+
+		if (!this._configManager) {
+			this._configManager = new CodeIndexConfigManager(contextProxy)
+		}
+		const { requiresRestart } = await this._configManager.loadConfiguration()
+
+		// Feature turned off — stop the orchestrator and reset state.
+		if (!this.isFeatureEnabled) {
+			this.stopIndexing()
+			this._stateManager.setSystemState("Standby", "Git indexing is disabled in settings.")
+			return
+		}
+
+		if (!this.isFeatureConfigured) {
+			this.stopIndexing()
+			this._stateManager.setSystemState(
+				"Standby",
+				"Git indexing is not configured (Missing API Key or Qdrant URL).",
+			)
+			return
+		}
+
+		if (requiresRestart) {
+			try {
+				if (!this._cacheManager) {
+					this._cacheManager = new GitCacheManager(this.context, this.workspacePath)
+					await this._cacheManager.initialize()
+				}
+				await this._recreateServices()
+				void this.startIndexing().catch(() => {
+					// State + telemetry already captured inside startIndexing()
+				})
+			} catch (error) {
+				try {
+					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
+						error: error instanceof Error ? error.message : String(error),
+						stack: error instanceof Error ? error.stack : undefined,
+						location: "GitIndexManager.handleSettingsChange",
+					})
+				} catch {
+					// Telemetry may not be initialized yet.
+				}
+				throw error
+			}
 		}
 	}
 
