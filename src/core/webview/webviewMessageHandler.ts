@@ -716,9 +716,6 @@ export const webviewMessageHandler = async (
 				const messageText = resolved.text
 
 				const currentTask = provider.getCurrentTask()
-				provider.log(
-					`[DIAG webviewHandler] askResponse received: askResponse=${message.askResponse}, text=${messageText?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}`,
-				)
 				currentTask?.handleWebviewAskResponse(message.askResponse!, messageText, resolved.images)
 			}
 			break
@@ -3474,9 +3471,6 @@ export const webviewMessageHandler = async (
 			const messageText = resolved.text
 
 			const currentTask = provider.getCurrentTask()
-			provider.log(
-				`[DIAG webviewHandler] queueMessage received: text=${messageText?.substring(0, 100)}, hasTask=${!!currentTask}, taskId=${currentTask?.taskId}.${currentTask?.instanceId}, queueSize=${currentTask?.messageQueueService.messages.length}, abort=${currentTask?.abort}`,
-			)
 			currentTask?.messageQueueService.addMessage(messageText, resolved.images)
 
 			// If the task's loop has already terminated (e.g. `attempt_completion`
@@ -3487,9 +3481,6 @@ export const webviewMessageHandler = async (
 			// the task loop with the dequeued message. Queueing semantics are for
 			// "task is doing work"; a completed task is not doing work.
 			if (currentTask?.abort) {
-				provider.log(
-					`[DIAG webviewHandler] queueMessage on aborted task — auto-triggering cancelAndProcessQueuedMessages, taskId=${currentTask.taskId}.${currentTask.instanceId}`,
-				)
 				await currentTask.cancelAndProcessQueuedMessages()
 			}
 			break
@@ -3509,12 +3500,7 @@ export const webviewMessageHandler = async (
 		case "cancelAndSendQueuedMessages": {
 			const currentTask = provider.getCurrentTask()
 			if (currentTask) {
-				provider.log(
-					`[DIAG webviewHandler] cancelAndSendQueuedMessages: taskId=${currentTask.taskId}.${currentTask.instanceId}, queueSize=${currentTask.messageQueueService.messages.length}`,
-				)
 				await currentTask.cancelAndProcessQueuedMessages()
-			} else {
-				provider.log(`[DIAG webviewHandler] cancelAndSendQueuedMessages: no current task`)
 			}
 			break
 		}

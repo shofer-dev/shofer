@@ -143,9 +143,6 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		this.conversationId = options.taskId ?? uuidv7()
 		this.parentConversationId = options.parentTaskId
 		this.rootConversationId = options.rootTaskId
-		console.log(
-			`[DEEPSEEK-DIAG] VsCodeLmHandler created: conversationId=${this.conversationId}, taskId=${options.taskId}, parentTaskId=${options.parentTaskId}, rootTaskId=${options.rootTaskId}`,
-		)
 
 		try {
 			// Listen for model changes and reset client
@@ -556,9 +553,6 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
-		console.log(
-			`[DEEPSEEK-DIAG] VsCodeLmHandler.createMessage: conversationId=${this.conversationId}, parentConversationId=${this.parentConversationId}, rootConversationId=${this.rootConversationId}, msgCount=${messages.length}`,
-		)
 		// Ensure clean state before starting a new request
 		this.ensureCleanState()
 		const client: vscode.LanguageModelChat = await this.getClient()
@@ -664,12 +658,6 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 					}
 				} else if (chunk instanceof vscode.LanguageModelToolCallPart) {
 					try {
-						// Diagnostic log for attempt_completion calls
-						if (chunk.name === "attempt_completion") {
-							getOutputChannel()?.appendLine(
-								`[DIAG] [vscode-lm] attempt_completion input: ${JSON.stringify(chunk.input)}`,
-							)
-						}
 						// Log tool call details for Xiaomi
 						if (isXiaomiModel) {
 							getOutputChannel()?.appendLine(

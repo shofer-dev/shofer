@@ -75,9 +75,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
 
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
-		// Diagnostic: dump all received params to the output channel
-		getOutputChannel()?.appendLine(`[DIAG] [AttemptCompletionTool] RAW PARAMS: ${JSON.stringify(params)}`)
-
 		const { result, rating, feedback } = params
 		const { handleError, pushToolResult } = callbacks
 
