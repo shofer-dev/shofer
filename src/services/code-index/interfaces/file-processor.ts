@@ -98,6 +98,8 @@ export interface FileProcessingResult {
 	error?: Error
 	reason?: string
 	newHash?: string
+	newMtimeMs?: number
+	newSize?: number
 	pointsToUpsert?: PointStruct[]
 }
 

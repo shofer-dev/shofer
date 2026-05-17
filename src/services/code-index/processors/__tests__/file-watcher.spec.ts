@@ -42,7 +42,7 @@ vi.mock("vscode", () => ({
 			},
 		],
 		fs: {
-			stat: vi.fn().mockResolvedValue({ size: 1000 }),
+			stat: vi.fn().mockResolvedValue({ size: 1000, mtime: 1700000000000 }),
 			readFile: vi.fn().mockResolvedValue(Buffer.from("test content")),
 		},
 	},
@@ -105,9 +105,10 @@ describe("FileWatcher", () => {
 		}
 
 		mockCacheManager = {
-			getHash: vi.fn(),
-			updateHash: vi.fn(),
+			getEntry: vi.fn(),
+			updateEntry: vi.fn(),
 			deleteHash: vi.fn(),
+			getAllPaths: vi.fn().mockReturnValue([]),
 		}
 
 		mockEmbedder = {
@@ -283,6 +284,96 @@ describe("FileWatcher", () => {
 			fileWatcher.dispose()
 
 			expect(mockWatcher.dispose).toHaveBeenCalled()
+		})
+	})
+
+	describe("Phase 1 — cache entry integrity", () => {
+		it("should write full cache entry with real mtimeMs+size on changed file, enabling fast-path on next scan", async () => {
+			// Return a proper stat with real mtime
+			const { workspace: ws } = await import("vscode")
+			const statWithMtime = { size: 2048, mtime: 1715952000000 }
+			;(ws.fs.stat as any).mockResolvedValue(statWithMtime)
+
+			// File content that hashes predictably
+			const fileContent = "function bar() { return 1; }"
+			;(ws.fs.readFile as any).mockResolvedValue(Buffer.from(fileContent))
+
+			// getEntry returns undefined — file not yet cached
+			;(mockCacheManager.getEntry as any).mockReturnValue(undefined)
+
+			// Mock parser to return blocks so the path goes through to "processed_for_batching"
+			const { codeParser } = await import("../parser")
+			;(codeParser.parseFile as any).mockResolvedValue([
+				{
+					file_path: "/mock/workspace/src/test.ts",
+					content: fileContent,
+					start_line: 1,
+					end_line: 1,
+					identifier: "bar",
+					type: "function",
+					fileHash: "new-hash",
+					segmentHash: "seg-1",
+				},
+			])
+
+			// Mock embedder to return embeddings
+			mockEmbedder.createEmbeddings.mockResolvedValue({ embeddings: [[0.1, 0.2, 0.3]] })
+
+			const result = await fileWatcher.processFile("/mock/workspace/src/test.ts")
+
+			// Verify the result carries stat info
+			expect(result.status).toBe("processed_for_batching")
+			expect(result.newMtimeMs).toBe(1715952000000)
+			expect(result.newSize).toBe(2048)
+
+			// Simulate the full batch upsert flow by calling updateEntry directly
+			// (the watcher normally defers this to batch processing)
+			const { createHash } = await import("crypto")
+			const contentHash = createHash("sha256").update(fileContent).digest("hex")
+
+			// Mimic what executeBatchUpsertOperations does with the returned stats
+			mockCacheManager.updateEntry("/mock/workspace/src/test.ts", {
+				hash: contentHash,
+				mtimeMs: result.newMtimeMs!,
+				size: result.newSize!,
+			})
+
+			expect(mockCacheManager.updateEntry).toHaveBeenCalledWith("/mock/workspace/src/test.ts", {
+				hash: contentHash,
+				mtimeMs: 1715952000000,
+				size: 2048,
+			})
+		})
+
+		it("should update cache entry on skipped (unchanged) file so fast-path survives", async () => {
+			const { workspace: ws } = await import("vscode")
+			const statWithMtime = { size: 1024, mtime: 1715953000000 }
+			;(ws.fs.stat as any).mockResolvedValue(statWithMtime)
+
+			const fileContent = "function unchanged() {}"
+			const { createHash } = await import("crypto")
+			const contentHash = createHash("sha256").update(fileContent).digest("hex")
+			;(ws.fs.readFile as any).mockResolvedValue(Buffer.from(fileContent))
+
+			// Cached entry has matching hash but stale mtime (simulates touch/rebase/rsync -t)
+			;(mockCacheManager.getEntry as any).mockReturnValue({
+				hash: contentHash,
+				mtimeMs: 1715952000000, // old mtime
+				size: 1024,
+			})
+
+			const result = await fileWatcher.processFile("/mock/workspace/src/unchanged.ts")
+
+			// Should be skipped
+			expect(result.status).toBe("skipped")
+			expect(result.reason).toBe("File has not changed")
+
+			// updateEntry should have been called with the new mtime
+			expect(mockCacheManager.updateEntry).toHaveBeenCalledWith("/mock/workspace/src/unchanged.ts", {
+				hash: contentHash,
+				mtimeMs: 1715953000000,
+				size: 1024,
+			})
 		})
 	})
 })

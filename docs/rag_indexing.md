@@ -129,7 +129,10 @@ vectorStore.initialize() → create Qdrant collection if needed
   → scanner.scanDirectory():
       listFiles() → filter by extensions, .gitignore, .shoferignore
       → for each file (parallel, concurrency=10):
-          SHA-256 hash check → skip if unchanged
+          stat() → get mtimeMs + size
+          Phase 1 fast-path: if cache entry has matching mtimeMs+size → skip
+          (avoids readFile + SHA-256 for unchanged files)
+          readFile() + SHA-256 hash → if hash matches cache → update mtimeMs+size, skip
           → CodeParser.parseFile():
               tree-sitter AST → extract functions/classes etc. as CodeBlock[]
               fallback: line-based chunking for unsupported exts
@@ -137,7 +140,7 @@ vectorStore.initialize() → create Qdrant collection if needed
           → when batch full:
               embedder.createEmbeddings(batchTexts)
               → QdrantVectorStore.upsertPoints(points with UUID-v5 IDs)
-              → CacheManager.updateHash()
+              → CacheManager.updateEntry() (stores hash + mtimeMs + size)
       → handle deleted files (remove from Qdrant + cache)
   → start FileWatcher for incremental updates
   → markIndexingComplete()
@@ -147,25 +150,36 @@ vectorStore.initialize() → create Qdrant collection if needed
 
 The system uses **two separate storage locations** for different kinds of data:
 
-| Data                                      | Storage Location                                                                                                                            | Survives Reboot?                                |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Vector embeddings** (in Qdrant)         | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                    | ✓ Yes — persisted on Kubernetes PVC             |
-| **File hash cache** (SHA-256 per file)    | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
-| **Metadata marker** (`indexing_complete`) | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                | ✓ Yes — persisted in Qdrant                     |
+| Data                                                | Storage Location                                                                                                                            | Survives Reboot?                                |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Vector embeddings** (in Qdrant)                   | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                    | ✓ Yes — persisted on Kubernetes PVC             |
+| **File cache** (v2: hash + mtimeMs + size per file) | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
+| **Metadata marker** (`indexing_complete`)           | Qdrant collection — a special point with `type: "metadata"` and `indexing_complete: boolean`                                                | ✓ Yes — persisted in Qdrant                     |
 
-#### Hash Cache Location
+#### Cache Location & Format
 
-The `CacheManager` persists file hashes to a JSON file in VS Code's extension global storage directory:
+The `CacheManager` persists a version 2 JSON cache to VS Code's extension global storage directory:
 
 ```
 ~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<sha256-of-workspace-path>.json
 ```
 
-Example:
+**v2 format** (Phase 1 — stat()-only fast-path):
 
+```json
+{
+	"version": 2,
+	"entries": {
+		"src/utils/helpers.ts": {
+			"hash": "a1b2c3d4...",
+			"mtimeMs": 1715952000000,
+			"size": 4096
+		}
+	}
+}
 ```
-~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-7d1f5ec07233fd91a20daff100cb1dafca4849d96205580a64af9b043026c073.json
-```
+
+Each entry stores the file's SHA-256 hash, last-modified time (ms), and size (bytes). On startup reconciliation, the scanner calls `stat()` and compares `mtimeMs` and `size` against the cache. If both match, the file is skipped without reading or hashing it. If only the hash matches (mtime changed but content identical — rare cases like `touch`, rebase, rsync -t), the cache entry is updated with the new mtimeMs/size and the file is still skipped. Per the **Versioned Snapshot Rule**, a `version` mismatch discards the entire cache and starts fresh.
 
 This cache file is **NOT** on the Qdrant PVC. It lives on the local filesystem with VS Code's settings.
 
@@ -178,12 +192,15 @@ After a reboot, when `CodeIndexManager.initialize()` runs:
 2. hasIndexedData() → checks if collection has points AND metadata marker exists
    → if points_count > 0 → collection has indexed data ✓
 3. if hasIndexedData():
-       → runs incremental scan: skips unchanged files via SHA-256 hash comparison
+       → runs incremental scan: per-file stat() → compare mtimeMs+size with cache
+         → if mtime+size match: skip (Phase 1 fast-path — no read, no hash)
+         → if not: readFile + SHA-256 → if hash matches: update cache entry, skip
+         → else: parse, embed, upsert
    else:
        → runs full scan: embed all files
 ```
 
-The critical dependency: **incremental scans require the hash cache file to be present**. Without it, the system cannot determine which files are unchanged → treats all files as new/changed → re-embeds everything, even though Qdrant already contains the vectors.
+The critical dependency: **incremental scans require the cache file to be present**. Without it, the system cannot determine which files are unchanged → treats all files as new/changed → re-embeds everything, even though Qdrant already contains the vectors. The Phase 1 mtime+size fast-path makes startup reconciliation O(changed files) instead of O(workspace files) — on a workspace where nothing changed, zero `readFile` calls are made.
 
 #### Reboot Behavior
 
