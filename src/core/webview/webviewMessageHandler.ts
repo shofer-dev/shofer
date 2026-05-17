@@ -567,8 +567,8 @@ export const webviewMessageHandler = async (
 
 	switch (message.type) {
 		case "webviewLog":
-			// Diagnostic log forwarded from the webview so it lands in Shofer's OutputChannel.
-			provider.log(`[webview] ${message.text ?? ""}`)
+			// Diagnostic log forwarded from the webview — only when DEBUG is set.
+			provider.debug?.(`[webview] ${message.text ?? ""}`)
 			break
 		case "webviewDidLaunch":
 			// Load custom modes first
@@ -1576,9 +1576,7 @@ export const webviewMessageHandler = async (
 			}
 
 			try {
-				provider.log(`Attempting to delete MCP server: ${message.serverName}`)
 				await provider.getMcpHub()?.deleteServer(message.serverName, message.source as "global" | "project")
-				provider.log(`Successfully deleted MCP server: ${message.serverName}`)
 
 				// Refresh the webview state
 				await provider.postStateToWebview()
@@ -2252,9 +2250,9 @@ export const webviewMessageHandler = async (
 				if (rulesFolderExists) {
 					try {
 						await fs.rm(rulesFolderPath, { recursive: true, force: true })
-						provider.log(`Deleted rules folder for mode ${message.slug}: ${rulesFolderPath}`)
+						provider.debug?.(`Deleted rules folder for mode ${message.slug}: ${rulesFolderPath}`)
 					} catch (error) {
-						provider.log(`Failed to delete rules folder for mode ${message.slug}: ${error}`)
+						provider.debug?.(`Failed to delete rules folder for mode ${message.slug}: ${error}`)
 						// Notify the user about the failure
 						vscode.window.showErrorMessage(
 							t("common:errors.delete_rules_folder_failed", {
@@ -2705,7 +2703,7 @@ export const webviewMessageHandler = async (
 						if (!currentCodeIndexManager.isInitialized) {
 							try {
 								await currentCodeIndexManager.initialize(provider.contextProxy)
-								provider.log(`Code index manager initialized after settings save`)
+								provider.debug?.(`Code index manager initialized after settings save`)
 							} catch (error) {
 								provider.log(
 									`Code index initialization failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -2720,7 +2718,7 @@ export const webviewMessageHandler = async (
 					}
 				} else {
 					// No workspace open - send error status
-					provider.log("Cannot save code index settings: No workspace folder open")
+					provider.debug?.("Cannot save code index settings: No workspace folder open")
 					await provider.postMessageToWebview({
 						type: "indexingStatusUpdate",
 						values: {
@@ -3418,7 +3416,7 @@ export const webviewMessageHandler = async (
 				const templateContent = t("common:errors.command_template_content")
 
 				await fs.writeFile(filePath, templateContent, "utf8")
-				provider.log(`Created new command file: ${filePath}`)
+				provider.debug?.(`Created new command file: ${filePath}`)
 
 				// Open the new file in the editor
 				openFile(filePath)
