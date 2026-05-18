@@ -26,7 +26,6 @@
 	"command.importSettings.title": "Import Settings",
 	"command.setCustomStoragePath.title": "Set Custom Storage Path",
 	"command.toggleAutoApprove.title": "Toggle Auto-Approve",
-	"command.refreshWebview.title": "Refresh Webview",
 	"commands.allowedCommands.description": "Commands that can be automatically executed when 'Always approve execute operations' is enabled",
 	"commands.commandExecutionTimeout.description": "Maximum time in seconds to wait for command execution to complete before timing out (0 = no timeout, 1-600s, default: 0s)",
 	"commands.commandTimeoutAllowlist.description": "Command prefixes that are excluded from command execution timeout. Commands matching these prefixes will run without timeout restrictions.",

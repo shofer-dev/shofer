@@ -279,14 +279,6 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		})
 		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
 	},
-	// ─── Webview ──────────────────────────────────────────────────────────
-	refreshWebview: async () => {
-		const visibleProvider = getVisibleProviderOrLog(outputChannel)
-		if (!visibleProvider) {
-			return
-		}
-		await visibleProvider.refreshWebview()
-	},
 	// ─── Git Index ────────────────────────────────────────────────────────
 	startGitIndexing: async () => {
 		const manager = GitIndexManager.getInstance(context)

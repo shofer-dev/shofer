@@ -8,18 +8,19 @@ This document establishes canonical names for the Shofer extension's UI componen
 
 1. [UI Components — Chat Area](#1-ui-components--chat-area)
 2. [UI Components — Task Management](#2-ui-components--task-management)
-3. [UI Components — Sidebar & Navigation](#3-ui-components--sidebar--navigation)
-4. [UI Components — Panels & Overlays](#4-ui-components--panels--overlays)
-5. [Architecture — Extension Host (Backend)](#5-architecture--extension-host-backend)
-6. [Architecture — Webview (Frontend)](#6-architecture--webview-frontend)
-7. [Data Types & Schemas](#7-data-types--schemas)
-8. [IPC Protocol](#8-ipc-protocol)
-9. [Tools — Canonical Names](#9-tools--canonical-names)
-10. [Tool Groups (Categories)](#10-tool-groups-categories)
-11. [Modes](#11-modes)
-12. [Task States & Lifecycle](#12-task-states--lifecycle)
-13. [Special Files & Directories](#13-special-files--directories)
-14. [API Provider Concepts](#14-api-provider-concepts)
+3. [UI Components — VS Code Panel Title Bar](#3-ui-components--vs-code-panel-title-bar)
+4. [UI Components — Sidebar & Navigation](#3a-ui-components--sidebar--navigation)
+5. [UI Components — Panels & Overlays](#4-ui-components--panels--overlays)
+6. [Architecture — Extension Host (Backend)](#5-architecture--extension-host-backend)
+7. [Architecture — Webview (Frontend)](#6-architecture--webview-frontend)
+8. [Data Types & Schemas](#7-data-types--schemas)
+9. [IPC Protocol](#8-ipc-protocol)
+10. [Tools — Canonical Names](#9-tools--canonical-names)
+11. [Tool Groups (Categories)](#10-tool-groups-categories)
+12. [Modes](#11-modes)
+13. [Task States & Lifecycle](#12-task-states--lifecycle)
+14. [Special Files & Directories](#13-special-files--directories)
+15. [API Provider Concepts](#14-api-provider-concepts)
 
 ---
 
@@ -84,7 +85,34 @@ Components related to viewing, switching, and managing multiple tasks.
 
 ---
 
-## 3. UI Components — Sidebar & Navigation
+## 3. UI Components — VS Code Panel Title Bar
+
+These are the native VS Code icon buttons rendered by VS Code itself in the title bar of the Shofer panel — **not** React components inside the webview. They are declared in `src/package.json` under `contributes.menus.view/title` (sidebar) and `contributes.menus.editor/title` (tab panel), and backed by commands registered in `src/activate/registerCommands.ts`.
+
+There are two display groups:
+
+- **Navigation buttons** (`group: "navigation@N"`) — shown as icons directly in the title bar, left-to-right in ascending `N` order.
+- **Overflow buttons** (`group: "overflow@N"`) — hidden inside the `⋯` ("More Actions…") dropdown.
+
+| Canonical Name         | Command ID                        | Icon               | Group          | Description                                                                     |
+| ---------------------- | --------------------------------- | ------------------ | -------------- | ------------------------------------------------------------------------------- |
+| **Plus button**        | `shofer.plusButtonClicked`        | `$(edit)`          | `navigation@1` | Opens a new task (moves the current task to background).                        |
+| **Tasks button**       | `shofer.tasksButtonClicked`       | `$(list-tree)`     | `navigation@2` | Opens the parallel-tasks drawer inside the webview.                             |
+| **Settings button**    | `shofer.settingsButtonClicked`    | `$(settings-gear)` | `navigation@3` | Navigates to SettingsView inside the webview.                                   |
+| **Marketplace button** | `shofer.marketplaceButtonClicked` | `$(extensions)`    | `navigation@5` | Navigates to MarketplaceView (feature-flagged via `shofer:marketplaceEnabled`). |
+| **History button**     | `shofer.historyButtonClicked`     | `$(history)`       | `overflow@1`   | Navigates to HistoryView inside the webview.                                    |
+| **Popout button**      | `shofer.popoutButtonClicked`      | `$(link-external)` | `overflow@2`   | Opens Shofer in a new editor tab (`openShoferInNewTab`).                        |
+
+> **Quick reference for requests:**
+>
+> - "Add a button to the VS Code title bar" → add a `contributes.menus.view/title` + `editor/title` entry and a new `CommandId`.
+> - "Put it next to the Plus/Settings icons" → use a `navigation@N` group.
+> - "Put it in the `⋯` menu" → use an `overflow@N` group.
+> - Do **not** confuse these with the React toolbar inside **ChatTextArea** (the webview input bar), which contains **ModeSelector**, **ApiConfigSelector**, **AutoApproveDropdown**, **CommandsButton**, **SkillsButton**, etc.
+
+---
+
+## 3a. UI Components — Sidebar & Navigation
 
 Components in the Shofer sidebar (or editor tab header) for top-level navigation.
 
