@@ -13,18 +13,32 @@ vitest.mock("../../../utils/safeWriteJson", () => ({
 import { safeWriteJson } from "../../../utils/safeWriteJson"
 
 // Mock vscode
-vitest.mock("vscode", () => ({
-	Uri: {
-		joinPath: vitest.fn(),
-	},
-	workspace: {
-		fs: {
-			readFile: vitest.fn(),
-			writeFile: vitest.fn(),
-			delete: vitest.fn(),
+vitest.mock("vscode", () => {
+	class EventEmitter<T> {
+		listeners: Array<(e: T) => void> = []
+		event = (l: (e: T) => void) => {
+			this.listeners.push(l)
+			return { dispose: () => {} }
+		}
+		fire = (e: T) => this.listeners.forEach((l) => l(e))
+		dispose = () => {
+			this.listeners = []
+		}
+	}
+	return {
+		Uri: {
+			joinPath: vitest.fn(),
 		},
-	},
-}))
+		workspace: {
+			fs: {
+				readFile: vitest.fn(),
+				writeFile: vitest.fn(),
+				delete: vitest.fn(),
+			},
+		},
+		EventEmitter,
+	}
+})
 
 // Mock debounce to execute immediately
 vitest.mock("lodash.debounce", () => ({ default: vitest.fn((fn) => fn) }))

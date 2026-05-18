@@ -23,6 +23,15 @@ export class CacheManager implements ICacheManager {
 	private _debouncedSaveCache: () => void
 
 	/**
+	 * Fires whenever an entry is added/updated. Used by `CodeIndexManager` to
+	 * surface "last file indexed" + cumulative "files indexed" diagnostics
+	 * in the popover without having to thread file paths through the scanner
+	 * callback signatures.
+	 */
+	private readonly _onEntryUpdated = new vscode.EventEmitter<string>()
+	public readonly onEntryUpdated = this._onEntryUpdated.event
+
+	/**
 	 * @param context VS Code extension context
 	 * @param workspacePath Path to the workspace
 	 */
@@ -111,6 +120,7 @@ export class CacheManager implements ICacheManager {
 	updateEntry(filePath: string, entry: CodebaseIndexCacheEntry): void {
 		this.entries[filePath] = entry
 		this._debouncedSaveCache()
+		this._onEntryUpdated.fire(filePath)
 	}
 
 	/**
@@ -129,9 +139,25 @@ export class CacheManager implements ICacheManager {
 	}
 
 	/**
+	 * Returns the cumulative number of files currently held in the cache.
+	 * Used by the popover to surface a "files indexed" diagnostic so users
+	 * can verify the Phase 1/2 fast-path didn't silently drop anything.
+	 */
+	getEntryCount(): number {
+		return Object.keys(this.entries).length
+	}
+
+	/**
 	 * Flushes any pending debounced cache writes to disk immediately.
 	 */
 	async flush(): Promise<void> {
 		await this._performSave()
+	}
+
+	/**
+	 * Disposes the entry-updated emitter. Called by `CodeIndexManager.dispose()`.
+	 */
+	dispose(): void {
+		this._onEntryUpdated.dispose()
 	}
 }

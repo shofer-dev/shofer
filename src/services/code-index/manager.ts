@@ -194,6 +194,17 @@ export class CodeIndexManager {
 		if (!this._cacheManager) {
 			this._cacheManager = new CacheManager(this.context, this.workspacePath)
 			await this._cacheManager.initialize()
+			// Surface diagnostics in the popover: every time the cache is
+			// touched, refresh the cumulative file-count and the most-recent
+			// file path. This is the data path that lets users verify the
+			// Phase 1/2 fast-path didn't silently drop files.
+			this._cacheManager.onEntryUpdated((relPath) => {
+				this._stateManager.recordFileIndexed(relPath)
+				this._stateManager.setIndexedFileCount(this._cacheManager!.getEntryCount())
+			})
+			// Seed the cumulative count immediately on (re)load so the popover
+			// shows the persisted total even before any new file change fires.
+			this._stateManager.setIndexedFileCount(this._cacheManager.getEntryCount())
 		}
 
 		// 6. Determine if Core Services Need Recreation
@@ -307,6 +318,10 @@ export class CodeIndexManager {
 	 */
 	public dispose(): void {
 		this.stopIndexing()
+		// Optional dispose: tolerate cacheManager mocks (and the small
+		// initialization window before _wireCacheDiagnostics has assigned a
+		// real CacheManager) that don't implement dispose().
+		this._cacheManager?.dispose?.()
 		this._stateManager.dispose()
 	}
 

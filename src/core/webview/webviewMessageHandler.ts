@@ -2800,15 +2800,18 @@ export const webviewMessageHandler = async (
 					if (gitManager) {
 						try {
 							await gitManager.handleSettingsChange(provider.contextProxy)
+							const status = gitManager.getCurrentStatus()
 							await provider.postMessageToWebview({
 								type: "gitIndexingStatusUpdate",
 								values: {
-									systemStatus: gitManager.state,
-									message: "",
+									systemStatus: status.systemStatus,
+									message: status.message ?? "",
 									processedItems: 0,
 									totalItems: 0,
 									currentItemUnit: "commits",
 									workspacePath: gitManager.workspacePath,
+									indexedCommitCount: status.indexedCommitCount,
+									latestCommitHash: status.latestCommitHash,
 								},
 							})
 						} catch (error) {
@@ -3040,6 +3043,8 @@ export const webviewMessageHandler = async (
 							totalItems: 0,
 							currentItemUnit: "commits",
 							workspacePath: manager.workspacePath,
+							indexedCommitCount: status.indexedCommitCount,
+							latestCommitHash: status.latestCommitHash,
 						},
 					})
 				}

@@ -903,11 +903,46 @@ export interface IndexingStatus {
 	workspacePath?: string
 	workspaceEnabled?: boolean
 	autoEnableDefault?: boolean
+	/**
+	 * Cumulative number of files currently held in the code-index cache
+	 * (i.e. the number of files presently represented in Qdrant). Survives
+	 * restart. Surfaced in the popover so users can verify the fast-path
+	 * didn't silently drop any files.
+	 */
+	indexedFileCount?: number
+	/**
+	 * Most recent file the orchestrator/watcher (re)indexed since the
+	 * extension started. Empty when no files have been touched yet this
+	 * session (e.g. cold-start with all files unchanged on disk).
+	 */
+	lastFileIndexed?: string
 }
 
 export interface IndexingStatusUpdateMessage {
 	type: "indexingStatusUpdate"
 	values: IndexingStatus
+}
+
+/**
+ * Payload pushed to the webview with the current git-history-index status.
+ * Mirrors {@link IndexingStatus} but with commit-oriented diagnostics.
+ */
+export interface GitIndexingStatus {
+	systemStatus: string
+	message?: string
+	processedItems: number
+	totalItems: number
+	currentItemUnit?: string
+	workspacePath?: string
+	/** Number of commits currently held in the git-index cache. */
+	indexedCommitCount?: number
+	/** Short SHA (7 chars) of the most recent commit known to the indexer. */
+	latestCommitHash?: string
+}
+
+export interface GitIndexingStatusUpdateMessage {
+	type: "gitIndexingStatusUpdate"
+	values: GitIndexingStatus
 }
 
 export interface LanguageModelChatSelector {
