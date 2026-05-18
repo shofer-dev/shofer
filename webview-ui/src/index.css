@@ -210,8 +210,24 @@
 		@apply underline;
 	}
 
-	/* Road-cruise animation — gentle float + subtle sway for the Shofer hero logo.
-	   Simulates the logo cruising along a road with mild suspension bob. */
+	/* Logo-roll animation — the Shofer "S" logo rotates like a wheel
+	   rolling along the road. Matches forward-motion parallax of the
+	   lane markers beneath it for a cohesive driving scene. */
+	@keyframes logo-roll {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
+	}
+
+	.animate-logo-roll {
+		animation: logo-roll 1.6s linear infinite;
+	}
+
+	/* Road-cruise animation (DEPRECATED — replaced by logo-roll).
+	   Kept for backward-compatibility; no components reference this class. */
 	@keyframes road-cruise {
 		0% {
 			transform: translate(0, 0);

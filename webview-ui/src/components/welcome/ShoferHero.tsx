@@ -4,7 +4,7 @@ import { useState } from "react"
  * ShoferHero — welcome-screen hero with a road-theme animation.
  *
  * On hover the scene comes alive:
- * - The logo gently cruises (subtle float + sway) above the road.
+ * - The "S" logo rotates like a wheel rolling along the road.
  * - A two-layer road surface scrolls beneath with parallax lane markings
  *   (fast centre dashes + slow edge dashes) to suggest forward motion.
  * - A distant sun glides slowly across the background.
@@ -21,7 +21,7 @@ const ShoferHero = () => {
 			className="mb-4 relative forced-color-adjust-none group flex flex-col items-center w-30 pt-4 overflow-clip"
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}>
-			{/* Logo — gently cruises on hover instead of bouncing */}
+			{/* Logo — rotates like a wheel rolling on the road */}
 			<div
 				style={{
 					backgroundColor: "var(--vscode-foreground)",
@@ -31,7 +31,7 @@ const ShoferHero = () => {
 					maskImage: `url('${imagesBaseUri}/shofer-logo.svg')`,
 					maskRepeat: "no-repeat",
 					maskSize: "contain",
-					animation: isHovered ? "road-cruise 2.5s ease-in-out infinite" : "none",
+					animation: isHovered ? "logo-roll 1.6s linear infinite" : "none",
 				}}
 				className="z-5 mr-auto translate-y-0 transition-transform duration-500">
 				<img src={imagesBaseUri + "/shofer-logo.svg"} alt="Shofer logo" className="h-8 opacity-0" />
