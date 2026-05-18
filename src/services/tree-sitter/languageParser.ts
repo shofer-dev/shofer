@@ -28,6 +28,7 @@ import {
 	embeddedTemplateQuery,
 	elispQuery,
 	elixirQuery,
+	scalaQuery,
 } from "./queries"
 
 export interface LanguageParser {
@@ -163,6 +164,8 @@ export async function loadRequiredLanguageParsers(filesToParse: string[], source
 				query = new Query(language, cssQuery)
 				break
 			case "html":
+			case "htm":
+				parserKey = "html" // Deduplicate: both use the same HTML parser and query
 				language = await loadLanguage("html", sourceDirectory)
 				query = new Query(language, htmlQuery)
 				break
@@ -173,7 +176,7 @@ export async function loadRequiredLanguageParsers(filesToParse: string[], source
 				break
 			case "scala":
 				language = await loadLanguage("scala", sourceDirectory)
-				query = new Query(language, luaQuery) // Temporarily use Lua query until Scala is implemented
+				query = new Query(language, scalaQuery)
 				break
 			case "sol":
 				language = await loadLanguage("solidity", sourceDirectory)
