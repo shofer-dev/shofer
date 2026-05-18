@@ -9,6 +9,7 @@ import { CodeIndexSearchService } from "./search-service"
 import { CodeIndexOrchestrator } from "./orchestrator"
 import { CacheManager } from "./cache-manager"
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import { GitIgnoreFilter, IIgnoreFilter } from "./shared/git-ignore-filter"
 import fs from "fs/promises"
 import ignore from "ignore"
 import path from "path"
@@ -28,6 +29,9 @@ export class CodeIndexManager {
 	private _searchService: CodeIndexSearchService | undefined
 	private _cacheManager: CacheManager | undefined
 	private _shoferIgnoreController: ShoferIgnoreController | undefined
+	private _gitIgnoreFilter: GitIgnoreFilter | undefined
+	private _gitIgnoreWatcher: vscode.FileSystemWatcher | undefined
+	private _gitIgnoreRefreshTimer: NodeJS.Timeout | undefined
 
 	// Flag to prevent race conditions during error recovery
 	private _isRecoveringFromError = false
@@ -323,6 +327,40 @@ export class CodeIndexManager {
 		// real CacheManager) that don't implement dispose().
 		this._cacheManager?.dispose?.()
 		this._stateManager.dispose()
+		this._disposeGitIgnoreWatcher()
+	}
+
+	/**
+	 * Lazily install (once per workspace) a watcher over every `.gitignore` in
+	 * the tree. On any change/create/delete we re-run `git ls-files` to refresh
+	 * the included-paths set used by {@link GitIgnoreFilter}. Refreshes are
+	 * debounced because batch operations (branch switches, merges, mass deletes)
+	 * fire many events back-to-back.
+	 */
+	private _ensureGitIgnoreWatcher(workspacePath: string): void {
+		if (this._gitIgnoreWatcher) return
+		const pattern = new vscode.RelativePattern(workspacePath, "**/.gitignore")
+		const watcher = vscode.workspace.createFileSystemWatcher(pattern)
+		const schedule = () => {
+			if (this._gitIgnoreRefreshTimer) clearTimeout(this._gitIgnoreRefreshTimer)
+			this._gitIgnoreRefreshTimer = setTimeout(() => {
+				void this._gitIgnoreFilter?.refresh()
+			}, 500)
+		}
+		watcher.onDidCreate(schedule)
+		watcher.onDidChange(schedule)
+		watcher.onDidDelete(schedule)
+		this._gitIgnoreWatcher = watcher
+	}
+
+	private _disposeGitIgnoreWatcher(): void {
+		if (this._gitIgnoreRefreshTimer) {
+			clearTimeout(this._gitIgnoreRefreshTimer)
+			this._gitIgnoreRefreshTimer = undefined
+		}
+		this._gitIgnoreWatcher?.dispose()
+		this._gitIgnoreWatcher = undefined
+		this._gitIgnoreFilter = undefined
 	}
 
 	/**
@@ -382,7 +420,6 @@ export class CodeIndexManager {
 			this._cacheManager!,
 		)
 
-		const ignoreInstance = ignore()
 		const workspacePath = this.workspacePath
 
 		if (!workspacePath) {
@@ -390,20 +427,37 @@ export class CodeIndexManager {
 			return
 		}
 
-		// Create .gitignore instance
-		const ignorePath = path.join(workspacePath, ".gitignore")
-		try {
-			const content = await fs.readFile(ignorePath, "utf8")
-			ignoreInstance.add(content)
-			ignoreInstance.add(".gitignore")
-		} catch (error) {
-			// Should never happen: reading file failed even though it exists
-			console.error("Unexpected error loading .gitignore:", error)
-			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined,
-				location: "_recreateServices",
-			})
+		// Prefer git itself as the .gitignore oracle: it honours nested .gitignore
+		// files, .git/info/exclude, the global core.excludesfile, and negations —
+		// all the things the flat `ignore` library does not. Fall back to a
+		// root-only `.gitignore` parse when the workspace is not a git repo (or
+		// the git binary is unavailable), so behaviour does not regress for
+		// non-git users. See shared/git-ignore-filter.ts.
+		let ignoreInstance: IIgnoreFilter
+		const gitFilter = await GitIgnoreFilter.create(workspacePath)
+		if (gitFilter) {
+			ignoreInstance = gitFilter
+			this._gitIgnoreFilter = gitFilter
+			this._ensureGitIgnoreWatcher(workspacePath)
+		} else {
+			const flat = ignore()
+			const ignorePath = path.join(workspacePath, ".gitignore")
+			try {
+				const content = await fs.readFile(ignorePath, "utf8")
+				flat.add(content)
+				flat.add(".gitignore")
+			} catch (error) {
+				// Workspace has no .gitignore at the root (or the read failed).
+				// Non-fatal: indexing proceeds with no git-derived filtering, with
+				// CODEBASE_INDEX_IGNORED_DIRS and .shoferignore still applied.
+				console.error("Unexpected error loading .gitignore:", error)
+				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
+					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
+					location: "_recreateServices",
+				})
+			}
+			ignoreInstance = flat
 		}
 
 		// Create ShoferIgnoreController instance (cached — created only once per workspace)
