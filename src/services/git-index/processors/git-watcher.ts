@@ -1,6 +1,9 @@
+import * as path from "path"
+
 import * as vscode from "vscode"
 import type { IGitWatcher, GitCommitBlock } from "../interfaces/git"
 import { GitLogExtractor } from "./git-log-extractor"
+import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
 
 /**
  * Default polling interval in milliseconds (5 minutes).
@@ -105,11 +108,23 @@ export class GitWatcher implements IGitWatcher {
 		if (!sinceDate) return
 
 		try {
-			const newCommits = await this._logExtractor.extractCommitsSince(
+			// Discover submodules every tick so a newly added submodule is picked
+			// up without restarting the watcher. Submodule discovery is cheap
+			// (one fork+exec) compared to the embed/upsert path that follows.
+			const submoduleDisplayPaths = await listSubmoduleDisplayPaths(this.workspacePath)
+			const repoPaths = [
 				this.workspacePath,
-				sinceDate,
-				INCREMENTAL_MAX_COMMITS,
+				...submoduleDisplayPaths.map((p) => path.resolve(this.workspacePath, p)),
+			]
+
+			const perRepo = await Promise.all(
+				repoPaths.map((repo) =>
+					this._logExtractor
+						.extractCommitsSince(repo, sinceDate, INCREMENTAL_MAX_COMMITS)
+						.catch(() => [] as GitCommitBlock[]),
+				),
 			)
+			const newCommits = perRepo.flat()
 
 			if (newCommits.length > 0) {
 				this._onNewCommits.fire(newCommits)

@@ -1,3 +1,5 @@
+import * as path from "path"
+
 import { v5 as uuidv5 } from "uuid"
 
 import type { GitCommitBlock } from "./interfaces/git"
@@ -10,6 +12,7 @@ import { GitWatcher } from "./processors/git-watcher"
 import { GitCacheManager } from "./git-cache-manager"
 
 import { BATCH_SEGMENT_THRESHOLD } from "../code-index/constants"
+import { listSubmoduleDisplayPaths } from "../../utils/git-submodules"
 import { logger } from "../../utils/logging"
 
 const LOG_PREFIX = "[GitHistoryOrchestrator]"
@@ -103,10 +106,8 @@ export class GitHistoryOrchestrator {
 			// 3. Full scan: extract all commits within the configured window
 			this.stateManager.setSystemState("Indexing", "Extracting git commit history...")
 
-			const commits = await this._logExtractor.extractCommits(
-				this.workspacePath,
-				effectiveMaxDays,
-				effectiveMaxCommits,
+			const commits = await this._extractFromAllRepos((repo) =>
+				this._logExtractor.extractCommits(repo, effectiveMaxDays, effectiveMaxCommits),
 			)
 
 			if (commits.length === 0) {
@@ -119,7 +120,7 @@ export class GitHistoryOrchestrator {
 			const newCommits = commits.filter((c) => !this.cacheManager.isUnchanged(c.commit_hash, c.contentHash))
 
 			if (newCommits.length === 0) {
-				this.stateManager.setSystemState("Indexed", "All commits already indexed (no changes).")
+				this.stateManager.setSystemState("Indexed", "All commits already indexed (including submodules).")
 				this.cacheManager.updateLastCommitDateFromBatch(commits)
 				await this.cacheManager.persist()
 				this._startWatcher()
@@ -173,6 +174,41 @@ export class GitHistoryOrchestrator {
 	// --- Private Helpers ---
 
 	/**
+	 * Run an extractor against the parent repo and each initialised submodule,
+	 * concatenating the results. Submodules are discovered fresh on each call
+	 * (a new one may have been added) and the parent repo is always included
+	 * first so its commits sort earliest under the cache's lastCommitDate
+	 * heuristic.
+	 *
+	 * NOTE: the same `commit_hash` could in principle appear in multiple repos
+	 * (e.g. cherry-picked across parent/submodule). Because the Qdrant point ID
+	 * is `uuidv5(commit_hash, NAMESPACE)`, such duplicates resolve to the same
+	 * point and the second upsert is a benign no-op — content is identical.
+	 */
+	private async _extractFromAllRepos(
+		extract: (repoAbsPath: string) => Promise<GitCommitBlock[]>,
+	): Promise<GitCommitBlock[]> {
+		const submoduleDisplayPaths = await listSubmoduleDisplayPaths(this.workspacePath)
+		const repoPaths = [
+			this.workspacePath,
+			...submoduleDisplayPaths.map((p) => path.resolve(this.workspacePath, p)),
+		]
+		const perRepo = await Promise.all(
+			repoPaths.map(async (repo) => {
+				try {
+					return await extract(repo)
+				} catch (err) {
+					logger.warn(`${LOG_PREFIX} Commit extraction failed for ${repo}: ${err}`, {
+						ctx: "git-index",
+					})
+					return []
+				}
+			}),
+		)
+		return perRepo.flat()
+	}
+
+	/**
 	 * Catch up on commits that landed since the last index date.
 	 * Best-effort: failures are logged and swallowed; the full scan will pick
 	 * up any missed commits.
@@ -183,10 +219,12 @@ export class GitHistoryOrchestrator {
 		if (this._isProcessing) return
 
 		try {
-			const incrementalCommits = await this._logExtractor.extractCommitsSince(
-				this.workspacePath,
-				sinceDate,
-				500, // Safety cap for catch-up
+			const incrementalCommits = await this._extractFromAllRepos((repo) =>
+				this._logExtractor.extractCommitsSince(
+					repo,
+					sinceDate,
+					500, // Safety cap for catch-up
+				),
 			)
 
 			if (incrementalCommits.length === 0) return
