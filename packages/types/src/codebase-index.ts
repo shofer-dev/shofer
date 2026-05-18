@@ -15,6 +15,88 @@ export const CODEBASE_INDEX_DEFAULTS = {
 } as const
 
 /**
+ * File extensions whose contents the codebase indexer ingests. A file is only
+ * picked up by the scanner / file-watcher if its extension is in this list AND
+ * it passes the workspace's .gitignore / .shoferignore rules AND is not under
+ * a directory in {@link CODEBASE_INDEX_IGNORED_DIRS}. The list is also the
+ * source-of-truth for the tree-sitter parser's supported languages — see
+ * `src/services/tree-sitter/index.ts` which re-exports it as `extensions`.
+ */
+export const CODEBASE_INDEX_FILE_EXTENSIONS: readonly string[] = [
+	".tla",
+	".js",
+	".jsx",
+	".ts",
+	".vue",
+	".tsx",
+	".py",
+	".rs",
+	".go",
+	".c",
+	".h",
+	".cpp",
+	".hpp",
+	".cs",
+	".rb",
+	".java",
+	".php",
+	".swift",
+	".sol",
+	".kt",
+	".kts",
+	".ex",
+	".exs",
+	".el",
+	".html",
+	".htm",
+	".md",
+	".markdown",
+	".json",
+	".css",
+	".rdl",
+	".ml",
+	".mli",
+	".lua",
+	".scala",
+	".toml",
+	".zig",
+	".elm",
+	".ejs",
+	".erb",
+	".vb",
+] as const
+
+/**
+ * Directory name patterns that the codebase indexer (and the general file-
+ * listing service) skips wholesale. Matched against any path component:
+ * an exact equality check, except for `.*` which matches any dotfile / hidden
+ * directory. Used by `services/glob/ignore-utils.ts::isPathInIgnoredDirectory`
+ * (re-exported from `services/glob/constants.ts` as `DIRS_TO_IGNORE`) and
+ * surfaced read-only in the Settings UI's RAG → Advanced Configuration panel.
+ */
+export const CODEBASE_INDEX_IGNORED_DIRS: readonly string[] = [
+	"node_modules",
+	"__pycache__",
+	"env",
+	"venv",
+	"dist",
+	"build",
+	"out",
+	"target",
+	"coverage",
+	".next",
+	"bundle",
+	"vendor",
+	"tmp",
+	"temp",
+	"deps",
+	"pkg",
+	"Pods",
+	".git",
+	".*",
+] as const
+
+/**
  * CodebaseIndexConfig
  */
 
