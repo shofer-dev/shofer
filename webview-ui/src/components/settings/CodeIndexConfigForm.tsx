@@ -2,7 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from "react"
 import { z } from "zod"
 import { VSCodeTextField, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 
-import { type EmbedderProvider, CODEBASE_INDEX_DEFAULTS } from "@shofer/types"
+import {
+	type EmbedderProvider,
+	CODEBASE_INDEX_DEFAULTS,
+	CODEBASE_INDEX_FILE_EXTENSIONS,
+	CODEBASE_INDEX_IGNORED_DIRS,
+} from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
@@ -936,6 +941,59 @@ export const CodeIndexConfigForm: React.FC = () => {
 								CODEBASE_INDEX_DEFAULTS.DEFAULT_SEARCH_RESULTS}
 						</span>
 					</div>
+				</div>
+
+				{/* Read-only index filter patterns.
+				    The indexer skips any file whose extension is NOT in
+				    CODEBASE_INDEX_FILE_EXTENSIONS, and any file beneath a directory
+				    whose name matches CODEBASE_INDEX_IGNORED_DIRS. Both lists live
+				    in @shofer/types and are the single source of truth shared with
+				    the indexer; this panel just renders them so users can see what
+				    is (and isn't) being indexed without grepping the source. */}
+				<div className="space-y-3">
+					<div>
+						<label className="text-sm font-medium">{t("settings:codeIndex.filterPatternsLabel")}</label>
+						<p className="text-xs text-vscode-descriptionForeground mt-1">
+							{t("settings:codeIndex.filterPatternsDescription")}
+						</p>
+					</div>
+
+					<div>
+						<label className="text-xs font-medium text-vscode-descriptionForeground">
+							{t("settings:codeIndex.filterFileExtensionsLabel")}
+						</label>
+						<div className="mt-1 flex flex-wrap gap-1" data-testid="filter-file-extensions">
+							{CODEBASE_INDEX_FILE_EXTENSIONS.map((ext) => (
+								<code
+									key={ext}
+									className="px-1.5 py-0.5 text-xs rounded bg-vscode-badge-background text-vscode-badge-foreground">
+									{ext}
+								</code>
+							))}
+						</div>
+					</div>
+
+					<div>
+						<label className="text-xs font-medium text-vscode-descriptionForeground">
+							{t("settings:codeIndex.filterIgnoredDirsLabel")}
+						</label>
+						<div className="mt-1 flex flex-wrap gap-1" data-testid="filter-ignored-dirs">
+							{CODEBASE_INDEX_IGNORED_DIRS.map((dir) => (
+								<code
+									key={dir}
+									className="px-1.5 py-0.5 text-xs rounded bg-vscode-badge-background text-vscode-badge-foreground">
+									{dir}
+								</code>
+							))}
+						</div>
+						<p className="text-xs text-vscode-descriptionForeground mt-1">
+							{t("settings:codeIndex.filterIgnoredDirsHint")}
+						</p>
+					</div>
+
+					<p className="text-xs text-vscode-descriptionForeground">
+						{t("settings:codeIndex.filterWorkspaceIgnoreNote")}
+					</p>
 				</div>
 			</div>
 

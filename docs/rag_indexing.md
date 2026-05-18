@@ -24,20 +24,63 @@ CodeIndexManager (singleton per workspace)
 
 ### Key Source Files
 
-| File                                                    | Role                                                                                                                                                    |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/services/code-index/manager.ts`                    | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.     |
-| `src/services/code-index/orchestrator.ts`               | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortController`. Phase 2: git-aware short-circuit before directory walk. |
-| `src/services/code-index/service-factory.ts`            | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                                 |
-| `src/services/code-index/git/git-source.ts`             | Thin wrapper around VS Code built-in Git extension API. Provides `diffSince()`, `discoverSubmodules()`, `diffSubmoduleSince()`.                         |
-| `src/services/code-index/processors/scanner.ts`         | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.       |
-| `src/services/code-index/processors/parser.ts`          | Uses **web-tree-sitter** for AST-aware parsing. Falls back to line-based chunking for unsupported languages. Also handles Markdown via custom parser.   |
-| `src/services/code-index/search-service.ts`             | Embeds query text → searches Qdrant with configurable min score & max results.                                                                          |
-| `src/services/code-index/config-manager.ts`             | Reads settings from `ContextProxy` (global state + secrets). Detects config changes requiring restart.                                                  |
-| `src/services/code-index/state-manager.ts`              | `vscode.EventEmitter`-based progress reporting to UI.                                                                                                   |
-| `src/services/code-index/cache-manager.ts`              | Persists file cache (v2: hash + mtimeMs + size) to skip unchanged files during scans.                                                                   |
-| `src/services/code-index/vector-store/qdrant-client.ts` | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per workspace. Stores metadata with commit info.                               |
-| `packages/types/src/codebase-index.ts`                  | Zod schemas for config, shared constants, and cache entries.                                                                                            |
+| File                                                     | Role                                                                                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/code-index/manager.ts`                     | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.     |
+| `src/services/code-index/orchestrator.ts`                | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortController`. Phase 2: git-aware short-circuit before directory walk. |
+| `src/services/code-index/service-factory.ts`             | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                                 |
+| `src/services/code-index/git/git-source.ts`              | Thin wrapper around VS Code built-in Git extension API. Provides `diffSince()`, `discoverSubmodules()`, `diffSubmoduleSince()`.                         |
+| `src/services/code-index/processors/scanner.ts`          | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.       |
+| `src/services/code-index/processors/parser.ts`           | Uses **web-tree-sitter** for AST-aware parsing. Falls back to line-based chunking for unsupported languages. Also handles Markdown via custom parser.   |
+| `src/services/code-index/search-service.ts`              | Embeds query text → searches Qdrant with configurable min score & max results.                                                                          |
+| `src/services/code-index/config-manager.ts`              | Reads settings from `ContextProxy` (global state + secrets). Detects config changes requiring restart.                                                  |
+| `src/services/code-index/state-manager.ts`               | `vscode.EventEmitter`-based progress reporting to UI.                                                                                                   |
+| `src/services/code-index/cache-manager.ts`               | Persists file cache (v2: hash + mtimeMs + size) to skip unchanged files during scans.                                                                   |
+| `src/services/code-index/vector-store/qdrant-client.ts`  | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per workspace. Stores metadata with commit info.                               |
+| `packages/types/src/codebase-index.ts`                   | Zod schemas for config, shared constants, and cache entries.                                                                                            |
+| `src/services/tree-sitter/languageParser.ts`             | Maps file extensions to tree-sitter WASM parsers and language-specific AST queries. Fallthrough to `default:` throws for unsupported extensions.        |
+| `src/services/tree-sitter/queries/`                      | Per-language tree-sitter query files (e.g., `scala.ts`, `css.ts`, `python.ts`) that define AST capture patterns for definitions.                        |
+| `src/services/code-index/shared/supported-extensions.ts` | `fallbackExtensions` — extensions routed to line-based chunking instead of tree-sitter parsing.                                                         |
+
+### Language Coverage
+
+Files are ingested only if their extension appears in [`CODEBASE_INDEX_FILE_EXTENSIONS`](extensions/shofer/packages/types/src/codebase-index.ts:25), defined in `@shofer/types`. The indexing pipeline then routes each file through either tree-sitter AST parsing or length-based fallback chunking:
+
+| Extension(s)         | Parser            | Mechanism                                              |
+| -------------------- | ----------------- | ------------------------------------------------------ |
+| `.js` `.jsx` `.json` | JavaScript        | Tree-sitter WASM                                       |
+| `.ts`                | TypeScript        | Tree-sitter WASM                                       |
+| `.tsx`               | TSX               | Tree-sitter WASM                                       |
+| `.py`                | Python            | Tree-sitter WASM                                       |
+| `.rs`                | Rust              | Tree-sitter WASM                                       |
+| `.go`                | Go                | Tree-sitter WASM                                       |
+| `.c` `.h`            | C                 | Tree-sitter WASM                                       |
+| `.cpp` `.hpp`        | C++               | Tree-sitter WASM                                       |
+| `.cs`                | C#                | Tree-sitter WASM                                       |
+| `.rb`                | Ruby              | Tree-sitter WASM                                       |
+| `.java`              | Java              | Tree-sitter WASM                                       |
+| `.php`               | PHP               | Tree-sitter WASM                                       |
+| `.swift`             | Swift             | Fallback chunking (parser instability)                 |
+| `.kt` `.kts`         | Kotlin            | Tree-sitter WASM                                       |
+| `.css`               | CSS               | Tree-sitter WASM                                       |
+| `.html` `.htm`       | HTML              | Tree-sitter WASM (shared parser, `parserKey = "html"`) |
+| `.ml` `.mli`         | OCaml             | Tree-sitter WASM                                       |
+| `.scala`             | Scala             | Tree-sitter WASM                                       |
+| `.sol`               | Solidity          | Tree-sitter WASM                                       |
+| `.toml`              | TOML              | Tree-sitter WASM                                       |
+| `.vue`               | Vue               | Tree-sitter WASM                                       |
+| `.lua`               | Lua               | Tree-sitter WASM                                       |
+| `.rdl`               | SystemRDL         | Tree-sitter WASM                                       |
+| `.tla`               | TLA⁺              | Tree-sitter WASM                                       |
+| `.zig`               | Zig               | Tree-sitter WASM                                       |
+| `.ejs` `.erb`        | Embedded Template | Tree-sitter WASM (`parserKey = "embedded_template"`)   |
+| `.el`                | Emacs Lisp        | Tree-sitter WASM                                       |
+| `.ex` `.exs`         | Elixir            | Tree-sitter WASM                                       |
+| `.vb`                | Visual Basic .NET | Fallback chunking (no WASM parser)                     |
+| `.elm`               | Elm               | Fallback chunking (no WASM parser)                     |
+| `.md` `.markdown`    | —                 | Custom markdown parser (heading/anchor extraction)     |
+
+Extensions in `fallbackExtensions` ([`supported-extensions.ts`](extensions/shofer/src/services/code-index/shared/supported-extensions.ts:21)) are detected before tree-sitter dispatch by [`shouldUseFallbackChunking()`](extensions/shofer/src/services/code-index/shared/supported-extensions.ts:32). They never reach [`loadRequiredLanguageParsers()`](extensions/shofer/src/services/tree-sitter/languageParser.ts:78), so the corresponding `case` in the parser switch is dead code — kept only for the `list_code_definition_names` tool, which does **not** check `fallbackExtensions` and therefore will crash on these extensions.
 
 ### Interfaces
 
