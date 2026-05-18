@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "URL de Qdrant",
 		"qdrantKeyLabel": "Clau de Qdrant:",
 		"startIndexingButton": "Iniciar",
-		"clearIndexDataButton": "Esborrar índex",
+		"clearIndexDataButton": "Esborrar índex de codi",
 		"unsavedSettingsMessage": "Si us plau, deseu la configuració abans d'iniciar el procés d'indexació.",
 		"clearDataDialog": {
 			"title": "Esteu segur?",

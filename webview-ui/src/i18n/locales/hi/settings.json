@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "Qdrant URL",
 		"qdrantKeyLabel": "Qdrant कुंजी:",
 		"startIndexingButton": "शुरू करें",
-		"clearIndexDataButton": "इंडेक्स साफ़ करें",
+		"clearIndexDataButton": "कोड इंडेक्स साफ़ करें",
 		"unsavedSettingsMessage": "इंडेक्सिंग प्रक्रिया शुरू करने से पहले कृपया अपनी सेटिंग्स सहेजें।",
 		"clearDataDialog": {
 			"title": "क्या आप सुनिश्चित हैं?",

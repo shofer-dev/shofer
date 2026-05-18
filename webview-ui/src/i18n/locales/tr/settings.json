@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "Qdrant URL",
 		"qdrantKeyLabel": "Qdrant Anahtarı:",
 		"startIndexingButton": "Başlat",
-		"clearIndexDataButton": "İndeks Temizle",
+		"clearIndexDataButton": "Kod İndeksini Temizle",
 		"unsavedSettingsMessage": "İndeksleme işlemini başlatmadan önce lütfen ayarlarını kaydet.",
 		"clearDataDialog": {
 			"title": "Emin misiniz?",

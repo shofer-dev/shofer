@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "URL Qdrant",
 		"qdrantKeyLabel": "Khóa Qdrant:",
 		"startIndexingButton": "Bắt đầu",
-		"clearIndexDataButton": "Xóa chỉ mục",
+		"clearIndexDataButton": "Xóa chỉ mục mã nguồn",
 		"unsavedSettingsMessage": "Vui lòng lưu cài đặt của bạn trước khi bắt đầu quá trình lập chỉ mục.",
 		"clearDataDialog": {
 			"title": "Bạn có chắc không?",

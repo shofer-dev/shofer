@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "Qdrant URL",
 		"qdrantKeyLabel": "Qdrant-sleutel:",
 		"startIndexingButton": "Start",
-		"clearIndexDataButton": "Index wissen",
+		"clearIndexDataButton": "Code-index wissen",
 		"unsavedSettingsMessage": "Sla je instellingen op voordat je het indexeringsproces start.",
 		"clearDataDialog": {
 			"title": "Weet je het zeker?",
