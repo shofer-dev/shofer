@@ -122,10 +122,10 @@ import * as vscode from "vscode"
  * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.
  * `is_background` is forwarded so the tool's boolean normalisation runs correctly.
  *
- * Injects default values for the now-mandatory `softResultLength` and
- * `softTimeoutSec` parameters unless the test already provides them, so
- * the existing test cases (which predate those parameters) continue to exercise
- * the post-validation code paths.
+ * Provides reasonable values for `softResultLength` and `softTimeoutSec` (if not
+ * already set) so existing tests (which predate those parameters) continue to exercise
+ * the post-validation code paths. Since these parameters are now optional with defaults,
+ * the helper simply forwards whatever the block already contains.
  */
 const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
 	const paramsWithDefaults = {
@@ -659,6 +659,151 @@ describe("newTaskTool", () => {
 			expect(mockGetConfiguration).toHaveBeenCalledWith("shofer-nightly")
 			expect(mockGet).toHaveBeenCalledWith("newTaskRequireTodos", false)
 		})
+	})
+})
+
+describe("softResultLength and softTimeoutSec defaults", () => {
+	/**
+	 * When the LLM does not provide softResultLength / softTimeoutSec (or provides
+	 * invalid values), the tool MUST apply sensible defaults instead of erroring.
+	 * This prevents the churn/retry cycle reported where the agent fails to include
+	 * these advisory parameters.
+	 */
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mockAskApproval.mockResolvedValue(true)
+		vi.mocked(getModeBySlug).mockReturnValue({
+			slug: "code",
+			name: "Code Mode",
+			roleDefinition: "Test role definition",
+			groups: ["execute", "read", "write"],
+		})
+		mockShofer.consecutiveMistakeCount = 0
+		mockShofer.didToolFailInCurrentTurn = false
+		mockCreateTask.mockResolvedValue({ taskId: "child-1" })
+		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+			get: vi.fn().mockReturnValue(false),
+		} as any)
+	})
+
+	it("applies defaults when softResultLength and softTimeoutSec are missing from nativeArgs", async () => {
+		// Simulate an LLM call that omits both advisory parameters.
+		const block: ToolUse<"new_task"> = {
+			type: "tool_use",
+			name: "new_task",
+			params: {
+				mode: "code",
+				message: "Do work without soft hints",
+				is_background: "false",
+			},
+			partial: false,
+			// nativeArgs deliberately lacks softResultLength and softTimeoutSec
+			nativeArgs: {
+				mode: "code",
+				message: "Do work without soft hints",
+				is_background: "false",
+			} as any,
+		}
+
+		await newTaskTool.handle(mockShofer as any, block, {
+			askApproval: mockAskApproval,
+			handleError: mockHandleError,
+			pushToolResult: mockPushToolResult,
+		})
+
+		// Must NOT error on missing params
+		expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "softResultLength")
+		expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalledWith("new_task", "softTimeoutSec")
+
+		// Must pass defaults (2000 chars, 300 sec) to the child task
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"Do work without soft hints",
+			undefined,
+			mockShofer,
+			expect.objectContaining({
+				softResultLength: 2000,
+				softTimeoutSec: 300,
+			}),
+			undefined,
+			undefined,
+		)
+	})
+
+	it("applies defaults when softResultLength is invalid (negative)", async () => {
+		const block: ToolUse<"new_task"> = {
+			type: "tool_use",
+			name: "new_task",
+			params: {
+				mode: "code",
+				message: "Work",
+				is_background: "false",
+			},
+			partial: false,
+			nativeArgs: {
+				mode: "code",
+				message: "Work",
+				is_background: "false",
+				softResultLength: -5,
+				softTimeoutSec: 120,
+			} as any,
+		}
+
+		await newTaskTool.handle(mockShofer as any, block, {
+			askApproval: mockAskApproval,
+			handleError: mockHandleError,
+			pushToolResult: mockPushToolResult,
+		})
+
+		expect(mockSayAndCreateMissingParamError).not.toHaveBeenCalled()
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"Work",
+			undefined,
+			mockShofer,
+			expect.objectContaining({
+				softResultLength: 2000, // default because -5 is invalid
+				softTimeoutSec: 120, // provided value is valid
+			}),
+			undefined,
+			undefined,
+		)
+	})
+
+	it("clamps softResultLength to MAX_SUBTASK_RESULT_LENGTH when value exceeds cap", async () => {
+		const block: ToolUse<"new_task"> = {
+			type: "tool_use",
+			name: "new_task",
+			params: {
+				mode: "code",
+				message: "Huge result",
+				is_background: "false",
+			},
+			partial: false,
+			nativeArgs: {
+				mode: "code",
+				message: "Huge result",
+				is_background: "false",
+				softResultLength: 200000,
+				softTimeoutSec: 60,
+			} as any,
+		}
+
+		await newTaskTool.handle(mockShofer as any, block, {
+			askApproval: mockAskApproval,
+			handleError: mockHandleError,
+			pushToolResult: mockPushToolResult,
+		})
+
+		expect(mockCreateTask).toHaveBeenCalledWith(
+			"Huge result",
+			undefined,
+			mockShofer,
+			expect.objectContaining({
+				softResultLength: 100000, // clamped to MAX_SUBTASK_RESULT_LENGTH
+			}),
+			undefined,
+			undefined,
+		)
 	})
 })
 

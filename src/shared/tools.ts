@@ -145,6 +145,8 @@ export type NativeToolArgs = {
 		message: string
 		todos?: string
 		is_background?: boolean | string | number | null
+		softResultLength?: number
+		softTimeoutSec?: number
 	}
 	check_task_status: { task_id: string }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }

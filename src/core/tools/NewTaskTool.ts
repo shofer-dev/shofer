@@ -25,6 +25,12 @@ interface NewTaskParams {
 /** Hard safety cap for subtask completion result length, in characters. */
 export const MAX_SUBTASK_RESULT_LENGTH = 100000
 
+/** Default soft result length (characters) when LLM does not provide one. */
+const DEFAULT_SOFT_RESULT_LENGTH = 2000
+
+/** Default soft timeout (seconds) when LLM does not provide one. */
+const DEFAULT_SOFT_TIMEOUT_SEC = 300
+
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
@@ -55,36 +61,26 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				return
 			}
 
-			// Validate softResultLength: mandatory, must be a positive integer.
-			if (
-				softResultLength === undefined ||
-				softResultLength === null ||
-				!Number.isFinite(softResultLength) ||
-				softResultLength <= 0 ||
-				!Number.isInteger(softResultLength)
-			) {
-				task.consecutiveMistakeCount++
-				task.recordToolError("new_task")
-				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "softResultLength"))
-				return
-			}
-			// Clamp to hard cap.
-			const clampedResultLength = Math.min(softResultLength, MAX_SUBTASK_RESULT_LENGTH)
+			// softResultLength: optional advisory parameter. Apply default and clamp
+			// to hard cap when the LLM doesn't provide a value (or provides an invalid one).
+			const effectiveSoftResultLength =
+				softResultLength !== undefined &&
+				softResultLength !== null &&
+				Number.isFinite(softResultLength) &&
+				softResultLength > 0 &&
+				Number.isInteger(softResultLength)
+					? softResultLength
+					: DEFAULT_SOFT_RESULT_LENGTH
+			const clampedResultLength = Math.min(effectiveSoftResultLength, MAX_SUBTASK_RESULT_LENGTH)
 
-			// Validate softTimeoutSec: mandatory, must be a positive number.
-			if (
-				softTimeoutSec === undefined ||
-				softTimeoutSec === null ||
-				!Number.isFinite(softTimeoutSec) ||
-				softTimeoutSec <= 0
-			) {
-				task.consecutiveMistakeCount++
-				task.recordToolError("new_task")
-				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("new_task", "softTimeoutSec"))
-				return
-			}
+			// softTimeoutSec: optional advisory parameter. Apply default when missing.
+			const effectiveSoftTimeoutSec =
+				softTimeoutSec !== undefined &&
+				softTimeoutSec !== null &&
+				Number.isFinite(softTimeoutSec) &&
+				softTimeoutSec > 0
+					? softTimeoutSec
+					: DEFAULT_SOFT_TIMEOUT_SEC
 
 			// Get the VSCode setting for requiring todos.
 			const provider = task.providerRef.deref()
@@ -209,7 +205,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						isBackground: true,
 						// Pass result length and estimated timeout to the child task.
 						softResultLength: clampedResultLength,
-						softTimeoutSec: softTimeoutSec,
+						softTimeoutSec: effectiveSoftTimeoutSec,
 					},
 					undefined, // configuration
 					undefined,
@@ -268,7 +264,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						openInStack: true,
 						// Pass result length and estimated timeout to the child task.
 						softResultLength: clampedResultLength,
-						softTimeoutSec: softTimeoutSec,
+						softTimeoutSec: effectiveSoftTimeoutSec,
 					},
 					undefined, // configuration
 					undefined,
