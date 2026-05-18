@@ -1,5 +1,4 @@
 import { listFiles } from "../../glob/list-files"
-import { Ignore } from "ignore"
 import { ShoferIgnoreController } from "../../../core/ignore/ShoferIgnoreController"
 import { stat } from "fs/promises"
 import * as path from "path"
@@ -26,6 +25,7 @@ import {
 	MAX_PENDING_BATCHES,
 } from "../constants"
 import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
+import type { IIgnoreFilter } from "../shared/git-ignore-filter"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
@@ -40,7 +40,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 		private readonly qdrantClient: IVectorStore,
 		private readonly codeParser: ICodeParser,
 		private readonly cacheManager: CacheManager,
-		private readonly ignoreInstance: Ignore,
+		private readonly ignoreInstance: IIgnoreFilter,
 		batchSegmentThreshold?: number,
 		shoferIgnoreController?: ShoferIgnoreController,
 	) {

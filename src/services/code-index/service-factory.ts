@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
-import { Ignore } from "ignore"
 
 import type { EmbedderProvider } from "@shofer/types"
+import type { IIgnoreFilter } from "./shared/git-ignore-filter"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 
@@ -180,7 +180,7 @@ export class CodeIndexServiceFactory {
 		embedder: IEmbedder,
 		vectorStore: IVectorStore,
 		parser: ICodeParser,
-		ignoreInstance: Ignore,
+		ignoreInstance: IIgnoreFilter,
 		shoferIgnoreController?: ShoferIgnoreController,
 	): DirectoryScanner {
 		// Get the configurable batch size from VSCode settings
@@ -212,7 +212,7 @@ export class CodeIndexServiceFactory {
 		embedder: IEmbedder,
 		vectorStore: IVectorStore,
 		cacheManager: CacheManager,
-		ignoreInstance: Ignore,
+		ignoreInstance: IIgnoreFilter,
 		shoferIgnoreController?: ShoferIgnoreController,
 	): IFileWatcher {
 		// Get the configurable batch size from VSCode settings
@@ -244,7 +244,7 @@ export class CodeIndexServiceFactory {
 	public createServices(
 		context: vscode.ExtensionContext,
 		cacheManager: CacheManager,
-		ignoreInstance: Ignore,
+		ignoreInstance: IIgnoreFilter,
 		shoferIgnoreController?: ShoferIgnoreController,
 	): {
 		embedder: IEmbedder
