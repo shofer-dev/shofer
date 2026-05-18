@@ -203,6 +203,7 @@ export class GitIndexManager {
 		if (!this._cacheManager) {
 			this._cacheManager = new GitCacheManager(this.context, this.workspacePath)
 			await this._cacheManager.initialize()
+			this._wireCacheDiagnostics()
 		}
 
 		// 6. Create services (embedder, vector store, search service, orchestrator)
@@ -319,11 +320,8 @@ export class GitIndexManager {
 	/**
 	 * Gets the current status of the git indexing system.
 	 */
-	public getCurrentStatus(): { systemStatus: IndexingState; message?: string } {
-		return {
-			systemStatus: this._stateManager.state,
-			message: this._stateManager.message,
-		}
+	public getCurrentStatus() {
+		return this._stateManager.getCurrentStatus()
 	}
 
 	/**
@@ -376,6 +374,7 @@ export class GitIndexManager {
 				if (!this._cacheManager) {
 					this._cacheManager = new GitCacheManager(this.context, this.workspacePath)
 					await this._cacheManager.initialize()
+					this._wireCacheDiagnostics()
 				}
 				await this._recreateServices()
 				void this.startIndexing().catch(() => {
@@ -401,11 +400,50 @@ export class GitIndexManager {
 	 */
 	public dispose(): void {
 		this._orchestrator?.stopIndexing()
+		this._cacheManager?.dispose()
 		this._stateManager.dispose()
 		GitIndexManager.instances.delete(this.workspacePath)
 	}
 
 	// --- Private Helpers ---
+
+	/**
+	 * Wires the GitCacheManager's onCacheUpdated event to refresh the
+	 * cumulative commit-count diagnostic and (lazily, throttled by HEAD
+	 * change detection) the short HEAD-SHA diagnostic surfaced in the
+	 * popover.
+	 */
+	private _wireCacheDiagnostics(): void {
+		if (!this._cacheManager) return
+		const cache = this._cacheManager
+		// Seed immediately so the cumulative count is visible on (re)load
+		// even before any new commit is indexed in this session.
+		this._stateManager.setIndexedCommitCount(cache.getCommitCount())
+		void this._refreshHeadSha()
+		cache.onCacheUpdated(() => {
+			this._stateManager.setIndexedCommitCount(cache.getCommitCount())
+			void this._refreshHeadSha()
+		})
+	}
+
+	/**
+	 * Reads the short (7-char) HEAD SHA via `git rev-parse` and forwards
+	 * it to the state manager. Best-effort: errors are swallowed because
+	 * a missing/transient git state should never break indexing.
+	 */
+	private async _refreshHeadSha(): Promise<void> {
+		try {
+			const { stdout } = await execFileAsync("git", ["rev-parse", "--short=7", "HEAD"], {
+				cwd: this.workspacePath,
+			})
+			const hash = stdout.trim()
+			if (hash) {
+				this._stateManager.setLatestCommitHash(hash)
+			}
+		} catch {
+			// Non-fatal: leave latestCommitHash as-is.
+		}
+	}
 
 	/**
 	 * Recreates all dependent services (embedder, vector store, search service, orchestrator).

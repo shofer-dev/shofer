@@ -38,6 +38,14 @@ export class GitCacheManager {
 	private _contentHashes: Record<string, string> = {}
 	private _lastCommitDate: string | undefined
 
+	/**
+	 * Fires whenever a commit is added/updated in the cache. Used by
+	 * `GitIndexManager` to surface "commits indexed" diagnostics in the
+	 * popover.
+	 */
+	private readonly _onCacheUpdated = new vscode.EventEmitter<string>()
+	public readonly onCacheUpdated = this._onCacheUpdated.event
+
 	constructor(context: vscode.ExtensionContext, workspacePath: string) {
 		const wsHash = crypto.createHash("sha256").update(workspacePath).digest("hex").substring(0, 16)
 		this._cachePath = vscode.Uri.joinPath(context.globalStorageUri, `git-index-cache-${wsHash}.json`)
@@ -90,6 +98,23 @@ export class GitCacheManager {
 	 */
 	setHash(commitHash: string, contentHash: string): void {
 		this._contentHashes[commitHash] = contentHash
+		this._onCacheUpdated.fire(commitHash)
+	}
+
+	/**
+	 * Returns the cumulative number of commits currently cached. Surfaced
+	 * in the popover so users can verify the incremental indexer didn't
+	 * silently drop commits.
+	 */
+	getCommitCount(): number {
+		return Object.keys(this._contentHashes).length
+	}
+
+	/**
+	 * Disposes the cache-updated emitter. Called by `GitIndexManager.dispose()`.
+	 */
+	dispose(): void {
+		this._onCacheUpdated.dispose()
 	}
 
 	/**

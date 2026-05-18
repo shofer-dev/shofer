@@ -3285,7 +3285,12 @@ export class ShoferProvider
 
 		if (currentManager) {
 			this.gitIndexStatusSubscription = currentManager.onProgressUpdate(
-				(update: { systemStatus: string; message?: string }) => {
+				(update: {
+					systemStatus: string
+					message?: string
+					indexedCommitCount?: number
+					latestCommitHash?: string
+				}) => {
 					if (currentManager !== GitIndexManager.getInstance(this.context)) {
 						return
 					}
@@ -3298,6 +3303,8 @@ export class ShoferProvider
 							totalItems: 0,
 							currentItemUnit: "commits",
 							workspacePath: currentManager.workspacePath,
+							indexedCommitCount: update.indexedCommitCount,
+							latestCommitHash: update.latestCommitHash,
 						},
 					})
 				},
@@ -3318,6 +3325,8 @@ export class ShoferProvider
 					totalItems: 0,
 					currentItemUnit: "commits",
 					workspacePath: currentManager.workspacePath,
+					indexedCommitCount: status.indexedCommitCount,
+					latestCommitHash: status.latestCommitHash,
 				},
 			})
 		}

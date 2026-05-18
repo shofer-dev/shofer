@@ -8,6 +8,17 @@ export class CodeIndexStateManager {
 	private _processedItems: number = 0
 	private _totalItems: number = 0
 	private _currentItemUnit: string = "blocks"
+	/**
+	 * Cumulative number of files currently held in the on-disk cache (and
+	 * therefore represented in Qdrant). Distinct from `_processedItems`
+	 * which is reset to 0 on every reconciliation pass — this is the
+	 * persistent "how much is actually indexed" diagnostic shown in the
+	 * popover so users can verify the Phase 1/2 fast-path didn't silently
+	 * drop files.
+	 */
+	private _indexedFileCount: number = 0
+	/** Most recent file the orchestrator/watcher (re)indexed, or empty. */
+	private _lastFileIndexed: string = ""
 	private _progressEmitter = new vscode.EventEmitter<ReturnType<typeof this.getCurrentStatus>>()
 
 	// --- Public API ---
@@ -25,6 +36,32 @@ export class CodeIndexStateManager {
 			processedItems: this._processedItems,
 			totalItems: this._totalItems,
 			currentItemUnit: this._currentItemUnit,
+			indexedFileCount: this._indexedFileCount,
+			lastFileIndexed: this._lastFileIndexed,
+		}
+	}
+
+	/**
+	 * Updates the persistent "files in cache" diagnostic. Called by the
+	 * orchestrator after each reconciliation pass with the current
+	 * cacheManager entry count.
+	 */
+	public setIndexedFileCount(count: number): void {
+		if (count !== this._indexedFileCount) {
+			this._indexedFileCount = count
+			this._progressEmitter.fire(this.getCurrentStatus())
+		}
+	}
+
+	/**
+	 * Records the most recently (re)indexed file path. Called by the
+	 * orchestrator/watcher per file. Stores only the relative path; the
+	 * UI is responsible for basename presentation.
+	 */
+	public recordFileIndexed(relPath: string): void {
+		if (relPath && relPath !== this._lastFileIndexed) {
+			this._lastFileIndexed = relPath
+			this._progressEmitter.fire(this.getCurrentStatus())
 		}
 	}
 

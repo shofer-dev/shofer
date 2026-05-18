@@ -23,6 +23,10 @@ interface GitIndexingStatus {
 	totalItems: number
 	currentItemUnit?: string
 	workspacePath?: string
+	// Diagnostic counters surfaced in the popover (kept optional so older
+	// host payloads without the fields still type-check at the boundary).
+	indexedCommitCount?: number
+	latestCommitHash?: string
 }
 
 /**
