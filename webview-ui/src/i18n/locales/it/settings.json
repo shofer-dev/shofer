@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "URL Qdrant",
 		"qdrantKeyLabel": "Chiave Qdrant:",
 		"startIndexingButton": "Avvia",
-		"clearIndexDataButton": "Cancella indice",
+		"clearIndexDataButton": "Cancella indice del codice",
 		"unsavedSettingsMessage": "Per favore salva le tue impostazioni prima di avviare il processo di indicizzazione.",
 		"clearDataDialog": {
 			"title": "Sei sicuro?",

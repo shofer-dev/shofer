@@ -160,7 +160,7 @@
 		"qdrantApiKeyPlaceholder": "Gib deinen Qdrant API-Schlüssel ein (optional)",
 		"setupConfigLabel": "Einrichtung",
 		"startIndexingButton": "Start",
-		"clearIndexDataButton": "Index löschen",
+		"clearIndexDataButton": "Code-Index löschen",
 		"unsavedSettingsMessage": "Bitte speichere deine Einstellungen, bevor du den Indexierungsprozess startest.",
 		"clearDataDialog": {
 			"title": "Sind Sie sicher?",

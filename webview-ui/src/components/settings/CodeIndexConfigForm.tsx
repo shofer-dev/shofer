@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react"
 import { z } from "zod"
-import { VSCodeButton, VSCodeTextField, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeTextField, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 
 import { type EmbedderProvider, CODEBASE_INDEX_DEFAULTS } from "@shofer/types"
 
@@ -908,17 +908,6 @@ export const CodeIndexConfigForm: React.FC = () => {
 								CODEBASE_INDEX_DEFAULTS.DEFAULT_SEARCH_MIN_SCORE
 							).toFixed(2)}
 						</span>
-						<VSCodeButton
-							appearance="icon"
-							title={t("settings:codeIndex.resetToDefault")}
-							onClick={() =>
-								updateSetting(
-									"codebaseIndexSearchMinScore",
-									CODEBASE_INDEX_DEFAULTS.DEFAULT_SEARCH_MIN_SCORE,
-								)
-							}>
-							<span className="codicon codicon-discard" />
-						</VSCodeButton>
 					</div>
 				</div>
 
@@ -946,17 +935,6 @@ export const CodeIndexConfigForm: React.FC = () => {
 							{currentSettings.codebaseIndexSearchMaxResults ??
 								CODEBASE_INDEX_DEFAULTS.DEFAULT_SEARCH_RESULTS}
 						</span>
-						<VSCodeButton
-							appearance="icon"
-							title={t("settings:codeIndex.resetToDefault")}
-							onClick={() =>
-								updateSetting(
-									"codebaseIndexSearchMaxResults",
-									CODEBASE_INDEX_DEFAULTS.DEFAULT_SEARCH_RESULTS,
-								)
-							}>
-							<span className="codicon codicon-discard" />
-						</VSCodeButton>
 					</div>
 				</div>
 			</div>

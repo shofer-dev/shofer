@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "URL Qdrant",
 		"qdrantKeyLabel": "Ключ Qdrant:",
 		"startIndexingButton": "Начать",
-		"clearIndexDataButton": "Очистить индекс",
+		"clearIndexDataButton": "Очистить индекс кода",
 		"unsavedSettingsMessage": "Пожалуйста, сохрани настройки перед запуском процесса индексации.",
 		"clearDataDialog": {
 			"title": "Вы уверены?",

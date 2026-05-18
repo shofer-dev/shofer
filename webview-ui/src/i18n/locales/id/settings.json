@@ -149,7 +149,7 @@
 		"qdrantUrlLabel": "Qdrant URL",
 		"qdrantKeyLabel": "Qdrant Key:",
 		"startIndexingButton": "Mulai",
-		"clearIndexDataButton": "Hapus Indeks",
+		"clearIndexDataButton": "Hapus Indeks Kode",
 		"unsavedSettingsMessage": "Silakan simpan pengaturan kamu sebelum memulai proses pengindeksan.",
 		"clearDataDialog": {
 			"title": "Apakah kamu yakin?",
