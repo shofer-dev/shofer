@@ -1,5 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
+import { CODEBASE_INDEX_FILE_EXTENSIONS } from "@shofer/types"
 import { LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
 import { fileExistsAtPath } from "../../utils/fs"
 import { parseMarkdown } from "./markdownParser"
@@ -26,71 +27,7 @@ export function setMinComponentLines(value: number): void {
 	currentMinComponentLines = value
 }
 
-const extensions = [
-	"tla",
-	"js",
-	"jsx",
-	"ts",
-	"vue",
-	"tsx",
-	"py",
-	// Rust
-	"rs",
-	"go",
-	// C
-	"c",
-	"h",
-	// C++
-	"cpp",
-	"hpp",
-	// C#
-	"cs",
-	// Ruby
-	"rb",
-	"java",
-	"php",
-	"swift",
-	// Solidity
-	"sol",
-	// Kotlin
-	"kt",
-	"kts",
-	// Elixir
-	"ex",
-	"exs",
-	// Elisp
-	"el",
-	// HTML
-	"html",
-	"htm",
-	// Markdown
-	"md",
-	"markdown",
-	// JSON
-	"json",
-	// CSS
-	"css",
-	// SystemRDL
-	"rdl",
-	// OCaml
-	"ml",
-	"mli",
-	// Lua
-	"lua",
-	// Scala
-	"scala",
-	// TOML
-	"toml",
-	// Zig
-	"zig",
-	// Elm
-	"elm",
-	// Embedded Template
-	"ejs",
-	"erb",
-	// Visual Basic .NET
-	"vb",
-].map((e) => `.${e}`)
+const extensions: readonly string[] = CODEBASE_INDEX_FILE_EXTENSIONS
 
 export { extensions }
 
