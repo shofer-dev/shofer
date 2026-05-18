@@ -302,7 +302,13 @@
 			"description": "This will delete all indexed commit messages from the vector store. This action cannot be undone.",
 			"cancelButton": "Cancel",
 			"confirmButton": "Clear Index"
-		}
+		},
+		"filesIndexedCount": "{{count}} files indexed",
+		"lastFileIndexedLabel": "Last file:",
+		"commitsIndexedCount": "{{count}} commits indexed",
+		"latestCommitLabel": "Latest commit:",
+		"dangerZoneTitle": "Danger Zone",
+		"openSettingsTooltip": "Open RAG Indexer settings"
 	},
 	"tools": {
 		"description": "Manage which tools are available to the AI assistant. Disabled tools will not be sent to the model and cannot be called during tasks.",
