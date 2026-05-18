@@ -20,6 +20,8 @@ import { MistralEmbedder } from "./embedders/mistral"
 import { VercelAiGatewayEmbedder } from "./embedders/vercel-ai-gateway"
 import { BedrockEmbedder } from "./embedders/bedrock"
 import { OpenRouterEmbedder } from "./embedders/openrouter"
+import { getEmbedderLane } from "./embedders/embedder-lane"
+import { SerializedEmbedder } from "./embedders/serialized-embedder"
 import { QdrantVectorStore } from "./vector-store/qdrant-client"
 import { codeParser, DirectoryScanner, FileWatcher } from "./processors"
 import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces"
@@ -39,11 +41,30 @@ export class CodeIndexServiceFactory {
 
 	/**
 	 * Creates an embedder instance based on the current configuration.
+	 *
+	 * The concrete embedder is wrapped in a `SerializedEmbedder` decorator so
+	 * that every embedder produced by this factory — across the code-index
+	 * and git-history subsystems — funnels `createEmbeddings` calls through a
+	 * shared per-provider concurrency lane. Without this, simultaneous batches
+	 * from the two subsystems saturate single-model backends (Ollama) and
+	 * the slower caller times out. See `embedders/embedder-lane.ts` for the
+	 * concurrency policy.
 	 */
 	public createEmbedder(): IEmbedder {
 		const config = this.configManager.getConfig()
-
 		const provider = config.embedderProvider as EmbedderProvider
+		const inner = this._instantiateEmbedder(config, provider)
+		return new SerializedEmbedder(inner, getEmbedderLane(provider))
+	}
+
+	/**
+	 * Provider switch. Kept private so callers always go through the
+	 * lane-wrapped `createEmbedder`.
+	 */
+	private _instantiateEmbedder(
+		config: ReturnType<CodeIndexConfigManager["getConfig"]>,
+		provider: EmbedderProvider,
+	): IEmbedder {
 
 		if (provider === "openai") {
 			const apiKey = config.openAiOptions?.openAiNativeApiKey
