@@ -11,6 +11,7 @@ import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
 
 interface CheckTaskStatusParams {
 	task_id: string
+	include_activity?: boolean | null
 }
 
 /** Map a Task's runtime TaskStatus to our BackgroundTaskStatus representation. */
@@ -94,9 +95,11 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 
 		let result: string | undefined
 		let errorText: string | undefined
+		let recentActivity: string | undefined
+
+		const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
 
 		if (handle.status === "completed" || handle.status === "error") {
-			const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
 			const messages = await readTaskMessages({ taskId: task_id, globalStoragePath })
 			// Find the last completion or error message
 			for (let i = messages.length - 1; i >= 0; i--) {
@@ -112,10 +115,62 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			}
 		}
 
+		// When include_activity is true, surface the child's most recent tool
+		// calls or messages so the parent can see what the child is currently
+		// doing (useful for deciding whether to wait or cancel).
+		if (params.include_activity) {
+			try {
+				const messages = await readTaskMessages({ taskId: task_id, globalStoragePath })
+				// Collect the last 3 tool-use or say messages for context.
+				const activityLines: string[] = []
+				let collected = 0
+				for (let i = messages.length - 1; i >= 0 && collected < 3; i--) {
+					const msg = messages[i]
+					if (
+						msg.type === "say" &&
+						(msg.say === "text" || msg.say === "completion_result" || msg.say === "error")
+					) {
+						const snippet = (msg.text ?? "").replace(/\n/g, " ").slice(0, 120)
+						activityLines.unshift(`[say:${msg.say}] ${snippet}`)
+						collected++
+					} else if (msg.type === "say" && msg.say === "tool") {
+						// The "tool" message is a JSON blob; try to extract tool name + args summary.
+						try {
+							const parsed = JSON.parse(msg.text ?? "{}")
+							activityLines.unshift(`[tool] ${parsed.tool ?? "unknown"}`)
+						} catch {
+							activityLines.unshift("[tool] (parsing failed)")
+						}
+						collected++
+					}
+				}
+				if (activityLines.length > 0) {
+					recentActivity = "Recent activity:\n" + activityLines.map((l) => `  ${l}`).join("\n")
+				}
+			} catch {
+				// Non-fatal: activity feed is best-effort.
+			}
+		}
+
+		// Surface a pending parent question if the child is waiting for input
+		// from the parent (ask_followup_question routed to parent).
+		let pendingQuestionText: string | undefined
+		try {
+			const liveInstance = provider.taskManager.getManagedTaskInstance(task_id)
+			const pq = (liveInstance as any)?._pendingParentQuestion
+			if (pq) {
+				pendingQuestionText = `\nPending parent question: "${pq.question}"\nSuggestions: ${pq.suggestions?.map((s: any) => `"${s.answer}"`).join(", ") ?? "none"}`
+			}
+		} catch {
+			// Non-fatal.
+		}
+
 		pushToolResult(
 			`Task: ${task_id}\nStatus: ${handle.status}\n` +
 				(result ? `Result: ${result.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : "") +
-				(errorText ? `Error: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : ""),
+				(errorText ? `Error: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : "") +
+				(recentActivity ? `\n${recentActivity}` : "") +
+				(pendingQuestionText ?? ""),
 		)
 	}
 
