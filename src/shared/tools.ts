@@ -198,6 +198,14 @@ export type NativeToolArgs = {
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }
 	git_search: { query: string; maxResults?: number | null }
+	call_mcp_tool_async: {
+		server_name: string
+		tool_name: string
+		arguments?: Record<string, unknown>
+		source?: "global" | "project"
+	}
+	check_mcp_call_status: { call_id: string }
+	wait_for_mcp_call: { call_ids: string[]; wait?: "all" | "any"; timeout?: number }
 	// Add more tools as they are migrated to native protocol
 }
 

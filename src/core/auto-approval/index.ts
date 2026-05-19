@@ -201,6 +201,15 @@ export async function checkAutoApproval({
 			return { decision: "approve" }
 		}
 
+		// Async MCP call management tools are purely informational queries against
+		// in-memory state owned by the calling task. They mutate nothing and are
+		// unconditionally auto-approved — same UX as the background-task tools above.
+		// `callMcpToolAsync` is intentionally NOT in this list; it goes through the
+		// `use_mcp_server` ask gate (alwaysAllowMcp + per-tool).
+		if (["checkMcpCallStatus", "waitForMcpCall"].includes(tool?.tool)) {
+			return { decision: "approve" }
+		}
+
 		// Harmless informational / lightweight read-only tools are unconditionally auto-approved
 		// (independent of `alwaysAllowReadOnly`). These tools either query in-memory editor/LSP
 		// state, fetch a public URL, or list workspace metadata — they cannot mutate user state

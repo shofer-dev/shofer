@@ -998,6 +998,9 @@ export interface ShoferSayTool {
 		| "moveFile"
 		| "askAssistantAgent"
 		| "gitSearch"
+		| "callMcpToolAsync"
+		| "checkMcpCallStatus"
+		| "waitForMcpCall"
 	path?: string
 	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
 	fileOp?: "rm" | "mv"
@@ -1111,6 +1114,13 @@ export interface ShoferAskUseMcpServer {
 	 * to render the tool call with the correct header/badge.
 	 */
 	external_lm_tool?: boolean
+	/**
+	 * When true, this MCP tool call was initiated asynchronously via
+	 * `call_mcp_tool_async`. The chat UI may render an ``async`` badge to
+	 * distinguish fire-and-forget calls from synchronous ``use_mcp_tool``
+	 * invocations.
+	 */
+	async?: boolean
 }
 
 export interface ShoferApiReqInfo {

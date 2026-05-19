@@ -62,6 +62,9 @@ import { waitForTaskTool } from "../tools/WaitForTaskTool"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
 import { cancelTasksTool } from "../tools/CancelTasksTool"
 import { answerSubtaskQuestionTool } from "../tools/AnswerSubtaskQuestionTool"
+import { callMcpToolAsyncTool } from "../tools/CallMcpToolAsyncTool"
+import { checkMcpCallStatusTool } from "../tools/CheckMcpCallStatusTool"
+import { waitForMcpCallTool } from "../tools/WaitForMcpCallTool"
 import { sleepTool } from "../tools/SleepTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -995,6 +998,27 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "answer_subtask_question":
 					await answerSubtaskQuestionTool.handle(shofer, block as ToolUse<"answer_subtask_question">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "call_mcp_tool_async":
+					await callMcpToolAsyncTool.handle(shofer, block as ToolUse<"call_mcp_tool_async">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "check_mcp_call_status":
+					await checkMcpCallStatusTool.handle(shofer, block as ToolUse<"check_mcp_call_status">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "wait_for_mcp_call":
+					await waitForMcpCallTool.handle(shofer, block as ToolUse<"wait_for_mcp_call">, {
 						askApproval,
 						handleError,
 						pushToolResult,

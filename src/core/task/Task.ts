@@ -39,6 +39,7 @@ import {
 	type ApiReqError,
 	type TaskHandle,
 	type CostLimit,
+	type McpToolCallResponse,
 	ShoferEventName,
 	TelemetryEventName,
 	TaskStatus,
@@ -173,6 +174,22 @@ export interface TaskOptions extends CreateTaskOptions {
 	initialState?: TaskState
 }
 
+/**
+ * Handle for an in-flight async MCP tool call, stored in {@link Task.mcpAsyncCalls}.
+ * Mirrors {@link TaskHandle} for background children.
+ */
+export interface McpAsyncCallHandle {
+	callId: string
+	serverName: string
+	toolName: string
+	status: "running" | "completed" | "error" | "cancelled"
+	promise: Promise<McpToolCallResponse>
+	abortController: AbortController
+	result?: McpToolCallResponse
+	error?: string
+	createdAt: number
+}
+
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	readonly taskId: string
 	readonly rootTaskId?: string
@@ -182,6 +199,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// NEW: Track background children
 	backgroundChildren: Map<string, TaskHandle> = new Map()
+
+	/**
+	 * In-flight async MCP tool calls (mirrors `backgroundChildren` for MCP calls).
+	 * Each entry tracks a fire-and-forget `McpHub.callTool()` promise plus an
+	 * AbortController. Cleaned up inline in {@link abortTask}.
+	 */
+	mcpAsyncCalls: Map<string, McpAsyncCallHandle> = new Map()
 
 	/**
 	 * Per-root-task USD budget cap. Stored only on root tasks; subtasks
@@ -2798,6 +2822,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Abort all background children before aborting self (Decision: abort propagation).
 		await this.abortBackgroundChildren()
+
+		// Abort in-flight async MCP tool calls (inline, mirrors backgroundChildren cleanup above).
+		if (this.mcpAsyncCalls.size > 0) {
+			for (const handle of this.mcpAsyncCalls.values()) {
+				if (handle.status === "running") {
+					handle.abortController.abort()
+					handle.status = "cancelled"
+				}
+			}
+			this.mcpAsyncCalls.clear()
+		}
 
 		// Will stop any autonomously running promises.
 		if (isAbandoned) {
