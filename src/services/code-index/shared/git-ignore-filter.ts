@@ -14,6 +14,8 @@ const execFileAsync = promisify(execFile)
  */
 export interface IIgnoreFilter {
 	ignores(relativeFilePath: string): boolean
+	/** Rebuild the included-paths snapshot. No-op implementations are valid. */
+	refresh(): Promise<void>
 }
 
 /**

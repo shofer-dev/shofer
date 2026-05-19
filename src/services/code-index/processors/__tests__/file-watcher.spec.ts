@@ -123,6 +123,7 @@ describe("FileWatcher", () => {
 
 		mockIgnoreInstance = {
 			ignores: vi.fn().mockReturnValue(false),
+			refresh: vi.fn().mockResolvedValue(undefined),
 		}
 
 		fileWatcher = new FileWatcher(
