@@ -12,6 +12,30 @@ const OLLAMA_EMBEDDING_TIMEOUT_MS = 60000 // 60 seconds for embedding requests
 const OLLAMA_VALIDATION_TIMEOUT_MS = 30000 // 30 seconds for validation requests
 
 /**
+ * Diagnostic logger that lazily resolves the shared Shofer output channel.
+ *
+ * Static import of `../../../extension` would form a require-cycle
+ * (extension → code-index/manager → … → embedders/ollama). The lazy
+ * dynamic import keeps the cycle out of the module graph while still routing
+ * diagnostics to the user-visible channel per the Output Channel Logging Rule.
+ */
+function log(...args: unknown[]): void {
+	void import("../../../extension")
+		.then(({ getOutputChannel }) => {
+			const ch = getOutputChannel()
+			if (!ch) return
+			const stamp = new Date().toISOString()
+			for (const arg of args) {
+				const body = typeof arg === "string" ? arg : JSON.stringify(arg)
+				ch.appendLine(`${stamp} [code-index/ollama] ${body}`)
+			}
+		})
+		.catch(() => {
+			/* output channel not yet wired; silently drop */
+		})
+}
+
+/**
  * Implements the IEmbedder interface using a local Ollama instance.
  */
 export class CodeIndexOllamaEmbedder implements IEmbedder {
@@ -92,6 +116,17 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 			// Note: Standard Ollama API uses 'prompt' for single text, not 'input' for array.
 			// Implementing based on user's specific request structure.
 
+			// Diagnostic: pre-request summary so we can correlate 400s with payload size.
+			const itemLengths = processedTexts.map((s) => s.length)
+			const totalChars = itemLengths.reduce((a, b) => a + b, 0)
+			const maxChars = itemLengths.length > 0 ? Math.max(...itemLengths) : 0
+			const maxIdx = itemLengths.indexOf(maxChars)
+			log(
+				`POST ${url} model=${modelToUse} items=${itemLengths.length} ` +
+					`totalChars=${totalChars} maxChars=${maxChars} (item ${maxIdx}) ` +
+					`num_ctx=${MAX_ITEM_TOKENS} cap=${MAX_SAFE_CHARS}`,
+			)
+
 			// Add timeout to prevent indefinite hanging
 			const controller = new AbortController()
 			const timeoutId = setTimeout(() => controller.abort(), OLLAMA_EMBEDDING_TIMEOUT_MS)
@@ -121,6 +156,14 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				} catch (e) {
 					// Ignore error reading body
 				}
+				// Diagnostic: dump per-item lengths so we can see which input the
+				// server is rejecting on a 400 "input length exceeds context length".
+				log(
+					`ERROR ${response.status} ${response.statusText} from ${url} ` +
+						`model=${modelToUse} num_ctx=${MAX_ITEM_TOKENS} ` +
+						`items=${itemLengths.length} maxChars=${maxChars} totalChars=${totalChars} ` +
+						`itemLengths=[${itemLengths.join(",")}] body=${errorBody}`,
+				)
 				throw new Error(
 					t("embeddings:ollama.requestFailed", {
 						status: response.status,
