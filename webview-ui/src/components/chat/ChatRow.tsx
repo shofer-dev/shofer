@@ -1097,6 +1097,36 @@ export const ChatRowContent = ({
 						)}
 					</>
 				)
+			case "cancelTasks": {
+				const results = Array.isArray(tool.results) ? tool.results : []
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("debug-stop")}
+							<span style={{ fontWeight: "bold" }}>{t("chat:backgroundTasks.cancelTasks")}</span>
+						</div>
+						<div className="pl-6 text-vscode-descriptionForeground">
+							{results.length === 0 ? (
+								<div>{t("chat:backgroundTasks.noTasks")}</div>
+							) : (
+								<ul className="list-none p-0 m-0">
+									{results.map((r: any) => (
+										<li key={r.task_id} className="mb-1">
+											{r.title ?? r.task_id}
+											{" — "}
+											{r.was_running
+												? t("chat:backgroundTasks.stopped")
+												: r.error
+													? t("chat:backgroundTasks.error")
+													: t("chat:backgroundTasks.alreadyTerminal")}
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+					</>
+				)
+			}
 			case "listBackgroundTasks": {
 				const bgTasks = Array.isArray(tool.tasks) ? tool.tasks : []
 				return (
@@ -1119,6 +1149,21 @@ export const ChatRowContent = ({
 									))}
 								</ul>
 							)}
+						</div>
+					</>
+				)
+			}
+			case "answerSubtaskQuestion": {
+				return (
+					<>
+						<div style={headerStyle}>
+							{toolIcon("comment-discussion")}
+							<span style={{ fontWeight: "bold" }}>
+								{t("chat:backgroundTasks.answerSubtaskQuestion")}
+							</span>
+						</div>
+						<div className="pl-6 text-vscode-descriptionForeground">
+							{tool.task_title ?? tool.task_id}: {tool.answer}
 						</div>
 					</>
 				)
