@@ -324,4 +324,111 @@ describe("CodeIndexOllamaEmbedder", () => {
 			expect(result.error).toBe("Network timeout")
 		})
 	})
+
+	describe("createEmbeddings", () => {
+		// Helper: mock the `/api/show` probe response for a given context length.
+		const mockShow = (contextLength: number, archPrefix = "nomic-bert") =>
+			mockFetch.mockImplementationOnce(() =>
+				Promise.resolve({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({
+							model_info: { [`${archPrefix}.context_length`]: contextLength },
+						}),
+				} as Response),
+			)
+
+		// Helper: mock the `/api/embed` response with a single zero vector per input.
+		const mockEmbed = (dim = 3) =>
+			mockFetch.mockImplementationOnce((_url, init) => {
+				const body = JSON.parse((init as RequestInit).body as string)
+				const inputs: string[] = body.input
+				return Promise.resolve({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({
+							embeddings: inputs.map(() => Array(dim).fill(0)),
+						}),
+				} as Response)
+			})
+
+		it("probes /api/show, caches the result, and sets options.num_ctx to the probed value", async () => {
+			mockShow(2048)
+			mockEmbed()
+			mockEmbed()
+
+			await embedder.createEmbeddings(["hello"])
+			await embedder.createEmbeddings(["world"]) // second call must reuse cached probe
+
+			// Three calls total: 1 probe + 2 embeds (no second probe).
+			expect(mockFetch).toHaveBeenCalledTimes(3)
+
+			const showCall = mockFetch.mock.calls[0]
+			expect(showCall[0]).toBe("http://localhost:11434/api/show")
+			expect(JSON.parse((showCall[1] as RequestInit).body as string)).toEqual({ name: "nomic-embed-text" })
+
+			for (const idx of [1, 2]) {
+				const embedCall = mockFetch.mock.calls[idx]
+				expect(embedCall[0]).toBe("http://localhost:11434/api/embed")
+				const body = JSON.parse((embedCall[1] as RequestInit).body as string)
+				expect(body.options).toEqual({ num_ctx: 2048 })
+			}
+		})
+
+		it("truncates inputs that exceed the chars-per-token budget derived from the probed context", async () => {
+			mockShow(2048)
+			mockEmbed()
+
+			// Cap = floor((2048 - 8) * 2.5) = 5100 chars.
+			const oversized = "a".repeat(10_000)
+			await embedder.createEmbeddings([oversized])
+
+			const embedCall = mockFetch.mock.calls[1]
+			const body = JSON.parse((embedCall[1] as RequestInit).body as string)
+			expect(body.input[0].length).toBe(5100)
+		})
+
+		it("falls back to 2048 tokens when /api/show fails", async () => {
+			mockFetch.mockImplementationOnce(() =>
+				Promise.resolve({
+					ok: false,
+					status: 500,
+					statusText: "boom",
+					json: () => Promise.resolve({}),
+				} as Response),
+			)
+			mockEmbed()
+
+			await embedder.createEmbeddings(["hi"])
+
+			const embedCall = mockFetch.mock.calls[1]
+			const body = JSON.parse((embedCall[1] as RequestInit).body as string)
+			expect(body.options).toEqual({ num_ctx: 2048 })
+		})
+
+		it("takes the minimum across multiple *.context_length keys", async () => {
+			mockFetch.mockImplementationOnce(() =>
+				Promise.resolve({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({
+							model_info: {
+								"nomic-bert.context_length": 8192,
+								"general.context_length": 2048,
+							},
+						}),
+				} as Response),
+			)
+			mockEmbed()
+
+			await embedder.createEmbeddings(["hi"])
+
+			const embedCall = mockFetch.mock.calls[1]
+			const body = JSON.parse((embedCall[1] as RequestInit).body as string)
+			expect(body.options).toEqual({ num_ctx: 2048 })
+		})
+	})
 })

@@ -21,19 +21,21 @@ const FIELD_SEPARATOR = "|||"
 const COMMIT_TERMINATOR = "ENDCOMMIT"
 
 /**
- * Maximum length of commit message content before truncation (7000 chars).
+ * Maximum length of commit message content before truncation (4000 chars).
  *
- * Protects against exceeding the embedding model's context length.  The
- * `length / 4` token-estimation heuristic used by the Ollama embedder can
- * under-count for non-Latin scripts (CJK, etc.) and dense code blocks where
- * the tokenizer may assign one token per character.  7000 chars leaves some
- * headroom under the 8192-token limit of `nomic-embed-text` while capturing
- * most of the commit body for semantic search.
+ * Sized for the smallest common embedding-model context window we expect to
+ * encounter: `nomic-embed-text` has a 2048-token training-time max, and at
+ * the conservative English-code ratio of ~2.5 chars/token used by the Ollama
+ * embedder that yields ~5000 chars of usable budget.  4000 leaves headroom
+ * for the BOS/EOS tokens and any worse-than-2.5 chars/token ratio that
+ * punctuation-heavy commit content can trigger.
  *
- * The Ollama embedder applies a last-resort truncation at the token-estimation
- * level — see ollama.ts for the defence-in-depth guard.
+ * The Ollama embedder applies a last-resort truncation using the model's
+ * actual probed context length — see ollama.ts for the defence-in-depth
+ * guard.  This cap is the first line of defence so we don't ship oversized
+ * items to the embedder in the first place.
  */
-const MAX_CONTENT_LENGTH = 7000
+const MAX_CONTENT_LENGTH = 4000
 
 /**
  * Extracts commit history from a git repository by running `git log`
