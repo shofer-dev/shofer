@@ -457,7 +457,10 @@ export class CodeIndexManager {
 					location: "_recreateServices",
 				})
 			}
-			ignoreInstance = flat
+			ignoreInstance = {
+				ignores: (p: string) => flat.ignores(p),
+				refresh: () => Promise.resolve(), // flat ignore has no snapshot to rebuild
+			}
 		}
 
 		// Create ShoferIgnoreController instance (cached — created only once per workspace)
