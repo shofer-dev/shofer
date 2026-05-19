@@ -158,13 +158,14 @@ Parameters:
 
 Reuses existing `codebaseIndex*` settings. New git-specific settings:
 
-| Setting                            | Type    | Default | Description                           |
-| ---------------------------------- | ------- | ------- | ------------------------------------- |
-| `codebaseIndexGitEnabled`          | boolean | false   | Enable git history indexing           |
-| `codebaseIndexGitMaxHistoryDays`   | number  | 365     | Max days of commit history to index   |
-| `codebaseIndexGitMaxCommits`       | number  | 10000   | Hard cap on number of commits indexed |
-| `codebaseIndexGitSearchMinScore`   | number  | 0.4     | Cosine similarity threshold           |
-| `codebaseIndexGitSearchMaxResults` | number  | 20      | Default max results per query         |
+| Setting                            | Type    | Default  | Description                           |
+| ---------------------------------- | ------- | -------- | ------------------------------------- |
+| `codebaseIndexGitEnabled`          | boolean | false    | Enable git history indexing           |
+| `codebaseIndexGitMaxHistoryDays`   | number  | 365      | Max days of commit history to index   |
+| `codebaseIndexGitMaxCommits`       | number  | 10000    | Hard cap on number of commits indexed |
+| `codebaseIndexGitSearchMinScore`   | number  | 0.4      | Cosine similarity threshold           |
+| `codebaseIndexGitBranch`           | string  | "master" | Branch (ref) to index, empty = HEAD   |
+| `codebaseIndexGitSearchMaxResults` | number  | 20       | Default max results per query         |
 
 These are added to [`packages/types/src/codebase-index.ts`](../packages/types/src/codebase-index.ts) (the existing Zod schema).
 

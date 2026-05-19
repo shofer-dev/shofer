@@ -138,6 +138,7 @@ export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexGitMaxHistoryDays: z.number().optional(),
 	codebaseIndexGitMaxCommits: z.number().optional(),
 	codebaseIndexGitSearchMinScore: z.number().min(0).max(1).optional(),
+	codebaseIndexGitBranch: z.string().optional(),
 	codebaseIndexGitSearchMaxResults: z.number().optional(),
 })
 

@@ -298,6 +298,8 @@
 		"gitStartButton": "Start Indexing",
 		"gitStopButton": "Stop Indexing",
 		"gitClearButton": "Clear Git Index",
+		"gitBranchLabel": "Branch to index",
+		"gitBranchDescription": "Branch (ref) to index. Leave empty to use the current HEAD.",
 		"gitMaxHistoryDaysLabel": "Max history (days)",
 		"gitMaxCommitsLabel": "Max commits",
 		"gitPollIntervalLabel": "Poll interval (minutes)",

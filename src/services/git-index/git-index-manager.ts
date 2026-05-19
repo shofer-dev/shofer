@@ -3,6 +3,7 @@ import { execFile } from "child_process"
 import { promisify } from "util"
 
 import type { ContextProxy } from "../../core/config/ContextProxy"
+import type { CodebaseIndexConfig } from "@shofer/types"
 import type { GitSearchResult } from "./interfaces/git"
 import type { IndexingState } from "../code-index/interfaces/manager"
 import type { IEmbedder } from "../code-index/interfaces/embedder"
@@ -53,6 +54,9 @@ const DEFAULT_GIT_SEARCH_MAX_RESULTS = 20
 export class GitIndexManager {
 	// --- Singleton Implementation ---
 	private static instances = new Map<string, GitIndexManager>()
+
+	/** Context proxy for reading persisted config (globalState). */
+	private _contextProxy?: ContextProxy
 
 	/**
 	 * Get or create the GitIndexManager singleton for a workspace.
@@ -171,6 +175,8 @@ export class GitIndexManager {
 	public async initialize(contextProxy: ContextProxy): Promise<void> {
 		if (this._isInitialized) return
 
+		this._contextProxy = contextProxy
+
 		// 1. ConfigManager Initialization and Configuration Loading
 		if (!this._configManager) {
 			this._configManager = new CodeIndexConfigManager(contextProxy)
@@ -240,9 +246,10 @@ export class GitIndexManager {
 
 		const gitMaxHistoryDays = this._readGitConfig("codebaseIndexGitMaxHistoryDays", 365)
 		const gitMaxCommits = this._readGitConfig("codebaseIndexGitMaxCommits", 10000)
+		const gitBranch = this._readGitConfig("codebaseIndexGitBranch", "master")
 
 		try {
-			await this._orchestrator.startIndexing(gitMaxHistoryDays, gitMaxCommits)
+			await this._orchestrator.startIndexing(gitMaxHistoryDays, gitMaxCommits, gitBranch)
 		} catch (error) {
 			// State is already set by the orchestrator; re-log for extension.ts visibility.
 			const message = error instanceof Error ? error.message : String(error)
@@ -341,6 +348,8 @@ export class GitIndexManager {
 	 * explicit Start button.
 	 */
 	public async handleSettingsChange(contextProxy: ContextProxy): Promise<void> {
+		this._contextProxy = contextProxy
+
 		// First-time enable: defer to initialize() which sets up services AND
 		// kicks off indexing in one shot.
 		if (!this._isInitialized) {
@@ -542,12 +551,9 @@ export class GitIndexManager {
 	/**
 	 * Read a git-specific config value from VS Code settings, with a default.
 	 */
-	private _readGitConfig<T>(key: string, defaultValue: T): T {
-		try {
-			const value = vscode.workspace.getConfiguration("shofer").get<T>(key)
-			return value !== undefined ? value : defaultValue
-		} catch {
-			return defaultValue
-		}
+	private _readGitConfig<T>(key: keyof CodebaseIndexConfig, defaultValue: T): T {
+		const cfg = this._contextProxy?.getGlobalState("codebaseIndexConfig")
+		const value = cfg?.[key] as T | undefined
+		return value !== undefined ? value : defaultValue
 	}
 }

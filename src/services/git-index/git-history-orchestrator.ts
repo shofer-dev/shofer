@@ -49,6 +49,7 @@ export class GitHistoryOrchestrator {
 	private _isProcessing = false
 	private _watcherSubscription: { dispose(): void } | null = null
 	private readonly _pollIntervalMs: number
+	private _branch = ""
 
 	constructor(
 		private readonly workspacePath: string,
@@ -82,11 +83,13 @@ export class GitHistoryOrchestrator {
 	 *
 	 * @param maxHistoryDays - Maximum days of history to index
 	 * @param maxCommits - Hard cap on number of commits to index
+	 * @param branch - Git ref (branch name) to index; empty string = HEAD
 	 */
-	public async startIndexing(maxHistoryDays: number, maxCommits: number): Promise<void> {
+	public async startIndexing(maxHistoryDays: number, maxCommits: number, branch: string): Promise<void> {
 		if (this._isProcessing) return
 
 		this._isProcessing = true
+		this._branch = branch
 		const effectiveMaxDays = maxHistoryDays > 0 ? maxHistoryDays : DEFAULT_GIT_MAX_HISTORY_DAYS
 		const effectiveMaxCommits = maxCommits > 0 ? maxCommits : DEFAULT_GIT_MAX_COMMITS
 
@@ -107,7 +110,7 @@ export class GitHistoryOrchestrator {
 			this.stateManager.setSystemState("Indexing", "Extracting git commit history...")
 
 			const commits = await this._extractFromAllRepos((repo) =>
-				this._logExtractor.extractCommits(repo, effectiveMaxDays, effectiveMaxCommits),
+				this._logExtractor.extractCommits(repo, effectiveMaxDays, effectiveMaxCommits, this._branch),
 			)
 
 			if (commits.length === 0) {
@@ -221,6 +224,7 @@ export class GitHistoryOrchestrator {
 					repo,
 					sinceDate,
 					500, // Safety cap for catch-up
+					this._branch,
 				),
 			)
 
@@ -318,7 +322,7 @@ export class GitHistoryOrchestrator {
 			}
 		})
 
-		this._watcher.start(() => this.cacheManager.lastCommitDate)
+		this._watcher.start(() => this.cacheManager.lastCommitDate, this._branch)
 	}
 
 	/**
