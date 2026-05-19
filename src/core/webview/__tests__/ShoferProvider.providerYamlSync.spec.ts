@@ -319,7 +319,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 				.mockResolvedValue(undefined)
 			const activateSpy = vi.spyOn(provider, "activateProviderProfile").mockResolvedValue(undefined)
 
-			await provider.handleModeSwitch("reviewer")
+			await provider.handleUserModeSwitch("reviewer")
 
 			expect(activateSpy).toHaveBeenCalledWith({ name: "yaml-profile" })
 			// Already in sync ⇒ no YAML write.
@@ -346,7 +346,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 			})
 			const activateSpy = vi.spyOn(provider, "activateProviderProfile").mockResolvedValue(undefined)
 
-			await provider.handleModeSwitch("reviewer")
+			await provider.handleUserModeSwitch("reviewer")
 
 			expect(activateSpy).toHaveBeenCalledWith({ name: "saved-profile" })
 		})

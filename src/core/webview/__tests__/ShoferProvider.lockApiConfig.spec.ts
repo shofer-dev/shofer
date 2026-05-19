@@ -9,6 +9,8 @@ vi.mock("vscode", () => ({
 	ExtensionContext: vi.fn(),
 	OutputChannel: vi.fn(),
 	WebviewView: vi.fn(),
+	TreeItem: vi.fn(),
+	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
 	Uri: {
 		joinPath: vi.fn(),
 		file: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("vscode", () => ({
 		showWarningMessage: vi.fn(),
 		showErrorMessage: vi.fn(),
 		onDidChangeActiveTextEditor: vi.fn(() => ({ dispose: vi.fn() })),
+		createTextEditorDecorationType: vi.fn(() => ({ dispose: vi.fn() })),
 	},
 	workspace: {
 		getConfiguration: vi.fn().mockReturnValue({
@@ -335,7 +338,7 @@ describe("ShoferProvider - Lock API Config Across Modes", () => {
 				.spyOn(provider, "activateProviderProfile")
 				.mockResolvedValue(undefined)
 
-			await provider.handleModeSwitch("architect")
+			await provider.handleUserModeSwitch("architect")
 
 			expect(getModeConfigIdSpy).not.toHaveBeenCalled()
 			expect(listConfigSpy).not.toHaveBeenCalled()
@@ -360,7 +363,7 @@ describe("ShoferProvider - Lock API Config Across Modes", () => {
 				.spyOn(provider, "activateProviderProfile")
 				.mockResolvedValue(undefined)
 
-			await provider.handleModeSwitch("architect")
+			await provider.handleUserModeSwitch("architect")
 
 			expect(getModeConfigIdSpy).toHaveBeenCalledWith("architect")
 			expect(activateProviderProfileSpy).toHaveBeenCalledWith({ name: "architect-profile" })

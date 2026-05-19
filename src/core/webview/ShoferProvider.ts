@@ -1645,15 +1645,36 @@ export class ShoferProvider
 	 * This prevents a mode switch in background Task A from silently updating the
 	 * mode of Task B (which the user is currently viewing).
 	 */
-	public async handleModeSwitch(newMode: Mode, sourceTask?: Task) {
-		const task = sourceTask ?? this.getCurrentTask()
+	public async handleModeSwitch(newMode: Mode, sourceTask: Task) {
+		TelemetryService.instance.captureModeSwitch(sourceTask.taskId, newMode)
+		sourceTask.emit(ShoferEventName.TaskModeSwitched, sourceTask.taskId, newMode)
+
+		try {
+			const taskHistoryItem =
+				this.taskHistoryStore.get(sourceTask.taskId) ??
+				(this.getGlobalState("taskHistory") ?? []).find((item) => item.id === sourceTask.taskId)
+
+			if (taskHistoryItem) {
+				await this.updateTaskHistory({ ...taskHistoryItem, mode: newMode })
+			}
+
+			;(sourceTask as any)._taskMode = newMode
+		} catch (error) {
+			this.log(
+				`Failed to persist mode switch for task ${sourceTask.taskId}: ${error instanceof Error ? error.message : String(error)}`,
+			)
+			throw error
+		}
+	}
+
+	public async handleUserModeSwitch(newMode: Mode) {
+		const task = this.getCurrentTask()
 
 		if (task) {
 			TelemetryService.instance.captureModeSwitch(task.taskId, newMode)
 			task.emit(ShoferEventName.TaskModeSwitched, task.taskId, newMode)
 
 			try {
-				// Update the task history with the new mode first.
 				const taskHistoryItem =
 					this.taskHistoryStore.get(task.taskId) ??
 					(this.getGlobalState("taskHistory") ?? []).find((item) => item.id === task.taskId)
@@ -1662,60 +1683,30 @@ export class ShoferProvider
 					await this.updateTaskHistory({ ...taskHistoryItem, mode: newMode })
 				}
 
-				// Only update the task's mode after successful persistence.
 				;(task as any)._taskMode = newMode
 			} catch (error) {
-				// If persistence fails, log the error but don't update the in-memory state.
 				this.log(
 					`Failed to persist mode switch for task ${task.taskId}: ${error instanceof Error ? error.message : String(error)}`,
 				)
-
-				// Optionally, we could emit an event to notify about the failure.
-				// This ensures the in-memory state remains consistent with persisted state.
 				throw error
 			}
 		} else {
-			// No current task — this is the initial "new task" screen (plus button
-			// clicked, or the first mode selection after extension activation). In
-			// this state the mode represents the mode for the *next* task to be
-			// created, so it belongs in global state. Tasks that are created from
-			// this screen will inherit it via createTaskWithHistoryItem().
 			await this.updateGlobalState("mode", newMode)
 		}
 
-		// Mode is task-scoped — do NOT update the global "mode" state here, as that
-		// would leak the mode change to every other active task sharing this provider.
-		// The webview's mode display is driven by the current task's _taskMode via
-		// getStateToPostToWebview(). restoreTaskMode() handles the global-state update
-		// when the user switches focus between tasks.
-		//
-		// EXCEPTION: when there is no current task (handled above), we DO update the
-		// global "mode" so that the initial "new task" screen and the task-creation
-		// flow see the user's chosen mode.
-		//
-		// We still propagate the mode change to the webview so the UI updates immediately,
-		// and emit ModeChanged for any downstream listeners that care about mode transitions.
-
 		this.emit(ShoferEventName.ModeChanged, newMode)
 
-		// If workspace lock is on, keep the current API config — don't load mode-specific config
 		const lockApiConfigAcrossModes = this.context.workspaceState.get("lockApiConfigAcrossModes", false)
 		if (lockApiConfigAcrossModes) {
 			await this.postStateToWebview()
 			return
 		}
 
-		// Load the saved API config for the new mode if it exists.
 		const savedConfigId = await this.providerSettingsManager.getModeConfigId(newMode)
 		const listApiConfig = await this.providerSettingsManager.listConfig()
 
-		// Update listApiConfigMeta first to ensure UI has latest data.
 		await this.updateGlobalState("listApiConfigMeta", listApiConfig)
 
-		// Resolve the desired profile name for this mode, with the YAML `provider:` field
-		// taking precedence over the saved per-mode mapping. This keeps custom-mode YAML
-		// authoritative: manual edits to `provider:` always win, and the saved mapping is
-		// kept in sync 1:1 by `syncCustomModeProviderToYaml` whenever it's mutated.
 		const customModes = await this.customModesManager.getCustomModes()
 		const modeConfig = getModeBySlug(newMode, customModes)
 
@@ -1728,12 +1719,6 @@ export class ShoferProvider
 		}
 
 		if (profileName) {
-			// Check if the profile has actual API configuration (not just an id).
-			// In CLI mode, the ProviderSettingsManager may return empty default profiles
-			// that only contain 'id' and 'name' fields. Activating such a profile would
-			// overwrite the CLI's working API configuration with empty settings.
-			// Skip activation if the profile has no apiProvider set - this indicates
-			// an unconfigured/empty profile.
 			const fullProfile = await this.providerSettingsManager.getProfile({ name: profileName })
 			const hasActualSettings = !!fullProfile.apiProvider
 
@@ -1741,8 +1726,6 @@ export class ShoferProvider
 				await this.activateProviderProfile({ name: profileName })
 			}
 		} else if (!modeConfig?.provider) {
-			// No YAML provider hint and no saved mapping: persist the current config as
-			// the default for this mode (and mirror to YAML for custom modes).
 			const currentApiConfigNameAfter = this.getGlobalState("currentApiConfigName")
 
 			if (currentApiConfigNameAfter) {

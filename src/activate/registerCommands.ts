@@ -99,7 +99,7 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		// of which mode the previously focused task was using. The popped
 		// task keeps its own mode persisted on its `_taskMode` and in the
 		// history item, so it's restored on refocus.
-		await visibleProvider.handleModeSwitch(defaultModeSlug)
+		await visibleProvider.handleUserModeSwitch(defaultModeSlug)
 
 		await visibleProvider.refreshWorkspace()
 		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
