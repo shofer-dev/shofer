@@ -19,6 +19,24 @@ export interface IIgnoreFilter {
 }
 
 /**
+ * Single-flight wrapper around {@link IIgnoreFilter.refresh}: concurrent
+ * callers share the in-flight promise instead of each spawning their own
+ * `git ls-files` process. Returns a no-op resolved promise when the filter
+ * is undefined.
+ */
+export function makeSingleflightRefresh(filter: IIgnoreFilter | undefined): () => Promise<void> {
+	let pending: Promise<void> | undefined
+	return () => {
+		if (!filter) return Promise.resolve()
+		if (pending) return pending
+		pending = filter.refresh().finally(() => {
+			pending = undefined
+		})
+		return pending
+	}
+}
+
+/**
  * Workspace-wide ignore filter that delegates to git itself, so it honours the
  * full `.gitignore` precedence stack — nested `.gitignore` files, `.git/info/exclude`,
  * the global `core.excludesfile`, negation patterns, the lot. This is the same
