@@ -386,7 +386,7 @@ describe("ShoferProvider - Sticky Mode", () => {
 			vi.spyOn(provider, "updateTaskHistory").mockImplementation(() => Promise.resolve([]))
 
 			// Switch mode
-			await provider.handleModeSwitch("architect", mockTask)
+			await provider.handleModeSwitch("architect", mockTask as unknown as Task)
 
 			// Verify task's _taskMode property was updated (using private property)
 			expect((mockTask as any)._taskMode).toBe("architect")
