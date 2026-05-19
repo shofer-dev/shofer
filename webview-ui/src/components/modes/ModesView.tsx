@@ -52,7 +52,7 @@ import { DeleteModeDialog } from "@src/components/modes/DeleteModeDialog"
 import { useEscapeKey } from "@src/hooks/useEscapeKey"
 
 // Get all available groups that should show in prompts view
-const availableGroups = (Object.keys(TOOL_GROUPS) as ToolGroup[]).filter((group) => !TOOL_GROUPS[group].alwaysAvailable)
+const availableGroups = Object.keys(TOOL_GROUPS) as ToolGroup[]
 
 type ModeSource = "global" | "project"
 

@@ -80,6 +80,8 @@ export const toolNames = [
 	"check_task_status",
 	"wait_for_task",
 	"list_background_tasks",
+	"cancel_tasks",
+	"answer_subtask_question",
 	"sleep",
 	"sed",
 	// Assistant Agent
@@ -98,7 +100,6 @@ export type ToolName = z.infer<typeof toolNamesSchema>
  */
 export type ToolGroupConfig = {
 	tools: readonly ToolName[]
-	alwaysAvailable?: boolean // Whether this group is always available and shouldn't show in prompts view
 	customTools?: readonly ToolName[] // Opt-in only tools - only available when explicitly included via model's includedTools
 }
 
@@ -152,6 +153,8 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	check_task_status: "check background task status",
 	wait_for_task: "wait for background task",
 	list_background_tasks: "list background tasks",
+	cancel_tasks: "cancel background tasks",
+	answer_subtask_question: "answer subtask question",
 	sleep: "wait / sleep",
 	sed: "regex find-and-replace on files",
 	ask_assistant_agent: "ask assistant agent",
@@ -206,11 +209,10 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["use_mcp_tool", "access_mcp_resource"],
 	},
 	mode: {
-		tools: ["switch_mode", "new_task"],
-		alwaysAvailable: true,
+		tools: ["switch_mode"],
 	},
 	subtasks: {
-		tools: ["check_task_status", "wait_for_task", "list_background_tasks"],
+		tools: ["new_task", "check_task_status", "wait_for_task", "list_background_tasks"],
 	},
 	questions: {
 		tools: ["ask_followup_question"],
