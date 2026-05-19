@@ -88,6 +88,10 @@ export const toolNames = [
 	"ask_assistant_agent",
 	// Git History Search
 	"git_search",
+	// Async MCP tool calling
+	"call_mcp_tool_async",
+	"check_mcp_call_status",
+	"wait_for_mcp_call",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -159,6 +163,9 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	sed: "regex find-and-replace on files",
 	ask_assistant_agent: "ask assistant agent",
 	git_search: "search git history",
+	call_mcp_tool_async: "call mcp tools asynchronously",
+	check_mcp_call_status: "check async mcp call status",
+	wait_for_mcp_call: "wait for async mcp calls",
 } as const
 
 /**
@@ -206,7 +213,13 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["execute_command", "read_command_output", "sleep"],
 	},
 	mcp: {
-		tools: ["use_mcp_tool", "access_mcp_resource"],
+		tools: [
+			"use_mcp_tool",
+			"access_mcp_resource",
+			"call_mcp_tool_async",
+			"check_mcp_call_status",
+			"wait_for_mcp_call",
+		],
 	},
 	mode: {
 		tools: ["switch_mode"],
