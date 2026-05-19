@@ -571,6 +571,7 @@ export const webviewMessageHandler = async (
 			provider.debug?.(`[webview] ${message.text ?? ""}`)
 			break
 		case "webviewDidLaunch":
+			provider.log("[webview-lifecycle] webviewDidLaunch received — webview initialized or re-initialized")
 			// Load custom modes first
 			const customModes = await provider.customModesManager.getCustomModes()
 			await updateGlobalState("customModes", customModes)
