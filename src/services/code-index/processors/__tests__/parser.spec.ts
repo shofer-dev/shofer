@@ -198,18 +198,18 @@ describe("CodeParser", () => {
 			expect(result).toEqual([])
 		})
 
-		it("should respect 50-character minimum threshold for all languages", async () => {
-			// Test content that is exactly 49 characters (should be filtered)
-			const shortContent = "function f() { return 1; } // Exactly 49 chars!!!"
-			expect(shortContent.length).toBe(49)
+		it("should respect MIN_BLOCK_CHARS minimum threshold for all languages", async () => {
+			// Test content that is below MIN_BLOCK_CHARS (10) (should be filtered)
+			const shortContent = "f(){}"
+			expect(shortContent.length).toBeLessThan(10)
 
-			// Test content that is exactly 50 characters (should be included)
-			const minContent = "function g() { return 42; } // Exactly 50 chars!!!"
-			expect(minContent.length).toBe(50)
+			// Test content that is exactly 10 characters (should be included)
+			const minContent = "function f"
+			expect(minContent.length).toBe(10)
 
-			// Test content that is longer than 50 characters (should be included)
-			const longContent = "function calculate() { return 1 + 2 + 3; } // This is longer than 50 characters"
-			expect(longContent.length).toBeGreaterThan(50)
+			// Test content that is longer than 10 characters (should be included)
+			const longContent = "function calculate() { return 1 + 2 + 3; } // longer than 10 characters"
+			expect(longContent.length).toBeGreaterThan(10)
 
 			// Mock the language parser to return captures for our test content
 			const mockCapture = (content: string, startLine: number = 0) => ({
@@ -224,7 +224,7 @@ describe("CodeParser", () => {
 				name: "definition.function",
 			})
 
-			// Test short content (49 chars) - should be filtered out
+			// Test short content (below MIN_BLOCK_CHARS) - should be filtered out
 			mockLanguageParser.js.query.captures.mockReturnValue([mockCapture(shortContent)])
 			const shortResult = await parser["parseContent"]("test.js", shortContent, "hash1")
 			expect(shortResult).toEqual([])
@@ -403,16 +403,11 @@ Additional content to ensure we exceed the minimum block size requirements for p
 		})
 
 		it("should enforce MIN_BLOCK_CHARS for all markdown sections", async () => {
-			const markdownContent = `# Short
-Small content.
-
-## Another Short
-Also small.
-
-### Long Section
-This section has substantial content that exceeds the minimum character requirements.
-It includes multiple lines with detailed information to ensure proper indexing.
-The content is comprehensive enough to be included in the search results.`
+			// At MIN_BLOCK_CHARS=10, only sections whose content falls below the
+			// threshold are dropped. Use single-character bodies for the two short
+			// sections so the rendered section content stays under 10 chars; the
+			// long section should still be included.
+			const markdownContent = `#S\nx\n\n##A\ny\n\n###Long\nThis section has substantial content that exceeds the minimum character requirements.\nIt includes multiple lines with detailed information to ensure proper indexing.\nThe content is comprehensive enough to be included in the search results.`
 
 			vi.mocked(parseMarkdown).mockReturnValue([
 				{
@@ -452,7 +447,7 @@ The content is comprehensive enough to be included in the search results.`
 			// Only the long section should be included
 			expect(result).toHaveLength(1)
 			expect(result[0].identifier).toBe("Long Section")
-			expect(result[0].content.length).toBeGreaterThanOrEqual(100) // MIN_BLOCK_CHARS
+			expect(result[0].content.trim().length).toBeGreaterThanOrEqual(10) // MIN_BLOCK_CHARS
 		})
 
 		it("should chunk large markdown sections and generate unique hashes for each chunk", async () => {
@@ -996,17 +991,16 @@ This content verifies that processing continues after multiple oversized lines.`
 
 		it("should return empty array for markdown content below MIN_BLOCK_CHARS threshold", async () => {
 			const parser = new CodeParser()
-			// Create content that is below the new MIN_BLOCK_CHARS threshold of 50
-			const smallContent = "Small markdown.\nJust a bit.\nTiny."
+			// Below the current MIN_BLOCK_CHARS threshold of 10
+			const smallContent = "hi"
 
 			// Mock parseMarkdown to return empty array (no headers)
 			vi.mocked(parseMarkdown).mockReturnValue([])
 
 			const results = await parser["parseContent"]("test.md", smallContent, "test-hash")
 
-			// Should return empty array since content is below MIN_BLOCK_CHARS (50)
 			expect(results.length).toBe(0)
-			expect(smallContent.length).toBeLessThan(50) // Verify our test assumption
+			expect(smallContent.trim().length).toBeLessThan(10) // Verify our test assumption
 		})
 	})
 })
