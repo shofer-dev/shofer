@@ -1,3 +1,5 @@
+import { TelemetryService } from "@shofer/telemetry"
+
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 
@@ -99,10 +101,27 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 			// intentionally do NOT mutate the underlying Task.mcpAsyncCalls handle
 			// — the call may still complete later and be retrievable via
 			// check_mcp_call_status.
+			const timeoutSec = params.timeout ?? 120
 			for (const r of records) {
 				if (!r.settled) {
 					r.status = "timeout"
-					r.error = `Did not complete within ${params.timeout ?? 120}s`
+					r.error = `Did not complete within ${timeoutSec}s`
+					TelemetryService.instance.captureMcpAsyncCallTimedOut(task.taskId, {
+						callId: r.callId,
+						serverName: r.serverName,
+						toolName: r.toolName,
+						timeoutSec,
+					})
+				}
+			}
+
+			// Delete-on-read: settled handles have been observed exactly once via this
+			// wait and returned to the agent; release them from the per-task map.
+			// Unsettled (timed-out) handles stay in the map so a subsequent
+			// check_mcp_call_status / wait_for_mcp_call can still observe them.
+			for (const r of records) {
+				if (r.settled) {
+					task.mcpAsyncCalls.delete(r.callId)
 				}
 			}
 

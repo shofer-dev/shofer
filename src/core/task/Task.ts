@@ -2829,6 +2829,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				if (handle.status === "running") {
 					handle.abortController.abort()
 					handle.status = "cancelled"
+					TelemetryService.instance.captureMcpAsyncCallCancelled(this.taskId, {
+						callId: handle.callId,
+						serverName: handle.serverName,
+						toolName: handle.toolName,
+						durationMs: Date.now() - handle.createdAt,
+					})
 				}
 			}
 			this.mcpAsyncCalls.clear()

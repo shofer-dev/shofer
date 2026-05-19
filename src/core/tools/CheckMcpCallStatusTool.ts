@@ -68,6 +68,9 @@ export class CheckMcpCallStatusTool extends BaseTool<"check_mcp_call_status"> {
 						shaped.images,
 					),
 				)
+				// Delete-on-read: settled handle has been observed exactly once and
+				// returned to the agent; release it from the per-task map to bound memory.
+				task.mcpAsyncCalls.delete(callId)
 				return
 			}
 
@@ -83,6 +86,7 @@ export class CheckMcpCallStatusTool extends BaseTool<"check_mcp_call_status"> {
 						}),
 					),
 				)
+				task.mcpAsyncCalls.delete(callId)
 				return
 			}
 
@@ -97,6 +101,7 @@ export class CheckMcpCallStatusTool extends BaseTool<"check_mcp_call_status"> {
 						}),
 					),
 				)
+				task.mcpAsyncCalls.delete(callId)
 				return
 			}
 

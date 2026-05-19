@@ -192,6 +192,13 @@ export const McpExecution = ({
 					)}
 					<div className="flex items-center gap-1 flex-wrap">
 						{serverName && <span className="font-bold text-vscode-foreground">{serverName}</span>}
+						{useMcpServer?.async && (
+							<span
+								className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-vscode-badge-background text-vscode-badge-foreground"
+								title={t("chat:mcp.asyncBadge", { defaultValue: "async" })}>
+								{t("chat:mcp.asyncBadge", { defaultValue: "async" })}
+							</span>
+						)}
 					</div>
 				</div>
 				<div className="flex flex-row items-center justify-between gap-2 px-1">

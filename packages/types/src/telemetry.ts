@@ -77,6 +77,12 @@ export enum TelemetryEventName {
 	READ_FILE_LEGACY_FORMAT_USED = "Read File Legacy Format Used",
 	BUDGET_EXCEEDED = "Budget Exceeded",
 	CODE_INDEX_SEGMENT_DEDUP = "Code Index Segment Dedup",
+
+	// Async MCP tool calls (`call_mcp_tool_async` / `wait_for_mcp_call`)
+	MCP_ASYNC_CALL_STARTED = "MCP Async Call Started",
+	MCP_ASYNC_CALL_COMPLETED = "MCP Async Call Completed",
+	MCP_ASYNC_CALL_CANCELLED = "MCP Async Call Cancelled",
+	MCP_ASYNC_CALL_TIMED_OUT = "MCP Async Call Timed Out",
 }
 
 /**
@@ -208,6 +214,10 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.MODE_SETTINGS_CHANGED,
 			TelemetryEventName.CUSTOM_MODE_CREATED,
 			TelemetryEventName.READ_FILE_LEGACY_FORMAT_USED,
+			TelemetryEventName.MCP_ASYNC_CALL_STARTED,
+			TelemetryEventName.MCP_ASYNC_CALL_COMPLETED,
+			TelemetryEventName.MCP_ASYNC_CALL_CANCELLED,
+			TelemetryEventName.MCP_ASYNC_CALL_TIMED_OUT,
 		]),
 		properties: telemetryPropertiesSchema,
 	}),

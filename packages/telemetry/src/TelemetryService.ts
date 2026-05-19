@@ -180,6 +180,40 @@ export class TelemetryService {
 	}
 
 	/**
+	 * Captures lifecycle events for an async MCP tool call dispatched via
+	 * `call_mcp_tool_async`. The four events form a partition of every
+	 * handle's terminal disposition: a call ends in exactly one of
+	 * completed / cancelled / timed-out, after starting exactly once.
+	 */
+	public captureMcpAsyncCallStarted(
+		taskId: string,
+		properties: { callId: string; serverName: string; toolName: string },
+	): void {
+		this.captureEvent(TelemetryEventName.MCP_ASYNC_CALL_STARTED, { taskId, ...properties })
+	}
+
+	public captureMcpAsyncCallCompleted(
+		taskId: string,
+		properties: { callId: string; serverName: string; toolName: string; isError: boolean; durationMs: number },
+	): void {
+		this.captureEvent(TelemetryEventName.MCP_ASYNC_CALL_COMPLETED, { taskId, ...properties })
+	}
+
+	public captureMcpAsyncCallCancelled(
+		taskId: string,
+		properties: { callId: string; serverName: string; toolName: string; durationMs: number },
+	): void {
+		this.captureEvent(TelemetryEventName.MCP_ASYNC_CALL_CANCELLED, { taskId, ...properties })
+	}
+
+	public captureMcpAsyncCallTimedOut(
+		taskId: string,
+		properties: { callId: string; serverName: string; toolName: string; timeoutSec: number },
+	): void {
+		this.captureEvent(TelemetryEventName.MCP_ASYNC_CALL_TIMED_OUT, { taskId, ...properties })
+	}
+
+	/**
 	 * Captures when a task's cost limit has been exceeded.
 	 * Emitted before the limit action (pause/abort/kill) is taken.
 	 */
