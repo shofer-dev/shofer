@@ -852,6 +852,7 @@ export class ShoferProvider
 	async resolveWebviewView(webviewView: vscode.WebviewView | vscode.WebviewPanel) {
 		this.view = webviewView
 		const inTabMode = "onDidChangeViewState" in webviewView
+		this.log(`[webview-lifecycle] resolveWebviewView called (mode: ${inTabMode ? "tab" : "sidebar"})`)
 
 		if (inTabMode) {
 			setPanel(webviewView, "tab")
@@ -934,7 +935,16 @@ export class ShoferProvider
 			// for this visibility listener panel.
 			const viewStateDisposable = webviewView.onDidChangeViewState(() => {
 				if (this.view?.visible) {
+					this.log(
+						"[webview-lifecycle] Tab panel became visible — posting didBecomeVisible and refreshing state",
+					)
 					this.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
+					// Push full state on re-show so a blank webview (e.g. renderer
+					// restarted under memory/CPU pressure) can recover without
+					// waiting for the next user interaction.
+					this.postStateToWebview()
+				} else {
+					this.log("[webview-lifecycle] Tab panel became hidden")
 				}
 			})
 
@@ -943,7 +953,16 @@ export class ShoferProvider
 			// sidebar
 			const visibilityDisposable = webviewView.onDidChangeVisibility(() => {
 				if (this.view?.visible) {
+					this.log(
+						"[webview-lifecycle] Sidebar panel became visible — posting didBecomeVisible and refreshing state",
+					)
 					this.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
+					// Push full state on re-show so a blank webview (e.g. renderer
+					// restarted under memory/CPU pressure) can recover without
+					// waiting for the next user interaction.
+					this.postStateToWebview()
+				} else {
+					this.log("[webview-lifecycle] Sidebar panel became hidden")
 				}
 			})
 
@@ -2149,8 +2168,14 @@ export class ShoferProvider
 		const { historyItem } = await this.getTaskWithId(taskId)
 
 		const aggregatedCosts = await aggregateTaskCostsRecursive(taskId, async (id: string) => {
-			const result = await this.getTaskWithId(id)
-			return result.historyItem
+			try {
+				const result = await this.getTaskWithId(id)
+				return result.historyItem
+			} catch {
+				// Child task not found in history (e.g. pruned or from a different session).
+				// aggregateTaskCostsRecursive handles undefined by returning zero costs.
+				return undefined
+			}
 		})
 
 		return { historyItem, aggregatedCosts }
