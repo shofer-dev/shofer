@@ -1,3 +1,4 @@
+src/tsconfig.tsbuildinfo
 .pnpm-store
 dist
 out
