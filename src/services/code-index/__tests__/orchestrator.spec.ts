@@ -401,6 +401,7 @@ describe("CodeIndexOrchestrator — Phase 2 git-aware narrowing", () => {
 			getHeadCommit: vi.fn().mockReturnValue(undefined),
 			diffSince: vi.fn(),
 			getDirtyChanges: vi.fn().mockReturnValue({ changed: [], deleted: [] }),
+			getDirtyChangesIncludingSubmodules: vi.fn().mockReturnValue({ changed: [], deleted: [] }),
 			getSubmoduleCommits: vi.fn().mockReturnValue({}),
 			diffSubmoduleSince: vi.fn(),
 		}
@@ -432,7 +433,7 @@ describe("CodeIndexOrchestrator — Phase 2 git-aware narrowing", () => {
 			changed: ["/test/workspace/src/a.ts"],
 			deleted: ["/test/workspace/src/b.ts"],
 		})
-		gitSource.getDirtyChanges.mockReturnValue({
+		gitSource.getDirtyChangesIncludingSubmodules.mockReturnValue({
 			changed: ["/test/workspace/src/c.ts"],
 			deleted: [],
 		})

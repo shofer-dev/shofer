@@ -187,8 +187,12 @@ export class CodeIndexOrchestrator {
 						allChanged.push(...mainDiff.changed)
 						allDeleted.push(...mainDiff.deleted)
 
-						// Also include current dirty state (unstaged + staged + untracked)
-						const dirtyDiff = this.gitSource.getDirtyChanges(repo)
+						// Also include current dirty state (unstaged + staged + untracked),
+						// merged across the parent repo AND every initialised submodule.
+						// The parent alone only sees a submodule as a single dirty entry,
+						// so files freshly created inside a submodule while VS Code was
+						// closed are invisible without this merge.
+						const dirtyDiff = this.gitSource.getDirtyChangesIncludingSubmodules(repo)
 						allChanged.push(...dirtyDiff.changed)
 						allDeleted.push(...dirtyDiff.deleted)
 
