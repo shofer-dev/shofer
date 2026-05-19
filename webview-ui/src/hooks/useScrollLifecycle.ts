@@ -113,6 +113,13 @@ export function useScrollLifecycle({
 	// --- Re-anchor frame ---
 	const reanchorAnimationFrameRef = useRef<number | null>(null)
 
+	// --- Disengage immune window ---
+	// Set when the user explicitly enters browse mode. While active,
+	// atBottomStateChange(true) from an in-flight programmatic scroll
+	// cannot snap the user back to ANCHORED_FOLLOWING.
+	const userDisengagedRef = useRef(false)
+	const userDisengagedTimeoutRef = useRef<number | null>(null)
+
 	// -----------------------------------------------------------------------
 	// Phase transitions
 	// -----------------------------------------------------------------------
@@ -134,6 +141,17 @@ export function useScrollLifecycle({
 		(_source: ScrollFollowDisengageSource) => {
 			transitionScrollPhase("USER_BROWSING_HISTORY")
 			setShowScrollToBottom(true)
+			// Open a brief immune window so any in-flight programmatic
+			// scroll-to-bottom that completes after this point cannot
+			// pull the user back to ANCHORED_FOLLOWING.
+			userDisengagedRef.current = true
+			if (userDisengagedTimeoutRef.current !== null) {
+				window.clearTimeout(userDisengagedTimeoutRef.current)
+			}
+			userDisengagedTimeoutRef.current = window.setTimeout(() => {
+				userDisengagedRef.current = false
+				userDisengagedTimeoutRef.current = null
+			}, 500)
 		},
 		[transitionScrollPhase],
 	)
@@ -239,6 +257,9 @@ export function useScrollLifecycle({
 			clearHydrationWindow()
 			cancelReanchorFrame()
 			scrollToBottomSmooth.clear()
+			if (userDisengagedTimeoutRef.current !== null) {
+				window.clearTimeout(userDisengagedTimeoutRef.current)
+			}
 		}
 	}, [cancelReanchorFrame, clearHydrationWindow, scrollToBottomSmooth])
 
@@ -252,6 +273,12 @@ export function useScrollLifecycle({
 		isAtBottomRef.current = false
 		clearHydrationWindow()
 		cancelReanchorFrame()
+		// Clear any disengage immune window from the previous task.
+		userDisengagedRef.current = false
+		if (userDisengagedTimeoutRef.current !== null) {
+			window.clearTimeout(userDisengagedTimeoutRef.current)
+			userDisengagedTimeoutRef.current = null
+		}
 
 		if (taskTs) {
 			transitionScrollPhase("HYDRATING_PINNED_TO_BOTTOM")
@@ -333,7 +360,11 @@ export function useScrollLifecycle({
 			}
 
 			if (isAtBottom) {
-				if (currentPhase === "USER_BROWSING_HISTORY" && isHydratingRef.current) {
+				if (currentPhase === "USER_BROWSING_HISTORY" && (isHydratingRef.current || userDisengagedRef.current)) {
+					// During hydration or the disengage immune window, an
+					// atBottomStateChange(true) signal is most likely from a
+					// programmatic scroll that completed after the user scrolled
+					// up. Do not override the user's browse intent.
 					setShowScrollToBottom(true)
 					return
 				}
