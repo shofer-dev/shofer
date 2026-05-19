@@ -212,7 +212,14 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["switch_mode"],
 	},
 	subtasks: {
-		tools: ["new_task", "check_task_status", "wait_for_task", "list_background_tasks"],
+		tools: [
+			"new_task",
+			"check_task_status",
+			"wait_for_task",
+			"list_background_tasks",
+			"cancel_tasks",
+			"answer_subtask_question",
+		],
 	},
 	questions: {
 		tools: ["ask_followup_question"],

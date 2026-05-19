@@ -148,9 +148,11 @@ export type NativeToolArgs = {
 		softResultLength?: number
 		softTimeoutSec?: number
 	}
-	check_task_status: { task_id: string }
+	check_task_status: { task_id: string; include_activity?: boolean | null }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
 	list_background_tasks: Record<string, never>
+	cancel_tasks: { task_ids: string[] }
+	answer_subtask_question: { task_id: string; answer: string }
 	ask_followup_question: {
 		question: string
 		follow_up: Array<{ text: string; mode?: string }>

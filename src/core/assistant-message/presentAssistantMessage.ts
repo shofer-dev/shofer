@@ -60,6 +60,8 @@ import { viewImageTool } from "../tools/ViewImageTool"
 import { checkTaskStatusTool } from "../tools/CheckTaskStatusTool"
 import { waitForTaskTool } from "../tools/WaitForTaskTool"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
+import { cancelTasksTool } from "../tools/CancelTasksTool"
+import { answerSubtaskQuestionTool } from "../tools/AnswerSubtaskQuestionTool"
 import { sleepTool } from "../tools/SleepTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -978,6 +980,20 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "list_background_tasks":
 					await listBackgroundTasksTool.handle(shofer, block as ToolUse<"list_background_tasks">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "cancel_tasks":
+					await cancelTasksTool.handle(shofer, block as ToolUse<"cancel_tasks">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "answer_subtask_question":
+					await answerSubtaskQuestionTool.handle(shofer, block as ToolUse<"answer_subtask_question">, {
 						askApproval,
 						handleError,
 						pushToolResult,

@@ -51,6 +51,8 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	waitForTask: "wait_for_task",
 	checkTaskStatus: "check_task_status",
 	listBackgroundTasks: "list_background_tasks",
+	cancelTasks: "cancel_tasks",
+	answerSubtaskQuestion: "answer_subtask_question",
 
 	// questions group
 	askFollowupQuestion: "ask_followup_question",

@@ -981,6 +981,8 @@ export interface ShoferSayTool {
 		| "waitForTask"
 		| "checkTaskStatus"
 		| "listBackgroundTasks"
+		| "cancelTasks"
+		| "answerSubtaskQuestion"
 		| "getErrors"
 		| "getChangedFiles"
 		| "getProjectSetupInfo"
@@ -1069,6 +1071,13 @@ export interface ShoferSayTool {
 	task_titles?: string[]
 	wait?: "all" | "any"
 	timeout?: number
+	results?: Array<{
+		task_id: string
+		title?: string
+		was_running: boolean
+		status: string
+		error?: string
+	}>
 	tasks?: Array<{
 		task_id: string
 		title: string

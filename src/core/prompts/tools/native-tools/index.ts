@@ -40,6 +40,8 @@ import giveFeedback from "./give_feedback"
 import checkTaskStatus from "./check_task_status"
 import waitForTask from "./wait_for_task"
 import listBackgroundTasks from "./list_background_tasks"
+import cancelTasks from "./cancel_tasks"
+import answerSubtaskQuestion from "./answer_subtask_question"
 import sed from "./sed"
 import sleep from "./sleep"
 import viewImage from "./view_image"
@@ -111,6 +113,8 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		checkTaskStatus,
 		waitForTask,
 		listBackgroundTasks,
+		cancelTasks,
+		answerSubtaskQuestion,
 		updateTodoList,
 		sed,
 		sleep,
