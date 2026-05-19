@@ -9,9 +9,11 @@ import { TelemetryEventName, codebaseIndexCacheSchema, type CodebaseIndexCacheEn
 /**
  * Manages the cache for code indexing.
  *
- * Stores a versioned on-disk cache mapping file paths to { hash, mtimeMs, size } entries.
- * Uses a stat()-only fast-path: when mtime+size match the cached values the scanner
- * skips reading and hashing the file entirely.
+ * Stores a versioned on-disk cache mapping file paths to
+ * { hash, mtimeMs, size, segmentHashes } entries. Uses a stat()-only fast-path:
+ * when mtime+size match the cached values the scanner skips reading and hashing
+ * the file entirely. `segmentHashes` enables per-segment deduplication in the
+ * file watcher so unchanged segments are not re-embedded on edit.
  *
  * Per the Versioned Snapshot Rule, a mismatch on the version field discards the entire
  * cache and triggers a fresh full scan — no migration.
@@ -52,6 +54,10 @@ export class CacheManager implements ICacheManager {
 	 * Loads the cache from disk. Validates against the v2 schema via safeParse;
 	 * on version mismatch or parse failure discards the cache and starts fresh.
 	 */
+	/**
+	 * Loads the cache from disk. Validates against the v3 schema via safeParse;
+	 * on version mismatch or parse failure discards the cache and starts fresh.
+	 */
 	async initialize(): Promise<void> {
 		try {
 			const cacheData = await vscode.workspace.fs.readFile(this.cachePath)
@@ -70,12 +76,12 @@ export class CacheManager implements ICacheManager {
 	}
 
 	/**
-	 * Saves the cache to disk in version 2 format.
+	 * Saves the cache to disk in version 3 format.
 	 */
 	private async _performSave(): Promise<void> {
 		try {
 			await safeWriteJson(this.cachePath.fsPath, {
-				version: 2,
+				version: 3,
 				entries: this.entries,
 			})
 		} catch (error) {
@@ -93,7 +99,7 @@ export class CacheManager implements ICacheManager {
 	 */
 	async clearCacheFile(): Promise<void> {
 		try {
-			await safeWriteJson(this.cachePath.fsPath, { version: 2, entries: {} })
+			await safeWriteJson(this.cachePath.fsPath, { version: 3, entries: {} })
 			this.entries = {}
 		} catch (error) {
 			console.error("Failed to clear cache file:", error, this.cachePath)
@@ -145,6 +151,16 @@ export class CacheManager implements ICacheManager {
 	 */
 	getEntryCount(): number {
 		return Object.keys(this.entries).length
+	}
+
+	/**
+	 * Returns the set of segment hashes previously stored for a file path,
+	 * or an empty set if the file is not cached or has no segments.
+	 * Used by the file watcher to determine which segments are unchanged.
+	 */
+	getSegmentHashes(filePath: string): Set<string> {
+		const entry = this.entries[filePath]
+		return new Set(entry?.segmentHashes ?? [])
 	}
 
 	/**

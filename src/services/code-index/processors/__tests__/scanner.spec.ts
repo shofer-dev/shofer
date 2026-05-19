@@ -533,6 +533,7 @@ describe("DirectoryScanner", () => {
 				hash: contentHash,
 				mtimeMs: 1000000,
 				size: 4096,
+				segmentHashes: [],
 			})
 
 			// parseFile should NOT have been called (no re-embedding)

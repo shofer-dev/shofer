@@ -10,4 +10,6 @@ export interface ICacheManager {
 	updateEntry(filePath: string, entry: CodebaseIndexCacheEntry): void
 	/** Returns all cached file paths (for deleted-file detection) */
 	getAllPaths(): string[]
+	/** Returns the set of segment hashes previously stored for a file path. */
+	getSegmentHashes(filePath: string): Set<string>
 }

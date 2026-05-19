@@ -270,20 +270,12 @@ export class FileWatcher implements IFileWatcher {
 		processedCountInBatch: number,
 		totalFilesInBatch: number,
 		pathsToExplicitlyDelete: string[],
-		filesToUpsertDetails: Array<{ path: string; uri: vscode.Uri; originalType: "create" | "change" }>,
-	): Promise<{ overallBatchError?: Error; clearedPaths: Set<string>; processedCount: number }> {
+	): Promise<{ overallBatchError?: Error; processedCount: number }> {
 		let overallBatchError: Error | undefined
-		const allPathsToClearFromDB = new Set<string>(pathsToExplicitlyDelete)
 
-		for (const fileDetail of filesToUpsertDetails) {
-			if (fileDetail.originalType === "change") {
-				allPathsToClearFromDB.add(fileDetail.path)
-			}
-		}
-
-		if (allPathsToClearFromDB.size > 0 && this.vectorStore) {
+		if (pathsToExplicitlyDelete.length > 0 && this.vectorStore) {
 			try {
-				await this.vectorStore.deletePointsByMultipleFilePaths(Array.from(allPathsToClearFromDB))
+				await this.vectorStore.deletePointsByMultipleFilePaths(pathsToExplicitlyDelete)
 
 				for (const path of pathsToExplicitlyDelete) {
 					this.cacheManager.deleteHash(path)
@@ -321,7 +313,7 @@ export class FileWatcher implements IFileWatcher {
 			}
 		}
 
-		return { overallBatchError, clearedPaths: allPathsToClearFromDB, processedCount: processedCountInBatch }
+		return { overallBatchError, processedCount: processedCountInBatch }
 	}
 
 	private async _processFilesAndPrepareUpserts(
@@ -332,16 +324,25 @@ export class FileWatcher implements IFileWatcher {
 		pathsToExplicitlyDelete: string[],
 	): Promise<{
 		pointsForBatchUpsert: PointStruct[]
-		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string; mtimeMs?: number; size?: number }>
+		successfullyProcessedForUpsert: Array<{
+			path: string
+			newHash?: string
+			newSegmentHashes?: string[]
+			mtimeMs?: number
+			size?: number
+		}>
 		processedCount: number
+		allStaleSegmentIds: string[]
 	}> {
 		const pointsForBatchUpsert: PointStruct[] = []
 		const successfullyProcessedForUpsert: Array<{
 			path: string
 			newHash?: string
+			newSegmentHashes?: string[]
 			mtimeMs?: number
 			size?: number
 		}> = []
+		const allStaleSegmentIds: string[] = []
 		const filesToProcessConcurrently = [...filesToUpsertDetails]
 
 		for (let i = 0; i < filesToProcessConcurrently.length; i += this.FILE_PROCESSING_CONCURRENCY_LIMIT) {
@@ -377,18 +378,22 @@ export class FileWatcher implements IFileWatcher {
 					} else if (result) {
 						if (result.status === "skipped" || result.status === "local_error") {
 							batchResults.push(result)
-						} else if (result.status === "processed_for_batching" && result.pointsToUpsert) {
-							pointsForBatchUpsert.push(...result.pointsToUpsert)
-							if (result.path && result.newHash) {
+						} else if (result.status === "processed_for_batching") {
+							if (result.pointsToUpsert && result.pointsToUpsert.length > 0) {
+								pointsForBatchUpsert.push(...result.pointsToUpsert)
+							}
+							// Collect stale segment point IDs for targeted deletion
+							if (result.staleSegmentIds && result.staleSegmentIds.length > 0) {
+								allStaleSegmentIds.push(...result.staleSegmentIds)
+							}
+							// Always record the file for cache-update, even when all
+							// segments were reused (no points to upsert) — the cache
+							// must reflect the new full-file hash + segment hashes.
+							if (result.path) {
 								successfullyProcessedForUpsert.push({
 									path: result.path,
 									newHash: result.newHash,
-									mtimeMs: result.newMtimeMs,
-									size: result.newSize,
-								})
-							} else if (result.path && !result.newHash) {
-								successfullyProcessedForUpsert.push({
-									path: result.path,
+									newSegmentHashes: result.newSegmentHashes,
 									mtimeMs: result.newMtimeMs,
 									size: result.newSize,
 								})
@@ -435,15 +440,40 @@ export class FileWatcher implements IFileWatcher {
 			pointsForBatchUpsert,
 			successfullyProcessedForUpsert,
 			processedCount: processedCountInBatch,
+			allStaleSegmentIds,
 		}
 	}
 
 	private async _executeBatchUpsertOperations(
 		pointsForBatchUpsert: PointStruct[],
-		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string; mtimeMs?: number; size?: number }>,
+		successfullyProcessedForUpsert: Array<{
+			path: string
+			newHash?: string
+			newSegmentHashes?: string[]
+			mtimeMs?: number
+			size?: number
+		}>,
 		batchResults: FileProcessingResult[],
 		overallBatchError?: Error,
 	): Promise<Error | undefined> {
+		// Update cache even when no points need upserting (all segments reused).
+		// This ensures the full-file hash + segment hashes are persisted
+		// so the next edit starts from the correct baseline.
+		if (pointsForBatchUpsert.length === 0 && successfullyProcessedForUpsert.length > 0) {
+			for (const { path, newHash, newSegmentHashes, mtimeMs, size } of successfullyProcessedForUpsert) {
+				if (newHash && mtimeMs !== undefined && size !== undefined) {
+					this.cacheManager.updateEntry(path, {
+						hash: newHash,
+						mtimeMs,
+						size,
+						segmentHashes: newSegmentHashes ?? [],
+					})
+				}
+				batchResults.push({ path, status: "success" })
+			}
+			return undefined
+		}
+
 		if (pointsForBatchUpsert.length > 0 && this.vectorStore && !overallBatchError) {
 			try {
 				for (let i = 0; i < pointsForBatchUpsert.length; i += this.batchSegmentThreshold) {
@@ -477,12 +507,13 @@ export class FileWatcher implements IFileWatcher {
 					}
 				}
 
-				for (const { path, newHash, mtimeMs, size } of successfullyProcessedForUpsert) {
+				for (const { path, newHash, newSegmentHashes, mtimeMs, size } of successfullyProcessedForUpsert) {
 					if (newHash && mtimeMs !== undefined && size !== undefined) {
 						this.cacheManager.updateEntry(path, {
 							hash: newHash,
 							mtimeMs,
 							size,
+							segmentHashes: newSegmentHashes ?? [],
 						})
 					}
 					batchResults.push({ path, status: "success" })
@@ -541,21 +572,23 @@ export class FileWatcher implements IFileWatcher {
 			}
 		}
 
-		// Phase 1: Handle deletions
+		// Phase 1: Handle explicit file deletions
 		const { overallBatchError: deletionError, processedCount: deletionCount } = await this._handleBatchDeletions(
 			batchResults,
 			processedCountInBatch,
 			totalFilesInBatch,
 			pathsToExplicitlyDelete,
-			filesToUpsertDetails,
 		)
 		overallBatchError = deletionError
 		processedCountInBatch = deletionCount
 
-		// Phase 2: Process files and prepare upserts
+		// Phase 2: Process files and prepare upserts (includes per-segment
+		// dedup — each file's processFile() already computed which segments
+		// are new vs reused vs stale)
 		const {
 			pointsForBatchUpsert,
 			successfullyProcessedForUpsert,
+			allStaleSegmentIds,
 			processedCount: upsertCount,
 		} = await this._processFilesAndPrepareUpserts(
 			filesToUpsertDetails,
@@ -566,7 +599,48 @@ export class FileWatcher implements IFileWatcher {
 		)
 		processedCountInBatch = upsertCount
 
-		// Phase 3: Execute batch upsert
+		// Aggregate per-segment dedup stats across the batch and fire a single
+		// telemetry event. Per-file events would be too high-cardinality and
+		// would leak file paths; the per-batch aggregate is sufficient to
+		// verify the optimization is paying off in production.
+		if (filesToUpsertDetails.length > 0) {
+			// Derive aggregate stats from what _processFilesAndPrepareUpserts
+			// already collected: embedded = upsert count, deleted = stale id
+			// count, totalBlocks = sum of newSegmentHashes lengths.
+			const embedded = pointsForBatchUpsert.length
+			const deleted = allStaleSegmentIds.length
+			let totalBlocks = 0
+			for (const entry of successfullyProcessedForUpsert) {
+				totalBlocks += entry.newSegmentHashes?.length ?? 0
+			}
+			if (totalBlocks > 0 || deleted > 0) {
+				TelemetryService.instance.captureCodeIndexSegmentDedup({
+					fileCount: successfullyProcessedForUpsert.length,
+					totalBlocks,
+					reused: totalBlocks - embedded,
+					embedded,
+					deleted,
+				})
+			}
+		}
+
+		// Phase 3a: Targeted deletion of stale segment points (replaces the
+		// old blanket deletePointsByMultipleFilePaths for change events)
+		if (allStaleSegmentIds.length > 0 && this.vectorStore && !overallBatchError) {
+			try {
+				await this.vectorStore.deletePointsByIds(allStaleSegmentIds)
+			} catch (error: any) {
+				const err = error as Error
+				overallBatchError = err
+				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
+					error: sanitizeErrorMessage(err.message),
+					location: "deletePointsByIds",
+					errorType: "deletion_error",
+				})
+			}
+		}
+
+		// Phase 3b: Execute batch upsert
 		overallBatchError = await this._executeBatchUpsertOperations(
 			pointsForBatchUpsert,
 			successfullyProcessedForUpsert,
@@ -647,11 +721,13 @@ export class FileWatcher implements IFileWatcher {
 			// Check if file has changed using the full cache entry
 			const cached = this.cacheManager.getEntry(filePath)
 			if (cached?.hash === newHash) {
-				// mtime may have changed — update the cache entry so fast-path works next time
+				// mtime may have changed — update the cache entry so fast-path works next time.
+				// Preserve segmentHashes so the dedup baseline survives mtime-only changes.
 				this.cacheManager.updateEntry(filePath, {
 					hash: newHash,
 					mtimeMs: fileStat.mtime,
 					size: fileStat.size,
+					segmentHashes: cached.segmentHashes ?? [],
 				})
 				return {
 					path: filePath,
@@ -666,30 +742,47 @@ export class FileWatcher implements IFileWatcher {
 			if (blocks.length === 0) {
 				// Common causes: file content below MIN_BLOCK_CHARS, parser
 				// failure, or a language with no extractable nodes (e.g. an
-				// empty markdown file). Without this log the file silently
-				// disappears from the indexer's perspective: no cache entry is
-				// written (cache update is gated on a non-empty upsert batch),
-				// no points are upserted, and semantic search will never find
-				// it — which looks identical to "the watcher is broken".
-				log(`skip ${relativeFilePath}: parser produced 0 blocks (file too small or no parseable content)`)
+				// empty markdown file). We do NOT short-circuit here — the cache
+				// entry must still be refreshed and any previously-indexed
+				// segments must be cleaned up via the dedup path below.
+				log(`${relativeFilePath}: parser produced 0 blocks (file too small or no parseable content)`)
 			}
+
+			// Per-segment dedup: compare new segment hashes against the
+			// previously cached set so we only embed and upsert genuinely
+			// new or changed segments.
+			const prevSegmentHashes = this.cacheManager.getSegmentHashes(filePath)
+			const newSegmentHashes = blocks.map((b) => b.segmentHash)
+			const newHashSet = new Set(newSegmentHashes)
+
+			// Point IDs of stale segments to delete (removed, moved, or changed)
+			const staleSegmentIds = [...prevSegmentHashes]
+				.filter((h) => !newHashSet.has(h))
+				.map((h) => uuidv5(h, QDRANT_CODE_BLOCK_NAMESPACE))
+
+			// Only embed genuinely new/changed blocks
+			const blocksToEmbed = blocks.filter((b) => !prevSegmentHashes.has(b.segmentHash))
 
 			// Prepare points for batch processing
 			let pointsToUpsert: PointStruct[] = []
-			if (this.embedder && blocks.length > 0) {
-				const texts = blocks.map((block) => block.content)
+			if (this.embedder && blocksToEmbed.length > 0) {
+				const texts = blocksToEmbed.map((block) => block.content)
 				const { embeddings } = await this.embedder.createEmbeddings(texts)
 
-				pointsToUpsert = blocks.map((block, index) => {
-					const normalizedAbsolutePath = generateNormalizedAbsolutePath(block.file_path, this.workspacePath)
-					const stableName = `${normalizedAbsolutePath}:${block.start_line}`
-					const pointId = uuidv5(stableName, QDRANT_CODE_BLOCK_NAMESPACE)
+				pointsToUpsert = blocksToEmbed.map((block, index) => {
+					// Use segmentHash-based point IDs (matching the scanner)
+					// so identical segments share the same Qdrant identity
+					// regardless of which code path produced them.
+					const pointId = uuidv5(block.segmentHash, QDRANT_CODE_BLOCK_NAMESPACE)
 
 					return {
 						id: pointId,
 						vector: embeddings[index],
 						payload: {
-							filePath: generateRelativeFilePath(normalizedAbsolutePath, this.workspacePath),
+							filePath: generateRelativeFilePath(
+								generateNormalizedAbsolutePath(block.file_path, this.workspacePath),
+								this.workspacePath,
+							),
 							codeChunk: block.content,
 							startLine: block.start_line,
 							endLine: block.end_line,
@@ -704,6 +797,8 @@ export class FileWatcher implements IFileWatcher {
 				newHash,
 				newMtimeMs: fileStat.mtime,
 				newSize: fileStat.size,
+				newSegmentHashes,
+				staleSegmentIds,
 				pointsToUpsert,
 			}
 		} catch (error) {

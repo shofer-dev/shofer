@@ -175,6 +175,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 							hash: currentFileHash,
 							mtimeMs: stats.mtimeMs,
 							size: stats.size,
+							segmentHashes: cached.segmentHashes ?? [],
 						})
 						skippedCount++
 						return
@@ -272,6 +273,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 							hash: currentFileHash,
 							mtimeMs: stats.mtimeMs,
 							size: stats.size,
+							segmentHashes: [],
 						})
 					}
 				} catch (error) {
@@ -498,12 +500,24 @@ export class DirectoryScanner implements IDirectoryScanner {
 				await this.qdrantClient.upsertPoints(points)
 				onBlocksIndexed?.(batchBlocks.length)
 
-				// Update cache entries for successfully processed files in this batch
+				// Update cache entries for successfully processed files in this batch.
+				// Group batch blocks by file_path so we can persist per-file segmentHashes
+				// for the file-watcher's per-segment dedup.
+				const blocksByFile = new Map<string, string[]>()
+				for (const block of batchBlocks) {
+					const existing = blocksByFile.get(block.file_path)
+					if (existing) {
+						existing.push(block.segmentHash)
+					} else {
+						blocksByFile.set(block.file_path, [block.segmentHash])
+					}
+				}
 				for (const fileInfo of batchFileInfos) {
 					this.cacheManager.updateEntry(fileInfo.filePath, {
 						hash: fileInfo.fileHash,
 						mtimeMs: fileInfo.mtimeMs,
 						size: fileInfo.size,
+						segmentHashes: blocksByFile.get(fileInfo.filePath) ?? [],
 					})
 				}
 				success = true
@@ -634,6 +648,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 							hash: currentFileHash,
 							mtimeMs: stats.mtimeMs,
 							size: stats.size,
+							segmentHashes: cached.segmentHashes ?? [],
 						})
 						skippedCount++
 						return
@@ -714,6 +729,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 							hash: currentFileHash,
 							mtimeMs: stats.mtimeMs,
 							size: stats.size,
+							segmentHashes: [],
 						})
 					}
 				} catch (error) {

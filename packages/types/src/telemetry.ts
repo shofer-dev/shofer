@@ -76,6 +76,7 @@ export enum TelemetryEventName {
 	MODEL_CACHE_EMPTY_RESPONSE = "Model Cache Empty Response",
 	READ_FILE_LEGACY_FORMAT_USED = "Read File Legacy Format Used",
 	BUDGET_EXCEEDED = "Budget Exceeded",
+	CODE_INDEX_SEGMENT_DEDUP = "Code Index Segment Dedup",
 }
 
 /**
