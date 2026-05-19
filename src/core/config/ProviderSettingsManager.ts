@@ -18,6 +18,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { Mode, modes } from "../../shared/modes"
 import { buildApiHandler } from "../../api"
+import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
 
 // Type-safe model migrations mapping
 type ModelMigrations = {
@@ -81,7 +82,7 @@ export class ProviderSettingsManager {
 		this.context = context
 
 		// TODO: We really shouldn't have async methods in the constructor.
-		this.initialize().catch(console.error)
+		this.initialize().catch(outputError)
 	}
 
 	public generateId() {
@@ -209,7 +210,7 @@ export class ProviderSettingsManager {
 			try {
 				rateLimitSeconds = await this.context.globalState.get<number>("rateLimitSeconds")
 			} catch (error) {
-				console.error("[MigrateRateLimitSeconds] Error getting global rate limit:", error)
+				outputError("[MigrateRateLimitSeconds] Error getting global rate limit:", error)
 			}
 
 			if (rateLimitSeconds === undefined) {
@@ -223,7 +224,7 @@ export class ProviderSettingsManager {
 				}
 			}
 		} catch (error) {
-			console.error(`[MigrateRateLimitSeconds] Failed to migrate rate limit settings:`, error)
+			outputError(`[MigrateRateLimitSeconds] Failed to migrate rate limit settings:`, error)
 		}
 	}
 
@@ -247,7 +248,7 @@ export class ProviderSettingsManager {
 				}
 			}
 		} catch (error) {
-			console.error(`[MigrateOpenAiHeaders] Failed to migrate OpenAI headers:`, error)
+			outputError(`[MigrateOpenAiHeaders] Failed to migrate OpenAI headers:`, error)
 		}
 	}
 
@@ -259,7 +260,7 @@ export class ProviderSettingsManager {
 				}
 			}
 		} catch (error) {
-			console.error(`[MigrateConsecutiveMistakeLimit] Failed to migrate consecutive mistake limit:`, error)
+			outputError(`[MigrateConsecutiveMistakeLimit] Failed to migrate consecutive mistake limit:`, error)
 		}
 	}
 
@@ -271,7 +272,7 @@ export class ProviderSettingsManager {
 				}
 			}
 		} catch (error) {
-			console.error(`[MigrateTodoListEnabled] Failed to migrate todo list enabled setting:`, error)
+			outputError(`[MigrateTodoListEnabled] Failed to migrate todo list enabled setting:`, error)
 		}
 	}
 
@@ -299,7 +300,7 @@ export class ProviderSettingsManager {
 				// Check if the current model ID needs migration
 				const newModelId = providerMigrations[apiConfig.apiModelId]
 				if (newModelId && newModelId !== apiConfig.apiModelId) {
-					console.log(
+					outputLog(
 						`[ModelMigration] Migrating ${apiConfig.apiProvider} model from ${apiConfig.apiModelId} to ${newModelId}`,
 					)
 					apiConfig.apiModelId = newModelId
@@ -307,7 +308,7 @@ export class ProviderSettingsManager {
 				}
 			}
 		} catch (error) {
-			console.error(`[ModelMigration] Failed to apply model migrations:`, error)
+			outputError(`[ModelMigration] Failed to apply model migrations:`, error)
 		}
 
 		return migrated
@@ -546,7 +547,7 @@ export class ProviderSettingsManager {
 					} catch (error) {
 						// If we can't build the API handler or get model info, skip filtering
 						// to avoid accidental data loss from incomplete configurations
-						console.warn(`Skipping token field filtering for config '${name}': ${error}`)
+						outputWarn(`Skipping token field filtering for config '${name}': ${error}`)
 					}
 				}
 				return profiles
@@ -654,7 +655,7 @@ export class ProviderSettingsManager {
 			apiProvider !== undefined &&
 			(typeof apiProvider !== "string" || (!isProviderName(apiProvider) && !isRetiredProvider(apiProvider)))
 		) {
-			console.log(
+			outputLog(
 				`[ProviderSettingsManager] Sanitizing unknown provider "${config.apiProvider}" - resetting to undefined`,
 			)
 			// Return a new config object without the invalid apiProvider

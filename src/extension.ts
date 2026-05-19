@@ -13,7 +13,7 @@ if (fs.existsSync(envPath)) {
 		dotenvx.config({ path: envPath })
 	} catch (e) {
 		// Best-effort only: never fail extension activation due to optional env loading.
-		console.warn("Failed to load environment variables:", e)
+		outputWarn("Failed to load environment variables:", e)
 	}
 }
 
@@ -21,7 +21,12 @@ import { TelemetryService, PostHogTelemetryClient } from "@shofer/telemetry"
 import { customToolRegistry } from "@shofer/core"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
-import { createOutputChannelLogger, createDualLogger } from "./utils/outputChannelLogger"
+import {
+	createDualLogger,
+	createOutputChannelLogger,
+	outputWarn,
+	setExtensionOutputChannel,
+} from "./utils/outputChannelLogger"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
 import { Package } from "./shared/package"
@@ -80,6 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)
 	context.subscriptions.push(outputChannel)
 	setMcpOutputChannel(outputChannel)
+	setExtensionOutputChannel(outputChannel)
 	outputChannel.appendLine(`${Package.name} extension activated - ${JSON.stringify(Package)}`)
 
 	// Initialize network proxy configuration early, before any network requests.
@@ -99,7 +105,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	try {
 		telemetryService.register(new PostHogTelemetryClient())
 	} catch (error) {
-		console.warn("Failed to register PostHogTelemetryClient:", error)
+		outputChannel.appendLine(`[WARN] Failed to register PostHogTelemetryClient: ${error}`)
 	}
 
 	// Initialize i18n for internationalization support.
@@ -305,7 +311,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			{ path: path.join(context.extensionPath, "../packages/telemetry"), pattern: "**/*.ts" },
 		]
 
-		console.log(
+		outputChannel.appendLine(
 			`♻️♻️♻️ Core auto-reloading: Watching for changes in ${watchPaths.map(({ path }) => path).join(", ")}`,
 		)
 
@@ -318,10 +324,10 @@ export async function activate(context: vscode.ExtensionContext) {
 				clearTimeout(reloadTimeout)
 			}
 
-			console.log(`♻️ ${uri.fsPath} changed; scheduling reload...`)
+			outputChannel.appendLine(`♻️ ${uri.fsPath} changed; scheduling reload...`)
 
 			reloadTimeout = setTimeout(() => {
-				console.log(`♻️ Reloading host after debounce delay...`)
+				outputChannel.appendLine(`♻️ Reloading host after debounce delay...`)
 				vscode.commands.executeCommand("workbench.action.reloadWindow")
 			}, DEBOUNCE_DELAY)
 		}

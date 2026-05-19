@@ -3,6 +3,7 @@ import * as http from "http"
 import { URL } from "url"
 import type { ExtensionContext } from "vscode"
 import { z } from "zod"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 /**
  * OpenAI Codex OAuth Configuration
@@ -353,7 +354,7 @@ export class OpenAiCodexOAuthManager {
 		if (this.logFn) {
 			this.logFn(message)
 		} else {
-			console.log(message)
+			outputLog(message)
 		}
 	}
 
@@ -361,7 +362,7 @@ export class OpenAiCodexOAuthManager {
 		const details = error instanceof Error ? error.message : error !== undefined ? String(error) : undefined
 		const full = details ? `${message} ${details}` : message
 		this.log(full)
-		console.error(full)
+		outputError(full)
 	}
 
 	/**

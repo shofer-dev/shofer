@@ -10,6 +10,7 @@ import { ContextProxy } from "../config/ContextProxy"
 import type { FileMetadataEntry, RecordSource, TaskMetadata } from "./FileContextTrackerTypes"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { AssistantAgentManager } from "../../services/assistant-agent/manager"
+import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
 
 /**
  * Snapshot kind written to the per-task originals/finals stores.
@@ -56,7 +57,7 @@ export class FileContextTracker {
 	private getCwd(): string | undefined {
 		const cwd = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0)
 		if (!cwd) {
-			console.info("No workspace folder available - cannot determine current working directory")
+			outputLog("No workspace folder available - cannot determine current working directory")
 		}
 		return cwd
 	}
@@ -107,20 +108,20 @@ export class FileContextTracker {
 			// Set up file watcher for this file
 			await this.setupFileWatcher(filePath)
 		} catch (error) {
-			console.error("Failed to track file operation:", error)
+			outputError("Failed to track file operation:", error)
 		}
 	}
 
 	public getContextProxy(): ContextProxy | undefined {
 		const provider = this.providerRef.deref()
 		if (!provider) {
-			console.error("ShoferProvider reference is no longer valid")
+			outputError("ShoferProvider reference is no longer valid")
 			return undefined
 		}
 		const context = provider.contextProxy
 
 		if (!context) {
-			console.error("Context is not available")
+			outputError("Context is not available")
 			return undefined
 		}
 
@@ -137,7 +138,7 @@ export class FileContextTracker {
 				return JSON.parse(await fs.readFile(filePath, "utf8"))
 			}
 		} catch (error) {
-			console.error("Failed to read task metadata:", error)
+			outputError("Failed to read task metadata:", error)
 		}
 		return { files_in_context: [] }
 	}
@@ -150,7 +151,7 @@ export class FileContextTracker {
 			const filePath = path.join(taskDir, GlobalFileNames.taskMetadata)
 			await safeWriteJson(filePath, metadata)
 		} catch (error) {
-			console.error("Failed to save task metadata:", error)
+			outputError("Failed to save task metadata:", error)
 		}
 	}
 
@@ -218,7 +219,7 @@ export class FileContextTracker {
 			// best-effort and must never propagate errors back to tools.
 			if (source === "shofer_edited") {
 				this.captureFinal(filePath).catch((err) =>
-					console.error(`[FileContextTracker] captureFinal failed:`, err),
+					outputError(`[FileContextTracker] captureFinal failed:`, err),
 				)
 				const provider = this.providerRef.deref()
 				provider?.scheduleChangedFilesUpdate?.(this.taskId)
@@ -228,7 +229,7 @@ export class FileContextTracker {
 				this._notifyAssistantAgent(filePath)
 			}
 		} catch (error) {
-			console.error("Failed to add file to metadata:", error)
+			outputError("Failed to add file to metadata:", error)
 		}
 	}
 
@@ -287,7 +288,7 @@ export class FileContextTracker {
 
 			return uniquePaths
 		} catch (error) {
-			console.error("Failed to get files read by Shofer:", error)
+			outputError("Failed to get files read by Shofer:", error)
 			return []
 		}
 	}
@@ -335,7 +336,7 @@ export class FileContextTracker {
 			}
 			return uniquePaths
 		} catch (error) {
-			console.error("Failed to get files edited by Shofer:", error)
+			outputError("Failed to get files edited by Shofer:", error)
 			return []
 		}
 	}
@@ -391,7 +392,7 @@ export class FileContextTracker {
 			const raw = await fs.readFile(file, "utf8")
 			return JSON.parse(raw) as FileSnapshot
 		} catch (err) {
-			console.error(`[FileContextTracker] Failed to read snapshot for ${relPath}:`, err)
+			outputError(`[FileContextTracker] Failed to read snapshot for ${relPath}:`, err)
 			return undefined
 		}
 	}
@@ -458,7 +459,7 @@ export class FileContextTracker {
 
 			await this.writeSnapshot(dirs.originals, relPath, snap)
 		} catch (err) {
-			console.error(`[FileContextTracker] captureOriginal failed for ${relPath}:`, err)
+			outputError(`[FileContextTracker] captureOriginal failed for ${relPath}:`, err)
 		}
 	}
 
@@ -474,14 +475,14 @@ export class FileContextTracker {
 		try {
 			const dirs = await this.getSnapshotDirs()
 			if (!dirs) {
-				console.warn(
+				outputWarn(
 					`[FileContextTracker] captureFinal skipped for ${relPath}: no snapshot dirs (globalStorage unavailable)`,
 				)
 				return
 			}
 			const cwd = this.getCwd()
 			if (!cwd) {
-				console.warn(
+				outputWarn(
 					`[FileContextTracker] captureFinal skipped for ${relPath}: no workspace folder (cwd undefined)`,
 				)
 				return
@@ -492,7 +493,7 @@ export class FileContextTracker {
 				content = await fs.readFile(abs, "utf8")
 			} catch (err: any) {
 				if (err?.code !== "ENOENT") {
-					console.warn(
+					outputWarn(
 						`[FileContextTracker] captureFinal read error for ${relPath}: ${err?.code ?? err?.message ?? err}`,
 					)
 				}
@@ -504,7 +505,7 @@ export class FileContextTracker {
 			// Also write a verbatim copy to final/<relPath>.
 			const wdirs = await this.getWorkingDirs()
 			if (!wdirs) {
-				console.warn(
+				outputWarn(
 					`[FileContextTracker] captureFinal(${relPath}): metadata snapshot written but working dirs unavailable — verbatim final copy skipped`,
 				)
 				return
@@ -523,7 +524,7 @@ export class FileContextTracker {
 				await fs.writeFile(dest, content, "utf8")
 			}
 		} catch (err) {
-			console.error(`[FileContextTracker] captureFinal failed for ${relPath}:`, err)
+			outputError(`[FileContextTracker] captureFinal failed for ${relPath}:`, err)
 		}
 	}
 

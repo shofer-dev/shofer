@@ -4,6 +4,7 @@ import * as fs from "fs/promises"
 import { convertTheme } from "monaco-vscode-textmate-theme-converter/lib/cjs"
 
 import { Package } from "../../shared/package"
+import { outputLog, outputError } from "../../utils/outputChannelLogger"
 
 const defaultThemes: Record<string, string> = {
 	"Default Dark Modern": "dark_modern",
@@ -85,7 +86,7 @@ export async function getTheme() {
 
 		return converted
 	} catch (e) {
-		console.log("Error loading color theme: ", e)
+		outputLog("Error loading color theme: ", e)
 	}
 	return undefined
 }
@@ -134,7 +135,7 @@ export function mergeJson(
 		}
 		return copyOfFirst
 	} catch (e) {
-		console.error("Error merging JSON", e, copyOfFirst, second)
+		outputError("Error merging JSON", e, copyOfFirst, second)
 		return {
 			...copyOfFirst,
 			...second,

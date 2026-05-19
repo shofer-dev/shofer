@@ -13,6 +13,7 @@ import { t } from "../../../i18n"
 import { withValidationErrorHandling, formatEmbeddingError, HttpError } from "../shared/validation-helpers"
 import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
+import { outputError, outputWarn } from "../../../utils/outputChannelLogger"
 
 /**
  * Amazon Bedrock implementation of the embedder interface with batching and rate limiting
@@ -72,7 +73,7 @@ export class BedrockEmbedder implements IEmbedder {
 				const itemTokens = Math.ceil(text.length / 4)
 
 				if (itemTokens > MAX_ITEM_TOKENS) {
-					console.warn(
+					outputWarn(
 						t("embeddings:textExceedsTokenLimit", {
 							index: i,
 							itemTokens,
@@ -147,7 +148,7 @@ export class BedrockEmbedder implements IEmbedder {
 				// Check if it's a rate limit error
 				if (error.name === "ThrottlingException" && hasMoreAttempts) {
 					const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempts)
-					console.warn(
+					outputWarn(
 						t("embeddings:rateLimitRetry", {
 							delayMs,
 							attempt: attempts + 1,
@@ -167,7 +168,7 @@ export class BedrockEmbedder implements IEmbedder {
 				})
 
 				// Log the error for debugging
-				console.error(`Bedrock embedder error (attempt ${attempts + 1}/${MAX_RETRIES}):`, error)
+				outputError(`Bedrock embedder error (attempt ${attempts + 1}/${MAX_RETRIES}):`, error)
 
 				// Format and throw the error
 				throw formatEmbeddingError(error, MAX_RETRIES)

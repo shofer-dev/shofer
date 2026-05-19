@@ -34,6 +34,7 @@ import {
 	ImageMemoryTracker,
 } from "./helpers/imageHelpers"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { outputWarn } from "../../utils/outputChannelLogger"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -669,7 +670,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 		const modelInfo = task.api.getModel().info
 
 		// Temporary indicator for testing legacy format detection
-		console.warn("[read_file] Legacy format detected - using backward compatibility path")
+		outputWarn("[read_file] Legacy format detected - using backward compatibility path")
 
 		if (!fileEntries || fileEntries.length === 0) {
 			task.consecutiveMistakeCount++

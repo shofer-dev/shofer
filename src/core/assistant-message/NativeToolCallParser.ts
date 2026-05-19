@@ -26,6 +26,7 @@ import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpTool
 type NativeArgsFor<TName extends ToolName> = TName extends keyof NativeToolArgs ? NativeToolArgs[TName] : never
 
 import { isPrivateLmTool } from "../task/build-tools"
+import { outputError, outputWarn } from "../../utils/outputChannelLogger"
 
 /**
  * Parser for native tool calls (OpenAI-style function calling).
@@ -918,8 +919,8 @@ export class NativeToolCallParser {
 			!customToolRegistry.has(resolvedName) &&
 			!isPrivateLmTool(resolvedName)
 		) {
-			console.error(`Invalid tool name: ${toolCall.name} (resolved: ${resolvedName})`)
-			console.error(`Valid tool names:`, toolNames)
+			outputError(`Invalid tool name: ${toolCall.name} (resolved: ${resolvedName})`)
+			outputError(`Valid tool names:`, toolNames)
 			return null
 		}
 
@@ -939,8 +940,8 @@ export class NativeToolCallParser {
 					!customToolRegistry.has(resolvedName) &&
 					!isPrivateLmTool(resolvedName)
 				) {
-					console.warn(`Unknown parameter '${key}' for tool '${resolvedName}'`)
-					console.warn(`Valid param names:`, toolParamNames)
+					outputWarn(`Unknown parameter '${key}' for tool '${resolvedName}'`)
+					outputWarn(`Valid param names:`, toolParamNames)
 					continue
 				}
 
@@ -1478,11 +1479,11 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
-			console.error(
+			outputError(
 				`Failed to parse tool call arguments: ${error instanceof Error ? error.message : String(error)}`,
 			)
 
-			console.error(`Tool call: ${JSON.stringify(toolCall, null, 2)}`)
+			outputError(`Tool call: ${JSON.stringify(toolCall, null, 2)}`)
 			return null
 		}
 	}
@@ -1505,7 +1506,7 @@ export class NativeToolCallParser {
 			// Format: mcp--serverName--toolName (using -- separator)
 			const parsed = parseMcpToolName(normalizedName)
 			if (!parsed) {
-				console.error(`Invalid dynamic MCP tool name format: ${toolCall.name} (normalized: ${normalizedName})`)
+				outputError(`Invalid dynamic MCP tool name format: ${toolCall.name} (normalized: ${normalizedName})`)
 				return null
 			}
 
@@ -1524,7 +1525,7 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
-			console.error(`Failed to parse dynamic MCP tool:`, error)
+			outputError(`Failed to parse dynamic MCP tool:`, error)
 			return null
 		}
 	}

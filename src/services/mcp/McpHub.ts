@@ -41,6 +41,7 @@ import { arePathsEqual, getWorkspacePath } from "../../utils/path"
 import { injectVariables } from "../../utils/config"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
@@ -173,7 +174,7 @@ export class McpHub {
 	constructor(provider: ShoferProvider) {
 		this.providerRef = new WeakRef(provider)
 		this.watchMcpSettingsFile()
-		this.watchProjectMcpFile().catch(console.error)
+		this.watchProjectMcpFile().catch(outputError)
 		this.setupWorkspaceFoldersWatcher()
 		this.initializationPromise = Promise.all([
 			this.initializeGlobalMcpServers(),
@@ -202,7 +203,7 @@ export class McpHub {
 	 */
 	public registerClient(): void {
 		this.refCount++
-		// console.log(`McpHub: Client registered. Ref count: ${this.refCount}`)
+		// outputLog(`McpHub: Client registered. Ref count: ${this.refCount}`)
 	}
 
 	/**
@@ -212,10 +213,10 @@ export class McpHub {
 	public async unregisterClient(): Promise<void> {
 		this.refCount--
 
-		// console.log(`McpHub: Client unregistered. Ref count: ${this.refCount}`)
+		// outputLog(`McpHub: Client unregistered. Ref count: ${this.refCount}`)
 
 		if (this.refCount <= 0) {
-			console.log("McpHub: Last client unregistered. Disposing hub.")
+			outputLog("McpHub: Last client unregistered. Disposing hub.")
 			await this.dispose()
 		}
 	}
@@ -293,7 +294,7 @@ export class McpHub {
 	 * @param error The error object
 	 */
 	private showErrorMessage(message: string, error: unknown): void {
-		console.error(`${message}:`, error)
+		outputError(`${message}:`, error)
 	}
 
 	public setupWorkspaceFoldersWatcher(): void {
@@ -345,7 +346,7 @@ export class McpHub {
 				config = JSON.parse(content)
 			} catch (parseError) {
 				const errorMessage = t("mcp:errors.invalid_settings_syntax")
-				console.error(errorMessage, parseError)
+				outputError(errorMessage, parseError)
 				vscode.window.showErrorMessage(errorMessage)
 				return
 			}
@@ -431,7 +432,7 @@ export class McpHub {
 				config = JSON.parse(content)
 			} catch (parseError) {
 				const errorMessage = t("mcp:errors.invalid_settings_syntax")
-				console.error(errorMessage, parseError)
+				outputError(errorMessage, parseError)
 				vscode.window.showErrorMessage(errorMessage)
 				return
 			}
@@ -445,7 +446,7 @@ export class McpHub {
 				const errorMessages = result.error.errors
 					.map((err) => `${err.path.join(".")}: ${err.message}`)
 					.join("\n")
-				console.error("Invalid project MCP settings format:", errorMessages)
+				outputError("Invalid project MCP settings format:", errorMessages)
 				vscode.window.showErrorMessage(t("mcp:errors.invalid_settings_validation", { errorMessages }))
 			}
 		} catch (error) {
@@ -610,7 +611,7 @@ export class McpHub {
 				const errorMessages = result.error.errors
 					.map((err) => `${err.path.join(".")}: ${err.message}`)
 					.join("\n")
-				console.error(`Invalid ${source} MCP settings format:`, errorMessages)
+				outputError(`Invalid ${source} MCP settings format:`, errorMessages)
 				vscode.window.showErrorMessage(t("mcp:errors.invalid_settings_validation", { errorMessages }))
 
 				if (source === "global") {
@@ -625,7 +626,7 @@ export class McpHub {
 		} catch (error) {
 			if (error instanceof SyntaxError) {
 				const errorMessage = t("mcp:errors.invalid_settings_syntax")
-				console.error(errorMessage, error)
+				outputError(errorMessage, error)
 				vscode.window.showErrorMessage(errorMessage)
 			} else {
 				this.showErrorMessage(`Failed to initialize ${source} MCP servers`, error)
@@ -780,7 +781,7 @@ export class McpHub {
 
 				// Set up stdio specific error handling
 				transport.onerror = async (error) => {
-					console.error(`Transport error for "${name}":`, error)
+					outputError(`Transport error for "${name}":`, error)
 					const connection = this.findConnection(name, source)
 					if (connection) {
 						connection.server.status = "disconnected"
@@ -809,10 +810,10 @@ export class McpHub {
 
 						if (isInfoLog) {
 							// Log normal informational messages
-							console.log(`Server "${name}" info:`, output)
+							outputLog(`Server "${name}" info:`, output)
 						} else {
 							// Treat as error log
-							console.error(`Server "${name}" stderr:`, output)
+							outputError(`Server "${name}" stderr:`, output)
 							const connection = this.findConnection(name, source)
 							if (connection) {
 								this.appendErrorMessage(connection, output)
@@ -823,7 +824,7 @@ export class McpHub {
 						}
 					})
 				} else {
-					console.error(`No stderr stream for ${name}`)
+					outputError(`No stderr stream for ${name}`)
 				}
 			} else if (configInjected.type === "streamable-http") {
 				// Streamable HTTP connection
@@ -835,7 +836,7 @@ export class McpHub {
 
 				// Set up Streamable HTTP specific error handling
 				transport.onerror = async (error) => {
-					console.error(`Transport error for "${name}" (streamable-http):`, error)
+					outputError(`Transport error for "${name}" (streamable-http):`, error)
 					const connection = this.findConnection(name, source)
 					if (connection) {
 						connection.server.status = "disconnected"
@@ -878,7 +879,7 @@ export class McpHub {
 
 				// Set up SSE specific error handling
 				transport.onerror = async (error) => {
-					console.error(`Transport error for "${name}":`, error)
+					outputError(`Transport error for "${name}":`, error)
 					const connection = this.findConnection(name, source)
 					if (connection) {
 						connection.server.status = "disconnected"
@@ -1092,7 +1093,7 @@ export class McpHub {
 					toolGroupsConfig = serverConfigData.mcpServers?.[serverName]?.toolGroups || {}
 				}
 			} catch (error) {
-				console.error(`Failed to read tool configuration for ${serverName}:`, error)
+				outputError(`Failed to read tool configuration for ${serverName}:`, error)
 				// Continue with empty configs
 			}
 
@@ -1118,7 +1119,7 @@ export class McpHub {
 
 			return tools
 		} catch (error) {
-			console.error(`Failed to fetch tools for ${serverName}:`, error)
+			outputError(`Failed to fetch tools for ${serverName}:`, error)
 			return []
 		}
 	}
@@ -1132,7 +1133,7 @@ export class McpHub {
 			const response = await connection.client.request({ method: "resources/list" }, ListResourcesResultSchema)
 			return response?.resources || []
 		} catch (error) {
-			// console.error(`Failed to fetch resources for ${serverName}:`, error)
+			// outputError(`Failed to fetch resources for ${serverName}:`, error)
 			return []
 		}
 	}
@@ -1152,7 +1153,7 @@ export class McpHub {
 			)
 			return response?.resourceTemplates || []
 		} catch (error) {
-			// console.error(`Failed to fetch resource templates for ${serverName}:`, error)
+			// outputError(`Failed to fetch resource templates for ${serverName}:`, error)
 			return []
 		}
 	}
@@ -1173,7 +1174,7 @@ export class McpHub {
 					await connection.client.close()
 				}
 			} catch (error) {
-				console.error(`Failed to close transport for ${name}:`, error)
+				outputError(`Failed to close transport for ${name}:`, error)
 			}
 		}
 
@@ -1288,7 +1289,7 @@ export class McpHub {
 						// Pass the source from the config to restartConnection
 						await this.restartConnection(name, source)
 					} catch (error) {
-						console.error(`Failed to restart server ${name} after change in ${changedPath}:`, error)
+						outputError(`Failed to restart server ${name} after change in ${changedPath}:`, error)
 					}
 				})
 
@@ -1310,7 +1311,7 @@ export class McpHub {
 						// Pass the source from the config to restartConnection
 						await this.restartConnection(name, source)
 					} catch (error) {
-						console.error(`Failed to restart server ${name} after change in ${filePath}:`, error)
+						outputError(`Failed to restart server ${name} after change in ${filePath}:`, error)
 					}
 				})
 
@@ -1412,7 +1413,7 @@ export class McpHub {
 				globalServers = globalConfig.mcpServers || {}
 				const globalServerNames = Object.keys(globalServers)
 			} catch (error) {
-				console.log("Error reading global MCP config:", error)
+				outputLog("Error reading global MCP config:", error)
 			}
 
 			const projectPath = await this.getProjectMcpPath()
@@ -1424,7 +1425,7 @@ export class McpHub {
 					projectServers = projectConfig.mcpServers || {}
 					const projectServerNames = Object.keys(projectServers)
 				} catch (error) {
-					console.log("Error reading project MCP config:", error)
+					outputLog("Error reading project MCP config:", error)
 				}
 			}
 
@@ -1507,10 +1508,10 @@ export class McpHub {
 				try {
 					await targetProvider.postMessageToWebview(message)
 				} catch (error) {
-					console.error("[McpHub] Error calling targetProvider.postMessageToWebview:", error)
+					outputError("[McpHub] Error calling targetProvider.postMessageToWebview:", error)
 				}
 			} else {
-				console.error("[McpHub] No target provider available - cannot send mcpServers message to webview")
+				outputError("[McpHub] No target provider available - cannot send mcpServers message to webview")
 			}
 		}
 	}
@@ -1562,7 +1563,7 @@ export class McpHub {
 						)
 					}
 				} catch (error) {
-					console.error(`Failed to refresh capabilities for ${serverName}:`, error)
+					outputError(`Failed to refresh capabilities for ${serverName}:`, error)
 				}
 			}
 
@@ -1599,7 +1600,7 @@ export class McpHub {
 		try {
 			await fs.access(configPath)
 		} catch (error) {
-			console.error("Settings file not accessible:", error)
+			outputError("Settings file not accessible:", error)
 			throw new Error("Settings file not accessible")
 		}
 
@@ -1651,7 +1652,7 @@ export class McpHub {
 		try {
 			await fs.access(configPath)
 		} catch (error) {
-			console.error("Settings file not accessible:", error)
+			outputError("Settings file not accessible:", error)
 			throw new Error("Settings file not accessible")
 		}
 
@@ -1839,7 +1840,7 @@ export class McpHub {
 			const parsedConfig = ServerConfigSchema.parse(JSON.parse(connection.server.config))
 			timeout = (parsedConfig.timeout ?? 60) * 1000
 		} catch (error) {
-			console.error("Failed to parse server config for timeout:", error)
+			outputError("Failed to parse server config for timeout:", error)
 			// Default to 60 seconds if parsing fails
 			timeout = 60 * 1000
 		}
@@ -1996,7 +1997,7 @@ export class McpHub {
 						serverName: conn.server.name,
 						error: errorMessage,
 					})
-					console.error(`Failed to disconnect MCP server ${conn.server.name}: ${errorMessage}`)
+					outputError(`Failed to disconnect MCP server ${conn.server.name}: ${errorMessage}`)
 				}
 			}
 
@@ -2015,7 +2016,7 @@ export class McpHub {
 			try {
 				await this.refreshAllConnections()
 			} catch (error) {
-				console.error(`Failed to refresh MCP connections after disabling: ${error}`)
+				outputError(`Failed to refresh MCP connections after disabling: ${error}`)
 				vscode.window.showErrorMessage(t("mcp:errors.refresh_after_disable"))
 			}
 		} else {
@@ -2023,7 +2024,7 @@ export class McpHub {
 			try {
 				await this.refreshAllConnections()
 			} catch (error) {
-				console.error(`Failed to refresh MCP connections after enabling: ${error}`)
+				outputError(`Failed to refresh MCP connections after enabling: ${error}`)
 				vscode.window.showErrorMessage(t("mcp:errors.refresh_after_enable"))
 			}
 		}
@@ -2057,7 +2058,7 @@ export class McpHub {
 			try {
 				await this.deleteConnection(connection.server.name, connection.server.source)
 			} catch (error) {
-				console.error(`Failed to close connection for ${connection.server.name}:`, error)
+				outputError(`Failed to close connection for ${connection.server.name}:`, error)
 			}
 		}
 

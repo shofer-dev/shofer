@@ -4,6 +4,7 @@ import { supportPrompt } from "../../shared/support-prompt"
 import { singleCompletionHandler } from "../../utils/single-completion-handler"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { ShoferProvider } from "./ShoferProvider"
+import { outputError } from "../../utils/outputChannelLogger"
 
 export interface MessageEnhancerOptions {
 	text: string
@@ -121,7 +122,7 @@ export class MessageEnhancer {
 				.join("\n")
 		} catch (error) {
 			// Log error but don't fail the enhancement
-			console.error("Failed to extract task history:", error)
+			outputError("Failed to extract task history:", error)
 			return ""
 		}
 	}

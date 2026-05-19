@@ -5,6 +5,7 @@ import type { SkillMetadata, WebviewMessage } from "@shofer/types"
 import type { ShoferProvider } from "./ShoferProvider"
 import { openFile } from "../../integrations/misc/open-file"
 import { t } from "../../i18n"
+import { outputLog } from "../../utils/outputChannelLogger"
 
 type SkillSource = SkillMetadata["source"]
 
@@ -22,12 +23,12 @@ export async function handleRequestSkills(provider: ShoferProvider): Promise<Ski
 				loadedSkills[name] = path
 			}
 		}
-		console.log(`[handleRequestSkills] currentTask=${!!currentTask} loadedSkills:`, loadedSkills)
+		outputLog(`[handleRequestSkills] currentTask=${!!currentTask} loadedSkills:`, loadedSkills)
 		if (skillsManager) {
 			// Re-discover skills from disk so the UI picks up newly added/removed skills
 			await skillsManager.discoverSkills()
 			const skills = skillsManager.getSkillsMetadata()
-			console.log(
+			outputLog(
 				`[handleRequestSkills] sending skills count=${skills.length} loadedSkills keys=`,
 				Object.keys(loadedSkills),
 			)

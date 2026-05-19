@@ -15,6 +15,7 @@ import { logger } from "../../utils/logging"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "../../i18n"
+import { outputError } from "../../utils/outputChannelLogger"
 
 const SHOFERMODES_FILENAME = ".shofermodes"
 
@@ -58,7 +59,7 @@ export class CustomModesManager {
 		private readonly onUpdate: () => Promise<void>,
 	) {
 		this.watchCustomModesFiles().catch((error) => {
-			console.error("[CustomModesManager] Failed to setup file watchers:", error)
+			outputError("[CustomModesManager] Failed to setup file watchers:", error)
 		})
 	}
 
@@ -162,7 +163,7 @@ export class CustomModesManager {
 				} catch (jsonError) {
 					// JSON also failed, show the original YAML error
 					const errorMsg = yamlError instanceof Error ? yamlError.message : String(yamlError)
-					console.error(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
+					outputError(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
 
 					const lineMatch = errorMsg.match(/at line (\d+)/)
 					const line = lineMatch ? lineMatch[1] : "unknown"
@@ -179,7 +180,7 @@ export class CustomModesManager {
 			// source of "my modes vanished" reports. The same i18n string is reused since
 			// the affected file is functionally equivalent from the user's perspective.
 			const errorMsg = yamlError instanceof Error ? yamlError.message : String(yamlError)
-			console.error(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
+			outputError(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
 			const lineMatch = errorMsg.match(/at line (\d+)/)
 			const line = lineMatch ? lineMatch[1] : "unknown"
 			vscode.window.showErrorMessage(t("common:customModes.errors.yamlParseError", { line }))
@@ -200,7 +201,7 @@ export class CustomModesManager {
 			const result = customModesSettingsSchema.safeParse(settings)
 
 			if (!result.success) {
-				console.error(`[CustomModesManager] Schema validation failed for ${filePath}:`, result.error)
+				outputError(`[CustomModesManager] Schema validation failed for ${filePath}:`, result.error)
 
 				// Surface schema-validation failures for both .shofermodes and the global
 				// custom_modes.yaml. A silent failure on the global file used to make
@@ -224,7 +225,7 @@ export class CustomModesManager {
 			// Only log if the error wasn't already handled in parseYamlSafely
 			if (!(error as any).alreadyHandled) {
 				const errorMsg = `Failed to load modes from ${filePath}: ${error instanceof Error ? error.message : String(error)}`
-				console.error(`[CustomModesManager] ${errorMsg}`)
+				outputError(`[CustomModesManager] ${errorMsg}`)
 			}
 			return []
 		}
@@ -289,7 +290,7 @@ export class CustomModesManager {
 				try {
 					config = this.parseYamlSafely(content, settingsPath)
 				} catch (error) {
-					console.error(error)
+					outputError(error)
 					vscode.window.showErrorMessage(errorMessage)
 					return
 				}
@@ -311,7 +312,7 @@ export class CustomModesManager {
 				this.clearCache()
 				await this.onUpdate()
 			} catch (error) {
-				console.error(`[CustomModesManager] Error handling settings file change:`, error)
+				outputError(`[CustomModesManager] Error handling settings file change:`, error)
 			}
 		}
 
@@ -337,7 +338,7 @@ export class CustomModesManager {
 					this.clearCache()
 					await this.onUpdate()
 				} catch (error) {
-					console.error(`[CustomModesManager] Error handling .shofermodes file change:`, error)
+					outputError(`[CustomModesManager] Error handling .shofermodes file change:`, error)
 				}
 			}
 
@@ -352,7 +353,7 @@ export class CustomModesManager {
 						this.clearCache()
 						await this.onUpdate()
 					} catch (error) {
-						console.error(`[CustomModesManager] Error handling .shofermodes file deletion:`, error)
+						outputError(`[CustomModesManager] Error handling .shofermodes file deletion:`, error)
 					}
 				}),
 			)

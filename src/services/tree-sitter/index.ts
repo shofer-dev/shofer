@@ -6,6 +6,7 @@ import { fileExistsAtPath } from "../../utils/fs"
 import { parseMarkdown } from "./markdownParser"
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 import { QueryCapture } from "web-tree-sitter"
+import { outputLog } from "../../utils/outputChannelLogger"
 
 // Private constant
 const DEFAULT_MIN_COMPONENT_LINES_VALUE = 4
@@ -261,7 +262,7 @@ async function parseFile(
 		// Process the captures
 		return processCaptures(captures, lines, extLang)
 	} catch (error) {
-		console.log(`Error parsing file: ${error}\n`)
+		outputLog(`Error parsing file: ${error}\n`)
 		// Return null on parsing error to avoid showing error messages in the output
 		return null
 	}

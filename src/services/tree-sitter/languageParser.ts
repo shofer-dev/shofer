@@ -1,5 +1,6 @@
 import * as path from "path"
 import { Parser as ParserT, Language as LanguageT, Query as QueryT } from "web-tree-sitter"
+import { outputError } from "../../utils/outputChannelLogger"
 import {
 	javascriptQuery,
 	typescriptQuery,
@@ -46,7 +47,7 @@ async function loadLanguage(langName: string, sourceDirectory?: string) {
 		const { Language } = require("web-tree-sitter")
 		return await Language.load(wasmPath)
 	} catch (error) {
-		console.error(`Error loading language: ${wasmPath}: ${error instanceof Error ? error.message : error}`)
+		outputError(`Error loading language: ${wasmPath}: ${error instanceof Error ? error.message : error}`)
 		throw error
 	}
 }
@@ -84,7 +85,7 @@ export async function loadRequiredLanguageParsers(filesToParse: string[], source
 			await Parser.init()
 			isParserInitialized = true
 		} catch (error) {
-			console.error(`Error initializing parser: ${error instanceof Error ? error.message : error}`)
+			outputError(`Error initializing parser: ${error instanceof Error ? error.message : error}`)
 			throw error
 		}
 	}

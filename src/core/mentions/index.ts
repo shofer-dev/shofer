@@ -19,6 +19,7 @@ import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import { getCommand, type Command } from "../../services/command/commands"
 import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "../../services/skills/skillInvocation"
 import type { SkillContent } from "../../shared/skills"
+import { outputLog } from "../../utils/outputChannelLogger"
 
 export async function openMention(cwd: string, mention?: string): Promise<void> {
 	if (!mention) {
@@ -133,13 +134,13 @@ export async function parseMentions(
 				}
 
 				const skillContent = await resolveSkillContentForMode(skillsManager, commandName, currentMode)
-				console.log(
+				outputLog(
 					`[parseMentions] skill lookup: name="${commandName}" skillsManager=${!!skillsManager} found=${!!skillContent} mode=${currentMode}`,
 				)
 				return { commandName, command: undefined, skillContent }
 			} catch (error) {
 				// If there's an error checking command existence, treat it as non-existent
-				console.log(`[parseMentions] skill lookup ERROR: name="${commandName}" error=${error}`)
+				outputLog(`[parseMentions] skill lookup ERROR: name="${commandName}" error=${error}`)
 				return { commandName, command: undefined, skillContent: null }
 			}
 		}),

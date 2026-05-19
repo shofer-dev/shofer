@@ -14,6 +14,7 @@ import { safeWriteJson } from "../../../utils/safeWriteJson"
 
 import { getOpenRouterModelEndpoints } from "./openrouter"
 import { getModels } from "./modelCache"
+import { outputLog, outputError } from "../../../utils/outputChannelLogger"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -52,7 +53,7 @@ export const getModelEndpoints = async ({
 	let modelProviders = memoryCache.get<ModelRecord>(key)
 
 	if (modelProviders) {
-		// console.log(`[getModelProviders] NodeCache hit for ${key} -> ${Object.keys(modelProviders).length}`)
+		// outputLog(`[getModelProviders] NodeCache hit for ${key} -> ${Object.keys(modelProviders).length}`)
 		return modelProviders
 	}
 
@@ -77,14 +78,14 @@ export const getModelEndpoints = async ({
 	}
 
 	if (Object.keys(modelProviders).length > 0) {
-		// console.log(`[getModelProviders] API fetch for ${key} -> ${Object.keys(modelProviders).length}`)
+		// outputLog(`[getModelProviders] API fetch for ${key} -> ${Object.keys(modelProviders).length}`)
 		memoryCache.set(key, modelProviders)
 
 		try {
 			await writeModelEndpoints(key, modelProviders)
-			// console.log(`[getModelProviders] wrote ${key} endpoints to file cache`)
+			// outputLog(`[getModelProviders] wrote ${key} endpoints to file cache`)
 		} catch (error) {
-			console.error(`[getModelProviders] error writing ${key} endpoints to file cache`, error)
+			outputError(`[getModelProviders] error writing ${key} endpoints to file cache`, error)
 		}
 
 		return modelProviders
@@ -92,9 +93,9 @@ export const getModelEndpoints = async ({
 
 	try {
 		modelProviders = await readModelEndpoints(router)
-		// console.log(`[getModelProviders] read ${key} endpoints from file cache`)
+		// outputLog(`[getModelProviders] read ${key} endpoints from file cache`)
 	} catch (error) {
-		console.error(`[getModelProviders] error reading ${key} endpoints from file cache`, error)
+		outputError(`[getModelProviders] error reading ${key} endpoints from file cache`, error)
 	}
 
 	return modelProviders ?? {}

@@ -4,6 +4,8 @@ import * as path from "path"
 import * as lockfile from "proper-lockfile"
 import { JsonStreamStringify } from "json-stream-stringify"
 
+import { outputError } from "./outputChannelLogger"
+
 /**
  * Options for safeWriteJson function
  */
@@ -76,7 +78,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 		// Verify directory exists after creation attempt
 		await fs.access(dirPath)
 	} catch (dirError: any) {
-		console.error(`Failed to create or access directory for ${absoluteFilePath}:`, dirError)
+		outputError(`Failed to create or access directory for ${absoluteFilePath}:`, dirError)
 		throw dirError
 	}
 
@@ -94,7 +96,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 				maxTimeout: 1000, // Maximum time to wait for any single retry (in ms)
 			},
 			onCompromised: (err) => {
-				console.error(`Lock at ${absoluteFilePath} was compromised:`, err)
+				outputError(`Lock at ${absoluteFilePath} was compromised:`, err)
 				throw err
 			},
 		})
@@ -102,7 +104,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 		// If lock acquisition fails, we throw immediately.
 		// The releaseLock remains a no-op, so the finally block in the main file operations
 		// try-catch-finally won't try to release an unacquired lock if this path is taken.
-		console.error(`Failed to acquire lock for ${absoluteFilePath}:`, lockError)
+		outputError(`Failed to acquire lock for ${absoluteFilePath}:`, lockError)
 		// Propagate the lock acquisition error
 		throw lockError
 	}
@@ -157,14 +159,14 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 			} catch (unlinkBackupError) {
 				// Log this error, but do not re-throw. The main operation was successful.
 				// actualTempBackupFilePath remains set, indicating an orphaned backup.
-				console.error(
+				outputError(
 					`Successfully wrote ${absoluteFilePath}, but failed to clean up backup ${actualTempBackupFilePath}:`,
 					unlinkBackupError,
 				)
 			}
 		}
 	} catch (originalError) {
-		console.error(`Operation failed for ${absoluteFilePath}: [Original Error Caught]`, originalError)
+		outputError(`Operation failed for ${absoluteFilePath}: [Original Error Caught]`, originalError)
 
 		const newFileToCleanupWithinCatch = actualTempNewFilePath
 		const backupFileToRollbackOrCleanupWithinCatch = actualTempBackupFilePath
@@ -177,7 +179,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 				actualTempBackupFilePath = null
 			} catch (rollbackError) {
 				// actualTempBackupFilePath (outer scope) remains pointing to backupFileToRollbackOrCleanupWithinCatch
-				console.error(
+				outputError(
 					`[Catch] Failed to restore backup ${backupFileToRollbackOrCleanupWithinCatch} to ${absoluteFilePath}:`,
 					rollbackError,
 				)
@@ -189,7 +191,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 			try {
 				await fs.unlink(newFileToCleanupWithinCatch)
 			} catch (cleanupError) {
-				console.error(
+				outputError(
 					`[Catch] Failed to clean up temporary new file ${newFileToCleanupWithinCatch}:`,
 					cleanupError,
 				)
@@ -201,7 +203,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 			try {
 				await fs.unlink(actualTempBackupFilePath)
 			} catch (cleanupError) {
-				console.error(
+				outputError(
 					`[Catch] Failed to clean up temporary backup file ${actualTempBackupFilePath}:`,
 					cleanupError,
 				)
@@ -216,7 +218,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 			await releaseLock()
 		} catch (unlockError) {
 			// Do not re-throw here, as the originalError from the try/catch (if any) is more important.
-			console.error(`Failed to release lock for ${absoluteFilePath}:`, unlockError)
+			outputError(`Failed to release lock for ${absoluteFilePath}:`, unlockError)
 		}
 	}
 }

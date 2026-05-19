@@ -15,6 +15,7 @@ import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../trans
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
+import { outputLog } from "../../utils/outputChannelLogger"
 
 /**
  * Converts OpenAI-format tools to VSCode Language Model tools.
@@ -152,7 +153,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						this.client = null
 						this.ensureCleanState()
 					} catch (error) {
-						console.error("Error during configuration change cleanup:", error)
+						getOutputChannel()?.appendLine(`[ERROR] Error during configuration change cleanup: ${error}`)
 					}
 				}
 			})
@@ -177,12 +178,12 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		try {
 			// Check if the client is already initialized
 			if (this.client) {
-				console.debug("Shofer <Language Model API>: Client already initialized")
+				outputLog("Shofer <Language Model API>: Client already initialized")
 				return
 			}
 			// Create a new client instance
 			this.client = await this.createClient(this.options.vsCodeLmModelSelector || {})
-			console.debug("Shofer <Language Model API>: Client initialized successfully")
+			outputLog("Shofer <Language Model API>: Client initialized successfully")
 			// Best-effort prefetch of pricing and capabilities for the selected
 			// model. Failures are non-fatal: non-shofer setups simply leave
 			// these unset (consumers fall back to conservative defaults).
@@ -191,7 +192,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		} catch (error) {
 			// Handle errors during client initialization
 			const errorMessage = error instanceof Error ? error.message : "Unknown error"
-			console.error("Shofer <Language Model API>: Client initialization failed:", errorMessage)
+			getOutputChannel()?.appendLine(
+				`[ERROR] Shofer <Language Model API>: Client initialization failed: ${errorMessage}`,
+			)
 			throw new Error(`Shofer <Language Model API>: Failed to initialize client: ${errorMessage}`)
 		}
 	}
@@ -411,13 +414,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	private async internalCountTokens(text: string | vscode.LanguageModelChatMessage): Promise<number> {
 		// Check for required dependencies
 		if (!this.client) {
-			console.warn("Shofer <Language Model API>: No client available for token counting")
+			getOutputChannel()?.appendLine("[WARN] Shofer <Language Model API>: No client available for token counting")
 			return 0
 		}
 
 		// Validate input
 		if (!text) {
-			console.debug("Shofer <Language Model API>: Empty text provided for token counting")
+			outputLog("Shofer <Language Model API>: Empty text provided for token counting")
 			return 0
 		}
 
@@ -441,24 +444,30 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			} else if (text instanceof vscode.LanguageModelChatMessage) {
 				// For chat messages, ensure we have content
 				if (!text.content || (Array.isArray(text.content) && text.content.length === 0)) {
-					console.debug("Shofer <Language Model API>: Empty chat message content")
+					outputLog("Shofer <Language Model API>: Empty chat message content")
 					return 0
 				}
 				const countMessage = extractTextCountFromMessage(text)
 				tokenCount = await this.client.countTokens(countMessage, cancellationToken)
 			} else {
-				console.warn("Shofer <Language Model API>: Invalid input type for token counting")
+				getOutputChannel()?.appendLine(
+					"[WARN] Shofer <Language Model API>: Invalid input type for token counting",
+				)
 				return 0
 			}
 
 			// Validate the result
 			if (typeof tokenCount !== "number") {
-				console.warn("Shofer <Language Model API>: Non-numeric token count received:", tokenCount)
+				getOutputChannel()?.appendLine(
+					`[WARN] Shofer <Language Model API>: Non-numeric token count received: ${tokenCount}`,
+				)
 				return 0
 			}
 
 			if (tokenCount < 0) {
-				console.warn("Shofer <Language Model API>: Negative token count received:", tokenCount)
+				getOutputChannel()?.appendLine(
+					`[WARN] Shofer <Language Model API>: Negative token count received: ${tokenCount}`,
+				)
 				return 0
 			}
 
@@ -466,16 +475,16 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		} catch (error) {
 			// Handle specific error types
 			if (error instanceof vscode.CancellationError) {
-				console.debug("Shofer <Language Model API>: Token counting cancelled by user")
+				outputLog("Shofer <Language Model API>: Token counting cancelled by user")
 				return 0
 			}
 
 			const errorMessage = error instanceof Error ? error.message : "Unknown error"
-			console.warn("Shofer <Language Model API>: Token counting failed:", errorMessage)
+			getOutputChannel()?.appendLine(`[WARN] Shofer <Language Model API>: Token counting failed: ${errorMessage}`)
 
 			// Log additional error details if available
 			if (error instanceof Error && error.stack) {
-				console.debug("Token counting error stack:", error.stack)
+				outputLog("Token counting error stack:", error.stack)
 			}
 
 			return 0 // Fallback to prevent stream interruption
@@ -503,7 +512,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 	private async getClient(): Promise<vscode.LanguageModelChat> {
 		if (!this.client) {
-			console.debug("Shofer <Language Model API>: Getting client with options:", {
+			outputLog("Shofer <Language Model API>: Getting client with options:", {
 				vsCodeLmModelSelector: this.options.vsCodeLmModelSelector,
 				hasOptions: !!this.options,
 				selectorKeys: this.options.vsCodeLmModelSelector ? Object.keys(this.options.vsCodeLmModelSelector) : [],
@@ -512,11 +521,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			try {
 				// Use default empty selector if none provided to get all available models
 				const selector = this.options?.vsCodeLmModelSelector || {}
-				console.debug("Shofer <Language Model API>: Creating client with selector:", selector)
+				outputLog("Shofer <Language Model API>: Creating client with selector:", selector)
 				this.client = await this.createClient(selector)
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Unknown error"
-				console.error("Shofer <Language Model API>: Client creation failed:", message)
+				getOutputChannel()?.appendLine(
+					`[ERROR] Shofer <Language Model API>: Client creation failed: ${message}`,
+				)
 				throw new Error(`Shofer <Language Model API>: Failed to create client: ${message}`)
 			}
 		}
@@ -647,8 +658,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				if (chunk instanceof vscode.LanguageModelTextPart) {
 					// Validate text part value
 					if (typeof chunk.value !== "string") {
-						console.warn("Shofer <Language Model API>: Invalid text part value received:", chunk.value)
-						continue
+						getOutputChannel()?.appendLine(
+							`[WARN] Shofer <Language Model API>: Invalid text part value received: ${chunk.value}`,
+						)
 					}
 
 					accumulatedText += chunk.value
@@ -667,23 +679,28 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 						// Validate tool call parameters
 						if (!chunk.name || typeof chunk.name !== "string") {
-							console.warn("Shofer <Language Model API>: Invalid tool name received:", chunk.name)
+							getOutputChannel()?.appendLine(
+								`[WARN] Shofer <Language Model API>: Invalid tool name received: ${chunk.name}`,
+							)
 							continue
 						}
 
 						if (!chunk.callId || typeof chunk.callId !== "string") {
-							console.warn("Shofer <Language Model API>: Invalid tool callId received:", chunk.callId)
+							getOutputChannel()?.appendLine(
+								`[WARN] Shofer <Language Model API>: Invalid tool callId received: ${chunk.callId}`,
+							)
 							continue
 						}
 
 						// Ensure input is a valid object
 						if (!chunk.input || typeof chunk.input !== "object") {
-							console.warn("Shofer <Language Model API>: Invalid tool input received:", chunk.input)
-							continue
+							getOutputChannel()?.appendLine(
+								`[WARN] Shofer <Language Model API>: Invalid tool input received: ${chunk.input}`,
+							)
 						}
 
 						// Log tool call for debugging
-						console.debug("Shofer <Language Model API>: Processing tool call:", {
+						outputLog("Shofer <Language Model API>: Processing tool call:", {
 							name: chunk.name,
 							callId: chunk.callId,
 							inputSize: JSON.stringify(chunk.input).length,
@@ -712,7 +729,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 							}
 						}
 					} catch (error) {
-						console.error("Shofer <Language Model API>: Failed to process tool call:", error)
+						getOutputChannel()?.appendLine(
+							`[ERROR] Shofer <Language Model API>: Failed to process tool call: ${error}`,
+						)
 						// Continue processing other chunks even if one fails
 						continue
 					}
@@ -740,7 +759,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 							}
 						}
 					} else {
-						console.warn("Shofer <Language Model API>: Unknown chunk type received:", chunk)
+						getOutputChannel()?.appendLine(
+							`[WARN] Shofer <Language Model API>: Unknown chunk type received: ${JSON.stringify(chunk)}`,
+						)
 					}
 				}
 			}
@@ -802,23 +823,25 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			}
 
 			if (error instanceof Error) {
-				console.error("Shofer <Language Model API>: Stream error details:", {
-					message: error.message,
-					stack: error.stack,
-					name: error.name,
-				})
+				getOutputChannel()?.appendLine(
+					`[ERROR] Shofer <Language Model API>: Stream error details: ${JSON.stringify({ message: error.message, stack: error.stack, name: error.name })}`,
+				)
 
 				// Return original error if it's already an Error instance
 				throw error
 			} else if (typeof error === "object" && error !== null) {
 				// Handle error-like objects
 				const errorDetails = JSON.stringify(error, null, 2)
-				console.error("Shofer <Language Model API>: Stream error object:", errorDetails)
+				getOutputChannel()?.appendLine(
+					`[ERROR] Shofer <Language Model API>: Stream error object: ${errorDetails}`,
+				)
 				throw new Error(`Shofer <Language Model API>: Response stream error: ${errorDetails}`)
 			} else {
 				// Fallback for unknown error types
 				const errorMessage = String(error)
-				console.error("Shofer <Language Model API>: Unknown stream error:", errorMessage)
+				getOutputChannel()?.appendLine(
+					`[ERROR] Shofer <Language Model API>: Unknown stream error: ${errorMessage}`,
+				)
 				throw new Error(`Shofer <Language Model API>: Response stream error: ${errorMessage}`)
 			}
 		}
@@ -839,7 +862,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			// Log any missing properties for debugging
 			for (const [prop, value] of Object.entries(requiredProps)) {
 				if (!value && value !== 0) {
-					console.warn(`Shofer <Language Model API>: Client missing ${prop} property`)
+					getOutputChannel()?.appendLine(
+						`[WARN] Shofer <Language Model API>: Client missing ${prop} property`,
+					)
 				}
 			}
 
@@ -849,7 +874,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			const modelId = this.client.id || modelParts.join(SELECTOR_SEPARATOR)
 
 			// Build model info with conservative defaults for missing values
-			console.log(
+			getOutputChannel()?.appendLine(
 				`[CONTEXT-DIAG] vscode-lm getModel() — client.id=${this.client.id}, ` +
 					`maxInputTokens=${this.client.maxInputTokens} (type=${typeof this.client.maxInputTokens})`,
 			)
@@ -991,8 +1016,8 @@ export async function getVsCodeLmModels(): Promise<VsCodeLmModelDescriptor[]> {
 		const filtered = models.filter((model) => !VSCODE_LM_STATIC_BLACKLIST.includes(model.id))
 		return await Promise.all(filtered.map(enrichVsCodeLmModel))
 	} catch (error) {
-		console.error(
-			`Error fetching VS Code LM models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
+		getOutputChannel()?.appendLine(
+			`[ERROR] Error fetching VS Code LM models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 		)
 		return []
 	}

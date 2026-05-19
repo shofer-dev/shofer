@@ -6,6 +6,7 @@ import { BaseTerminal } from "./BaseTerminal"
 import { TerminalProcess } from "./TerminalProcess"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
 import { mergePromise } from "./mergePromise"
+import { outputLog, outputError } from "../../utils/outputChannelLogger"
 
 export class Terminal extends BaseTerminal {
 	public terminal: vscode.Terminal
@@ -40,7 +41,10 @@ export class Terminal extends BaseTerminal {
 		return this.terminal.exitStatus !== undefined
 	}
 
-	public override runCommand(command: string, callbacks: ShoferTerminalCallbacks): ShoferTerminalProcessResultPromise {
+	public override runCommand(
+		command: string,
+		callbacks: ShoferTerminalCallbacks,
+	): ShoferTerminalProcessResultPromise {
 		// We set busy before the command is running because the terminal may be
 		// waiting on terminal integration, and we must prevent another instance
 		// from selecting the terminal for use during that time.
@@ -63,7 +67,7 @@ export class Terminal extends BaseTerminal {
 			// Set up event handlers
 			process.once("continue", () => resolve())
 			process.once("error", (error) => {
-				console.error(`[Terminal ${this.id}] error:`, error)
+				outputError(`[Terminal ${this.id}] error:`, error)
 				reject(error)
 			})
 
@@ -79,7 +83,7 @@ export class Terminal extends BaseTerminal {
 					process.run(command)
 				})
 				.catch(() => {
-					console.log(`[Terminal ${this.id}] Shell integration not available. Command execution aborted.`)
+					outputLog(`[Terminal ${this.id}] Shell integration not available. Command execution aborted.`)
 
 					// Clean up temporary directory if shell integration is not available
 					ShellIntegrationManager.zshCleanupTmpDir(this.id)

@@ -2,6 +2,7 @@ import * as path from "path"
 
 import { CheckpointServiceOptions } from "./types"
 import { ShadowCheckpointService } from "./ShadowCheckpointService"
+import { outputLog } from "../../utils/outputChannelLogger"
 
 export class RepoPerTaskCheckpointService extends ShadowCheckpointService {
 	public static create({
@@ -9,7 +10,7 @@ export class RepoPerTaskCheckpointService extends ShadowCheckpointService {
 		workspaceDir,
 		shadowDir,
 		scopedWorktreeDir,
-		log = console.log,
+		log = outputLog,
 	}: CheckpointServiceOptions) {
 		return new RepoPerTaskCheckpointService(
 			taskId,

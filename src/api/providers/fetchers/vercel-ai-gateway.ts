@@ -6,6 +6,7 @@ import { VERCEL_AI_GATEWAY_VISION_ONLY_MODELS, VERCEL_AI_GATEWAY_VISION_AND_TOOL
 
 import type { ApiHandlerOptions } from "../../../shared/api"
 import { parseApiPrice } from "../../../shared/cost"
+import { outputError } from "../../../utils/outputChannelLogger"
 
 /**
  * VercelAiGatewayPricing
@@ -63,7 +64,7 @@ export async function getVercelAiGatewayModels(options?: ApiHandlerOptions): Pro
 		const data = result.success ? result.data.data : response.data.data
 
 		if (!result.success) {
-			console.error(`Vercel AI Gateway models response is invalid ${JSON.stringify(result.error.format())}`)
+			outputError(`Vercel AI Gateway models response is invalid ${JSON.stringify(result.error.format())}`)
 		}
 
 		for (const model of data) {
@@ -78,7 +79,7 @@ export async function getVercelAiGatewayModels(options?: ApiHandlerOptions): Pro
 			models[id] = parseVercelAiGatewayModel({ id, model })
 		}
 	} catch (error) {
-		console.error(
+		outputError(
 			`Error fetching Vercel AI Gateway models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 		)
 	}

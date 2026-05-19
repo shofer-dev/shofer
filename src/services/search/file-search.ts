@@ -6,6 +6,7 @@ import * as readline from "readline"
 import { byLengthAsc, Fzf } from "fzf"
 import { getBinPath } from "../ripgrep"
 import { Package } from "../../shared/package"
+import { outputError } from "../../utils/outputChannelLogger"
 
 export type FileResult = { path: string; type: "file" | "folder"; label?: string }
 
@@ -188,7 +189,7 @@ export async function searchWorkspaceFiles(
 
 		return verifiedResults
 	} catch (error) {
-		console.error("Error in searchWorkspaceFiles:", error)
+		outputError("Error in searchWorkspaceFiles:", error)
 		return []
 	}
 }

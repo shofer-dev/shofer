@@ -16,6 +16,7 @@ import path from "path"
 import { t } from "../../i18n"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
+import { outputError } from "../../utils/outputChannelLogger"
 
 export class CodeIndexManager {
 	// --- Singleton Implementation ---
@@ -303,7 +304,7 @@ export class CodeIndexManager {
 			this._stateManager.setSystemState("Standby", "")
 		} catch (error) {
 			// Log error but continue with recovery - clearing service instances is more important
-			console.error("Failed to clear error state during recovery:", error)
+			outputError("Failed to clear error state during recovery:", error)
 		} finally {
 			// Force re-initialization by clearing service instances
 			// This ensures a clean slate even if state update failed
@@ -450,7 +451,7 @@ export class CodeIndexManager {
 				// Workspace has no .gitignore at the root (or the read failed).
 				// Non-fatal: indexing proceeds with no git-derived filtering, with
 				// CODEBASE_INDEX_IGNORED_DIRS and .shoferignore still applied.
-				console.error("Unexpected error loading .gitignore:", error)
+				outputError("Unexpected error loading .gitignore:", error)
 				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 					error: error instanceof Error ? error.message : String(error),
 					stack: error instanceof Error ? error.stack : undefined,
@@ -540,7 +541,7 @@ export class CodeIndexManager {
 					await this._recreateServices()
 				} catch (error) {
 					// Error state already set in _recreateServices
-					console.error("Failed to recreate services:", error)
+					outputError("Failed to recreate services:", error)
 					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 						error: error instanceof Error ? error.message : String(error),
 						stack: error instanceof Error ? error.stack : undefined,

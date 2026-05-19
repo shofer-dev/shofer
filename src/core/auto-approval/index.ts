@@ -12,6 +12,7 @@ import { ShoferAskResponse } from "../../shared/WebviewMessage"
 import { isWriteToolAction, isReadOnlyToolAction, getToolGroupForSayTool } from "./tools"
 import { isMcpToolUncategorized } from "./mcp"
 import { getCommandDecision } from "./commands"
+import { outputError } from "../../utils/outputChannelLogger"
 
 // We have auto-approval actions for different categories.
 export type AutoApprovalState =
@@ -157,7 +158,7 @@ export async function checkAutoApproval({
 		try {
 			tool = JSON.parse(text || "{}")
 		} catch (error) {
-			console.error("Failed to parse tool:", error)
+			outputError("Failed to parse tool:", error)
 		}
 
 		if (!tool) {
