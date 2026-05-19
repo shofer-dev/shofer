@@ -41,7 +41,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 
 		// Apply model-specific query prefix if required
 		const queryPrefix = getModelQueryPrefix("ollama", modelToUse)
-		const processedTexts = queryPrefix
+		const prefixedTexts = queryPrefix
 			? texts.map((text, index) => {
 					// Prevent double-prefixing
 					if (text.startsWith(queryPrefix)) {
@@ -63,6 +63,28 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 					return prefixedText
 				})
 			: texts
+
+		// Defence-in-depth: truncate individual items whose estimated token
+		// count exceeds MAX_ITEM_TOKENS.  Callers (git-log-extractor, code
+		// parser) apply their own character-level truncation, but the length/4
+		// heuristic can under-count for non-Latin scripts and dense code.
+		// This is the last-resort guard matching the per-item check in the
+		// OpenAI embedder (openai.ts:87-101).
+		const MAX_SAFE_CHARS = MAX_ITEM_TOKENS * 4
+		const processedTexts = prefixedTexts.map((text, index) => {
+			const estimatedTokens = Math.ceil(text.length / 4)
+			if (estimatedTokens > MAX_ITEM_TOKENS) {
+				const originalLen = text.length
+				const truncated = text.substring(0, MAX_SAFE_CHARS)
+				console.warn(
+					`[OllamaEmbedder] Defence-in-depth truncation: item ${index} ` +
+						`estimated ${estimatedTokens} tokens > ${MAX_ITEM_TOKENS} max, ` +
+						`truncated from ${originalLen} to ${truncated.length} chars`,
+				)
+				return truncated
+			}
+			return text
+		})
 
 		try {
 			// Note: Standard Ollama API uses 'prompt' for single text, not 'input' for array.
