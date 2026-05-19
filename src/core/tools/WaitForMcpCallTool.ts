@@ -87,6 +87,16 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 				timer = setTimeout(() => resolve("timeout"), timeoutMs)
 			})
 
+			// Mark the task as `waiting` for the duration of the blocking await so
+			// the Task Selector / TaskHeader surface "this agent is blocked on an
+			// external event, not actively working". Mirrors WaitForTaskTool. The
+			// state is restored in the finally so an exception in the wait path
+			// does not strand the task in `waiting` forever. The taskManager
+			// reference is optional — in unit tests / non-provider contexts
+			// (e.g. CLI) the state transition is skipped.
+			const taskManager = task.providerRef.deref()?.taskManager
+			taskManager?.setState(task.taskId, { lifecycle: "waiting" })
+
 			try {
 				if (waitStrategy === "any") {
 					await Promise.race([Promise.race(settlePromises), timeoutPromise])
@@ -95,6 +105,7 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 				}
 			} finally {
 				if (timer) clearTimeout(timer)
+				taskManager?.setState(task.taskId, { lifecycle: "running" })
 			}
 
 			// Mark any still-unsettled handles as timed out for the response. We

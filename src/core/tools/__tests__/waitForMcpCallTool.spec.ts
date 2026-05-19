@@ -23,6 +23,16 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
+const setStateSpy = vi.fn()
+
+// Minimal provider stub returning a taskManager with a setState spy, wrapped
+// in a fake WeakRef-shaped object so `task.providerRef.deref()` works exactly
+// like the production code path expects.
+function buildProviderRef() {
+	const provider = { taskManager: { setState: setStateSpy } }
+	return { deref: () => provider } as unknown as Task["providerRef"]
+}
+
 function buildHandle(callId: string, promise: Promise<any>): McpAsyncCallHandle {
 	return {
 		callId,
@@ -42,6 +52,7 @@ function buildTask(handles: McpAsyncCallHandle[]): Partial<Task> {
 		recordToolError: vi.fn(),
 		sayAndCreateMissingParamError: vi.fn().mockResolvedValue("missing"),
 		mcpAsyncCalls: new Map(handles.map((h) => [h.callId, h] as const)),
+		providerRef: buildProviderRef(),
 	}
 }
 
@@ -59,7 +70,10 @@ const block = (nativeArgs: {
 	}) as ToolUse<"wait_for_mcp_call">
 
 describe("waitForMcpCallTool", () => {
-	beforeEach(() => captureMcpAsyncCallTimedOut.mockClear())
+	beforeEach(() => {
+		captureMcpAsyncCallTimedOut.mockClear()
+		setStateSpy.mockClear()
+	})
 
 	it("returns error envelope when none of the call_ids are known", async () => {
 		const task = buildTask([])
@@ -141,5 +155,26 @@ describe("waitForMcpCallTool", () => {
 		// c1 settled → deleted; c2 unsettled (timeout) → retained.
 		expect(task.mcpAsyncCalls!.has("c1")).toBe(false)
 		expect(task.mcpAsyncCalls!.has("c2")).toBe(true)
+	})
+
+	it("transitions task lifecycle to 'waiting' during the await and restores 'running' in finally", async () => {
+		const pendingPromise = new Promise<any>(() => {})
+		const h1 = buildHandle("c1", pendingPromise)
+		const task = buildTask([h1])
+		const pushToolResult = vi.fn()
+		vi.useFakeTimers()
+		const handlePromise = waitForMcpCallTool.handle(
+			task as Task,
+			block({ call_ids: ["c1"], wait: "all", timeout: 1 }) as any,
+			{ askApproval: vi.fn(), handleError: vi.fn(), pushToolResult },
+		)
+		await vi.advanceTimersByTimeAsync(1100)
+		await handlePromise
+		vi.useRealTimers()
+		// First call: enter `waiting` before the race; second call: restore
+		// `running` in finally — even though the await timed out (no MCP
+		// settlement) the task must not be stranded in `waiting`.
+		expect(setStateSpy).toHaveBeenNthCalledWith(1, "task-1", { lifecycle: "waiting" })
+		expect(setStateSpy).toHaveBeenNthCalledWith(2, "task-1", { lifecycle: "running" })
 	})
 })
