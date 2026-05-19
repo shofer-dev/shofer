@@ -44,47 +44,70 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 				return
 			}
 
-			// Build a promise that resolves based on the wait strategy
-			const promises = handles.map((h) =>
-				h.promise
-					.then((result) => ({
-						callId: h.callId,
-						serverName: h.serverName,
-						toolName: h.toolName,
-						result,
-						status: "completed" as const,
-					}))
-					.catch((err) => ({
-						callId: h.callId,
-						serverName: h.serverName,
-						toolName: h.toolName,
-						error: err instanceof Error ? err.message : String(err),
-						status: "error" as const,
-					})),
-			)
-
-			let resolvedResults: Array<{
+			// Per-call settle records. We track `settled` so the outer timeout can
+			// emit a structured `status:"timeout"` entry for each handle that did
+			// not finish in time, instead of collapsing the whole call into one
+			// generic error.
+			type SettleRecord = {
 				callId: string
 				serverName: string
 				toolName: string
 				result?: any
 				error?: string
-				status: "completed" | "error"
-			}>
+				status: "completed" | "error" | "timeout"
+				settled: boolean
+			}
 
-			const timeoutPromise = new Promise<never>((_, reject) =>
-				setTimeout(() => reject(new Error(`Timed out after ${params.timeout ?? 120}s`)), timeoutMs),
+			const records: SettleRecord[] = handles.map((h) => ({
+				callId: h.callId,
+				serverName: h.serverName,
+				toolName: h.toolName,
+				status: "completed",
+				settled: false,
+			}))
+
+			const settlePromises = handles.map((h, i) =>
+				h.promise
+					.then((result) => {
+						records[i].result = result
+						records[i].status = "completed"
+						records[i].settled = true
+					})
+					.catch((err) => {
+						records[i].error = err instanceof Error ? err.message : String(err)
+						records[i].status = "error"
+						records[i].settled = true
+					}),
 			)
 
-			if (waitStrategy === "any") {
-				const result = await Promise.race([Promise.race(promises), timeoutPromise])
-				resolvedResults = [result]
-			} else {
-				resolvedResults = await Promise.race([Promise.all(promises), timeoutPromise])
+			let timer: NodeJS.Timeout | undefined
+			const timeoutPromise = new Promise<"timeout">((resolve) => {
+				timer = setTimeout(() => resolve("timeout"), timeoutMs)
+			})
+
+			try {
+				if (waitStrategy === "any") {
+					await Promise.race([Promise.race(settlePromises), timeoutPromise])
+				} else {
+					await Promise.race([Promise.all(settlePromises), timeoutPromise])
+				}
+			} finally {
+				if (timer) clearTimeout(timer)
+			}
+
+			// Mark any still-unsettled handles as timed out for the response. We
+			// intentionally do NOT mutate the underlying Task.mcpAsyncCalls handle
+			// — the call may still complete later and be retrievable via
+			// check_mcp_call_status.
+			for (const r of records) {
+				if (!r.settled) {
+					r.status = "timeout"
+					r.error = `Did not complete within ${params.timeout ?? 120}s`
+				}
 			}
 
 			// Shape results
-			const output = resolvedResults.map((r) => {
+			const output = records.map((r) => {
 				let resultText = ""
 				let images: string[] = []
 

@@ -183,7 +183,7 @@ export interface McpAsyncCallHandle {
 	serverName: string
 	toolName: string
 	status: "running" | "completed" | "error" | "cancelled"
-	promise: Promise<McpToolCallResponse>
+	promise: Promise<McpToolCallResponse | undefined>
 	abortController: AbortController
 	result?: McpToolCallResponse
 	error?: string
