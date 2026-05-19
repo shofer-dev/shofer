@@ -16,7 +16,11 @@ export interface SafeWriteJsonOptions {
 	 */
 	prettyPrint?: boolean
 }
-
+// Module-level per-file write queue. Serializes same-file writes within this process
+// so we never race on proper-lockfile from concurrent async callers. The lockfile's
+// retry budget (~3.5 s total with default config) is easily exhausted under CPU
+// pressure when a write takes longer than expected.
+const writeQueues = new Map<string, Promise<void>>()
 /**
  * Safely writes JSON data to a file.
  * - Creates parent directories if they don't exist
@@ -33,6 +37,31 @@ export interface SafeWriteJsonOptions {
  */
 
 async function safeWriteJson(filePath: string, data: any, options?: SafeWriteJsonOptions): Promise<void> {
+	const absoluteFilePath = path.resolve(filePath)
+
+	// Serialize same-file writes within this process. Each caller chains onto the
+	// previous promise for that file path so at most one write is executing per path
+	// at a time. The proper-lockfile below still handles cross-process protection.
+	const prev = writeQueues.get(absoluteFilePath) ?? Promise.resolve()
+	let resolver!: () => void
+	const next = new Promise<void>((r) => {
+		resolver = r
+	})
+	writeQueues.set(absoluteFilePath, next)
+
+	try {
+		await prev
+		await _safeWriteJsonLocked(absoluteFilePath, data, options)
+	} finally {
+		resolver()
+		if (writeQueues.get(absoluteFilePath) === next) {
+			writeQueues.delete(absoluteFilePath)
+		}
+	}
+}
+
+/** Inner implementation — called only by safeWriteJson after the per-file queue gate. */
+async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeWriteJsonOptions): Promise<void> {
 	const absoluteFilePath = path.resolve(filePath)
 	let releaseLock = async () => {} // Initialized to a no-op
 
