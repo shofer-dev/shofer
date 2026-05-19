@@ -1,5 +1,7 @@
 import i18next from "i18next"
 
+import { outputLog, outputError } from "../utils/outputChannelLogger"
+
 // Build translations object
 const translations: Record<string, Record<string, any>> = {}
 
@@ -54,17 +56,17 @@ if (!isTestEnv) {
 						const content = fs.readFileSync(filePath, "utf8")
 						translations[language][namespace] = JSON.parse(content)
 					} catch (error) {
-						console.error(`Error loading translation file ${filePath}:`, error)
+						outputError(`Error loading translation file ${filePath}:`, error)
 					}
 				})
 			})
 
-			console.log(`Loaded translations for languages: ${Object.keys(translations).join(", ")}`)
+			outputLog(`Loaded translations for languages: ${Object.keys(translations).join(", ")}`)
 		} catch (dirError) {
-			console.error(`Error processing directory ${localesDir}:`, dirError)
+			outputError(`Error processing directory ${localesDir}:`, dirError)
 		}
 	} catch (error) {
-		console.error("Error loading translations:", error)
+		outputError("Error loading translations:", error)
 	}
 }
 

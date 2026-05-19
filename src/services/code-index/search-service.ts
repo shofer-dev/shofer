@@ -6,6 +6,7 @@ import { CodeIndexConfigManager } from "./config-manager"
 import { CodeIndexStateManager } from "./state-manager"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
+import { outputError } from "../../utils/outputChannelLogger"
 
 /**
  * Service responsible for searching the code index.
@@ -65,7 +66,7 @@ export class CodeIndexSearchService {
 			const results = await this.vectorStore.search(vector, normalizedPrefix, minScore, effectiveMax)
 			return results
 		} catch (error) {
-			console.error("[CodeIndexSearchService] Error during search:", error)
+			outputError("[CodeIndexSearchService] Error during search:", error)
 			this.stateManager.setSystemState("Error", `Search failed: ${(error as Error).message}`)
 
 			// Capture telemetry for the error

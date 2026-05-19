@@ -2,6 +2,7 @@ import type { ToolName, ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
+import { outputError } from "../../utils/outputChannelLogger"
 
 /**
  * Callbacks passed to tool execution
@@ -135,7 +136,7 @@ export abstract class BaseTool<TName extends ToolName> {
 			try {
 				await this.handlePartial(task, block)
 			} catch (error) {
-				console.error(`Error in handlePartial:`, error)
+				outputError(`Error in handlePartial:`, error)
 				await callbacks.handleError(
 					`handling partial ${this.name}`,
 					error instanceof Error ? error : new Error(String(error)),
@@ -167,7 +168,7 @@ export abstract class BaseTool<TName extends ToolName> {
 				throw new Error("Tool call is missing native arguments (nativeArgs).")
 			}
 		} catch (error) {
-			console.error(`Error parsing parameters:`, error)
+			outputError(`Error parsing parameters:`, error)
 			const errorMessage = `Failed to parse ${this.name} parameters: ${error instanceof Error ? error.message : String(error)}`
 			await callbacks.handleError(`parsing ${this.name} args`, new Error(errorMessage))
 			// Note: handleError already emits a tool_result via formatResponse.toolError in the caller.

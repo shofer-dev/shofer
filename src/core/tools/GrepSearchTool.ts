@@ -35,6 +35,7 @@ import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { GREP_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
+import { outputError } from "../../utils/outputChannelLogger"
 
 interface GrepSearchParams {
 	path: string
@@ -378,7 +379,7 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 			try {
 				rawOutput = await execRipgrep(rgPath, rgArgs, maxRgLines)
 			} catch (error) {
-				console.error("Error executing ripgrep:", error)
+				outputError("Error executing ripgrep:", error)
 				pushToolResult(`No results found for: ${query}`)
 				return
 			}

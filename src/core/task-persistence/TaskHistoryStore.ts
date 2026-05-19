@@ -7,6 +7,7 @@ import type { HistoryItem } from "@shofer/types"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { getStorageBasePath } from "../../utils/storage"
+import { outputError } from "../../utils/outputChannelLogger"
 
 /**
  * Index file format for fast startup reads.
@@ -122,7 +123,7 @@ export class TaskHistoryStore {
 
 		// Synchronously flush the index (best-effort)
 		this.flushIndex().catch((err) => {
-			console.error("[TaskHistoryStore] Error flushing index on dispose:", err)
+			outputError("[TaskHistoryStore] Error flushing index on dispose:", err)
 		})
 	}
 
@@ -415,7 +416,7 @@ export class TaskHistoryStore {
 			try {
 				await this.writeIndex()
 			} catch (err) {
-				console.error("[TaskHistoryStore] Failed to write index:", err)
+				outputError("[TaskHistoryStore] Failed to write index:", err)
 			}
 		}, TaskHistoryStore.INDEX_WRITE_DEBOUNCE_MS)
 	}
@@ -488,22 +489,22 @@ export class TaskHistoryStore {
 						}
 						watchDebounce = setTimeout(() => {
 							this.reconcile().catch((err) => {
-								console.error("[TaskHistoryStore] Reconciliation after fs.watch failed:", err)
+								outputError("[TaskHistoryStore] Reconciliation after fs.watch failed:", err)
 							})
 						}, 500)
 					})
 
 					this.fsWatcher.on("error", (err) => {
-						console.error("[TaskHistoryStore] fs.watch error:", err)
+						outputError("[TaskHistoryStore] fs.watch error:", err)
 						// fs.watch is unreliable on some platforms; periodic reconciliation
 						// serves as the fallback.
 					})
 				} catch (err) {
-					console.error("[TaskHistoryStore] Failed to start fs.watch:", err)
+					outputError("[TaskHistoryStore] Failed to start fs.watch:", err)
 				}
 			})
 			.catch((err) => {
-				console.error("[TaskHistoryStore] Failed to get tasks dir for watcher:", err)
+				outputError("[TaskHistoryStore] Failed to get tasks dir for watcher:", err)
 			})
 	}
 
@@ -523,7 +524,7 @@ export class TaskHistoryStore {
 			try {
 				await this.reconcile()
 			} catch (err) {
-				console.error("[TaskHistoryStore] Periodic reconciliation failed:", err)
+				outputError("[TaskHistoryStore] Periodic reconciliation failed:", err)
 			}
 			this.startPeriodicReconciliation()
 		}, TaskHistoryStore.RECONCILE_INTERVAL_MS)

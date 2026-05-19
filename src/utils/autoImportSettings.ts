@@ -5,6 +5,7 @@ import * as os from "os"
 import { Package } from "../shared/package"
 import { fileExistsAtPath } from "./fs"
 import { t } from "../i18n"
+import { outputWarn } from "./outputChannelLogger"
 
 import { importSettingsFromPath, ImportOptions } from "../core/config/importExport"
 
@@ -61,7 +62,7 @@ export async function autoImportSettings(
 		outputChannel.appendLine(`[AutoImport] Unexpected error during auto-import: ${errorMessage}`)
 
 		// Log error but don't fail extension activation
-		console.warn("Auto-import settings error:", error)
+		outputWarn("Auto-import settings error:", error)
 	}
 }
 

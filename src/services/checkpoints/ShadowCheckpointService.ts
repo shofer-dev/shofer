@@ -13,6 +13,7 @@ import { executeRipgrep } from "../../services/search/file-search"
 
 import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types"
 import { getExcludePatterns } from "./excludes"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 /**
  * Creates a SimpleGit instance with sanitized environment variables to prevent
@@ -67,7 +68,7 @@ function createSanitizedGit(baseDir: string): SimpleGit {
 
 	// Log which git env vars were removed (helps with debugging Dev Container issues)
 	if (removedVars.length > 0) {
-		console.log(
+		outputLog(
 			`[createSanitizedGit] Removed git environment variables for checkpoint isolation: ${removedVars.join(", ")}`,
 		)
 	}
@@ -84,7 +85,7 @@ function createSanitizedGit(baseDir: string): SimpleGit {
 	// This replaces the inherited environment with our sanitized version
 	git.env(sanitizedEnv)
 
-	console.log(`[createSanitizedGit] Created git instance for baseDir: ${baseDir}`)
+	outputLog(`[createSanitizedGit] Created git instance for baseDir: ${baseDir}`)
 
 	return git
 }
@@ -554,9 +555,9 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		const success = await this.deleteBranch(git, branchName)
 
 		if (success) {
-			console.log(`[${this.name}#deleteTask.${taskId}] deleted branch ${branchName}`)
+			outputLog(`[${this.name}#deleteTask.${taskId}] deleted branch ${branchName}`)
 		} else {
-			console.error(`[${this.name}#deleteTask.${taskId}] failed to delete branch ${branchName}`)
+			outputError(`[${this.name}#deleteTask.${taskId}] failed to delete branch ${branchName}`)
 		}
 	}
 
@@ -564,7 +565,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		const branches = await git.branchLocal()
 
 		if (!branches.all.includes(branchName)) {
-			console.error(`[${this.constructor.name}#deleteBranch] branch ${branchName} does not exist`)
+			outputError(`[${this.constructor.name}#deleteBranch] branch ${branchName} does not exist`)
 			return false
 		}
 
@@ -591,7 +592,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 				await git.branch(["-D", branchName])
 				return true
 			} catch (error) {
-				console.error(
+				outputError(
 					`[${this.constructor.name}#deleteBranch] failed to delete branch ${branchName}: ${error instanceof Error ? error.message : String(error)}`,
 				)
 

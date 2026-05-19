@@ -5,6 +5,7 @@ import process from "process"
 import type { ShoferTerminal } from "./types"
 import { BaseTerminal } from "./BaseTerminal"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
+import { outputLog, outputWarn, outputError } from "../../utils/outputChannelLogger"
 
 export class ExecaTerminalProcess extends BaseTerminalProcess {
 	private terminalRef: WeakRef<ShoferTerminal>
@@ -106,7 +107,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 				let timeoutId: NodeJS.Timeout | undefined
 
 				const kill = new Promise<void>((resolve) => {
-					console.log(`[ExecaTerminalProcess#run] SIGKILL -> ${this.pid}`)
+					outputLog(`[ExecaTerminalProcess#run] SIGKILL -> ${this.pid}`)
 
 					timeoutId = setTimeout(() => {
 						try {
@@ -120,7 +121,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 				try {
 					await Promise.race([this.subprocess, kill])
 				} catch (error) {
-					console.log(
+					outputLog(
 						`[ExecaTerminalProcess#run] subprocess termination error: ${error instanceof Error ? error.message : String(error)}`,
 					)
 				}
@@ -133,10 +134,10 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 			this.emit("shell_execution_complete", { exitCode: 0 })
 		} catch (error) {
 			if (error instanceof ExecaError) {
-				console.error(`[ExecaTerminalProcess#run] shell execution error: ${error.message}`)
+				outputError(`[ExecaTerminalProcess#run] shell execution error: ${error.message}`)
 				this.emit("shell_execution_complete", { exitCode: error.exitCode ?? 0, signalName: error.signal })
 			} else {
-				console.error(
+				outputError(
 					`[ExecaTerminalProcess#run] shell execution error: ${error instanceof Error ? error.message : String(error)}`,
 				)
 
@@ -169,7 +170,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 				try {
 					this.subprocess.kill("SIGKILL")
 				} catch (e) {
-					console.warn(
+					outputWarn(
 						`[ExecaTerminalProcess#abort] Failed to kill subprocess: ${e instanceof Error ? e.message : String(e)}`,
 					)
 				}
@@ -180,7 +181,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 				try {
 					process.kill(this.pid, "SIGKILL")
 				} catch (e) {
-					console.warn(
+					outputWarn(
 						`[ExecaTerminalProcess#abort] Failed to kill process ${this.pid}: ${e instanceof Error ? e.message : String(e)}`,
 					)
 				}
@@ -205,13 +206,13 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 						try {
 							process.kill(pid, "SIGKILL")
 						} catch (e) {
-							console.warn(
+							outputWarn(
 								`[ExecaTerminalProcess#abort] Failed to send SIGKILL to child PID ${pid}: ${e instanceof Error ? e.message : String(e)}`,
 							)
 						}
 					}
 				} else {
-					console.error(
+					outputError(
 						`[ExecaTerminalProcess#abort] Failed to get process tree for PID ${this.pid}: ${err.message}`,
 					)
 				}
@@ -234,7 +235,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 		index++
 		this.lastRetrievedIndex += index
 
-		// console.log(
+		// outputLog(
 		// 	`[ExecaTerminalProcess#getUnretrievedOutput] fullOutput.length=${this.fullOutput.length} lastRetrievedIndex=${this.lastRetrievedIndex}`,
 		// 	output.slice(0, index),
 		// )

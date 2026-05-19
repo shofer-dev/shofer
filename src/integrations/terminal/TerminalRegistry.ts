@@ -7,6 +7,7 @@ import { TerminalProcess } from "./TerminalProcess"
 import { Terminal } from "./Terminal"
 import { ExecaTerminal } from "./ExecaTerminal"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 // Although vscode.window.terminals provides a list of all open terminals,
 // there's no way to know whether they're busy or not (exitStatus does not
@@ -52,7 +53,7 @@ export class TerminalRegistry {
 					const stream = e.execution.read()
 					const terminal = this.getTerminalByVSCETerminal(e.terminal)
 
-					console.info("[onDidStartTerminalShellExecution]", {
+					outputLog("[onDidStartTerminalShellExecution]", {
 						command: e.execution?.commandLine?.value,
 						terminalId: terminal?.id,
 					})
@@ -61,7 +62,7 @@ export class TerminalRegistry {
 						terminal.setActiveStream(stream)
 						terminal.busy = true // Mark terminal as busy when shell execution starts
 					} else {
-						console.error(
+						outputError(
 							"[onDidStartTerminalShellExecution] Shell execution started, but not from a Shofer-registered terminal:",
 							e,
 						)
@@ -79,14 +80,14 @@ export class TerminalRegistry {
 					const process = terminal?.process
 					const exitDetails = TerminalProcess.interpretExitCode(e.exitCode)
 
-					console.info("[onDidEndTerminalShellExecution]", {
+					outputLog("[onDidEndTerminalShellExecution]", {
 						command: e.execution?.commandLine?.value,
 						terminalId: terminal?.id,
 						...exitDetails,
 					})
 
 					if (!terminal) {
-						console.error(
+						outputError(
 							"[onDidEndTerminalShellExecution] Shell execution ended, but not from a Shofer-registered terminal:",
 							e,
 						)
@@ -95,7 +96,7 @@ export class TerminalRegistry {
 					}
 
 					if (!terminal.running) {
-						console.error(
+						outputError(
 							"[TerminalRegistry] Shell execution end event received, but process is not running for terminal:",
 							{ terminalId: terminal?.id, command: process?.command, exitCode: e.exitCode },
 						)
@@ -105,7 +106,7 @@ export class TerminalRegistry {
 					}
 
 					if (!process) {
-						console.error(
+						outputError(
 							"[TerminalRegistry] Shell execution end event received on running terminal, but process is undefined:",
 							{ terminalId: terminal.id, exitCode: e.exitCode },
 						)
@@ -123,7 +124,7 @@ export class TerminalRegistry {
 				this.disposables.push(endDisposable)
 			}
 		} catch (error) {
-			console.error("[TerminalRegistry] Error setting up shell execution handlers:", error)
+			outputError("[TerminalRegistry] Error setting up shell execution handlers:", error)
 		}
 	}
 

@@ -13,6 +13,7 @@ import { t } from "../../i18n"
 import type { CustomModesManager } from "../../core/config/CustomModesManager"
 
 import { RemoteConfigLoader } from "./RemoteConfigLoader"
+import { outputError } from "../../utils/outputChannelLogger"
 import { SimpleInstaller } from "./SimpleInstaller"
 
 export interface MarketplaceItemsResponse {
@@ -69,7 +70,7 @@ export class MarketplaceManager {
 			}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error)
-			console.error("Failed to load marketplace items:", error)
+			outputError("Failed to load marketplace items:", error)
 
 			return {
 				organizationMcps: [],
@@ -275,7 +276,7 @@ export class MarketplaceManager {
 				// File doesn't exist or can't be read, skip
 			}
 		} catch (error) {
-			console.error("Error checking project installations:", error)
+			outputError("Error checking project installations:", error)
 		}
 	}
 
@@ -320,7 +321,7 @@ export class MarketplaceManager {
 				// File doesn't exist or can't be read, skip
 			}
 		} catch (error) {
-			console.error("Error checking global installations:", error)
+			outputError("Error checking global installations:", error)
 		}
 	}
 }

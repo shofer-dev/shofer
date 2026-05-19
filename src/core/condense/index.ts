@@ -11,6 +11,7 @@ import { findLast } from "../../shared/array"
 import { supportPrompt } from "../../shared/support-prompt"
 import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import { generateFoldedFileContext } from "./foldedFileContext"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 export type { FoldedFileContextResult, FoldedFileContextOptions } from "./foldedFileContext"
 
@@ -283,7 +284,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 			messages.length <= 1
 				? t("common:errors.condense_not_enough_messages")
 				: t("common:errors.condensed_recently")
-		console.log(
+		outputLog(
 			`[CONTEXT-DIAG] summarizeConversation BAIL — messagesToSummarize=${messagesToSummarize.length}, totalMessages=${messages.length}, reason="${error}"`,
 		)
 		return { ...response, error }
@@ -294,7 +295,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 
 	if (recentSummaryExists && messagesToSummarize.length <= 2) {
 		const error = t("common:errors.condensed_recently")
-		console.log(
+		outputLog(
 			`[CONTEXT-DIAG] summarizeConversation BAIL — recentSummaryExists, messagesToSummarize=${messagesToSummarize.length}`,
 		)
 		return { ...response, error }
@@ -328,7 +329,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 
 	// Validate that the API handler supports message creation
 	if (!apiHandler || typeof apiHandler.createMessage !== "function") {
-		console.error("API handler is invalid for condensing. Cannot proceed.")
+		outputError("API handler is invalid for condensing. Cannot proceed.")
 		const error = t("common:errors.condense_handler_invalid")
 		return { ...response, error }
 	}
@@ -350,7 +351,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 			}
 		}
 	} catch (error) {
-		console.error("Error during condensing API call:", error)
+		outputError("Error during condensing API call:", error)
 		const errorMessage = error instanceof Error ? error.message : String(error)
 
 		// Capture detailed error information for debugging
@@ -439,7 +440,7 @@ ${commandBlocks}
 				}
 			}
 		} catch (error) {
-			console.error("[summarizeConversation] Failed to generate folded file context:", error)
+			outputError("[summarizeConversation] Failed to generate folded file context:", error)
 			// Continue without folded context - non-critical failure
 		}
 	}

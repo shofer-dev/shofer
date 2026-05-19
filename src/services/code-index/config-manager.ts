@@ -4,6 +4,7 @@ import { EmbedderProvider } from "./interfaces/manager"
 import { CodeIndexConfig, PreviousConfigSnapshot } from "./interfaces/config"
 import { DEFAULT_SEARCH_MIN_SCORE, DEFAULT_MAX_SEARCH_RESULTS } from "./constants"
 import { getDefaultModelId, getModelDimension, getModelScoreThreshold } from "../../shared/embeddingModels"
+import { outputWarn } from "../../utils/outputChannelLogger"
 
 /**
  * Manages configuration state and validation for the code indexing feature.
@@ -94,7 +95,7 @@ export class CodeIndexConfigManager {
 			if (!isNaN(dimension) && dimension > 0) {
 				this.modelDimension = dimension
 			} else {
-				console.warn(
+				outputWarn(
 					`Invalid codebaseIndexEmbedderModelDimension value: ${rawDimension}. Must be a positive number.`,
 				)
 				this.modelDimension = undefined

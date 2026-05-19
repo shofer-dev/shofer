@@ -1,4 +1,5 @@
 import type OpenAI from "openai"
+import { outputLog } from "../../../../utils/outputChannelLogger"
 
 const SEARCH_FILES_DESCRIPTION = `Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.
 
@@ -26,7 +27,7 @@ Example: Literal search for TODO with whole-word matching
 { "path": "src", "query": "TODO", "fileTypes": "*.ts", "isRegex": false, "caseSensitive": true, "wholeWord": true }
 
 Example: Literal search with excludes
-{ "path": "src", "query": "console.log", "isRegex": false, "excludePattern": "**/*.test.ts" }
+{ "path": "src", "query": "outputLog", "isRegex": false, "excludePattern": "**/*.test.ts" }
 
 Example: Minimal search (all defaults)
 { "path": "src", "query": "authService" }`

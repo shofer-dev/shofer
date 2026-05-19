@@ -8,6 +8,7 @@ import { MAX_CONDENSE_THRESHOLD, MIN_CONDENSE_THRESHOLD, summarizeConversation, 
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/types"
 import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
+import { outputLog, outputWarn } from "../../utils/outputChannelLogger"
 
 /**
  * Context Management
@@ -174,7 +175,7 @@ export function willManageContext({
 		const prevContextTokens = totalTokens + lastMessageTokens
 		const allowedTokens = contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE) - reservedTokens
 		const willRun = prevContextTokens > allowedTokens
-		console.log(
+		outputLog(
 			`[CONTEXT-DIAG] willManageContext autoCondense=OFF — totalTokens=${totalTokens}, lastMsgTokens=${lastMessageTokens}, prev=${prevContextTokens}, contextWindow=${contextWindow}, maxTokens=${maxTokens}, reserved=${reservedTokens}, allowed=${allowedTokens.toFixed(0)} → willRun=${willRun}`,
 		)
 		return willRun
@@ -198,7 +199,7 @@ export function willManageContext({
 
 	const contextPercent = (100 * prevContextTokens) / contextWindow
 	const willRun = contextPercent >= effectiveThreshold || prevContextTokens > allowedTokens
-	console.log(
+	outputLog(
 		`[CONTEXT-DIAG] willManageContext autoCondense=ON — totalTokens=${totalTokens}, lastMsgTokens=${lastMessageTokens}, prev=${prevContextTokens}, contextWindow=${contextWindow}, maxTokens=${maxTokens}, reserved=${reservedTokens}, allowed=${allowedTokens.toFixed(0)}, contextPct=${contextPercent.toFixed(2)}%, threshold=${effectiveThreshold}% (profile="${currentProfileId}", profileVal=${profileThreshold}) → willRun=${willRun} (pctTrigger=${contextPercent >= effectiveThreshold}, allowedTrigger=${prevContextTokens > allowedTokens})`,
 	)
 	return willRun
@@ -303,7 +304,7 @@ export async function manageContext({
 			effectiveThreshold = profileThreshold
 		} else {
 			// Invalid threshold value, fall back to global setting
-			console.warn(
+			outputWarn(
 				`Invalid profile threshold ${profileThreshold} for profile "${currentProfileId}". Using global default of ${autoCondenseContextPercent}%`,
 			)
 			effectiveThreshold = autoCondenseContextPercent
@@ -313,11 +314,11 @@ export async function manageContext({
 
 	if (autoCondenseContext) {
 		const contextPercent = (100 * prevContextTokens) / contextWindow
-		console.log(
+		outputLog(
 			`[CONTEXT-DIAG] manageContext entry — totalTokens=${totalTokens}, lastMsgTokens=${lastMessageTokens}, prev=${prevContextTokens}, contextWindow=${contextWindow}, maxTokens=${maxTokens}, reserved=${reservedTokens}, allowed=${allowedTokens.toFixed(0)}, contextPct=${contextPercent.toFixed(2)}%, threshold=${effectiveThreshold}%, autoCondenseContext=${autoCondenseContext}, currentProfileId="${currentProfileId}", messages=${messages.length}`,
 		)
 		if (contextPercent >= effectiveThreshold || prevContextTokens > allowedTokens) {
-			console.log(
+			outputLog(
 				`[CONTEXT-DIAG] manageContext → CONDENSE TRIGGERED (pctTrigger=${contextPercent >= effectiveThreshold}, allowedTrigger=${prevContextTokens > allowedTokens})`,
 			)
 			// Attempt to intelligently condense the context
@@ -335,32 +336,32 @@ export async function manageContext({
 				shoferIgnoreController,
 			})
 			if (result.error) {
-				console.log(
+				outputLog(
 					`[CONTEXT-DIAG] manageContext → CONDENSE FAILED: ${result.error} | details=${result.errorDetails ?? "(none)"}`,
 				)
 				error = result.error
 				errorDetails = result.errorDetails
 				cost = result.cost
 			} else {
-				console.log(
+				outputLog(
 					`[CONTEXT-DIAG] manageContext → CONDENSE SUCCESS: prev=${prevContextTokens} → new=${result.newContextTokens ?? "?"}, cost=${result.cost}`,
 				)
 				return { ...result, prevContextTokens }
 			}
 		} else {
-			console.log(
+			outputLog(
 				`[CONTEXT-DIAG] manageContext → no condense (pct ${contextPercent.toFixed(2)}% < ${effectiveThreshold}% AND prev ${prevContextTokens} <= allowed ${allowedTokens.toFixed(0)})`,
 			)
 		}
 	} else {
-		console.log(
+		outputLog(
 			`[CONTEXT-DIAG] manageContext entry — autoCondenseContext=OFF, prev=${prevContextTokens}, allowed=${allowedTokens.toFixed(0)}`,
 		)
 	}
 
 	// Fall back to sliding window truncation if needed
 	if (prevContextTokens > allowedTokens) {
-		console.log(
+		outputLog(
 			`[CONTEXT-DIAG] manageContext → TRUNCATE TRIGGERED (prev=${prevContextTokens} > allowed=${allowedTokens.toFixed(0)})`,
 		)
 		const truncationResult = truncateConversation(messages, 0.5, taskId)
@@ -401,13 +402,13 @@ export async function manageContext({
 			messagesRemoved: truncationResult.messagesRemoved,
 			newContextTokensAfterTruncation,
 		}
-		console.log(
+		outputLog(
 			`[CONTEXT-DIAG] manageContext → TRUNCATE DONE: messagesRemoved=${truncationResult.messagesRemoved}, newContextTokens=${newContextTokensAfterTruncation}`,
 		)
 		return result
 	}
 	// No truncation or condensation needed
-	console.log(
+	outputLog(
 		`[CONTEXT-DIAG] manageContext → NO-OP (prev=${prevContextTokens} <= allowed=${allowedTokens.toFixed(0)}, error=${error ?? "none"})`,
 	)
 	return { messages, summary: "", cost, prevContextTokens, error, errorDetails }

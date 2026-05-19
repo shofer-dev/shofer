@@ -4,6 +4,7 @@ import type { ModelInfo } from "@shofer/types"
 
 import { parseApiPrice } from "../../../shared/cost"
 import { toRequestyServiceUrl } from "../../../shared/utils/requesty"
+import { outputError } from "../../../utils/outputChannelLogger"
 
 export async function getRequestyModels(baseUrl?: string, apiKey?: string): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
@@ -48,7 +49,7 @@ export async function getRequestyModels(baseUrl?: string, apiKey?: string): Prom
 			models[rawModel.id] = modelInfo
 		}
 	} catch (error) {
-		console.error(`Error fetching Requesty models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
+		outputError(`Error fetching Requesty models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
 	}
 
 	return models

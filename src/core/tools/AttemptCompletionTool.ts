@@ -62,7 +62,7 @@ async function computeFileChangeStats(task: Task): Promise<{ insertions: number;
 		}
 		return { insertions, deletions }
 	} catch (err) {
-		console.error(
+		outputError(
 			`[AttemptCompletionTool] Failed to compute file change stats for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
 		)
 		return { insertions: 0, deletions: 0 }
@@ -70,6 +70,7 @@ async function computeFileChangeStats(task: Task): Promise<{ insertions: number;
 }
 
 import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
@@ -78,7 +79,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const { result, rating, feedback } = params
 		const { handleError, pushToolResult } = callbacks
 
-		console.log(
+		outputLog(
 			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${rating}, result=${result?.substring(0, 100)}`,
 		)
 
@@ -126,7 +127,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const effectiveRating: CompletionRating =
 				rating && ALLOWED_RATINGS.has(rating) ? (rating as CompletionRating) : "poor"
 			if (!rating || !ALLOWED_RATINGS.has(rating)) {
-				console.log(
+				outputLog(
 					`[AttemptCompletionTool.execute] Rating missing or invalid (got: ${rating}), defaulting to "poor"`,
 				)
 			}
@@ -160,7 +161,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			await task.say("completion_result", effectiveResult, undefined, false)
 
-			console.log(
+			outputLog(
 				`[AttemptCompletionTool.execute] Checking delegation: taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}`,
 			)
 
@@ -181,7 +182,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							completionResult: effectiveResult,
 						})
 						if (blockingHandled) {
-							console.log(
+							outputLog(
 								`[AttemptCompletionTool.execute] Blocking foreground path handled taskId=${task.taskId}`,
 							)
 							pushToolResult("")
@@ -201,7 +202,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							// Instead: persist completion status on the child's own
 							// history, update the parent's in-memory backgroundChildren
 							// handle, emit TaskCompleted, and abort the child cleanly.
-							console.log(
+							outputLog(
 								`[AttemptCompletionTool.execute] Background child completed, skipping delegation taskId=${task.taskId}`,
 							)
 
@@ -219,7 +220,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 									deletions: fileStats.deletions,
 								})
 							} catch (err) {
-								console.error(
+								outputError(
 									`[AttemptCompletionTool] Failed to persist background child completion for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
 								)
 							}
@@ -236,7 +237,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						}
 					} catch (err) {
 						// If we can't get the history, log error and skip delegation
-						console.error(
+						outputError(
 							`[AttemptCompletionTool] Failed to get history for task ${task.taskId}: ${(err as Error)?.message ?? String(err)}. ` +
 								`Skipping delegation.`,
 						)
@@ -262,7 +263,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (!task.messageQueueService.isEmpty()) {
 				const queued = task.messageQueueService.dequeueMessage()
 				if (queued) {
-					console.log(
+					outputLog(
 						`[AttemptCompletionTool.execute] Draining queued message instead of completing, taskId=${task.taskId}, text=${queued.text?.substring(0, 100)}`,
 					)
 					await task.say("user_feedback", queued.text ?? "", queued.images)
@@ -292,7 +293,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					}
 				}
 			} catch (err) {
-				console.error(
+				outputError(
 					`[AttemptCompletionTool] Failed to persist completion artefacts for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
 				)
 			}
@@ -330,7 +331,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	private emitTaskCompleted(task: Task, rating: CompletionRating): void {
-		console.log(`[AttemptCompletionTool.emitTaskCompleted] Emitting TaskCompleted event, taskId=${task.taskId}`)
+		outputLog(`[AttemptCompletionTool.emitTaskCompleted] Emitting TaskCompleted event, taskId=${task.taskId}`)
 		// Force final token usage update before emitting TaskCompleted.
 		// This ensures the latest stats are captured regardless of throttle timer.
 		task.emitFinalTokenUsageUpdate()
@@ -340,7 +341,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			rating,
 			isSubtask: !!task.parentTaskId,
 		})
-		console.log(`[AttemptCompletionTool.emitTaskCompleted] TaskCompleted event emitted, taskId=${task.taskId}`)
+		outputLog(`[AttemptCompletionTool.emitTaskCompleted] TaskCompleted event emitted, taskId=${task.taskId}`)
 	}
 }
 

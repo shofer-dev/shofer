@@ -3,6 +3,7 @@ import * as os from "os"
 import * as vscode from "vscode"
 import { arePathsEqual, getWorkspacePath } from "../../utils/path"
 import { t } from "../../i18n"
+import { outputWarn } from "../../utils/outputChannelLogger"
 
 interface OpenFileOptions {
 	create?: boolean
@@ -20,7 +21,7 @@ export async function openFile(filePath: string, options: OpenFileOptions = {}) 
 			filePath = decodeURIComponent(filePath)
 		} catch (decodeError) {
 			// If decoding fails (e.g., invalid escape sequences), continue with the original path
-			console.warn(`Failed to decode file path: ${decodeError}. Using original path.`)
+			outputWarn(`Failed to decode file path: ${decodeError}. Using original path.`)
 		}
 
 		const workspaceRoot = getWorkspacePath()
@@ -77,7 +78,7 @@ export async function openFile(filePath: string, options: OpenFileOptions = {}) 
 					await vscode.commands.executeCommand("list.expand")
 				} catch (expandError) {
 					// Log or handle if expansion specifically fails, though often not critical
-					console.warn("Could not expand directory in explorer:", expandError)
+					outputWarn("Could not expand directory in explorer:", expandError)
 				}
 				return // Done for directories
 			}

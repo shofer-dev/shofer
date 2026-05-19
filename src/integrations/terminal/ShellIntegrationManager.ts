@@ -1,6 +1,7 @@
 import * as path from "path"
 
 import * as vscode from "vscode"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 export class ShellIntegrationManager {
 	public static terminalTmpDirs: Map<number, string> = new Map()
@@ -15,7 +16,7 @@ export class ShellIntegrationManager {
 		const os = require("os")
 		const path = require("path")
 		const tmpDir = path.join(os.tmpdir(), `shofer-zdotdir-${Math.random().toString(36).substring(2, 15)}`)
-		console.info(`[TerminalRegistry] Creating temporary directory for ZDOTDIR: ${tmpDir}`)
+		outputLog(`[TerminalRegistry] Creating temporary directory for ZDOTDIR: ${tmpDir}`)
 
 		// Save original ZDOTDIR as ROO_ZDOTDIR
 		if (process.env.ZDOTDIR) {
@@ -26,7 +27,7 @@ export class ShellIntegrationManager {
 		vscode.workspace.fs
 			.createDirectory(vscode.Uri.file(tmpDir))
 			.then(() => {
-				console.info(`[TerminalRegistry] Created temporary directory for ZDOTDIR at ${tmpDir}`)
+				outputLog(`[TerminalRegistry] Created temporary directory for ZDOTDIR at ${tmpDir}`)
 
 				// Create .zshrc in the temporary directory
 				const zshrcPath = `${tmpDir}/.zshrc`
@@ -44,20 +45,20 @@ export class ShellIntegrationManager {
 	[ -f "$ZDOTDIR/.zlogin" ] && source "$ZDOTDIR/.zlogin"
 	[ "$ZDOTDIR" = "$HOME" ] && unset ZDOTDIR
 	`
-				console.info(`[TerminalRegistry] Creating .zshrc file at ${zshrcPath} with content:\n${zshrcContent}`)
+				outputLog(`[TerminalRegistry] Creating .zshrc file at ${zshrcPath} with content:\n${zshrcContent}`)
 				vscode.workspace.fs.writeFile(vscode.Uri.file(zshrcPath), Buffer.from(zshrcContent)).then(
 					// Success handler
 					() => {
-						console.info(`[TerminalRegistry] Successfully created .zshrc file at ${zshrcPath}`)
+						outputLog(`[TerminalRegistry] Successfully created .zshrc file at ${zshrcPath}`)
 					},
 					// Error handler
 					(error: Error) => {
-						console.error(`[TerminalRegistry] Error creating .zshrc file at ${zshrcPath}: ${error}`)
+						outputError(`[TerminalRegistry] Error creating .zshrc file at ${zshrcPath}: ${error}`)
 					},
 				)
 			})
 			.then(undefined, (error: Error) => {
-				console.error(`[TerminalRegistry] Error creating temporary directory at ${tmpDir}: ${error}`)
+				outputError(`[TerminalRegistry] Error creating temporary directory at ${tmpDir}: ${error}`)
 			})
 
 		return tmpDir
@@ -74,7 +75,7 @@ export class ShellIntegrationManager {
 		}
 
 		const logPrefix = `[TerminalRegistry] Cleaning up temporary directory for terminal ${terminalId}`
-		console.info(`${logPrefix}: ${tmpDir}`)
+		outputLog(`${logPrefix}: ${tmpDir}`)
 
 		try {
 			// Use fs to remove the directory and its contents
@@ -84,23 +85,23 @@ export class ShellIntegrationManager {
 			// Remove .zshrc file
 			const zshrcPath = path.join(tmpDir, ".zshrc")
 			if (fs.existsSync(zshrcPath)) {
-				console.info(`${logPrefix}: Removing .zshrc file at ${zshrcPath}`)
+				outputLog(`${logPrefix}: Removing .zshrc file at ${zshrcPath}`)
 				fs.unlinkSync(zshrcPath)
 			}
 
 			// Remove the directory
 			if (fs.existsSync(tmpDir)) {
-				console.info(`${logPrefix}: Removing directory at ${tmpDir}`)
+				outputLog(`${logPrefix}: Removing directory at ${tmpDir}`)
 				fs.rmdirSync(tmpDir)
 			}
 
 			// Remove it from the map
 			this.terminalTmpDirs.delete(terminalId)
-			console.info(`${logPrefix}: Removed terminal ${terminalId} from temporary directory map`)
+			outputLog(`${logPrefix}: Removed terminal ${terminalId} from temporary directory map`)
 
 			return true
 		} catch (error: unknown) {
-			console.error(
+			outputError(
 				`[TerminalRegistry] Error cleaning up temporary directory ${tmpDir}: ${error instanceof Error ? error.message : String(error)}`,
 			)
 

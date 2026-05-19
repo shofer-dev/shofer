@@ -27,6 +27,7 @@ import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { openShoferInNewTab } from "../activate/registerCommands"
 import { getCommands } from "../services/command/commands"
 import { getModels } from "../api/providers/fetchers/modelCache"
+import { outputLog } from "../utils/outputChannelLogger"
 
 export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	private readonly outputChannel: vscode.OutputChannel
@@ -51,7 +52,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		if (enableLogging) {
 			this.log = (...args: unknown[]) => {
 				this.outputChannelLog(...args)
-				console.log(args)
+				outputLog(args)
 			}
 
 			this.logfile = path.join(os.tmpdir(), "shofer-code-messages.log")

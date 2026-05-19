@@ -66,6 +66,7 @@ import { sleepTool } from "../tools/SleepTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
+import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -118,8 +119,8 @@ export async function presentAssistantMessage(shofer: Task) {
 		// This provides 80-90% reduction in cloning overhead (5-100ms saved per block).
 		block = { ...shofer.assistantMessageContent[shofer.currentStreamingContentIndex] }
 	} catch (error) {
-		console.error(`ERROR cloning block:`, error)
-		console.error(
+		outputError(`ERROR cloning block:`, error)
+		outputError(
 			`Block content:`,
 			JSON.stringify(shofer.assistantMessageContent[shofer.currentStreamingContentIndex], null, 2),
 		)
@@ -161,7 +162,7 @@ export async function presentAssistantMessage(shofer: Task) {
 
 			const pushToolResult = (content: ToolResponse, feedbackImages?: string[]) => {
 				if (hasToolResult) {
-					console.warn(
+					outputWarn(
 						`[presentAssistantMessage] Skipping duplicate tool_result for mcp_tool_use: ${toolCallId}`,
 					)
 					return
@@ -523,7 +524,7 @@ export async function presentAssistantMessage(shofer: Task) {
 			const pushToolResult = (content: ToolResponse) => {
 				// Native tool calling: only allow ONE tool_result per tool call
 				if (hasToolResult) {
-					console.warn(
+					outputWarn(
 						`[presentAssistantMessage] Skipping duplicate tool_result for tool_use_id: ${toolCallId}`,
 					)
 					return
@@ -929,7 +930,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					// multiple attempt_completion calls in a single response (common after delegation).
 					// Only execute the FIRST attempt_completion and skip subsequent ones.
 					if (shofer.didExecuteAttemptCompletion) {
-						console.log(
+						outputLog(
 							`[presentAssistantMessage] Skipping duplicate attempt_completion (tool_use_id: ${toolCallId})`,
 						)
 						pushToolResult(
@@ -1150,7 +1151,7 @@ export async function presentAssistantMessage(shofer: Task) {
 											? parseParamsError.message
 											: String(parseParamsError)
 									const message = `Custom tool "${block.name}" argument validation failed: ${errMsg}`
-									console.error(message)
+									outputError(message)
 									shofer.consecutiveMistakeCount++
 									await shofer.say("error", message)
 									pushToolResult(formatResponse.toolError(message))
@@ -1163,7 +1164,7 @@ export async function presentAssistantMessage(shofer: Task) {
 								task: shofer,
 							})
 
-							console.log(
+							outputLog(
 								`${customTool.name}.execute(): ${JSON.stringify(customToolArgs)} -> ${JSON.stringify(result)}`,
 							)
 
@@ -1312,7 +1313,7 @@ async function checkpointSaveAndMark(task: Task) {
 		await task.checkpointSave(true)
 		task.currentStreamingDidCheckpoint = true
 	} catch (error) {
-		console.error(
+		outputError(
 			`[Task#presentAssistantMessage] Error saving checkpoint: ${error instanceof Error ? error.message : String(error)}`,
 			error,
 		)

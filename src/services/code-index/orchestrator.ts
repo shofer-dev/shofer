@@ -9,6 +9,7 @@ import { GitSource } from "./git/git-source"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { t } from "../../i18n"
+import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
 
 /**
  * Manages the code indexing workflow, coordinating between different services and managers.
@@ -68,7 +69,7 @@ export class CodeIndexOrchestrator {
 				}),
 				this.fileWatcher.onDidFinishBatchProcessing((summary: BatchProcessingSummary) => {
 					if (summary.batchError) {
-						console.error(`[CodeIndexOrchestrator] Batch processing failed:`, summary.batchError)
+						outputError(`[CodeIndexOrchestrator] Batch processing failed:`, summary.batchError)
 					} else {
 						const successCount = summary.processedFiles.filter(
 							(f: { status: string }) => f.status === "success",
@@ -80,7 +81,7 @@ export class CodeIndexOrchestrator {
 				}),
 			]
 		} catch (error) {
-			console.error("[CodeIndexOrchestrator] Failed to start file watcher:", error)
+			outputError("[CodeIndexOrchestrator] Failed to start file watcher:", error)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
@@ -101,13 +102,13 @@ export class CodeIndexOrchestrator {
 		// Check if workspace is available first
 		if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
 			this.stateManager.setSystemState("Error", t("embeddings:orchestrator.indexingRequiresWorkspace"))
-			console.warn("[CodeIndexOrchestrator] Start rejected: No workspace folder open.")
+			outputWarn("[CodeIndexOrchestrator] Start rejected: No workspace folder open.")
 			return
 		}
 
 		if (!this.configManager.isFeatureConfigured) {
 			this.stateManager.setSystemState("Standby", "Missing configuration. Save your settings to start indexing.")
-			console.warn("[CodeIndexOrchestrator] Start rejected: Missing configuration.")
+			outputWarn("[CodeIndexOrchestrator] Start rejected: Missing configuration.")
 			return
 		}
 
@@ -117,7 +118,7 @@ export class CodeIndexOrchestrator {
 				this.stateManager.state !== "Error" &&
 				this.stateManager.state !== "Indexed")
 		) {
-			console.warn(
+			outputWarn(
 				`[CodeIndexOrchestrator] Start rejected: Already processing or in state ${this.stateManager.state}.`,
 			)
 			return
@@ -149,7 +150,7 @@ export class CodeIndexOrchestrator {
 			if (hasExistingData && !collectionCreated) {
 				// Collection exists with data - run incremental scan to catch any new/changed files
 				// This handles files added while workspace was closed or Qdrant was inactive
-				console.log(
+				outputLog(
 					"[CodeIndexOrchestrator] Collection already has indexed data. Running incremental scan for new/changed files...",
 				)
 				this.stateManager.setSystemState("Indexing", "Checking for new or modified files...")
@@ -224,7 +225,7 @@ export class CodeIndexOrchestrator {
 									)
 								}
 							} catch (e) {
-								console.warn(
+								outputWarn(
 									`[CodeIndexOrchestrator] Submodule diff failed for ${subPath}: ` +
 										(e instanceof Error ? e.message : String(e)),
 								)
@@ -237,7 +238,7 @@ export class CodeIndexOrchestrator {
 						const deletedSet = new Set(allDeleted)
 
 						if (changedSet.size > 0 || deletedSet.size > 0) {
-							console.log(
+							outputLog(
 								`[CodeIndexOrchestrator] Git diff: ${changedSet.size} changed, ${deletedSet.size} deleted since ${meta.lastIndexedCommit.slice(0, 8)}`,
 							)
 
@@ -274,7 +275,7 @@ export class CodeIndexOrchestrator {
 							return
 						}
 					} catch (e) {
-						console.warn(
+						outputWarn(
 							`[CodeIndexOrchestrator] Git diff failed, falling back to full incremental scan: ` +
 								(e instanceof Error ? e.message : String(e)),
 						)
@@ -293,7 +294,7 @@ export class CodeIndexOrchestrator {
 				const result = await this.scanner.scanDirectory(
 					this.workspacePath,
 					(batchError: Error) => {
-						console.error(
+						outputError(
 							`[CodeIndexOrchestrator] Error during incremental scan batch: ${batchError.message}`,
 							batchError,
 						)
@@ -317,11 +318,11 @@ export class CodeIndexOrchestrator {
 
 				// If new files were found and indexed, log the results
 				if (cumulativeBlocksFoundSoFar > 0) {
-					console.log(
+					outputLog(
 						`[CodeIndexOrchestrator] Incremental scan completed: ${cumulativeBlocksIndexed} blocks indexed from new/changed files`,
 					)
 				} else {
-					console.log("[CodeIndexOrchestrator] No new or changed files found")
+					outputLog("[CodeIndexOrchestrator] No new or changed files found")
 				}
 
 				await this._startWatcher()
@@ -357,7 +358,7 @@ export class CodeIndexOrchestrator {
 				const result = await this.scanner.scanDirectory(
 					this.workspacePath,
 					(batchError: Error) => {
-						console.error(
+						outputError(
 							`[CodeIndexOrchestrator] Error during initial scan batch: ${batchError.message}`,
 							batchError,
 						)
@@ -431,14 +432,14 @@ export class CodeIndexOrchestrator {
 		} catch (error: any) {
 			// Handle abort gracefully — not an error, just a user-initiated stop
 			if (error?.name === "AbortError" || signal.aborted) {
-				console.log("[CodeIndexOrchestrator] Indexing aborted by user.")
+				outputLog("[CodeIndexOrchestrator] Indexing aborted by user.")
 				await this.cacheManager.flush()
 				this.stopWatcher()
 				this.stateManager.setSystemState("Standby", t("embeddings:orchestrator.indexingStopped"))
 				return
 			}
 
-			console.error("[CodeIndexOrchestrator] Error during indexing:", error)
+			outputError("[CodeIndexOrchestrator] Error during indexing:", error)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
@@ -448,7 +449,7 @@ export class CodeIndexOrchestrator {
 				try {
 					await this.vectorStore.clearCollection()
 				} catch (cleanupError) {
-					console.error("[CodeIndexOrchestrator] Failed to clean up after error:", cleanupError)
+					outputError("[CodeIndexOrchestrator] Failed to clean up after error:", cleanupError)
 					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 						error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
 						stack: cleanupError instanceof Error ? cleanupError.stack : undefined,
@@ -462,12 +463,12 @@ export class CodeIndexOrchestrator {
 			if (indexingStarted) {
 				// Indexing started but failed mid-way - clear cache to avoid cache-Qdrant mismatch
 				await this.cacheManager.clearCacheFile()
-				console.log(
+				outputLog(
 					"[CodeIndexOrchestrator] Indexing failed after starting. Clearing cache to avoid inconsistency.",
 				)
 			} else {
 				// Never connected to Qdrant - preserve cache for future incremental scan
-				console.log(
+				outputLog(
 					"[CodeIndexOrchestrator] Failed to connect to Qdrant. Preserving cache for future incremental scan.",
 				)
 			}
@@ -525,10 +526,10 @@ export class CodeIndexOrchestrator {
 				if (this.configManager.isFeatureConfigured) {
 					await this.vectorStore.deleteCollection()
 				} else {
-					console.warn("[CodeIndexOrchestrator] Service not configured, skipping vector collection clear.")
+					outputWarn("[CodeIndexOrchestrator] Service not configured, skipping vector collection clear.")
 				}
 			} catch (error: any) {
-				console.error("[CodeIndexOrchestrator] Failed to clear vector collection:", error)
+				outputError("[CodeIndexOrchestrator] Failed to clear vector collection:", error)
 				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 					error: error instanceof Error ? error.message : String(error),
 					stack: error instanceof Error ? error.stack : undefined,

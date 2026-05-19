@@ -5,6 +5,7 @@ import debounce from "lodash.debounce"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName, codebaseIndexCacheSchema, type CodebaseIndexCacheEntry } from "@shofer/types"
+import { outputError } from "../../utils/outputChannelLogger"
 
 /**
  * Manages the cache for code indexing.
@@ -85,7 +86,7 @@ export class CacheManager implements ICacheManager {
 				entries: this.entries,
 			})
 		} catch (error) {
-			console.error("Failed to save cache:", error)
+			outputError("Failed to save cache:", error)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
@@ -102,7 +103,7 @@ export class CacheManager implements ICacheManager {
 			await safeWriteJson(this.cachePath.fsPath, { version: 3, entries: {} })
 			this.entries = {}
 		} catch (error) {
-			console.error("Failed to clear cache file:", error, this.cachePath)
+			outputError("Failed to clear cache file:", error, this.cachePath)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,

@@ -22,6 +22,7 @@ import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
+import { outputWarn } from "../../utils/outputChannelLogger"
 
 interface SedParams {
 	path: string
@@ -142,7 +143,7 @@ export class SedTool extends BaseTool<"sed"> {
 			try {
 				await task.fileContextTracker?.captureOriginal(relPath, originalContent)
 			} catch (err) {
-				console.warn(`[SedTool] captureOriginal failed for ${relPath}:`, err)
+				outputWarn(`[SedTool] captureOriginal failed for ${relPath}:`, err)
 			}
 
 			if (isPreventFocusDisruptionEnabled) {

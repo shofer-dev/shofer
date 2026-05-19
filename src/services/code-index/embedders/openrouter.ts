@@ -13,6 +13,7 @@ import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { Mutex } from "async-mutex"
 import { handleOpenAIError } from "../../../api/providers/utils/openai-error-handler"
+import { outputError, outputWarn } from "../../../utils/outputChannelLogger"
 
 // Default provider name when no specific provider is selected
 export const OPENROUTER_DEFAULT_PROVIDER_NAME = "[default]"
@@ -109,7 +110,7 @@ export class OpenRouterEmbedder implements IEmbedder {
 					const prefixedText = `${queryPrefix}${text}`
 					const estimatedTokens = Math.ceil(prefixedText.length / 4)
 					if (estimatedTokens > MAX_ITEM_TOKENS) {
-						console.warn(
+						outputWarn(
 							t("embeddings:textWithPrefixExceedsTokenLimit", {
 								index,
 								estimatedTokens,
@@ -137,7 +138,7 @@ export class OpenRouterEmbedder implements IEmbedder {
 				const itemTokens = Math.ceil(text.length / 4)
 
 				if (itemTokens > this.maxItemTokens) {
-					console.warn(
+					outputWarn(
 						t("embeddings:textExceedsTokenLimit", {
 							index: i,
 							itemTokens,
@@ -262,7 +263,7 @@ export class OpenRouterEmbedder implements IEmbedder {
 						const globalDelay = await this.getGlobalRateLimitDelay()
 						const delayMs = Math.max(baseDelay, globalDelay)
 
-						console.warn(
+						outputWarn(
 							t("embeddings:rateLimitRetry", {
 								delayMs,
 								attempt: attempts + 1,
@@ -275,7 +276,7 @@ export class OpenRouterEmbedder implements IEmbedder {
 				}
 
 				// Log the error for debugging
-				console.error(`OpenRouter embedder error (attempt ${attempts + 1}/${MAX_RETRIES}):`, error)
+				outputError(`OpenRouter embedder error (attempt ${attempts + 1}/${MAX_RETRIES}):`, error)
 
 				// Format and throw the error
 				throw formatEmbeddingError(error, MAX_RETRIES)

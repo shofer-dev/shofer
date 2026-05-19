@@ -13,6 +13,7 @@ import type {
 import { ShoferEventName, isTerminalLifecycle, IDLE_TASK_STATE } from "@shofer/types"
 
 import type { Task } from "../../core/task/Task"
+import { outputError } from "../../utils/outputChannelLogger"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 
 interface ManagedTaskNotification {
@@ -395,7 +396,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			if (TaskManager.statesEqual(existing.taskState, state)) return
 			await provider.updateTaskHistory({ ...existing, taskState: state })
 		} catch (err) {
-			console.error(
+			outputError(
 				`[TaskManager] Failed to persist taskState for ${targetTaskId}:`,
 				err instanceof Error ? err.message : String(err),
 			)
