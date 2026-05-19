@@ -64,22 +64,24 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				})
 			: texts
 
-		// Defence-in-depth: truncate individual items whose estimated token
-		// count exceeds MAX_ITEM_TOKENS.  Callers (git-log-extractor, code
-		// parser) apply their own character-level truncation, but the length/4
-		// heuristic can under-count for non-Latin scripts and dense code.
-		// This is the last-resort guard matching the per-item check in the
-		// OpenAI embedder (openai.ts:87-101).
-		const MAX_SAFE_CHARS = MAX_ITEM_TOKENS * 4
+		// Defence-in-depth: enforce a hard character cap so a single oversized
+		// item cannot exceed the Ollama runtime context window (num_ctx, set
+		// explicitly below).  Assume English text/code at ~3 chars/token — more
+		// conservative than the length/4 heuristic used elsewhere (which under-
+		// counts for punctuation-dense code) but not as pessimistic as 1 char/
+		// token (which would only be needed for CJK).  The detection check uses
+		// the same 3 chars/token ratio so the trigger and the cap agree.
+		const CHARS_PER_TOKEN_ENGLISH = 3
+		const MAX_SAFE_CHARS = MAX_ITEM_TOKENS * CHARS_PER_TOKEN_ENGLISH
 		const processedTexts = prefixedTexts.map((text, index) => {
-			const estimatedTokens = Math.ceil(text.length / 4)
-			if (estimatedTokens > MAX_ITEM_TOKENS) {
+			if (text.length > MAX_SAFE_CHARS) {
 				const originalLen = text.length
 				const truncated = text.substring(0, MAX_SAFE_CHARS)
 				console.warn(
 					`[OllamaEmbedder] Defence-in-depth truncation: item ${index} ` +
-						`estimated ${estimatedTokens} tokens > ${MAX_ITEM_TOKENS} max, ` +
-						`truncated from ${originalLen} to ${truncated.length} chars`,
+						`length ${originalLen} chars > ${MAX_SAFE_CHARS} cap ` +
+						`(MAX_ITEM_TOKENS=${MAX_ITEM_TOKENS} × ${CHARS_PER_TOKEN_ENGLISH} chars/token), ` +
+						`truncated to ${truncated.length} chars`,
 				)
 				return truncated
 			}
@@ -101,7 +103,12 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				},
 				body: JSON.stringify({
 					model: modelToUse,
-					input: processedTexts, // Using 'input' as requested
+					input: processedTexts,
+					// Ollama's runtime default num_ctx is 2048 regardless of the model's
+					// nominal context window.  Without this, even a 7000-char input can
+					// exceed the runtime budget and return HTTP 400 "the input length
+					// exceeds the context length".  Set it to match our truncation budget.
+					options: { num_ctx: MAX_ITEM_TOKENS },
 				}),
 				signal: controller.signal,
 			})
