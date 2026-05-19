@@ -9,6 +9,7 @@ vi.mock("../../../../../packages/telemetry/src/TelemetryService", () => ({
 	TelemetryService: {
 		instance: {
 			captureEvent: vi.fn(),
+			captureCodeIndexSegmentDedup: vi.fn(),
 		},
 	},
 }))
@@ -109,6 +110,7 @@ describe("FileWatcher", () => {
 			updateEntry: vi.fn(),
 			deleteHash: vi.fn(),
 			getAllPaths: vi.fn().mockReturnValue([]),
+			getSegmentHashes: vi.fn().mockReturnValue(new Set()),
 		}
 
 		mockEmbedder = {
@@ -119,6 +121,7 @@ describe("FileWatcher", () => {
 			upsertPoints: vi.fn().mockResolvedValue(undefined),
 			deletePointsByFilePath: vi.fn().mockResolvedValue(undefined),
 			deletePointsByMultipleFilePaths: vi.fn().mockResolvedValue(undefined),
+			deletePointsByIds: vi.fn().mockResolvedValue(undefined),
 		}
 
 		mockIgnoreInstance = {
@@ -337,12 +340,14 @@ describe("FileWatcher", () => {
 				hash: contentHash,
 				mtimeMs: result.newMtimeMs!,
 				size: result.newSize!,
+				segmentHashes: result.newSegmentHashes ?? [],
 			})
 
 			expect(mockCacheManager.updateEntry).toHaveBeenCalledWith("/mock/workspace/src/test.ts", {
 				hash: contentHash,
 				mtimeMs: 1715952000000,
 				size: 2048,
+				segmentHashes: ["seg-1"],
 			})
 		})
 
@@ -374,6 +379,7 @@ describe("FileWatcher", () => {
 				hash: contentHash,
 				mtimeMs: 1715953000000,
 				size: 1024,
+				segmentHashes: [],
 			})
 		})
 	})

@@ -98,6 +98,12 @@ export interface IVectorStore {
 	markIndexingIncomplete(): Promise<void>
 
 	/**
+	 * Deletes specific points by their Qdrant point IDs.
+	 * @param pointIds Array of point ID strings to delete
+	 */
+	deletePointsByIds(pointIds: string[]): Promise<void>
+
+	/**
 	 * Returns the indexing metadata point, or undefined if none exists.
 	 */
 	getMetadata(): Promise<IndexingMetadata | undefined>

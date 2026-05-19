@@ -580,6 +580,25 @@ export class QdrantVectorStore implements IVectorStore {
 	}
 
 	/**
+	 * Deletes points by their Qdrant point IDs.
+	 * Used by the file watcher for targeted deletion of stale segment points
+	 * during per-segment deduplication.
+	 *
+	 * Throws on failure (consistent with `deletePointsByMultipleFilePaths`) so
+	 * callers can surface the error to telemetry and `overallBatchError`
+	 * rather than silently leaving stale points in the index.
+	 */
+	async deletePointsByIds(pointIds: string[]): Promise<void> {
+		if (pointIds.length === 0) return
+		const collectionExists = await this.collectionExists()
+		if (!collectionExists) return
+		await this.client.delete(this.collectionName, {
+			points: pointIds,
+			wait: true,
+		})
+	}
+
+	/**
 	 * Deletes the entire collection.
 	 */
 	async deleteCollection(): Promise<void> {

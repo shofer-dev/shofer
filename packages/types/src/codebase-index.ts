@@ -193,12 +193,13 @@ export const codebaseIndexCacheEntrySchema = z.object({
 	hash: z.string(),
 	mtimeMs: z.number(),
 	size: z.number(),
+	segmentHashes: z.array(z.string()),
 })
 
 export type CodebaseIndexCacheEntry = z.infer<typeof codebaseIndexCacheEntrySchema>
 
 export const codebaseIndexCacheSchema = z.object({
-	version: z.literal(2),
+	version: z.literal(3),
 	entries: z.record(z.string(), codebaseIndexCacheEntrySchema),
 })
 

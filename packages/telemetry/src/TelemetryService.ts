@@ -301,6 +301,24 @@ export class TelemetryService {
 		return TELEMETRY_ENABLED
 	}
 
+	/**
+	 * Captures per-batch segment deduplication stats from the code-index
+	 * file watcher so we can verify the per-segment dedup optimization
+	 * in production.
+	 *
+	 * Aggregated across all files in a single batch to keep cardinality
+	 * bounded and avoid leaking individual file paths to telemetry.
+	 */
+	public captureCodeIndexSegmentDedup(properties: {
+		fileCount: number
+		totalBlocks: number
+		reused: number
+		embedded: number
+		deleted: number
+	}): void {
+		this.captureEvent(TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP, properties)
+	}
+
 	public async shutdown(): Promise<void> {
 		if (!this.isReady) {
 			return

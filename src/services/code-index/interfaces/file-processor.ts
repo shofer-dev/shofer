@@ -122,6 +122,10 @@ export interface FileProcessingResult {
 	newHash?: string
 	newMtimeMs?: number
 	newSize?: number
+	/** New segment hashes after parsing (used for per-segment dedup cache). */
+	newSegmentHashes?: string[]
+	/** Qdrant point IDs of stale segments to delete (previous hashes not in new set). */
+	staleSegmentIds?: string[]
 	pointsToUpsert?: PointStruct[]
 }
 
