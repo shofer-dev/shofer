@@ -109,8 +109,13 @@ export class GitHistoryOrchestrator {
 			// 3. Full scan: extract all commits within the configured window
 			this.stateManager.setSystemState("Indexing", "Extracting git commit history...")
 
-			const commits = await this._extractFromAllRepos((repo) =>
-				this._logExtractor.extractCommits(repo, effectiveMaxDays, effectiveMaxCommits, this._branch),
+			const commits = await this._extractFromAllRepos((repo, isParent) =>
+				this._logExtractor.extractCommits(
+					repo,
+					effectiveMaxDays,
+					effectiveMaxCommits,
+					isParent ? this._branch : "",
+				),
 			)
 
 			if (commits.length === 0) {
@@ -187,16 +192,21 @@ export class GitHistoryOrchestrator {
 	 * (e.g. cherry-picked across parent/submodule). Because the Qdrant point ID
 	 * is `uuidv5(commit_hash, NAMESPACE)`, such duplicates resolve to the same
 	 * point and the second upsert is a benign no-op — content is identical.
+	 *
+	 * The `isParent` flag passed to `extract` lets callers apply the
+	 * configured branch only to the parent repo. Submodules almost never have
+	 * a ref matching the parent's branch name, so they must always be polled
+	 * with their own HEAD.
 	 */
 	private async _extractFromAllRepos(
-		extract: (repoAbsPath: string) => Promise<GitCommitBlock[]>,
+		extract: (repoAbsPath: string, isParent: boolean) => Promise<GitCommitBlock[]>,
 	): Promise<GitCommitBlock[]> {
 		const submoduleDisplayPaths = await listSubmoduleDisplayPaths(this.workspacePath)
 		const repoPaths = [this.workspacePath, ...submoduleDisplayPaths.map((p) => path.resolve(this.workspacePath, p))]
 		const perRepo = await Promise.all(
-			repoPaths.map(async (repo) => {
+			repoPaths.map(async (repo, idx) => {
 				try {
-					return await extract(repo)
+					return await extract(repo, idx === 0)
 				} catch (err) {
 					logger.warn(`${LOG_PREFIX} Commit extraction failed for ${repo}: ${err}`, {
 						ctx: "git-index",
@@ -219,12 +229,12 @@ export class GitHistoryOrchestrator {
 		if (this._isProcessing) return
 
 		try {
-			const incrementalCommits = await this._extractFromAllRepos((repo) =>
+			const incrementalCommits = await this._extractFromAllRepos((repo, isParent) =>
 				this._logExtractor.extractCommitsSince(
 					repo,
 					sinceDate,
 					500, // Safety cap for catch-up
-					this._branch,
+					isParent ? this._branch : "",
 				),
 			)
 
@@ -322,7 +332,26 @@ export class GitHistoryOrchestrator {
 			}
 		})
 
-		this._watcher.start(() => this.cacheManager.lastCommitDate, this._branch)
+		this._watcher.start(
+			() => this.cacheManager.lastCommitDate,
+			// Lazy getter so Settings → Save changes to `codebaseIndexGitBranch`
+			// (propagated via updateBranch() from GitIndexManager) take effect on
+			// the next poll tick without restarting the watcher.
+			() => this._branch,
+		)
+	}
+
+	/**
+	 * Update the configured branch without restarting the indexing pipeline.
+	 * Called from `GitIndexManager.handleSettingsChange` whenever the
+	 * `codebaseIndexGitBranch` setting changes. The new value is picked up by
+	 * the watcher on its next poll tick (via the `getBranch` getter passed in
+	 * `_startWatcher`). In-flight full scans and catch-ups already running
+	 * continue with the previous value — acceptable because they finish
+	 * within seconds and the watcher will reconcile any drift incrementally.
+	 */
+	public updateBranch(branch: string): void {
+		this._branch = branch
 	}
 
 	/**

@@ -401,6 +401,15 @@ export class GitIndexManager {
 				}
 				throw error
 			}
+		} else {
+			// Branch (and other git-specific) settings are not tracked by
+			// CodeIndexConfigManager.loadConfiguration() — its dirty check
+			// only covers the embedder/vector-store fields that warrant a
+			// full service rebuild. Propagate the current branch to the
+			// orchestrator unconditionally so a Settings → Save with only a
+			// branch change is picked up by the watcher on its next poll
+			// tick (via the lazy getter wired in _startWatcher).
+			this._orchestrator?.updateBranch(this._readGitConfig("codebaseIndexGitBranch", "master"))
 		}
 	}
 
