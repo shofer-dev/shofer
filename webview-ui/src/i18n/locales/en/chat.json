@@ -306,6 +306,7 @@
 		"youSaid": "You said"
 	},
 	"mcp": {
+		"asyncBadge": "async",
 		"wantsToUseTool": "Shofer wants to use a tool on the {{serverName}} MCP server",
 		"wantsToAccessResource": "Shofer wants to access a resource on the {{serverName}} MCP server",
 		"wantsToUseExternalTool": "Shofer wants to use the {{toolName}} tool from {{serverName}}"

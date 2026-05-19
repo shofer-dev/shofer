@@ -1,4 +1,5 @@
 import type { ShoferAskUseMcpServer } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { Task, type McpAsyncCallHandle } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
@@ -98,6 +99,12 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 
 			task.mcpAsyncCalls.set(callId, handle)
 
+			TelemetryService.instance.captureMcpAsyncCallStarted(task.taskId, {
+				callId,
+				serverName,
+				toolName: resolvedToolName,
+			})
+
 			// Attach finalizer: update status when the promise settles.
 			// The handle is canonical state; ignore late settles after an external
 			// abort flipped status to "cancelled" (see Task.abortTask).
@@ -111,11 +118,25 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 						handle.status = "error"
 						handle.error = "MCP server returned no response"
 					}
+					TelemetryService.instance.captureMcpAsyncCallCompleted(task.taskId, {
+						callId,
+						serverName,
+						toolName: resolvedToolName,
+						isError: handle.status === "error" || Boolean(result?.isError),
+						durationMs: Date.now() - handle.createdAt,
+					})
 				})
 				.catch((err) => {
 					if (handle.status !== "running") return
 					handle.status = "error"
 					handle.error = err instanceof Error ? err.message : String(err)
+					TelemetryService.instance.captureMcpAsyncCallCompleted(task.taskId, {
+						callId,
+						serverName,
+						toolName: resolvedToolName,
+						isError: true,
+						durationMs: Date.now() - handle.createdAt,
+					})
 				})
 
 			pushToolResult(
