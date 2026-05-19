@@ -87,9 +87,13 @@ export interface IGitWatcher extends vscode.Disposable {
 	 * @param getLastCommitDate - Lazy getter for the ISO 8601 date of the most
 	 *   recent indexed commit. Called on each poll tick so the watcher always
 	 *   uses the freshest boundary.
-	 * @param branch - Git ref (branch name) to index; empty string = HEAD
+	 * @param getBranch - Lazy getter for the configured git ref (branch name).
+	 *   Called on each poll tick so changes to the `codebaseIndexGitBranch`
+	 *   setting take effect on the next tick without restarting the watcher.
+	 *   Empty string = HEAD. Applied to the parent repo only — submodules are
+	 *   always polled with their own HEAD.
 	 */
-	start(getLastCommitDate: () => string | undefined, branch: string): void
+	start(getLastCommitDate: () => string | undefined, getBranch: () => string): void
 
 	/** Stop polling. */
 	stop(): void
