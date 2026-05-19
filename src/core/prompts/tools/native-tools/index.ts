@@ -42,6 +42,9 @@ import waitForTask from "./wait_for_task"
 import listBackgroundTasks from "./list_background_tasks"
 import cancelTasks from "./cancel_tasks"
 import answerSubtaskQuestion from "./answer_subtask_question"
+import callMcpToolAsync from "./call_mcp_tool_async"
+import checkMcpCallStatus from "./check_mcp_call_status"
+import waitForMcpCall from "./wait_for_mcp_call"
 import sed from "./sed"
 import sleep from "./sleep"
 import viewImage from "./view_image"
@@ -115,6 +118,9 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		listBackgroundTasks,
 		cancelTasks,
 		answerSubtaskQuestion,
+		callMcpToolAsync,
+		checkMcpCallStatus,
+		waitForMcpCall,
 		updateTodoList,
 		sed,
 		sleep,

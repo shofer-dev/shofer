@@ -1,8 +1,7 @@
 import type { ShoferAskUseMcpServer } from "@shofer/types"
 
-import { Task } from "../task/Task"
+import { Task, type McpAsyncCallHandle } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
-import { t } from "../../i18n"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -13,22 +12,6 @@ interface CallMcpToolAsyncParams {
 	tool_name: string
 	arguments?: Record<string, unknown>
 	source?: "global" | "project"
-}
-
-/**
- * Handle for an in-flight async MCP tool call.
- * Exported so that status/result checkers can reference the type.
- */
-export interface McpAsyncCallHandle {
-	callId: string
-	serverName: string
-	toolName: string
-	status: "running" | "completed" | "error" | "cancelled"
-	promise: Promise<any>
-	abortController: AbortController
-	result?: any
-	error?: string
-	createdAt: number
 }
 
 export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
@@ -56,7 +39,13 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 			const toolName = params.tool_name
 
 			// Validate that the tool exists on the server (delegates to shared helper)
-			const toolValidation = await validateMcpToolExists(task, serverName, toolName, pushToolResult)
+			const toolValidation = await validateMcpToolExists(
+				task,
+				serverName,
+				toolName,
+				pushToolResult,
+				"call_mcp_tool_async",
+			)
 			if (!toolValidation.isValid) {
 				return
 			}
@@ -91,6 +80,7 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 				serverName,
 				toolName: resolvedToolName,
 				args: params.arguments,
+				source: params.source,
 				executionId,
 				signal: abortController.signal,
 			})
@@ -108,13 +98,22 @@ export class CallMcpToolAsyncTool extends BaseTool<"call_mcp_tool_async"> {
 
 			task.mcpAsyncCalls.set(callId, handle)
 
-			// Attach finalizer: update status when the promise settles
+			// Attach finalizer: update status when the promise settles.
+			// The handle is canonical state; ignore late settles after an external
+			// abort flipped status to "cancelled" (see Task.abortTask).
 			mcpPromise
 				.then((result) => {
-					handle.status = result ? "completed" : "error"
-					handle.result = result
+					if (handle.status !== "running") return
+					if (result) {
+						handle.status = "completed"
+						handle.result = result
+					} else {
+						handle.status = "error"
+						handle.error = "MCP server returned no response"
+					}
 				})
 				.catch((err) => {
+					if (handle.status !== "running") return
 					handle.status = "error"
 					handle.error = err instanceof Error ? err.message : String(err)
 				})

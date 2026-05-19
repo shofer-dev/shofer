@@ -1,4 +1,4 @@
-import type { McpExecutionStatus, McpToolCallResponse } from "@shofer/types"
+import type { McpExecutionStatus, McpToolCallResponse, ToolName } from "@shofer/types"
 
 import type { Task } from "../../task/Task"
 import { formatResponse } from "../../prompts/responses"
@@ -21,13 +21,16 @@ export interface McpToolValidationResult {
  * `use_mcp_tool` path and the async `call_mcp_tool_async` path.
  *
  * Mutates `task` state on validation failure (increments mistake counters,
- * pushes error messages).
+ * pushes error messages). The `callingToolName` parameter is the native tool
+ * whose execution triggered this validation; it is forwarded to
+ * `task.recordToolError` so per-tool error accounting stays accurate.
  */
 export async function validateMcpToolExists(
 	task: Task,
 	serverName: string,
 	toolName: string,
 	pushToolResult: (content: string) => void,
+	callingToolName: ToolName = "use_mcp_tool",
 ): Promise<McpToolValidationResult> {
 	try {
 		const provider = task.providerRef.deref()
@@ -46,7 +49,7 @@ export async function validateMcpToolExists(
 				availableServersArray.length > 0 ? availableServersArray.join(", ") : "No servers available"
 
 			task.consecutiveMistakeCount++
-			task.recordToolError("use_mcp_tool")
+			task.recordToolError(callingToolName)
 			await task.say("error", t("mcp:errors.serverNotFound", { serverName, availableServers }))
 			task.didToolFailInCurrentTurn = true
 
@@ -56,7 +59,7 @@ export async function validateMcpToolExists(
 
 		if (!server.tools || server.tools.length === 0) {
 			task.consecutiveMistakeCount++
-			task.recordToolError("use_mcp_tool")
+			task.recordToolError(callingToolName)
 			await task.say(
 				"error",
 				t("mcp:errors.toolNotFound", {
@@ -77,7 +80,7 @@ export async function validateMcpToolExists(
 			const availableToolNames = server.tools.map((t) => t.name)
 
 			task.consecutiveMistakeCount++
-			task.recordToolError("use_mcp_tool")
+			task.recordToolError(callingToolName)
 			await task.say(
 				"error",
 				t("mcp:errors.toolNotFound", {
@@ -97,7 +100,7 @@ export async function validateMcpToolExists(
 			const enabledToolNames = enabledTools.map((t) => t.name)
 
 			task.consecutiveMistakeCount++
-			task.recordToolError("use_mcp_tool")
+			task.recordToolError(callingToolName)
 			await task.say(
 				"error",
 				t("mcp:errors.toolDisabled", {
@@ -172,11 +175,12 @@ export async function runMcpToolCall(
 		serverName: string
 		toolName: string
 		args?: Record<string, unknown>
+		source?: "global" | "project"
 		executionId: string
 		signal?: AbortSignal
 	},
 ): Promise<McpToolCallResponse | undefined> {
-	const { serverName, toolName, args, executionId, signal } = opts
+	const { serverName, toolName, args, source, executionId, signal } = opts
 
 	await task.say("mcp_server_request_started")
 
@@ -192,7 +196,7 @@ export async function runMcpToolCall(
 	const toolResult = await task.providerRef
 		.deref()
 		?.getMcpHub()
-		?.callTool(serverName, toolName, args, undefined, task.taskId, signal ?? task.abortSignal)
+		?.callTool(serverName, toolName, args, source, task.taskId, signal ?? task.abortSignal)
 
 	let toolResultPretty = "(No response)"
 	let images: string[] = []
