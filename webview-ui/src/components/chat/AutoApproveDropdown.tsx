@@ -1,5 +1,6 @@
 import React from "react"
 import { ListChecks, LayoutList, Settings, CheckCheck, X } from "lucide-react"
+import { DEFAULT_MODES } from "@shofer/types"
 
 import { vscode } from "@/utils/vscode"
 
@@ -22,19 +23,24 @@ import { AutoApproveSetting, autoApproveSettingsConfig } from "../settings/AutoA
  * Resolve the set of ToolGroup names accessible to the current mode.
  *
  * Mode group entries can be bare strings ("read") or tuples
- * (["write", { fileRegex: "..." }]). This extracts just the group name
- * from each entry.
+ * (["write", { fileRegex: "..." }]), or scoped objects
+ * ({ read: { allowed: [...], denied: [...] } }).
+ * This extracts just the group name from each entry.
+ *
+ * Derived from the canonical DEFAULT_MODES in @shofer/types rather than
+ * a hard-coded copy, so the auto-approval dropdown stays in sync with
+ * mode definitions automatically.
  */
 function getModeAllowedGroups(
 	modeSlug: string | undefined,
 	customModes: Array<{ slug: string; groups?: Array<string | [string, unknown]> }> | undefined,
 ): Set<string> {
-	const DEFAULT_MODE_GROUPS: Record<string, string[]> = {
-		code: ["read", "write", "execute", "mcp"],
-		architect: ["read", "write", "mcp"],
-		ask: ["read", "mcp"],
-		debug: ["read", "write", "execute", "mcp"],
-		orchestrator: [],
+	// Build the default-mode group map from the single source of truth.
+	const defaultModeGroups: Record<string, string[]> = {}
+	for (const m of DEFAULT_MODES) {
+		defaultModeGroups[m.slug] = (m.groups ?? []).map((g) =>
+			typeof g === "string" ? g : Array.isArray(g) ? g[0] : Object.keys(g)[0]!,
+		)
 	}
 
 	// Check custom modes first
@@ -49,7 +55,7 @@ function getModeAllowedGroups(
 	// If the slug is unrecognised (e.g. a custom mode without groups in
 	// customModes), show all toggles rather than hiding everything.
 	const slug = modeSlug ?? "code"
-	const defaults = DEFAULT_MODE_GROUPS[slug]
+	const defaults = defaultModeGroups[slug]
 	if (!defaults) {
 		return new Set(Object.values(autoApproveSettingsConfig).map((c) => c.toolGroup))
 	}
