@@ -13,7 +13,7 @@ CodeIndexManager (singleton per workspace)
  ├── CodeIndexConfigManager       — reads/writes settings & secrets
  ├── CodeIndexStateManager        — UI progress events
  │                                   (IndexingState: Standby|Indexing|Indexed|Error|Stopping)
- ├── CacheManager                 — file hash cache (SHA-256 per file, stored in VS Code globalStorage, NOT on Qdrant PVC)
+ ├── CacheManager                 — per-file cache (v3: hash + mtimeMs + size + segmentHashes, stored in VS Code globalStorage, NOT on Qdrant PVC)
  ├── CodeIndexServiceFactory      — creates embedder, vector-store, scanner, parser, file-watcher
  ├── CodeIndexOrchestrator        — drives the indexing workflow (scan → watch)
  │    ├── DirectoryScanner        — walks files, parses, batches embeddings, upserts to Qdrant
@@ -24,23 +24,23 @@ CodeIndexManager (singleton per workspace)
 
 ### Key Source Files
 
-| File                                                     | Role                                                                                                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/services/code-index/manager.ts`                     | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.     |
-| `src/services/code-index/orchestrator.ts`                | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortController`. Phase 2: git-aware short-circuit before directory walk. |
-| `src/services/code-index/service-factory.ts`             | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                                 |
-| `src/services/code-index/git/git-source.ts`              | Thin wrapper around VS Code built-in Git extension API. Provides `diffSince()`, `discoverSubmodules()`, `diffSubmoduleSince()`.                         |
-| `src/services/code-index/processors/scanner.ts`          | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.       |
-| `src/services/code-index/processors/parser.ts`           | Uses **web-tree-sitter** for AST-aware parsing. Falls back to line-based chunking for unsupported languages. Also handles Markdown via custom parser.   |
-| `src/services/code-index/search-service.ts`              | Embeds query text → searches Qdrant with configurable min score & max results.                                                                          |
-| `src/services/code-index/config-manager.ts`              | Reads settings from `ContextProxy` (global state + secrets). Detects config changes requiring restart.                                                  |
-| `src/services/code-index/state-manager.ts`               | `vscode.EventEmitter`-based progress reporting to UI.                                                                                                   |
-| `src/services/code-index/cache-manager.ts`               | Persists file cache (v2: hash + mtimeMs + size) to skip unchanged files during scans.                                                                   |
-| `src/services/code-index/vector-store/qdrant-client.ts`  | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per workspace. Stores metadata with commit info.                               |
-| `packages/types/src/codebase-index.ts`                   | Zod schemas for config, shared constants, and cache entries.                                                                                            |
-| `src/services/tree-sitter/languageParser.ts`             | Maps file extensions to tree-sitter WASM parsers and language-specific AST queries. Fallthrough to `default:` throws for unsupported extensions.        |
-| `src/services/tree-sitter/queries/`                      | Per-language tree-sitter query files (e.g., `scala.ts`, `css.ts`, `python.ts`) that define AST capture patterns for definitions.                        |
-| `src/services/code-index/shared/supported-extensions.ts` | `fallbackExtensions` — extensions routed to line-based chunking instead of tree-sitter parsing.                                                         |
+| File                                                     | Role                                                                                                                                                             |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/code-index/manager.ts`                     | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.              |
+| `src/services/code-index/orchestrator.ts`                | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortController`. Phase 2: git-aware short-circuit before directory walk.          |
+| `src/services/code-index/service-factory.ts`             | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                                          |
+| `src/services/code-index/git/git-source.ts`              | Thin wrapper around VS Code built-in Git extension API. Provides `diffSince()`, `discoverSubmodules()`, `diffSubmoduleSince()`.                                  |
+| `src/services/code-index/processors/scanner.ts`          | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.                |
+| `src/services/code-index/processors/parser.ts`           | Uses **web-tree-sitter** for AST-aware parsing. Falls back to line-based chunking for unsupported languages. Also handles Markdown via custom parser.            |
+| `src/services/code-index/search-service.ts`              | Embeds query text → searches Qdrant with configurable min score & max results.                                                                                   |
+| `src/services/code-index/config-manager.ts`              | Reads settings from `ContextProxy` (global state + secrets). Detects config changes requiring restart.                                                           |
+| `src/services/code-index/state-manager.ts`               | `vscode.EventEmitter`-based progress reporting to UI.                                                                                                            |
+| `src/services/code-index/cache-manager.ts`               | Persists per-file cache (v3: hash + mtimeMs + size + `segmentHashes[]`) to skip unchanged files during scans and to drive per-segment dedup in the file watcher. |
+| `src/services/code-index/vector-store/qdrant-client.ts`  | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per workspace. Stores metadata with commit info.                                        |
+| `packages/types/src/codebase-index.ts`                   | Zod schemas for config, shared constants, and cache entries.                                                                                                     |
+| `src/services/tree-sitter/languageParser.ts`             | Maps file extensions to tree-sitter WASM parsers and language-specific AST queries. Fallthrough to `default:` throws for unsupported extensions.                 |
+| `src/services/tree-sitter/queries/`                      | Per-language tree-sitter query files (e.g., `scala.ts`, `css.ts`, `python.ts`) that define AST capture patterns for definitions.                                 |
+| `src/services/code-index/shared/supported-extensions.ts` | `fallbackExtensions` — extensions routed to line-based chunking instead of tree-sitter parsing.                                                                  |
 
 ### Language Coverage
 
@@ -87,9 +87,10 @@ Extensions in `fallbackExtensions` ([`supported-extensions.ts`](extensions/shofe
 All interfaces are defined under `src/services/code-index/interfaces/`:
 
 - **`IEmbedder`** (`embedder.ts`) — `createEmbeddings(texts, model?)`, `validateConfiguration()`
-- **`IVectorStore`** (`vector-store.ts`) — `initialize()`, `upsertPoints()`, `search()`, `deletePointsByFilePath()`, `deletePointsByMultipleFilePaths()`, `hasIndexedData()`, `markIndexingComplete/Incomplete()`, `clearCollection()`, `deleteCollection()`, `collectionExists()`
+- **`IVectorStore`** (`vector-store.ts`) — `initialize()`, `upsertPoints()`, `search()`, `deletePointsByFilePath()`, `deletePointsByMultipleFilePaths()`, `deletePointsByIds()` (targeted deletion of stale segment points during per-segment dedup), `hasIndexedData()`, `markIndexingComplete/Incomplete()`, `clearCollection()`, `deleteCollection()`, `collectionExists()`
 - **`ICodeParser`** (`file-processor.ts`) — `parseFile(filePath, options?)` → `CodeBlock[]`
 - **`IFileWatcher`** (`file-processor.ts`) — `initialize()`, `processFile()`, events: `onDidStartBatchProcessing`, `onBatchProgressUpdate`, `onDidFinishBatchProcessing`
+- **`ICodeIndexCacheManager`** (`cache-manager.ts`) — `initialize()`, `getHash(path)`, `getSegmentHashes(path)` (returns `Set<string>` of previously-indexed segment hashes for the file, used by the per-segment dedup path), `updateEntry()`, `deleteEntry()`, `clearCacheFile()`
 - **`ICodeIndexManager`** (`manager.ts`) — public API contract
 
 ### Data Types
@@ -105,7 +106,7 @@ All interfaces are defined under `src/services/code-index/interfaces/`:
 	end_line: number
 	content: string
 	fileHash: string
-	segmentHash: string
+	segmentHash: string // SHA-256(path + line range + content length + content preview); drives per-segment dedup and Qdrant point IDs (uuidv5)
 }
 ```
 
@@ -206,33 +207,34 @@ The system uses **two separate storage locations** for different kinds of data:
 | Data                                                                               | Storage Location                                                                                                                            | Survives Reboot?                                |
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | **Vector embeddings** (in Qdrant)                                                  | Qdrant PVC (`qdrant-storage`, `local-path`) — stored at `/var/lib/rancher/k3s/storage/pvc-<uuid>_shofer_qdrant-storage/`                    | ✓ Yes — persisted on Kubernetes PVC             |
-| **File cache** (v2: hash + mtimeMs + size per file)                                | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
+| **File cache** (v3: hash + mtimeMs + size + segmentHashes per file)                | Local filesystem — VS Code globalStorage directory: `~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<workspace-hash>.json` | ✗ No — stored on laptop filesystem, outside PVC |
 | **Metadata marker** (`indexing_complete`, `lastIndexedCommit`, `submoduleCommits`) | Qdrant collection — a special point with `type: "metadata"` and indexing status + git commit info                                           | ✓ Yes — persisted in Qdrant                     |
 
 #### Cache Location & Format
 
-The `CacheManager` persists a version 2 JSON cache to VS Code's extension global storage directory:
+The `CacheManager` persists a version 3 JSON cache to VS Code's extension global storage directory:
 
 ```
 ~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<sha256-of-workspace-path>.json
 ```
 
-**v2 format** (Phase 1 — stat()-only fast-path):
+**v3 format** (Phase 1 stat() fast-path + per-segment dedup):
 
 ```json
 {
-	"version": 2,
+	"version": 3,
 	"entries": {
 		"src/utils/helpers.ts": {
 			"hash": "a1b2c3d4...",
 			"mtimeMs": 1715952000000,
-			"size": 4096
+			"size": 4096,
+			"segmentHashes": ["e3f1a2...", "9c7d4b..."]
 		}
 	}
 }
 ```
 
-Each entry stores the file's SHA-256 hash, last-modified time (ms), and size (bytes). On startup reconciliation, the scanner calls `stat()` and compares `mtimeMs` and `size` against the cache. If both match, the file is skipped without reading or hashing it. If only the hash matches (mtime changed but content identical — rare cases like `touch`, rebase, rsync -t), the cache entry is updated with the new mtimeMs/size and the file is still skipped. Per the **Versioned Snapshot Rule**, a `version` mismatch discards the entire cache and starts fresh.
+Each entry stores the file's SHA-256 hash, last-modified time (ms), size (bytes), and the list of `segmentHash` values produced by the tree-sitter parser for the file's previously-indexed blocks. On startup reconciliation, the scanner calls `stat()` and compares `mtimeMs` and `size` against the cache. If both match, the file is skipped without reading or hashing it. If only the hash matches (mtime changed but content identical — rare cases like `touch`, rebase, rsync -t), the cache entry is updated with the new mtimeMs/size and the file is still skipped. The `segmentHashes` list drives the **per-segment deduplication** path in the file watcher (see below). Per the **Versioned Snapshot Rule**, a `version` mismatch discards the entire cache and starts fresh — v2 cache files are dropped on load.
 
 This cache file is **NOT** on the Qdrant PVC. It lives on the local filesystem with VS Code's settings.
 
@@ -280,13 +282,37 @@ When a git repository is detected, the orchestrator bypasses the directory walk 
 
 On a 50k-file repo with 3 dirty files, startup reconciliation now issues one `git diff` + one status query and processes 3 files — no directory walk at all.
 
+#### Per-Segment Deduplication (File Watcher)
+
+The full-file SHA-256 is the right signal for **skipping** an unchanged file, but it is far too coarse for **re-indexing** a changed file: if a 2,000-line file gains a single line, the old pipeline re-embedded every block in the file and re-upserted every point, and the historical points for any removed lines were never cleaned up at all.
+
+Per-segment dedup uses the parser's per-block `segmentHash` (`SHA-256(filePath + start_line + end_line + content.length + contentPreview[0:100])`, computed in `parser.ts`) as a stable identity for each indexed segment. The cache's `segmentHashes[]` records which segments the file watcher last persisted to Qdrant for a given file.
+
+When [`FileWatcher.processFile()`](extensions/shofer/src/services/code-index/processors/file-watcher.ts) handles a changed file:
+
+1. Read the previous segment-hash set from the cache: `prev = cacheManager.getSegmentHashes(filePath)`.
+2. Parse the file and compute `newSegmentHashes = blocks.map(b => b.segmentHash)`.
+3. Diff:
+    - **Reused**: `b.segmentHash ∈ prev` → skip embedding, the point is already in Qdrant.
+    - **New / changed**: `b.segmentHash ∉ prev` → embed and upsert.
+    - **Stale**: `h ∈ prev ∧ h ∉ new` → delete the corresponding point from Qdrant. Point IDs are derived from segment hashes via `uuidv5(segmentHash, QDRANT_CODE_BLOCK_NAMESPACE)`, so no extra lookup is needed.
+4. After [`processBatch`](extensions/shofer/src/services/code-index/processors/file-watcher.ts) completes Phase 2 (per-file processing), it:
+    - Issues a single `vectorStore.deletePointsByIds(allStaleSegmentIds)` for the whole batch (Phase 3a). `deletePointsByIds` throws on failure so the error is surfaced via `overallBatchError` and the `CODE_INDEX_ERROR` telemetry event with `location: "deletePointsByIds"`.
+    - If every file in the batch turned out to be all-reused (no points to upsert), an early-return path in `_executeBatchUpsertOperations` still updates the cache (so the new full-file hash + segment hashes are persisted) without contacting the embedder or issuing an upsert.
+    - Fires a single aggregated `CODE_INDEX_SEGMENT_DEDUP` telemetry event with `{ fileCount, totalBlocks, reused, embedded, deleted }` per batch (not per file, to keep cardinality bounded and avoid leaking file paths).
+5. If the parser produces 0 blocks (file shrunk below `MIN_BLOCK_CHARS`, became empty, etc.) the file is still processed: the cache entry is refreshed and any previously-indexed segments are queued for deletion via the same `staleSegmentIds` path — no special "skip on empty" short-circuit.
+
+The scanner ([`scanner.ts`](extensions/shofer/src/services/code-index/processors/scanner.ts)) writes `segmentHashes` at all three cache-update sites: the unchanged-file skip path preserves the existing list, the no-blocks path writes `[]`, and the successful batch-upsert path groups `batchBlocks` by `file_path` into a `Map<string, string[]>` so each file's full segment-hash list is recorded with one cache entry.
+
+**Trade-off**: edits to a small "hot" file no longer cascade into N redundant embedding calls and upserts, and removed code is actively cleaned out of Qdrant on the next save rather than lingering until a full re-index. The cache file is slightly larger (one extra string array per entry), but still well within an order of magnitude of the v2 layout for typical workspaces.
+
 #### Reboot Behavior
 
 After a system reboot, **no restart of indexing is needed** because:
 
 - ✓ Qdrant PVC retains all vectors (53,000+ points survive)
 - ✓ Metadata marker (`indexing_complete`) stored in Qdrant, survives reboot
-- ✓ If hash cache is intact → incremental scan skips unchanged files
+- ✓ If hash cache is intact → incremental scan skips unchanged files, and the file watcher uses `segmentHashes` to embed only changed blocks on the next edit
 - ⚠ If hash cache was lost/deleted → full re-embed (vectors re-created but identical)
 
 The hash cache is the only component that may not survive a reboot depending on system configuration. The Qdrant PVC is the durable store of record.
@@ -298,8 +324,10 @@ The startup reconciliation pipeline is organised as three layers, each strictly 
 | Layer                                       | Candidate set                                                                                                                                         | Fallback trigger                                                                                                                                 |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **B. Git-aware narrowing** (Phase 2)        | `git diff <lastIndexedCommit> HEAD` ∪ working-tree dirty changes ∪ per-submodule diff                                                                 | git extension unavailable, `lastIndexedCommit` missing from Qdrant metadata, `diffSince` throws ("bad object"), or a new submodule is discovered |
-| **A. Versioned mtime+size cache** (Phase 1) | every file in workspace, but only `stat()` per file — no read, no hash, no parse, when `entry.mtimeMs === stats.mtimeMs && entry.size === stats.size` | cache v1 (or older) on disk → version-mismatch discards cache and re-scans                                                                       |
+| **A. Versioned mtime+size cache** (Phase 1) | every file in workspace, but only `stat()` per file — no read, no hash, no parse, when `entry.mtimeMs === stats.mtimeMs && entry.size === stats.size` | cache v2 (or older) on disk → version-mismatch discards cache and re-scans                                                                       |
 | **Hash check** (legacy, final tiebreaker)   | files that failed layer A (mtime/size changed) — `readFile` + SHA-256, skip if hash matches cache                                                     | none — always available                                                                                                                          |
+
+A fourth layer applies at **runtime** rather than startup: when the file watcher reacts to a saved edit, [per-segment deduplication](#per-segment-deduplication-file-watcher) skips embedding for any block whose `segmentHash` is already in the file's cached `segmentHashes[]`, and deletes points for any cached hash no longer present in the new parse.
 
 Per the **Versioned Snapshot Rule** and **No Backward Compatibility Unless Asked** rule, schema bumps (cache `version`, Qdrant metadata fields) discard old state rather than migrate. Each layer was shipped as its own minor-version bump.
 
@@ -434,7 +462,7 @@ Defined in `src/services/code-index/constants/index.ts`:
 - **Error recovery**: `recoverFromError()` clears all service instances, forcing a clean re-initialization on next use. Protected against race conditions with `_isRecoveringFromError` flag.
 - **Cache preservation**: If Qdrant connection fails, the cache is preserved for future incremental scans. If indexing fails mid-way (after connecting), the cache is cleared to avoid inconsistency.
 - **Retry logic**: Failed embedding batches retry up to 3 times with exponential backoff (500ms initial delay).
-- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {...})` with location context.
+- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {...})` with location context. The file watcher additionally fires `TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP` once per batch (`captureCodeIndexSegmentDedup({ fileCount, totalBlocks, reused, embedded, deleted })`) so the effectiveness of per-segment dedup can be tracked in production without per-file cardinality or path leakage.
 
 ---
 
