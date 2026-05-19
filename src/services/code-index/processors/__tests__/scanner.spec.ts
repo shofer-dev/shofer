@@ -108,6 +108,7 @@ describe("DirectoryScanner", () => {
 		}
 		mockIgnoreInstance = {
 			ignores: vi.fn().mockReturnValue(false),
+			refresh: vi.fn().mockResolvedValue(undefined),
 		}
 
 		scanner = new DirectoryScanner(

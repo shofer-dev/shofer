@@ -206,6 +206,12 @@ export class FileWatcher implements IFileWatcher {
 			return
 		}
 
+		// Refresh the git-ignore snapshot so newly created untracked files
+		// (which are not present in the snapshot built at initialization time)
+		// are included. Without this, `ignores()` returns `true` for any file
+		// created after the snapshot and the watcher silently skips it.
+		await this.ignoreInstance?.refresh()
+
 		const eventsToProcess = new Map(this.accumulatedEvents)
 		this.accumulatedEvents.clear()
 
