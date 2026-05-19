@@ -1,5 +1,5 @@
 import React from "react"
-import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeCheckbox, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
@@ -23,6 +23,7 @@ import {
 interface CodebaseIndexConfig {
 	codebaseIndexEnabled?: boolean
 	codebaseIndexGitEnabled?: boolean
+	codebaseIndexGitBranch?: string
 	codebaseIndexGitMaxHistoryDays?: number
 	codebaseIndexGitMaxCommits?: number
 	codebaseIndexGitPollIntervalMinutes?: number
@@ -48,6 +49,7 @@ export const RagIndexerSettings: React.FC<RagIndexerSettingsProps> = ({ codebase
 
 	const codeEnabled = codebaseIndexConfig?.codebaseIndexEnabled ?? true
 	const gitEnabled = codebaseIndexConfig?.codebaseIndexGitEnabled ?? false
+	const gitBranch = codebaseIndexConfig?.codebaseIndexGitBranch ?? "master"
 	const gitMaxHistoryDays = codebaseIndexConfig?.codebaseIndexGitMaxHistoryDays ?? 365
 	const gitMaxCommits = codebaseIndexConfig?.codebaseIndexGitMaxCommits ?? 10000
 	const gitPollIntervalMinutes = codebaseIndexConfig?.codebaseIndexGitPollIntervalMinutes ?? 5
@@ -117,6 +119,24 @@ export const RagIndexerSettings: React.FC<RagIndexerSettingsProps> = ({ codebase
 
 						{gitEnabled && (
 							<>
+								{/* Branch */}
+								<SearchableSetting
+									settingId="codebaseIndex-git-branch"
+									section="codebaseIndex"
+									label={t("settings:codeIndex.gitBranchLabel")}>
+									<span className="block font-medium mb-1">
+										{t("settings:codeIndex.gitBranchLabel")}
+									</span>
+									<VSCodeTextField
+										value={gitBranch}
+										onInput={(e: any) => updateGitSetting("codebaseIndexGitBranch", e.target.value)}
+										placeholder="master"
+									/>
+									<p className="text-xs text-vscode-descriptionForeground mt-1">
+										{t("settings:codeIndex.gitBranchDescription")}
+									</p>
+								</SearchableSetting>
+
 								{/* Max History Days */}
 								<SearchableSetting
 									settingId="codebaseIndex-git-max-history-days"

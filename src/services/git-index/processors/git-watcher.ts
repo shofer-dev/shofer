@@ -35,6 +35,7 @@ export class GitWatcher implements IGitWatcher {
 	private _isRunning = false
 	private readonly _pollIntervalMs: number
 	private _getLastCommitDate: (() => string | undefined) | null = null
+	private _branch = ""
 
 	private readonly _onNewCommits = new vscode.EventEmitter<GitCommitBlock[]>()
 
@@ -59,14 +60,16 @@ export class GitWatcher implements IGitWatcher {
 	 * @param getLastCommitDate - Lazy getter for the ISO 8601 date of the most
 	 *   recent indexed commit. Called on each poll tick so the watcher always
 	 *   uses the freshest boundary. Returns undefined to skip the current tick.
+	 * @param branch - Git ref (branch name) to index; empty string = HEAD
 	 */
-	start(getLastCommitDate: () => string | undefined): void {
+	start(getLastCommitDate: () => string | undefined, branch: string): void {
 		if (this._isRunning) return
 
 		// Set _isRunning before firing the immediate tick so that a re-entrant
 		// call to start() before the microtask queue drains is correctly guarded.
 		this._isRunning = true
 		this._getLastCommitDate = getLastCommitDate
+		this._branch = branch
 
 		// Catch up: run an immediate scan for commits since last index date
 		this._pollTick().catch(() => {})
@@ -120,7 +123,7 @@ export class GitWatcher implements IGitWatcher {
 			const perRepo = await Promise.all(
 				repoPaths.map((repo) =>
 					this._logExtractor
-						.extractCommitsSince(repo, sinceDate, INCREMENTAL_MAX_COMMITS)
+						.extractCommitsSince(repo, sinceDate, INCREMENTAL_MAX_COMMITS, this._branch)
 						.catch(() => [] as GitCommitBlock[]),
 				),
 			)

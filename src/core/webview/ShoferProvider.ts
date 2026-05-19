@@ -2762,6 +2762,7 @@ export class ShoferProvider
 				codebaseIndexGitPollIntervalMinutes: codebaseIndexConfig?.codebaseIndexGitPollIntervalMinutes ?? 5,
 				codebaseIndexGitSearchMinScore: codebaseIndexConfig?.codebaseIndexGitSearchMinScore ?? 0.4,
 				codebaseIndexGitSearchMaxResults: codebaseIndexConfig?.codebaseIndexGitSearchMaxResults ?? 20,
+				codebaseIndexGitBranch: codebaseIndexConfig?.codebaseIndexGitBranch ?? "master",
 			},
 			// Only set mdmCompliant if there's an actual MDM policy
 			// undefined means no MDM policy, true means compliant, false means non-compliant
@@ -3001,6 +3002,7 @@ export class ShoferProvider
 				codebaseIndexGitSearchMinScore: stateValues.codebaseIndexConfig?.codebaseIndexGitSearchMinScore ?? 0.4,
 				codebaseIndexGitSearchMaxResults:
 					stateValues.codebaseIndexConfig?.codebaseIndexGitSearchMaxResults ?? 20,
+				codebaseIndexGitBranch: stateValues.codebaseIndexConfig?.codebaseIndexGitBranch ?? "master",
 			},
 			profileThresholds: stateValues.profileThresholds ?? {},
 			lockApiConfigAcrossModes: this.context.workspaceState.get("lockApiConfigAcrossModes", false),

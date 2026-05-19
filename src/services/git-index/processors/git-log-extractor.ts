@@ -42,21 +42,28 @@ const MAX_CONTENT_LENGTH = 4000
  * with a structured format string and parsing the output.
  */
 export class GitLogExtractor implements IGitLogExtractor {
-	async extractCommits(workspacePath: string, maxHistoryDays: number, maxCommits: number): Promise<GitCommitBlock[]> {
-		const args = this._buildLogArgs(`--since=${maxHistoryDays} days ago`, `--max-count=${maxCommits}`)
+	async extractCommits(
+		workspacePath: string,
+		maxHistoryDays: number,
+		maxCommits: number,
+		branch: string,
+	): Promise<GitCommitBlock[]> {
+		const args = this._buildLogArgs(branch, `--since=${maxHistoryDays} days ago`, `--max-count=${maxCommits}`)
 		return this._executeLog(workspacePath, args)
 	}
 
 	/**
 	 * Extract commits since a specific ISO 8601 date (for incremental indexing).
-	 * No cap on commit count — incremental scans are expected to be small.
-	 */
-	/**
-	 * Extract commits since a specific ISO 8601 date (for incremental indexing).
 	 * @param maxCommits - Hard cap on number of commits returned (safety ceiling).
+	 * @param branch - Git ref (branch name) to index; empty string = HEAD
 	 */
-	async extractCommitsSince(workspacePath: string, sinceDate: string, maxCommits: number): Promise<GitCommitBlock[]> {
-		const args = this._buildLogArgs(`--since=${sinceDate}`, `--max-count=${maxCommits}`)
+	async extractCommitsSince(
+		workspacePath: string,
+		sinceDate: string,
+		maxCommits: number,
+		branch: string,
+	): Promise<GitCommitBlock[]> {
+		const args = this._buildLogArgs(branch, `--since=${sinceDate}`, `--max-count=${maxCommits}`)
 		return this._executeLog(workspacePath, args)
 	}
 
@@ -64,12 +71,14 @@ export class GitLogExtractor implements IGitLogExtractor {
 
 	/**
 	 * Build the common `git log` argument array.
+	 * @param branch - Git ref to index; when non-empty, injected as first positional after "log"
 	 * @param sinceArg - The `--since=` argument value
 	 * @param extraArgs - Additional optional args (e.g. `--max-count=N`)
 	 */
-	private _buildLogArgs(sinceArg: string, ...extraArgs: string[]): string[] {
+	private _buildLogArgs(branch: string, sinceArg: string, ...extraArgs: string[]): string[] {
 		const formatStr = `%H${FIELD_SEPARATOR}%h${FIELD_SEPARATOR}%an <%ae>${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%s${FIELD_SEPARATOR}%b${FIELD_SEPARATOR}${COMMIT_TERMINATOR}`
-		return ["log", `--format=${formatStr}`, sinceArg, ...extraArgs, "--encoding=UTF-8"]
+		const refArg = branch.trim().length > 0 ? [branch] : []
+		return ["log", ...refArg, `--format=${formatStr}`, sinceArg, ...extraArgs, "--encoding=UTF-8"]
 	}
 
 	/**

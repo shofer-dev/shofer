@@ -49,18 +49,31 @@ export interface IGitLogExtractor {
 	 * @param workspacePath - Path to the git repository root
 	 * @param maxHistoryDays - Maximum number of days of history to extract
 	 * @param maxCommits - Hard cap on number of commits to extract
+	 * @param branch - Git ref (branch name) to index; empty string = HEAD
 	 * @returns Array of parsed commit blocks
 	 */
-	extractCommits(workspacePath: string, maxHistoryDays: number, maxCommits: number): Promise<GitCommitBlock[]>
+	extractCommits(
+		workspacePath: string,
+		maxHistoryDays: number,
+		maxCommits: number,
+		branch: string,
+	): Promise<GitCommitBlock[]>
 
 	/**
 	 * Extract commits since a specific ISO 8601 date (for incremental indexing).
 	 *
 	 * @param workspacePath - Path to the git repository root
 	 * @param sinceDate - ISO 8601 date string (e.g. "2024-01-01T00:00:00+00:00")
+	 * @param maxCommits - Hard cap on number of commits returned (safety ceiling)
+	 * @param branch - Git ref (branch name) to index; empty string = HEAD
 	 * @returns Array of parsed commit blocks since the given date
 	 */
-	extractCommitsSince(workspacePath: string, sinceDate: string, maxCommits: number): Promise<GitCommitBlock[]>
+	extractCommitsSince(
+		workspacePath: string,
+		sinceDate: string,
+		maxCommits: number,
+		branch: string,
+	): Promise<GitCommitBlock[]>
 }
 
 /**
@@ -74,8 +87,9 @@ export interface IGitWatcher extends vscode.Disposable {
 	 * @param getLastCommitDate - Lazy getter for the ISO 8601 date of the most
 	 *   recent indexed commit. Called on each poll tick so the watcher always
 	 *   uses the freshest boundary.
+	 * @param branch - Git ref (branch name) to index; empty string = HEAD
 	 */
-	start(getLastCommitDate: () => string | undefined): void
+	start(getLastCommitDate: () => string | undefined, branch: string): void
 
 	/** Stop polling. */
 	stop(): void

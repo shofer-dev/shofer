@@ -454,6 +454,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					assistantAgentApiConfigId: assistantAgentApiConfigId ?? "",
 					assistantAgentMaxContextTokens: assistantAgentMaxContextTokens,
 					assistantAgentContextFillThreshold: assistantAgentContextFillThreshold,
+					codebaseIndexConfig,
 				},
 			})
 
