@@ -11,6 +11,7 @@ import { ShoferIgnoreController } from "../../../core/ignore/ShoferIgnoreControl
 import { v5 as uuidv5 } from "uuid"
 import { scannerExtensions } from "../shared/supported-extensions"
 import type { IIgnoreFilter } from "../shared/git-ignore-filter"
+import { makeSingleflightRefresh } from "../shared/git-ignore-filter"
 import {
 	IFileWatcher,
 	FileProcessingResult,
@@ -58,10 +59,12 @@ function log(...args: unknown[]): void {
  */
 export class FileWatcher implements IFileWatcher {
 	private ignoreInstance?: IIgnoreFilter
+	private refreshIgnoreSnapshot: () => Promise<void> = () => Promise.resolve()
 	private fileWatcher?: vscode.FileSystemWatcher
 	private ignoreController: ShoferIgnoreController
 	private accumulatedEvents: Map<string, { uri: vscode.Uri; type: "create" | "change" | "delete" }> = new Map()
 	private batchProcessDebounceTimer?: NodeJS.Timeout
+	private _batchInFlight: boolean = false
 	private readonly BATCH_DEBOUNCE_DELAY_MS = 500
 	private readonly FILE_PROCESSING_CONCURRENCY_LIMIT = 10
 	private readonly batchSegmentThreshold: number
@@ -110,6 +113,7 @@ export class FileWatcher implements IFileWatcher {
 		this.ignoreController = ignoreController || new ShoferIgnoreController(workspacePath)
 		if (ignoreInstance) {
 			this.ignoreInstance = ignoreInstance
+			this.refreshIgnoreSnapshot = makeSingleflightRefresh(ignoreInstance)
 		}
 		// Get the configurable batch size from VSCode settings, fallback to default
 		// If not provided in constructor, try to get from VSCode settings
@@ -199,26 +203,62 @@ export class FileWatcher implements IFileWatcher {
 	}
 
 	/**
-	 * Triggers processing of accumulated events
+	 * Triggers processing of accumulated events.
+	 *
+	 * Re-entrancy: guarded by {@link _batchInFlight}. A second debounce that
+	 * fires while a batch is mid-flight does NOT start a parallel
+	 * `processBatch` (that would race on `accumulatedEvents` and on the
+	 * git-ignore snapshot refresh); it simply reschedules itself so the
+	 * still-arriving events get picked up after the in-flight batch finishes.
+	 *
+	 * GitIgnore snapshot: refreshed lazily, and only when a `create` event
+	 * references a path the current snapshot does not know about (i.e. the
+	 * snapshot would `ignores() => true` it and the file would be silently
+	 * skipped). Pure change/delete batches don't pay the git-process cost.
+	 * The refresh itself is single-flighted so back-to-back batches share
+	 * one in-flight `git ls-files`.
 	 */
 	private async triggerBatchProcessing(): Promise<void> {
+		if (this._batchInFlight) {
+			// Another invocation owns the batch. Reschedule so new events
+			// accumulated during processing are drained on the next debounce.
+			this.scheduleBatchProcessing()
+			return
+		}
 		if (this.accumulatedEvents.size === 0) {
 			return
 		}
 
-		// Refresh the git-ignore snapshot so newly created untracked files
-		// (which are not present in the snapshot built at initialization time)
-		// are included. Without this, `ignores()` returns `true` for any file
-		// created after the snapshot and the watcher silently skips it.
-		await this.ignoreInstance?.refresh()
+		this._batchInFlight = true
+		try {
+			if (this.ignoreInstance) {
+				let needsRefresh = false
+				for (const event of this.accumulatedEvents.values()) {
+					if (event.type !== "create") continue
+					const rel = generateRelativeFilePath(event.uri.fsPath, this.workspacePath)
+					if (this.ignoreInstance.ignores(rel)) {
+						needsRefresh = true
+						break
+					}
+				}
+				if (needsRefresh) {
+					await this.refreshIgnoreSnapshot()
+				}
+			}
 
-		const eventsToProcess = new Map(this.accumulatedEvents)
-		this.accumulatedEvents.clear()
+			const eventsToProcess = new Map(this.accumulatedEvents)
+			this.accumulatedEvents.clear()
 
-		const filePathsInBatch = Array.from(eventsToProcess.keys())
-		this._onDidStartBatchProcessing.fire(filePathsInBatch)
+			const filePathsInBatch = Array.from(eventsToProcess.keys())
+			this._onDidStartBatchProcessing.fire(filePathsInBatch)
 
-		await this.processBatch(eventsToProcess)
+			await this.processBatch(eventsToProcess)
+		} finally {
+			this._batchInFlight = false
+			if (this.accumulatedEvents.size > 0) {
+				this.scheduleBatchProcessing()
+			}
+		}
 	}
 
 	/**
@@ -622,6 +662,17 @@ export class FileWatcher implements IFileWatcher {
 
 			// Parse file
 			const blocks = await codeParser.parseFile(filePath, { content, fileHash: newHash })
+
+			if (blocks.length === 0) {
+				// Common causes: file content below MIN_BLOCK_CHARS, parser
+				// failure, or a language with no extractable nodes (e.g. an
+				// empty markdown file). Without this log the file silently
+				// disappears from the indexer's perspective: no cache entry is
+				// written (cache update is gated on a non-empty upsert batch),
+				// no points are upserted, and semantic search will never find
+				// it — which looks identical to "the watcher is broken".
+				log(`skip ${relativeFilePath}: parser produced 0 blocks (file too small or no parseable content)`)
+			}
 
 			// Prepare points for batch processing
 			let pointsToUpsert: PointStruct[] = []
