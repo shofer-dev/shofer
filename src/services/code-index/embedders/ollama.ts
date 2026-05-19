@@ -1,7 +1,6 @@
 import { ApiHandlerOptions } from "../../../shared/api"
 import { EmbedderInfo, EmbeddingResponse, IEmbedder } from "../interfaces"
 import { getModelQueryPrefix } from "../../../shared/embeddingModels"
-import { MAX_ITEM_TOKENS } from "../constants"
 import { t } from "../../../i18n"
 import { withValidationErrorHandling, sanitizeErrorMessage } from "../shared/validation-helpers"
 import { TelemetryService } from "@shofer/telemetry"
@@ -42,6 +41,30 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 	private readonly baseUrl: string
 	private readonly defaultModelId: string
 
+	// Cached per-model context-window probe.  Ollama silently ignores
+	// `options.num_ctx` above the model's training-time max sequence length
+	// (e.g. nomic-embed-text is 2048), so we must read the real value from
+	// `/api/show` rather than assume MAX_ITEM_TOKENS (8191) applies.  Keyed by
+	// model id; the promise is cached so concurrent calls share one probe.
+	private readonly _modelContextCache = new Map<string, Promise<number>>()
+
+	// Conservative chars-per-token ratio for English text *including code*,
+	// commit messages, identifiers, and short fragments.  The standard /4
+	// heuristic under-counts for punctuation-dense code; empirically a 7000-
+	// char commit hit the 2048-token wall on nomic-embed-text, implying a real
+	// ratio < 3.5 chars/token for that content.  2.5 chars/token gives a safe
+	// budget for typical mixed English+code without being CJK-pessimistic.
+	private static readonly CHARS_PER_TOKEN = 2.5
+
+	// Tokens reserved for special tokens (BOS/EOS) and model overhead.  Ollama
+	// counts these against num_ctx, so the usable budget for input text is
+	// strictly less than the model's declared context length.
+	private static readonly TOKEN_OVERHEAD = 8
+
+	// Fallback context length when /api/show probe fails or returns no value.
+	// Matches Ollama's runtime default; deliberately pessimistic.
+	private static readonly FALLBACK_CONTEXT_TOKENS = 2048
+
 	constructor(options: ApiHandlerOptions) {
 		// Ensure ollamaBaseUrl and ollamaModelId exist on ApiHandlerOptions or add defaults
 		let baseUrl = options.ollamaBaseUrl || "http://localhost:11434"
@@ -54,6 +77,60 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 	}
 
 	/**
+	 * Probes Ollama's `/api/show` for the model's actual training-time context
+	 * length, cached per model id.  Returns FALLBACK_CONTEXT_TOKENS on any error.
+	 *
+	 * The response's `model_info` object contains an architecture-prefixed key
+	 * like `"nomic-bert.context_length"`, `"llama.context_length"`, etc.  We
+	 * scan all `*.context_length` keys and take the min (defensive).
+	 */
+	private getModelContextTokens(modelId: string): Promise<number> {
+		const cached = this._modelContextCache.get(modelId)
+		if (cached) return cached
+
+		const probe = (async (): Promise<number> => {
+			try {
+				const controller = new AbortController()
+				const timeoutId = setTimeout(() => controller.abort(), OLLAMA_VALIDATION_TIMEOUT_MS)
+				const resp = await fetch(`${this.baseUrl}/api/show`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ name: modelId }),
+					signal: controller.signal,
+				})
+				clearTimeout(timeoutId)
+				if (!resp.ok) {
+					log(
+						`/api/show ${resp.status} ${resp.statusText} for ${modelId} — ` +
+							`falling back to ${CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS} tokens`,
+					)
+					return CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS
+				}
+				const data: any = await resp.json()
+				const modelInfo: Record<string, unknown> = data?.model_info ?? {}
+				const ctxValues = Object.entries(modelInfo)
+					.filter(([k, v]) => k.endsWith(".context_length") && typeof v === "number")
+					.map(([, v]) => v as number)
+				const resolved =
+					ctxValues.length > 0 ? Math.min(...ctxValues) : CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS
+				log(
+					`/api/show ${modelId} context_length=${resolved} tokens (sources: ${ctxValues.join(",") || "none"})`,
+				)
+				return resolved
+			} catch (err: any) {
+				log(
+					`/api/show probe failed for ${modelId}: ${err?.message ?? err} — ` +
+						`falling back to ${CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS} tokens`,
+				)
+				return CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS
+			}
+		})()
+
+		this._modelContextCache.set(modelId, probe)
+		return probe
+	}
+
+	/**
 	 * Creates embeddings for the given texts using the specified Ollama model.
 	 * @param texts - An array of strings to embed.
 	 * @param model - Optional model ID to override the default.
@@ -62,6 +139,13 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 	async createEmbeddings(texts: string[], model?: string): Promise<EmbeddingResponse> {
 		const modelToUse = model || this.defaultModelId
 		const url = `${this.baseUrl}/api/embed` // Endpoint as specified
+
+		// Resolve the real model context window before we size truncation or
+		// num_ctx.  Cached per model, so this is one extra request the first time
+		// each model is used.
+		const modelContextTokens = await this.getModelContextTokens(modelToUse)
+		const usableTokens = Math.max(1, modelContextTokens - CodeIndexOllamaEmbedder.TOKEN_OVERHEAD)
+		const maxSafeChars = Math.floor(usableTokens * CodeIndexOllamaEmbedder.CHARS_PER_TOKEN)
 
 		// Apply model-specific query prefix if required
 		const queryPrefix = getModelQueryPrefix("ollama", modelToUse)
@@ -72,40 +156,30 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 						return text
 					}
 					const prefixedText = `${queryPrefix}${text}`
-					const estimatedTokens = Math.ceil(prefixedText.length / 4)
-					if (estimatedTokens > MAX_ITEM_TOKENS) {
-						console.warn(
-							t("embeddings:textWithPrefixExceedsTokenLimit", {
-								index,
-								estimatedTokens,
-								maxTokens: MAX_ITEM_TOKENS,
-							}),
+					if (prefixedText.length > maxSafeChars) {
+						log(
+							`prefix would overflow item ${index}: ` +
+								`${prefixedText.length} chars > ${maxSafeChars} cap — dropping prefix`,
 						)
-						// Return original text if adding prefix would exceed limit
 						return text
 					}
 					return prefixedText
 				})
 			: texts
 
-		// Defence-in-depth: enforce a hard character cap so a single oversized
-		// item cannot exceed the Ollama runtime context window (num_ctx, set
-		// explicitly below).  Assume English text/code at ~3 chars/token — more
-		// conservative than the length/4 heuristic used elsewhere (which under-
-		// counts for punctuation-dense code) but not as pessimistic as 1 char/
-		// token (which would only be needed for CJK).  The detection check uses
-		// the same 3 chars/token ratio so the trigger and the cap agree.
-		const CHARS_PER_TOKEN_ENGLISH = 3
-		const MAX_SAFE_CHARS = MAX_ITEM_TOKENS * CHARS_PER_TOKEN_ENGLISH
+		// Defence-in-depth: hard character cap derived from the model's actual
+		// context length (probed via /api/show), not the static MAX_ITEM_TOKENS.
+		// Ollama silently caps `options.num_ctx` at the model's training-time max
+		// for embedding models, so sizing to MAX_ITEM_TOKENS=8191 was meaningless
+		// for nomic-embed-text (2048).
 		const processedTexts = prefixedTexts.map((text, index) => {
-			if (text.length > MAX_SAFE_CHARS) {
+			if (text.length > maxSafeChars) {
 				const originalLen = text.length
-				const truncated = text.substring(0, MAX_SAFE_CHARS)
-				console.warn(
-					`[OllamaEmbedder] Defence-in-depth truncation: item ${index} ` +
-						`length ${originalLen} chars > ${MAX_SAFE_CHARS} cap ` +
-						`(MAX_ITEM_TOKENS=${MAX_ITEM_TOKENS} × ${CHARS_PER_TOKEN_ENGLISH} chars/token), ` +
-						`truncated to ${truncated.length} chars`,
+				const truncated = text.substring(0, maxSafeChars)
+				log(
+					`truncation: item ${index} ${originalLen} chars > ${maxSafeChars} cap ` +
+						`(usable=${usableTokens} tokens × ${CodeIndexOllamaEmbedder.CHARS_PER_TOKEN} chars/token), ` +
+						`truncated to ${truncated.length}`,
 				)
 				return truncated
 			}
@@ -124,7 +198,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 			log(
 				`POST ${url} model=${modelToUse} items=${itemLengths.length} ` +
 					`totalChars=${totalChars} maxChars=${maxChars} (item ${maxIdx}) ` +
-					`num_ctx=${MAX_ITEM_TOKENS} cap=${MAX_SAFE_CHARS}`,
+					`modelCtx=${modelContextTokens} usableTokens=${usableTokens} cap=${maxSafeChars}`,
 			)
 
 			// Add timeout to prevent indefinite hanging
@@ -139,11 +213,11 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				body: JSON.stringify({
 					model: modelToUse,
 					input: processedTexts,
-					// Ollama's runtime default num_ctx is 2048 regardless of the model's
-					// nominal context window.  Without this, even a 7000-char input can
-					// exceed the runtime budget and return HTTP 400 "the input length
-					// exceeds the context length".  Set it to match our truncation budget.
-					options: { num_ctx: MAX_ITEM_TOKENS },
+					// Tell Ollama to load the model with the full probed context.
+					// Ollama silently caps this at the model's training-time max for
+					// embedding models, so setting it higher than `modelContextTokens`
+					// is harmless but redundant; we pass exactly that value.
+					options: { num_ctx: modelContextTokens },
 				}),
 				signal: controller.signal,
 			})
@@ -160,7 +234,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				// server is rejecting on a 400 "input length exceeds context length".
 				log(
 					`ERROR ${response.status} ${response.statusText} from ${url} ` +
-						`model=${modelToUse} num_ctx=${MAX_ITEM_TOKENS} ` +
+						`model=${modelToUse} modelCtx=${modelContextTokens} cap=${maxSafeChars} ` +
 						`items=${itemLengths.length} maxChars=${maxChars} totalChars=${totalChars} ` +
 						`itemLengths=[${itemLengths.join(",")}] body=${errorBody}`,
 				)
