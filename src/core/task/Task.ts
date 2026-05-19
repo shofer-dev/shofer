@@ -38,6 +38,7 @@ import {
 	type ShoferApiReqInfo,
 	type ApiReqError,
 	type TaskHandle,
+	type PendingParentQuestionInfo,
 	type CostLimit,
 	type McpToolCallResponse,
 	ShoferEventName,
@@ -199,6 +200,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// NEW: Track background children
 	backgroundChildren: Map<string, TaskHandle> = new Map()
+
+	/**
+	 * When this task is a background child whose `ask_followup_question`
+	 * routed up to the parent, stores the question + the promise hooks the
+	 * tool handler is awaiting. Accessed only through the typed
+	 * `getPendingParentQuestion / setPendingParentQuestion / resolve / reject`
+	 * accessors below — never via cast.
+	 */
+	private _pendingParentQuestion?: {
+		info: PendingParentQuestionInfo
+		resolve: (answer: string) => void
+		reject: (reason: Error) => void
+	}
 
 	/**
 	 * In-flight async MCP tool calls (mirrors `backgroundChildren` for MCP calls).
@@ -2817,8 +2831,55 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/** True when this task was spawned as a background child of another task. */
+	public get isBackgroundTask(): boolean {
+		return this.isBackground
+	}
+
+	/** Typed read-only view of a question this background child has routed to its parent. */
+	public getPendingParentQuestion(): PendingParentQuestionInfo | undefined {
+		return this._pendingParentQuestion?.info
+	}
+
+	/**
+	 * Register a pending parent question. Returns a promise that resolves with
+	 * the parent's answer (via `resolvePendingParentQuestion`) or rejects when
+	 * the task is aborted (via `rejectPendingParentQuestion`).
+	 *
+	 * Only one pending question can be outstanding at a time per task — calling
+	 * this while one is already pending rejects the previous one.
+	 */
+	public setPendingParentQuestion(info: PendingParentQuestionInfo): Promise<string> {
+		// Reject any previous outstanding question to avoid leaking promises.
+		this.rejectPendingParentQuestion(new Error("superseded by a new question"))
+		return new Promise<string>((resolve, reject) => {
+			this._pendingParentQuestion = { info, resolve, reject }
+		})
+	}
+
+	public resolvePendingParentQuestion(answer: string): boolean {
+		const pq = this._pendingParentQuestion
+		if (!pq) return false
+		this._pendingParentQuestion = undefined
+		pq.resolve(answer)
+		return true
+	}
+
+	public rejectPendingParentQuestion(reason: Error): boolean {
+		const pq = this._pendingParentQuestion
+		if (!pq) return false
+		this._pendingParentQuestion = undefined
+		pq.reject(reason)
+		return true
+	}
+
 	public async abortTask(isAbandoned = false) {
 		// Aborting task
+
+		// If this task was blocked awaiting a parent answer (via the
+		// ask_followup_question → parent routing), reject that promise NOW so
+		// the child wakes and unwinds the tool handler instead of hanging.
+		this.rejectPendingParentQuestion(new Error("task aborted"))
 
 		// Abort all background children before aborting self (Decision: abort propagation).
 		await this.abortBackgroundChildren()
@@ -4781,6 +4842,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					)
 					constraints.push(
 						"- The parent may cancel you at any time via the cancel_tasks tool. Checkpoint partial results in your attempt_completion so the parent can recover useful work even if you are stopped early.",
+					)
+					constraints.push(
+						"- If you genuinely need clarification, you may call ask_followup_question — your question will be routed to the parent task (NOT the user). Keep the question concise and self-contained, and only ask when you cannot make a reasonable judgment on your own.",
 					)
 				} else {
 					constraints.push(

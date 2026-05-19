@@ -168,13 +168,32 @@ export enum TaskStatus {
 	None = "none",
 }
 
-export type BackgroundTaskStatus = "starting" | "running" | "waiting" | "completed" | "error" | "paused"
+export type BackgroundTaskStatus =
+	| "starting"
+	| "running"
+	| "waiting"
+	| "waiting_for_parent"
+	| "completed"
+	| "error"
+	| "cancelled"
+	| "paused"
 
 export interface TaskHandle {
 	taskId: string
 	status: BackgroundTaskStatus
 	createdAt: number
 	parentTaskId: string
+}
+
+/**
+ * Read-only view of a question that a background child task routed up to
+ * its parent via `ask_followup_question`. Consumers (CheckTaskStatusTool,
+ * WaitForTaskTool, AnswerSubtaskQuestionTool) read this; only the child's
+ * Task instance produces it.
+ */
+export interface PendingParentQuestionInfo {
+	question: string
+	suggestions: Array<{ answer: string; mode?: string }>
 }
 
 export const taskMetadataSchema = z.object({

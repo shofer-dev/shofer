@@ -36,7 +36,7 @@ export class AnswerSubtaskQuestionTool extends BaseTool<"answer_subtask_question
 		}
 
 		// Check if the child is waiting for parent input.
-		const pendingQuestion = (liveInstance as any)._pendingParentQuestion
+		const pendingQuestion = liveInstance.getPendingParentQuestion()
 		if (!pendingQuestion) {
 			pushToolResult(formatResponse.toolError(`Task ${task_id} does not have a pending question`))
 			return
@@ -55,10 +55,23 @@ export class AnswerSubtaskQuestionTool extends BaseTool<"answer_subtask_question
 		}
 
 		// Resolve the child's pending question with the parent's answer.
-		pendingQuestion.resolve(answer)
-		delete (liveInstance as any)._pendingParentQuestion
+		const resolved = liveInstance.resolvePendingParentQuestion(answer)
+		if (!resolved) {
+			pushToolResult(
+				formatResponse.toolError(
+					`Task ${task_id} was no longer waiting for an answer (resolved between check and write).`,
+				),
+			)
+			return
+		}
 
-		pushToolResult(`Answered question for task ${task_id}`)
+		// Flip the parent-side handle back to "running" so subsequent
+		// check_task_status / wait_for_task calls see live status again.
+		if (handle.status === "waiting_for_parent") {
+			handle.status = "running"
+		}
+
+		pushToolResult(`Answered question for task ${task_id}: ${pendingQuestion.question}`)
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"answer_subtask_question">): Promise<void> {

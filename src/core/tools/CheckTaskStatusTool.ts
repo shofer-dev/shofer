@@ -71,7 +71,12 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		//   2. Persisted HistoryItem.status — survives process restarts.
 		//   3. Live managed Task instance — only consulted when no terminal
 		//      verdict is available from (1) or (2).
-		if (handle.status !== "completed" && handle.status !== "error") {
+		if (
+			handle.status !== "completed" &&
+			handle.status !== "error" &&
+			handle.status !== "cancelled" &&
+			handle.status !== "waiting_for_parent"
+		) {
 			let resolvedFromHistory = false
 			try {
 				const { historyItem } = await provider.getTaskWithId(task_id)
@@ -99,7 +104,7 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 
 		const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
 
-		if (handle.status === "completed" || handle.status === "error") {
+		if (handle.status === "completed" || handle.status === "error" || handle.status === "cancelled") {
 			const messages = await readTaskMessages({ taskId: task_id, globalStoragePath })
 			// Find the last completion or error message
 			for (let i = messages.length - 1; i >= 0; i--) {
@@ -157,9 +162,11 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		let pendingQuestionText: string | undefined
 		try {
 			const liveInstance = provider.taskManager.getManagedTaskInstance(task_id)
-			const pq = (liveInstance as any)?._pendingParentQuestion
+			const pq = liveInstance?.getPendingParentQuestion()
 			if (pq) {
-				pendingQuestionText = `\nPending parent question: "${pq.question}"\nSuggestions: ${pq.suggestions?.map((s: any) => `"${s.answer}"`).join(", ") ?? "none"}`
+				const suggestionList =
+					pq.suggestions.length > 0 ? pq.suggestions.map((s) => `"${s.answer}"`).join(", ") : "none"
+				pendingQuestionText = `\nPending parent question: "${pq.question}"\nSuggestions: ${suggestionList}\nAnswer via answer_subtask_question(task_id="${task_id}", answer=...).`
 			}
 		} catch {
 			// Non-fatal.

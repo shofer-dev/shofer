@@ -46,6 +46,13 @@ export interface ManagedTask {
 export interface TaskManagerEvents {
 	"managedTask:state-changed": [targetTaskId: string, state: TaskState]
 	"managedTask:needs-input": [notification: ManagedTaskNotification]
+	/**
+	 * Emitted when a background child task routes a question up to its parent
+	 * via `ask_followup_question`. The parent's `wait_for_task` tool listens
+	 * for this so it can wake up and surface the question to the LLM instead
+	 * of blocking on a non-existent terminal transition.
+	 */
+	"managedTask:needs-parent-input": [targetTaskId: string, question: string]
 	"managedTask:completed": [targetTaskId: string]
 	"managedTask:error": [targetTaskId: string, error: string]
 	"managedTask:tool-error": [targetTaskId: string, error: string]
