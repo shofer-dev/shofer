@@ -189,10 +189,7 @@ export class GitHistoryOrchestrator {
 		extract: (repoAbsPath: string) => Promise<GitCommitBlock[]>,
 	): Promise<GitCommitBlock[]> {
 		const submoduleDisplayPaths = await listSubmoduleDisplayPaths(this.workspacePath)
-		const repoPaths = [
-			this.workspacePath,
-			...submoduleDisplayPaths.map((p) => path.resolve(this.workspacePath, p)),
-		]
+		const repoPaths = [this.workspacePath, ...submoduleDisplayPaths.map((p) => path.resolve(this.workspacePath, p))]
 		const perRepo = await Promise.all(
 			repoPaths.map(async (repo) => {
 				try {
@@ -280,6 +277,10 @@ export class GitHistoryOrchestrator {
 
 			batch.forEach((c) => this.cacheManager.setHash(c.commit_hash, c.contentHash))
 			this.cacheManager.updateLastCommitDateFromBatch(batch)
+			// Persist after every batch so progress survives process restarts.
+			// Without this, an interruption mid-indexing discards all in-memory
+			// cache writes and the next start re-indexes from scratch.
+			await this.cacheManager.persist()
 		}
 	}
 
