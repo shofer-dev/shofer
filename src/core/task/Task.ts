@@ -2757,29 +2757,46 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.debouncedEmitTokenUsage.flush()
 	}
 
+	/**
+	 * Abort all background children tracked by this task.
+	 *
+	 * Each live child found via TaskManager is aborted (fire-and-forget in
+	 * parallel) and the in-memory handle map is cleared.  Already-terminated
+	 * children whose handle was already `completed` or `error` are no-ops.
+	 *
+	 * This is the single choke-point for child cleanup — called from both
+	 * `abortTask()` (user stop / forced abort) and `AttemptCompletionTool`
+	 * (normal parent completion).
+	 */
+	public async abortBackgroundChildren(clearHandles = true): Promise<void> {
+		if (this.backgroundChildren.size === 0) return
+
+		const provider = this.providerRef.deref()
+		if (!provider) return
+
+		await Promise.all(
+			Array.from(this.backgroundChildren.keys()).map(async (childId) => {
+				try {
+					const child = provider.taskManager.getManagedTaskInstance(childId)
+					if (child) {
+						await child.abortTask(false)
+					}
+				} catch (err) {
+					console.error(`[Task#abortBackgroundChildren] Failed to abort child ${childId}:`, err)
+				}
+			}),
+		)
+
+		if (clearHandles) {
+			this.backgroundChildren.clear()
+		}
+	}
+
 	public async abortTask(isAbandoned = false) {
 		// Aborting task
 
 		// Abort all background children before aborting self (Decision: abort propagation).
-		// We fire-and-forget each child abort in parallel so a slow child cannot delay ours.
-		if (this.backgroundChildren.size > 0) {
-			const provider = this.providerRef.deref()
-			if (provider) {
-				await Promise.all(
-					Array.from(this.backgroundChildren.keys()).map(async (childId) => {
-						try {
-							const child = provider.taskManager.getManagedTaskInstance(childId)
-							if (child) {
-								await child.abortTask(isAbandoned)
-							}
-						} catch (err) {
-							console.error(`[Task#abortTask] Failed to abort background child ${childId}:`, err)
-						}
-					}),
-				)
-			}
-			this.backgroundChildren.clear()
-		}
+		await this.abortBackgroundChildren()
 
 		// Will stop any autonomously running promises.
 		if (isAbandoned) {
@@ -4707,13 +4724,36 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				provider.getSkillsManager(),
 			)
 
-			// Inject subtask constraints when this is a child task with a result length
-			// and/or estimated timeout specified by the parent.
-			if (this.parentTaskId && (this.softResultLength || this.softTimeoutSec)) {
+			// Inject subtask constraints for any child task (sync or background).
+			// Provides role awareness so the subtask knows it is working on behalf of
+			// a parent and what tools / behaviors are available to it.
+			if (this.parentTaskId) {
 				const constraints: string[] = []
 				constraints.push("SUBTASK CONSTRAINTS")
 				constraints.push("")
+
+				// Role awareness — always injected.
+				if (this.isBackground) {
+					constraints.push(
+						"- You are a background sub-task spawned by a parent task. Your results will be collected by the parent via check_task_status or wait_for_task. Work independently and do not wait for user input — the user is not watching you.",
+					)
+					constraints.push(
+						"- The parent may cancel you at any time via the cancel_tasks tool. Checkpoint partial results in your attempt_completion so the parent can recover useful work even if you are stopped early.",
+					)
+				} else {
+					constraints.push(
+						"- You are a synchronous sub-task spawned by a parent task. The parent is blocked waiting for your result. Complete your work and return a concise attempt_completion result.",
+					)
+					constraints.push(
+						"- Do not ask the user follow-up questions — the parent cannot answer them. If you need clarification, make your best judgment and proceed.",
+					)
+				}
+
+				// Soft constraints — injected when specified by the parent.
 				if (this.softResultLength) {
+					if (constraints.length > 2) {
+						constraints.push("")
+					}
 					constraints.push(
 						`- Result length suggestion: ${this.softResultLength} characters (soft guidance — aim to keep your attempt_completion result within this budget by summarizing concisely; the parent may accept longer results).`,
 					)
