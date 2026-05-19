@@ -15,6 +15,7 @@ export const taskLifecycleSchema = z.enum([
 	"idle", // No active execution; waiting or cleared
 	"running", // Actively processing (API call in progress)
 	"waiting_input", // Paused, needs user approval/input
+	"waiting", // Blocked on a non-user external event (e.g. wait_for_task on a subtask)
 	"paused", // Manually paused by the user (non-destructive abort)
 	"completed", // Finished via attempt_completion (rating in TaskState.rating)
 	"error", // Stopped due to an error
@@ -46,8 +47,9 @@ export type TaskState = z.infer<typeof taskStateSchema>
 
 /**
  * Terminal lifecycle phases — those that survive a process restart unchanged.
- * Transient phases (`running`, `waiting_input`) are sanitized to `idle` on
- * restore because no live `Task` instance can plausibly still be running.
+ * Transient phases (`running`, `waiting_input`, `waiting`) are sanitized to
+ * `idle` on restore because no live `Task` instance can plausibly still be
+ * running.
  */
 export function isTerminalLifecycle(lifecycle: TaskLifecycle): boolean {
 	return lifecycle === "completed" || lifecycle === "error" || lifecycle === "paused"

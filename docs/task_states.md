@@ -4,14 +4,14 @@ This document describes the task state model used by the Task Selector and the
 in-chat header. The model has been redesigned around two orthogonal axes:
 
 1. **Lifecycle** — what the task is doing right now (`idle`, `running`,
-   `waiting_input`, `paused`, `completed`, `error`).
+   `waiting_input`, `waiting`, `paused`, `completed`, `error`).
 2. **Completion rating** — _only_ meaningful when the lifecycle is
    `completed`. One of `poor`, `well`, `excellent`.
 
 Both fields live together inside a single `TaskState` value:
 
 ```typescript
-type TaskLifecycle = "idle" | "running" | "waiting_input" | "paused" | "completed" | "error"
+type TaskLifecycle = "idle" | "running" | "waiting_input" | "waiting" | "paused" | "completed" | "error"
 type CompletionRating = "poor" | "well" | "excellent"
 type TaskState = { lifecycle: TaskLifecycle; rating?: CompletionRating }
 ```
@@ -57,6 +57,7 @@ overlay on top.
 | `idle`          | `codicon-circle-large-outline` | description foreground              |
 | `running`       | `codicon-sync` (spinning)      | charts blue                         |
 | `waiting_input` | `codicon-question`             | charts yellow                       |
+| `waiting`       | `codicon-watch`                | charts blue                         |
 | `paused`        | `codicon-debug-pause`          | charts orange                       |
 | `completed`     | `codicon-pass`                 | charts green (overridden by rating) |
 | `error`         | `codicon-error`                | error foreground                    |
@@ -95,8 +96,9 @@ managed-task map being authoritative) require restoration to have run first.
 
 1. Rehydrates the managed-task map from history.
 2. Calls `sanitizeRestoredState` for each entry to downgrade any transient
-   lifecycle (`running`, `waiting_input`) to `idle` — those values can never
-   be true after a restart, since no live `Task` instance exists.
+   lifecycle (`running`, `waiting_input`, `waiting`) to `idle` — those
+   values can never be true after a restart, since no live `Task` instance
+   exists.
 3. Sets a private `restored` flag.
 
 `assertRestored()` is invoked at the top of any method that depends on the

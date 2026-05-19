@@ -20,7 +20,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null
 }
 
-const VALID_LIFECYCLES: readonly TaskLifecycle[] = ["idle", "running", "waiting_input", "paused", "completed", "error"]
+const VALID_LIFECYCLES: readonly TaskLifecycle[] = [
+	"idle",
+	"running",
+	"waiting_input",
+	"waiting",
+	"paused",
+	"completed",
+	"error",
+]
 const VALID_RATINGS: readonly CompletionRating[] = ["poor", "well", "excellent"]
 
 function parseTaskState(value: unknown): TaskState | undefined {

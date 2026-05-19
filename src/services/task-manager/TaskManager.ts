@@ -613,13 +613,15 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	/**
 	 * Resolve an in-memory state from a persisted snapshot.
 	 *
-	 * Transient lifecycles (`running`, `waiting_input`) imply in-flight work,
-	 * which cannot survive a restart — downgrade them to `idle`. Terminal
-	 * lifecycles (`completed` with rating, `error`, `paused`) are preserved.
+	 * Transient lifecycles (`running`, `waiting_input`, `waiting`) imply
+	 * in-flight work, which cannot survive a restart — downgrade them to
+	 * `idle`. Terminal lifecycles (`completed` with rating, `error`, `paused`)
+	 * are preserved.
 	 */
 	private static sanitizeRestoredState(state: TaskState | undefined): TaskState {
 		if (!state) return IDLE_TASK_STATE
-		if (state.lifecycle === "running" || state.lifecycle === "waiting_input") return IDLE_TASK_STATE
+		if (state.lifecycle === "running" || state.lifecycle === "waiting_input" || state.lifecycle === "waiting")
+			return IDLE_TASK_STATE
 		if (isTerminalLifecycle(state.lifecycle) || state.lifecycle === "idle") return state
 		return IDLE_TASK_STATE
 	}
