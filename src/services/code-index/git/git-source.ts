@@ -139,6 +139,37 @@ export class GitSource {
 	}
 
 	/**
+	 * Returns the parent repo's dirty state merged with each discovered
+	 * submodule's dirty state.
+	 *
+	 * Why: the parent repository sees a submodule as a single "dirty"
+	 * entry (the submodule pointer / a `-dirty` marker) and not as the
+	 * individual files inside it. Without this merge, a file freshly
+	 * created or modified inside a submodule while VS Code was closed is
+	 * invisible to the startup incremental scan and only ever gets indexed
+	 * the next time the user touches it (which fires the live file watcher).
+	 *
+	 * Paths are absolute (each sub-repo classifies against its own rootUri),
+	 * matching the parent's classification, so callers can deduplicate by
+	 * fsPath and feed the merged set into `scanner.scanSpecificFiles`.
+	 */
+	getDirtyChangesIncludingSubmodules(parentRepo: GitRepository): DiffResult {
+		const result = this.getDirtyChanges(parentRepo)
+		const api = this.getApi()
+		if (!api) return result
+
+		for (const subUri of this.discoverSubmodules(parentRepo)) {
+			const subRepo = api.getRepository(subUri)
+			if (!subRepo) continue
+			const subDirty = this.getDirtyChanges(subRepo)
+			result.changed.push(...subDirty.changed)
+			result.deleted.push(...subDirty.deleted)
+		}
+
+		return result
+	}
+
+	/**
 	 * Classifies an array of GitChange objects into changed / deleted paths.
 	 */
 	private classifyChanges(changes: GitChange[], rootPath: string): DiffResult {
