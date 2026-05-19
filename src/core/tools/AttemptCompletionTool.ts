@@ -297,6 +297,12 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				)
 			}
 
+			// Abort all background children before completing.  Without this a
+			// parent task that calls attempt_completion would leave its
+			// background sub-tasks running — their live Task instances continue
+			// the API loop indefinitely.
+			await task.abortBackgroundChildren()
+
 			pushToolResult("")
 			this.emitTaskCompleted(task, effectiveRating)
 			task.abort = true
