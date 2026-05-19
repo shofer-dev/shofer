@@ -124,70 +124,80 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		const conditionMet = () => (effectiveWait === "all" ? allSatisfied() : anySatisfied())
 
 		if (!conditionMet()) {
-			// Event-driven wait — no polling; resolves on the first relevant event.
-			await new Promise<void>((resolve) => {
-				let settled = false
+			// Mark the parent task as `waiting` for the duration of the blocking
+			// await so the Task Selector / TaskHeader surface "this agent is
+			// blocked on a subtask, not actively working". Restored to `running`
+			// in the finally so an exception in the wait path doesn't strand the
+			// parent in `waiting` forever.
+			provider.taskManager.setState(task.taskId, { lifecycle: "waiting" })
+			try {
+				// Event-driven wait — no polling; resolves on the first relevant event.
+				await new Promise<void>((resolve) => {
+					let settled = false
 
-				const cleanup = () => {
-					if (settled) return
-					settled = true
-					provider.taskManager.off("managedTask:completed", onComplete)
-					provider.taskManager.off("managedTask:error", onError)
-					provider.taskManager.off("managedTask:needs-parent-input", onNeedsParentInput)
-					clearTimeout(timer)
-				}
-
-				const checkAndMaybeResolve = () => {
-					if (conditionMet()) {
-						cleanup()
-						resolve()
+					const cleanup = () => {
+						if (settled) return
+						settled = true
+						provider.taskManager.off("managedTask:completed", onComplete)
+						provider.taskManager.off("managedTask:error", onError)
+						provider.taskManager.off("managedTask:needs-parent-input", onNeedsParentInput)
+						clearTimeout(timer)
 					}
-				}
 
-				const onComplete = (completedId: string) => {
-					const handle = handles.get(completedId)
-					if (!handle) return
-					handle.status = "completed"
-					checkAndMaybeResolve()
-				}
-
-				const onError = (erroredId: string) => {
-					const handle = handles.get(erroredId)
-					if (!handle) return
-					handle.status = "error"
-					// For "all" mode an error is still a terminal state — recheck.
-					checkAndMaybeResolve()
-				}
-
-				const onNeedsParentInput = (childId: string) => {
-					const handle = handles.get(childId)
-					if (!handle) return
-					handle.status = "waiting_for_parent"
-					checkAndMaybeResolve()
-				}
-
-				const timer = setTimeout(async () => {
-					// Timeout: re-check authoritative sources before giving up to close
-					// the race window between our initial check and the timer firing.
-					for (const [id, handle] of handles) {
-						if (!isTerminal(id)) {
-							const persisted = await readPersistedStatus(id)
-							if (persisted === "completed") {
-								handle.status = "completed"
-							} else {
-								const liveInstance = provider.taskManager.getManagedTaskInstance(id)
-								handle.status = liveInstance ? mapTaskStatus(liveInstance.taskStatus) : "error"
-							}
+					const checkAndMaybeResolve = () => {
+						if (conditionMet()) {
+							cleanup()
+							resolve()
 						}
 					}
-					cleanup()
-					resolve()
-				}, effectiveTimeout * 1000)
 
-				provider.taskManager.on("managedTask:completed", onComplete)
-				provider.taskManager.on("managedTask:error", onError)
-				provider.taskManager.on("managedTask:needs-parent-input", onNeedsParentInput)
-			})
+					const onComplete = (completedId: string) => {
+						const handle = handles.get(completedId)
+						if (!handle) return
+						handle.status = "completed"
+						checkAndMaybeResolve()
+					}
+
+					const onError = (erroredId: string) => {
+						const handle = handles.get(erroredId)
+						if (!handle) return
+						handle.status = "error"
+						// For "all" mode an error is still a terminal state — recheck.
+						checkAndMaybeResolve()
+					}
+
+					const onNeedsParentInput = (childId: string) => {
+						const handle = handles.get(childId)
+						if (!handle) return
+						handle.status = "waiting_for_parent"
+						checkAndMaybeResolve()
+					}
+
+					const timer = setTimeout(async () => {
+						// Timeout: re-check authoritative sources before giving up to close
+						// the race window between our initial check and the timer firing.
+						for (const [id, handle] of handles) {
+							if (!isTerminal(id)) {
+								const persisted = await readPersistedStatus(id)
+								if (persisted === "completed") {
+									handle.status = "completed"
+								} else {
+									const liveInstance = provider.taskManager.getManagedTaskInstance(id)
+									handle.status = liveInstance ? mapTaskStatus(liveInstance.taskStatus) : "error"
+								}
+							}
+						}
+						cleanup()
+						resolve()
+					}, effectiveTimeout * 1000)
+
+					provider.taskManager.on("managedTask:completed", onComplete)
+					provider.taskManager.on("managedTask:error", onError)
+					provider.taskManager.on("managedTask:needs-parent-input", onNeedsParentInput)
+				})
+			} finally {
+				provider.taskManager.setState(task.taskId, { lifecycle: "running" })
+			}
 		}
 
 		// Build results — for each task, fetch the last completion/error message

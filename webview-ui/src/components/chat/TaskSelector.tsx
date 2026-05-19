@@ -96,6 +96,13 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		icon: "codicon-question",
 		iconColor: "text-[var(--vscode-charts-yellow,#eab308)]",
 	},
+	waiting: {
+		dot: "bg-[var(--vscode-charts-blue,#3b82f6)]",
+		label: "Waiting",
+		pulse: true,
+		icon: "codicon-watch",
+		iconColor: "text-[var(--vscode-charts-blue,#3b82f6)]",
+	},
 	paused: {
 		dot: "bg-[var(--vscode-charts-orange,#f97316)]",
 		label: "Paused",
