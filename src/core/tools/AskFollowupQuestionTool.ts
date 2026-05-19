@@ -50,38 +50,51 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// When this is a background child task, route the question to the
 			// parent instead of blocking on user input. The parent discovers
 			// the question via check_task_status / wait_for_task (which show
-			// status "waiting" and the question text) and answers via
-			// answer_subtask_question.
-			const provider = task.providerRef.deref()
-			if (provider && task.parentTaskId) {
-				// Check if this subtask is a background child by inspecting
-				// its persisted history item.
-				let isBg = false
-				try {
-					const { historyItem } = await provider.getTaskWithId(task.taskId)
-					isBg = historyItem?.isBackground === true
-				} catch {
-					// Fall through — if we can't read history, treat as foreground.
+			// status "waiting_for_parent" and the question text) and answers
+			// via answer_subtask_question.
+			const provider = task.providerRef?.deref()
+			if (provider && task.parentTaskId && task.isBackgroundTask) {
+				// Flip the parent's view of this child to "waiting_for_parent"
+				// so check_task_status / list_background_tasks reflect reality.
+				const parentInstance = provider.taskManager.getManagedTaskInstance(task.parentTaskId)
+				const handleOnParent = parentInstance?.backgroundChildren.get(task.taskId)
+				const previousHandleStatus = handleOnParent?.status
+				if (handleOnParent) {
+					handleOnParent.status = "waiting_for_parent"
 				}
 
-				if (isBg) {
-					// Store the question so answer_subtask_question can resolve it.
-					;(task as any)._pendingParentQuestion = {
-						question,
-						suggestions: follow_up.map((s) => ({ answer: s.text, mode: s.mode })),
-						resolve: null as ((answer: string) => void) | null,
+				// Register the pending question on the child and wake any
+				// wait_for_task currently blocked on this child.
+				const answerPromise = task.setPendingParentQuestion({
+					question,
+					suggestions: follow_up.map((s) => ({ answer: s.text, mode: s.mode })),
+				})
+				provider.taskManager.emit("managedTask:needs-parent-input", task.taskId, question)
+
+				try {
+					const answer = await answerPromise
+					// Restore parent handle status — the child is about to resume.
+					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
+						handleOnParent.status = previousHandleStatus ?? "running"
 					}
-
-					// Block until the parent answers.
-					const answer = await new Promise<string>((resolve) => {
-						;(task as any)._pendingParentQuestion!.resolve = resolve
-					})
-
-					// Simulate the user feedback that normally comes from task.ask("followup", ...).
 					await task.say("user_feedback", answer, undefined)
 					pushToolResult(formatResponse.toolResult(`<user_message>\n${answer}\n</user_message>`))
-					return
+				} catch (rejectErr) {
+					// The promise rejected because the task was aborted (or the
+					// question was superseded). Surface a clean tool error
+					// rather than letting the cast-style error leak up.
+					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
+						handleOnParent.status = previousHandleStatus ?? "running"
+					}
+					pushToolResult(
+						formatResponse.toolError(
+							`ask_followup_question was cancelled before the parent answered: ${
+								rejectErr instanceof Error ? rejectErr.message : String(rejectErr)
+							}`,
+						),
+					)
 				}
+				return
 			}
 
 			const { text, images } = await task.ask("followup", JSON.stringify(follow_up_json), false)

@@ -94,8 +94,15 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 
 		const isTerminal = (id: string) => {
 			const h = handles.get(id)!
-			return h.status === "completed" || h.status === "error"
+			return h.status === "completed" || h.status === "error" || h.status === "cancelled"
 		}
+
+		// A child blocked on a question to the parent is *not* terminal, but
+		// it is a wake-up condition: the parent's wait_for_task must return
+		// so the LLM can decide whether to answer (via answer_subtask_question)
+		// or cancel (via cancel_tasks). Both wait modes treat it as
+		// "the wait condition is satisfied for this child".
+		const needsParentInput = (id: string) => handles.get(id)!.status === "waiting_for_parent"
 
 		// Phase 1: resolve any non-terminal handles from persisted state first,
 		// so tasks that already finished (but whose event we missed) are caught early.
@@ -109,9 +116,12 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		}
 
 		// Condition predicates for the two wait modes.
-		const allTerminal = () => [...handles.keys()].every(isTerminal)
-		const anyCompleted = () => [...handles.values()].some((h) => h.status === "completed")
-		const conditionMet = () => (effectiveWait === "all" ? allTerminal() : anyCompleted())
+		// A child that has routed a question to the parent counts as "done
+		// for the purposes of waiting" — the parent must come back and act.
+		const allSatisfied = () => [...handles.keys()].every((id) => isTerminal(id) || needsParentInput(id))
+		const anySatisfied = () =>
+			[...handles.values()].some((h) => h.status === "completed" || h.status === "waiting_for_parent")
+		const conditionMet = () => (effectiveWait === "all" ? allSatisfied() : anySatisfied())
 
 		if (!conditionMet()) {
 			// Event-driven wait — no polling; resolves on the first relevant event.
@@ -123,6 +133,7 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 					settled = true
 					provider.taskManager.off("managedTask:completed", onComplete)
 					provider.taskManager.off("managedTask:error", onError)
+					provider.taskManager.off("managedTask:needs-parent-input", onNeedsParentInput)
 					clearTimeout(timer)
 				}
 
@@ -148,6 +159,13 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 					checkAndMaybeResolve()
 				}
 
+				const onNeedsParentInput = (childId: string) => {
+					const handle = handles.get(childId)
+					if (!handle) return
+					handle.status = "waiting_for_parent"
+					checkAndMaybeResolve()
+				}
+
 				const timer = setTimeout(async () => {
 					// Timeout: re-check authoritative sources before giving up to close
 					// the race window between our initial check and the timer firing.
@@ -168,18 +186,22 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 
 				provider.taskManager.on("managedTask:completed", onComplete)
 				provider.taskManager.on("managedTask:error", onError)
+				provider.taskManager.on("managedTask:needs-parent-input", onNeedsParentInput)
 			})
 		}
 
-		// Build results — for each task, fetch the last completion/error message.
+		// Build results — for each task, fetch the last completion/error message
+		// or surface the pending parent question.
 		const resultLines: string[] = []
 		const completedIds: string[] = []
+		const needsAnswerIds: string[] = []
 
 		for (const [id, handle] of handles) {
 			let result: string | undefined
 			let errorText: string | undefined
+			let pendingQuestionText: string | undefined
 
-			if (handle.status === "completed" || handle.status === "error") {
+			if (handle.status === "completed" || handle.status === "error" || handle.status === "cancelled") {
 				const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
 				const messages = await readTaskMessages({ taskId: id, globalStoragePath })
 				for (let i = messages.length - 1; i >= 0; i--) {
@@ -193,6 +215,15 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 						break
 					}
 				}
+			} else if (handle.status === "waiting_for_parent") {
+				const liveInstance = provider.taskManager.getManagedTaskInstance(id)
+				const pq = liveInstance?.getPendingParentQuestion()
+				if (pq) {
+					const suggestionList =
+						pq.suggestions.length > 0 ? pq.suggestions.map((s) => `"${s.answer}"`).join(", ") : "none"
+					pendingQuestionText = `Pending parent question: "${pq.question}"\nSuggestions: ${suggestionList}\nAnswer via answer_subtask_question(task_id="${id}", answer=...) or cancel via cancel_tasks.`
+				}
+				needsAnswerIds.push(id)
 			}
 
 			if (handle.status === "completed") {
@@ -204,13 +235,15 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 				`Task: ${id}\nStatus: ${handle.status}` +
 					(timedOut ? `\nTimed out after ${effectiveTimeout}s` : "") +
 					(result ? `\nResult: ${result.slice(0, MAX_SUBTASK_RESULT_LENGTH)}` : "") +
-					(errorText ? `\nError: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}` : ""),
+					(errorText ? `\nError: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}` : "") +
+					(pendingQuestionText ? `\n${pendingQuestionText}` : ""),
 			)
 		}
 
 		const timedOut = [...handles.values()].some((h) => h.status === "running" || h.status === "waiting")
 		const summary =
 			`Completed: [${completedIds.join(", ")}]\n` +
+			(needsAnswerIds.length > 0 ? `Awaiting parent answer: [${needsAnswerIds.join(", ")}]\n` : "") +
 			(timedOut ? `Timed out (${effectiveTimeout}s limit reached)\n` : "") +
 			`\n` +
 			resultLines.join("\n\n")

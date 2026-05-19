@@ -242,7 +242,7 @@ Block until one or more background child tasks reach a terminal state, then retu
 }
 ```
 
-**Implementation:** Creates a promise that resolves when each tracked child reaches `completed`, `error`, or `cancelled` status. On timeout, returns current statuses for all tasks without error. The `wait` parameter controls the resolution strategy:
+**Implementation:** Creates a promise that resolves when each tracked child reaches `completed`, `error`, or `cancelled` status, OR when a child routes a question to the parent (`"waiting_for_parent"`). Listens for `managedTask:completed`, `managedTask:error`, and `managedTask:needs-parent-input` events. On timeout, returns current statuses for all tasks without error. The `wait` parameter controls the resolution strategy:
 
 - `"all"` (default): resolves when every listed task reaches a terminal state.
 - `"any"`: resolves as soon as at least one task completes successfully.
@@ -265,17 +265,17 @@ List all background child tasks started by the current task via `new_task` with 
 
 ### `cancel_tasks`
 
-Stop one or more background child tasks. Already-completed or errored tasks are unaffected (no-op).
+Stop one or more background child tasks. Already-completed, errored, or cancelled tasks are unaffected (no-op).
 
 ```typescript
 // Parameters
 { task_ids: string[] }
 
 // Returns per-task status:
-// "Canceled: 2 task(s)\nchild-1: stopped\nchild-2: already completed"
+// "Canceled: 2 task(s)\nchild-1: cancelled\nchild-2: already completed"
 ```
 
-**Implementation:** Iterates over `task_ids`, resolves each from `Task.backgroundChildren`, fetches the live instance from `TaskManager`, and calls `abortTask(false)`. Already-terminal tasks are skipped. Results reported with per-task status.
+**Implementation:** Builds a classification plan first (so the auto-rendered chat row reflects per-task verdicts), then awaits `askApproval`, then performs `abortTask(false)` on each live instance. Cancelled handles end in status `"cancelled"` (distinct from `"error"`). A failure during abort downgrades that task's status to `"error"` and surfaces the message.
 
 ### `answer_subtask_question`
 
@@ -286,17 +286,18 @@ Answer a question that a background child task asked via `ask_followup_question`
 { task_id: string, answer: string }
 ```
 
-**Implementation:** Resolves the child's `_pendingParentQuestion` promise with the parent's answer, allowing the child's `ask_followup_question` tool handler to continue.
+**Implementation:** Resolves the child's pending parent question via the typed `Task.resolvePendingParentQuestion(answer)` accessor, allowing the child's `ask_followup_question` tool handler to continue. Flips the parent-side handle status from `"waiting_for_parent"` back to `"running"`.
 
 ### `ask_followup_question` routing
 
 When a background child calls `ask_followup_question`, the question is automatically routed to the parent:
 
-1. The child stores the question as `_pendingParentQuestion` on its `Task` instance.
-2. The child blocks on a promise awaiting the parent's answer.
-3. The parent discovers the question via `check_task_status` (which shows `status: "waiting"` and the question text) or `wait_for_task`.
-4. The parent answers via `answer_subtask_question`, resolving the child's promise.
-5. The child continues as if the user had answered.
+1. The child registers the question via `Task.setPendingParentQuestion()` which returns a promise the tool handler `await`s.
+2. The parent-side `TaskHandle.status` for this child flips to `"waiting_for_parent"`.
+3. `TaskManager` emits a `managedTask:needs-parent-input` event so any parent `wait_for_task` currently blocked on this child wakes up immediately.
+4. The parent discovers the question via `check_task_status` (which surfaces the question text + suggestions) or `wait_for_task` (which now returns with the question in its summary).
+5. The parent answers via `answer_subtask_question`, resolving the child's promise; the child resumes as if the user had answered.
+6. If the parent is aborted while the child is waiting, `Task.abortTask` calls `rejectPendingParentQuestion(new Error("task aborted"))` so the child's await unblocks cleanly with a tool error instead of hanging.
 
 ---
 
