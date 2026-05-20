@@ -511,7 +511,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					if (!item) {
 						break
 					}
-					console.log(`[DIAG-WEBVIEW-RX] id=${item.id} state=${JSON.stringify(item.taskState)}`)
 					setState((prevState) => {
 						const existingIndex = prevState.taskHistory.findIndex((h) => h.id === item.id)
 						let nextHistory: typeof prevState.taskHistory
