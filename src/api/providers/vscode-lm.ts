@@ -874,10 +874,6 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			const modelId = this.client.id || modelParts.join(SELECTOR_SEPARATOR)
 
 			// Build model info with conservative defaults for missing values
-			getOutputChannel()?.appendLine(
-				`[CONTEXT-DIAG] vscode-lm getModel() — client.id=${this.client.id}, ` +
-					`maxInputTokens=${this.client.maxInputTokens} (type=${typeof this.client.maxInputTokens})`,
-			)
 			const modelInfo: ModelInfo = {
 				maxTokens: -1, // Unlimited tokens by default
 				// Context window must come from llm-router (via
