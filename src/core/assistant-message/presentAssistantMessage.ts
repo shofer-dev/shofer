@@ -608,11 +608,35 @@ export async function presentAssistantMessage(shofer: Task) {
 
 				// Emit tool result to the webview so ChatRow can show an expandable
 				// output section beneath the tool invocation block.
-				// Skip when the tool produced no meaningful output (e.g. attempt_completion,
-				// update_todo_list, set_task_title).
+				//
+				// Suppress for tools whose results are already visible inline in the
+				// chat UI (dedicated ChatRow renderers) — showing a redundant "Output"
+				// section adds noise without value.
+				const TOOLS_WITH_INLINE_RESULT = new Set([
+					"attempt_completion",
+					"update_todo_list",
+					"set_task_title",
+					"give_feedback",
+					"switch_mode",
+					"skills",
+					"run_slash_command",
+					"ask_assistant_agent",
+					"new_task",
+					"check_task_status",
+					"wait_for_task",
+					"list_background_tasks",
+					"cancel_tasks",
+					"answer_subtask_question",
+					"generate_image",
+				])
+
 				// Cap output at 2 KB to avoid bloating IPC messages and persisted
 				// ui_messages.json with multi-MB grep/file results.
-				if (resultContent && resultContent !== "(tool did not return anything)") {
+				if (
+					resultContent &&
+					resultContent !== "(tool did not return anything)" &&
+					!TOOLS_WITH_INLINE_RESULT.has(block.name)
+				) {
 					const MAX_TOOL_RESULT = 2048
 					const truncatedOutput =
 						resultContent.length > MAX_TOOL_RESULT
