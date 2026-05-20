@@ -140,7 +140,7 @@ Source: project
 
 ## Loaded Skill Tracking
 
-Each `Task` maintains a [`loadedSkills: Map<string, string>`](src/core/task/Task.ts:449) — skill name → absolute SKILL.md path.
+Each `Task` maintains a [`loadedSkills: Map<string, string>`](src/core/task/Task.ts:549) — skill name → absolute SKILL.md path.
 
 ### Lifecycle
 
@@ -157,13 +157,13 @@ All three code paths clear `loadedSkills`:
 
 ```typescript
 // 1. User-triggered condense via /condense_context
-//    Task.ts → condenseContext() line 2036
+//    Task.ts → condenseContext() line 2076
 
 // 2. Forced truncation after context window error
-//    Task.ts → handleContextWindowExceededError() line 4638
+//    Task.ts → handleContextWindowExceededError() line 4889
 
 // 3. Auto-condense via manageContext in attemptApiRequest()
-//    Task.ts → line 4876
+//    Task.ts → line 4952
 ```
 
 ## UI Integration
@@ -230,7 +230,7 @@ When multiple skills have the same name:
 
 | File                                                                            | Purpose                                            |
 | ------------------------------------------------------------------------------- | -------------------------------------------------- |
-| [`Task.ts`](src/core/task/Task.ts:449)                                          | `loadedSkills` Map, condense clearing              |
+| [`Task.ts`](src/core/task/Task.ts:549)                                          | `loadedSkills` Map, condense clearing              |
 | [`SkillsTool.ts`](src/core/tools/SkillsTool.ts)                                 | Handler: no-op check, tracking, approval           |
 | [`SkillsManager.ts`](src/services/skills/SkillsManager.ts)                      | Discovery, caching, file watching                  |
 | [`skillInvocation.ts`](src/services/skills/skillInvocation.ts)                  | Content loading, result formatting                 |

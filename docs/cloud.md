@@ -1,5 +1,17 @@
 # Shofer Cloud Architecture & Features
 
+> **⚠️ ACCURACY NOTE (2026-05-20):** This document was inherited from upstream and has not been updated for the Shofer fork. Nearly all the cloud features described below — including `CloudService`, `WebAuthService`, `CloudAPI`, `CloudShareService`, the retry queue, bridge connectivity, MDM enforcement, task sync, cloud profile sync, and all cloud UI components — **do not exist** in the current codebase. The `packages/cloud/` package does not exist. The document is preserved as aspirational reference and must be rewritten before being relied upon.
+
+## What Does Exist (verified)
+
+| Location                                                                                           | Purpose                                                          |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`packages/telemetry/src/`](packages/telemetry/src/)                                               | Base telemetry client + PostHog client                           |
+| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type only                                |
+| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class (no Shofer-specific handler) |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`      |
+| [`apps/web-shofer/`](apps/web-shofer/)                                                             | Next.js marketing/product pages (accurate)                       |
+
 This document provides a comprehensive overview of all cloud-related features in the Shofer extension, covering the cloud service architecture, authentication, settings synchronization, telemetry, task sharing, bridge connectivity, the Shofer Router provider, cloud profile management, image generation, MDM enforcement, and the web UI components.
 
 ---
@@ -52,63 +64,34 @@ This document provides a comprehensive overview of all cloud-related features in
 
 ## Architecture Overview
 
-The cloud layer lives primarily in three locations:
+> **⚠️ The `packages/cloud/` package does not exist in this codebase.** The `CloudService` and all its sub-services described in the legacy sections below have been removed. The architecture diagram and component descriptions are preserved for reference only.
 
-| Location                                                               | Purpose                                                                  |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [`packages/cloud/src/`](packages/cloud/src/)                           | Core cloud service library — auth, settings, API, telemetry, retry queue |
-| [`src/api/providers/shofer.ts`](src/api/providers/shofer.ts)           | Shofer Router provider (AI model proxy)                                  |
-| [`webview-ui/src/components/cloud/`](webview-ui/src/components/cloud/) | React UI components for the Cloud tab                                    |
+The cloud-related code that actually exists lives in:
 
-The [`CloudService`](packages/cloud/src/CloudService.ts) is the central orchestrator, instantiated as a singleton during extension activation in [`src/extension.ts`](src/extension.ts). It composes all cloud subsystems and emits typed events for auth state changes, user info updates, and settings changes.
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   CloudService                       │
-│  (singleton, EventEmitter<CloudServiceEvents>)       │
-├─────────────────────────────────────────────────────┤
-│  authService       → WebAuthService | StaticToken   │
-│  settingsService   → CloudSettingsService | Static  │
-│  telemetryClient   → CloudTelemetryClient           │
-│  shareService      → CloudShareService              │
-│  cloudAPI          → CloudAPI                       │
-│  retryQueue        → RetryQueue                     │
-└─────────────────────────────────────────────────────┘
-```
+| Location                                                                                           | Purpose                                                             |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`packages/telemetry/src/`](packages/telemetry/src/)                                               | `BaseTelemetryClient`, `TelemetryService`, `PostHogTelemetryClient` |
+| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type                                        |
+| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class                                 |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Marketplace mode/MCP fetching from cloud                            |
+| [`apps/web-shofer/`](apps/web-shofer/)                                                             | Next.js web app (marketing + product pages)                         |
 
 ---
 
-## Cloud Service (`CloudService`)
+## Legacy / Not Yet Implemented
 
-**File:** [`packages/cloud/src/CloudService.ts`](packages/cloud/src/CloudService.ts)
+The sections below describe cloud features from the upstream codebase. **None of the following files, classes, or services exist in the current Shofer codebase:**
 
-The [`CloudService`](packages/cloud/src/CloudService.ts:34) is the central facade. It:
+- `packages/cloud/` (entire package — `CloudService`, `WebAuthService`, `StaticTokenAuthService`, `CloudSettingsService`, `StaticSettingsService`, `CloudAPI`, `CloudShareService`, `TelemetryClient`, `RetryQueue`, `RefreshTimer`, `config.ts`, `errors.ts`)
+- `packages/types/src/cloud.ts` (all cloud type definitions)
+- `src/api/providers/shofer.ts` (Shofer-specific AI provider handler)
+- `webview-ui/src/components/cloud/` (all cloud UI components)
+- `webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`
+- `src/services/mdm/MdmService.ts`
 
-- Is a singleton (`CloudService.instance` / `CloudService.createInstance()`)
-- Implements `Disposable` for proper cleanup
-- Determines auth mode via the `SHOFER_CLOUD_TOKEN` environment variable:
-    - If set → [`StaticTokenAuthService`](packages/cloud/src/StaticTokenAuthService.ts) (cloud agent mode)
-    - Otherwise → [`WebAuthService`](packages/cloud/src/WebAuthService.ts) (normal user mode)
-- Determines settings mode via the `SHOFER_CLOUD_ORG_SETTINGS` environment variable:
-    - If set → [`StaticSettingsService`](packages/cloud/src/StaticSettingsService.ts) (base64-encoded JSON)
-    - Otherwise → [`CloudSettingsService`](packages/cloud/src/CloudSettingsService.ts) (API-fetched)
-- Initializes all sub-services in order: auth → settings → cloudAPI → retryQueue → telemetry → share
-- Delegates auth state changes to the retry queue lifecycle (pause/resume/clear)
+Content below is preserved for reference:
 
-Key public methods:
-
-- `login()`, `logout()`, `handleAuthCallback()` — authentication flow
-- `getUserInfo()`, `getOrganizationId()`, `getOrganizationMemberships()` — user/org data
-- `getAllowList()`, `getOrganizationSettings()`, `getUserSettings()` — settings
-- `captureEvent()` — telemetry
-- `shareTask()` — task sharing
-- `switchOrganization()` — organization context switching
-- `updateUserSettings()` — user settings persistence
-- `isTaskSyncEnabled()` — task sync check
-
----
-
-## Authentication
+### Authentication
 
 ### WebAuthService (User-Facing)
 
@@ -514,11 +497,14 @@ Shows the user's credit balance next to the Shofer Router provider in settings. 
 
 ## Marketplace Integration
 
-The marketplace loads remote configurations from Shofer Cloud:
+The marketplace loads remote configurations from Shofer Cloud via [`RemoteConfigLoader`](src/services/marketplace/RemoteConfigLoader.ts):
 
-- [`RemoteConfigLoader`](src/services/marketplace/RemoteConfigLoader.ts) fetches marketplace listings from `{SHOFER_API_URL}/api/...`.
-- Organization settings can specify `hiddenMcps` and `hideMarketplaceMcps` to control visibility.
-- Organization-provided MCPs are displayed under the organization name in the marketplace UI.
+- Fetches modes from `{SHOFER_API_URL}/api/marketplace/modes` (YAML, validated against `modeMarketplaceItemSchema`)
+- Fetches MCPs from `{SHOFER_API_URL}/api/marketplace/mcps` (YAML, validated against `mcpMarketplaceItemSchema`)
+- Results are cached for 5 minutes with exponential backoff retry (up to 3 attempts)
+- API base URL defaults to `https://app.shofer.dev` (overridable via `SHOFER_API_URL` env var)
+
+> **Note:** Organization-level MCP filtering (`hiddenMcps`, `hideMarketplaceMcps`) and organization-provided MCPs are referenced in type definitions (`packages/types/src/organization.ts`) but the runtime integration is not yet implemented.
 
 ---
 
@@ -543,69 +529,45 @@ The Next.js app at [`apps/web-shofer/`](apps/web-shofer/) hosts marketing and pr
 
 ## Configuration & Environment Variables
 
-| Variable                                        | Default                        | Description                                 |
-| ----------------------------------------------- | ------------------------------ | ------------------------------------------- |
-| `CLERK_BASE_URL`                                | `https://clerk.shofer.dev`     | Clerk authentication server URL             |
-| `ROO_CODE_API_URL` / `SHOFER_API_URL`           | `https://app.shofer.dev`       | Shofer Cloud API base URL                   |
-| `ROO_CODE_PROVIDER_URL` / `SHOFER_PROVIDER_URL` | `https://api.shofer.dev/proxy` | Shofer Router proxy base URL                |
-| `SHOFER_CLOUD_TOKEN`                            | _(empty)_                      | Static JWT for cloud agent auth             |
-| `SHOFER_CLOUD_ORG_SETTINGS`                     | _(empty)_                      | Base64-encoded org settings for static mode |
-| `SHOFER_DISABLE_TELEMETRY`                      | `0`                            | Set to `1` to disable cloud telemetry       |
+| Variable                 | Default                        | Description                                            |
+| ------------------------ | ------------------------------ | ------------------------------------------------------ |
+| `SHOFER_API_URL`         | `https://app.shofer.dev`       | Shofer Cloud API base URL (used by marketplace loader) |
+| `SHOFER_PROVIDER_URL`    | `https://api.shofer.dev/proxy` | Shofer Router proxy base URL                           |
+| `TELEMETRY_ENABLED`      | `false`                        | Set to `"true"` to enable telemetry (PostHog/cloud)    |
+| `SHOFER_IPC_SOCKET_PATH` | _(empty)_                      | Unix socket path for IPC API                           |
 
-**Defined in:** [`packages/cloud/src/config.ts`](packages/cloud/src/config.ts) and referenced in `.env.sample`.
+> **Note:** `CLERK_BASE_URL`, `SHOFER_CLOUD_TOKEN`, `SHOFER_CLOUD_ORG_SETTINGS`, and `SHOFER_DISABLE_TELEMETRY` are referenced in the legacy sections below but do not exist in the current codebase. The telemetry toggle in the actual code is `TELEMETRY_ENABLED` (set to `"true"`), not `SHOFER_DISABLE_TELEMETRY`.
+
+**Actual config sources:**
+
+- Marketplace: resolved in [`RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) (`SHOFER_API_URL` env var, line 12)
+- Telemetry: gated by `TELEMETRY_ENABLED` in [`TelemetryService.ts`](packages/telemetry/src/TelemetryService.ts) (line 17)
+- IPC socket: `SHOFER_IPC_SOCKET_PATH` in [`extension.ts`](src/extension.ts) (line 303)
 
 ---
 
 ## Error Handling
 
-**File:** [`packages/cloud/src/errors.ts`](packages/cloud/src/errors.ts)
-
-Custom error classes for cloud operations:
-
-| Error Class               | HTTP Status | Description                                                    |
-| ------------------------- | ----------- | -------------------------------------------------------------- |
-| `CloudAPIError`           | Varies      | Base error with optional `statusCode` and `responseBody`       |
-| `AuthenticationError`     | 401         | Missing or invalid session token                               |
-| `TaskNotFoundError`       | 404         | Task not found when sharing (triggers backfill)                |
-| `NetworkError`            | —           | Network connectivity failure                                   |
-| `InvalidClientTokenError` | —           | Expired/invalid Clerk client token (triggers credential clear) |
-
-The [`CloudAPI.request()`](packages/cloud/src/CloudAPI.ts:25) method uses `AbortSignal.timeout()` (30s default) and distinguishes between network errors, timeouts, and HTTP error responses.
+> **⚠️** The error classes and `CloudAPI.request()` described in the legacy version below do not exist (`packages/cloud/src/errors.ts` and `packages/cloud/src/CloudAPI.ts` are not present). The `RemoteConfigLoader` uses bare `try/catch` with exponential backoff retry and a 10s timeout via `axios`.
 
 ---
 
 ## Lifecycle
 
-The cloud service lifecycle is managed in [`src/extension.ts`](src/extension.ts):
-
-1. **Activation:** `CloudService.createInstance()` is called, which initializes all sub-services.
-2. **Runtime:** Event handlers respond to auth state changes (refresh models, clear cache, apply provider profiles).
-3. **Deactivation:** `CloudService.instance.dispose()` is called, which cleans up timers, listeners, and the retry queue.
+> **⚠️** The `CloudService` lifecycle described in the legacy version below does not exist. There is no `CloudService.createInstance()` or `CloudService.instance.dispose()` call in the current [`extension.ts`](src/extension.ts).
 
 ---
 
 ## Summary of Key Files
 
-| File                                                                                                                                             | Purpose                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
-| [`packages/cloud/src/CloudService.ts`](packages/cloud/src/CloudService.ts)                                                                       | Central orchestrator          |
-| [`packages/cloud/src/WebAuthService.ts`](packages/cloud/src/WebAuthService.ts)                                                                   | Clerk OAuth authentication    |
-| [`packages/cloud/src/StaticTokenAuthService.ts`](packages/cloud/src/StaticTokenAuthService.ts)                                                   | Cloud agent static token auth |
-| [`packages/cloud/src/CloudSettingsService.ts`](packages/cloud/src/CloudSettingsService.ts)                                                       | API-fetched org/user settings |
-| [`packages/cloud/src/StaticSettingsService.ts`](packages/cloud/src/StaticSettingsService.ts)                                                     | Static org settings           |
-| [`packages/cloud/src/CloudAPI.ts`](packages/cloud/src/CloudAPI.ts)                                                                               | HTTP client for cloud APIs    |
-| [`packages/cloud/src/CloudShareService.ts`](packages/cloud/src/CloudShareService.ts)                                                             | Task sharing logic            |
-| [`packages/cloud/src/TelemetryClient.ts`](packages/cloud/src/TelemetryClient.ts)                                                                 | Cloud telemetry client        |
-| [`packages/cloud/src/retry-queue/RetryQueue.ts`](packages/cloud/src/retry-queue/RetryQueue.ts)                                                   | Resilient request retry       |
-| [`packages/cloud/src/RefreshTimer.ts`](packages/cloud/src/RefreshTimer.ts)                                                                       | Exponential backoff timer     |
-| [`packages/cloud/src/config.ts`](packages/cloud/src/config.ts)                                                                                   | Environment configuration     |
-| [`packages/cloud/src/errors.ts`](packages/cloud/src/errors.ts)                                                                                   | Error classes                 |
-| [`packages/types/src/cloud.ts`](packages/types/src/cloud.ts)                                                                                     | TypeScript type definitions   |
-| [`src/api/providers/shofer.ts`](src/api/providers/shofer.ts)                                                                                     | Shofer Router AI provider     |
-| [`src/core/task/Task.ts`](src/core/task/Task.ts)                                                                                                 | Task sync integration         |
-| [`src/services/mdm/MdmService.ts`](src/services/mdm/MdmService.ts)                                                                               | MDM policy enforcement        |
-| [`src/core/config/ProviderSettingsManager.ts`](src/core/config/ProviderSettingsManager.ts)                                                       | Cloud profile sync            |
-| [`webview-ui/src/components/cloud/CloudView.tsx`](webview-ui/src/components/cloud/CloudView.tsx)                                                 | Cloud tab UI                  |
-| [`webview-ui/src/components/cloud/CloudAccountSwitcher.tsx`](webview-ui/src/components/cloud/CloudAccountSwitcher.tsx)                           | Account switcher              |
-| [`webview-ui/src/components/cloud/CloudUpsellDialog.tsx`](webview-ui/src/components/cloud/CloudUpsellDialog.tsx)                                 | Cloud upsell modal            |
-| [`webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`](webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx) | Credit balance display        |
+> **⚠️** Almost all files in the legacy summary below do not exist in this codebase. Files from the upstream `packages/cloud/` package, `src/api/providers/shofer.ts`, `src/services/mdm/MdmService.ts`, and all `webview-ui/src/components/cloud/` components have been removed.
+
+**Files that DO exist (verified):**
+
+| File                                                                                               | Actual Purpose                      |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| [`packages/telemetry/src/BaseTelemetryClient.ts`](packages/telemetry/src/BaseTelemetryClient.ts)   | Abstract base for telemetry clients |
+| [`packages/telemetry/src/TelemetryService.ts`](packages/telemetry/src/TelemetryService.ts)         | Telemetry orchestrator (PostHog)    |
+| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` schema      |
+| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Marketplace mode/MCP fetching       |

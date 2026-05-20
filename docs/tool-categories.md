@@ -33,9 +33,9 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
     write:       { tools: ["apply_diff", "write_to_file", ...], customTools: [...] },
     execute:     { tools: ["execute_command", "read_command_output", "sleep"] },
     browser:     { tools: [] },  // external LM tools from browser-tools
-    mcp:         { tools: ["use_mcp_tool", "access_mcp_resource"] },
-    mode:        { tools: ["switch_mode", "new_task"], alwaysAvailable: true },
-    subtasks:    { tools: ["check_task_status", "wait_for_task", "list_background_tasks"] },
+    mcp:         { tools: ["use_mcp_tool", "access_mcp_resource", "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
+    mode:        { tools: ["switch_mode"] },
+    subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task", "list_background_tasks", "cancel_tasks", "answer_subtask_question"] },
     questions:   { tools: ["ask_followup_question"] },
     uncategorized: { tools: [] },
 }
@@ -43,17 +43,17 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 
 ### 2. External LM Tools — Declared by the Extension That Registers Them
 
-Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer reads this configuration at runtime via `resolveExternalLmToolGroup()` in [`build-tools.ts`](../src/core/task/build-tools.ts).
+Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer reads this configuration at runtime via [`filterPrivateToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts) in `filter-tools-for-mode.ts`.
 
-| Extension              | Config namespace                 | Tool prefix |
-| ---------------------- | -------------------------------- | ----------- |
-| `shofer-vscode-tools`  | `shofer.vscodeTools.toolGroups`  | `ide_`      |
-| `shofer-browser-tools` | `shofer.browserTools.toolGroups` | `browser_`  |
+| Extension               | Config namespace                  | Tool prefix |
+| ----------------------- | --------------------------------- | ----------- |
+| `arkware-vscode-tools`  | `arkware.vscodeTools.toolGroups`  | `ide_`      |
+| `arkware-browser-tools` | (MCP server — inferred by prefix) | `browser_`  |
 
 **Example — vscode-tools** (`extensions/vscode-tools/package.json`):
 
 ```json
-"shofer.vscodeTools.toolGroups": {
+"arkware.vscodeTools.toolGroups": {
     "ide_file_read": "read",
     "ide_file_open": "execute",
     "ide_panel_focus": "execute",
@@ -61,16 +61,7 @@ Extensions that register language model tools via `vscode.lm.registerTool()` dec
 }
 ```
 
-**Example — browser-tools** (`extensions/browser-tools/package.json`):
-
-```json
-"shofer.browserTools.toolGroups": {
-    "browser_navigate": "browser",
-    "browser_click": "browser",
-    "browser_screenshot": "browser",
-    ...
-}
-```
+Browser tools (`browser_*`) are registered as an MCP server (not via a `toolGroups` config). Their group is inferred by the `browser_` prefix in [`getToolGroupForSayTool()`](../src/core/auto-approval/tools.ts), which maps `browser_*` → `"browser"` and `ide_*` → `"execute"` as a fallback.
 
 ### 3. MCP Tools — Server Declaration + User Override
 
@@ -114,19 +105,19 @@ MCP tools are classified via a three-tier priority system (highest first):
 
 When a mode requests tools, each tool's group is checked against the mode's allowed groups. The `mcp` group itself is a **gateway** — the `use_mcp_tool` and `access_mcp_resource` gateway tools live in the `mcp` group, but individual MCP tools use their own assigned groups. This means a mode with `groups: ["read", "mcp"]` gets `use_mcp_tool` + all MCP tools classified as `read`.
 
-| Default mode | Allowed groups                      |
-| ------------ | ----------------------------------- |
-| architect    | `read`, `write` (`.md` only), `mcp` |
-| code         | `read`, `write`, `execute`, `mcp`   |
-| ask          | `read`, `mcp`                       |
-| debug        | `read`, `write`, `execute`, `mcp`   |
-| orchestrator | (empty — delegates via `new_task`)  |
+| Default mode | Allowed groups                                                                      |
+| ------------ | ----------------------------------------------------------------------------------- |
+| architect    | `read`, `write` (`.md` only), `mcp`, `questions`                                    |
+| code         | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` |
+| ask          | `read`, `mcp`                                                                       |
+| debug        | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`         |
+| orchestrator | (empty — delegates via `new_task`)                                                  |
 
 ### Always-available tools
 
-These tools bypass mode filtering entirely:
+These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TOOLS`](../packages/types/src/tool.ts) constant:
 
-`attempt_completion`, `update_todo_list`, `run_slash_command`, `skill`, `set_task_title`
+`attempt_completion`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`
 
 ### MCP tools without group
 
@@ -134,9 +125,9 @@ Tools without an explicit `group` field continue to work — they default to `un
 
 ## Adding a New Extension's Tools
 
-1. Add the extension's config namespace to [`resolveExternalLmToolGroup()`](../src/core/task/build-tools.ts) in `build-tools.ts`
-2. Add a `toolGroups` configuration contribution in the extension's [`package.json`] mapping each tool name to its group
-3. Ensure the group exists in the [`toolGroups` enum](../packages/types/src/tool.ts)
+1. Add a `toolGroups` configuration contribution in the extension's `package.json` mapping each tool name to its group (see `arkware.vscodeTools.toolGroups` for the existing pattern)
+2. Ensure the group exists as a valid [`ToolGroup`](../packages/types/src/tool.ts) value
+3. For prefix-based automatic classification (used by browser tools), the `browser_` prefix maps to `"browser"` and `ide_` prefix maps to `"execute"` in [`getToolGroupForSayTool()`](../src/core/auto-approval/tools.ts)
 
 ## References
 

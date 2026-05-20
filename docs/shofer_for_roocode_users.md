@@ -15,18 +15,18 @@ This document catalogues every **user-facing feature** and **opinionated change*
 3. [TaskSelector UX](#3-taskselector-ux)
 4. [Message Queue, Send Now & Per-Task Drafts](#4-message-queue-send-now--per-task-drafts)
 5. [Task Export (JSON + Markdown)](#5-task-export-json--markdown)
-6. [Drag & Drop System](#6-drag--drop-system)
+6. [Drag & Drop Workaround](#6-drag--drop-workaround)
 7. [New Native Tools](#7-new-native-tools)
 8. [File Changes System](#8-file-changes-system)
 9. [Auto-Approval & Tool Categories](#9-auto-approval--tool-categories)
 10. [Skills System Overhaul](#10-skills-system-overhaul)
 11. [Modes & Tool Access Control](#11-modes--tool-access-control)
 12. [External LM Tool Providers](#12-external-lm-tool-providers)
-13. [Worktree Support](#13-worktree-support)
+13. [Native Worktree Support](#13-native-worktree-support)
 14. [Cancellation Flow](#14-cancellation-flow)
 15. [Submodule & Nested Git Support](#15-submodule--nested-git-support)
 16. [Cost Calculation & Limits](#16-cost-calculation--limits)
-17. [Branding & Platform Changes](#17-branding--platform-changes)
+17. [Cloud removal and marketplace/telemetry feature flags](#17-cloud-removal-and-marketplacetelemetry-feature-flags)
 18. [Provider Improvements](#18-provider-improvements)
 19. [UI/UX Opinionated Changes](#19-uiux-opinionated-changes)
 
@@ -49,9 +49,9 @@ Previously, the codebase supported only one task at a time — starting a new ta
 
 ### Architecture
 
-- [`new_task`](../src/core/task/tools/NewTaskTool.ts) creates an independent `Task` instance.
+- [`new_task`](../src/core/tools/NewTaskTool.ts) creates an independent `Task` instance.
 - Each task runs its own `_runTaskLoop`, making independent API calls to the LLM.
-- The [`TaskManager`](../src/core/task/TaskManager.ts) orchestrates lifecycle: create, pause, resume, abort, rehydrate.
+- The [`TaskManager`](../src/services/task-manager/TaskManager.ts) orchestrates lifecycle: create, pause, resume, abort, rehydrate.
 - Task state is persisted to disk so tasks survive extension reloads and VS Code restarts.
 
 > 📸 TODO: screenshot of TaskSelector showing multiple tasks with different state badges (running, paused, completed)
@@ -66,15 +66,15 @@ Previously, `new_task` only spawned synchronous children — the parent waited u
 
 ### What Was Built
 
-| Feature                                                                      | Description                                                                                                                          |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **`is_background` parameter**                                                | `new_task` accepts `is_background: true`. The child runs concurrently; the parent continues immediately.                             |
-| [`check_task_status`](../src/core/task/tools/CheckTaskStatusTool.ts)         | Query the current status of any background task by its task ID.                                                                      |
-| [`wait_for_task`](../src/core/task/tools/WaitForTaskTool.ts)                 | Block until one or more background tasks reach a terminal state. Supports `all`/`any` wait strategies and multiple task IDs.         |
-| [`list_background_tasks`](../src/core/task/tools/ListBackgroundTasksTool.ts) | List all background child tasks with their current status.                                                                           |
-| **Abort propagation**                                                        | Canceling a parent task propagates abort to all background children.                                                                 |
-| **Parent mode inheritance**                                                  | Background children inherit the parent's mode unless explicitly overridden.                                                          |
-| **UI rows**                                                                  | Async tool calls (`wait_for_task`, `check_task_status`, `list_background_tasks`) render as descriptive chat rows with status badges. |
+| Feature                                                                 | Description                                                                                                                          |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **`is_background` parameter**                                           | `new_task` accepts `is_background: true`. The child runs concurrently; the parent continues immediately.                             |
+| [`check_task_status`](../src/core/tools/CheckTaskStatusTool.ts)         | Query the current status of any background task by its task ID.                                                                      |
+| [`wait_for_task`](../src/core/tools/WaitForTaskTool.ts)                 | Block until one or more background tasks reach a terminal state. Supports `all`/`any` wait strategies and multiple task IDs.         |
+| [`list_background_tasks`](../src/core/tools/ListBackgroundTasksTool.ts) | List all background child tasks with their current status.                                                                           |
+| **Abort propagation**                                                   | Canceling a parent task propagates abort to all background children.                                                                 |
+| **Parent mode inheritance**                                             | Background children inherit the parent's mode unless explicitly overridden.                                                          |
+| **UI rows**                                                             | Async tool calls (`wait_for_task`, `check_task_status`, `list_background_tasks`) render as descriptive chat rows with status badges. |
 
 ### Example Orchestration Pattern
 
@@ -161,25 +161,25 @@ Twelve native tools were implemented to provide functionality on par with Copilo
 
 See [`native_tools.md`](native_tools.md) for the complete tool reference.
 
-| Tool                                                                       | Description                                                                                                                                                                                     |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`lsp_search`](../src/core/task/tools/LspSearchTool.ts)                    | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
-| [`create_new_workspace`](../src/core/task/tools/CreateNewWorkspaceTool.ts) | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
-| [`fetch_web_page`](../src/core/task/tools/FetchWebPageTool.ts)             | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
-| [`execute_command`](../src/core/task/tools/ExecuteCommandTool.ts)          | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
-| [`list_files`](../src/core/task/tools/ListFilesTool.ts)                    | List directory contents with recursive option.                                                                                                                                                  |
-| [`grep_search`](../src/core/task/tools/GrepSearchTool.ts)                  | Regex/literal search across files with context display (using VS Code's native search API). See [`grep_search-tool.md`](grep_search-tool.md).                                                   |
-| [`read_file`](../src/core/task/tools/ReadFileTool.ts)                      | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
-| [`write_to_file`](../src/core/task/tools/WriteToFileTool.ts)               | Write complete file content, with automatic directory creation.                                                                                                                                 |
-| [`apply_diff`](../src/core/task/tools/ApplyDiffTool.ts)                    | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
-| [`insert_edit`](../src/core/task/tools/InsertEditTool.ts)                  | Insert text at a specific line/column position.                                                                                                                                                 |
-| [`rename_symbol`](../src/core/task/tools/RenameSymbolTool.ts)              | Rename a symbol and all its references via LSP.                                                                                                                                                 |
-| [`list_code_usages`](../src/core/task/tools/ListCodeUsagesTool.ts)         | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
-| **[`sed`](../src/core/task/tools/SedTool.ts)**                             | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
-| **[`file`](../src/core/task/tools/FileTool.ts)**                           | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
-| **[`set_task_title`](../src/core/task/tools/SetTaskTitleTool.ts)**         | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
-| [`skills`](../packages/types/src/tool.ts)                                  | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
-| **[`give_feedback`](../src/core/task/tools/GiveFeedbackTool.ts)**          | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
+| Tool                                                                  | Description                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`lsp_search`](../src/core/tools/LspSearchTool.ts)                    | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
+| [`create_new_workspace`](../src/core/tools/CreateNewWorkspaceTool.ts) | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
+| [`fetch_web_page`](../src/core/tools/FetchWebPageTool.ts)             | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
+| [`execute_command`](../src/core/tools/ExecuteCommandTool.ts)          | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
+| [`list_files`](../src/core/tools/ListFilesTool.ts)                    | List directory contents with recursive option.                                                                                                                                                  |
+| [`grep_search`](../src/core/tools/GrepSearchTool.ts)                  | Regex/literal search across files with context display (using VS Code's native search API). See [`grep_search-tool.md`](grep_search-tool.md).                                                   |
+| [`read_file`](../src/core/tools/ReadFileTool.ts)                      | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
+| [`write_to_file`](../src/core/tools/WriteToFileTool.ts)               | Write complete file content, with automatic directory creation.                                                                                                                                 |
+| [`apply_diff`](../src/core/tools/ApplyDiffTool.ts)                    | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
+| [`insert_edit`](../src/core/tools/InsertEditTool.ts)                  | Insert text at a specific line/column position.                                                                                                                                                 |
+| [`rename_symbol`](../src/core/tools/RenameSymbolTool.ts)              | Rename a symbol and all its references via LSP.                                                                                                                                                 |
+| [`list_code_usages`](../src/core/tools/ListCodeUsagesTool.ts)         | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
+| **[`sed`](../src/core/tools/SedTool.ts)**                             | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
+| **[`file`](../src/core/tools/FileTool.ts)**                           | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
+| **[`set_task_title`](../src/core/tools/SetTaskTitleTool.ts)**         | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
+| [`skills`](../src/core/tools/SkillsTool.ts)                           | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
+| **[`give_feedback`](../src/core/tools/GiveFeedbackTool.ts)**          | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
 
 > 📸 TODO: screenshot of `lsp_search` results in chat
 

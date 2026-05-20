@@ -39,7 +39,7 @@ Project config takes priority over global config when the same server name appea
 
 ### Server Schema
 
-Each server entry is validated by [`ServerConfigSchema`](../src/services/mcp/McpHub.ts) (line 93). Three transport types are supported:
+Each server entry is validated by [`ServerConfigSchema`](../src/services/mcp/McpHub.ts) (line 148). Three transport types are supported:
 
 | Transport         | Description                                                     |
 | ----------------- | --------------------------------------------------------------- |
@@ -103,21 +103,21 @@ Before connection, [`injectVariables()`](../src/utils/config.ts) expands `${env:
 
 ### Startup
 
-1. [`McpServerManager.getInstance()`](../src/services/mcp/McpServerManager.ts) (line 21) is called during provider activation. It creates a single [`McpHub`](../src/services/mcp/McpHub.ts) (line 40) and waits for [`waitUntilReady()`](../src/services/mcp/McpHub.ts) (line 196).
+1. [`McpServerManager.getInstance()`](../src/services/mcp/McpServerManager.ts) (line 21) is called during provider activation. It creates a single [`McpHub`](../src/services/mcp/McpHub.ts) (line 174) and waits for [`waitUntilReady()`](../src/services/mcp/McpHub.ts) (line 197).
 
 2. `McpHub` constructor:
 
     - Reads global MCP settings and project `.shofer/mcp.json`.
-    - For each enabled server, calls [`connectToServer()`](../src/services/mcp/McpHub.ts) (line 702).
+    - For each enabled server, calls [`connectToServer()`](../src/services/mcp/McpHub.ts) (line 703).
 
-3. [`connectToServer()`](../src/services/mcp/McpHub.ts) (line 702):
+3. [`connectToServer()`](../src/services/mcp/McpHub.ts) (line 703):
     - Creates an MCP SDK [`Client`](https://github.com/modelcontextprotocol/typescript-sdk) with name `"Shofer"`.
     - Builds the appropriate transport (`StdioClientTransport`, `SSEClientTransport`, or `StreamableHTTPClientTransport`).
     - For `stdio`: starts the child process and pipes `stderr` for error logging.
     - For `sse` / `streamable-http`: applies a 10-second connect timeout to prevent indefinite blocking.
     - Registers `onerror` and `onclose` handlers that update `server.status` to `"disconnected"` and notify the webview.
     - Calls `client.connect(transport)`.
-    - On success, fetches `tools/list` and `resources/list` (line 960).
+    - On success, fetches `tools/list` and `resources/list` (line 961).
 
 ### File Watching
 
@@ -144,7 +144,7 @@ Built by [`buildMcpToolName()`](../src/utils/mcp-name.ts) (line 127). Names are:
 - Capped at 64 characters (Gemini constraint).
 - Deduplicated across servers (project wins over global).
 
-The LLM receives these alongside Shofer's native tools. When the LLM calls `mcp--server--tool`, the [`NativeToolCallParser`](../src/core/assistant-message/NativeToolCallParser.ts) (line 897) recognizes the prefix and routes execution to the MCP tool handler.
+The LLM receives these alongside Shofer's native tools. When the LLM calls `mcp--server--tool`, the [`NativeToolCallParser`](../src/core/assistant-message/NativeToolCallParser.ts) (`parseToolCall()`, line 960) recognizes the prefix and routes execution to the MCP tool handler.
 
 **Hyphen normalization:** Some models convert `--` to `__` in function names. [`normalizeMcpToolName()`](../src/utils/mcp-name.ts) (line 44) handles this by converting `mcp__server__tool` back to `mcp--server--tool`.
 
@@ -154,7 +154,7 @@ When `use_mcp_tool` appears in the tool list, it serves as an explicit wrapper. 
 
 ### Tool Discovery on the Wire
 
-[`fetchToolsList()`](../src/services/mcp/McpHub.ts) (line 1056) sends the MCP `tools/list` request and annotates each tool with:
+[`fetchToolsList()`](../src/services/mcp/McpHub.ts) (line 1057) sends the MCP `tools/list` request and annotates each tool with:
 
 - `enabledForPrompt`: `false` if the tool name is in `disabledTools`.
 - `group`: resolved from user override → server-declared → `"uncategorized"`.
@@ -175,19 +175,19 @@ NativeToolCallParser                   ← recognizes "mcp--" / "mcp__" prefix
   └─ Parses server + tool name via parseMcpToolName()
                 │
                 ▼
-presentAssistantMessage.ts:129         ← "mcp_tool_use" case
+presentAssistantMessage.ts:135         ← "mcp_tool_use" case
   └─ Creates synthetic ToolUse<"use_mcp_tool"> block
      preserving the original tool name for API history
                 │
                 ▼
 UseMcpToolTool.execute()               ← validates params, server, tool
   ├─ validateParams()                  ← server_name + tool_name required
-  ├─ validateToolExists()              ← checks server existence, tool name,
+  ├─ validateMcpToolExists()           ← checks server existence, tool name,
   │                                      disabled status (fuzzy matching)
   └─ task.ask("use_mcp_server", ...)   ← user approval prompt
                 │
                 ▼
-McpHub.callTool(                       ← line 1819
+McpHub.callTool(                       ← line 1820
   serverName, toolName,
   arguments, source,
   conversationId,                      ← injected into _meta for tracing
@@ -199,7 +199,7 @@ McpHub.callTool(                       ← line 1819
      }, CallToolResultSchema, { timeout })
                 │
                 ▼
-processToolContent()                   ← handles text, resource, image types
+processMcpToolContent()               ← handles text, resource, image types
   └─ task.say("mcp_server_response", ...)
 ```
 
@@ -211,7 +211,7 @@ processToolContent()                   ← handles text, resource, image types
 
 ### Result Processing
 
-[`processToolContent()`](../src/core/tools/UseMcpToolTool.ts) (line 258) handles MCP content types:
+[`processMcpToolContent()`](../src/core/tools/mcp/use-mcp-shared.ts) (line 130) handles MCP content types:
 
 | MCP Type   | Handling                                                 |
 | ---------- | -------------------------------------------------------- |
@@ -219,7 +219,7 @@ processToolContent()                   ← handles text, resource, image types
 | `resource` | JSON-stringified (blobs stripped).                       |
 | `image`    | Converted to data URL (`data:{mimeType};base64,{data}`). |
 
-Execution status (`started`, `output`, `completed`, `error`) is streamed to the webview via [`sendExecutionStatus()`](../src/core/tools/UseMcpToolTool.ts) (line 250).
+Execution status (`started`, `output`, `completed`, `error`) is streamed to the webview via [`sendExecutionStatus()`](../src/core/tools/mcp/use-mcp-shared.ts) (line 242).
 
 ### Error Handling
 
@@ -245,14 +245,14 @@ MCP resources are accessed via the [`access_mcp_resource`](../src/core/prompts/t
 LLM calls: access_mcp_resource({ server_name, uri })
                 │
                 ▼
-McpHub.readResource(serverName, uri, source, signal)    ← line 1794
+McpHub.readResource(serverName, uri, source, signal)    ← line 1795
   └─ connection.client.request({
        method: "resources/read",
        params: { uri }
      }, ReadResourceResultSchema)
 ```
 
-Resources are also listed at connect time via [`fetchResourcesList()`](../src/services/mcp/McpHub.ts) (line 1126) and resource templates via [`fetchResourceTemplatesList()`](../src/services/mcp/McpHub.ts) (line 1140). Both are stored on the `McpServer` object and pushed to the webview.
+Resources are also listed at connect time via [`fetchResourcesList()`](../src/services/mcp/McpHub.ts) (line 1127) and resource templates via [`fetchResourceTemplatesList()`](../src/services/mcp/McpHub.ts) (line 1141). Both are stored on the `McpServer` object and pushed to the webview.
 
 ---
 
@@ -260,7 +260,7 @@ Resources are also listed at connect time via [`fetchResourcesList()`](../src/se
 
 ### Group Resolution Priority
 
-For each MCP tool, the group is resolved by [`fetchToolsList()`](../src/services/mcp/McpHub.ts) (line 1104):
+For each MCP tool, the group is resolved by [`fetchToolsList()`](../src/services/mcp/McpHub.ts):
 
 1. **User override** — `toolGroups[toolName]` in the server config (project or global).
 2. **Server-declared** — `tool.group` from the server's tool definition.
@@ -268,7 +268,7 @@ For each MCP tool, the group is resolved by [`fetchToolsList()`](../src/services
 
 ### Auto-Approval
 
-The auto-approval system in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts) (line 110) gates MCP tool calls:
+The auto-approval system in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts) (line 111) gates MCP tool calls:
 
 - **Master gate:** `alwaysAllowMcp` must be enabled for **any** MCP tool to be auto-approved.
 - **Per-group gate:** If `alwaysAllowMcp` is on, only tools whose group is also auto-approved run without prompting.
@@ -280,7 +280,7 @@ The auto-approval system in [`auto-approval/index.ts`](../src/core/auto-approval
 
 ### Server State Push
 
-When server state changes, [`notifyWebviewOfServerChanges()`](../src/services/mcp/McpHub.ts) broadcasts an `"mcpServers"` message to all registered webviews with the full server list (including tools, resources, status, and error history).
+When server state changes, [`setNotifyAllProviders()`](../src/services/mcp/McpHub.ts) (line 189) broadcasts an `"mcpServers"` message to all registered webviews via the injected callback, with the full server list (including tools, resources, status, and error history).
 
 ### Execution Status Streaming
 

@@ -32,16 +32,16 @@ The possible decisions are:
 
 These are the boolean toggles exposed in the UI. Each controls a specific class of actions.
 
-| Toggle (`alwaysAllow*`)        | Controls                                                                       | Additional Options                                              |
-| ------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup                                                  | `alwaysAllowReadOnlyOutsideWorkspace`                           |
-| `alwaysAllowWrite`             | Tools in the `write` ToolGroup                                                 | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected` |
-| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup                                               | –                                                               |
-| `alwaysAllowMcp`               | MCP tool calls and resource access                                             | `mcpServers` (per-tool `alwaysAllow` flag)                      |
-| `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                               |
-| `alwaysAllowSubtasks`          | `new_task` and `finishTask`                                                    | –                                                               |
-| `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                             |
-| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                  |
+| Toggle (`alwaysAllow*`)        | Controls                                                                       | Additional Options                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup                                                  | `alwaysAllowReadOnlyOutsideWorkspace`                                    |
+| `alwaysAllowWrite`             | Tools in the `write` ToolGroup                                                 | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`          |
+| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup                                               | –                                                                        |
+| `alwaysAllowMcp`               | MCP tool calls and resource access                                             | `alwaysAllowUncategorized` (for tools without a `group` in `mcpServers`) |
+| `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                                        |
+| `alwaysAllowSubtasks`          | `new_task`, `finishTask`, `cancel_tasks`, `answer_subtask_question`            | –                                                                        |
+| `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                                      |
+| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                           |
 
 > **Each toggle maps to a ToolGroup** (see [`tool-categories.md`](tool-categories.md)).
 > Adding a new group to `TOOL_GROUPS` in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)
@@ -60,8 +60,9 @@ either harmless meta-operations or purely informational queries against in-memor
 | Tool               | Rationale                                                       |
 | ------------------ | --------------------------------------------------------------- |
 | `update_todo_list` | Updates the task checklist — UI-only, no side effects.          |
-| `skill`            | Loads pre-defined instructions — skills must be user-installed. |
+| `skills`           | Loads pre-defined instructions — skills must be user-installed. |
 | `set_task_title`   | Renames the task in UI and history — non-destructive.           |
+| `give_feedback`    | Appends a feedback line to the extension output channel.        |
 
 ### Background-Task Status Tools
 
@@ -75,9 +76,11 @@ or network and mutate nothing:
 | `list_background_tasks` | List all background child tasks started by this task.                         |
 
 > **Important distinction:** The _status_ tools are unconditionally approved, but
-> **`new_task` itself is gated** behind `alwaysAllowSubtasks`. If that toggle is off,
-> the model must ask permission before spawning a child task. This prevents uncontrolled
-> task-tree growth while still letting the model inspect tasks it has already spawned.
+> **`new_task`**, `cancel_tasks`, `finishTask`, and `answer_subtask_question` are
+> all gated behind `alwaysAllowSubtasks`. If that toggle is off, the model must ask
+> permission before spawning, cancelling, or completing a subtask. This prevents
+> uncontrolled task-tree growth while still letting the model inspect tasks it has
+> already spawned.
 
 ### Lightweight Read-Only Tools
 
@@ -97,20 +100,33 @@ of `alwaysAllowReadOnly`):
 | `list_code_usages`       | LSP "find all references" for a symbol.            |
 | `lsp_search`             | LSP workspace symbol search.                       |
 
+### Async MCP Call Status Tools
+
+These tools query in-memory state of async MCP calls. They mutate nothing and are
+unconditionally approved:
+
+| Tool                    | Description                                          |
+| ----------------------- | ---------------------------------------------------- |
+| `check_mcp_call_status` | Check status/result of an async MCP tool call.       |
+| `wait_for_mcp_call`     | Block until async MCP calls complete (event-driven). |
+
 ---
 
 ## Conditional Auto-Approval (Toggle-Gated)
 
 ### `alwaysAllowSubtasks`
 
-Controls **task creation and completion only**. The background-task status tools
-(`check_task_status`, `wait_for_task`, `list_background_tasks`) are **not** gated
-by this toggle (see [Unconditionally Auto-Approved](#unconditionally-auto-approved-tools)).
+Controls **task creation, completion, cancellation, and subtask question answering**.
+The background-task status tools (`check_task_status`, `wait_for_task`,
+`list_background_tasks`) are **not** gated by this toggle (see
+[Unconditionally Auto-Approved](#unconditionally-auto-approved-tools)).
 
-| Tool         | Toggle ON                 | Toggle OFF            |
-| ------------ | ------------------------- | --------------------- |
-| `new_task`   | `{ decision: "approve" }` | `{ decision: "ask" }` |
-| `finishTask` | `{ decision: "approve" }` | `{ decision: "ask" }` |
+| Tool                      | Toggle ON                 | Toggle OFF            |
+| ------------------------- | ------------------------- | --------------------- |
+| `new_task`                | `{ decision: "approve" }` | `{ decision: "ask" }` |
+| `finishTask`              | `{ decision: "approve" }` | `{ decision: "ask" }` |
+| `cancel_tasks`            | `{ decision: "approve" }` | `{ decision: "ask" }` |
+| `answer_subtask_question` | `{ decision: "approve" }` | `{ decision: "ask" }` |
 
 ### `alwaysAllowModeSwitch`
 
@@ -127,7 +143,6 @@ Controls the read-only tool actions as classified by `isReadOnlyToolAction()`:
 | `grep_search`            |
 | `rag_search`             |
 | `lsp_search`             |
-| `run_slash_command`      |
 | `find_files`             |
 | `view_image`             |
 | `get_errors`             |
@@ -135,6 +150,8 @@ Controls the read-only tool actions as classified by `isReadOnlyToolAction()`:
 | `get_project_setup_info` |
 | `list_code_usages`       |
 | `fetch_web_page`         |
+| `git_search`             |
+| `ask_assistant_agent`    |
 
 > **Note:** Some tools appear both here and in the unconditionally-approved list.
 > The unconditional path takes precedence — these tools are approved before the
@@ -208,9 +225,11 @@ approval, regardless of `allowedCommands` or `deniedCommands` configuration.
 
 ### `alwaysAllowMcp`
 
-Controls MCP tool calls and resource access. For `use_mcp_tool`, the tool must also have
-its per-tool `alwaysAllow` flag set in the MCP server configuration. For
-`access_mcp_resource`, the toggle alone is sufficient.
+Controls MCP tool calls and resource access. For `use_mcp_tool`, the tool must be
+categorized into a tool group (via its `group` field in MCP server configuration).
+Tools without an explicit group default to `"uncategorized"` and require the
+additional `alwaysAllowUncategorized` toggle. For `access_mcp_resource`, the
+`alwaysAllowMcp` toggle alone is sufficient.
 
 ### `alwaysAllowFollowupQuestions`
 
@@ -231,7 +250,7 @@ These are **separate concepts**:
 
 A tool being in `ALWAYS_AVAILABLE_TOOLS` does **not** mean it's auto-approved. For example,
 `new_task` is always available but still requires the `alwaysAllowSubtasks` toggle for
-auto-approval. Conversely, `rag_search` is auto-approved unconditionally but is
+auto-approval. Conversely, `fetch_web_page` is auto-approved unconditionally but is
 **not** in `ALWAYS_AVAILABLE_TOOLS` — it's available through the mode's `read` group.
 
 ---

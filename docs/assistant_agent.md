@@ -35,6 +35,8 @@ AssistantAgentManager (singleton per workspace, vscode.Disposable)
  │                                 (file contexts evicted before message pairs)
  ├── AssistantAgentLlmClient         — wraps shared `buildApiHandler()` ApiHandler
  │                                 (streaming, abort-aware, full provider catalog)
+ ├── AssistantAgentToolExecutor   — read-only tool dispatcher (wraps ripgrep, glob,
+ │                                 extract-text, CodeIndexManager; no Task dependency)
  ├── AssistantAgentDirectoryTree     — workspace scanner, ~10% context-window cap
  ├── AssistantAgentFileWatcher       — VSCode FileSystemWatcher, 500ms debounce
  └── pricing                       — per-model USD cost from ApiHandler.getModel()
@@ -51,20 +53,21 @@ State machine:  Standby → Initializing → Ready ⇄ Busy → Stopping → Sta
 
 ### Key Source Files
 
-| File                                                 | Lines | Role                                                                                                                                                                                                                     |
-| ---------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/services/assistant-agent/manager.ts`            | ~820  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                            |
-| `src/services/assistant-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                                       |
-| `src/services/assistant-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                            |
-| `src/services/assistant-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                             |
-| `src/services/assistant-agent/llm-client.ts`         | ~210  | Adapter onto the shared `buildApiHandler()`. Maps the assistant-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                            |
-| `src/services/assistant-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                                     |
-| `src/services/assistant-agent/directory-tree.ts`     | ~160  | Recursive workspace scan. `find .`-style tree generation. Excludes `.shofer/worktrees/` + common ignore dirs; capped at ~10% of context window.                                                                          |
-| `src/services/assistant-agent/file-watcher.ts`       | ~100  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce; skips worktrees and hidden paths. Notifies the manager which invalidates `ContextWindow` entries.                                                           |
-| `src/services/assistant-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                             |
-| `packages/types/src/assistant-agent.ts`              | ~180  | Zod schemas (`AgentMessage`, `FileContextEntry`, `AssistantAgentConfig`, `QuestionResult`, `AssistantAgentCostTracking`, `AssistantAgentConversationData`); the fixed `ASSISTANT_AGENT_SYSTEM_PROMPT`; all 11 constants. |
-| `packages/types/src/global-settings.ts`              |       | `assistantAgent{Enabled,Provider,ModelId,BaseUrl,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`; six `assistantAgent*Key` entries on `GLOBAL_SECRET_KEYS`.                                       |
-| `packages/types/src/vscode.ts`                       |       | Assistant-agent command ids on the typed `commandIds` array (`assistantAgent.{start,stop,clearContext,showChat,openSettings}`).                                                                                          |
+| File                                                 | Lines | Role                                                                                                                                                                                                                       |
+| ---------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/assistant-agent/manager.ts`            | ~910  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                              |
+| `src/services/assistant-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                                         |
+| `src/services/assistant-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                              |
+| `src/services/assistant-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                               |
+| `src/services/assistant-agent/llm-client.ts`         | ~320  | Adapter onto the shared `buildApiHandler()`. Maps the assistant-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                              |
+| `src/services/assistant-agent/tool-executor.ts`      | ~380  | Read-only tool dispatcher wrapping ripgrep, glob, extract-text, and CodeIndexManager. No Task dependency — pure utility layer. Only `TOOL_GROUPS.read` tools (minus `ask_assistant_agent` itself).                         |
+| `src/services/assistant-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                                       |
+| `src/services/assistant-agent/directory-tree.ts`     | ~160  | Recursive workspace scan. `find .`-style tree generation. Excludes `.shofer/worktrees/` + common ignore dirs; capped at ~10% of context window.                                                                            |
+| `src/services/assistant-agent/file-watcher.ts`       | ~100  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce; skips worktrees and hidden paths. Notifies the manager which invalidates `ContextWindow` entries.                                                             |
+| `src/services/assistant-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                               |
+| `packages/types/src/assistant-agent.ts`              | ~230  | Zod schemas (`AgentMessage`, `FileContextEntry`, `AssistantAgentConfig`, `QuestionResult`, `AssistantAgentCostTracking`, `AssistantAgentConversationData`); the fixed `ASSISTANT_AGENT_SYSTEM_PROMPT`; 13 constants.       |
+| `packages/types/src/global-settings.ts`              |       | `assistantAgent{Enabled,ApiConfigId,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`. Credentials come from the linked API Configuration profile (no assistant-agent-specific `GLOBAL_SECRET_KEYS`). |
+| `packages/types/src/vscode.ts`                       |       | Assistant-agent command ids on the typed `commandIds` array (`assistantAgent.{start,stop,clearContext,showChat,openSettings}`).                                                                                            |
 
 ### Module Contracts
 
@@ -73,7 +76,7 @@ directory). The Manager depends directly on each class; substitution for
 testing is achieved by constructor injection at the spec level. The public
 shape of each module:
 
-- **`ConversationStore`** — `load(): Promise<ConversationSnapshot>`, `save(snapshot)`, `filePath` getter. Snapshot shape: `{ version, messages, fileContexts, costTracking }`. Discards on version mismatch (no migrations).
+- **`ConversationStore`** — `load(): Promise<ConversationSnapshot>`, `save(snapshot)`, `filePath` getter. In-memory `ConversationSnapshot` shape: `{ messages, fileContexts, costTracking }` (version lives on the persisted `AssistantAgentConversationData`). Discards on version mismatch (no migrations).
 - **`QuestionQueue`** — `setProcessor(fn)`, `enqueue(question, contextFiles?, timeoutMs?, softLimits?): Promise<QuestionResult>`, `cancelAll()`, `pendingCount`, `isProcessing`. `softLimits` carries `{ softTimeoutSec?, softResultLength? }` — prompt-embedded recommendations, not enforced. Processor signature: `(question, contextFiles, signal, softLimits) => Promise<QuestionResult>`.
 - **`ContextWindow`** — `configure(opts)`, `restore(messages, fileContexts)`, `clear()`, `appendMessage`, `upsertFileContext`, `removeFileContext`, `invalidateFileContext`, `enforceLimit()`, `getUsage()`, `consumeEvictedTokens()`. Plus getters used by the Manager: `messages`, `fileContexts`, `fileContextPaths`, `estimatedTokenCount`, `maxContextTokens`, `contextFillThreshold`, `isNearlyFull`.
 - **`AssistantAgentLlmClient`** — constructor builds an `ApiHandler` via `buildApiHandler(toProviderSettings(config), { taskId: ASSISTANT_AGENT_TASK_ID })`. `chat(messages, signal?): Promise<ChatResult>` drains `ApiStream`, accumulating `text` chunks into the answer and `usage` chunks into prompt/completion tokens; cooperatively aborts between chunks via the `AbortSignal`.
@@ -114,12 +117,12 @@ shape of each module:
 ```typescript
 {
 	enabled: boolean
-	provider: string              // e.g., "openai", "gemini", "openai-compatible", "anthropic"
-	modelId: string               // e.g., "gemini-2.0-flash", "gpt-4o-mini"
-	apiKey: string                // stored in SecretStorage
-	baseUrl?: string              // for openai-compatible providers
-	maxContextTokens: number      // max tokens for the context window (default: model's max)
-	contextFillThreshold: number  // 0.0–1.0, default 0.80 — "nearly full" warning threshold
+	apiConfigId: string // ID of the linked API Configuration profile
+	apiConfigName: string // Display name of the linked profile
+	providerSettings: ProviderSettings // Resolved profile fed into buildApiHandler
+	maxContextTokens: number // Overridable; defaults to model's reported contextWindow
+	contextWindowSource: "override" | "model-info" | "unresolved"
+	contextFillThreshold: number // 0.0–1.0, default 0.80 — "nearly full" warning threshold
 }
 ```
 
@@ -335,7 +338,7 @@ Integration point: `AssistantAgentManager` subscribes to tool execution events (
 
 ```
 
-### 7. Directory Tree Injection (`directory-tree.ts`)
+### 6. Directory Tree Injection (`directory-tree.ts`)
 
 On agent startup (and after Clear Context), the assistant agent scans the workspace and injects a directory/file hierarchy into the system prompt. This gives the agent immediate awareness of the project structure without needing to call `list_files` on every question.
 
@@ -376,7 +379,7 @@ The directory tree is:
 
 Integration point: `src/services/assistant-agent/directory-tree.ts` — generates and token-counts the tree.
 
-### 8. Context Window Management (`context-window.ts`)
+### 7. Context Window Management (`context-window.ts`)
 
 The assistant agent uses **truncation, not summarization**. The context window is a ring-buffer-like structure where old content is simply dropped when the limit is reached. No summarization is ever performed — the idea is to keep the context window nearly full (configurable up to a fill threshold) with raw conversation and file content.
 
@@ -439,7 +442,7 @@ Loop-time enforcement:
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
 | **Conversation history**  | VS Code globalStorage: `~/.config/Code/User/globalStorage/shofer.dev/shofer-assistant-agent-<workspace-hash>.json` | ✓ Yes — persisted alongside VS Code settings |
 | **File context registry** | Same JSON file as conversation history (nested under `fileContexts` key)                                           | ✓ Yes — persisted in globalStorage           |
-| **API keys & secrets**    | VS Code `SecretStorage` (keyed as `assistantAgentOpenAiKey`, `assistantAgentGeminiKey`, etc.)                      | ✓ Yes — OS-level credential store            |
+| **API keys & secrets**    | VS Code `SecretStorage` (managed via the linked API Configuration profile, not per-agent keys)                     | ✓ Yes — OS-level credential store            |
 | **Configuration**         | VS Code `globalState` (via `ContextProxy`)                                                                         | ✓ Yes — synced with VS Code settings         |
 
 ### Persistence Format
@@ -448,7 +451,7 @@ The conversation store persists a single JSON file:
 
 ```json
 {
-	"version": 1,
+	"version": 2,
 	"workspacePath": "/home/user/projects/my-app",
 	"createdAt": 1715678900000,
 	"updatedAt": 1715680000000,
@@ -556,13 +559,13 @@ The `ask_assistant_agent` tool is **auto-approved by default** (like `rag_search
 
 The assistant agent itself runs as an internal task with a **severely restricted tool set**. It is strictly read-only and cannot modify any state:
 
-| Tool Category     | Available? | Tools Included                                                                           |
-| ----------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| Tool Category     | Available? | Tools Included                                                                                                                                                                                |
+| ----------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Read**          | ✓ Yes      | `read_file`, `list_files`, `grep_search`, `find_files`, `rag_search`, `read_project_structure`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search` |
-| **Write/Edit**    | ✗ No       | `write_to_file`, `apply_diff`, `insert_edit`, `sed`                                      |
-| **CLI/Execution** | ✗ No       | `execute_command`                                                                        |
-| **MCP**           | ✗ No       | All MCP-provided tools (browser, k3s, mimir, loki, tempo, etc.)                          |
-| **Task Control**  | ✗ No       | `new_task`, `switch_mode`, `attempt_completion`                                          |
+| **Write/Edit**    | ✗ No       | `write_to_file`, `apply_diff`, `insert_edit`, `sed`                                                                                                                                           |
+| **CLI/Execution** | ✗ No       | `execute_command`                                                                                                                                                                             |
+| **MCP**           | ✗ No       | All MCP-provided tools (browser, k3s, mimir, loki, tempo, etc.)                                                                                                                               |
+| **Task Control**  | ✗ No       | `new_task`, `switch_mode`, `attempt_completion`                                                                                                                                               |
 
 These restrictions are enforced at the tool-filtering layer (`filter-tools-for-mode.ts`) based on a dedicated `assistant_agent` internal mode slug. The assistant agent's system prompt explicitly instructs it that it cannot make changes — it can only read and answer questions about the codebase. This ensures:
 
@@ -576,13 +579,13 @@ These restrictions are enforced at the tool-filtering layer (`filter-tools-for-m
 
 ### Extension Host
 
-| Point      | File                                             | Details                                                                                                           |
-| ---------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Activation | `src/extension.ts`                               | Creates `AssistantAgentManager` per workspace folder, initializes in background                                   |
-| Chat View  | `src/core/webview/AssistantAgentChatProvider.ts` | Registers webview panel for the assistant agent chat view; streams live responses                                 |
-| Provider   | `src/core/webview/ShoferProvider.ts`             | Subscribes to `onAgentStateChange` to push assistant agent status to webview                                      |
-| Status Bar | `src/activate/registerStatusBar.ts`              | Registers status bar button next to RAG indexer, shows agent state + model name                                   |
-| Commands   | `src/activate/registerCommands.ts`               | Registers `assistantAgent.start`, `assistantAgent.stop`, `assistantAgent.clearContext`, `assistantAgent.showChat` |
+| Point      | File                                                           | Details                                                                                                           |
+| ---------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Activation | `src/extension.ts`                                             | Creates `AssistantAgentManager` per workspace folder, initializes in background                                   |
+| Chat View  | `src/core/webview/AssistantAgentChatProvider.ts`               | Registers webview panel for the assistant agent chat view; streams live responses                                 |
+| Provider   | `src/core/webview/ShoferProvider.ts`                           | Subscribes to `onAgentStateChange` to push assistant agent status to webview                                      |
+| Toolbar    | `webview-ui/src/components/chat/AssistantAgentStatusBadge.tsx` | Badge + popover in the Shofer chat-input toolbar; hosts start/stop/clear/chat actions via `assistantAgentAction`  |
+| Commands   | `src/activate/registerCommands.ts`                             | Registers `assistantAgent.start`, `assistantAgent.stop`, `assistantAgent.clearContext`, `assistantAgent.showChat` |
 
 ### Settings & Webview
 
@@ -595,13 +598,13 @@ These restrictions are enforced at the tool-filtering layer (`filter-tools-for-m
 
 ### Tool System
 
-| Point             | File                                                    | Details                                                                   |
-| ----------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Tool registration | `src/core/task/build-tools.ts`                          | Gets `AssistantAgentManager` for current workspace, passes to tool filter |
-| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts`       | Removes `ask_assistant_agent` if agent is disabled/unconfigured/not-ready |
-| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts` | Routes to `AssistantAgentTool`                                            |
-| Auto-approval     | `src/core/auto-approval/tools.ts`                       | `askAssistantAgent` is auto-approved by default                           |
-| System prompt     | `src/core/prompts/system.ts`                            | Includes assistant agent status + model info in system prompt context     |
+| Point             | File                                                    | Details                                                                        |
+| ----------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Tool registration | `src/core/task/build-tools.ts`                          | Gets `AssistantAgentManager` for current workspace, passes to tool filter      |
+| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts`       | Removes `ask_assistant_agent` if agent is disabled/unconfigured/not-ready      |
+| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts` | Routes to `AssistantAgentTool`                                                 |
+| Auto-approval     | `src/core/auto-approval/tools.ts`                       | `askAssistantAgent` is auto-approved by default                                |
+| System prompt     | `src/core/prompts/system.ts`                            | (Deferred) — assistant agent status + model info not yet in task system prompt |
 
 ### Configuration Schema
 
@@ -609,16 +612,13 @@ State keys live on the extension-wide `globalSettingsSchema` in `packages/types/
 
 ```typescript
 // globalSettingsSchema (state, persisted in globalState)
-assistantAgentEnabled: boolean
-assistantAgentProvider: "openai" | "gemini" | "openai-compatible" | "anthropic" | "ollama" | "openrouter"
-assistantAgentModelId: string
-assistantAgentBaseUrl?: string                // openai-compatible / ollama only
-assistantAgentMaxContextTokens: number        // default DEFAULT_MAX_CONTEXT_TOKENS (128_000)
-assistantAgentContextFillThreshold: number    // 0.0–1.0, default 0.80
+assistantAgentEnabled: boolean // master on/off toggle
+assistantAgentApiConfigId: string // ID of the linked API Configuration profile
+assistantAgentMaxContextTokens: number // optional override; default from linked model's contextWindow
+assistantAgentContextFillThreshold: number // 0.0–1.0, default 0.80
 
 // GLOBAL_SECRET_KEYS (secrets, persisted in SecretStorage)
-assistantAgentOpenAiKey | assistantAgentGeminiKey | assistantAgentOpenAiCompatibleKey
-  | assistantAgentAnthropicKey | assistantAgentOllamaKey | assistantAgentOpenRouterKey
+// No assistant-agent-specific secrets — credentials come from the linked API Configuration profile.
 ```
 
 The Zod runtime schemas for the on-disk conversation snapshot — `assistantAgentConfigSchema`, `agentMessageSchema`, `fileContextEntrySchema`, `assistantAgentCostTrackingSchema`, `assistantAgentConversationDataSchema`, `questionResultSchema` — live in `packages/types/src/assistant-agent.ts`. The fixed `ASSISTANT_AGENT_SYSTEM_PROMPT` is also defined there.
@@ -663,7 +663,7 @@ All exported from `packages/types/src/assistant-agent.ts`:
 | `FILE_CONTEXT_SYSTEM_MESSAGE_PREFIX`  | `"[File context: {path}]\n"`                                   | Prefix for injected file content in messages                          |
 | `DIRECTORY_TREE_MAX_CONTEXT_FRACTION` | 0.10                                                           | Max fraction of context window for the directory tree (10%)           |
 | `TRUNCATION_MARKER_MESSAGE`           | `"[{N} earlier messages were truncated due to context limit]"` | Inserted when truncation occurs                                       |
-| `CONVERSATION_STORE_VERSION`          | 1                                                              | Version for the persistence format                                    |
+| `CONVERSATION_STORE_VERSION`          | 2                                                              | Version for the persistence format                                    |
 
 ---
 
@@ -696,37 +696,37 @@ The assistant agent interacts with worktrees as follows:
 
 ---
 
-## UI: Status Bar Button
+## UI: Toolbar Badge + Popover
 
-The Assistant Agent status bar button sits **next to the RAG indexer button** on the status bar. It displays:
+The Assistant Agent status indicator lives in the **Shofer chat-input toolbar** (via `AssistantAgentStatusBadge` → `AssistantAgentPopover`), not in the VS Code status bar. It displays:
 
-- **Icon**: A chat bubble or brain icon (distinct from RAG's database icon)
-- **Blinking behavior**: The icon **blinks** when the agent is `Busy` (processing a question), matching the RAG indexer's blinking pattern during indexing.
-- **State indicator** (status bar text, always visible):
-    - `🔵 Initializing...` — agent is starting up
-    - `🟢 Ready (42%)` — agent is idle; the percentage shows context window fill (`current / max` tokens)
-    - `🟡 Busy (42%)` — processing a question (blinking); shows queue depth if > 0 queued
-    - `🟠 Nearly Full (87%)` — context is above the fill threshold, truncation imminent
-    - `🔴 Error` — configuration or connection issue
-    - `⚪ Standby` — agent is configured but not started
-- **Left-click**: Opens a detailed **info panel** (quick pick) showing:
+- **Icon badge**: Shows agent state with color-coded indicator
+- **Pulsing animation**: The badge pulses when the agent is `Busy` (processing a question)
+- **State indicator**:
+    - `Initializing...` — agent is starting up
+    - `Ready (42%)` — agent is idle; the percentage shows context window fill (`current / max` tokens)
+    - `Busy (42%)` — processing a question; shows queue depth if > 0 queued
+    - `Nearly Full (87%)` — context is above the fill threshold, truncation imminent
+    - `Error` — configuration or connection issue
+    - `Standby` — agent is configured but not started
+- **Click**: Opens a **popover** showing:
     - **Status**: Current state, model name, provider
     - **Context**: Token usage bar (`current / max`, fill percentage with visual progress bar)
-    - **Context fill threshold**: Configured percentage and whether it's been exceeded
+    - **Context window source**: How `maxContextTokens` was resolved (`override` | `model-info` | `unresolved`)
     - **Cost tracking**: Total input tokens, output tokens, truncated tokens, estimated cost (USD)
-    - **Files in context**: Count and scrollable list of file paths
-    - **Conversation**: Number of message turns, oldest turn timestamp
-    - **Quick actions**:
-        - **View Chat** — opens the dedicated chat panel showing full conversation history
-        - **Clear Context** — resets the conversation to just the system prompt (all messages and file contexts are dropped; cost tracking is preserved)
-        - **Configure API** — opens the API configuration settings
-- **Tooltip**: Shows model name, token usage (`12.5K / 128K`), fill percentage, and estimated cost
+    - **Files in context**: Count and list of file paths
+    - **Conversation**: Number of message turns
+    - **Quick actions** (via `assistantAgentAction` webview message):
+        - **Start** / **Stop** — control agent lifecycle
+        - **View Chat** — opens the dedicated chat panel
+        - **Clear Context** — resets conversation (cost tracking preserved)
+        - **Open Settings** — opens API configuration settings
 
 ### Assistant Agent Chat View
 
 A dedicated **chat panel** lets the user observe everything the assistant agent is doing in real time. It is accessible from:
 
-- The status bar info panel: **"View Chat"** action (left-click the status bar button, then select "View Chat")
+- The toolbar popover: **"View Chat"** action
 - A dedicated VS Code webview panel (similar to the Shofer task chat UI)
 
 The chat view displays:
@@ -749,7 +749,7 @@ The chat view displays:
 
 The chat view is **read-only** — the user cannot send messages directly to the assistant agent. All messages come from tasks via the `ask_assistant_agent` tool. This keeps the interaction model simple and prevents the user from accidentally polluting the context window.
 
-Integration point: `src/core/webview/AssistantAgentChatProvider.ts` — registers a webview panel provider that subscribes to conversation store updates and streams live responses via `EventEmitter`.
+Integration point: `src/core/webview/AssistantAgentChatProvider.ts` — manages a `WebviewPanel` with coalesced `postMessage` ticks; subscribes to manager state/conversation changes and forwards `state` messages containing the full message list and context usage to the webview for client-side diff-rendering.
 
 ---
 
@@ -868,7 +868,7 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 |------|--------|-------|
 | `src/extension.ts` | Modify | Register assistant agent status bar button (blinking pattern, left-click info panel) |
 | `src/services/assistant-agent/manager.ts` | Modify | Add `getContextUsage()`, `clearContext()`, `onStateChange`/`onConversationUpdate` events |
-| `src/activate/registerCommands.ts` | Modify | Register `assistantAgent.start`, `assistantAgent.stop`, `assistantAgent.clearContext`, `assistantAgent.showInfo` |
+| `src/activate/registerCommands.ts` | Modify | Register `assistantAgent.start`, `assistantAgent.stop`, `assistantAgent.clearContext`, `assistantAgent.openSettings` |
 
 **What works at end of Phase 4:**
 
@@ -922,16 +922,16 @@ Phases 4 and 5 can be implemented in parallel after Phase 3 is complete.
 
 ### Commit History
 
-| Phase | Commit                                                                                  | Files Changed                                                                             |
-| ----- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 1     | `3a26139d5` `feat(assistant-agent): Phase 1 — Core Manager + Configuration`             | 2 new: `packages/types/src/assistant-agent.ts`, `src/services/assistant-agent/manager.ts` |
-| 2     | `d1309e281` `feat(assistant-agent): Phase 2 — Native Tool + Tool System Integration`    | 2 new, 5 modified                                                                         |
-| 3     | `4bab12a81` `feat(assistant-agent): Phase 3 — Queue + Timeout + KV-Cache Notifications` | 1 modified: `manager.ts` (+256/-63)                                                       |
-| 4     | `9d4c50554` `feat(assistant-agent): Phase 4 — Status Bar + Info Panel + Clear Context`  | 1 modified: `extension.ts` (+189)                                                         |
-| 5a    | `d80dbdc8c` `feat(assistant-agent): Phase 5 — Directory Tree + File Watcher`            | 2 new, 1 modified                                                                         |
-| 5b    | `3a90b5003` `feat(assistant-agent): Phase 5b — Chat View + FileContextTracker hooks`    | 1 new, 2 modified                                                                         |
-| R     | `794e6d0ac` `shofer: refactor assistant agent into focused modules + typed plumbing`    | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)              |
-| L     | `9cb81669f` `fix(assistant-agent): enforce context budget during agent loop and after append` | 1 modified: `manager.ts` (+53/-20); split `_buildAgentPrompt`, add 3-point enforcement |
+| Phase | Commit                                                                                        | Files Changed                                                                             |
+| ----- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 1     | `3a26139d5` `feat(assistant-agent): Phase 1 — Core Manager + Configuration`                   | 2 new: `packages/types/src/assistant-agent.ts`, `src/services/assistant-agent/manager.ts` |
+| 2     | `d1309e281` `feat(assistant-agent): Phase 2 — Native Tool + Tool System Integration`          | 2 new, 5 modified                                                                         |
+| 3     | `4bab12a81` `feat(assistant-agent): Phase 3 — Queue + Timeout + KV-Cache Notifications`       | 1 modified: `manager.ts` (+256/-63)                                                       |
+| 4     | `9d4c50554` `feat(assistant-agent): Phase 4 — Status Bar + Info Panel + Clear Context`        | 1 modified: `extension.ts` (+189)                                                         |
+| 5a    | `d80dbdc8c` `feat(assistant-agent): Phase 5 — Directory Tree + File Watcher`                  | 2 new, 1 modified                                                                         |
+| 5b    | `3a90b5003` `feat(assistant-agent): Phase 5b — Chat View + FileContextTracker hooks`          | 1 new, 2 modified                                                                         |
+| R     | `794e6d0ac` `shofer: refactor assistant agent into focused modules + typed plumbing`          | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)              |
+| L     | `9cb81669f` `fix(assistant-agent): enforce context budget during agent loop and after append` | 1 modified: `manager.ts` (+53/-20); split `_buildAgentPrompt`, add 3-point enforcement    |
 
 _Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback` for `attempt_completion`.
 
@@ -947,44 +947,45 @@ _Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback`
 | Phase 5b: Chat View + FileContextTracker hooks               | ✅ Complete |
 | R: Refactor into focused modules + typed plumbing            | ✅ Complete |
 
-### Files Created (13)
+### Files Created (14)
 
 | File                                                                                                                                                         | Phase | Lines | Description                                                                                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`packages/types/src/assistant-agent.ts`](extensions/shofer/packages/types/src/assistant-agent.ts:1)                                                         | 1     | 176   | Zod schemas for AgentMessage, FileContextEntry, AssistantAgentConfig, QuestionResult, CostTracking; ASSISTANT_AGENT_SYSTEM_PROMPT; all 11 constants          |
-| [`src/services/assistant-agent/manager.ts`](extensions/shofer/src/services/assistant-agent/manager.ts:1)                                                     | 1, R  | 621   | Singleton-per-workspace orchestrator. Owns lifecycle, config, event emitters; delegates everything else to focused collaborators.                            |
+| [`packages/types/src/assistant-agent.ts`](extensions/shofer/packages/types/src/assistant-agent.ts:1)                                                         | 1     | 228   | Zod schemas for AgentMessage, FileContextEntry, AssistantAgentConfig, QuestionResult, CostTracking; ASSISTANT_AGENT_SYSTEM_PROMPT; 13 constants              |
+| [`src/services/assistant-agent/manager.ts`](extensions/shofer/src/services/assistant-agent/manager.ts:1)                                                     | 1, R  | 912   | Singleton-per-workspace orchestrator. Owns lifecycle, config, event emitters; delegates everything else to focused collaborators.                            |
 | [`src/services/assistant-agent/conversation-store.ts`](extensions/shofer/src/services/assistant-agent/conversation-store.ts:1)                               | R     | 141   | Versioned JSON snapshot persistence. SHA-256 file-context validation on load; ENOENT-safe; discards on version mismatch.                                     |
 | [`src/services/assistant-agent/question-queue.ts`](extensions/shofer/src/services/assistant-agent/question-queue.ts:1)                                       | R     | 158   | Bounded FIFO with per-entry AbortSignal + timeout. Reentrant-safe drain loop. `cancelAll()` for shutdown.                                                    |
 | [`src/services/assistant-agent/context-window.ts`](extensions/shofer/src/services/assistant-agent/context-window.ts:1)                                       | R     | 197   | In-memory window for messages + file contexts. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs). Token estimation. |
-| [`src/services/assistant-agent/llm-client.ts`](extensions/shofer/src/services/assistant-agent/llm-client.ts:1)                                               | R     | 212   | Adapter wrapping `buildApiHandler()`. Maps the assistant-agent provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                 |
+| [`src/services/assistant-agent/llm-client.ts`](extensions/shofer/src/services/assistant-agent/llm-client.ts:1)                                               | R     | 320   | Adapter wrapping `buildApiHandler()`. Maps the assistant-agent provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                 |
+| [`src/services/assistant-agent/tool-executor.ts`](extensions/shofer/src/services/assistant-agent/tool-executor.ts:1)                                         | R     | 383   | Read-only tool dispatcher for the Assistant Agent. Wraps ripgrep, glob, extract-text, CodeIndexManager; no Task dependency. Only `TOOL_GROUPS.read` tools.   |
 | [`src/services/assistant-agent/pricing.ts`](extensions/shofer/src/services/assistant-agent/pricing.ts:1)                                                     | R     | 48    | Per-model USD cost from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler omits pricing.                            |
 | [`src/services/assistant-agent/directory-tree.ts`](extensions/shofer/src/services/assistant-agent/directory-tree.ts:1)                                       | 5a    | 158   | Recursive workspace scan, `find .`-style tree generation, ~10% token cap, common-dir exclusion set                                                           |
 | [`src/services/assistant-agent/file-watcher.ts`](extensions/shofer/src/services/assistant-agent/file-watcher.ts:1)                                           | 5a    | 106   | VSCode FileSystemWatcher wrapper, 500ms per-file debounce, worktree + hidden-path skipping                                                                   |
 | [`src/services/assistant-agent/__tests__/conversation-store.spec.ts`](extensions/shofer/src/services/assistant-agent/__tests__/conversation-store.spec.ts:1) | R     |       | Vitest spec for versioned persistence + hash validation.                                                                                                     |
 | [`src/services/assistant-agent/__tests__/question-queue.spec.ts`](extensions/shofer/src/services/assistant-agent/__tests__/question-queue.spec.ts:1)         | R     |       | Vitest spec for FIFO ordering, abort, timeout, bulk cancel.                                                                                                  |
 | [`src/services/assistant-agent/__tests__/context-window.spec.ts`](extensions/shofer/src/services/assistant-agent/__tests__/context-window.spec.ts:1)         | R     |       | Vitest spec for LRU eviction + token-budget enforcement.                                                                                                     |
-| [`src/core/prompts/tools/native-tools/ask_assistant_agent.ts`](extensions/shofer/src/core/prompts/tools/native-tools/ask_assistant_agent.ts:1)               | 2     | 51    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs                                                                               |
-| [`src/core/tools/AskAssistantAgentTool.ts`](extensions/shofer/src/core/tools/AskAssistantAgentTool.ts:1)                                                     | 2     | 102   | BaseTool<"ask_assistant_agent"> delegating to AssistantAgentManager                                                                                          |
-| [`src/core/webview/AssistantAgentChatProvider.ts`](extensions/shofer/src/core/webview/AssistantAgentChatProvider.ts:1)                                       | 5b    | 134   | Read-only WebviewPanel with conversation history, auto-refresh on state changes, accessible via status bar info panel                                        |
+| [`src/core/prompts/tools/native-tools/ask_assistant_agent.ts`](extensions/shofer/src/core/prompts/tools/native-tools/ask_assistant_agent.ts:1)               | 2     | 74    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs, softTimeoutSec, softResultLength                                             |
+| [`src/core/tools/AskAssistantAgentTool.ts`](extensions/shofer/src/core/tools/AskAssistantAgentTool.ts:1)                                                     | 2     | 151   | BaseTool<"ask_assistant_agent"> delegating to AssistantAgentManager                                                                                          |
+| [`src/core/webview/AssistantAgentChatProvider.ts`](extensions/shofer/src/core/webview/AssistantAgentChatProvider.ts:1)                                       | 5b    | 467   | Read-only WebviewPanel with conversation history, live streaming via coalesced postMessage ticks, client-side markdown rendering                             |
 
 ### Files Modified (13)
 
-| File                                                    | Phase    | Changes                                                                                                                      |
-| ------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `packages/types/src/index.ts`                           | 1        | Added `export * from "./assistant-agent.js"`                                                                                 |
-| `packages/types/src/tool.ts`                            | 1        | Added `"ask_assistant_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`                                       |
-| `packages/types/src/telemetry.ts`                       | 1        | Added `ASSISTANT_AGENT_ERROR = "Assistant Agent Error"` to TelemetryEventName                                                |
-| `packages/types/src/global-settings.ts`                 | R        | Added 6 `assistantAgent*` keys to `globalSettingsSchema`; 6 `assistantAgent*Key` to `GLOBAL_SECRET_KEYS`                     |
-| `packages/types/src/vscode.ts`                          | R        | Added 5 assistant-agent command ids to the typed `commandIds` array                                                          |
-| `src/shared/tools.ts`                                   | 1, fix   | Added `ask_assistant_agent` to `NativeToolArgs`; pre-existing fix for `toolParamNames`                                       |
-| `src/extension.ts`                                      | 1,4,5b,R | Per-workspace activation, disposeAll(), status bar button, chat view import; commands now registered via registerCommands.ts |
-| `src/activate/registerCommands.ts`                      | R        | Registers the 5 assistant-agent commands through the typed `commandIds` plumbing                                             |
-| `src/core/prompts/tools/native-tools/index.ts`          | 2        | Import + registration in `getNativeTools()`                                                                                  |
-| `src/core/assistant-message/presentAssistantMessage.ts` | 2        | Import, description, dispatch case                                                                                           |
-| `src/core/prompts/tools/filter-tools-for-mode.ts`       | 2        | Added `assistantAgentManager` (8th parameter), conditional `ask_assistant_agent` exclusion                                   |
-| `src/core/task/build-tools.ts`                          | 2        | Import `AssistantAgentManager`, pass to `filterNativeToolsForMode`                                                           |
-| `src/core/auto-approval/tools.ts`                       | 2        | Added `askAssistantAgent: "ask_assistant_agent"` auto-approval entry                                                         |
-| `src/core/context-tracking/FileContextTracker.ts`       | 5b       | Added `_notifyAssistantAgent()` hook on `shofer_edited` events                                                               |
+| File                                                    | Phase    | Changes                                                                                                                                                                                 |
+| ------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/types/src/index.ts`                           | 1        | Added `export * from "./assistant-agent.js"`                                                                                                                                            |
+| `packages/types/src/tool.ts`                            | 1        | Added `"ask_assistant_agent"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`                                                                                                  |
+| `packages/types/src/telemetry.ts`                       | 1        | Added `ASSISTANT_AGENT_ERROR = "Assistant Agent Error"` to TelemetryEventName                                                                                                           |
+| `packages/types/src/global-settings.ts`                 | R        | Added 4 `assistantAgent*` keys to `globalSettingsSchema` (`assistantAgentEnabled`, `assistantAgentApiConfigId`, `assistantAgentMaxContextTokens`, `assistantAgentContextFillThreshold`) |
+| `packages/types/src/vscode.ts`                          | R        | Added 5 assistant-agent command ids to the typed `commandIds` array                                                                                                                     |
+| `src/shared/tools.ts`                                   | 1, fix   | Added `ask_assistant_agent` to `NativeToolArgs`; pre-existing fix for `toolParamNames`                                                                                                  |
+| `src/extension.ts`                                      | 1,4,5b,R | Per-workspace activation, disposeAll(), status bar button, chat view import; commands now registered via registerCommands.ts                                                            |
+| `src/activate/registerCommands.ts`                      | R        | Registers the 5 assistant-agent commands through the typed `commandIds` plumbing                                                                                                        |
+| `src/core/prompts/tools/native-tools/index.ts`          | 2        | Import + registration in `getNativeTools()`                                                                                                                                             |
+| `src/core/assistant-message/presentAssistantMessage.ts` | 2        | Import, description, dispatch case                                                                                                                                                      |
+| `src/core/prompts/tools/filter-tools-for-mode.ts`       | 2        | Added `assistantAgentManager` (9th parameter), conditional `ask_assistant_agent` exclusion                                                                                              |
+| `src/core/task/build-tools.ts`                          | 2        | Import `AssistantAgentManager`, pass to `filterNativeToolsForMode`                                                                                                                      |
+| `src/core/auto-approval/tools.ts`                       | 2        | Added `askAssistantAgent: "ask_assistant_agent"` auto-approval entry                                                                                                                    |
+| `src/core/context-tracking/FileContextTracker.ts`       | 5b       | Added `_notifyAssistantAgent()` hook on `shofer_edited` events                                                                                                                          |
 
 ### Implementation Deviations from Design
 
@@ -1004,11 +1005,9 @@ for conversation storage, the question queue, the context window, and pricing.
 
 ### Deferred Items
 
-| Item                                                                      | Design Reference                 | Reason                                                                                                                             |
-| ------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `ShoferProvider.ts` — subscribe to assistant agent events                 | Phase 5 Integration Points table | Would push assistant agent status/events to the Shofer webview. A separate wiring pass after the core tool pipeline is stabilized. |
-| `webviewMessageHandler.ts` — settings save, status request, secret status | Integration Points table         | Settings UI integration for the webview.                                                                                           |
-| `system.ts` — assistant agent status in system prompt context             | Integration Points table         | Inclusion of assistant agent availability + model info in the task agent's system prompt.                                          |
+| Item                                                          | Design Reference         | Reason                                                                                    |
+| ------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
+| `system.ts` — assistant agent status in system prompt context | Integration Points table | Inclusion of assistant agent availability + model info in the task agent's system prompt. |
 
 ### Build Verification
 

@@ -63,7 +63,7 @@ It does **not** detect:
 The file [`extensions/shofer/.git`](../../extensions/shofer/.git) contains:
 
 ```
-gitdir: ../../.git/modules/Shofer
+gitdir: ../../.git/modules/shofer
 ```
 
 This makes `extensions/shofer` a **git submodule** of the parent repository.
@@ -156,31 +156,33 @@ directory) rather than the workspace — keeping `git clean -f -d` safe.
 ## Impact on File Changes Panel
 
 The File Changes Panel ([`ChangedFilesService`](../src/core/file-changes/ChangedFilesService.ts))
-has two backends:
+uses a single per-task working-directory backend with **no git dependency**. It stores
+verbatim file copies under `<taskDir>/base/<relPath>` (original state at first edit)
+and `<taskDir>/final/<relPath>` (last Shofer-produced state, for Redo).
 
-1. **Checkpoint backend** (preferred) — uses shadow git `getDiffStat()`, full rename tracking,
-   fast revert-all via `restoreCheckpoint(baseHash)`
-2. **Tracker backend** (fallback) — compares disk content against per-task snapshots,
-   degraded: no rename tracking, slower revert-all
+The backend is independent of the shadow-git checkpoint service — it works identically
+in every workspace type, whether or not a git repo exists and whether or not nested
+`.git` directories are present. The file list is driven by [`FileContextTracker`](../src/core/context-tracking/FileContextTracker.ts),
+which records every file Shofer edits via `getFilesEditedByRoo()`.
 
-Nested `.git` was a blocker for the checkpoint backend. When detected, the system fell
-back to tracker mode with a "limited mode" badge.
+Checkpoints (shadow git) and file-changes (per-task working directory) serve different
+purposes and do not share a backend. The nested-git fix described above enables the
+shadow-git checkpoint service to operate in submodule-heavy workspaces, but that has no
+bearing on the file-changes panel — it always used the working-directory backend.
 
-After the fix, the checkpoint backend is available for workspaces with nested git repos.
-The shadow git tracks submodule files as regular files (`.git` metadata excluded via
-`GIT_DIR` isolation), so `getDiffStat()` works correctly.
-
-| Feature          | Before fix (nested git) | After fix                         |
-| ---------------- | ----------------------- | --------------------------------- |
-| Backend          | tracker (fallback)      | checkpoint (preferred)            |
-| Rename tracking  | ❌ add+delete only      | ✅ full                           |
-| Revert-all speed | slow (iterate files)    | fast (single `restoreCheckpoint`) |
-| Click-to-diff    | per-task snapshot       | `git show baseHash:<path>`        |
-| UI badge         | "limited mode"          | none                              |
+| Aspect            | Description                                                     |
+| ----------------- | --------------------------------------------------------------- |
+| Backend           | per-task working-directory (`base/` + `final/` copies)          |
+| Git dependency    | none                                                            |
+| Diff computation  | unified-diff of base copy vs. current disk content              |
+| Revert (per-file) | restore `base/<relPath>` to workspace (or delete if was absent) |
+| Redo (per-file)   | restore `final/<relPath>` to workspace                          |
+| Revert-all        | iterate `restoreFile` over candidate set                        |
+| Accept            | promote current disk content as new baseline, clear final copy  |
 
 ## References
 
 - [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts) — checkpoint implementation
 - [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts) — file changes panel backend selection
 - [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts) — per-task file snapshots
-- [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/Shofer`)
+- [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/shofer`)

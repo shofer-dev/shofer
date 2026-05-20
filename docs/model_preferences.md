@@ -4,7 +4,7 @@ This document records the tool inclusion/exclusion and alias preferences configu
 
 ## Tool Aliases
 
-Defined in [`src/shared/tools.ts`](../src/shared/tools.ts:416):
+Defined in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts:266):
 
 | Alias                | Canonical Tool  | Notes                                       |
 | -------------------- | --------------- | ------------------------------------------- |
@@ -44,7 +44,7 @@ if (modelId.includes("openai")) {
 
 ### Gemini (Native Provider)
 
-Applied in [`src/api/providers/gemini.ts`](../src/api/providers/gemini.ts:364):
+Applied in [`src/api/providers/gemini.ts`](../src/api/providers/gemini.ts:357):
 
 ```typescript
 {
@@ -61,7 +61,7 @@ Applied in [`src/api/providers/gemini.ts`](../src/api/providers/gemini.ts:364):
 
 ### Vertex AI (Native Provider)
 
-Applied in [`src/api/providers/vertex.ts`](../src/api/providers/vertex.ts:29):
+Applied in [`src/api/providers/vertex.ts`](../src/api/providers/vertex.ts:28):
 
 ```typescript
 {

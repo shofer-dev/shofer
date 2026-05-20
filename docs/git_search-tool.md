@@ -97,9 +97,10 @@ Each commit message chunk is stored as one Qdrant point:
 ### Indexing Pipeline (Phase 1)
 
 ```
-GitHistoryManager.startIndexing()
-  → GitLogExtractor.extractCommits()
-      `git log --format=%H|||%h|||%an <%ae>|||%aI|||%s|||%b|||ENDCOMMIT`
+GitIndexManager.startIndexing()
+  → GitHistoryOrchestrator.startIndexing()
+    → GitLogExtractor.extractCommits()
+      `git log --format=%H|||%h|||%an <%ae>|||%aI|||%s|||%b|||ENDCOMMIT --encoding=UTF-8`
       → stream parse → GitCommitBlock[]
   → filter by maxHistoryDays (config, default 365)
   → GitCacheManager check: skip commits whose hash is unchanged
@@ -158,14 +159,15 @@ Parameters:
 
 Reuses existing `codebaseIndex*` settings. New git-specific settings:
 
-| Setting                            | Type    | Default  | Description                           |
-| ---------------------------------- | ------- | -------- | ------------------------------------- |
-| `codebaseIndexGitEnabled`          | boolean | false    | Enable git history indexing           |
-| `codebaseIndexGitMaxHistoryDays`   | number  | 365      | Max days of commit history to index   |
-| `codebaseIndexGitMaxCommits`       | number  | 10000    | Hard cap on number of commits indexed |
-| `codebaseIndexGitSearchMinScore`   | number  | 0.4      | Cosine similarity threshold           |
-| `codebaseIndexGitBranch`           | string  | "master" | Branch (ref) to index, empty = HEAD   |
-| `codebaseIndexGitSearchMaxResults` | number  | 20       | Default max results per query         |
+| Setting                               | Type    | Default | Description                           |
+| ------------------------------------- | ------- | ------- | ------------------------------------- |
+| `codebaseIndexGitEnabled`             | boolean | false   | Enable git history indexing           |
+| `codebaseIndexGitMaxHistoryDays`      | number  | 365     | Max days of commit history to index   |
+| `codebaseIndexGitMaxCommits`          | number  | 10000   | Hard cap on number of commits indexed |
+| `codebaseIndexGitPollIntervalMinutes` | number  | 5       | Poll interval for incremental updates |
+| `codebaseIndexGitSearchMinScore`      | number  | 0.4     | Cosine similarity threshold           |
+| `codebaseIndexGitBranch`              | string  | ""      | Branch (ref) to index, empty = HEAD   |
+| `codebaseIndexGitSearchMaxResults`    | number  | 20      | Default max results per query         |
 
 These are added to [`packages/types/src/codebase-index.ts`](../packages/types/src/codebase-index.ts) (the existing Zod schema).
 
@@ -333,7 +335,7 @@ Following the [adding-new-tools.md](adding-new-tools.md) 11-step checklist:
 | `git` binary not found         | Graceful error logged; manager stays in `Error` state                      |
 | Qdrant connection fails        | Same recovery path as code index; cache preserved                          |
 | Empty commit history           | Indexing completes with 0 points; search returns "No results"              |
-| Very large commit message      | Truncated to 8000 characters before embedding                              |
+| Very large commit message      | Truncated to 4000 characters before embedding                              |
 | Encoding issues (non-UTF-8)    | `git log` is forced to UTF-8 via `--encoding=UTF-8`; replace invalid chars |
 | Workspace with 50,000+ commits | Capped by `codebaseIndexGitMaxCommits`; only most recent N are indexed     |
 

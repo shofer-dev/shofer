@@ -7,7 +7,7 @@ Components:
 [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)
 
 Backend:
-[`Task.ts:449`](src/core/task/Task.ts:449) — loadedSkills tracking,
+[`Task.ts:549`](src/core/task/Task.ts:549) — loadedSkills tracking,
 [`SkillsTool.ts`](src/core/tools/SkillsTool.ts) — reload no-op,
 [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts) — IPC
 
@@ -79,7 +79,7 @@ Same flow for the **🎓 Skills** button.
 | Icon             | `Zap` (Lucide) + `ChevronDown` (Lucide)                                                                          |
 | Tooltip          | "Slash Commands — click to browse and insert"                                                                    |
 | Hidden when      | No commands available (`commands.length === 0`)                                                                  |
-| Popover header   | "Slash Commands" + gear settings button (navigates to Settings → Slash Commands)                                 |
+| Popover header   | "Slash Commands" + refresh button + gear settings button (navigates to Settings → Slash Commands)                |
 | Popover width    | `min-w-56 max-w-72`                                                                                              |
 | Grouping         | By source: Project (`FolderGit2`), Global (`Globe`), Built-in (`Wrench`)                                         |
 | Each item shows  | Command name as `/name` in monospace, description (truncated), open-file button (on hover, if `filePath` exists) |
@@ -87,7 +87,7 @@ Same flow for the **🎓 Skills** button.
 | Open-file button | `ExternalLink` icon on hover, sends `{ type: "openFile", text: filePath }`                                       |
 | Max height       | 400px with scroll                                                                                                |
 
-**Command data** (from [`Command`](extensions/shofer/packages/types/src/vscode-extension-host.ts:440)):
+**Command data** (from [`Command`](extensions/shofer/packages/types/src/vscode-extension-host.ts:465)):
 
 ```typescript
 interface Command {
@@ -107,7 +107,7 @@ interface Command {
 | Icon             | `GraduationCap` (Lucide) + `ChevronDown` (Lucide)                                                                                                         |
 | Tooltip          | "Skills — click to browse and insert"                                                                                                                     |
 | Hidden when      | No skills available (`skills.length === 0`)                                                                                                               |
-| Popover header   | "Skills" + gear settings button (navigates to Settings → Skills)                                                                                          |
+| Popover header   | "Skills" + refresh button + gear settings button (navigates to Settings → Skills)                                                                         |
 | Popover width    | `min-w-72 max-w-96` (wider than Commands to accommodate description)                                                                                      |
 | Grouping         | **Loaded skills** (✓ checkmark, green), then unloaded by mode: "All Modes" (`Globe` icon), per-mode groups (`FolderGit2` icon), all sorted alphabetically |
 | Each item shows  | Source badge (or ✓ for loaded), skill name on first line, description (truncated) on second line, open-file button on hover                               |
@@ -125,15 +125,6 @@ Each `Task` maintains a `loadedSkills: Map<string,string>` (skill name → SKILL
 - **Cleared on condense**: All 3 context-condensation paths clear `loadedSkills`
 - **IPC**: `handleRequestSkills` includes `loadedSkills` in the skills message
 - **UI**: `SkillsButton` shows loaded skills first with a green ✓ checkmark
-
-### `/loaded` and `/search` Slash Commands
-
-Two new built-in slash commands:
-
-| Command              | Description                                                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `/loaded`            | Lists currently loaded skills for the task (name + description)                                                               |
-| `/search <keywords>` | Searches SKILL.md files — RAG semantic search via `rag_search` scoped to `.shofer/skills`, falling back to `grep_search` grep |
 
 **Skill data** (from [`SkillMetadata`](extensions/shofer/packages/types/src/skills.ts:5)):
 
@@ -199,7 +190,7 @@ Both components call `vscode.postMessage({ type: "requestCommands" })` / `vscode
 
 #### Layout Integration
 
-In [`ChatTextArea.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatTextArea.tsx:1341-1342):
+In [`ChatTextArea.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatTextArea.tsx:1391-1392):
 
 ```tsx
 <div className="flex items-center gap-2">
@@ -243,11 +234,15 @@ Keys in [`quickAccess.json`](extensions/shofer/webview-ui/src/i18n/locales/en/qu
 | `quickAccess:commands.globalCommands`  | "Global Commands"                             |
 | `quickAccess:commands.builtInCommands` | "Built-in Commands"                           |
 | `quickAccess:commands.noCommands`      | "No commands available"                       |
+| `quickAccess:commands.refresh`         | "Re-read .shofer/commands directories"        |
+| `quickAccess:commands.openFile`        | "Open file"                                   |
 | `quickAccess:commands.settings`        | "Manage commands in Settings"                 |
 | `quickAccess:skills.tooltip`           | "Skills — click to browse and insert"         |
 | `quickAccess:skills.title`             | "Skills"                                      |
 | `quickAccess:skills.allModes`          | "All Modes"                                   |
 | `quickAccess:skills.loaded`            | "Loaded"                                      |
+| `quickAccess:skills.refresh`           | "Re-read .shofer/skills directories"          |
+| `quickAccess:skills.openFile`          | "Open SKILL.md"                               |
 | `quickAccess:skills.noSkills`          | "No skills available"                         |
 | `quickAccess:skills.settings`          | "Manage skills in Settings"                   |
 

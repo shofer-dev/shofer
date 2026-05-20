@@ -7,7 +7,7 @@ Shofer supports three tool integration patterns. Choose the one that fits your u
 | Kind                 | Where the tool lives               | How Shofer discovers it              | See doc                                                          |
 | -------------------- | ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
 | **Native tool**      | Inside Shofer (TypeScript handler) | Compiled into the extension          | This document                                                    |
-| **External LM tool** | Separate VS Code extension         | `vscode.lm.tools` + extension config | [`tool-categories.md`](tool-categories.md) § "External LM Tools" |
+| **External LM tool** | Separate VS Code extension         | `shofer.privateToolProviders` config | [`tool-categories.md`](tool-categories.md) § "External LM Tools" |
 | **MCP tool**         | External MCP server                | MCP protocol                         | [`tool-categories.md`](tool-categories.md) § "MCP Tools"         |
 
 ---
@@ -244,11 +244,11 @@ Add label strings to [`webview-ui/src/i18n/locales/en/chat.json`](../webview-ui/
 
 For tools registered by a separate VS Code extension:
 
-| #   | Location                                            | Description                                                                  |
-| --- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 1   | Extension's `package.json`                          | Add `toolGroups` config mapping each tool name → ToolGroup                   |
-| 2   | [`build-tools.ts`](../src/core/task/build-tools.ts) | Add config namespace to `configNamespaces` in `resolveExternalLmToolGroup()` |
-| 3   | [`tool.ts`](../packages/types/src/tool.ts)          | Ensure the ToolGroup exists in the enum                                      |
+| #   | Location                                            | Description                                                                                                                                  |
+| --- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Extension's `package.json`                          | Add `toolGroups` config mapping each tool name → ToolGroup                                                                                   |
+| 2   | [`build-tools.ts`](../src/core/task/build-tools.ts) | Tool group resolved automatically by `resolvePrivateToolGroup()` via `shofer.privateToolProviders` + `shofer.<providerId>.toolGroups` config |
+| 3   | [`tool.ts`](../packages/types/src/tool.ts)          | Ensure the ToolGroup exists in the enum                                                                                                      |
 
 See [`tool-categories.md`](tool-categories.md) § "External LM Tools" for the full reference and examples.
 
@@ -263,7 +263,7 @@ Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts
 ## Build & Test
 
 ```bash
-./deploy.sh dev build Shofer
+./deploy.sh dev build shofer
 ./deploy.sh dev install-extensions
 ```
 

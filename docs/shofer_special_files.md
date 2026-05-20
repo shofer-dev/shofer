@@ -43,13 +43,12 @@ Controls which files the LLM can access through its tools. Applies to:
 - **@-mentions**: Ignored files return `"(File is ignored by .shoferignore)"`; directory attachments filter or mark them with 🔒
 - **Environment details**: Ignored files are excluded from the file listing injected into each user message
 
-Error message on block:
-
-```
-Access to <path> is blocked by the .shoferignore file settings.
-You must try to continue in the task without using this file,
-or ask the user to update the .shoferignore file.
-```
+When a file is blocked by `.shoferignore`, read-tool results omit the file
+and write/execute tools return an error indicating the path is ignored.
+The exact wording varies by tool; the controller itself only exposes boolean
+access checks and a formatted instructions block via
+[`getInstructions()`](../src/core/ignore/ShoferIgnoreController.ts)
+(surfaces `🔒`-badged entries for blocked files).
 
 A UI setting ("Show .shoferignore'd files in lists and searches") controls
 whether ignored files appear with a 🔒 badge or are hidden entirely from

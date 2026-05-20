@@ -4,13 +4,13 @@ Complete reference for all native tools available in Shofer, their mode availabi
 
 ## Mode Availability
 
-| Mode            | Groups                           | Description                  |
-| --------------- | -------------------------------- | ---------------------------- |
-| 🏗️ Architect    | `read`, `edit` (md only), `mcp`  | Plan and design              |
-| 💻 Code         | `read`, `edit`, `command`, `mcp` | Write and modify code        |
-| ❓ Ask          | `read`, `mcp`                    | Get answers and explanations |
-| 🪲 Debug        | `read`, `edit`, `command`, `mcp` | Diagnose and fix issues      |
-| 🪃 Orchestrator | varies                           | Delegates to other modes     |
+| Mode            | Groups                                                             | Description                  |
+| --------------- | ------------------------------------------------------------------ | ---------------------------- |
+| 🏗️ Architect    | `read`, `write` (md only), `mcp`, `questions`                      | Plan and design              |
+| 💻 Code         | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions` | Write and modify code        |
+| ❓ Ask          | `read`, `mcp`                                                      | Get answers and explanations |
+| 🪲 Debug        | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`         | Diagnose and fix issues      |
+| 🪃 Orchestrator | varies                                                             | Delegates to other modes     |
 
 **Always-available tools** bypass mode filtering entirely (see column below).
 
@@ -50,13 +50,20 @@ Complete reference for all native tools available in Shofer, their mode availabi
 
 ### `read_file`
 
-Read a file's contents, optionally restricted to a line range.
+Read a file's contents with two modes: slice (offset/limit) and indentation (semantic block extraction).
 
-| Param        | Type   | Required | Description                     |
-| ------------ | ------ | :------: | ------------------------------- |
-| `path`       | string |    ✅    | File path relative to workspace |
-| `start_line` | number |    –     | 1-based start line              |
-| `end_line`   | number |    –     | 1-based end line                |
+| Param                          | Type                                 | Required | Description                                                        |
+| ------------------------------ | ------------------------------------ | :------: | ------------------------------------------------------------------ |
+| `path`                         | string                               |    ✅    | File path relative to workspace                                    |
+| `mode`                         | `"slice"` \| `"indentation"` \| null |    –     | Reading mode: `"slice"` (default) or `"indentation"`               |
+| `offset`                       | number \| null                       |    –     | 1-based line to start reading from (slice mode, default: 1)        |
+| `limit`                        | number \| null                       |    –     | Maximum lines to return (default: 2000)                            |
+| `indentation`                  | object \| null                       |    –     | Indentation-mode options (only used when `mode === "indentation"`) |
+| `indentation.anchor_line`      | number                               |    –     | 1-based line anchoring code block extraction                       |
+| `indentation.max_levels`       | number \| null                       |    –     | Maximum indentation levels above anchor (0 = unlimited, default)   |
+| `indentation.include_siblings` | boolean \| null                      |    –     | Include sibling blocks at same indentation (default: false)        |
+| `indentation.include_header`   | boolean \| null                      |    –     | Include file header/imports (default: true)                        |
+| `indentation.max_lines`        | number \| null                       |    –     | Hard cap on lines for indentation mode                             |
 
 ### `write_to_file`
 
@@ -117,12 +124,12 @@ Inserts text at a specific position in a file using VS Code's WorkspaceEdit API.
 
 Performs regex find-and-replace on a workspace file, similar to `sed 's/pattern/replacement/g'`. Uses JavaScript RegExp syntax. Supports capture group backreferences ($1, $2, etc.).
 
-| Param | Type          |    Required     | Description |
-| ----- | ------------- | :-------------: | ----------- | ------------------------------------------ |
-|       | `path`        |     string      | ✅          | File path relative to workspace            |
-|       | `pattern`     |     string      | ✅          | Regex pattern (JavaScript RegExp syntax)   |
-|       | `replacement` |     string      | ✅          | Replacement string (supports $1, $2, etc.) |
-|       | `global`      | boolean \| null | ✅          | Replace all occurrences (default: true)    |
+| Param         | Type            | Required | Description                                |
+| ------------- | --------------- | :------: | ------------------------------------------ |
+| `path`        | string          |    ✅    | File path relative to workspace            |
+| `pattern`     | string          |    ✅    | Regex pattern (JavaScript RegExp syntax)   |
+| `replacement` | string          |    ✅    | Replacement string (supports $1, $2, etc.) |
+| `global`      | boolean \| null |    ✅    | Replace all occurrences (default: true)    |
 
 ### `create_new_workspace`
 
@@ -146,7 +153,7 @@ Creates a new workspace/project directory structure with optional subdirectories
 | `list_code_usages`    | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                       |
 | `rag_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)             |
 | `lsp_search`          | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback                  |
-| `git_search`          | 🟣 AW  | read  |        –         |   ✅   | Search git history (commit messages + diffs)           |
+| `git_search`          | 🟣 AW  | read  |        –         |   ✅   | Search git history (commit messages only)              |
 | `ask_assistant_agent` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent assistant agent a codebase question |
 
 ### `grep_search`
@@ -196,7 +203,7 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 
 ### `git_search`
 
-Searches the workspace git history for commit messages and patches matching a query. Returns a list of matching commits with author, date, subject, and a snippet of the diff.
+Semantic search over git commit history (commit messages only — not diffs, not file contents). Uses embedding-based cosine similarity against a Qdrant collection of indexed commit messages. Requires the git index to be enabled and initialized.
 
 | Param        | Type           | Required | Description                         |
 | ------------ | -------------- | :------: | ----------------------------------- |
@@ -207,10 +214,11 @@ Searches the workspace git history for commit messages and patches matching a qu
 
 🔒 Requires code index to be enabled, configured, and initialized.
 
-| Param   | Type   | Required | Description                   |
-| ------- | ------ | :------: | ----------------------------- |
-| `query` | string |    ✅    | Natural language search query |
-| `path`  | string |    –     | Directory scope               |
+| Param        | Type           | Required | Description                                   |
+| ------------ | -------------- | :------: | --------------------------------------------- |
+| `query`      | string         |    ✅    | Natural language search query                 |
+| `path`       | string \| null |    –     | Directory scope (relative to workspace)       |
+| `maxResults` | number \| null |    –     | Maximum code snippets to return (default: 10) |
 
 ### `ask_assistant_agent`
 
@@ -255,7 +263,7 @@ Analyzes workspace root for config files and detects languages, frameworks, buil
 
 ### `get_changed_files`
 
-Returns the files Shofer edited in the current task with per-file net-state annotations (+insertions / −deletions). Backed by the working-directory `ChangedFilesService` — each edited file has a `base/` copy captured at first edit and a `final/` copy captured after every `roo_edited`. Diff stats are computed via unified diff against the base content. No git dependency.
+Returns the files Shofer edited in the current task with per-file net-state annotations (+insertions / −deletions). Backed by the working-directory `ChangedFilesService` — each edited file has a `base/` copy captured at first edit and a `final/` copy captured after every `shofer_edited`. Diff stats are computed via unified diff against the base content. No git dependency.
 
 No approval prompt — read-only meta-operation.
 
@@ -306,18 +314,22 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 
 Execute a CLI command in the user's terminal.
 
-| Param     | Type   | Required | Description        |
-| --------- | ------ | :------: | ------------------ |
-| `execute` | string |    ✅    | Command to execute |
-| `cwd`     | string |    –     | Working directory  |
+| Param     | Type           | Required | Description        |
+| --------- | -------------- | :------: | ------------------ |
+| `command` | string         |    ✅    | Command to execute |
+| `cwd`     | string \| null |    –     | Working directory  |
+| `timeout` | number \| null |    –     | Timeout in seconds |
 
 ### `read_command_output`
 
-Retrieve the full output from a previously truncated command execution.
+Retrieve the full output from a previously truncated command execution. Supports search filtering and pagination.
 
-| Param         | Type   | Required | Description                                |
-| ------------- | ------ | :------: | ------------------------------------------ |
-| `artifact_id` | string |    ✅    | The artifact ID from the truncated command |
+| Param         | Type           | Required | Description                                                          |
+| ------------- | -------------- | :------: | -------------------------------------------------------------------- |
+| `artifact_id` | string         |    ✅    | The artifact ID from the truncated command                           |
+| `search`      | string \| null |    –     | Optional regex or literal pattern to filter lines (case-insensitive) |
+| `offset`      | number \| null |    –     | Byte offset to start reading from (default: 0)                       |
+| `limit`       | number \| null |    –     | Maximum bytes to return (default: 40KB)                              |
 
 ### `fetch_web_page`
 
@@ -352,7 +364,7 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 | `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task          |
 | `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List all background child tasks started by this task        |
 | `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                        |
-| `skill`                   | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
+| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
 | `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
 | `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                  |
 
@@ -363,14 +375,14 @@ Create a new task instance in the chosen mode. Supports two execution models:
 - **Synchronous (default):** The parent blocks until the child completes. Must be called alone — no other tools in the same turn.
 - **Background (`is_background=true`):** The child starts immediately and runs concurrently. The parent receives the child's `task_id` and continues without blocking. Use `check_task_status` or `wait_for_task` to retrieve results later.
 
-| Param              | Type    | Required | Description                                                                                                                                |
-| ------------------ | ------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mode`             | string  |    ✅    | Mode slug (e.g., `code`, `debug`)                                                                                                          |
-| `message`          | string  |    ✅    | Initial instructions for the child task                                                                                                    |
-| `todos`            | string  |    –     | Initial markdown checklist for the child                                                                                                   |
-| `is_background`    | boolean |    –     | When `true`, run child concurrently and return `task_id` immediately                                                                       |
-| `softResultLength` | number  |    ✅    | Soft suggestion for max characters of the subtask's completion result. Hard safety cap: 100000 characters (results beyond this truncated). |
-| `softTimeoutSec`   | number  |    ✅    | Soft guidance (in seconds) for how long the parent expects to wait. Informational only — not enforced.                                     |
+| Param              | Type            | Required | Description                                                                                                                |
+| ------------------ | --------------- | :------: | -------------------------------------------------------------------------------------------------------------------------- |
+| `mode`             | string          |    ✅    | Mode slug (e.g., `code`, `debug`)                                                                                          |
+| `message`          | string          |    ✅    | Initial instructions for the child task                                                                                    |
+| `todos`            | string \| null  |    –     | Initial markdown checklist for the child                                                                                   |
+| `is_background`    | boolean \| null |    –     | When `true`, run child concurrently and return `task_id` immediately (default: `false`)                                    |
+| `softResultLength` | number \| null  |    –     | Soft suggestion for max characters of the subtask's completion result (default: 2000). Hard safety cap: 100000 characters. |
+| `softTimeoutSec`   | number \| null  |    –     | Soft guidance in seconds for how long the parent expects to wait (default: 300). Informational only — not enforced.        |
 
 ### `check_task_status`
 
@@ -590,7 +602,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `cancel_tasks`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `answer_subtask_question` |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `list_background_tasks`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `skill`                   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `skills`                  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `set_task_title`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `give_feedback`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `run_slash_command`       |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |

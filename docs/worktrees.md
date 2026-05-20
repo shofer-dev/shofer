@@ -77,10 +77,10 @@ Two parallel tasks running against the same workspace would interfere if their s
 
 ### 5. Embedded Worktree Detection (`isEmbeddedWorktree`)
 
-`handleListWorktrees` uses `path.relative(gitRootPath, cwd)` to determine whether a subfolder workspace is itself an embedded worktree:
+`handleListWorktrees` uses `path.relative(path.resolve(gitRootPath), path.resolve(cwd))` to determine whether a subfolder workspace is itself an embedded worktree:
 
 ```typescript
-const rel = path.relative(gitRootPath, cwd)
+const rel = path.relative(path.resolve(gitRootPath), path.resolve(cwd))
 const embeddedPrefix = path.join(".shofer", "worktrees") + path.sep
 isEmbeddedWorktree = !rel.startsWith("..") && !path.isAbsolute(rel) && rel.startsWith(embeddedPrefix)
 ```

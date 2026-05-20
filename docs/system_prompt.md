@@ -123,7 +123,7 @@ The largest section, containing operational constraints:
 
 ### 11. [`sections/custom-instructions.ts`](../src/core/prompts/sections/custom-instructions.ts)
 
-**Function:** `addCustomInstructions(baseInstructions, globalCustomInstructions, cwd, mode, options)`
+**Function:** `addCustomInstructions(modeCustomInstructions, globalCustomInstructions, cwd, mode, options)`
 
 - Loads and concatenates custom instructions from multiple sources:
     - **Mode-specific `customInstructions`** (from the mode definition).

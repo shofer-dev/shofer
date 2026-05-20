@@ -101,18 +101,18 @@ Excluding lockfiles, the ~57K JSON lines are:
 | Category               | Approx. Lines | Description                                                       |
 | ---------------------- | ------------- | ----------------------------------------------------------------- |
 | i18n translation files | ~48,000       | 18+ languages × ~2.7K per locale (settings, chat, commands, etc.) |
-| Web app config         | ~3,400        | `apps/web-shofer-code/` package.json, nextjs config, etc.         |
+| Web app config         | ~3,400        | `apps/web-shofer/` package.json, nextjs config, etc.              |
 | Package manifests      | ~1,250        | 18 `package.json` files across monorepo                           |
 | Other JSON             | ~5,250        | Schema files, tsconfigs, evals fixtures                           |
 
 ### YAML Breakdown
 
-| File                                  | Lines  |
-| ------------------------------------- | ------ |
-| `pnpm-lock.yaml`                      | 22,438 |
-| CI/CD workflows (`github/workflows/`) | ~1,200 |
-| Docker compose                        | ~200   |
-| Issue templates                       | ~270   |
+| File                                   | Lines  |
+| -------------------------------------- | ------ |
+| `pnpm-lock.yaml`                       | 22,438 |
+| CI/CD workflows (`.github/workflows/`) | ~1,200 |
+| Docker compose                         | ~130   |
+| Issue templates                        | ~270   |
 
 ---
 
