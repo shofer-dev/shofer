@@ -619,6 +619,47 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "access_mcp_resource":
+				if (partialArgs.server_name !== undefined || partialArgs.uri !== undefined) {
+					nativeArgs = {
+						server_name: partialArgs.server_name,
+						uri: partialArgs.uri,
+					}
+				}
+				break
+
+			case "call_mcp_tool_async":
+				if (partialArgs.server_name !== undefined || partialArgs.tool_name !== undefined) {
+					nativeArgs = {
+						server_name: partialArgs.server_name,
+						tool_name: partialArgs.tool_name,
+						arguments: partialArgs.arguments,
+						source:
+							partialArgs.source === "project" || partialArgs.source === "global"
+								? partialArgs.source
+								: undefined,
+					}
+				}
+				break
+
+			case "check_mcp_call_status":
+				if (partialArgs.call_id !== undefined) {
+					nativeArgs = {
+						call_id: partialArgs.call_id,
+					}
+				}
+				break
+
+			case "wait_for_mcp_call":
+				if (partialArgs.call_ids !== undefined) {
+					nativeArgs = {
+						call_ids: Array.isArray(partialArgs.call_ids) ? partialArgs.call_ids : [partialArgs.call_ids],
+						wait: partialArgs.wait === "any" ? "any" : "all",
+						timeout: this.coerceOptionalNumber(partialArgs.timeout),
+					}
+				}
+				break
+
 			case "apply_patch":
 				if (partialArgs.patch !== undefined) {
 					nativeArgs = {
@@ -695,9 +736,10 @@ export class NativeToolCallParser {
 				break
 
 			case "wait_for_task":
-				if (partialArgs.task_id !== undefined) {
+				if (partialArgs.task_ids !== undefined) {
 					nativeArgs = {
-						task_id: partialArgs.task_id,
+						task_ids: Array.isArray(partialArgs.task_ids) ? partialArgs.task_ids : [partialArgs.task_ids],
+						wait: partialArgs.wait === "any" ? "any" : "all",
 						timeout: this.coerceOptionalNumber(partialArgs.timeout),
 					}
 				}
@@ -707,6 +749,24 @@ export class NativeToolCallParser {
 				if (partialArgs.task_id !== undefined) {
 					nativeArgs = {
 						task_id: partialArgs.task_id,
+						include_activity: this.coerceOptionalBoolean(partialArgs.include_activity),
+					}
+				}
+				break
+
+			case "cancel_tasks":
+				if (partialArgs.task_ids !== undefined) {
+					nativeArgs = {
+						task_ids: Array.isArray(partialArgs.task_ids) ? partialArgs.task_ids : [partialArgs.task_ids],
+					}
+				}
+				break
+
+			case "answer_subtask_question":
+				if (partialArgs.task_id !== undefined || partialArgs.answer !== undefined) {
+					nativeArgs = {
+						task_id: partialArgs.task_id,
+						answer: partialArgs.answer,
 					}
 				}
 				break
@@ -1210,6 +1270,35 @@ export class NativeToolCallParser {
 					}
 					break
 
+				case "call_mcp_tool_async":
+					if (args.server_name !== undefined && args.tool_name !== undefined) {
+						nativeArgs = {
+							server_name: args.server_name,
+							tool_name: args.tool_name,
+							arguments: args.arguments,
+							source: args.source === "project" || args.source === "global" ? args.source : undefined,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "check_mcp_call_status":
+					if (args.call_id !== undefined) {
+						nativeArgs = {
+							call_id: args.call_id,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "wait_for_mcp_call":
+					if (args.call_ids !== undefined) {
+						nativeArgs = {
+							call_ids: Array.isArray(args.call_ids) ? args.call_ids : [args.call_ids],
+							wait: args.wait === "any" ? "any" : "all",
+							timeout: this.coerceOptionalNumber(args.timeout),
+						} as NativeArgsFor<TName>
+					}
+					break
+
 				case "apply_patch":
 					if (args.patch !== undefined) {
 						nativeArgs = {
@@ -1283,6 +1372,24 @@ export class NativeToolCallParser {
 					if (args.task_id !== undefined) {
 						nativeArgs = {
 							task_id: args.task_id,
+							include_activity: this.coerceOptionalBoolean(args.include_activity),
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "cancel_tasks":
+					if (args.task_ids !== undefined) {
+						nativeArgs = {
+							task_ids: Array.isArray(args.task_ids) ? args.task_ids : [args.task_ids],
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "answer_subtask_question":
+					if (args.task_id !== undefined && args.answer !== undefined) {
+						nativeArgs = {
+							task_id: args.task_id,
+							answer: args.answer,
 						} as NativeArgsFor<TName>
 					}
 					break
