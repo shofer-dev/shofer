@@ -23,8 +23,8 @@ export class SerializedEmbedder implements IEmbedder {
 		private readonly lane: LimitFunction,
 	) {}
 
-	async createEmbeddings(texts: string[], model?: string): Promise<EmbeddingResponse> {
-		return this.lane(() => this.inner.createEmbeddings(texts, model))
+	async createEmbeddings(texts: string[], model?: string, signal?: AbortSignal): Promise<EmbeddingResponse> {
+		return this.lane(() => this.inner.createEmbeddings(texts, model, signal))
 	}
 
 	async validateConfiguration(): Promise<{ valid: boolean; error?: string }> {

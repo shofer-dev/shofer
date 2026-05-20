@@ -236,6 +236,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 												scanWorkspace,
 												onError,
 												onBlocksIndexed,
+												signal,
 											),
 										)
 										activeBatchPromises.add(batchPromise)
@@ -333,7 +334,15 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 				// Queue final batch processing
 				const batchPromise = batchLimiter(() =>
-					this.processBatch(batchBlocks, batchTexts, batchFileInfos, scanWorkspace, onError, onBlocksIndexed),
+					this.processBatch(
+						batchBlocks,
+						batchTexts,
+						batchFileInfos,
+						scanWorkspace,
+						onError,
+						onBlocksIndexed,
+						signal,
+					),
 				)
 				activeBatchPromises.add(batchPromise)
 
@@ -423,6 +432,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 		scanWorkspace: string,
 		onError?: (error: Error) => void,
 		onBlocksIndexed?: (indexedCount: number) => void,
+		signal?: AbortSignal,
 	): Promise<void> {
 		if (batchBlocks.length === 0) return
 
@@ -431,6 +441,9 @@ export class DirectoryScanner implements IDirectoryScanner {
 		let lastError: Error | null = null
 
 		while (attempts < MAX_BATCH_RETRIES && !success) {
+			// Bail out early between retries when the caller has cancelled.
+			if (signal?.aborted) return
+
 			attempts++
 			try {
 				// --- Deletion Step ---
@@ -474,8 +487,9 @@ export class DirectoryScanner implements IDirectoryScanner {
 				}
 				// --- End Deletion Step ---
 
-				// Create embeddings for batch
-				const { embeddings } = await this.embedder.createEmbeddings(batchTexts)
+				// Create embeddings for batch — thread the abort signal so the
+				// orchestrator's "Stop Indexing" can cancel in-flight Ollama calls.
+				const { embeddings } = await this.embedder.createEmbeddings(batchTexts, undefined, signal)
 
 				// Prepare points for Qdrant
 				const points = batchBlocks.map((block, index) => {
@@ -696,6 +710,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 												workspacePath,
 												onError,
 												onBlocksIndexed,
+												signal,
 											),
 										)
 										activeBatchPromises.add(batchPromise)
@@ -762,7 +777,15 @@ export class DirectoryScanner implements IDirectoryScanner {
 				pendingBatchCount++
 
 				const batchPromise = batchLimiter(() =>
-					this.processBatch(batchBlocks, batchTexts, batchFileInfos, workspacePath, onError, onBlocksIndexed),
+					this.processBatch(
+						batchBlocks,
+						batchTexts,
+						batchFileInfos,
+						workspacePath,
+						onError,
+						onBlocksIndexed,
+						signal,
+					),
 				)
 				activeBatchPromises.add(batchPromise)
 				batchPromise.finally(() => {

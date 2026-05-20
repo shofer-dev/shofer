@@ -7,9 +7,12 @@ export interface IEmbedder {
 	 * Creates embeddings for the given texts.
 	 * @param texts Array of text strings to create embeddings for
 	 * @param model Optional model ID to use for embeddings
+	 * @param signal Optional AbortSignal for cooperative cancellation.
+	 *   When provided and aborted, the embedder SHOULD cancel in-flight work
+	 *   as quickly as possible (e.g. abort HTTP requests).
 	 * @returns Promise resolving to an EmbeddingResponse
 	 */
-	createEmbeddings(texts: string[], model?: string): Promise<EmbeddingResponse>
+	createEmbeddings(texts: string[], model?: string, signal?: AbortSignal): Promise<EmbeddingResponse>
 
 	/**
 	 * Validates the embedder configuration by testing connectivity and credentials.

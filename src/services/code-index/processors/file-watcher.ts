@@ -673,7 +673,7 @@ export class FileWatcher implements IFileWatcher {
 	 * @param filePath Path to the file to process
 	 * @returns Promise resolving to processing result
 	 */
-	async processFile(filePath: string): Promise<FileProcessingResult> {
+	async processFile(filePath: string, signal?: AbortSignal): Promise<FileProcessingResult> {
 		try {
 			// Get relative path for ignore checks
 			const relativeFilePath = generateRelativeFilePath(filePath, this.workspacePath)
@@ -768,7 +768,7 @@ export class FileWatcher implements IFileWatcher {
 			let pointsToUpsert: PointStruct[] = []
 			if (this.embedder && blocksToEmbed.length > 0) {
 				const texts = blocksToEmbed.map((block) => block.content)
-				const { embeddings } = await this.embedder.createEmbeddings(texts)
+				const { embeddings } = await this.embedder.createEmbeddings(texts, undefined, signal)
 
 				pointsToUpsert = blocksToEmbed.map((block, index) => {
 					// Use segmentHash-based point IDs (matching the scanner)
