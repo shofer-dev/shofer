@@ -124,22 +124,27 @@ export function useScrollLifecycle({
 	// Phase transitions
 	// -----------------------------------------------------------------------
 
-	const transitionScrollPhase = useCallback((nextPhase: ScrollPhase) => {
+	const transitionScrollPhase = useCallback((nextPhase: ScrollPhase, reason?: string) => {
 		if (scrollPhaseRef.current === nextPhase) {
 			return
 		}
+		console.log(`[scroll] phase ${scrollPhaseRef.current} → ${nextPhase}${reason ? ` (${reason})` : ""}`)
 		scrollPhaseRef.current = nextPhase
 		setScrollPhase(nextPhase)
 	}, [])
 
-	const enterAnchoredFollowing = useCallback(() => {
-		transitionScrollPhase("ANCHORED_FOLLOWING")
-		setShowScrollToBottom(false)
-	}, [transitionScrollPhase])
+	const enterAnchoredFollowing = useCallback(
+		(reason?: string) => {
+			transitionScrollPhase("ANCHORED_FOLLOWING", reason)
+			setShowScrollToBottom(false)
+		},
+		[transitionScrollPhase],
+	)
 
 	const enterUserBrowsingHistory = useCallback(
 		(_source: ScrollFollowDisengageSource) => {
-			transitionScrollPhase("USER_BROWSING_HISTORY")
+			console.log(`[scroll] enterUserBrowsingHistory source=${_source} phase=${scrollPhaseRef.current}`)
+			transitionScrollPhase("USER_BROWSING_HISTORY", _source)
 			setShowScrollToBottom(true)
 			// Open a brief immune window so any in-flight programmatic
 			// scroll-to-bottom that completes after this point cannot
@@ -170,7 +175,12 @@ export function useScrollLifecycle({
 	const scrollToBottomSmooth = useMemo(
 		() =>
 			debounce(
-				() => virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" }),
+				() => {
+					console.log(
+						`[scroll] scrollToBottomSmooth phase=${scrollPhaseRef.current} isAtBottom=${isAtBottomRef.current} userDisengaged=${userDisengagedRef.current}`,
+					)
+					virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })
+				},
 				10,
 				{ immediate: true },
 			),
@@ -178,6 +188,9 @@ export function useScrollLifecycle({
 	)
 
 	const scrollToBottomAuto = useCallback(() => {
+		console.log(
+			`[scroll] scrollToBottomAuto phase=${scrollPhaseRef.current} isAtBottom=${isAtBottomRef.current} userDisengaged=${userDisengagedRef.current}`,
+		)
 		virtuosoRef.current?.scrollToIndex({
 			index: "LAST",
 			align: "end",
@@ -205,7 +218,7 @@ export function useScrollLifecycle({
 
 		if (scrollPhaseRef.current === "HYDRATING_PINNED_TO_BOTTOM") {
 			if (isAtBottomRef.current) {
-				enterAnchoredFollowing()
+				enterAnchoredFollowing("hydration-complete")
 			} else if (hydrationRetryCountRef.current < MAX_HYDRATION_RETRIES) {
 				hydrationRetryCountRef.current++
 				scrollToBottomAuto()
@@ -216,7 +229,7 @@ export function useScrollLifecycle({
 			} else {
 				// Retry budget exhausted. Keep anchored follow rather than
 				// downgrading to browsing mode due to non-user transient drift.
-				enterAnchoredFollowing()
+				enterAnchoredFollowing("hydration-retry-exhausted")
 			}
 		}
 
@@ -309,6 +322,9 @@ export function useScrollLifecycle({
 			}
 
 			const shouldForcePinForAnchoredStreaming = scrollPhaseRef.current === "ANCHORED_FOLLOWING" && isStreaming
+			console.log(
+				`[scroll] handleRowHeightChange isTaller=${isTaller} phase=${scrollPhaseRef.current} isAtBottom=${isAtBottomRef.current} forcePin=${shouldForcePinForAnchoredStreaming}`,
+			)
 			if (isAtBottomRef.current || shouldForcePinForAnchoredStreaming) {
 				if (isTaller) {
 					scrollToBottomSmooth()
@@ -325,7 +341,7 @@ export function useScrollLifecycle({
 	// -----------------------------------------------------------------------
 
 	const handleScrollToBottomClick = useCallback(() => {
-		enterAnchoredFollowing()
+		enterAnchoredFollowing("scroll-to-bottom-click")
 		scrollToBottomAuto()
 		cancelReanchorFrame()
 		reanchorAnimationFrameRef.current = requestAnimationFrame(() => {
@@ -354,6 +370,10 @@ export function useScrollLifecycle({
 
 			const currentPhase = scrollPhaseRef.current
 
+			console.log(
+				`[scroll] atBottomStateChange isAtBottom=${isAtBottom} phase=${currentPhase} hydrating=${isHydratingRef.current} userDisengaged=${userDisengagedRef.current} pointerActive=${pointerScrollActiveRef.current} isStreaming=${isStreaming}`,
+			)
+
 			if (!isAtBottom && isHydratingRef.current && currentPhase !== "USER_BROWSING_HISTORY") {
 				setShowScrollToBottom(false)
 				return
@@ -365,15 +385,17 @@ export function useScrollLifecycle({
 					// atBottomStateChange(true) signal is most likely from a
 					// programmatic scroll that completed after the user scrolled
 					// up. Do not override the user's browse intent.
+					console.log("[scroll] atBottomStateChange: suppressed re-anchor (immune window or hydration)")
 					setShowScrollToBottom(true)
 					return
 				}
 
-				enterAnchoredFollowing()
+				enterAnchoredFollowing("atBottomStateChange")
 				return
 			}
 
 			if (currentPhase === "ANCHORED_FOLLOWING" && !isAtBottom && pointerScrollActiveRef.current) {
+				console.log("[scroll] atBottomStateChange: pointer-scroll-up detected")
 				enterUserBrowsingHistory("pointer-scroll-up")
 				return
 			}
