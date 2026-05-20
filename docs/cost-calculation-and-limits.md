@@ -53,18 +53,21 @@ TaskHeader (total cost display)
 When Shofer is about to call the AI provider, it emits a placeholder `api_req_started` message:
 
 ```typescript
-// Task.ts line ~3150
-await this.say("api_req_started", JSON.stringify({ apiProtocol }))
+// Task.ts line ~3418
+await this.say(
+	"api_req_started",
+	JSON.stringify({ apiProtocol, model: modelId, retryAttempt: currentItem.retryAttempt ?? 0 }),
+)
 ```
 
-At this point the message has no cost or token data — just the protocol (`"anthropic"` or `"openai"`).
+At this point the message has no cost or token data — just the protocol (`"anthropic"` or `"openai"`), model ID, and retry attempt counter.
 
 #### 2. Streaming — Usage Accumulation
 
 As the provider streams its response, Shofer receives periodic `"usage"` chunks that carry token counts:
 
 ```typescript
-// Task.ts lines 3438-3441
+// Task.ts lines 3735-3741
 case "usage":
     inputTokens += chunk.inputTokens
     outputTokens += chunk.outputTokens
@@ -75,7 +78,7 @@ case "usage":
 
 #### 3. Message Updated with Cost
 
-The `updateApiReqMsg()` function (Task.ts line 3261) stamps the accumulated usage into the `api_req_started` message's `text` field:
+The `updateApiReqMsg()` function (Task.ts line 3554) stamps the accumulated usage into the `api_req_started` message's `text` field:
 
 ```typescript
 this.shoferMessages[lastApiReqIndex].text = JSON.stringify({
@@ -109,15 +112,27 @@ Cost is calculated using provider-specific functions:
 | `condense_context` messages | `contextCondense.cost`                                       |
 
 ```typescript
-// consolidateTokenUsage.ts lines 40-70
+// consolidateTokenUsage.ts lines 40-71 (simplified)
 messages.forEach((message) => {
-	if (message.say === "api_req_started" && message.text) {
-		const { tokensIn, tokensOut, cacheWrites, cacheReads, cost } = JSON.parse(message.text)
-		result.totalTokensIn += tokensIn
-		result.totalTokensOut += tokensOut
-		result.totalCost += cost
-		// ...
-	} else if (message.say === "condense_context") {
+	if (message.type === "say" && message.say === "api_req_started" && message.text) {
+		const parsedText = JSON.parse(message.text)
+		const { tokensIn, tokensOut, cacheWrites, cacheReads, cost } = parsedText
+		if (typeof tokensIn === "number") {
+			result.totalTokensIn += tokensIn
+		}
+		if (typeof tokensOut === "number") {
+			result.totalTokensOut += tokensOut
+		}
+		if (typeof cacheWrites === "number") {
+			result.totalCacheWrites = (result.totalCacheWrites ?? 0) + cacheWrites
+		}
+		if (typeof cacheReads === "number") {
+			result.totalCacheReads = (result.totalCacheReads ?? 0) + cacheReads
+		}
+		if (typeof cost === "number") {
+			result.totalCost += cost
+		}
+	} else if (message.type === "say" && message.say === "condense_context") {
 		result.totalCost += message.contextCondense?.cost ?? 0
 	}
 })
@@ -135,7 +150,7 @@ messages.forEach((message) => {
 **Orphaned `api_req_started` messages** — if a request was started (`api_req_started` emitted) but the extension crashed or the task was force-closed before ANY response data arrived, the message has no `cost` and no `cancelReason`. These are removed during `saveShoferMessages()`:
 
 ```typescript
-// Task.ts lines 2344-2350
+// Task.ts lines 2517-2519
 if (cost === undefined && cancelReason === undefined) {
 	modifiedShoferMessages.splice(lastApiReqStartedIndex, 1)
 }

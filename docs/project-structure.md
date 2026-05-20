@@ -2,9 +2,9 @@
 
 ## Overview
 
-Shofer is a VS Code extension (fork of Shofer/Shofer) that provides an AI coding assistant. It uses a pnpm monorepo structure with TypeScript for the extension and React for the webview UI.
+Shofer is a VS Code extension that provides an AI coding assistant. It uses a pnpm monorepo structure with TypeScript for the extension and React for the webview UI.
 
-**Project root**: `/home/alsterg/Projects/shofer.dev/extensions/shofer/`
+**Project root**: `/home/alsterg/Projects/arkware.ai/extensions/shofer/`
 
 ## Directory Structure
 
@@ -73,7 +73,6 @@ The main VS Code webview provider that:
 - `createTask()` - Creates new task, optionally preserving current
 - `createManagedTask()` - Creates task preserving current in background
 - `popFromStackWithoutAborting()` - Removes task from UI without killing it
-- `registerBackgroundTask()` - Registers task with TaskManager
 - `getStateToPostToWebview()` - Builds ExtensionState for webview
 
 ### TaskManager.ts (`src/services/task-manager/TaskManager.ts`)
@@ -81,7 +80,8 @@ The main VS Code webview provider that:
 Manages parallel task execution:
 
 - Tracks managed tasks (background tasks with live instances)
-- Maintains task execution states (idle, running, waiting_input, paused)
+- Maintains task lifecycle states (idle, running, waiting_input, waiting, paused, completed, error)
+- `registerBackgroundTask()` - Registers a Task instance with TaskManager
 - Creates notifications for background tasks needing attention
 - Emits events for state changes
 
@@ -106,12 +106,15 @@ React component for task switching:
 - Displays state indicator (colored dot)
 - Shows notification badge count (yellow circle)
 
-**State indicator colors:**
+**State indicators** (rendered via codicons with VSCode CSS variable colors):
 
-- Gray (`bg-gray-400`) - idle
-- Green (`bg-green-500`) + pulse - running
-- Yellow (`bg-yellow-500`) + pulse - waiting_input
-- Orange (`bg-orange-500`) - paused
+- DescriptionForeground (`codicon-circle-large-outline`) - idle
+- Charts Green (`codicon-sync` with spin) - running (pulse animation)
+- Charts Yellow (`codicon-question`) - waiting_input (pulse animation)
+- Charts Blue (`codicon-watch`) - waiting (pulse animation)
+- Charts Orange (`codicon-debug-pause`) - paused
+- Charts Green (`codicon-pass`) - completed (rating overlays vary)
+- Error Red (`codicon-error`) - error
 
 ### ExtensionStateContext.tsx (`webview-ui/src/context/ExtensionStateContext.tsx`)
 

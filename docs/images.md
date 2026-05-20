@@ -204,7 +204,7 @@ Upstream AI provider
 ## Image Size Limits
 
 - **Per-message count**: [`MAX_IMAGES_PER_MESSAGE`](../webview-ui/src/components/chat/ChatView.tsx) controls the maximum number of images per message
-- **Per-file size**: [`maxReadFileImageSize`](https://shofer.dev/docs/) setting controls maximum image size for `read_file` tool
+- **Per-file size**: [`maxImageFileSize`](https://shofer.dev/docs/) setting controls maximum image size for `read_file` tool
 
 ## Multi-Turn Image Handling
 
@@ -212,7 +212,7 @@ Images from previous user turns are preserved in the conversation history (`apiC
 
 ## Image Generation
 
-Shofer also supports **image generation** via a separate `generate_image` tool. This is documented separately in the [image generation section of the tool access docs](tool_access.md#image-generation).
+Shofer also supports **image generation** via a separate `generate_image` tool. This is documented separately in the [Feature-Gated Tools section of the native tools docs](native_tools.md#feature-gated-tools).
 
 Image generation uses provider-specific endpoints (not the chat completions API) and returns images that are displayed in the chat using the [`ImageViewer`](../webview-ui/src/components/common/ImageViewer.tsx) component, which supports zoom, copy, save, and Mermaid-style action buttons.
 

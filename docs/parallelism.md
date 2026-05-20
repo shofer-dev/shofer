@@ -16,7 +16,7 @@ A **Task** ([`extensions/shofer/src/core/task/Task.ts`](../src/core/task/Task.ts
 
 ### HistoryItem
 
-A **HistoryItem** ([`@shofer/types/src/history.ts`](../../types/src/history.ts)) is the persisted record of a task, written to disk as `history_item.json` inside the task's storage directory. It holds metadata: `id`, `name`, `task` (first message text), `tokensIn`, `tokensOut`, `totalCost`, `workspace`, `mode`, `taskExecutionState`, `isBackground`, `backgroundChildIds`, etc.
+A **HistoryItem** ([`@shofer/types/src/history.ts`](../packages/types/src/history.ts)) is the persisted record of a task, written to disk as `history_item.json` inside the task's storage directory. It holds metadata: `id`, `name`, `task` (first message text), `tokensIn`, `tokensOut`, `totalCost`, `workspace`, `mode`, `taskState`, `isBackground`, `backgroundChildIds`, etc.
 
 ### TaskManager
 
@@ -43,36 +43,38 @@ interface ManagedTask {
 	workspace: string
 	createdAt: number
 	lastActiveAt: number
-	state: TaskExecutionState // "idle" | "running" | "waiting_input" | "paused" | "error"
+	state: TaskState // { lifecycle: TaskLifecycle, rating?: CompletionRating }
 }
 ```
 
 ### TaskHandle
 
-A **TaskHandle** ([`@shofer/types/src/task.ts`](../../types/src/task.ts)) is a lightweight in-memory reference the parent `Task` holds for each background child it spawned. Intentionally minimal — identity, lifecycle status, and timing only. No title.
+A **TaskHandle** ([`@shofer/types/src/task.ts`](../packages/types/src/task.ts)) is a lightweight in-memory reference the parent `Task` holds for each background child it spawned. Intentionally minimal — identity, lifecycle status, and timing only. No title.
 
 ```typescript
 interface TaskHandle {
 	taskId: string
-	status: BackgroundTaskStatus // "starting" | "running" | "waiting" | "completed" | "error"
+	status: BackgroundTaskStatus // "starting" | "running" | "waiting" | "waiting_for_parent" | "completed" | "error" | "cancelled" | "paused"
 	createdAt: number
 	parentTaskId: string
 }
 ```
 
-### Task Execution State
+### Task Lifecycle
 
-The lifecycle of a task is represented by `TaskExecutionState`:
+The lifecycle of a task is represented by `TaskLifecycle`:
 
 | State           | Color  | Pulse | Trigger                                                                    |
 | --------------- | ------ | ----- | -------------------------------------------------------------------------- |
-| `idle`          | Gray   | No    | `attempt_completion`, `resume_completed_task`                              |
+| `idle`          | Gray   | No    | `TaskIdle`, task restored from history                                     |
 | `running`       | Green  | Yes   | `TaskStarted`, `TaskActive`                                                |
 | `waiting_input` | Yellow | Yes   | `TaskInteractive` (needs user approval)                                    |
-| `paused`        | Orange | No    | User pressed Stop, `TaskAborted`                                           |
+| `waiting`       | Blue   | Yes   | `wait_for_task` blocking on subtasks                                       |
+| `paused`        | Orange | No    | User paused task (non-destructive stop)                                    |
+| `completed`     | Green  | No    | `TaskCompleted` (with rating)                                              |
 | `error`         | Red    | No    | `api_req_failed`, `mistake_limit_reached`, `auto_approval_max_req_reached` |
 
-See [`task_states.md`](task_states.md) for the full state model including completion ratings.
+See [`task_states.md`](task_states.md) for the full state model including completion ratings and visual indicators.
 
 ---
 
@@ -128,11 +130,11 @@ The parent **blocks** until the child completes. The child result is returned as
 
 ```
 Parent calls new_task(mode="code", message="Fix bug in foo.ts")
-  → Parent enters "delegated" status
+  → Parent enters "waiting" status
   → Child created, focused in stack
   → Child runs its tool loop
   → Child calls attempt_completion
-  → reopenParentFromDelegation() restores parent
+  → resumeBlockingParent() restores parent
   → Parent receives child result as tool_result
   → Parent continues
 ```
@@ -160,14 +162,14 @@ Parent calls wait_for_task(task_ids=["<id1>", "<id2>"])
 
 #### Key differences from synchronous mode
 
-| Aspect                                   | Sync                               | Async (Background)                 |
-| ---------------------------------------- | ---------------------------------- | ---------------------------------- |
-| Parent status                            | `delegated`                        | Remains `active`                   |
-| Parent blocks?                           | Yes                                | No                                 |
-| Parent history saved?                    | Yes (delegation metadata)          | No (parent keeps running)          |
-| Child completion triggers parent resume? | Yes (`reopenParentFromDelegation`) | No (parent explicitly polls/waits) |
-| Can start multiple children?             | No                                 | Yes (in parallel)                  |
-| Stack behavior                           | Child becomes focused              | Focused task unchanged             |
+| Aspect                                   | Sync                         | Async (Background)                 |
+| ---------------------------------------- | ---------------------------- | ---------------------------------- |
+| Parent status                            | `waiting`                    | Remains `running`                  |
+| Parent blocks?                           | Yes                          | No                                 |
+| Parent history saved?                    | Yes (delegation metadata)    | No (parent keeps running)          |
+| Child completion triggers parent resume? | Yes (`resumeBlockingParent`) | No (parent explicitly polls/waits) |
+| Can start multiple children?             | No                           | Yes (in parallel)                  |
+| Stack behavior                           | Child becomes focused        | Focused task unchanged             |
 
 #### Parameters
 
@@ -177,8 +179,8 @@ Parent calls wait_for_task(task_ids=["<id1>", "<id2>"])
 | `message`          | string  | ✅       | Initial instructions for the child task                                                                                                    |
 | `todos`            | string  | –        | Initial markdown checklist for the child                                                                                                   |
 | `is_background`    | boolean | –        | When `true`, run child concurrently and return `task_id` immediately                                                                       |
-| `softResultLength` | number  | ✅       | Soft suggestion for max characters of the subtask's completion result. Hard safety cap: 100000 characters (results beyond this truncated). |
-| `softTimeoutSec`   | number  | ✅       | Soft guidance (in seconds) for how long the parent expects to wait. Informational only — not enforced.                                     |
+| `softResultLength` | number  | –        | Soft suggestion for max characters of the subtask's completion result. Hard safety cap: 100000 characters (results beyond this truncated). |
+| `softTimeoutSec`   | number  | –        | Soft guidance (in seconds) for how long the parent expects to wait. Informational only — not enforced.                                     |
 
 ### Delegation from background tasks
 
@@ -195,7 +197,7 @@ This preserves the invariant: background tasks should execute without stealing f
 
 ## Background Task Orchestration Tools
 
-Five tools manage the parent-child relationship for background tasks. All are **always available** (bypass mode filtering) and **auto-approved** (no user prompt).
+Five tools manage the parent-child relationship for background tasks. All are **always available** (bypass mode filtering). `check_task_status`, `wait_for_task`, and `list_background_tasks` are unconditionally auto-approved (read-only queries). `cancel_tasks` and `answer_subtask_question` are gated by the `alwaysAllowSubtasks` toggle.
 
 ### `check_task_status`
 
@@ -329,7 +331,7 @@ Background task orchestration tools are registered as always-approved in [`src/c
 | `cancel_tasks`            | Parent owns its children; stopping is non-destructive to other tasks |
 | `answer_subtask_question` | Parent answering its own child's question; no external side effects  |
 
-The `tool` string in the JSON payload uses camelCase (`checkTaskStatus`, `waitForTask`, `listBackgroundTasks`) and must match the `ClineSayTool.tool` union and the `ChatRow` switch case.
+The `tool` string in the JSON payload uses camelCase (`checkTaskStatus`, `waitForTask`, `listBackgroundTasks`) and must match the `ShoferSayTool.tool` union and the `ChatRow` switch case.
 
 ### ChatRow rendering
 
@@ -349,7 +351,7 @@ Titles are rendered as `title ?? task_id` — the UI gracefully handles missing 
 interface TaskResourceLimits {
 	maxConcurrentActive: number // Default: 3 (prevent API rate limits)
 	maxConcurrentStreaming: number // Default: 2 (memory/bandwidth)
-}
+	backgroundTimeout: number // Default: 30 (seconds)
 ```
 
 - `maxConcurrentActive` caps the number of simultaneously running tasks (focused + background).

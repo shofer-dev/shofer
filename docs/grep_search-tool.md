@@ -178,6 +178,6 @@ Defaults: `isRegex=true`, `caseSensitive=false`, `wholeWord=false`, `fileTypes=n
 
 ### Files NOT Modified
 
-| File                            | Reason                                               |
-| ------------------------------- | ---------------------------------------------------- |
-| `src/services/ripgrep/index.ts` | Still used by `read_command_output` and `list_files` |
+| File                            | Reason                     |
+| ------------------------------- | -------------------------- |
+| `src/services/ripgrep/index.ts` | Still used by `list_files` |

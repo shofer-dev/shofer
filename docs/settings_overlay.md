@@ -28,8 +28,8 @@ API provider configurations (profiles, keys, models, base URLs) are stored acros
 
 **Managed by:** [`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts:57)
 
-**Storage key:** `roo_cline_config_api_config` (constructed at
-[`ProviderSettingsManager.ts:576`](../src/core/config/ProviderSettingsManager.ts:576))
+**Storage key:** `shofer_config_api_config` (constructed at
+[`ProviderSettingsManager.ts:577`](../src/core/config/ProviderSettingsManager.ts:577))
 
 This is the **source of truth** for all provider/API configuration profiles. It stores a
 single JSON blob in VS Code's secure credential store with this schema:
@@ -51,8 +51,8 @@ single JSON blob in VS Code's secure credential store with this schema:
 }
 ```
 
-Write/read methods: [`store()`](../src/core/config/ProviderSettingsManager.ts:669) /
-[`load()`](../src/core/config/ProviderSettingsManager.ts:580).
+Write/read methods: [`store()`](../src/core/config/ProviderSettingsManager.ts:670) /
+[`load()`](../src/core/config/ProviderSettingsManager.ts:581).
 
 ### 1b. Individual API Keys — VS Code `SecretStorage`
 
@@ -60,7 +60,7 @@ Write/read methods: [`store()`](../src/core/config/ProviderSettingsManager.ts:66
 
 Each provider's API key is stored as a **separate** entry in VS Code's `SecretStorage`.
 The full list of secret keys is defined in
-[`SECRET_STATE_KEYS`](../packages/types/src/global-settings.ts:262):
+[`SECRET_STATE_KEYS`](../packages/types/src/global-settings.ts:280):
 
 | Key                                                                                                                                                                                           | Provider                         |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
@@ -269,10 +269,10 @@ flat file.
 | **Scope**      | Per-extension install (shared across workspaces)                       |
 | **Purpose**    | MCP server definitions (command, args, env, transport type, etc.)      |
 | **Editable**   | Via Settings UI (Tools tab → MCP Servers) or direct file edit          |
-| **Managed by** | [`McpHub.getMcpSettingsFilePath()`](../src/services/mcp/McpHub.ts:534) |
+| **Managed by** | [`McpHub.getMcpSettingsFilePath()`](../src/services/mcp/McpHub.ts:535) |
 
 The file is watched for changes via `chokidar` at
-[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557). On any change,
+[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:558). On any change,
 servers are re-read and connections re-established.
 
 > **Note:** There is no project-level MCP config file. All MCP servers are defined in
@@ -296,7 +296,7 @@ The merge happens in **two stages**:
 
 ### Stage 1: Merge `.shofermodes` + Global Storage → `customModes`
 
-From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManager.ts:363):
+From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManager.ts:364):
 
 ```
 ┌────────────────────────────────────────────────┐
@@ -331,7 +331,7 @@ for (const mode of settingsModes) {
 
 ### Stage 2: Overlay `customModes` onto Built-in Modes → Final List
 
-From [`getAllModes(customModes)`](../src/shared/modes.ts:91):
+From [`getAllModes(customModes)`](../src/shared/modes.ts:119):
 
 ```
 ┌────────────────────────────────────────────────┐
@@ -417,7 +417,7 @@ Settings UI
 ```
 Settings UI (API Provider tab)
   └── ProviderSettingsManager.updateConfig(name, config)
-       └── secrets.store("roo_cline_config_api_config", JSON)
+       └── secrets.store("shofer_config_api_config", JSON)
             └── ContextProxy.setProviderSettings(config)  // sync cache
 ```
 
@@ -436,7 +436,7 @@ User edits .shofermodes
 ### Global Custom Instructions (all modes)
 
 1. Stored in `globalState["customInstructions"]` — backed by the SQLite database at
-   `~/.config/Code/User/globalStorage/shofer-dev.shofer/state.vscdb` (Linux). See §1c
+   `~/.config/Code/User/globalStorage/shofer.dev/state.vscdb` (Linux). See §1c
    for the `globalState` backend details.
 2. Added to system prompt for ALL modes
 3. Edited in: Settings → Modes → "Custom Instructions for All Modes"
@@ -449,7 +449,7 @@ User edits .shofermodes
 
 ### How Both Are Combined
 
-From [`system.ts`](../src/core/prompts/system.ts:41):
+From [`system.ts`](../src/core/prompts/system.ts:65):
 
 ```typescript
 // Get mode config with overrides
@@ -486,7 +486,7 @@ if (globalCustomInstructions?.trim()) {
 
 ### Mode Configs
 
-The [`CustomModesManager`](../src/core/config/CustomModesManager.ts:268) watches both sources:
+The [`CustomModesManager`](../src/core/config/CustomModesManager.ts:269) watches both sources:
 
 ```typescript
 // Watch global settings file
@@ -496,10 +496,10 @@ settingsWatcher.onDidCreate(handleSettingsChange)
 settingsWatcher.onDidDelete(handleSettingsChange)
 
 // Watch .shofermodes file
-const roomodesWatcher = vscode.workspace.createFileSystemWatcher(roomodesPath)
-roomodesWatcher.onDidChange(handleRoomodesChange)
-roomodesWatcher.onDidCreate(handleRoomodesChange)
-roomodesWatcher.onDidDelete(handleRoomodesChange)
+const shofermodesWatcher = vscode.workspace.createFileSystemWatcher(shofermodesPath)
+shofermodesWatcher.onDidChange(handleShofermodesChange)
+shofermodesWatcher.onDidCreate(handleShofermodesChange)
+shofermodesWatcher.onDidDelete(handleShofermodesChange)
 ```
 
 On any file change, the manager re-reads both sources, re-merges, and updates `globalState`.
@@ -509,10 +509,10 @@ On any file change, the manager re-reads both sources, re-merges, and updates `g
 The [`McpHub`](../src/services/mcp/McpHub.ts) watches both global and project MCP configs:
 
 **Global:** [`mcp_settings.json`](../src/shared/globalFileNames.ts:4) via
-[`watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557) using `FileSystemWatcher`.
+[`watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:558) using `FileSystemWatcher`.
 
 **Project:** `.shofer/mcp.json` via
-[`watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:377) using `FileSystemWatcher`.
+[`watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:378) using `FileSystemWatcher`.
 
 Both use a 500ms debounce. On file change, servers are re-read, validated against
 `McpSettingsSchema`, and connections are updated. File deletion triggers cleanup of
@@ -564,12 +564,12 @@ All JSON/YAML file-based configs use VS Code's `FileSystemWatcher` API (backed b
 
 **Global:** [`mcp_settings.json`](../src/shared/globalFileNames.ts:4) at
 `<globalStorage>/settings/mcp_settings.json`, watched by
-[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:557).
+[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:558).
 
 **Project:** `.shofer/mcp.json` at `<workspace>/.shofer/mcp.json`, watched by
-[`McpHub.watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:377).
+[`McpHub.watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:378).
 
-Both use a **500ms debounce** via [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:316)
+Both use a **500ms debounce** via [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:317)
 to avoid redundant server restarts during rapid edits. Programmatic updates
 (from Settings UI) set `isProgrammaticUpdate = true` to skip the watcher-triggered
 re-read entirely.
@@ -578,19 +578,19 @@ On change:
 
 1. File is re-read and parsed
 2. Schema validated against `McpSettingsSchema`
-3. [`updateServerConnections()`](../src/services/mcp/McpHub.ts:363) reconnects affected servers
+3. [`updateServerConnections()`](../src/services/mcp/McpHub.ts:364) reconnects affected servers
 4. WebView is notified of server changes
 
 #### Mode Definitions (`.shofermodes` + `custom_modes.yaml`)
 
-Both files are watched by [`CustomModesManager.watchCustomModesFiles()`](../src/core/config/CustomModesManager.ts:268):
+Both files are watched by [`CustomModesManager.watchCustomModesFiles()`](../src/core/config/CustomModesManager.ts:269):
 
 ```typescript
 // .shofermodes watcher (per workspace folder)
-const roomodesWatcher = vscode.workspace.createFileSystemWatcher(roomodesPath)
-roomodesWatcher.onDidChange(handleRoomodesChange)
-roomodesWatcher.onDidCreate(handleRoomodesChange)
-roomodesWatcher.onDidDelete(handleRoomodesChange)
+const shofermodesWatcher = vscode.workspace.createFileSystemWatcher(shofermodesPath)
+shofermodesWatcher.onDidChange(handleShofermodesChange)
+shofermodesWatcher.onDidCreate(handleShofermodesChange)
+shofermodesWatcher.onDidDelete(handleShofermodesChange)
 
 // custom_modes.yaml watcher (global settings)
 const settingsWatcher = vscode.workspace.createFileSystemWatcher(settingsPath)
@@ -628,7 +628,7 @@ This means:
 ### 🔄 Auto-Import: Startup Only
 
 The auto-import mechanism in [`autoImportSettings`](../src/utils/autoImportSettings.ts:16) is
-called **only once** during extension activation (in [`extension.ts:346`](../src/extension.ts:346)):
+called **only once** during extension activation (in [`extension.ts:233`](../src/extension.ts:233)):
 
 ```typescript
 // extension.ts activate()
@@ -741,7 +741,7 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
 separate per-mode Export that saves individual mode definitions as YAML — see §10g.
 
 Export (Settings → About → `Export` button) calls
-[`exportSettings()`](../src/core/config/importExport.ts:246) and writes a single JSON file
+[`exportSettings()`](../src/core/config/importExport.ts:247) and writes a single JSON file
 (`shofer-code-settings.json`) containing two top-level sections:
 
 ```json
@@ -768,7 +768,7 @@ Export (Settings → About → `Export` button) calls
 
 #### `providerProfiles` — Full API Configuration
 
-Exported from [`ProviderSettingsManager.export()`](../src/core/config/ProviderSettingsManager.ts:511).
+Exported from [`ProviderSettingsManager.export()`](../src/core/config/ProviderSettingsManager.ts:512).
 Contains ALL provider profiles including:
 
 - **API keys** — included in each profile's `apiKey`, `openRouterApiKey`, etc. fields
@@ -827,7 +827,7 @@ Includes:
 separate per-mode Import that loads individual mode definitions from YAML — see §10g.
 
 Import (Settings → About → `Import` button) calls
-[`importSettingsWithFeedback()`](../src/core/config/importExport.ts:298) and reads a
+[`importSettingsWithFeedback()`](../src/core/config/importExport.ts:299) and reads a
 `shofer-code-settings.json` file, applying both sections:
 
 ```
@@ -851,7 +851,7 @@ SecretStorage
  geminiApiKey, etc.)
 ```
 
-Import is handled by [`importSettingsFromPath`](../src/core/config/importExport.ts:75) which:
+Import is handled by [`importSettingsFromPath`](../src/core/config/importExport.ts:76) which:
 
 1. Validates and sanitizes each provider profile (handles retired/invalid providers gracefully)
 2. Merges profiles with existing ones (does not delete existing profiles unless IDs conflict)
@@ -869,7 +869,7 @@ Shofer supports automatic import on extension activation via the VS Code setting
 automatically import settings from that file on startup.
 
 Implementation: [`autoImportSettings`](../src/utils/autoImportSettings.ts:16), called
-from [`extension.ts:346`](../src/extension.ts:346).
+from [`extension.ts:233`](../src/extension.ts:233).
 
 ```
 Extension activation
@@ -895,10 +895,10 @@ deployments. The setting can be pre-seeded in VS Code's `settings.json`:
 The **Reset** button in Settings → About provides a destructive "factory reset" that
 wipes all Shofer settings back to defaults. It is available **only** in the About tab.
 
-**Implementation:** [`ShoferProvider.resetState()`](../src/core/webview/ShoferProvider.ts:2947),
+**Implementation:** [`ShoferProvider.resetState()`](../src/core/webview/ShoferProvider.ts:3141),
 triggered by the `resetState` message from
 [`About.tsx`](../webview-ui/src/components/settings/About.tsx:153) →
-[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:974).
+[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:1013).
 
 The flow:
 
@@ -953,8 +953,8 @@ Export/Import in §10a–§10c.
 #### Per-Mode Export
 
 The `Export` button next to each mode in the Modes tab calls the `exportMode` message
-([`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx:894) →
-[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:2231)).
+([`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx:1070) →
+[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:2274)).
 
 It exports a **single mode** as a YAML file (e.g., `code-export.yaml`) via
 [`customModesManager.exportModeWithRules()`](../src/core/config/CustomModesManager.ts):
@@ -982,8 +982,8 @@ Single mode definition (YAML)
 #### Per-Mode Import
 
 The `Import` button in the Modes tab toolbar calls the `importMode` message
-([`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx:1673) →
-[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:2309)).
+([`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx:1774) →
+[`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts:2352)).
 
 It opens a file dialog for YAML files and lets the user choose where to import:
 
@@ -1056,7 +1056,7 @@ Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
 
 | Layer                       | Backend         | Path / Key                                                    | Format             | Scope         | Priority        | Editable           |
 | --------------------------- | --------------- | ------------------------------------------------------------- | ------------------ | ------------- | --------------- | ------------------ |
-| **API Profiles (SoT)**      | `SecretStorage` | `roo_cline_config_api_config`                                 | JSON blob          | Per-extension | —               | Settings UI        |
+| **API Profiles (SoT)**      | `SecretStorage` | `shofer_config_api_config`                                    | JSON blob          | Per-extension | —               | Settings UI        |
 | **API Keys**                | `SecretStorage` | `apiKey`, `openRouterApiKey`, … (30+ keys)                    | String             | Per-extension | —               | Settings UI        |
 | **Non-secret API settings** | `globalState`   | `apiProvider`, `apiModelId`, `anthropicBaseUrl`, …            | Key-value          | Per-extension | —               | Settings UI        |
 | **`.shofermodes`**          | File            | `<workspace>/.shofermodes`                                    | YAML               | Per-project   | Highest (modes) | Direct edit        |

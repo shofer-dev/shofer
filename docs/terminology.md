@@ -116,11 +116,11 @@ There are two display groups:
 
 Components in the Shofer sidebar (or editor tab header) for top-level navigation.
 
-| Canonical Name      | File                                                                                  | Description                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **SettingsView**    | [`SettingsView.tsx`](../webview-ui/src/components/settings/SettingsView.tsx)          | The settings panel with sections for API configs, auto-approval, modes, tools, etc. |
-| **WelcomeView**     | [`WelcomeView.tsx`](../webview-ui/src/components/welcome/WelcomeView.tsx)             | Welcome/splash screen shown on first launch or when no task history exists.         |
-| **MarketplaceView** | [`MarketplaceView.tsx`](../webview-ui/src/components/marketplace/MarketplaceView.tsx) | Marketplace for installing MCP servers, modes, and other extensions.                |
+| Canonical Name      | File                                                                                      | Description                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **SettingsView**    | [`SettingsView.tsx`](../webview-ui/src/components/settings/SettingsView.tsx)              | The settings panel with sections for API configs, auto-approval, modes, tools, etc. |
+| **WelcomeView**     | [`WelcomeViewProvider.tsx`](../webview-ui/src/components/welcome/WelcomeViewProvider.tsx) | Welcome/splash screen shown on first launch or when no task history exists.         |
+| **MarketplaceView** | [`MarketplaceView.tsx`](../webview-ui/src/components/marketplace/MarketplaceView.tsx)     | Marketplace for installing MCP servers, modes, and other extensions.                |
 
 The top-level tabs are: **chat**, **history**, **settings**, **marketplace** (feature-flagged).
 
@@ -149,7 +149,7 @@ These components run in the VS Code extension host (Node.js process).
 | -------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Task**                         | [`Task.ts`](../src/core/task/Task.ts)                                                         | The main task execution class. Runs the LLM conversation loop, executes tools, emits lifecycle events (`TaskStarted`, `TaskInteractive`, `TaskIdle`, `TaskCompleted`). |
 | **ShoferProvider**               | [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                  | The VS Code `WebviewViewProvider`. Manages the task stack, creates/destroys `Task` instances, posts state to the webview, and handles parallel task operations.        |
-| **TaskManager**                  | [`TaskManager.ts`](../src/services/task-manager/TaskManager.ts)                               | Manages parallel task execution. Tracks `ManagedTask` instances, runtime state (`idle`/`running`/`waiting_input`/`paused`), and background task notifications.         |
+| **TaskManager**                  | [`TaskManager.ts`](../src/services/task-manager/TaskManager.ts)                               | Manages parallel task execution. Tracks `ManagedTask` instances, lifecycle state, and background task notifications.                                                   |
 | **webviewMessageHandler**        | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                    | Central dispatch for all webview → host messages. Every `WebviewMessage.type` is handled here.                                                                         |
 | **MessageQueueService**          | [`MessageQueueService.ts`](../src/core/message-queue/MessageQueueService.ts)                  | Manages the per-task message queue. When a task is busy, user messages are enqueued; "Send Now" dequeues and sends immediately.                                        |
 | **MessageManager**               | [`message-manager/index.ts`](../src/core/message-manager/index.ts)                            | Manages adding/removing/editing messages within a task conversation. Handles checkpoint integration on edits/deletes.                                                  |
@@ -201,7 +201,7 @@ Defined in [`packages/types/src/`](../packages/types/src/). Always refer to the 
 | -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ------------------------------------- | --------------------------------------- |
 | **HistoryItem**      | `history.ts` | Persisted task record. Contains `id`, `ts`, `task` (description), `tokensIn`, `tokensOut`, `totalCost`, `taskState`, `parentTaskId`, `childIds`, `mode`, `cwd`, `pinned`, `archived`, etc. |
 | **TaskState**        | `history.ts` | The full execution state: `{ lifecycle: TaskLifecycle, rating?: CompletionRating }`.                                                                                                       |
-| **TaskLifecycle**    | `history.ts` | Enum: `"idle"`, `"running"`, `"waiting_input"`, `"paused"`, `"completed"`, `"error"`.                                                                                                      |
+| **TaskLifecycle**    | `history.ts` | Enum: `"idle"`, `"running"`, `"waiting_input"`, `"waiting"`, `"paused"`, `"completed"`, `"error"`.                                                                                         |
 | **CompletionRating** | `history.ts` | Agent self-assessment: `"poor"`, `"well"`, `"excellent"`. Only set when `lifecycle === "completed"`.                                                                                       |
 | **TaskNotification** | `history.ts` | `{ taskId, type: "needs_input"                                                                                                                                                             | "completed" | "error"                               | "file_conflict", message, timestamp }`. |
 | **CostLimit**        | `history.ts` | `{ maxUsd: number, action: "pause"                                                                                                                                                         | "abort"     | "kill" }` — per-root-task budget cap. |
@@ -214,7 +214,7 @@ Defined in [`packages/types/src/`](../packages/types/src/). Always refer to the 
 | **ShoferSay**     | `message.ts` | A statement from the model (text, reasoning, tool call, etc.). Includes `say` type discriminant.            |
 | **ShoferAsk**     | `message.ts` | A question/approval request from the model (e.g., `followup`, `tool`, `command`, `completion_result`).      |
 | **QueuedMessage** | `message.ts` | A user message waiting in the queue: `{ id, text, images?, timestamp }`.                                    |
-| **TodoItem**      | `todo.ts`    | `{ id: string, content: string, completed: boolean }`.                                                      |
+| **TodoItem**      | `todo.ts`    | `{ id: string, content: string, status: "pending" \| "in_progress" \| "completed" }`.                       |
 
 ### Tool-Related Types
 
@@ -222,7 +222,7 @@ Defined in [`packages/types/src/`](../packages/types/src/). Always refer to the 
 | ------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | **ToolName**        | `tool.ts` | Union of all canonical tool names (see [§9](#9-tools--canonical-names)).                                                         |
 | **ToolGroup**       | `tool.ts` | Tool category: `"read"`, `"write"`, `"execute"`, `"browser"`, `"mcp"`, `"mode"`, `"subtasks"`, `"questions"`, `"uncategorized"`. |
-| **ToolGroupConfig** | `tool.ts` | `{ tools: ToolName[], alwaysAvailable?: boolean, customTools?: ToolName[] }`.                                                    |
+| **ToolGroupConfig** | `tool.ts` | `{ tools: readonly ToolName[], customTools?: readonly ToolName[] }`.                                                             |
 
 ### State & Configuration Types
 
@@ -264,21 +264,21 @@ The extension host posts messages via `ShoferProvider.postMessageToWebview()`. K
 
 The webview posts messages via `vscode.postMessage()`. Key types:
 
-| `type`                    | Purpose                                                                                   |
-| ------------------------- | ----------------------------------------------------------------------------------------- |
-| `"sendMessage"`           | User clicked Send. Carries `text`, `images`, and `mode`.                                  |
-| `"cancelTask"`            | User clicked Stop.                                                                        |
-| `"focusParallelTask"`     | User switched to a different task via TaskSelector.                                       |
-| `"createParallelTask"`    | User created a new parallel task (via task sidebar drawer).                               |
-| `"enqueueMessage"`        | User typed a message while the task is busy; enqueue instead of sending.                  |
-| `"sendNow"`               | User clicked Send Now to cancel the current turn and send the queued message immediately. |
-| `"deleteMessageConfirm"`  | User confirmed deletion of a message.                                                     |
-| `"editMessageConfirm"`    | User confirmed editing of a message.                                                      |
-| `"changedFiles/showDiff"` | User clicked a file in FileChangesPanel to view the diff.                                 |
-| `"changedFiles/accept"`   | User clicked Accept on a changed file.                                                    |
-| `"changedFiles/revert"`   | User clicked Revert on a changed file.                                                    |
-| `"webviewDidLaunch"`      | Webview initialized and ready to receive state.                                           |
-| `"requestWorkspaceFiles"` | Request file listing for @mention autocomplete.                                           |
+| `type`                          | Purpose                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `"newTask"`                     | User sent a message (starts a new task). Carries `text`, `images`, and `mode`.            |
+| `"cancelTask"`                  | User clicked Stop.                                                                        |
+| `"focusParallelTask"`           | User switched to a different task via TaskSelector.                                       |
+| `"createParallelTask"`          | User created a new parallel task (via task sidebar drawer).                               |
+| `"queueMessage"`                | User typed a message while the task is busy; enqueue instead of sending.                  |
+| `"cancelAndSendQueuedMessages"` | User clicked Send Now to cancel the current turn and send the queued message immediately. |
+| `"deleteMessageConfirm"`        | User confirmed deletion of a message.                                                     |
+| `"editMessageConfirm"`          | User confirmed editing of a message.                                                      |
+| `"changedFiles/showDiff"`       | User clicked a file in FileChangesPanel to view the diff.                                 |
+| `"changedFiles/accept"`         | User clicked Accept on a changed file.                                                    |
+| `"changedFiles/revert"`         | User clicked Revert on a changed file.                                                    |
+| `"webviewDidLaunch"`            | Webview initialized and ready to receive state.                                           |
+| `"openMention"`                 | Request file listing for @mention autocomplete.                                           |
 
 ---
 
@@ -308,6 +308,7 @@ Defined in [`tool.ts`](../packages/types/src/tool.ts) as the `toolNames` const. 
 - `get_errors` — Get diagnostics from language servers.
 - `get_project_setup_info` — Analyze project for languages, frameworks, build systems.
 - `get_changed_files` — List files Shofer has changed in the current session.
+- `git_search` — Search git commit history (commit messages only) using semantic search.
 
 ### Command Execution
 
@@ -326,6 +327,8 @@ Defined in [`tool.ts`](../packages/types/src/tool.ts) as the `toolNames` const. 
 - `ask_followup_question` — Ask the user a multiple-choice question.
 - `ask_assistant_agent` — Query the persistent assistant agent.
 - `give_feedback` — Send feedback to the Shofer.Dev developers.
+- `answer_subtask_question` — Answer a question from a background child task.
+- `cancel_tasks` — Stop one or more background child tasks.
 
 ### Content
 
@@ -347,14 +350,19 @@ Defined in [`tool.ts`](../packages/types/src/tool.ts) as the `toolNames` const. 
 
 - `use_mcp_tool` — Invoke a tool from an MCP server.
 - `access_mcp_resource` — Access a resource from an MCP server.
+- `call_mcp_tool_async` — Call an MCP server tool asynchronously (fire-and-forget).
+- `check_mcp_call_status` — Check the status of an async MCP tool call.
+- `wait_for_mcp_call` — Block until async MCP tool calls complete.
 
 ### Deprecated Tool Names
 
-Mapping from old names to canonical names (auto-translated by `NativeToolCallParser`):
+Mapping from old names to canonical names (auto-translated by `NativeToolCallParser` and `TOOL_ALIASES`):
 
-| Old Name     | Canonical Name |
-| ------------ | -------------- |
-| `skill_load` | `skills`       |
+| Old Name             | Canonical Name  |
+| -------------------- | --------------- |
+| `skill_load`         | `skills`        |
+| `write_file`         | `write_to_file` |
+| `search_and_replace` | `edit`          |
 
 ---
 
@@ -386,7 +394,7 @@ Every tool belongs to exactly one tool group (defined in [`tool.ts`](../packages
 
 ## 11. Modes
 
-Built-in modes (defined in `shared/modes.ts`):
+Built-in modes (defined in [`mode.ts`](../packages/types/src/mode.ts) as `DEFAULT_MODES`, re-exported from [`shared/modes.ts`](../src/shared/modes.ts)):
 
 | Slug           | Display Name    | Description                                                   |
 | -------------- | --------------- | ------------------------------------------------------------- |
@@ -402,7 +410,7 @@ Built-in modes (defined in `shared/modes.ts`):
 
 Custom modes can be defined via [`.shofermodes`](#13-special-files--directories) files.
 
-**Custom Mode Fields**: `slug`, `name`, `roleDefinition`, `groups` (tool groups), `tools_allowed`, `tools_denied`, `customInstructions`, `whenToUse`, `description`, `rulesFiles`, `source` (`"project"` | `"global"`).
+**Custom Mode Fields**: `slug`, `name`, `roleDefinition`, `groups` (tool groups), `tools_allowed`, `tools_denied`, `customInstructions`, `whenToUse`, `description`, `source` (`"project"` | `"global"`), `provider`.
 
 ---
 
@@ -425,6 +433,7 @@ The icon for a task (in `TaskSelector` and `TaskHeader`) is resolved as:
 | idle          | Gray   | `bg-gray-400`    | –      |
 | running       | Green  | `bg-green-500`   | Pulse  |
 | waiting_input | Yellow | `bg-yellow-500`  | Pulse  |
+| waiting       | Yellow | `bg-yellow-500`  | Pulse  |
 | paused        | Orange | `bg-orange-500`  | –      |
 | completed     | Green  | (checkmark icon) | –      |
 | error         | Red    | (warning icon)   | –      |

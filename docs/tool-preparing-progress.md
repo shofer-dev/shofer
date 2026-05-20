@@ -52,8 +52,11 @@ following null-byte-delimited structure:
 
 - **First name detection**: emitted immediately when a tool call delta first
   carries a `function.name`, even if `byteCount` is 0 or small.
-- **Heartbeat**: re-emitted every 5s with the updated accumulated byte count
-  (replaces the old `"."` dot heartbeat).
+- **Subsequent updates**: re-emitted on every subsequent tool call delta
+  carrying the function name, with the updated accumulated byte count
+  (each delta also updates `lastVisibleEmitMs` for any future
+  idle-detection logic, though no timer-based re-emission is currently
+  implemented).
 - **Stop condition**: the provider stops emitting after the accumulated tool call
   is reported as a final `LanguageModelToolCallPart` on `finishReason`.
 

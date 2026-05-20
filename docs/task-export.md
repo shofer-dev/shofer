@@ -6,7 +6,7 @@ Shofer provides two export formats for task history: **Markdown** (conversation 
 
 |                          | Markdown                            | JSON                                    |
 | ------------------------ | ----------------------------------- | --------------------------------------- |
-| **Button**               | ⬇ Download                         | 📄 FileJson                             |
+| **Button**               | Export (DownloadIcon)               | Export JSON (FileJsonIcon)              |
 | **File extension**       | `.md`                               | `.json`                                 |
 | **Human-readable**       | ✅ Any text editor                  | ❌ Needs JSON viewer                    |
 | **Machine-readable**     | ❌ Free-form text                   | ✅ Schema'd, scriptable                 |
@@ -23,8 +23,8 @@ Shofer provides two export formats for task history: **Markdown** (conversation 
 1. Start a task in Shofer
 2. Click the task title bar at the top of the chat panel to expand it
 3. Use the buttons in the action row:
-    - ⬇ **Download** — exports as Markdown (`.md`)
-    - 📄 **FileJson** — exports as JSON (`.json`)
+    - **Export** (download icon) — exports as Markdown (`.md`)
+    - **Export JSON** (file icon) — exports as JSON (`.json`)
 4. Choose a save location in the file dialog
 
 Both buttons are also available from the History panel (clock icon in the VS Code title bar) for completed tasks.
@@ -110,7 +110,7 @@ interface JsonExportTrace {
 
 interface JsonExportCall {
 	index: number // 1-based call number
-	apiProtocol?: string // "anthropic", "openai", "openai-native"
+	apiProtocol?: string // "anthropic", "openai"
 	model?: string // Model ID
 	inputTokens: number // Input tokens (estimated if `_tokensEstimated`)
 	outputTokens: number // Output tokens (estimated if `_tokensEstimated`)
@@ -123,7 +123,6 @@ interface JsonExportCall {
 	messages: MessageParam[] // Anthropic-format messages for this call (empty `[]` for error-only calls)
 	toolCalls: JsonExportToolCall[] // Tool calls from the assistant message
 	reasoning?: string // Extracted reasoning / thinking
-	_tokensEstimated?: true // Present when tokens are char/4 heuristic
 	retryAttempt?: number // Number of retries before this attempt (0 = first try)
 	error?: {
 		// Structured error info when this call failed
@@ -133,6 +132,7 @@ interface JsonExportCall {
 		stack?: string // Stack trace
 	}
 	wireRequest?: string // Serialised wire-level request metadata (JSON)
+	_tokensEstimated?: true // Present when tokens are char/4 heuristic
 }
 
 interface JsonExportToolCall {

@@ -71,7 +71,7 @@ Third-party MCP servers define their own input schemas with `additionalPropertie
 
 ### Why `task.taskId`?
 
-Shofer does not use VS Code's chat participant API (it renders its own webview), so VS Code's native `request.sessionId` is not available. Instead, Shofer uses [`task.taskId`](../src/core/task/Task.ts:543) — a UUID v7 generated per conversation — as the `conversationId`. This provides the same conversation-scoped correlation that VS Code's native MCP client would provide via `vscode.conversationId`.
+Shofer does not use VS Code's chat participant API (it renders its own webview), so VS Code's native `request.sessionId` is not available. Instead, Shofer uses [`task.taskId`](../src/core/task/Task.ts:195) — a UUID v7 generated per conversation — as the `conversationId`. This provides the same conversation-scoped correlation that VS Code's native MCP client would provide via `vscode.conversationId`.
 
 ### Key holding `vscode.conversationId`
 
@@ -83,13 +83,13 @@ The key name `vscode.conversationId` is used to match VS Code's established conv
 
 ## Component Reference
 
-| Component          | File                                                                                           | Role                                                             |
-| ------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| UseMcpToolTool     | [`src/core/tools/UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts:311)                  | Passes `task.taskId` to `callTool()`                             |
-| McpHub             | [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts:1781)                             | Injects `_meta["vscode.conversationId"]` into MCP request params |
-| mcp-server handler | [`mcp-server/internal/handlers/mcp.go`](../../mcp-server/internal/handlers/mcp.go:258)         | Extracts and validates `conversationId` from `_meta`             |
-| mcp-server backend | [`mcp-server/internal/services/backend.go`](../../mcp-server/internal/services/backend.go:178) | Forwards as `conversation_id` to tools-backend                   |
-| IDs documentation  | [`docs/IDs.md`](../../docs/IDs.md)                                                             | System-wide ID architecture overview                             |
+| Component               | File                                                                                                                                                                | Role                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| UseMcpToolTool / shared | [`src/core/tools/UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts) and [`src/core/tools/mcp/use-mcp-shared.ts`](../src/core/tools/mcp/use-mcp-shared.ts:199) | Passes `task.taskId` to `McpHub.callTool()` via `runMcpToolCall`         |
+| McpHub                  | [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts:1853)                                                                                                  | Injects `_meta["vscode.conversationId"]` into MCP request params         |
+| mcp-server handler      | [`mcp-server/internal/handlers/mcp.go`](../../mcp-server/internal/handlers/mcp.go:344)                                                                              | Extracts and validates `conversationId` from `_meta` in `handleToolCall` |
+| mcp-server backend      | [`mcp-server/internal/services/backend.go`](../../mcp-server/internal/services/backend.go:178)                                                                      | Forwards as `conversation_id` to tools-backend                           |
+| IDs documentation       | [`docs/IDs.md`](../../docs/IDs.md)                                                                                                                                  | System-wide ID architecture overview                                     |
 
 ## Compatibility
 

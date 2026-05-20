@@ -65,12 +65,12 @@ queue and the UI just shows the active one.
 `ChatView.handleSendMessage` chooses between three host messages based on
 whether the Task is busy and whether an ask is awaiting:
 
-| Condition (checked in order)                                                                          | Posted message                                  |
-| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `messagesRef.current.length === 0` (home screen)                                                      | `{ type: "newTask", text, images, worktreeDir }` |
-| Task is busy: `sendingDisabled \|\| isStreaming \|\| messageQueue.length > 0 \|\| ask === "command_output"` | `{ type: "queueMessage", text, images }`         |
-| `shoferAskRef.current` is set (a known interactive ask is awaiting)                                   | `{ type: "askResponse", askResponse: "messageResponse", text, images }` |
-| Otherwise (ongoing task, no ask currently awaiting)                                                   | `{ type: "queueMessage", text, images }`         |
+| Condition (checked in order)                                                                                | Posted message                                                          |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `messagesRef.current.length === 0` (home screen)                                                            | `{ type: "newTask", text, images, worktreeDir }`                        |
+| Task is busy: `sendingDisabled \|\| isStreaming \|\| messageQueue.length > 0 \|\| ask === "command_output"` | `{ type: "queueMessage", text, images }`                                |
+| `shoferAskRef.current` is set (a known interactive ask is awaiting)                                         | `{ type: "askResponse", askResponse: "messageResponse", text, images }` |
+| Otherwise (ongoing task, no ask currently awaiting)                                                         | `{ type: "queueMessage", text, images }`                                |
 
 The **last row** is the important one: the webview MUST NOT post a bare
 `messageResponse` when no ask is awaiting. Doing so would land in the
@@ -121,7 +121,7 @@ above:
 
 ```ts
 if (!this.isAwaitingAskResponse && !this.abort && !this.abandoned) {
-	if (askResponse === "messageResponse" && (text || images?.length)) {
+	if (askResponse === "messageResponse" && (text || (images && images.length > 0))) {
 		this.messageQueueService.prependMessage(text ?? "", images)
 	}
 	return
@@ -274,26 +274,17 @@ drafts changing must not trigger a re-render of the chat view.
 ### The pencil / new-chat race
 
 The "start a new Task" button (pencil icon) fires `handleChatReset()`,
-which clears `inputValue` to `""`, **before** `currentTaskItem.id`
-flips to the new Task id. By the time the task-id `useEffect` runs, the
-outgoing draft has already been wiped.
+which performs housekeeping (clearing auto-approval timeouts, resetting
+ask/button state) but does **not** touch `inputValue`, `selectedImages`,
+or `droppedContextFiles`. When `currentTaskItem.id` subsequently flips
+to the new Task id, the task-id `useEffect` described above fires and
+snapshots the outgoing draft using the still-intact input value — so the
+draft is saved before the incoming task's (empty) state is restored.
 
-Fix: `handleChatReset` snapshots the outgoing draft itself, using
-`previousTaskIdRef.current` as the key, _before_ it clears the textarea:
-
-```ts
-const outgoingTaskId = previousTaskIdRef.current
-if (outgoingTaskId) {
-  const draftText = inputValueRef.current
-  if (draftText || selectedImages.length || droppedContextFiles.length) {
-    taskDraftsRef.current.set(outgoingTaskId, { inputValue: draftText, ... })
-  } else {
-    taskDraftsRef.current.delete(outgoingTaskId) // no draft worth keeping
-  }
-}
-setInputValue("")
-// ...
-```
+An earlier version of this code cleared `inputValue` inside
+`handleChatReset`, which caused the outgoing draft to be wiped before
+the `useEffect` could read it. The fix was to remove that clear and
+make the `useEffect` the single source of truth for snapshot/restore.
 
 ### Why `inputValueRef.current` and not `inputValue`?
 
@@ -317,7 +308,8 @@ changes but always sees the latest text.
   `getStateToPostToWebview` and `focusTask`.
 - [webview-ui/src/components/chat/ChatView.tsx](../webview-ui/src/components/chat/ChatView.tsx) —
   `taskDraftsRef`, the task-id swap effect, and the
-  `handleChatReset` snapshot.
+  per-Task input draft lifecycle (`handleChatReset`
+  preserves drafts so the `useEffect` can snapshot them).
 
 ## Related
 

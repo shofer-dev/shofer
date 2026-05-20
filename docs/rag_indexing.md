@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shofer's code indexing is a **semantic code search** system (RAG — Retrieval-Augmented Generation) that uses **vector embeddings** stored in **Qdrant** to let the AI agent search codebases by meaning rather than just keywords. It lives under `src/services/code-index/` and is exposed to the AI as the `rag_search` native tool. A lighter companion tool `lsp_search` uses VS Code's built-in Language Server Protocol workspace symbol provider and requires no external infrastructure.
+Shofer's code indexing is a **semantic code search** system (RAG — Retrieval-Augmented Generation) that uses **vector embeddings** stored in a **Qdrant** collection to let the AI agent search codebases by meaning rather than just keywords. It lives under `src/services/code-index/` and is exposed to the AI as the `rag_search` native tool. A lighter companion tool `lsp_search` uses VS Code's built-in Language Server Protocol workspace symbol provider and requires no external infrastructure.
 
 ---
 
@@ -27,7 +27,7 @@ CodeIndexManager (singleton per workspace)
 | File                                                     | Role                                                                                                                                                             |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/services/code-index/manager.ts`                     | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.              |
-| `src/services/code-index/orchestrator.ts`                | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortController`. Phase 2: git-aware short-circuit before directory walk.          |
+| `src/services/code-index/orchestrator.ts`                | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortSignal`. Phase 2: git-aware short-circuit before directory walk.              |
 | `src/services/code-index/service-factory.ts`             | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                                          |
 | `src/services/code-index/git/git-source.ts`              | Thin wrapper around VS Code built-in Git extension API. Provides `diffSince()`, `discoverSubmodules()`, `diffSubmoduleSince()`.                                  |
 | `src/services/code-index/processors/scanner.ts`          | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.                |
@@ -80,7 +80,7 @@ Files are ingested only if their extension appears in [`CODEBASE_INDEX_FILE_EXTE
 | `.elm`               | Elm               | Fallback chunking (no WASM parser)                     |
 | `.md` `.markdown`    | —                 | Custom markdown parser (heading/anchor extraction)     |
 
-Extensions in `fallbackExtensions` ([`supported-extensions.ts`](extensions/shofer/src/services/code-index/shared/supported-extensions.ts:21)) are detected before tree-sitter dispatch by [`shouldUseFallbackChunking()`](extensions/shofer/src/services/code-index/shared/supported-extensions.ts:32). They never reach [`loadRequiredLanguageParsers()`](extensions/shofer/src/services/tree-sitter/languageParser.ts:78), so the corresponding `case` in the parser switch is dead code — kept only for the `list_code_definition_names` tool, which does **not** check `fallbackExtensions` and therefore will crash on these extensions.
+Extensions in `fallbackExtensions` ([`supported-extensions.ts`](extensions/shofer/src/services/code-index/shared/supported-extensions.ts:21)) are detected before tree-sitter dispatch by [`shouldUseFallbackChunking()`](extensions/shofer/src/services/code-index/shared/supported-extensions.ts:32). They never reach [`loadRequiredLanguageParsers()`](extensions/shofer/src/services/tree-sitter/languageParser.ts:80), so the corresponding `case` in the parser switch is dead code — kept only for the `list_code_definition_names` tool, which does **not** check `fallbackExtensions` and therefore will crash on these extensions.
 
 ### Interfaces
 
@@ -90,7 +90,7 @@ All interfaces are defined under `src/services/code-index/interfaces/`:
 - **`IVectorStore`** (`vector-store.ts`) — `initialize()`, `upsertPoints()`, `search()`, `deletePointsByFilePath()`, `deletePointsByMultipleFilePaths()`, `deletePointsByIds()` (targeted deletion of stale segment points during per-segment dedup), `hasIndexedData()`, `markIndexingComplete/Incomplete()`, `clearCollection()`, `deleteCollection()`, `collectionExists()`
 - **`ICodeParser`** (`file-processor.ts`) — `parseFile(filePath, options?)` → `CodeBlock[]`
 - **`IFileWatcher`** (`file-processor.ts`) — `initialize()`, `processFile()`, events: `onDidStartBatchProcessing`, `onBatchProgressUpdate`, `onDidFinishBatchProcessing`
-- **`ICodeIndexCacheManager`** (`cache-manager.ts`) — `initialize()`, `getHash(path)`, `getSegmentHashes(path)` (returns `Set<string>` of previously-indexed segment hashes for the file, used by the per-segment dedup path), `updateEntry()`, `deleteEntry()`, `clearCacheFile()`
+- **`ICacheManager`** (`cache.ts`) — `deleteHash(filePath)`, `flush()`, `getEntry(filePath)` (returns `CodebaseIndexCacheEntry`), `updateEntry(filePath, entry)`, `getAllPaths()`, `getSegmentHashes(filePath)` (returns `Set<string>` of previously-indexed segment hashes for the file, used by the per-segment dedup path)
 - **`ICodeIndexManager`** (`manager.ts`) — public API contract
 
 ### Data Types
@@ -144,7 +144,7 @@ Provider selection is stored in `codebaseIndexEmbedderProvider` setting. Model I
 
 ## Data Flow: Indexing Pipeline
 
-### 1. Activation (`extension.ts:126-142`)
+### 1. Activation ([`extension.ts:130-149`](extensions/shofer/src/extension.ts:130))
 
 During extension activation, for each workspace folder:
 
@@ -153,7 +153,7 @@ CodeIndexManager.getInstance(context, folder.uri.fsPath)
   → manager.initialize(contextProxy)   // non-blocking, runs in background
 ```
 
-### 2. Initialization (`manager.ts:163-215`)
+### 2. Initialization ([`manager.ts:169-280`](extensions/shofer/src/services/code-index/manager.ts:169))
 
 ```
 ConfigManager.loadConfiguration()
@@ -368,31 +368,31 @@ User query string
 
 ### Extension Host
 
-| Point      | File                                           | Details                                                                                                   |
-| ---------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Activation | `src/extension.ts:126-142`                     | Creates `CodeIndexManager` per workspace folder, initializes in background                                |
-| Provider   | `src/core/webview/ShoferProvider.ts:3106-3139` | `updateCodeIndexStatusSubscription()` subscribes to `onProgressUpdate` to push indexing status to webview |
-| Commands   | `src/activate/registerCommands.ts:289`         | Registers commands that reference `CodeIndexManager`                                                      |
+| Point      | File                                           | Details                                                                                                                                             |
+| ---------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Activation | `src/extension.ts:130-149`                     | Creates `CodeIndexManager` per workspace folder, initializes in background                                                                          |
+| Provider   | `src/core/webview/ShoferProvider.ts:3210-3259` | `getCurrentWorkspaceCodeIndexManager()` + `updateCodeIndexStatusSubscription()` subscribes to `onProgressUpdate` to push indexing status to webview |
+| Commands   | `src/activate/registerCommands.ts`             | Registers commands that reference `CodeIndexManager` (imported at line 13)                                                                          |
 
 ### Settings & Webview
 
-| Point            | File                                 | Details                                                                     |
-| ---------------- | ------------------------------------ | --------------------------------------------------------------------------- |
-| Settings save    | `webviewMessageHandler.ts:2562`      | `saveCodeIndexSettingsAtomic` → saves secrets + `handleSettingsChange()`    |
-| Status request   | `webviewMessageHandler.ts:2724`      | `requestIndexingStatus`                                                     |
-| Start/stop/clear | `webviewMessageHandler.ts:2812-2898` | `startIndexing`, `stopIndexing`, `clearIndexData`, `toggleCodeIndexEnabled` |
-| Secret status    | `webviewMessageHandler.ts:2784`      | `requestCodeIndexSecretStatus`                                              |
-| Status display   | `ShoferProvider.ts:3099-3139`        | `getCurrentWorkspaceCodeIndexManager()`, subscribes to progress updates     |
+| Point            | File                          | Details                                                                                                             |
+| ---------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Settings save    | `webviewMessageHandler.ts`    | `saveCodeIndexSettingsAtomic` → saves secrets + `handleSettingsChange()`                                            |
+| Status request   | `webviewMessageHandler.ts`    | `requestIndexingStatus`                                                                                             |
+| Start/stop/clear | `webviewMessageHandler.ts`    | `startIndexing`, `stopIndexing`, `clearIndexData`                                                                   |
+| Secret status    | `webviewMessageHandler.ts`    | `requestCodeIndexSecretStatus`                                                                                      |
+| Status display   | `ShoferProvider.ts:3210-3259` | `getCurrentWorkspaceCodeIndexManager()`, subscribes to `onProgressUpdate` via `updateCodeIndexStatusSubscription()` |
 
 ### Tool System
 
-| Point             | File                                                            | Details                                                                 |
-| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Tool registration | `src/core/task/build-tools.ts:258-259`                          | Gets `CodeIndexManager` for current workspace, passes to tool filter    |
-| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts:271-277`       | Removes `rag_search` if indexing is disabled/unconfigured/uninitialized |
-| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts:822-828` | Routes to `RagSearchTool` or `LspSearchTool`                            |
-| Auto-approval     | `src/core/auto-approval/tools.ts:20`                            | `ragSearch` is auto-approved by default                                 |
-| System prompt     | `src/core/prompts/system.ts:72`                                 | Includes indexing status in system prompt context                       |
+| Point             | File                                                                     | Details                                                                 |
+| ----------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Tool registration | `src/core/task/build-tools.ts:258-259`                                   | Gets `CodeIndexManager` for current workspace, passes to tool filter    |
+| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts:271-277`                | Removes `rag_search` if indexing is disabled/unconfigured/uninitialized |
+| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts:850-853, 871-874` | Routes to `RagSearchTool` or `LspSearchTool`                            |
+| Auto-approval     | `src/core/auto-approval/tools.ts:20`                                     | `ragSearch` is auto-approved by default                                 |
+| System prompt     | `src/core/prompts/system.ts:72`                                          | Includes indexing status in system prompt context                       |
 
 ### Configuration Schema
 
@@ -435,7 +435,7 @@ Defined in `src/services/code-index/constants/index.ts`:
 | Constant                          | Value  | Purpose                                           |
 | --------------------------------- | ------ | ------------------------------------------------- |
 | `MAX_BLOCK_CHARS`                 | 1000   | Max characters per code block                     |
-| `MIN_BLOCK_CHARS`                 | 50     | Min characters per code block                     |
+| `MIN_BLOCK_CHARS`                 | 10     | Min characters per code block                     |
 | `MIN_CHUNK_REMAINDER_CHARS`       | 200    | Min size for the remainder when splitting a chunk |
 | `MAX_CHARS_TOLERANCE_FACTOR`      | 1.15   | 15% tolerance on max block size                   |
 | `MAX_FILE_SIZE_BYTES`             | 1 MB   | Skip files larger than this                       |

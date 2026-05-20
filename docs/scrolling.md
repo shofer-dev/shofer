@@ -88,9 +88,9 @@ Clicking the `codicon-chevron-down` button calls `handleScrollToBottomClick`:
 
 ### Naturally reaching the bottom
 
-`atBottomStateChangeCallback` fires whenever Virtuoso's bottom-detection crosses the 1 px threshold (`atBottomThreshold={1}`). When `isAtBottom` becomes `true` in any phase other than `USER_BROWSING_HISTORY`-while-hydrating, the hook calls `enterAnchoredFollowing()`.
+`atBottomStateChangeCallback` fires whenever Virtuoso's bottom-detection crosses the 1 px threshold (`atBottomThreshold={1}`). When `isAtBottom` becomes `true`, the hook calls `enterAnchoredFollowing()` — except when in `USER_BROWSING_HISTORY` during the hydration window or the disengage immune window, where the signal is suppressed (see the immune window description above).
 
-When `isAtBottom` becomes `true` while already in `ANCHORED_FOLLOWING` during streaming the hook additionally calls `scrollToBottomAuto()` and hides the button — a safety net against Virtuoso briefly reporting not-at-bottom during rapid content growth.
+When `isAtBottom` becomes `false` while already in `ANCHORED_FOLLOWING` during streaming (a transient not-at-bottom blip from rapid content growth), the hook calls `scrollToBottomAuto()` and keeps the button hidden — a safety net that prevents Virtuoso from momentarily dropping the follow anchor.
 
 ## Scroll Commands
 

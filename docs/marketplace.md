@@ -2,20 +2,20 @@
 
 > **⚠️ CURRENT STATUS: DISABLED**
 >
-> The marketplace feature is currently **disabled** via the [`MARKETPLACE_ENABLED`](extensions/shofer/packages/types/src/marketplace.ts:7) feature flag set to `false`. This means:
+> The marketplace feature is currently **disabled** via the [`MARKETPLACE_ENABLED`](extensions/shofer/packages/types/src/marketplace.ts:10) feature flag set to `false`. This means:
 >
 > - No marketplace tab is shown in the Shofer panel.
 > - No marketplace buttons appear in MCP, Modes, ModeSelector, or Skills settings.
 > - No API calls are made to the Shofer backend for marketplace data.
 > - **No server-side infrastructure is required.**
 >
-> To re-enable the marketplace, set `MARKETPLACE_ENABLED = true` in [`packages/types/src/marketplace.ts`](extensions/shofer/packages/types/src/marketplace.ts:7).
+> To re-enable the marketplace, set `MARKETPLACE_ENABLED = true` in [`packages/types/src/marketplace.ts`](extensions/shofer/packages/types/src/marketplace.ts:10).
 
 ## Overview
 
 The Shofer Marketplace is an in-IDE catalog that lets users discover, browse, and install **Custom Modes** (`.shofermodes` entries) and **MCP Servers** (`mcp.json` entries) directly from the Shofer extension. It is backed by a remote API, caches results locally, and integrates deeply with VS Code's configuration files for both project-level and global installation scopes.
 
-The marketplace was introduced in **v3.21.0** (June 2025) and has been **generally available** (no feature flag) since v3.25.x. When enabled, it appears as a dedicated tab in the Shofer panel alongside Settings, History, Chat, and Cloud.
+The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appears as a dedicated tab in the Shofer panel alongside Settings, History, Chat, and Cloud.
 
 ### Key capabilities
 
@@ -90,11 +90,11 @@ The marketplace was introduced in **v3.21.0** (June 2025) and has been **general
 │  GET /api/marketplace/modes  ─► YAML response            │
 │  GET /api/marketplace/mcps   ─► YAML response            │
 │                                                          │
-│  CloudService (Shofer Cloud)                             │
-│    └── OrganizationSettings                              │
-│          ├── mcps: MarketplaceItem[]  (private catalog)  │
-│          ├── hiddenMcps: string[]     (hidden from UI)   │
-│          └── hideMarketplaceMcps: bool                   │
+│  NOTE: Cloud/org integration previously provided         │
+│  organization-specific MCP catalogs via a CloudService   │
+│  but has been removed in the current codebase. The       │
+│  orgSettings variable in MarketplaceManager remains      │
+│  undefined.                                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -104,12 +104,12 @@ The marketplace was introduced in **v3.21.0** (June 2025) and has been **general
 
 ### Types & Schemas
 
-| File                                                                                                           | Purpose                                                                                                                                                                                                                           |
-| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`packages/types/src/marketplace.ts`](extensions/shofer/packages/types/src/marketplace.ts)                     | Zod schemas for `MarketplaceItem`, `ModeMarketplaceItem`, `McpMarketplaceItem`, `McpParameter`, `McpInstallationMethod`, `InstallMarketplaceItemOptions`, `MarketplaceInstalledMetadata`                                          |
-| [`packages/types/src/cloud.ts`](extensions/shofer/packages/types/src/cloud.ts) (lines 152-163)                 | `OrganizationSettings` schema includes `mcps`, `hiddenMcps`, `hideMarketplaceMcps`                                                                                                                                                |
-| [`packages/types/src/telemetry.ts`](extensions/shofer/packages/types/src/telemetry.ts) (lines 49-52)           | Telemetry event names: `MARKETPLACE_ITEM_INSTALLED`, `MARKETPLACE_ITEM_REMOVED`, `MARKETPLACE_TAB_VIEWED`, `MARKETPLACE_INSTALL_BUTTON_CLICKED`                                                                                   |
-| [`packages/types/src/vscode-extension-host.ts`](extensions/shofer/packages/types/src/vscode-extension-host.ts) | Message types: `marketplaceData`, `filterMarketplaceItems`, `installMarketplaceItem`, `removeInstalledMarketplaceItem`, `marketplaceInstallResult`, `marketplaceRemoveResult`, `fetchMarketplaceData`, `marketplaceButtonClicked` |
+| File                                                                                                                         | Purpose                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`packages/types/src/marketplace.ts`](extensions/shofer/packages/types/src/marketplace.ts)                                   | Zod schemas for `MarketplaceItem`, `ModeMarketplaceItem`, `McpMarketplaceItem`, `McpParameter`, `McpInstallationMethod`, `InstallMarketplaceItemOptions`, `MarketplaceInstalledMetadata`                                          |
+| [`packages/types/src/vscode-extension-host.ts`](extensions/shofer/packages/types/src/vscode-extension-host.ts) (lines 21-33) | Cloud types (formerly in `cloud.ts`) are now defined inline: `CloudUserInfo`, `CloudOrganizationMembership`, `ShareVisibility`. Organization-level MCP settings are no longer defined as a Zod schema.                            |
+| [`packages/types/src/telemetry.ts`](extensions/shofer/packages/types/src/telemetry.ts) (lines 49-52)                         | Telemetry event names: `MARKETPLACE_ITEM_INSTALLED`, `MARKETPLACE_ITEM_REMOVED`, `MARKETPLACE_TAB_VIEWED`, `MARKETPLACE_INSTALL_BUTTON_CLICKED`                                                                                   |
+| [`packages/types/src/vscode-extension-host.ts`](extensions/shofer/packages/types/src/vscode-extension-host.ts)               | Message types: `marketplaceData`, `filterMarketplaceItems`, `installMarketplaceItem`, `removeInstalledMarketplaceItem`, `marketplaceInstallResult`, `marketplaceRemoveResult`, `fetchMarketplaceData`, `marketplaceButtonClicked` |
 
 ### Extension Host (Backend)
 
@@ -119,9 +119,9 @@ The marketplace was introduced in **v3.21.0** (June 2025) and has been **general
 | [`src/services/marketplace/MarketplaceManager.ts`](extensions/shofer/src/services/marketplace/MarketplaceManager.ts)         | Top-level coordinator: fetches items, filters, installs, removes, reads installation metadata                                                                      |
 | [`src/services/marketplace/RemoteConfigLoader.ts`](extensions/shofer/src/services/marketplace/RemoteConfigLoader.ts)         | HTTP client that calls the Shofer API (`/api/marketplace/modes`, `/api/marketplace/mcps`), parses YAML, validates with Zod, caches results for 5 minutes           |
 | [`src/services/marketplace/SimpleInstaller.ts`](extensions/shofer/src/services/marketplace/SimpleInstaller.ts)               | Writes marketplace items to the correct config files (`.shofermodes`, `mcp.json`) at project or global scope; integrates with `CustomModesManager` for mode import |
-| [`src/core/webview/ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) (lines 287, 785-786, 2402-2444) | Instantiates `MarketplaceManager`, provides `fetchMarketplaceData()`                                                                                               |
-| [`src/core/webview/webviewMessageHandler.ts`](extensions/shofer/src/core/webview/webviewMessageHandler.ts) (lines 3072-3186) | Routes webview messages to `MarketplaceManager` methods                                                                                                            |
-| [`src/activate/registerCommands.ts`](extensions/shofer/src/activate/registerCommands.ts) (lines 163-168)                     | Registers `marketplaceButtonClicked` command                                                                                                                       |
+| [`src/core/webview/ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) (lines 2417-2448)               | Provides `fetchMarketplaceData()` method; `MarketplaceManager` is a class field                                                                                    |
+| [`src/core/webview/webviewMessageHandler.ts`](extensions/shofer/src/core/webview/webviewMessageHandler.ts) (lines 3065-3183) | Routes webview messages to `MarketplaceManager` methods                                                                                                            |
+| [`src/activate/registerCommands.ts`](extensions/shofer/src/activate/registerCommands.ts) (lines 155-159)                     | Registers `marketplaceButtonClicked` command                                                                                                                       |
 | [`src/core/config/CustomModesManager.ts`](extensions/shofer/src/core/config/CustomModesManager.ts) (lines 517-598)           | `deleteCustomMode()` accepts `fromMarketplace` flag for tailored error messages during marketplace removal                                                         |
 
 ### Webview UI (React)
@@ -143,7 +143,7 @@ The marketplace was introduced in **v3.21.0** (June 2025) and has been **general
 | View                                                                                                                                               | Trigger                                                                      |
 | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | [`webview-ui/src/components/mcp/McpView.tsx`](extensions/shofer/webview-ui/src/components/mcp/McpView.tsx) (lines 197-211)                         | "Marketplace" button in MCP settings header → opens marketplace to MCP tab   |
-| [`webview-ui/src/components/modes/ModesView.tsx`](extensions/shofer/webview-ui/src/components/modes/ModesView.tsx) (lines 655-666)                 | "Marketplace" button in Modes settings → opens marketplace to Mode tab       |
+| [`webview-ui/src/components/modes/ModesView.tsx`](extensions/shofer/webview-ui/src/components/modes/ModesView.tsx) (lines 834-845)                 | "Marketplace" button in Modes settings → opens marketplace to Mode tab       |
 | [`webview-ui/src/components/chat/ModeSelector.tsx`](extensions/shofer/webview-ui/src/components/chat/ModeSelector.tsx) (lines 315-322)             | "Marketplace" icon in mode selector dropdown → opens marketplace to Mode tab |
 | [`webview-ui/src/components/settings/SkillsSettings.tsx`](extensions/shofer/webview-ui/src/components/settings/SkillsSettings.tsx) (lines 289-291) | "Marketplace" link in Skills settings → opens marketplace to Mode tab        |
 
@@ -151,7 +151,7 @@ The marketplace was introduced in **v3.21.0** (June 2025) and has been **general
 
 | File                                                                                                                         | Purpose                                                                           |
 | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [`packages/telemetry/src/TelemetryService.ts`](extensions/shofer/packages/telemetry/src/TelemetryService.ts) (lines 209-248) | `captureMarketplaceItemInstalled()` and `captureMarketplaceItemRemoved()` methods |
+| [`packages/telemetry/src/TelemetryService.ts`](extensions/shofer/packages/telemetry/src/TelemetryService.ts) (lines 258-302) | `captureMarketplaceItemInstalled()` and `captureMarketplaceItemRemoved()` methods |
 
 ---
 
@@ -300,7 +300,7 @@ This is computed at runtime by reading the actual config files (`.shofermodes`, 
 
 ## API Endpoints
 
-The marketplace fetches data from the Shofer API. The base URL is configured in [`getShoferApiUrl()`](extensions/shofer/packages/cloud/src/index.ts).
+The marketplace fetches data from the Shofer API. The base URL is defined by the `SHOFER_API_URL` environment variable (defaulting to `"https://app.shofer.dev"`) in [`RemoteConfigLoader.ts`](extensions/shofer/src/services/marketplace/RemoteConfigLoader.ts:12).
 
 | Endpoint                     | Response Format                              | Description                |
 | ---------------------------- | -------------------------------------------- | -------------------------- |
@@ -317,15 +317,9 @@ The marketplace fetches data from the Shofer API. The base URL is configured in 
 
 ## Organization / Cloud Integration
 
-When a user is authenticated with **Shofer Cloud**, organization settings augment the marketplace:
+When a user is authenticated with **Shofer Cloud**, organization settings would augment the marketplace. However, the cloud integration that provided organization-controlled MCP catalogs has been removed from the current codebase. The `orgSettings` variable in [`MarketplaceManager.getMarketplaceItems()`](extensions/shofer/src/services/marketplace/MarketplaceManager.ts:41) is always `undefined`, and the comment reads `"Cloud services removed; orgSettings remains undefined"`.
 
-1. **Organization MCPs**: The `mcps` array in [`OrganizationSettings`](extensions/shofer/packages/types/src/cloud.ts) is treated as a private, team-specific catalog shown in a dedicated "Organization MCPs" section above the public marketplace items.
-
-2. **Hidden MCPs**: The `hiddenMcps` string array filters out specific MCP IDs from the public marketplace list (admins can hide MCPs they don't want team members to see).
-
-3. **Hide Marketplace MCPs**: If `hideMarketplaceMcps` is `true`, no MCPs are fetched from the public API at all.
-
-4. **Auto-refresh**: The [`MarketplaceView`](extensions/shofer/webview-ui/src/components/marketplace/MarketplaceView.tsx) watches `organizationSettingsVersion` from `ExtensionStateContext` and re-fetches marketplace data whenever the version changes (indicating admin updates).
+The [`MarketplaceView`](extensions/shofer/webview-ui/src/components/marketplace/MarketplaceView.tsx) still watches `organizationSettingsVersion` from `ExtensionStateContext` and re-fetches marketplace data whenever the version changes, though in the current code this version is always `-1`.
 
 ---
 

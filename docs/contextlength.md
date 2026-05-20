@@ -10,35 +10,35 @@ Does `ContextLength` in `llm-router/internal/types/model_registry.go` actually g
 
 ## Path A: Shofer Router provider
 
-| Step    | File                                                                                        | Field                        |
-| ------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
-| Source  | [`model_registry.go:8`](llm-router/internal/types/model_registry.go:8)                      | `ContextLength int`          |
-| API     | [`models.go:226`](llm-router/internal/handlers/models.go:226)                               | JSON `context_length`        |
-| Proxy   | Shofer Router (hosted)                                                                      | remaps → `context_window`    |
-| Fetcher | [`shofer.ts:81`](extensions/shofer/src/api/providers/fetchers/shofer.ts:81)                 | `model.context_window`       |
-| Schema  | [`shofer.ts:35`](extensions/shofer/packages/types/src/providers/shofer.ts:35)               | `context_window: z.number()` |
-| UI      | [`TaskHeader.tsx:105`](extensions/shofer/webview-ui/src/components/chat/TaskHeader.tsx:105) | `model?.contextWindow`       |
+| Step    | File                                                                                                      | Field                                            |
+| ------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Source  | [`model_registry.go:8`](llm-router/internal/types/model_registry.go:8)                                    | `ContextLength int`                              |
+| API     | [`models.go:226`](llm-router/internal/handlers/models.go:226)                                             | JSON `context_length`                            |
+| Proxy   | Shofer Router (hosted)                                                                                    | remaps → `context_window`                        |
+| Fetcher | [`useSelectedModel.ts:354`](extensions/shofer/webview-ui/src/components/ui/hooks/useSelectedModel.ts:354) | `info.contextWindow` (via `routerModels.shofer`) |
+| Schema  | [`shofer.ts:35`](extensions/shofer/packages/types/src/providers/shofer.ts:35)                             | `context_window: z.number()`                     |
+| UI      | [`TaskHeader.tsx:106`](extensions/shofer/webview-ui/src/components/chat/TaskHeader.tsx:106)               | `model?.contextWindow`                           |
 
 ## Path B: llm-provider → VSCode LM API → vscode-lm handler
 
-| Step            | File                                                                                                      | Field                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Source          | [`model_registry.go:218`](llm-router/internal/types/model_registry.go:218)                                | `ContextLength: 1000000`                                                                            |
-| API             | [`models.go:226`](llm-router/internal/handlers/models.go:226)                                             | JSON `context_length: 1000000`                                                                      |
-| llm-provider    | [`llm-client.ts:628`](extensions/llm-provider/src/llm-client.ts:628)                                      | `contextLength: model.context_length`                                                               |
-| VSCode info     | [`language-model-provider.ts:886`](extensions/llm-provider/src/language-model-provider.ts:886)            | `maxInputTokens: contextLength`                                                                     |
-| VSCode LM       | `vscode.lm.selectChatModels()`                                                                            | `LanguageModelChat.maxInputTokens`                                                                  |
-| Runtime handler | [`vscode-lm.ts`](extensions/shofer/src/api/providers/vscode-lm.ts) `getModel()`                           | `contextWindow: this.client.maxInputTokens` (no 128K fallback)                                      |
-| IPC message     | `webviewMessageHandler.ts:1274-1277`                                                                      | `{ type: "vsCodeLmModels" }` (now `VsCodeLmChatInfo[]` with `shoferCapabilities`/`shoferPricing`) |
-| Context         | [`ExtensionStateContext.tsx:303`](extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:303) | `vsCodeLmModels` state                                                                              |
-| Hook            | [`useSelectedModel.ts`](extensions/shofer/webview-ui/src/components/ui/hooks/useSelectedModel.ts)         | dynamic lookup from context                                                                         |
-| UI              | [`TaskHeader.tsx:105`](extensions/shofer/webview-ui/src/components/chat/TaskHeader.tsx:105)               | `model?.contextWindow`                                                                              |
+| Step            | File                                                                                                      | Field                                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Source          | [`model_registry.go:218`](llm-router/internal/types/model_registry.go:218)                                | `ContextLength: 1000000`                                                                          |
+| API             | [`models.go:226`](llm-router/internal/handlers/models.go:226)                                             | JSON `context_length: 1000000`                                                                    |
+| llm-provider    | [`llm-client.ts:651`](extensions/llm-provider/src/llm-client.ts:651)                                      | `contextLength: model.context_length`                                                             |
+| VSCode info     | [`language-model-provider.ts:976`](extensions/llm-provider/src/language-model-provider.ts:976)            | `maxInputTokens: contextLength`                                                                   |
+| VSCode LM       | `vscode.lm.selectChatModels()`                                                                            | `LanguageModelChat.maxInputTokens`                                                                |
+| Runtime handler | [`vscode-lm.ts`](extensions/shofer/src/api/providers/vscode-lm.ts) `getModel()`                           | `contextWindow: this.client.maxInputTokens` (no 128K fallback)                                    |
+| IPC message     | [`webviewMessageHandler.ts:1238-1241`](extensions/shofer/src/core/webview/webviewMessageHandler.ts:1238)  | `{ type: "vsCodeLmModels" }` (now `VsCodeLmChatInfo[]` with `shoferCapabilities`/`shoferPricing`) |
+| Context         | [`ExtensionStateContext.tsx:327`](extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx:327) | `vsCodeLmModels` state                                                                            |
+| Hook            | [`useSelectedModel.ts`](extensions/shofer/webview-ui/src/components/ui/hooks/useSelectedModel.ts)         | dynamic lookup from context                                                                       |
+| UI              | [`TaskHeader.tsx:106`](extensions/shofer/webview-ui/src/components/chat/TaskHeader.tsx:106)               | `model?.contextWindow`                                                                            |
 
 ## Root Cause of the 128K Bug (FIXED)
 
-The webview's [`useSelectedModel`](extensions/shofer/webview-ui/src/components/ui/hooks/useSelectedModel.ts:300) hook for `vscode-lm` used a static [`vscodeLlmModels`](extensions/shofer/packages/types/src/providers/vscode-llm.ts:8) map. Unknown models (from provider extensions like llm-provider) fell through to [`openAiModelInfoSaneDefaults`](extensions/shofer/packages/types/src/providers/openai.ts:595) which has `contextWindow: 128_000`.
+The webview's [`useSelectedModel`](extensions/shofer/webview-ui/src/components/ui/hooks/useSelectedModel.ts:312) hook for `vscode-lm` used a static [`vscodeLlmModels`](extensions/shofer/packages/types/src/providers/vscode-llm.ts:65) map. Unknown models (from provider extensions like llm-provider) fell through to [`openAiModelInfoSaneDefaults`](extensions/shofer/packages/types/src/providers/openai.ts:595) which has `contextWindow: 128_000`.
 
-The backend `vscode-lm` handler's [`getModel()`](extensions/shofer/src/api/providers/vscode-lm.ts:751) correctly returned 1M from `this.client.maxInputTokens`, but the webview never used it — it used its own static lookup.
+The backend `vscode-lm` handler's [`getModel()`](extensions/shofer/src/api/providers/vscode-lm.ts:851) correctly returned 1M from `this.client.maxInputTokens`, but the webview never used it — it used its own static lookup.
 
 ### Fix applied
 

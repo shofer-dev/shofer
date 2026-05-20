@@ -19,10 +19,10 @@ target. TreeViews use VSCode's `TreeDragAndDropController` API, which
 operates outside the webview sandbox and is therefore reliable on both
 Desktop and code-server.
 
-The TreeView is registered with `"visibility": "collapsed"` so it appears
+The TreeView is registered with `"initialSize": 1` so it appears
 as a single thin row at the bottom of the Shofer sidebar — minimal
-visual clutter. The user expands it (or simply drops onto its title bar
-— VSCode delivers drops to collapsed views as well) to attach files.
+visual clutter. The user drops files onto its title bar or expands
+it to see the hint text.
 
 ## Architecture
 
@@ -57,7 +57,7 @@ visual clutter. The user expands it (or simply drops onto its title bar
 | `ContextDropZoneProvider` | [src/core/webview/ContextDropZoneProvider.ts](../src/core/webview/ContextDropZoneProvider.ts) | Native TreeView + `TreeDragAndDropController`. Stateless drop target — forwards files to webview. |
 | `ChatView`                | [webview-ui/src/components/chat/ChatView.tsx](../webview-ui/src/components/chat/ChatView.tsx) | Owns the `droppedContextFiles` React state, renders tags, converts to `@mentions` on Send.        |
 | `addContextFiles` message | [packages/types/src/vscode-extension-host.ts](../packages/types/src/vscode-extension-host.ts) | Host → webview message carrying `Array<{path, isFile}>`.                                          |
-| View contribution         | [src/package.json](../src/package.json) (`shofer.contextDropZone`, `visibility: collapsed`)   | Registers the drop-zone TreeView in the Shofer activity-bar container.                            |
+| View contribution         | [src/package.json](../src/package.json) (`shofer.contextDropZone`, `initialSize: 1`)          | Registers the drop-zone TreeView in the Shofer activity-bar container.                            |
 
 ## Data flow
 
@@ -74,18 +74,31 @@ visual clutter. The user expands it (or simply drops onto its title bar
 ## UI
 
 - **Drop Files for Context** — a native VSCode TreeView, registered
-  collapsed-by-default in the Shofer sidebar. Contains a single hint
-  row ("Drag files here to add to chat context"). Holds no state.
+  with `"initialSize": 1` in the Shofer sidebar so it appears as
+  a minimal row. Contains a single hint row ("Drag files here to add
+  to chat context"). Holds no state.
 - **File tags** — rendered above the chat input. Each tag has a remove
   (×) button; a "clear all" button removes them all.
 - **Status bar** — a brief "Added N files to chat context" message is
   shown for 2 seconds on each successful drop.
 
-## Legacy webview drop handlers
+## Webview drop handlers
 
-Earlier versions attempted to receive drops directly in the webview
-(`ChatView` root, then `ChatTextArea` container). Both proved unreliable
-and have been kept only as a _fallback_ code path: if a runtime ever does
-deliver drag events to the webview, those handlers still produce the
-same `droppedContextFiles` state. In practice they do not fire under
-VSCode Desktop or code-server today.
+There are two additional drop handlers inside the webview:
+
+- **`ChatView` root** (`handleWebviewDrop`) — a handler on the iframe
+  root. VSCode Desktop's cross-origin webview overlay swallows these
+  events, so this path effectively never fires on Desktop. It is kept
+  as a fallback for runtimes that do deliver root-level drag events.
+
+- **`ChatTextArea` container** (`handleDrop` via `onDrop`) — a handler
+  on the native form-control textarea container. This is the only
+  webview-side drop path that fires reliably on VSCode Desktop,
+  because the overlay does deliver events to form-control descendants.
+  It forwards parsed entries to `ChatView`'s `droppedContextFiles` state
+  via the `onContextFilesDropped` callback, sharing the same
+  `extractUriPayload` / `parseDroppedUris` parser used by the native
+  TreeView.
+
+Both handlers delegate to the same `droppedContextFiles` React state,
+ensuring consistent behavior regardless of which path processes the drop.

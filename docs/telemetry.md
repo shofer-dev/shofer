@@ -15,7 +15,6 @@
     - [`ApiProviderError`](#apiprovidererror)
     - [`ConsecutiveMistakeError`](#consecutivemistakeerror)
 - [Webview-Side Telemetry](#webview-side-telemetry)
-- [Cloud Telemetry Client](#cloud-telemetry-client)
 - [Telemetry Flow & Initialization](#telemetry-flow--initialization)
 - [Event Catalog](#event-catalog)
     - [Task Lifecycle Events](#task-lifecycle-events)
@@ -32,13 +31,13 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-  <!-- /TOC -->
+    <!-- /TOC -->
 
 ---
 
 ## Architecture Overview
 
-Shofer uses a **multi-client telemetry architecture** with a singleton [`TelemetryService`](packages/telemetry/src/TelemetryService.ts:15) that acts as a multiplexer, fanning out all events to one or more registered [`TelemetryClient`](packages/types/src/telemetry.ts:263) implementations. The system is split across two packages and two runtime environments:
+Shofer uses a **multi-client telemetry architecture** with a singleton [`TelemetryService`](packages/telemetry/src/TelemetryService.ts:24) that acts as a multiplexer, fanning out all events to one or more registered [`TelemetryClient`](packages/types/src/telemetry.ts:275) implementations. The system is split across two packages and two runtime environments:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -46,7 +45,6 @@ Shofer uses a **multi-client telemetry architecture** with a singleton [`Telemet
 │                                                          │
 │  TelemetryService (singleton)                            │
 │  ├── PostHogTelemetryClient  ──► posthog-node  ──► ph.shofer.dev │
-│  └── CloudTelemetryClient    ──► Shofer Cloud API        │
 │                                                          │
 ├─────────────────────────────────────────────────────────┤
 │  Webview UI (Browser)                                    │
@@ -56,11 +54,10 @@ Shofer uses a **multi-client telemetry architecture** with a singleton [`Telemet
 └─────────────────────────────────────────────────────────┘
 ```
 
-| Component                                                                       | Runtime                  | Library        | Endpoint                   |
-| ------------------------------------------------------------------------------- | ------------------------ | -------------- | -------------------------- |
-| [`PostHogTelemetryClient`](packages/telemetry/src/PostHogTelemetryClient.ts:24) | Node.js (extension host) | `posthog-node` | `https://ph.shofer.dev`    |
-| [`TelemetryClient`](webview-ui/src/utils/TelemetryClient.ts:5)                  | Browser (webview)        | `posthog-js`   | `https://ph.shofer.dev`    |
-| [`CloudTelemetryClient`](packages/cloud/src/TelemetryClient.ts:87)              | Node.js (extension host) | Fetch API      | Shofer Cloud `/api/events` |
+| Component                                                                       | Runtime                  | Library        | Endpoint                |
+| ------------------------------------------------------------------------------- | ------------------------ | -------------- | ----------------------- |
+| [`PostHogTelemetryClient`](packages/telemetry/src/PostHogTelemetryClient.ts:30) | Node.js (extension host) | `posthog-node` | `https://ph.shofer.dev` |
+| [`TelemetryClient`](webview-ui/src/utils/TelemetryClient.ts:5)                  | Browser (webview)        | `posthog-js`   | `https://ph.shofer.dev` |
 
 ---
 
@@ -80,49 +77,55 @@ The central orchestration point for all telemetry. Implements a **singleton patt
 
 | Method                                                                                            | Description                                                                            |
 | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [`createInstance(clients?)`](packages/telemetry/src/TelemetryService.ts:288)                      | Creates the singleton. Throws if already created.                                      |
-| [`instance`](packages/telemetry/src/TelemetryService.ts:297)                                      | Static getter; throws if not initialized.                                              |
-| [`hasInstance()`](packages/telemetry/src/TelemetryService.ts:305)                                 | Safe check before accessing `.instance`.                                               |
-| [`register(client)`](packages/telemetry/src/TelemetryService.ts:18)                               | Registers a new `TelemetryClient`.                                                     |
-| [`setProvider(provider)`](packages/telemetry/src/TelemetryService.ts:26)                          | Sets a `TelemetryPropertiesProvider` on all clients for automatic property enrichment. |
-| [`updateTelemetryState(isOptedIn)`](packages/telemetry/src/TelemetryService.ts:46)                | Toggles telemetry on/off across all clients.                                           |
-| [`captureEvent(eventName, properties?)`](packages/telemetry/src/TelemetryService.ts:60)           | Generic event capture; fans out to all clients.                                        |
-| [`captureException(error, additionalProperties?)`](packages/telemetry/src/TelemetryService.ts:73) | Exception capture (PostHog error tracking).                                            |
-| [`shutdown()`](packages/telemetry/src/TelemetryService.ts:278)                                    | Gracefully shuts down all clients.                                                     |
+| [`createInstance(clients?)`](packages/telemetry/src/TelemetryService.ts:366)                      | Creates the singleton. Throws if already created.                                      |
+| [`instance`](packages/telemetry/src/TelemetryService.ts:375)                                      | Static getter; throws if not initialized.                                              |
+| [`hasInstance()`](packages/telemetry/src/TelemetryService.ts:383)                                 | Safe check before accessing `.instance`.                                               |
+| [`isGloballyEnabled()`](packages/telemetry/src/TelemetryService.ts:334)                           | Returns whether `TELEMETRY_ENABLED` env var is set.                                    |
+| [`register(client)`](packages/telemetry/src/TelemetryService.ts:27)                               | Registers a new `TelemetryClient`.                                                     |
+| [`setProvider(provider)`](packages/telemetry/src/TelemetryService.ts:38)                          | Sets a `TelemetryPropertiesProvider` on all clients for automatic property enrichment. |
+| [`updateTelemetryState(isOptedIn)`](packages/telemetry/src/TelemetryService.ts:61)                | Toggles telemetry on/off across all clients.                                           |
+| [`captureEvent(eventName, properties?)`](packages/telemetry/src/TelemetryService.ts:75)           | Generic event capture; fans out to all clients.                                        |
+| [`captureException(error, additionalProperties?)`](packages/telemetry/src/TelemetryService.ts:88) | Exception capture (PostHog error tracking).                                            |
+| [`shutdown()`](packages/telemetry/src/TelemetryService.ts:356)                                    | Gracefully shuts down all clients.                                                     |
 
 #### Convenience Event Methods
 
-The service provides typed convenience methods for every event type. Each method internally calls [`captureEvent()`](packages/telemetry/src/TelemetryService.ts:60) with the appropriate [`TelemetryEventName`](packages/types/src/telemetry.ts:20) enum value:
+The service provides typed convenience methods for every event type. Each method internally calls [`captureEvent()`](packages/telemetry/src/TelemetryService.ts:75) with the appropriate [`TelemetryEventName`](packages/types/src/telemetry.ts:20) enum value:
 
 | Method                                                                              | Event                        | Parameters                                                                        |
 | ----------------------------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------- |
-| [`captureTaskCreated`](packages/telemetry/src/TelemetryService.ts:81)               | `TASK_CREATED`               | `taskId`                                                                          |
-| [`captureTaskRestarted`](packages/telemetry/src/TelemetryService.ts:85)             | `TASK_RESTARTED`             | `taskId`                                                                          |
-| [`captureTaskCompleted`](packages/telemetry/src/TelemetryService.ts:89)             | `TASK_COMPLETED`             | `taskId`                                                                          |
-| [`captureConversationMessage`](packages/telemetry/src/TelemetryService.ts:93)       | `TASK_CONVERSATION_MESSAGE`  | `taskId`, `source`                                                                |
-| [`captureLlmCompletion`](packages/telemetry/src/TelemetryService.ts:97)             | `LLM_COMPLETION`             | `taskId`, `{inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, cost?}` |
-| [`captureModeSwitch`](packages/telemetry/src/TelemetryService.ts:110)               | `MODE_SWITCH`                | `taskId`, `newMode`                                                               |
-| [`captureToolUsage`](packages/telemetry/src/TelemetryService.ts:114)                | `TOOL_USED`                  | `taskId`, `tool`                                                                  |
-| [`captureCheckpointCreated`](packages/telemetry/src/TelemetryService.ts:118)        | `CHECKPOINT_CREATED`         | `taskId`                                                                          |
-| [`captureCheckpointDiffed`](packages/telemetry/src/TelemetryService.ts:122)         | `CHECKPOINT_DIFFED`          | `taskId`                                                                          |
-| [`captureCheckpointRestored`](packages/telemetry/src/TelemetryService.ts:126)       | `CHECKPOINT_RESTORED`        | `taskId`                                                                          |
-| [`captureContextCondensed`](packages/telemetry/src/TelemetryService.ts:130)         | `CONTEXT_CONDENSED`          | `taskId`, `isAutomaticTrigger`, `usedCustomPrompt?`                               |
-| [`captureSlidingWindowTruncation`](packages/telemetry/src/TelemetryService.ts:138)  | `SLIDING_WINDOW_TRUNCATION`  | `taskId`                                                                          |
-| [`captureCodeActionUsed`](packages/telemetry/src/TelemetryService.ts:142)           | `CODE_ACTION_USED`           | `actionType`                                                                      |
-| [`capturePromptEnhanced`](packages/telemetry/src/TelemetryService.ts:146)           | `PROMPT_ENHANCED`            | `taskId?`                                                                         |
-| [`captureSchemaValidationError`](packages/telemetry/src/TelemetryService.ts:150)    | `SCHEMA_VALIDATION_ERROR`    | `{schemaName, error}`                                                             |
-| [`captureDiffApplicationError`](packages/telemetry/src/TelemetryService.ts:155)     | `DIFF_APPLICATION_ERROR`     | `taskId`, `consecutiveMistakeCount`                                               |
-| [`captureShellIntegrationError`](packages/telemetry/src/TelemetryService.ts:159)    | `SHELL_INTEGRATION_ERROR`    | `taskId`                                                                          |
-| [`captureConsecutiveMistakeError`](packages/telemetry/src/TelemetryService.ts:163)  | `CONSECUTIVE_MISTAKE_ERROR`  | `taskId`                                                                          |
-| [`captureBudgetExceeded`](packages/telemetry/src/TelemetryService.ts:171)           | `BUDGET_EXCEEDED`            | `taskId`, `{rootTaskId, limitUsd, spentUsd, action, modelId}`                     |
-| [`captureTabShown`](packages/telemetry/src/TelemetryService.ts:188)                 | `TAB_SHOWN`                  | `tab`                                                                             |
-| [`captureModeSettingChanged`](packages/telemetry/src/TelemetryService.ts:196)       | `MODE_SETTINGS_CHANGED`      | `settingName`                                                                     |
-| [`captureCustomModeCreated`](packages/telemetry/src/TelemetryService.ts:205)        | `CUSTOM_MODE_CREATED`        | `modeSlug`, `modeName`                                                            |
-| [`captureMarketplaceItemInstalled`](packages/telemetry/src/TelemetryService.ts:217) | `MARKETPLACE_ITEM_INSTALLED` | `itemId`, `itemType`, `itemName`, `target`, `properties?`                         |
-| [`captureMarketplaceItemRemoved`](packages/telemetry/src/TelemetryService.ts:241)   | `MARKETPLACE_ITEM_REMOVED`   | `itemId`, `itemType`, `itemName`, `target`                                        |
-| [`captureTitleButtonClicked`](packages/telemetry/src/TelemetryService.ts:254)       | `TITLE_BUTTON_CLICKED`       | `button`                                                                          |
-| [`captureTelemetrySettingsChanged`](packages/telemetry/src/TelemetryService.ts:263) | `TELEMETRY_SETTINGS_CHANGED` | `previousSetting`, `newSetting`                                                   |
-| [`isTelemetryEnabled`](packages/telemetry/src/TelemetryService.ts:274)              | —                            | Returns `true` if any client has telemetry enabled                                |
+| [`captureTaskCreated`](packages/telemetry/src/TelemetryService.ts:96)               | `TASK_CREATED`               | `taskId`                                                                          |
+| [`captureTaskRestarted`](packages/telemetry/src/TelemetryService.ts:100)            | `TASK_RESTARTED`             | `taskId`                                                                          |
+| [`captureTaskCompleted`](packages/telemetry/src/TelemetryService.ts:104)            | `TASK_COMPLETED`             | `taskId`                                                                          |
+| [`captureConversationMessage`](packages/telemetry/src/TelemetryService.ts:108)      | `TASK_CONVERSATION_MESSAGE`  | `taskId`, `source`                                                                |
+| [`captureLlmCompletion`](packages/telemetry/src/TelemetryService.ts:112)            | `LLM_COMPLETION`             | `taskId`, `{inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, cost?}` |
+| [`captureModeSwitch`](packages/telemetry/src/TelemetryService.ts:125)               | `MODE_SWITCH`                | `taskId`, `newMode`                                                               |
+| [`captureToolUsage`](packages/telemetry/src/TelemetryService.ts:129)                | `TOOL_USED`                  | `taskId`, `tool`                                                                  |
+| [`captureCheckpointCreated`](packages/telemetry/src/TelemetryService.ts:133)        | `CHECKPOINT_CREATED`         | `taskId`                                                                          |
+| [`captureCheckpointDiffed`](packages/telemetry/src/TelemetryService.ts:137)         | `CHECKPOINT_DIFFED`          | `taskId`                                                                          |
+| [`captureCheckpointRestored`](packages/telemetry/src/TelemetryService.ts:141)       | `CHECKPOINT_RESTORED`        | `taskId`                                                                          |
+| [`captureContextCondensed`](packages/telemetry/src/TelemetryService.ts:145)         | `CONTEXT_CONDENSED`          | `taskId`, `isAutomaticTrigger`, `usedCustomPrompt?`                               |
+| [`captureSlidingWindowTruncation`](packages/telemetry/src/TelemetryService.ts:153)  | `SLIDING_WINDOW_TRUNCATION`  | `taskId`                                                                          |
+| [`captureCodeActionUsed`](packages/telemetry/src/TelemetryService.ts:157)           | `CODE_ACTION_USED`           | `actionType`                                                                      |
+| [`capturePromptEnhanced`](packages/telemetry/src/TelemetryService.ts:161)           | `PROMPT_ENHANCED`            | `taskId?`                                                                         |
+| [`captureSchemaValidationError`](packages/telemetry/src/TelemetryService.ts:165)    | `SCHEMA_VALIDATION_ERROR`    | `{schemaName, error}`                                                             |
+| [`captureDiffApplicationError`](packages/telemetry/src/TelemetryService.ts:170)     | `DIFF_APPLICATION_ERROR`     | `taskId`, `consecutiveMistakeCount`                                               |
+| [`captureShellIntegrationError`](packages/telemetry/src/TelemetryService.ts:174)    | `SHELL_INTEGRATION_ERROR`    | `taskId`                                                                          |
+| [`captureConsecutiveMistakeError`](packages/telemetry/src/TelemetryService.ts:178)  | `CONSECUTIVE_MISTAKE_ERROR`  | `taskId`                                                                          |
+| [`captureMcpAsyncCallStarted`](packages/telemetry/src/TelemetryService.ts:188)      | `MCP_ASYNC_CALL_STARTED`     | `taskId`, `{callId, serverName, toolName}`                                        |
+| [`captureMcpAsyncCallCompleted`](packages/telemetry/src/TelemetryService.ts:195)    | `MCP_ASYNC_CALL_COMPLETED`   | `taskId`, `{callId, serverName, toolName, isError, durationMs}`                   |
+| [`captureMcpAsyncCallCancelled`](packages/telemetry/src/TelemetryService.ts:202)    | `MCP_ASYNC_CALL_CANCELLED`   | `taskId`, `{callId, serverName, toolName, durationMs}`                            |
+| [`captureMcpAsyncCallTimedOut`](packages/telemetry/src/TelemetryService.ts:209)     | `MCP_ASYNC_CALL_TIMED_OUT`   | `taskId`, `{callId, serverName, toolName, timeoutSec}`                            |
+| [`captureBudgetExceeded`](packages/telemetry/src/TelemetryService.ts:220)           | `BUDGET_EXCEEDED`            | `taskId`, `{rootTaskId, limitUsd, spentUsd, action, modelId}`                     |
+| [`captureTabShown`](packages/telemetry/src/TelemetryService.ts:237)                 | `TAB_SHOWN`                  | `tab`                                                                             |
+| [`captureModeSettingChanged`](packages/telemetry/src/TelemetryService.ts:245)       | `MODE_SETTINGS_CHANGED`      | `settingName`                                                                     |
+| [`captureCustomModeCreated`](packages/telemetry/src/TelemetryService.ts:254)        | `CUSTOM_MODE_CREATED`        | `modeSlug`, `modeName`                                                            |
+| [`captureMarketplaceItemInstalled`](packages/telemetry/src/TelemetryService.ts:266) | `MARKETPLACE_ITEM_INSTALLED` | `itemId`, `itemType`, `itemName`, `target`, `properties?`                         |
+| [`captureMarketplaceItemRemoved`](packages/telemetry/src/TelemetryService.ts:290)   | `MARKETPLACE_ITEM_REMOVED`   | `itemId`, `itemType`, `itemName`, `target`                                        |
+| [`captureTitleButtonClicked`](packages/telemetry/src/TelemetryService.ts:303)       | `TITLE_BUTTON_CLICKED`       | `button`                                                                          |
+| [`captureTelemetrySettingsChanged`](packages/telemetry/src/TelemetryService.ts:312) | `TELEMETRY_SETTINGS_CHANGED` | `previousSetting`, `newSetting`                                                   |
+| [`captureCodeIndexSegmentDedup`](packages/telemetry/src/TelemetryService.ts:346)    | `CODE_INDEX_SEGMENT_DEDUP`   | `{fileCount, totalBlocks, reused, embedded, deleted}`                             |
+| [`isTelemetryEnabled`](packages/telemetry/src/TelemetryService.ts:323)              | —                            | Returns `true` if any client has telemetry enabled                                |
 
 ### `PostHogTelemetryClient`
 
@@ -140,10 +143,10 @@ The primary Node.js-side telemetry client, backed by [`posthog-node`](https://ww
 
 #### Event Subscription
 
-Uses an **exclusion list** pattern: subscribes to all events **except** `TASK_MESSAGE` and `LLM_COMPLETION` (line 34). These are excluded from PostHog because they contain high-cardinality payload data.
+Uses an **exclusion list** pattern: subscribes to all events **except** `TASK_MESSAGE` and `LLM_COMPLETION` (line 30). These are excluded from PostHog because they contain high-cardinality payload data.
 
 ```typescript
-// From BaseTelemetryClient constructor call (line 31-37):
+// From BaseTelemetryClient constructor call (lines 37-43):
 {
     type: "exclude",
     events: [TelemetryEventName.TASK_MESSAGE, TelemetryEventName.LLM_COMPLETION],
@@ -152,7 +155,7 @@ Uses an **exclusion list** pattern: subscribes to all events **except** `TASK_ME
 
 #### Privacy Filters
 
-The client **filters out git repository properties** from all events via [`isPropertyCapturable()`](packages/telemetry/src/PostHogTelemetryClient.ts:47). Properties excluded:
+The client **filters out git repository properties** from all events via [`isPropertyCapturable()`](packages/telemetry/src/PostHogTelemetryClient.ts:55). Properties excluded:
 
 - `repositoryUrl`
 - `repositoryName`
@@ -160,7 +163,7 @@ The client **filters out git repository properties** from all events via [`isPro
 
 #### Two-Phase Telemetry Gating
 
-[`updateTelemetryState(didUserOptIn)`](packages/telemetry/src/PostHogTelemetryClient.ts:147) implements a two-phase check:
+[`updateTelemetryState(didUserOptIn)`](packages/telemetry/src/PostHogTelemetryClient.ts:155) implements a two-phase check:
 
 1. **VSCode global telemetry level** — must be `"all"` (reads `telemetry.telemetryLevel` from VSCode configuration)
 2. **User opt-in** — the extension-specific `telemetrySetting` must not be `"disabled"`
@@ -169,7 +172,7 @@ If either check fails, telemetry is disabled and `posthog-node` is set to `optOu
 
 #### Error Filtering in `captureException`
 
-[`captureException()`](packages/telemetry/src/PostHogTelemetryClient.ts:77) applies the following filters before sending:
+[`captureException()`](packages/telemetry/src/PostHogTelemetryClient.ts:85) applies the following filters before sending:
 
 1. **402 Payment Required** — filtered out (billing issues are expected)
 2. **429 Rate Limit** — filtered out (rate limits are expected)
@@ -178,8 +181,8 @@ If either check fails, telemetry is disabled and `posthog-node` is set to `optOu
 
 For non-filtered errors, the method:
 
-- Extracts structured properties from [`ApiProviderError`](packages/types/src/telemetry.ts:444) instances (provider, modelId, operation, errorCode)
-- Extracts structured properties from [`ConsecutiveMistakeError`](packages/types/src/telemetry.ts:494) instances (taskId, counts, reason)
+- Extracts structured properties from [`ApiProviderError`](packages/types/src/telemetry.ts:456) instances (provider, modelId, operation, errorCode)
+- Extracts structured properties from [`ConsecutiveMistakeError`](packages/types/src/telemetry.ts:506) instances (taskId, counts, reason)
 - Overrides the error message with the most descriptive nested message (e.g., upstream provider errors from OpenRouter metadata)
 - Appends `$app_version` from the provider's telemetry properties
 - Merges any additional properties passed by the caller
@@ -188,7 +191,7 @@ For non-filtered errors, the method:
 
 **File:** [`packages/telemetry/src/BaseTelemetryClient.ts`](packages/telemetry/src/BaseTelemetryClient.ts)
 
-Abstract base class implementing the [`TelemetryClient`](packages/types/src/telemetry.ts:263) interface. Provides:
+Abstract base class implementing the [`TelemetryClient`](packages/types/src/telemetry.ts:275) interface. Provides:
 
 | Feature                 | Description                                                                                                                                                                   |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -293,12 +296,18 @@ enum TelemetryEventName {
 	SHELL_INTEGRATION_ERROR = "Shell Integration Error",
 	CONSECUTIVE_MISTAKE_ERROR = "Consecutive Mistake Error",
 	CODE_INDEX_ERROR = "Code Index Error",
+	ASSISTANT_AGENT_ERROR = "Assistant Agent Error",
+	TELEMETRY_SETTINGS_CHANGED = "Telemetry Settings Changed",
 	MODEL_CACHE_EMPTY_RESPONSE = "Model Cache Empty Response",
 	READ_FILE_LEGACY_FORMAT_USED = "Read File Legacy Format Used",
 	BUDGET_EXCEEDED = "Budget Exceeded",
+	CODE_INDEX_SEGMENT_DEDUP = "Code Index Segment Dedup",
 
-	// Telemetry meta
-	TELEMETRY_SETTINGS_CHANGED = "Telemetry Settings Changed",
+	// Async MCP tool calls
+	MCP_ASYNC_CALL_STARTED = "MCP Async Call Started",
+	MCP_ASYNC_CALL_COMPLETED = "MCP Async Call Completed",
+	MCP_ASYNC_CALL_CANCELLED = "MCP Async Call Cancelled",
+	MCP_ASYNC_CALL_TIMED_OUT = "MCP Async Call Timed Out",
 }
 ```
 
@@ -346,14 +355,14 @@ The types package provides a suite of error classification utilities used by the
 
 | Function                                                                                 | File Location      | Purpose                                                                                            |
 | ---------------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------- |
-| [`getErrorStatusCode(error)`](packages/types/src/telemetry.ts:335)                       | `telemetry.ts:335` | Extracts HTTP status code from OpenAI SDK errors                                                   |
-| [`getErrorMessage(error)`](packages/types/src/telemetry.ts:385)                          | `telemetry.ts:385` | Extracts most descriptive error message (prioritizes nested metadata → `error.message`)            |
-| [`extractMessageFromJsonPayload(message)`](packages/types/src/telemetry.ts:350)          | `telemetry.ts:350` | Parses JSON-embedded error messages (e.g., `503 {"error":{"message":"..."}}`)                      |
-| [`shouldReportApiErrorToTelemetry(code?, msg?)`](packages/types/src/telemetry.ts:422)    | `telemetry.ts:422` | Returns `false` for expected errors (402, 429, rate limit patterns)                                |
-| [`isApiProviderError(error)`](packages/types/src/telemetry.ts:461)                       | `telemetry.ts:461` | Type guard for `ApiProviderError`                                                                  |
-| [`extractApiProviderErrorProperties(error)`](packages/types/src/telemetry.ts:475)        | `telemetry.ts:475` | Extracts `{provider, modelId, operation, errorCode?}`                                              |
-| [`isConsecutiveMistakeError(error)`](packages/types/src/telemetry.ts:513)                | `telemetry.ts:513` | Type guard for `ConsecutiveMistakeError`                                                           |
-| [`extractConsecutiveMistakeErrorProperties(error)`](packages/types/src/telemetry.ts:527) | `telemetry.ts:527` | Extracts `{taskId, consecutiveMistakeCount, consecutiveMistakeLimit, reason, provider?, modelId?}` |
+| [`getErrorStatusCode(error)`](packages/types/src/telemetry.ts:347)                       | `telemetry.ts:335` | Extracts HTTP status code from OpenAI SDK errors                                                   |
+| [`getErrorMessage(error)`](packages/types/src/telemetry.ts:397)                          | `telemetry.ts:385` | Extracts most descriptive error message (prioritizes nested metadata → `error.message`)            |
+| [`extractMessageFromJsonPayload(message)`](packages/types/src/telemetry.ts:362)          | `telemetry.ts:350` | Parses JSON-embedded error messages (e.g., `503 {"error":{"message":"..."}}`)                      |
+| [`shouldReportApiErrorToTelemetry(code?, msg?)`](packages/types/src/telemetry.ts:434)    | `telemetry.ts:422` | Returns `false` for expected errors (402, 429, rate limit patterns)                                |
+| [`isApiProviderError(error)`](packages/types/src/telemetry.ts:473)                       | `telemetry.ts:461` | Type guard for `ApiProviderError`                                                                  |
+| [`extractApiProviderErrorProperties(error)`](packages/types/src/telemetry.ts:487)        | `telemetry.ts:475` | Extracts `{provider, modelId, operation, errorCode?}`                                              |
+| [`isConsecutiveMistakeError(error)`](packages/types/src/telemetry.ts:525)                | `telemetry.ts:513` | Type guard for `ConsecutiveMistakeError`                                                           |
+| [`extractConsecutiveMistakeErrorProperties(error)`](packages/types/src/telemetry.ts:539) | `telemetry.ts:527` | Extracts `{taskId, consecutiveMistakeCount, consecutiveMistakeLimit, reason, provider?, modelId?}` |
 
 ### `ApiProviderError`
 
@@ -424,10 +433,8 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 | Share → Connect Cloud | `SHARE_CONNECT_TO_CLOUD_CLICKED`        | [`ShareButton.tsx`](webview-ui/src/components/chat/ShareButton.tsx:113)                                  |
 | Marketplace Tab       | `MARKETPLACE_TAB_VIEWED`                | [`App.tsx`](webview-ui/src/App.tsx:224)                                                                  |
 | Marketplace Install   | `MARKETPLACE_INSTALL_BUTTON_CLICKED`    | [`MarketplaceItemCard.tsx`](webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx:82) |
-| Cloud Connect         | `ACCOUNT_CONNECT_CLICKED`               | [`CloudView.tsx`](webview-ui/src/components/cloud/CloudView.tsx:82)                                      |
+| (webview)             | `ACCOUNT_CONNECT_CLICKED`               | — (source file not yet present)                                                                          |
 | Cloud Connect Success | `ACCOUNT_CONNECT_SUCCESS`               | [`useCloudUpsell.ts`](webview-ui/src/hooks/useCloudUpsell.ts:28)                                         |
-| Cloud Logout          | `ACCOUNT_LOGOUT_CLICKED`                | [`CloudView.tsx`](webview-ui/src/components/cloud/CloudView.tsx:122)                                     |
-| Cloud Logout Success  | `ACCOUNT_LOGOUT_SUCCESS`                | [`CloudView.tsx`](webview-ui/src/components/cloud/CloudView.tsx:55)                                      |
 | Upsell Dismissed      | `UPSELL_DISMISSED`                      | [`DismissibleUpsell.tsx`](webview-ui/src/components/common/DismissibleUpsell.tsx:83)                     |
 | Upsell Clicked        | `UPSELL_CLICKED`                        | [`DismissibleUpsell.tsx`](webview-ui/src/components/common/DismissibleUpsell.tsx:146)                    |
 | Error Boundary        | `error_boundary_caught_error`           | [`ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx:41)                                    |
@@ -436,45 +443,17 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 
 ---
 
-## Cloud Telemetry Client
-
-**File:** [`packages/cloud/src/TelemetryClient.ts`](packages/cloud/src/TelemetryClient.ts)
-
-A secondary telemetry client that sends events to the **Shofer Cloud API** when the user is authenticated. This is separate from PostHog and is used for cloud-side analytics and message backfill for shared tasks.
-
-### Key Characteristics
-
-- **Always reports as enabled** — [`isTelemetryEnabled()`](packages/cloud/src/TelemetryClient.ts:80) always returns `true`
-- **Requires authentication** — events are only sent if a valid session token exists
-- **Uses Fetch API** — sends events as JSON `POST` to `/api/events`
-- **Retry queue** — uses [`RetryQueue`](packages/cloud/src/retry-queue/) for network resilience (500-level and 429 responses are queued for retry)
-- **Task message backfill** — [`backfillMessages()`](packages/cloud/src/TelemetryClient.ts:202) uploads historical messages for shared tasks
-- **Event subscription** — uses **exclusion list** (same as PostHog client: excludes `TASK_MESSAGE` and `LLM_COMPLETION`), but also gates `TASK_MESSAGE` behind the task sync toggle
-
-### Registration
-
-Registered in [`extension.ts`](src/extension.ts:233-236) after the cloud service initializes:
-
-```typescript
-if (cloudService.telemetryClient) {
-	TelemetryService.instance.register(cloudService.telemetryClient)
-}
-```
-
----
-
 ## Telemetry Flow & Initialization
 
 ### Extension Activation Sequence
 
-1. **Extension activates** → [`extension.ts:activate()`](src/extension.ts:81)
-2. **Network proxy** initialized (debug mode only) → [`extension.ts:91`](src/extension.ts:91)
-3. **Settings migrated** → [`extension.ts:97`](src/extension.ts:97)
-4. **TelemetryService created** as singleton → [`extension.ts:100`](src/extension.ts:100)
-5. **PostHogTelemetryClient registered** → [`extension.ts:103`](src/extension.ts:103)
-6. **ShoferProvider created** → registered as properties provider via `TelemetryService.instance.setProvider(this)` → [`ShoferProvider.ts:252`](src/core/webview/ShoferProvider.ts:252)
-7. **Cloud service initializes** → its `CloudTelemetryClient` is registered → [`extension.ts:235`](src/extension.ts:235)
-8. **User telemetry preference** sent from webview → `updateTelemetryState(isOptedIn)` called → [`webviewMessageHandler.ts:656`](src/core/webview/webviewMessageHandler.ts:656)
+1. **Extension activates** → `extension.ts:activate()` (startup)
+2. **Network proxy** initialized (debug mode only) → `extension.ts` (startup)
+3. **Settings migrated** → `extension.ts` (startup)
+4. **TelemetryService created** as singleton → `extension.ts` (startup)
+5. **PostHogTelemetryClient registered** → `extension.ts` (startup)
+6. **ShoferProvider created** → registered as properties provider via `TelemetryService.instance.setProvider(this)` → [`ShoferProvider.ts:268`](src/core/webview/ShoferProvider.ts:268)
+7. **User telemetry preference** sent from webview → `updateTelemetryState(isOptedIn)` called → [`webviewMessageHandler.ts:2462`](src/core/webview/webviewMessageHandler.ts:2462)
 
 ### Event Flow
 
@@ -487,10 +466,6 @@ Caller (e.g., Task.ts, Provider code)
   │     │     ├── isEventCapturable(event)? → check exclusion list
   │     │     ├── getEventProperties() → enrich with provider properties
   │     │     └── posthog.capture(distinctId, event, properties)
-  │     └── CloudTelemetryClient.capture()
-  │           ├── isEventCapturable(event)? → check exclusion list + auth
-  │           └── fetch(POST /api/events)
-  │
   └── TelemetryService.instance.captureException(error, props)
         └── PostHogTelemetryClient.captureException()
               ├── isTelemetryEnabled()?
@@ -532,6 +507,7 @@ Caller (e.g., Task.ts, Provider code)
 | `CONTEXT_CONDENSED`         | Context condensation      | `taskId`, `isAutomaticTrigger`, `usedCustomPrompt?`                 |
 | `SLIDING_WINDOW_TRUNCATION` | Sliding window truncation | `taskId`                                                            |
 | `BUDGET_EXCEEDED`           | Cost limit enforcement    | `taskId`, `rootTaskId`, `limitUsd`, `spentUsd`, `action`, `modelId` |
+| `CODE_INDEX_SEGMENT_DEDUP`  | Code-index file watcher   | `{fileCount, totalBlocks, reused, embedded, deleted}`               |
 
 ### UI & Interaction Events
 
@@ -573,8 +549,18 @@ Caller (e.g., Task.ts, Provider code)
 | `SHELL_INTEGRATION_ERROR`     | Shell integration              | `taskId`                                         |
 | `CONSECUTIVE_MISTAKE_ERROR`   | Mistake limit reached          | `taskId`                                         |
 | `CODE_INDEX_ERROR`            | Code indexing service          | `error` (message), plus service-specific context |
+| `ASSISTANT_AGENT_ERROR`       | Assistant agent service        | `error` (message), service-specific context      |
 | `MODEL_CACHE_EMPTY_RESPONSE`  | Model cache                    | —                                                |
 | `error_boundary_caught_error` | React error boundary (webview) | `error` (message), `componentStack`              |
+
+### MCP Async Call Events
+
+| Event                      | Where Emitted                        | Properties                                                            |
+| -------------------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| `MCP_ASYNC_CALL_STARTED`   | `call_mcp_tool_async` dispatch       | `taskId`, `callId`, `serverName`, `toolName`                          |
+| `MCP_ASYNC_CALL_COMPLETED` | Async MCP call finishes              | `taskId`, `callId`, `serverName`, `toolName`, `isError`, `durationMs` |
+| `MCP_ASYNC_CALL_CANCELLED` | `cancel_tasks` during async MCP call | `taskId`, `callId`, `serverName`, `toolName`, `durationMs`            |
+| `MCP_ASYNC_CALL_TIMED_OUT` | Async MCP call exceeds timeout       | `taskId`, `callId`, `serverName`, `toolName`, `timeoutSec`            |
 
 ---
 
@@ -585,7 +571,7 @@ Caller (e.g., Task.ts, Provider code)
 - **Code or file contents** — never sent in any telemetry event
 - **AI prompts or responses** — excluded from telemetry
 - **Personally identifiable information** — not collected
-- **Git repository URLs/names/branches** — filtered out by [`PostHogTelemetryClient.isPropertyCapturable()`](packages/telemetry/src/PostHogTelemetryClient.ts:47)
+- **Git repository URLs/names/branches** — filtered out by [`PostHogTelemetryClient.isPropertyCapturable()`](packages/telemetry/src/PostHogTelemetryClient.ts:55)
 
 ### What IS collected
 
@@ -618,8 +604,8 @@ The following error types are **intentionally not reported** to telemetry to avo
 
 | Error Type                         | Filter                                                            |
 | ---------------------------------- | ----------------------------------------------------------------- |
-| HTTP 402 (Payment Required)        | [`EXPECTED_API_ERROR_CODES`](packages/types/src/telemetry.ts:278) |
-| HTTP 429 (Rate Limit)              | [`EXPECTED_API_ERROR_CODES`](packages/types/src/telemetry.ts:278) |
+| HTTP 402 (Payment Required)        | [`EXPECTED_API_ERROR_CODES`](packages/types/src/telemetry.ts:290) |
+| HTTP 429 (Rate Limit)              | [`EXPECTED_API_ERROR_CODES`](packages/types/src/telemetry.ts:290) |
 | Messages starting with `429`       | Regex pattern `/^429\b/`                                          |
 | Messages containing `"rate limit"` | Regex pattern `/rate limit/i`                                     |
 
@@ -649,7 +635,7 @@ disabled ──► enabled (user re-enables)
 When telemetry is **turned OFF**, the `TELEMETRY_SETTINGS_CHANGED` event is fired **before** disabling — capturing the last event. When telemetry is **turned ON**, the event is fired **after** enabling — ensuring it's actually sent.
 
 ```typescript
-// From webviewMessageHandler.ts:2510-2524
+// From webviewMessageHandler.ts:2462-2476
 // If turning telemetry OFF, fire event BEFORE disabling
 if (wasPreviouslyOptedIn && !isOptedIn) {
 	TelemetryService.instance.captureTelemetrySettingsChanged(previousSetting, telemetrySetting)
@@ -670,7 +656,7 @@ if (!wasPreviouslyOptedIn && isOptedIn) {
 
 | File                                                                                                         | Integration                                                                                                                       |
 | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| [`extension.ts`](src/extension.ts)                                                                           | Initializes `TelemetryService`, registers `PostHogTelemetryClient` and `CloudTelemetryClient`                                     |
+| [`extension.ts`](src/extension.ts)                                                                           | Initializes `TelemetryService` and registers `PostHogTelemetryClient`                                                             |
 | [`core/webview/ShoferProvider.ts`](src/core/webview/ShoferProvider.ts)                                       | Implements `TelemetryPropertiesProvider.getTelemetryProperties()`; registers as provider; CSP allows `*.posthog.com`              |
 | [`core/webview/webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)                         | Handles `telemetrySetting` message from webview; calls `updateTelemetryState`                                                     |
 | [`core/task/Task.ts`](src/core/task/Task.ts)                                                                 | Emits task lifecycle events, tool usage, LLM completions, budget exceeded, consecutive mistakes, tool result ID validation errors |
@@ -727,7 +713,6 @@ Provider implementations capture errors via `TelemetryService.instance.captureEx
 | [`App.tsx`](webview-ui/src/App.tsx)                                                                   | Initializes `telemetryClient` on state hydration |
 | [`ModeSelector.tsx`](webview-ui/src/components/chat/ModeSelector.tsx)                                 | `MODE_SELECTOR_OPENED`                           |
 | [`ShareButton.tsx`](webview-ui/src/components/chat/ShareButton.tsx)                                   | Share interaction events                         |
-| [`CloudView.tsx`](webview-ui/src/components/cloud/CloudView.tsx)                                      | Account connect/logout events                    |
 | [`useCloudUpsell.ts`](webview-ui/src/hooks/useCloudUpsell.ts)                                         | `ACCOUNT_CONNECT_SUCCESS`                        |
 | [`DismissibleUpsell.tsx`](webview-ui/src/components/common/DismissibleUpsell.tsx)                     | Upsell interaction events                        |
 | [`MarketplaceItemCard.tsx`](webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx) | Marketplace install events                       |
@@ -744,7 +729,6 @@ Tests for the telemetry package are in:
 
 - [`packages/telemetry/src/__tests__/PostHogTelemetryClient.test.ts`](packages/telemetry/src/__tests__/PostHogTelemetryClient.test.ts) — covers event capture, exception filtering, property merging, git property filtering, telemetry state management, and error filtering (402/429)
 - [`packages/types/src/__tests__/telemetry.test.ts`](packages/types/src/__tests__/telemetry.test.ts) — covers all error utility functions, `ApiProviderError`, `ConsecutiveMistakeError`
-- [`packages/cloud/src/__tests__/TelemetryClient.test.ts`](packages/cloud/src/__tests__/TelemetryClient.test.ts) — covers cloud telemetry client
 
 Throughout the extension host test suite, `@shofer/telemetry` is mocked with a consistent pattern:
 
@@ -776,9 +760,6 @@ pnpm --filter @shofer/telemetry test
 
 # Test telemetry types
 pnpm --filter @shofer/types test -- src/__tests__/telemetry.test.ts
-
-# Test cloud telemetry client
-pnpm --filter @shofer/cloud test -- src/__tests__/TelemetryClient.test.ts
 
 # Test webview telemetry
 pnpm --filter webview-ui test -- src/utils/__tests__/TelemetryClient.spec.ts

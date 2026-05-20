@@ -49,7 +49,7 @@ Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/p
 
 ### Lifecycle
 
-- **Creation:** `getTaskDirectoryPath()` in [`storage.ts`](../src/utils/storage.ts) creates the per-task directory lazily. [`FileContextTracker.captureOriginal()`](../src/core/context-tracking/FileContextTracker.ts) writes `base/<relPath>` + `originals/<sha1>.json` on first Shofer edit (idempotent). [`captureFinal()`](../src/core/context-tracking/FileContextTracker.ts) writes `final/<relPath>` + `finals/<sha1>.json` after every Shofer write.
+- **Creation:** `getTaskDirectoryPath(globalStoragePath, taskId)` in [`storage.ts`](../src/utils/storage.ts) creates the per-task directory. [`FileContextTracker.captureOriginal()`](../src/core/context-tracking/FileContextTracker.ts) writes `base/<relPath>` + `originals/<sha1>.json` on first Shofer edit (idempotent). [`captureFinal()`](../src/core/context-tracking/FileContextTracker.ts) writes `final/<relPath>` + `finals/<sha1>.json` after every Shofer write.
 - **Deletion:** When the user deletes a task, [`ShoferProvider.deleteTaskWithId()`](../src/core/webview/ShoferProvider.ts) removes the entire `<globalStorage>/tasks/<taskId>/` directory with `fs.rm({ recursive: true, force: true })` and deletes the shadow git branch `shofer-<taskId>`. All child subtasks are cleaned up recursively.
 - **Partial deletion:** `removeFinalSnapshot()` deletes individual `final/` and `finals/` entries when the user accepts a file change. `overwriteOriginalBase()` promotes the final state to the new baseline.
 
@@ -57,15 +57,15 @@ Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/p
 
 The panel and the `get_changed_files` tool show **only files Shofer edited at
 least once during the current Task**. Files modified solely by the user
-(`user_edited` events, or files appearing in the checkpoint diff that Shofer
-never touched) are excluded.
+(`user_edited` events) that Shofer never touched are excluded.
 
 Consequences:
 
 - The candidate paths come from `FileContextTracker.getFilesEditedByRoo()`
   (authoritative for "who touched what").
-- The checkpoint diff is used only to compute **net state** for those
-  candidate paths — it answers "is this file currently different from task
+- Net state for each candidate is computed by comparing current on-disk
+  content against the per-task `base/<relPath>` copy via hash comparison
+  and unified diff — it answers "is this file currently different from task
   start?", not "which files changed?".
 - A file Shofer edited but whose disk content currently matches the task's
   base is **dropped** from the list regardless of whether a final
@@ -76,36 +76,34 @@ Consequences:
 
 ## Unified source of truth
 
-All consumers go through one async API:
-[`ChangedFilesService`](../src/core/file-changes/ChangedFilesService.ts).
+All consumers go through one async API exported from
+[`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts).
 
 ```ts
 type ChangedFileEntry = {
-    path: string                  // workspace-relative POSIX path
-    insertions: number            // 0 if binary, unknown, or reverted
-    deletions: number             // 0 if binary, unknown, or reverted
-    binary: boolean
-    state: "modified" | "added" | "deleted" | "reverted"
-    source: "checkpoint" | "tracker"
-    hasOriginalContent: boolean   // diff/revert against original is possible
-    hasFinalContent: boolean      // a "Shofer-produced" final snapshot exists → Redo possible
+	path: string // workspace-relative POSIX path
+	insertions: number // 0 if binary, unknown, or reverted
+	deletions: number // 0 if binary, unknown, or reverted
+	binary: boolean
+	state: "modified" | "added" | "deleted" | "reverted"
+	source: "working"
+	hasOriginalContent: boolean // diff/revert against original is possible
+	hasFinalContent: boolean // a "Shofer-produced" final snapshot exists → Redo possible
 }
 
 type ChangedFilesPayload = {
-    taskId: string
-    entries: ChangedFileEntry[]
-    backend: "checkpoint" | "tracker" | "none"
-    degraded: boolean
-    reason?: string
+	taskId: string
+	entries: ChangedFileEntry[]
+	backend: "working" | "none"
 }
 
-getChangedFiles(task): Promise<ChangedFilesPayload>
-getOriginalContent(task, relPath): Promise<string | null>
-getFinalContent(task, relPath): Promise<string | null>
-restoreFile(task, relPath): Promise<void>
-restoreAll(task): Promise<void>
-acceptFile(task, relPath): Promise<void>
-acceptAll(task): Promise<void>
+export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload>
+export async function getOriginalContent(task: Task, relPath: string): Promise<string | null>
+export async function getFinalContent(task: Task, relPath: string): Promise<string | null>
+export async function restoreFile(task: Task, relPath: string): Promise<void>
+export async function restoreAll(task: Task): Promise<void>
+export async function acceptFile(task: Task, relPath: string): Promise<void>
+export async function acceptAll(task: Task): Promise<void>
 ```
 
 ### Operation primitives
@@ -120,28 +118,20 @@ acceptAll(task): Promise<void>
 | `acceptFile`         | Read current disk content → `base/<relPath>`, update originals hash, then `removeFinalSnapshot` — file disappears from panel |
 | `acceptAll`          | Iterate `acceptFile` over all candidates                                                                                     |
 
-### Backend selection
+### How net state is computed
 
-Both backends start from the same candidate set
-(`FileContextTracker.getFilesEditedByRoo(taskId)`). They differ only in how
-they compute _net state_.
+`getChangedFiles` iterates the candidate set from
+`FileContextTracker.getFilesEditedByRoo(taskId)` and for each candidate:
 
-1. **Preferred — checkpoint backend.** When `getCheckpointService(task)`
-   returns an initialized service with a valid `baseHash`, call
-   `service.getDiffStat({ from: baseHash })` and intersect with the
-   candidate set.
-2. **Fallback — tracker backend.** When checkpoints are unavailable
-   (disabled, nested-git error, no `git` binary, protected workspace path),
-   compare current disk content of each candidate against the per-task
-   original snapshot. If hashes match (or both indicate "absent") the
-   candidate is treated as matching base.
+- Reads the original snapshot (kind + hash) and current on-disk content.
+- Compares the disk content hash against the captured original hash.
+- Drops candidates whose current state matches the original (zero net change).
+- Computes insertions/deletions via unified diff of the captured base copy
+  against current disk content.
+- Candidates whose current disk state matches base are dropped even when
+  a final snapshot exists — zero net change means no effective diff to show.
 
-In **both** backends, candidates whose current disk state matches base are
-emitted as `state: "reverted"` when a final snapshot exists, and dropped
-otherwise.
-
-`backend` and `degraded` are surfaced to the UI so it can show a "limited
-mode" badge in the panel header when `backend === "tracker"`.
+The backend is always `"working"` — there is no git dependency.
 
 ### Original- and final-content capture
 
@@ -158,12 +148,13 @@ mode" badge in the panel header when `backend === "tracker"`.
 
 1. The text snapshot (or `""` for `kind: "absent"`, so the diff editor
    shows additions cleanly), if present.
-2. Otherwise, when the checkpoint backend is active and initialized,
-   `git show <baseHash>:<path>` from the shadow git, returning `""` when
-   the path did not exist at base.
+2. Falls back to reading `base/<relPath>` directly via
+   `FileContextTracker.getBaseContent()` when the metadata snapshot is
+   missing but the base copy exists (e.g. `captureOriginal` wrote the
+   file copy before the snapshot write failed).
 3. `null` only when neither source has any base content.
 
-This makes click-to-diff and revert work uniformly across backends, and
+This makes click-to-diff and revert work without any git dependency, and
 crucially also works for files Shofer edited via tool paths that bypass
 `DiffViewProvider`'s snapshot hook (e.g. plain `write_to_file` for new
 files, or the `file` tool's `rm`/`mv`).
@@ -221,9 +212,7 @@ query. The host handler resolves original content via
 shadow git as described above.
 
 The row's click is disabled only when `!entry.hasOriginalContent`, which
-in practice means tracker backend with a missing snapshot — checkpoint
-entries always advertise `hasOriginalContent: true` because the shadow
-git can always serve the base.
+in practice means a missing original snapshot.
 
 ### Per-file Revert / Accept / Redo
 
@@ -233,9 +222,7 @@ git can always serve the base.
    `final` content the user has edited the file after Shofer, so a modal
    warning is shown and the action proceeds only on confirmation.
 2. Calls `ChangedFilesService.restoreFile(task, path)`:
-    - Checkpoint backend: per-file checkout from `baseHash` via the shadow
-      git, plus an explicit `unlink` when the path did not exist at base.
-    - Tracker backend: writes the snapshot back to disk, or `unlink`s when
+    - Writes the original snapshot content back to disk, or `unlink`s when
       the snapshot says "absent".
 3. Does **not** recapture `final` — the last Shofer-produced state is
    preserved so Redo can re-apply it.
@@ -267,10 +254,8 @@ Two header buttons next to the file count.
 
 - **Accept all** reads current disk content for every candidate, copies it
   to the base, and removes all final snapshots (persistent).
-- **Revert all** shows a modal confirmation. On confirm:
-    - Checkpoint backend: single `service.restoreCheckpoint(baseHash)` —
-      atomic, fast.
-    - Tracker backend: iterate `restoreFile` over all candidates.
+- **Revert all** shows a modal confirmation. On confirm, iterates
+  `restoreFile` over all candidates.
 
 After revert-all the panel does not empty: every still-tracked entry
 shifts to `state: "reverted"` so Redo remains reachable for each.
@@ -305,32 +290,13 @@ mount and on task switch via `changedFiles/get`.
 
 ## Operating without a git repo / without checkpoints
 
-The shadow checkpoint service does **not** require the workspace to be a
-git repo — it creates its own shadow `.git` under
-`<globalStorage>/checkpoints/<workspaceHash>/`. So "no git repo in workspace"
-is **not** a blocker on its own. Real blockers for the checkpoint backend:
+The `ChangedFilesService` has **no** git dependency — it uses only the
+per-task working directories (`base/` and `final/`). The shadow checkpoint
+service (used only for user-initiated "restore to checkpoint" from the chat
+UI) is a separate concern and does **not** affect file change tracking.
 
-1. `git` binary missing on PATH.
-2. Workspace path is a protected location (`$HOME`, Desktop, Documents,
-   Downloads).
-3. Workspace contains a nested `.git` directory.
-4. User disabled checkpoints in settings.
-
-When any of these holds, the unified API automatically falls back to the
-tracker backend.
-
-| Feature                       | Checkpoint backend                                                               | Tracker backend                                                            |
-| ----------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Net file list                 | full (creates+deletes cancel, renames detected)                                  | partial (renames appear as add+delete; binary detection by extension only) |
-| Scrollable list               | identical                                                                        | identical                                                                  |
-| Click-to-diff                 | original from `git show baseHash:<path>`                                         | original from per-task snapshot                                            |
-| Per-file revert               | per-file checkout from `baseHash` + workspace unlink for "did not exist at base" | overwrite file with snapshot, or unlink if snapshot says "absent"          |
-| Per-file redo                 | re-apply `final` snapshot                                                        | identical                                                                  |
-| Revert-all                    | single `restoreCheckpoint(baseHash)`                                             | iterate `restoreFile`                                                      |
-| `state: "reverted"` retention | no (zero-net-change files are dropped)                                           | no                                                                         |
-
-The only meaningfully degraded feature is rename tracking. The UI shows a
-small "limited mode" badge when `backend === "tracker"`.
+This means file change tracking works identically in every workspace type:
+no git repo, nested git repo, protected paths — all function the same way.
 
 ## Multi-task same-file editing
 
@@ -365,19 +331,18 @@ The shadow-git checkpoint service itself is **preserved** — it still powers us
 
 ## Key files
 
-| File                                                                                        | Role                                                                                                                                                            |
-| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts)                 | Public API: `getChangedFiles`, `getOriginalContent`, `getFinalContent`, `restoreFile`, `restoreAll`, `acceptFile`, `acceptAll`                                  |
-| [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts)               | Snapshot capture: `captureOriginal`, `captureFinal`, `getBaseContent`, `getFinalContent`, `overwriteOriginalBase`, `removeFinalSnapshot`, `getFilesEditedByRoo` |
-| [`FileChangesPanel.tsx`](../webview-ui/src/components/chat/FileChangesPanel.tsx)            | Webview UI: scrollable file list with diff/revert/accept buttons                                                                                                |
-| [`DiffViewProvider.ts`](../src/integrations/editor/DiffViewProvider.ts)                     | Edit infrastructure: `open()` and `saveDirectly()` both call `captureOriginal` before mutation                                                                  |
-| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                  | `changedFiles/*` IPC handlers                                                                                                                                   |
-| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                | `scheduleChangedFilesUpdate(taskId)` debouncer, `pushChangedFilesUpdate()`, and task deletion with directory cleanup                                            |
-| [`RooOriginalContentProvider.ts`](../src/integrations/editor/RooOriginalContentProvider.ts) | Virtual `shofer-original:` documents for click-to-diff                                                                                                          |
-| [`extension.ts`](../src/extension.ts)                                                       | Registers the `shofer-original:` content provider scheme                                                                                                        |
-| [`storage.ts`](../src/utils/storage.ts)                                                     | `getTaskDirectoryPath()` — resolves and creates `<globalStorage>/tasks/<taskId>/`                                                                               |
-| [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts)      | Shadow git repo management, `deleteTask()` for branch cleanup on task deletion                                                                                  |
-| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                | Types: `ChangedFileEntry`, `ChangedFilesPayload`                                                                                                                |
+| File                                                                                   | Role                                                                                                                                                            |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts)            | Public API: `getChangedFiles`, `getOriginalContent`, `getFinalContent`, `restoreFile`, `restoreAll`, `acceptFile`, `acceptAll`                                  |
+| [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts)          | Snapshot capture: `captureOriginal`, `captureFinal`, `getBaseContent`, `getFinalContent`, `overwriteOriginalBase`, `removeFinalSnapshot`, `getFilesEditedByRoo` |
+| [`FileChangesPanel.tsx`](../webview-ui/src/components/chat/FileChangesPanel.tsx)       | Webview UI: scrollable file list with diff/revert/accept buttons                                                                                                |
+| [`DiffViewProvider.ts`](../src/integrations/editor/DiffViewProvider.ts)                | Edit infrastructure: `open()` and `saveDirectly()` both call `captureOriginal` before mutation                                                                  |
+| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)             | `changedFiles/*` IPC handlers                                                                                                                                   |
+| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                           | `scheduleChangedFilesUpdate(taskId)` debouncer, `pushChangedFilesUpdate()`, and task deletion with directory cleanup                                            |
+| [`extension.ts`](../src/extension.ts)                                                  | Registers the `shofer-original:` content provider scheme (anonymous class implementing `TextDocumentContentProvider`)                                           |
+| [`storage.ts`](../src/utils/storage.ts)                                                | `getTaskDirectoryPath()` — resolves and creates `<globalStorage>/tasks/<taskId>/`                                                                               |
+| [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts) | Shadow git repo management, `deleteTask()` for branch cleanup on task deletion                                                                                  |
+| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)           | Types: `ChangedFileEntry`, `ChangedFilesPayload`                                                                                                                |
 
 ## i18n keys
 
@@ -386,9 +351,10 @@ Webview (`webview-ui/src/i18n/locales/<lang>/chat.json`):
 - `chat:fileChangesInConversation.header`
 - `chat:fileChanges.acceptAll`, `chat:fileChanges.revertAll`
 - `chat:fileChanges.accept`, `chat:fileChanges.revert`, `chat:fileChanges.redo`
-- `chat:fileChanges.diffUnavailable`, `chat:fileChanges.diffTitle`
-- `chat:fileChanges.reviewedSection`
-- `chat:fileChanges.limitedMode`, `chat:fileChanges.limitedModeTooltip`
+- `chat:fileChanges.diffUnavailable`
+- `chat:fileChanges.revertConfirmUserEdits`, `chat:fileChanges.revertConfirmYes`
+- `chat:fileChanges.revertAllConfirm`
+- `chat:fileChanges.blockedTaskRunning`
 
 Host (`src/i18n/locales/<lang>/common.json`):
 

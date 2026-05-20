@@ -74,7 +74,7 @@ const currentTaskRuntimeState = useMemo(
 
 // Stop is also available whenever the task runtime reports it as "running",
 // covering the auto-approved tool-execution window.
-if (currentTaskRuntimeState === "running") return true
+if (currentTaskRuntimeState?.lifecycle === "running") return true
 ```
 
 This guarantees that **Stop is always visible while the agent is doing work**.

@@ -77,17 +77,6 @@ incomplete todo items.
 
 When enabled, the `new_task` tool requires a `todos` parameter.
 
-### `shofer.useAgentRules`
-
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `true`    |
-| Scope   | window    |
-
-Enable loading `AGENTS.md` files for agent-specific rules. See
-[agent-rules.org](https://agent-rules.org/).
-
 ---
 
 ## API & Providers
@@ -291,3 +280,14 @@ Default per-root-task USD budget cap applied to all new tasks. When
 
 List of native tool names to globally disable. Tools in this list are
 excluded from prompt generation and rejected at execution time.
+
+### `shofer.useAgentRules`
+
+```jsonc
+{
+	"shofer.useAgentRules": true,
+}
+```
+
+Enable loading `AGENTS.md` files for agent-specific rules. See
+[agent-rules.org](https://agent-rules.org/). Defaults to `true`.

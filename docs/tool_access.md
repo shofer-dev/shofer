@@ -102,8 +102,9 @@ A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
     `read` group it gets ONLY `mcp--shofer--web_search` — not `read_file`,
     `grep_search`, etc.
 
-Group definitions live in [`src/shared/tools.ts`](../src/shared/tools.ts) as
-`TOOL_GROUPS`, which maps each group name to the concrete tool IDs it grants.
+Group definitions are in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts) as
+`TOOL_GROUPS`, which maps each group name to the concrete tool IDs it grants,
+and are re-exported from [`src/shared/tools.ts`](../src/shared/tools.ts).
 
 ### `tools_allowed`
 
@@ -123,7 +124,7 @@ entirely — this is what project-level read-only modes such as `reviewer` and
 A flat list of tool IDs that are unconditionally forbidden, regardless of
 whether `groups` or `tools_allowed` would otherwise grant them. This is the
 right field for "subtract one tool from an otherwise broad permission set"
-patterns — e.g. grant the `command` group but deny `execute_command`.
+patterns — e.g. grant the `execute` group but deny `execute_command`.
 
 ## Worked examples
 
@@ -132,7 +133,7 @@ patterns — e.g. grant the `command` group but deny `execute_command`.
 ```yaml
 - slug: code
   name: 💻 Code
-  groups: [read, edit, command, mcp, browser]
+  groups: [read, write, execute, mcp, browser]
 ```
 
 Result: every tool in any of those five groups is allowed. No
@@ -143,7 +144,7 @@ Result: every tool in any of those five groups is allowed. No
 ```yaml
 - slug: reviewer
   name: 👀 Reviewer
-  tools_allowed: [read_file, grep_search, list_files, list_code_definition_names]
+  tools_allowed: [read_file, grep_search, list_files, lsp_search]
 ```
 
 Result: only those four tool IDs are allowed. The mode has no `groups` array,
@@ -163,11 +164,11 @@ Result: every tool in `read`, plus `new_task`. The two sources are unioned.
 
 ```yaml
 - slug: safe-coder
-  groups: [read, edit, command]
+  groups: [read, write, execute]
   tools_denied: [execute_command]
 ```
 
-Result: every tool in `read`, `edit`, and `command` **except**
+Result: every tool in `read`, `write`, and `execute` **except**
 `execute_command`. The deny-list applies on top of the union and cannot be
 overridden.
 

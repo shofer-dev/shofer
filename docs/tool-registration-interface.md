@@ -46,12 +46,12 @@ Alternatively, providers can be set in `settings.json`:
 {
 	"shofer.privateToolProviders": {
 		"vscode-tools": {
-			"getDefinitionsCommand": "shofer.vscodeTools.getDefinitions",
-			"invokeToolCommand": "shofer.vscodeTools.invokeTool"
+			"getDefinitionsCommand": "arkware.vscodeTools.getDefinitions",
+			"invokeToolCommand": "arkware.vscodeTools.invokeTool"
 		},
 		"browser-tools": {
-			"getDefinitionsCommand": "shofer.browserTools.getDefinitions",
-			"invokeToolCommand": "shofer.browserTools.invokeTool"
+			"getDefinitionsCommand": "arkware.browserTools.getDefinitions",
+			"invokeToolCommand": "arkware.browserTools.invokeTool"
 		}
 	}
 }
@@ -72,7 +72,7 @@ interface ToolDefinition {
 	/** JSON Schema for the tool's input parameters. */
 	inputSchema: object
 	/** Optional tool group for mode filtering. Falls back to provider-level config. */
-	group?: "read" | "write" | "execute" | "mcp" | "mode" | "browser" | "uncategorized"
+	group?: "read" | "write" | "execute" | "browser" | "mcp" | "mode" | "subtasks" | "questions" | "uncategorized"
 }
 ```
 
@@ -103,7 +103,7 @@ Example provider config in `settings.json`:
 
 ```json
 {
-	"shofer.vscodeTools.toolGroups": {
+	"shofer.vscode-tools.toolGroups": {
 		"ide_file_read": "read",
 		"ide_file_open": "read",
 		"ide_file_reveal_in_explorer": "read"
@@ -118,8 +118,8 @@ for the reference implementation.
 
 1. Tools are stored in a private registry (`registerIdeTool()`).
 2. Two VS Code commands expose them:
-    - `shofer.vscodeTools.getDefinitions` → returns `getAllDefinitions()`
-    - `shofer.vscodeTools.invokeTool` → calls `invokeTool(name, input)` and returns `{ content, is_error? }`
+    - `arkware.vscodeTools.getDefinitions` → returns `getAllDefinitions()`
+    - `arkware.vscodeTools.invokeTool` → calls `invokeTool(name, input)` and returns `{ content, is_error? }`
 3. The provider is registered via config.
 
 ## Migration: vscode.lm.tools → Private Channel
