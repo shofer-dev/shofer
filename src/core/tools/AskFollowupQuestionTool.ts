@@ -54,6 +54,19 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// via answer_subtask_question.
 			const provider = task.providerRef?.deref()
 			if (provider && task.parentTaskId && task.isBackgroundTask) {
+				// Finalize the streaming "tool" ChatRow before routing to the
+				// parent. This tool is in the "questions" group and auto-approved
+				// for background children (which inherit alwaysAllow* settings),
+				// so askApproval returns immediately while rendering a ChatRow entry.
+				const completeMessage = JSON.stringify({
+					tool: "askFollowupQuestion",
+					question,
+				})
+				const didApprove = await callbacks.askApproval("tool", completeMessage)
+				if (!didApprove) {
+					return
+				}
+
 				// Flip the parent's view of this child to "waiting_for_parent"
 				// so check_task_status / list_background_tasks reflect reality.
 				const parentInstance = provider.taskManager.getManagedTaskInstance(task.parentTaskId)
