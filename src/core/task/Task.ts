@@ -1472,7 +1472,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async updateShoferMessage(message: ShoferMessage) {
 		const provider = this.providerRef.deref()
-		await provider?.postMessageToWebview({ type: "messageUpdated", shoferMessage: message })
+		// Only push messageUpdated to the webview when this task is the focused
+		// task.  Background tasks and non-focused tasks do not have their
+		// messages in the webview's shoferMessages array (the state pushes
+		// from addToShoferMessages always carry the focused task's messages),
+		// so a targeted update would land on a timestamp the webview doesn't
+		// have — producing a console warning and a dropped update.
+		if (provider && provider.taskManager?.getFocusedTaskId() === this.taskId) {
+			await provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: message })
+		}
 		this.emit(ShoferEventName.Message, { action: "updated", message })
 	}
 
