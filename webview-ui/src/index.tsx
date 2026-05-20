@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 
 import "./index.css"
 import App from "./App"
+import ErrorBoundary from "./components/ErrorBoundary"
 import "../node_modules/@vscode/codicons/dist/codicon.css"
 
 import { getHighlighter } from "./utils/highlighter"
@@ -12,6 +13,8 @@ getHighlighter().catch((error: Error) => console.error("Failed to initialize Shi
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
-		<App />
+		<ErrorBoundary>
+			<App />
+		</ErrorBoundary>
 	</StrictMode>,
 )
