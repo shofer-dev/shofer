@@ -393,6 +393,15 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.server_name}']`
 					case "access_mcp_resource":
 						return `[${block.name} for '${block.params.server_name}']`
+					case "call_mcp_tool_async":
+						return `[${block.name} for '${block.params.server_name}/${block.params.tool_name}']`
+					case "check_mcp_call_status":
+						return `[${block.name} for '${block.params.call_id}']`
+					case "wait_for_mcp_call": {
+						const ids = block.params.call_ids
+						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
+						return `[${block.name} for '${idsStr ?? ""}']`
+					}
 					case "ask_followup_question":
 						return `[${block.name} for '${block.params.question}']`
 					case "attempt_completion":
@@ -425,7 +434,17 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.command}'${block.params.args ? ` with args: ${block.params.args}` : ""}]`
 					case "check_task_status":
 						return `[${block.name} for '${block.params.task_id}']`
-					case "wait_for_task":
+					case "wait_for_task": {
+						const ids = block.params.task_ids
+						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
+						return `[${block.name} for '${idsStr ?? ""}']`
+					}
+					case "cancel_tasks": {
+						const ids = block.params.task_ids
+						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
+						return `[${block.name} for '${idsStr ?? ""}']`
+					}
+					case "answer_subtask_question":
 						return `[${block.name} for '${block.params.task_id}']`
 					case "list_background_tasks":
 						return `[${block.name}]`
