@@ -1,0 +1,405 @@
+# Integration Test Scenarios — Native Tools
+#
+# These scenarios exercise the full lifecycle of native tool execution:
+#   parameter validation → mode filtering → approval → execute → result rendering
+#
+# Focus areas:
+#   1. Tool parameter correctness (missing params, optional params, advisory defaults)
+#   2. Mode-based availability (always-available, group-filtered, feature-gated)
+#   3. Tool execution lifecycle (partial rendering, stabilization, result push)
+#   4. Tool aliases in the parser (deprecated names mapping to canonical)
+#   5. Feature-gated tools (code-index, git-index, MCP resources)
+
+scenarios:
+  # ── Parameter validation ──────────────────────────────────────────────────
+
+  - name: "missing required param: execute_command without command should error"
+    tool: execute_command
+    params: {}
+    expect: error
+    error_contains: "command"
+
+  - name: "missing required param: read_command_output without artifact_id should error"
+    tool: read_command_output
+    params: {}
+    expect: error
+    error_contains: "artifact_id"
+
+  - name: "advisory param defaults: new_task without softResultLength succeeds with default 2000"
+    tool: new_task
+    params:
+      mode: code
+      message: "Write a hello world function"
+    expect: allowed_and_executes
+    # softResultLength defaults to 2000, softTimeoutSec defaults to 300
+
+  - name: "advisory param omitted: new_task without mode should error"
+    tool: new_task
+    params:
+      message: "Write a hello world function"
+    expect: error
+    error_contains: "mode"
+
+  - name: "optional params: read_command_output with search filter"
+    tool: read_command_output
+    params:
+      artifact_id: "cmd-test"
+      search: "error"
+    expect: allowed_and_executes
+
+  - name: "optional params: read_command_output with offset and limit"
+    tool: read_command_output
+    params:
+      artifact_id: "cmd-test"
+      offset: 4096
+      limit: 2048
+    expect: allowed_and_executes
+
+  - name: "mutual exclusion: sed with subcommand also passed is valid"
+    tool: sed
+    params:
+      path: "src/index.ts"
+      pattern: "old_function"
+      replacement: "new_function"
+    expect: allowed_and_executes
+
+  # ── read_file modes ──────────────────────────────────────────────────────
+
+  - name: "read_file in slice mode with offset and limit"
+    tool: read_file
+    params:
+      path: "src/index.ts"
+      mode: slice
+      offset: 10
+      limit: 50
+    expect: allowed_and_executes
+
+  - name: "read_file in indentation mode with anchor_line"
+    tool: read_file
+    params:
+      path: "src/index.ts"
+      mode: indentation
+      indentation:
+        anchor_line: 42
+    expect: allowed_and_executes
+
+  - name: "read_file in indentation mode without anchor_line still succeeds"
+    tool: read_file
+    params:
+      path: "src/index.ts"
+      mode: indentation
+    expect: allowed_and_executes
+
+  - name: "read_file with include_siblings option"
+    tool: read_file
+    params:
+      path: "src/index.ts"
+      mode: indentation
+      indentation:
+        anchor_line: 42
+        include_siblings: true
+    expect: allowed_and_executes
+
+  # ── file tool subcommands ──────────────────────────────────────────────
+
+  - name: "file rm succeeds on a workspace file"
+    tool: file
+    params:
+      subcommand: rm
+      path: "temp/test-file.txt"
+    expect: allowed_and_executes
+
+  - name: "file rm recursive=true succeeds on directory"
+    tool: file
+    params:
+      subcommand: rm
+      path: "temp/test-dir"
+      recursive: true
+    expect: allowed_and_executes
+
+  - name: "file mv renames a file"
+    tool: file
+    params:
+      subcommand: mv
+      path: "temp/old-name.txt"
+      destination: "temp/new-name.txt"
+    expect: allowed_and_executes
+
+  - name: "file rm without subcommand errors"
+    tool: file
+    params:
+      path: "temp/test.txt"
+    expect: error
+
+  # ── Mode-based availability ──────────────────────────────────────────────
+
+  - name: "always-available: attempt_completion works in empty-group mode"
+    mode:
+      groups: []
+    tool: attempt_completion
+    params:
+      result: "Done"
+      rating: well
+    expect: allowed
+
+  - name: "always-available: set_task_title works in empty-group mode"
+    mode:
+      groups: []
+    tool: set_task_title
+    params:
+      title: "Test title"
+    expect: allowed
+
+  - name: "always-available: give_feedback works in empty-group mode"
+    mode:
+      groups: []
+    tool: give_feedback
+    params:
+      feedback: "Integration test feedback"
+    expect: allowed
+
+  - name: "always-available: skills works in empty-group mode"
+    mode:
+      groups: []
+    tool: skills
+    params:
+      skill: "some-skill"
+    expect: allowed
+
+  - name: "always-available: ask_followup_question works in empty-group mode"
+    mode:
+      groups: []
+    tool: ask_followup_question
+    params:
+      question: "What next?"
+      follow_up:
+        - text: "Continue"
+          mode: null
+        - text: "Stop"
+          mode: null
+    expect: allowed
+
+  - name: "read-only mode: write_to_file denied in ask mode"
+    mode:
+      groups: [read, mcp]
+    tool: write_to_file
+    params:
+      path: "test.txt"
+      content: "hello"
+    expect: denied
+
+  - name: "architect mode: write_to_file allowed for .md files"
+    mode:
+      groups: [read, [write, { fileRegex: "\\.md$" }], mcp, questions]
+    tool: write_to_file
+    params:
+      path: "docs/test.md"
+      content: "# Test"
+    expect: allowed
+
+  - name: "architect mode: write_to_file denied for .ts files"
+    mode:
+      groups: [read, [write, { fileRegex: "\\.md$" }], mcp, questions]
+    tool: write_to_file
+    params:
+      path: "src/test.ts"
+      content: "export {}"
+    expect: file_restriction_error
+
+  # ── Tool alias mapping ────────────────────────────────────────────────────
+
+  - name: "alias: skill is parsed as skills"
+    tool: skill
+    params:
+      skill: "some-skill"
+    expect: allowed
+    note: "Parser maps 'skill' → 'skills' via TOOL_ALIASES"
+
+  - name: "alias: write_file is parsed as write_to_file"
+    tool: write_file
+    params:
+      path: "test.txt"
+      content: "hello"
+    expect: allowed
+    note: "Parser maps 'write_file' → 'write_to_file' via TOOL_ALIASES"
+
+  # ── execute_command timeout handling ──────────────────────────────────────
+
+  - name: "execute_command with explicit timeout"
+    tool: execute_command
+    params:
+      command: "sleep 2 && echo done"
+      timeout: 5
+    expect: allowed_and_executes
+
+  - name: "execute_command without timeout uses default"
+    tool: execute_command
+    params:
+      command: "echo hello"
+    expect: allowed_and_executes
+
+  - name: "execute_command with cwd override"
+    tool: execute_command
+    params:
+      command: "pwd"
+      cwd: "/tmp"
+    expect: allowed_and_executes
+
+  # ── Feature-gated tools ──────────────────────────────────────────────────
+
+  - name: "rag_search: allowed when code-index is configured"
+    tool: rag_search
+    params:
+      query: "user authentication"
+    expect: allowed_and_executes
+    preconditions:
+      code_index_configured: true
+
+  - name: "rag_search: allowed but empty result when index not built"
+    tool: rag_search
+    params:
+      query: "user authentication"
+    expect: allowed_and_executes
+    preconditions:
+      code_index_configured: true
+      code_index_built: false
+
+  - name: "git_search: allowed when git-index is configured"
+    tool: git_search
+    params:
+      query: "added authentication"
+    expect: allowed_and_executes
+    preconditions:
+      git_index_configured: true
+
+  # ── Task management tools ─────────────────────────────────────────────────
+
+  - name: "new_task: synchronous child completes and parent resumes"
+    tool: new_task
+    params:
+      mode: ask
+      message: "What is 2+2?"
+      is_background: false
+    expect: allowed_and_executes
+    note: "Parent blocks until child attempt_completion"
+
+  - name: "new_task: background child starts and parent continues"
+    tool: new_task
+    params:
+      mode: ask
+      message: "List files in the root"
+      is_background: true
+    expect: allowed_and_executes
+    note: "Parent continues immediately, child runs concurrently"
+
+  - name: "check_task_status: returns running status for active child"
+    tool: check_task_status
+    params:
+      task_id: "${background_child_id}"
+    expect: allowed_and_executes
+
+  - name: "wait_for_task all: blocks until all listed tasks complete"
+    tool: wait_for_task
+    params:
+      task_ids:
+        - "${child_1_id}"
+        - "${child_2_id}"
+      wait: all
+    expect: allowed_and_executes
+
+  - name: "wait_for_task any: returns when first task completes"
+    tool: wait_for_task
+    params:
+      task_ids:
+        - "${child_1_id}"
+        - "${child_2_id}"
+      wait: any
+    expect: allowed_and_executes
+
+  - name: "cancel_tasks: cancels running background children"
+    tool: cancel_tasks
+    params:
+      task_ids:
+        - "${background_child_id}"
+    expect: allowed_and_executes
+
+  # ── MCP async tools ───────────────────────────────────────────────────────
+
+  - name: "call_mcp_tool_async: returns call_id immediately"
+    tool: call_mcp_tool_async
+    params:
+      server_name: "test-server"
+      tool_name: "test-tool"
+      arguments:
+        key: value
+    expect: allowed_and_executes
+    preconditions:
+      mcp_server_connected: true
+    note: "Returns immediately, use check_mcp_call_status to poll"
+
+  - name: "check_mcp_call_status: returns running for in-flight call"
+    tool: check_mcp_call_status
+    params:
+      call_id: "${mcp_call_id}"
+    expect: allowed_and_executes
+
+  - name: "wait_for_mcp_call all: blocks until all calls complete"
+    tool: wait_for_mcp_call
+    params:
+      call_ids:
+        - "${call_1_id}"
+        - "${call_2_id}"
+      wait: all
+    expect: allowed_and_executes
+
+  # ── ask_assistant_agent ───────────────────────────────────────────────────
+
+  - name: "ask_assistant_agent: returns answer within timeout"
+    tool: ask_assistant_agent
+    params:
+      question: "What does the UserService class do?"
+    expect: allowed_and_executes
+    preconditions:
+      assistant_agent_configured: true
+
+  - name: "ask_assistant_agent: with context files"
+    tool: ask_assistant_agent
+    params:
+      question: "How does this middleware work?"
+      contextFiles:
+        - "src/middleware/auth.ts"
+      softResultLength: 500
+    expect: allowed_and_executes
+    preconditions:
+      assistant_agent_configured: true
+
+  # ── sleep tool ────────────────────────────────────────────────────────────
+
+  - name: "sleep: pauses for specified duration"
+    tool: sleep
+    params:
+      seconds: 0.5
+    expect: allowed_and_executes
+
+  - name: "sleep: rejects duration above maximum"
+    tool: sleep
+    params:
+      seconds: 600
+    expect: error
+
+  # ── fetch_web_page ────────────────────────────────────────────────────────
+
+  - name: "fetch_web_page: fetches and extracts content"
+    tool: fetch_web_page
+    params:
+      urls:
+        - "https://example.com"
+    expect: allowed_and_executes
+
+  - name: "fetch_web_page: with content filtering query"
+    tool: fetch_web_page
+    params:
+      urls:
+        - "https://example.com/docs"
+      query: "authentication"
+    expect: allowed_and_executes

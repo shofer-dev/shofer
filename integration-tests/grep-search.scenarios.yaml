@@ -1,0 +1,498 @@
+# Integration Test Scenarios — grep_search Tool
+#
+# These scenarios exercise the grep_search tool's full lifecycle:
+#   parameter validation → ripgrep argument construction → execution → output formatting
+#
+# Focus areas derived from the grep_search-tool.md review:
+#   1. Parameter validation (required params, semantic-optional params in strict mode)
+#   2. Ripgrep CLI argument mapping (regex vs literal, flags, globs, context)
+#   3. Output format correctness (header, line padding, block separators, truncation)
+#   4. .shoferignore dual-exclusion (native --ignore-file + post-filter safety net)
+#   5. Edge cases (no results, binary missing, maxLines budget, result cap)
+#   6. Ripgrep spawn error handling and message variants
+
+scenarios:
+
+  # ── Parameter validation ──────────────────────────────────────────────────
+
+  - name: "missing required param: grep_search without path should error"
+    tool: grep_search
+    params:
+      query: "TODO"
+    expect: error
+    error_contains: "path"
+
+  - name: "missing required param: grep_search without query should error"
+    tool: grep_search
+    params:
+      path: "src"
+    expect: error
+    error_contains: "query"
+
+  - name: "both required params present: grep_search succeeds with defaults"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+    expect: allowed_and_executes
+
+  - name: "all 10 params explicitly provided"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "function"
+      fileTypes: "*.ts"
+      excludePattern: "**/*.test.ts"
+      isRegex: true
+      caseSensitive: false
+      wholeWord: false
+      maxResults: 50
+      contextBefore: 2
+      contextAfter: 3
+    expect: allowed_and_executes
+
+  # ── Ripgrep CLI argument mapping ──────────────────────────────────────────
+
+  - name: "regex search: isRegex=true (default) produces -e flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "function\\s+\\w+"
+      isRegex: true
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-e"
+
+  - name: "literal search: isRegex=false produces -F flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "console.log"
+      isRegex: false
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-F"
+      - "-e"
+
+  - name: "case-sensitive: caseSensitive=true omits -i flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "ERROR"
+      caseSensitive: true
+    expect: allowed_and_executes
+    verify_rg_args_absent:
+      - "-i"
+
+  - name: "case-insensitive: caseSensitive=false (default) includes -i flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "error"
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-i"
+
+  - name: "whole-word: wholeWord=true produces -w flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      isRegex: false
+      wholeWord: true
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-w"
+
+  - name: "whole-word: -w flag omitted when isRegex=true (ignored)"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      isRegex: true
+      wholeWord: true
+    expect: allowed_and_executes
+    # -w should NOT be present when isRegex=true
+    verify_rg_args_absent:
+      - "-w"
+
+  - name: "fileTypes: glob passed via -g flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      fileTypes: "*.ts"
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-g"
+      - "*.ts"
+
+  - name: "excludePattern: negated glob passed via -g flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      excludePattern: "**/*.test.ts"
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-g"
+      - "!**/*.test.ts"
+
+  - name: "contextBefore: >0 produces -B flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      contextBefore: 3
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-B"
+      - "3"
+
+  - name: "contextAfter: >0 produces -A flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      contextAfter: 5
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-A"
+      - "5"
+
+  - name: "contextBefore=0 omits -B flag"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      contextBefore: 0
+    expect: allowed_and_executes
+    verify_rg_args_absent:
+      - "-B"
+
+  - name: "core args: --json and --no-messages always present"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "--json"
+      - "--no-messages"
+
+  # ── .shoferignore dual-exclusion ──────────────────────────────────────────
+
+  - name: "shoferignore loaded: --ignore-file flag passed to ripgrep"
+    tool: grep_search
+    params:
+      path: "."
+      query: "secret_key"
+    preconditions:
+      shoferignore_loaded: true
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "--ignore-file"
+    verify_rg_args_contains:
+      - ".shoferignore"
+
+  - name: "shoferignore not loaded: --ignore-file flag absent"
+    tool: grep_search
+    params:
+      path: "."
+      query: "secret_key"
+    preconditions:
+      shoferignore_loaded: false
+    expect: allowed_and_executes
+    verify_rg_args_absent:
+      - "--ignore-file"
+
+  - name: "shoferignore post-filter: ignored files excluded from output"
+    tool: grep_search
+    params:
+      path: "."
+      query: "unique_match_only_in_ignored_file"
+    preconditions:
+      shoferignore_loaded: true
+      workspace_has_ignored_file_with_specific_content: true
+    expect: allowed_and_executes
+    result_empty: true
+
+  # ── Output format ─────────────────────────────────────────────────────────
+
+  - name: "header: 'Found N results.' for non-truncated output"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      fileTypes: "*.ts"
+    expect: allowed_and_executes
+    output_starts_with: "Found "
+
+  - name: "header: 'Showing first M of more results.' for truncated output"
+    tool: grep_search
+    params:
+      path: "."
+      query: "import"
+      maxResults: 3
+    preconditions:
+      matches_exceed: 3
+    expect: allowed_and_executes
+    output_starts_with: "Showing first 3 of more results."
+
+  - name: "match lines: > prefix with 4-digit padded line number"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+    expect: allowed_and_executes
+    output_matches_pattern: "^> \\d{4} \\| "
+
+  - name: "context lines: space prefix, same 4-digit padding"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      contextBefore: 1
+      contextAfter: 1
+    expect: allowed_and_executes
+    output_matches_pattern: "^  \\d{4} \\| "
+
+  - name: "file headers: '## relative/path' format"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+    expect: allowed_and_executes
+    output_matches_pattern: "^## [a-zA-Z0-9_/.\\-]+$"
+
+  - name: "non-contiguous blocks: separated by '----'"
+    tool: grep_search
+    params:
+      path: "."
+      query: "TODO"
+      fileTypes: "*.ts"
+    preconditions:
+      file_has_non_contiguous_matches: true
+    expect: allowed_and_executes
+    output_contains: "----"
+
+  - name: "files separated by blank lines"
+    tool: grep_search
+    params:
+      path: "."
+      query: "TODO"
+      fileTypes: "*.ts"
+    preconditions:
+      matches_in_multiple_files: true
+    expect: allowed_and_executes
+    output_contains: "\n\n## "
+
+  # ── Result cap behavior ───────────────────────────────────────────────────
+
+  - name: "maxResults cap: output limited to requested count"
+    tool: grep_search
+    params:
+      path: "."
+      query: "import"
+      maxResults: 5
+    preconditions:
+      matches_exceed: 5
+    expect: allowed_and_executes
+    max_match_lines_in_output: 5
+
+  - name: "maxResults default: 100 applied when omitted"
+    tool: grep_search
+    params:
+      path: "."
+      query: "import"
+    expect: allowed_and_executes
+    implied_cap: 100
+
+  - name: "maxResults clamped: absurdly high value clamped to GREP_SEARCH_CAP.max (1000)"
+    tool: grep_search
+    params:
+      path: "."
+      query: "import"
+      maxResults: 20000
+    expect: allowed_and_executes
+    implied_cap: 1000
+
+  - name: "maxResults invalid values: NaN/negative/zero treated as default (100)"
+    tool: grep_search
+    params:
+      path: "."
+      query: "import"
+      maxResults: -5
+    expect: allowed_and_executes
+    implied_cap: 100
+
+  - name: "2x fetch buffer: truncated flag fires when more than maxResults hits exist"
+    tool: grep_search
+    params:
+      path: "."
+      query: "."
+      maxResults: 10
+    preconditions:
+      matches_exceed: 100
+    expect: allowed_and_executes
+    output_starts_with: "Showing first 10 of more results."
+
+  # ── Edge cases ────────────────────────────────────────────────────────────
+
+  - name: "no results: 'No results found for: <query>' message"
+    tool: grep_search
+    params:
+      path: "."
+      query: "zzz_no_such_text_xyzzy"
+    expect: allowed_and_executes
+    output_equals: "No results found for: zzz_no_such_text_xyzzy"
+
+  - name: "ripgrep binary missing: returns 'Search failed: Could not find ripgrep binary'"
+    tool: grep_search
+    params:
+      path: "."
+      query: "TODO"
+    preconditions:
+      ripgrep_binary_missing: true
+    expect: allowed_and_executes
+    result_equals: "Search failed: Could not find ripgrep binary"
+
+  - name: "ripgrep spawn error: returns 'No results found for: <query>'"
+    tool: grep_search
+    params:
+      path: "."
+      query: "TODO"
+    preconditions:
+      ripgrep_spawn_failure: true
+    expect: allowed_and_executes
+    output_equals: "No results found for: TODO"
+
+  - name: "line truncation: lines >500 chars truncated with '[truncated...]' suffix"
+    tool: grep_search
+    params:
+      path: "."
+      query: "match_on_very_long_line"
+    preconditions:
+      workspace_has_line_exceeding_500_chars: true
+    expect: allowed_and_executes
+    output_contains: "[truncated...]"
+
+  - name: "empty directory: no matches returned"
+    tool: grep_search
+    params:
+      path: "empty_dir"
+      query: "anything"
+    preconditions:
+      directory_is_empty: true
+    expect: allowed_and_executes
+    output_starts_with: "No results found for:"
+
+  - name: "path outside workspace: still executes but marks isOutsideWorkspace"
+    tool: grep_search
+    params:
+      path: "../../outside/workspace"
+      query: "TODO"
+    expect: allowed_and_executes
+    shared_message_prop:
+      isOutsideWorkspace: true
+
+  # ── Rust regex vs JavaScript regex ────────────────────────────────────────
+
+  - name: "basic regex: character classes work"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "[A-Z]{3}"
+      isRegex: true
+    expect: allowed_and_executes
+
+  - name: "regex alternation: pipe syntax works"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "import|export|require"
+      isRegex: true
+    expect: allowed_and_executes
+
+  - name: "regex quantifiers: star and plus work"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO.*FIX"
+      isRegex: true
+    expect: allowed_and_executes
+
+  - name: "literal search: regex metacharacters treated as literals when isRegex=false"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "a.b(c)"
+      isRegex: false
+    expect: allowed_and_executes
+    # Must match the literal string "a.b(c)", not "axb(c)" etc.
+
+  # ── combined parameter effects ─────────────────────────────────────────────
+
+  - name: "combined: fileTypes + excludePattern both respected"
+    tool: grep_search
+    params:
+      path: "src"
+      query: "TODO"
+      fileTypes: "*.ts"
+      excludePattern: "**/*.test.ts"
+    preconditions:
+      todo_in_ts_file: true
+      todo_in_test_ts_file: true
+    expect: allowed_and_executes
+    # Result should contain the non-test *.ts TODO but exclude the *.test.ts one
+
+  - name: "combined: contextBefore/After + wholeWord + caseSensitive"
+    tool: grep_search
+    params:
+      path: "."
+      query: "ERROR"
+      fileTypes: "*.go"
+      isRegex: false
+      caseSensitive: true
+      wholeWord: true
+      maxResults: 50
+      contextBefore: 2
+      contextAfter: 2
+    expect: allowed_and_executes
+    verify_rg_args:
+      - "-F"
+      - "-e"
+      - "-w"
+      - "-g"
+      - "-B"
+      - "2"
+      - "-A"
+      - "2"
+    verify_rg_args_absent:
+      - "-i"
+
+  # ── Integration with parent tool pipeline ─────────────────────────────────
+
+  - name: "grep_search result consumed by subsequent tool call"
+    tool_sequence:
+      - grep_search:
+          path: "src"
+          query: "function getUserData"
+          fileTypes: "*.ts"
+      - read_file:
+          path: "<path_from_grep_result>"
+          mode: indentation
+          indentation:
+            anchor_line: "<line_from_grep_result>"
+    expect: sequence_succeeds
+
+  - name: "grep_search used after file mutation to verify change"
+    tool_sequence:
+      - apply_diff:
+          path: "src/utils.ts"
+          diff: "replace TODO with DONE"  # conceptual
+      - grep_search:
+          path: "src/utils.ts"
+          query: "DONE"
+          isRegex: false
+    expect: sequence_succeeds

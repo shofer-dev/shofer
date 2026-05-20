@@ -1,0 +1,597 @@
+# Integration Test Scenarios — Auto-Approval
+#
+# These scenarios exercise the full auto-approval decision pipeline:
+#   checkAutoApproval() → isAutoApprovableAsk → per-toggle checks →
+#   getToolGroupForSayTool → isReadOnlyToolAction / isWriteToolAction →
+#   getCommandDecision / containsDangerousSubstitution →
+#   isMcpToolUncategorized
+#
+# Each scenario specifies the ask type, tool/command details, toggle state,
+# and the expected checkAutoApproval result decision.
+
+scenarios:
+
+  # ── Master toggle gate ───────────────────────────────────────────────────
+
+  - name: "master toggle OFF: everything requires user approval"
+    state:
+      autoApprovalEnabled: false
+    test:
+      - ask: tool
+        tool: readFile
+        expect_decision: ask
+      - ask: tool
+        tool: newFileCreated
+        expect_decision: ask
+      - ask: command
+        text: "git status"
+        expect_decision: ask
+      - ask: use_mcp_server
+        text: '{"type":"use_mcp_tool","serverName":"test","toolName":"echo"}'
+        expect_decision: ask
+
+  # ── isAutoApprovableAsk fast-path ────────────────────────────────────────
+
+  - name: "command_output is auto-approvable regardless of toggle state"
+    state: {}
+    test:
+      - ask: command_output
+        expect_decision: approve
+
+  # ── Unconditionally auto-approved tools ──────────────────────────────────
+
+  - name: "meta-operations unconditionally approved"
+    state: {}
+    test:
+      - ask: tool
+        tool: updateTodoList
+        expect_decision: approve
+      - ask: tool
+        tool: skills
+        expect_decision: approve
+      - ask: tool
+        tool: setTaskTitle
+        expect_decision: approve
+      - ask: tool
+        tool: giveFeedback
+        expect_decision: approve
+
+  - name: "background-task status tools unconditionally approved"
+    state: {}
+    test:
+      - ask: tool
+        tool: waitForTask
+        expect_decision: approve
+      - ask: tool
+        tool: checkTaskStatus
+        expect_decision: approve
+      - ask: tool
+        tool: listBackgroundTasks
+        expect_decision: approve
+
+  - name: "async MCP call status tools unconditionally approved"
+    state: {}
+    test:
+      - ask: tool
+        tool: checkMcpCallStatus
+        expect_decision: approve
+      - ask: tool
+        tool: waitForMcpCall
+        expect_decision: approve
+
+  - name: "lightweight read-only tools unconditionally approved"
+    state: {}
+    test:
+      - ask: tool
+        tool: fetchWebPage
+        expect_decision: approve
+      - ask: tool
+        tool: findFiles
+        expect_decision: approve
+      - ask: tool
+        tool: viewImage
+        expect_decision: approve
+      - ask: tool
+        tool: getErrors
+        expect_decision: approve
+      - ask: tool
+        tool: getChangedFiles
+        expect_decision: approve
+      - ask: tool
+        tool: getProjectSetupInfo
+        expect_decision: approve
+      - ask: tool
+        tool: readProjectStructure
+        expect_decision: approve
+      - ask: tool
+        tool: listCodeUsages
+        expect_decision: approve
+      - ask: tool
+        tool: lspSearch
+        expect_decision: approve
+
+  # ── alwaysAllowSubtasks ──────────────────────────────────────────────────
+
+  - name: "subtask tools gated behind alwaysAllowSubtasks"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowSubtasks: false
+    test:
+      - ask: tool
+        tool: newTask
+        expect_decision: ask
+      - ask: tool
+        tool: finishTask
+        expect_decision: ask
+      - ask: tool
+        tool: cancelTasks
+        expect_decision: ask
+      - ask: tool
+        tool: answerSubtaskQuestion
+        expect_decision: ask
+
+  - name: "subtask tools approved when alwaysAllowSubtasks is ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowSubtasks: true
+    test:
+      - ask: tool
+        tool: newTask
+        expect_decision: approve
+      - ask: tool
+        tool: finishTask
+        expect_decision: approve
+      - ask: tool
+        tool: cancelTasks
+        expect_decision: approve
+      - ask: tool
+        tool: answerSubtaskQuestion
+        expect_decision: approve
+
+  # ── alwaysAllowModeSwitch ────────────────────────────────────────────────
+
+  - name: "switch_mode gated behind alwaysAllowModeSwitch"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowModeSwitch: false
+    test:
+      - ask: tool
+        tool: switchMode
+        expect_decision: ask
+
+  - name: "switch_mode approved when alwaysAllowModeSwitch is ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowModeSwitch: true
+    test:
+      - ask: tool
+        tool: switchMode
+        expect_decision: approve
+
+  # ── alwaysAllowReadOnly ──────────────────────────────────────────────────
+
+  - name: "read tools require alwaysAllowReadOnly"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowReadOnly: false
+    test:
+      - ask: tool
+        tool: readFile
+        expect_decision: ask
+      - ask: tool
+        tool: listFiles
+        expect_decision: ask
+      - ask: tool
+        tool: grepSearch
+        expect_decision: ask
+      - ask: tool
+        tool: ragSearch
+        expect_decision: ask
+      - ask: tool
+        tool: gitSearch
+        expect_decision: ask
+      - ask: tool
+        tool: askAssistantAgent
+        expect_decision: ask
+
+  - name: "read tools approved when alwaysAllowReadOnly is ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowReadOnly: true
+    test:
+      - ask: tool
+        tool: readFile
+        expect_decision: approve
+      - ask: tool
+        tool: grepSearch
+        expect_decision: approve
+      - ask: tool
+        tool: gitSearch
+        expect_decision: approve
+      - ask: tool
+        tool: askAssistantAgent
+        expect_decision: approve
+
+  - name: "read tools outside workspace require alwaysAllowReadOnlyOutsideWorkspace"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowReadOnly: true
+      alwaysAllowReadOnlyOutsideWorkspace: false
+    test:
+      - ask: tool
+        tool: readFile
+        isOutsideWorkspace: true
+        expect_decision: ask
+
+  - name: "read tools outside workspace approved when outside-workspace toggle ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowReadOnly: true
+      alwaysAllowReadOnlyOutsideWorkspace: true
+    test:
+      - ask: tool
+        tool: readFile
+        isOutsideWorkspace: true
+        expect_decision: approve
+
+  # ── alwaysAllowWrite ─────────────────────────────────────────────────────
+
+  - name: "write tools require alwaysAllowWrite"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowWrite: false
+    test:
+      - ask: tool
+        tool: editedExistingFile
+        expect_decision: ask
+      - ask: tool
+        tool: appliedDiff
+        expect_decision: ask
+      - ask: tool
+        tool: newFileCreated
+        expect_decision: ask
+      - ask: tool
+        tool: generateImage
+        expect_decision: ask
+
+  - name: "write tools approved when alwaysAllowWrite is ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowWrite: true
+    test:
+      - ask: tool
+        tool: editedExistingFile
+        expect_decision: approve
+      - ask: tool
+        tool: newFileCreated
+        expect_decision: approve
+
+  - name: "write tools outside workspace require alwaysAllowWriteOutsideWorkspace"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowWrite: true
+      alwaysAllowWriteOutsideWorkspace: false
+    test:
+      - ask: tool
+        tool: newFileCreated
+        isOutsideWorkspace: true
+        expect_decision: ask
+
+  - name: "write tools outside workspace approved when outside-workspace toggle ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowWrite: true
+      alwaysAllowWriteOutsideWorkspace: true
+    test:
+      - ask: tool
+        tool: newFileCreated
+        isOutsideWorkspace: true
+        expect_decision: approve
+
+  - name: "write to protected files requires alwaysAllowWriteProtected"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowWrite: true
+      alwaysAllowWriteProtected: false
+    test:
+      - ask: tool
+        tool: newFileCreated
+        isProtected: true
+        expect_decision: ask
+
+  - name: "write to protected files approved when protected toggle ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowWrite: true
+      alwaysAllowWriteProtected: true
+    test:
+      - ask: tool
+        tool: newFileCreated
+        isProtected: true
+        expect_decision: approve
+
+  # ── alwaysAllowBrowser ───────────────────────────────────────────────────
+
+  - name: "browser tools require alwaysAllowBrowser"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowBrowser: false
+    test:
+      - ask: tool
+        tool: "browser_navigate"
+        expect_decision: ask
+      - ask: tool
+        tool: "browser_click"
+        expect_decision: ask
+
+  - name: "browser tools approved when alwaysAllowBrowser is ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowBrowser: true
+    test:
+      - ask: tool
+        tool: "browser_navigate"
+        expect_decision: approve
+      - ask: tool
+        tool: "browser_screenshot"
+        expect_decision: approve
+
+  # ── alwaysAllowExecute (command allowlist/denylist) ──────────────────────
+
+  - name: "command toggle OFF: all commands ask user"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: false
+      allowedCommands: ["git"]
+    test:
+      - ask: command
+        text: "git status"
+        expect_decision: ask
+
+  - name: "allowlist-only: git status approved, npm install asks user"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: true
+      allowedCommands: ["git"]
+      deniedCommands: []
+    test:
+      - ask: command
+        text: "git status"
+        expect_decision: approve
+      - ask: command
+        text: "npm install"
+        expect_decision: ask
+
+  - name: "denylist beats allowlist when longer prefix"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: true
+      allowedCommands: ["git"]
+      deniedCommands: ["git push"]
+    test:
+      - ask: command
+        text: "git status"
+        expect_decision: approve
+      - ask: command
+        text: "git push origin"
+        expect_decision: deny
+
+  - name: "allowlist beats denylist when longer prefix"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: true
+      allowedCommands: ["git push --dry-run"]
+      deniedCommands: ["git push"]
+    test:
+      - ask: command
+        text: "git push --dry-run"
+        expect_decision: approve
+
+  - name: "wildcard * in allowlist approves everything except denylist"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: true
+      allowedCommands: ["*"]
+      deniedCommands: ["rm"]
+    test:
+      - ask: command
+        text: "echo hello"
+        expect_decision: approve
+      - ask: command
+        text: "ls -la"
+        expect_decision: approve
+      - ask: command
+        text: "rm -rf /"
+        expect_decision: deny
+
+  - name: "command chain: any denied sub-command denies entire chain"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: true
+      allowedCommands: ["git", "npm"]
+      deniedCommands: ["rm"]
+    test:
+      - ask: command
+        text: "git status && npm test"
+        expect_decision: approve
+      - ask: command
+        text: "git status && rm file.txt"
+        expect_decision: deny
+      - ask: command
+        text: "echo hello | grep world"
+        expect_decision: ask  # echo not in allowlist
+
+  - name: "dangerous substitution patterns never auto-approved"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: true
+      allowedCommands: ["*"]
+      deniedCommands: []
+    test:
+      - ask: command
+        text: 'echo "${var@P}"'
+        expect_decision: ask
+      - ask: command
+        text: '${!var}'
+        expect_decision: ask
+      - ask: command
+        text: 'cat <<<$(whoami)'
+        expect_decision: ask
+      - ask: command
+        text: '*(e:whoami:)'
+        expect_decision: ask
+
+  - name: "empty allowlist: every command asks user"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowExecute: true
+      allowedCommands: []
+      deniedCommands: []
+    test:
+      - ask: command
+        text: "git status"
+        expect_decision: ask
+      - ask: command
+        text: "echo hello"
+        expect_decision: ask
+
+  # ── alwaysAllowMcp ────────────────────────────────────────────────────────
+
+  - name: "MCP tool calls require alwaysAllowMcp"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowMcp: false
+    test:
+      - ask: use_mcp_server
+        text: '{"type":"use_mcp_tool","serverName":"test","toolName":"echo"}'
+        expect_decision: ask
+
+  - name: "MCP tool calls approved when alwaysAllowMcp ON and tool has a group"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowMcp: true
+      mcpServers:
+        - name: test
+          config: "{}"
+          status: connected
+          tools:
+            - name: echo
+              group: read
+    test:
+      - ask: use_mcp_server
+        text: '{"type":"use_mcp_tool","serverName":"test","toolName":"echo"}'
+        expect_decision: approve
+
+  - name: "uncategorized MCP tool requires alwaysAllowUncategorized"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowMcp: true
+      alwaysAllowUncategorized: false
+      mcpServers:
+        - name: test
+          config: "{}"
+          status: connected
+          tools:
+            - name: echo
+              # no group → uncategorized
+    test:
+      - ask: use_mcp_server
+        text: '{"type":"use_mcp_tool","serverName":"test","toolName":"echo"}'
+        expect_decision: ask
+
+  - name: "uncategorized MCP tool approved when alwaysAllowUncategorized ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowMcp: true
+      alwaysAllowUncategorized: true
+      mcpServers:
+        - name: test
+          config: "{}"
+          status: connected
+          tools:
+            - name: echo
+    test:
+      - ask: use_mcp_server
+        text: '{"type":"use_mcp_tool","serverName":"test","toolName":"echo"}'
+        expect_decision: approve
+
+  - name: "MCP resource access auto-approved when alwaysAllowMcp ON"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowMcp: true
+    test:
+      - ask: use_mcp_server
+        text: '{"type":"access_mcp_resource","serverName":"test","uri":"file:///data.json"}'
+        expect_decision: approve
+
+  - name: "external_lm_tool bypasses MCP gating"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowMcp: false
+    test:
+      - ask: use_mcp_server
+        text: '{"type":"use_mcp_tool","serverName":"test","toolName":"some_tool","external_lm_tool":true}'
+        expect_decision: approve
+
+  # ── alwaysAllowFollowupQuestions ─────────────────────────────────────────
+
+  - name: "followup asks user when toggle OFF"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowFollowupQuestions: false
+    test:
+      - ask: followup
+        text: '{"suggest":[{"answer":"Yes, continue"}]}'
+        expect_decision: ask
+
+  - name: "followup asks user when toggle ON but no timeout configured"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowFollowupQuestions: true
+      followupAutoApproveTimeoutMs: 0
+    test:
+      - ask: followup
+        text: '{"suggest":[{"answer":"Yes, continue"}]}'
+        expect_decision: ask
+
+  - name: "followup timeout when toggle ON and timeout configured"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowFollowupQuestions: true
+      followupAutoApproveTimeoutMs: 5000
+    test:
+      - ask: followup
+        text: '{"suggest":[{"answer":"Yes, continue"}]}'
+        expect_decision: timeout
+        expect_timeout: 5000
+
+  # ── Decision priority order ──────────────────────────────────────────────
+
+  - name: "followup checked before command"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowFollowupQuestions: false
+      alwaysAllowExecute: true
+      allowedCommands: ["*"]
+    test:
+      - ask: followup
+        text: '{"suggest":[{"answer":"Run command"}]}'
+        expect_decision: ask  # followup path, not command path
+
+  - name: "isAutoApprovableAsk checked before master toggle"
+    state:
+      autoApprovalEnabled: false
+    test:
+      - ask: command_output
+        expect_decision: approve  # fast-path bypasses toggle check
+
+  # ── run_slash_command is NOT in read group ───────────────────────────────
+
+  - name: "run_slash_command not auto-approved via alwaysAllowReadOnly"
+    state:
+      autoApprovalEnabled: true
+      alwaysAllowReadOnly: true
+    test:
+      - ask: tool
+        tool: runSlashCommand
+        expect_decision: ask  # not in TOOL_GROUPS.read
