@@ -163,6 +163,11 @@ export async function presentAssistantMessage(shofer: Task) {
 			// Store approval feedback to merge into tool result (GitHub #10465)
 			let approvalFeedback: { text: string; images?: string[] } | undefined
 
+			// Resolve experiments flag before pushToolResult so the sync closure
+			// can gate tool_result emission without awaiting inside it.
+			const mcpState = await shofer.providerRef.deref()?.getState()
+			const mcpExperimentsEnabled = mcpState?.experiments?.showToolInputOutput === true
+
 			const pushToolResult = (content: ToolResponse, feedbackImages?: string[]) => {
 				if (hasToolResult) {
 					outputWarn(
@@ -210,9 +215,10 @@ export async function presentAssistantMessage(shofer: Task) {
 
 				// Emit tool result to the webview so ChatRow can show an expandable
 				// output section beneath the MCP tool invocation block.
+				// Gated by mcpExperimentsEnabled (captured above before pushToolResult).
 				// Skip when the tool produced no meaningful output.
 				// Cap output at 2 KB to avoid bloating IPC messages.
-				if (resultContent && resultContent !== "(tool did not return anything)") {
+				if (mcpExperimentsEnabled && resultContent && resultContent !== "(tool did not return anything)") {
 					const MAX_TOOL_RESULT = 2048
 					const mcpTruncatedOutput =
 						resultContent.length > MAX_TOOL_RESULT
@@ -631,9 +637,14 @@ export async function presentAssistantMessage(shofer: Task) {
 					"generate_image",
 				])
 
+				// Only emit tool_result when the user has opted in via the
+				// experimental "Show tool input/output" toggle.
+				const experimentsEnabled = stateExperiments?.showToolInputOutput === true
+
 				// Cap output at 2 KB to avoid bloating IPC messages and persisted
 				// ui_messages.json with multi-MB grep/file results.
 				if (
+					experimentsEnabled &&
 					resultContent &&
 					resultContent !== "(tool did not return anything)" &&
 					!TOOLS_WITH_INLINE_RESULT.has(block.name)

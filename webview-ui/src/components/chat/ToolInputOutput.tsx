@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react"
 import type { ShoferSayTool } from "@shofer/types"
+import { useExtensionState } from "@src/context/ExtensionStateContext"
 import CodeAccordion from "../common/CodeAccordion"
 
 /**
@@ -20,6 +21,13 @@ export const ToolInputSection: React.FC<{
 	isExpanded: boolean
 	onToggle: () => void
 }> = ({ tool, isExpanded, onToggle }) => {
+	const { experiments } = useExtensionState()
+
+	// Feature-gated: only render when the user has enabled the experiment.
+	if (!experiments?.showToolInputOutput) {
+		return null
+	}
+
 	// Build a displayable copy: strip batch content blobs and image data
 	const displayParams: Record<string, unknown> = {}
 	for (const [key, value] of Object.entries(tool)) {
@@ -79,11 +87,17 @@ export const ToolOutputSection: React.FC<{
 	tool: string
 	output: string
 }> = ({ tool: _tool, output }) => {
+	const { experiments } = useExtensionState()
 	const [expanded, setExpanded] = useState(false)
 
 	const handleToggle = useCallback(() => {
 		setExpanded((prev) => !prev)
 	}, [])
+
+	// Feature-gated: only render when the user has enabled the experiment.
+	if (!experiments?.showToolInputOutput) {
+		return null
+	}
 
 	const isLarge = output.length > MAX_INLINE_OUTPUT
 	const displayContent =
