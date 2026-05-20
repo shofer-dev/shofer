@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-    <!-- /TOC -->
+      <!-- /TOC -->
 
 ---
 
@@ -764,3 +764,37 @@ pnpm --filter @shofer/types test -- src/__tests__/telemetry.test.ts
 # Test webview telemetry
 pnpm --filter webview-ui test -- src/utils/__tests__/TelemetryClient.spec.ts
 ```
+
+---
+
+## Gaps & Areas for Improvement
+
+This section identifies known gaps, drift risks, and areas where the telemetry system or its documentation could be improved. These were discovered during a doc-to-code verification pass.
+
+### Documentation Drift Risks
+
+- **Line numbers are fragile.** The telemetry source files shift frequently as methods are added or refactored. All line numbers in this document are valid only at the time of the last audit (see `verify-telemetry-doc` task). Every convenience method added, removed, or reordered in [`TelemetryService.ts`](packages/telemetry/src/TelemetryService.ts) will drift line references in the Key Methods and Convenience Methods tables. Consider documenting method contract (signature + behavior) without tying it to a specific line number, or adding a CI step that validates line-number anchors.
+
+- **`ShoferProvider.ts` line numbers are unstable.** The provider's `getTelemetryProperties()` and `setProvider` call site have moved between versions. The anchor is currently [`ShoferProvider.ts:268`](src/core/webview/ShoferProvider.ts).
+
+- **`webviewMessageHandler.ts` opt-out/opt-in block moves.** The `telemetrySetting` handler (`captureTelemetrySettingsChanged` before vs. after `updateTelemetryState`) is sensitive to reordering. The current location is around line 2462.
+
+### Missing Codebase Components
+
+- **`packages/cloud/` does not exist.** The Cloud Telemetry Client section was removed from this document because `packages/cloud/src/TelemetryClient.ts` and `packages/cloud/src/retry-queue/` are not present in this version of the codebase. If cloud-side telemetry is planned, a new package must be created and this document updated.
+
+- **`webview-ui/src/components/cloud/CloudView.tsx` does not exist.** The `cloud/` components directory under the webview is empty. Account connect/logout telemetry events (`ACCOUNT_CONNECT_CLICKED`, `ACCOUNT_LOGOUT_CLICKED`, `ACCOUNT_LOGOUT_SUCCESS`) currently have no webview-side source file. Their event names exist in the enum but may never be emitted.
+
+### Missing from Documentation
+
+- **`captureException(error)` mutates `error.message`.** In [`PostHogTelemetryClient.captureException()`](packages/telemetry/src/PostHogTelemetryClient.ts:85), line 128 overwrites `error.message` with the most-descriptive error message extracted by `getErrorMessage()`. This is a side-effect callers should be aware of if they retain a reference to the error after calling `captureException`.
+
+- **`TELEMETRY_ENABLED` env var gating.** All telemetry is gated behind `TELEMETRY_ENABLED=true`. Without it, `TelemetryService` never initializes, `PostHog` clients are never instantiated, and all `capture*` calls are no-ops. This is the primary kill-switch and should be documented prominently.
+
+- **`TelemetryService` constructor is public, not fully private.** The singleton pattern is enforced by `createInstance()` (which throws if `_instance` already exists), but the constructor itself is `public`. A direct `new TelemetryService(...)` call would bypass the singleton guard.
+
+### Structural Observations
+
+- **No `captureException` for non-PostHog clients.** `TelemetryService` delegates `captureException` to all registered clients, but only `PostHogTelemetryClient` implements meaningful exception capture. If a second client is registered, it must also implement `captureException`.
+
+- **Enum ordering in telemetry.ts vs. doc.** The `TelemetryEventName` enum in [`telemetry.ts`](packages/types/src/telemetry.ts:20) places `ASSISTANT_AGENT_ERROR` and `CODE_INDEX_SEGMENT_DEDUP` at lines 74 and 79, between `CODE_INDEX_ERROR` and `TELEMETRY_SETTINGS_CHANGED`. The `shoferTelemetryEventSchema` discriminated union in the same file exhaustively lists members — adding a new enum value without updating the schema will cause type errors at compile time.

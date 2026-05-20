@@ -25,7 +25,6 @@ The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appe
 - **Remove** previously installed marketplace items
 - Support for **parameterized MCP installation** with user-provided values
 - Support for **multiple installation methods** per MCP item
-- **Organization-controlled MCPs** via Shofer Cloud team settings (private catalog)
 - **Telemetry** on installs, removals, tab views, and button clicks
 - **5-minute in-memory cache** for API responses with exponential backoff retry
 
@@ -166,13 +165,11 @@ User clicks "Marketplace" button (MCP view / Mode selector / Settings)
   → Sends "fetchMarketplaceData" message to extension host
   → ShoferProvider.fetchMarketplaceData() calls MarketplaceManager
   → MarketplaceManager.getMarketplaceItems():
-     1. Checks CloudService for team org settings
-     2. RemoteConfigLoader.loadAllItems() fetches from API:
-        GET /api/marketplace/modes → YAML → modeMarketplaceResponse Zod parse
-        GET /api/marketplace/mcps  → YAML → mcpMarketplaceResponse Zod parse
-     3. Applies hidden MCPs filter from org settings
-     4. Merges org-level MCPs into organizationMcps array
-     5. Returns { organizationMcps, marketplaceItems, errors }
+      1. RemoteConfigLoader.loadAllItems() fetches from API:
+         GET /api/marketplace/modes → YAML → modeMarketplaceResponse Zod parse
+         GET /api/marketplace/mcps  → YAML → mcpMarketplaceResponse Zod parse
+      2. Returns { organizationMcps: [], marketplaceItems, errors }
+      (Note: Cloud org settings integration has been removed; all items come from the public API.)
   → MarketplaceManager.getInstallationMetadata():
      1. Reads project .shofermodes and .shofer/mcp.json
      2. Reads global custom-modes.yaml and mcp-settings.json
@@ -410,6 +407,26 @@ Per the [Shofer Privacy Policy](extensions/shofer/PRIVACY.md):
 > When you browse or search the Marketplace for Model Configuration Profiles (MCPs) or Custom Modes, Shofer makes a secure API call to Shofer's backend servers to retrieve listing information. These requests send only the query parameters (e.g., extension version, search term) necessary to fulfill the request and do not include your code, prompts, or personally identifiable information.
 
 ---
+
+## Gaps, Issues & Improvement Areas
+
+The following deficiencies were discovered during the 2026-05-20 verification of this doc against the live codebase.
+
+1. **`cancelMarketplaceInstall` message type not documented**: The [`WebviewMessage` union](extensions/shofer/packages/types/src/vscode-extension-host.ts:642) includes `"cancelMarketplaceInstall"` but this doc does not mention it in the message tables.
+
+2. **`filterMarketplaceItems` handler doesn't do server-side filtering**: The webview message handler at [`webviewMessageHandler.ts:3065-3074`](extensions/shofer/src/core/webview/webviewMessageHandler.ts:3065) delegates to `MarketplaceManager.filterItems()`, which is a private method that does client-side filtering — not a server-side operation. The doc describes it as "Applies server-side filters" in the message table but the actual behavior is local.
+
+3. **Stale line numbers for `McpView.tsx` marketplace button**: The doc says lines 197-211 but the button block spans lines 196-217 in the current source. The start (`MARKETPLACE_ENABLED &&`) is at line 196 and the closing `</StandardTooltip>)` is at line 216-217.
+
+4. **Stale line numbers for `SkillsSettings.tsx` marketplace link**: The doc says lines 289-291 but the `window.postMessage` block starts at line 288.
+
+5. **`filterMarketplaceItems` message payload mismatch**: The Webview → Extension Host table says the payload is `{ type?, search?, tags? }` but the actual handler at [`webviewMessageHandler.ts:3065-3074`](extensions/shofer/src/core/webview/webviewMessageHandler.ts:3065) accesses `message.filters.type`, `message.filters.search`, `message.filters.tags` — the payload is nested under `filters`, not flat.
+
+6. **`McpView.tsx` line range in entry points table**: Doc says lines 197-211 but the marketplace button spans 196-217.
+
+7. **No `PRIVACY.md` verification**: The Privacy section references `extensions/shofer/PRIVACY.md` which was not verified to exist during this review.
+
+8. **Phantom `CloudService` and `OrganizationSettings`**: The doc previously described a `CloudService` providing `OrganizationSettings` with `mcps`, `hiddenMcps`, and `hideMarketplaceMcps` fields. Cloud integration has been removed; `MarketplaceManager.constructor` no longer creates a `CloudService` and `orgSettings` stays `undefined`. This doc has been updated but the `hideMarketplaceMcps` bullet in the API Endpoints section (§ "The `hideMarketplaceMcps` organization setting causes…") is still misleading since `orgSettings` is always `undefined` — the MCP fetch is never skipped.
 
 ## Release History
 

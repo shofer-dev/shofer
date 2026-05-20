@@ -226,17 +226,79 @@ When multiple skills have the same name:
 2. **Within same source**: mode-specific > generic
 3. **Same source + specificity**: first discovered wins
 
+## Gaps, Issues, and Areas for Improvement
+
+This section documents discovered gaps between the documentation and the actual codebase, edge cases not yet addressed, and opportunities for hardening the skills system.
+
+### Undocumented Public API Methods
+
+- **`getSkillsMetadata()`** on [`SkillsManager.ts`](src/services/skills/SkillsManager.ts:290) — the public method used by `handleRequestSkills()` to return all discovered skills to the webview. This is distinct from `getSkillsForMode()` which filters by mode and applies override resolution. The Key Files table does not reference it, and the Discovery Process section focuses only on `getSkillsForMode()`.
+- **`getSkillContent()`** on [`SkillsManager.ts`](src/services/skills/SkillsManager.ts:262) — resolves a skill's full content by name and optional mode, used by `resolveSkillContentForMode()`. This is the bridge between metadata discovery and actual instruction loading.
+- **`createSkill()`**, **`deleteSkill()`**, **`moveSkill()`** on [`SkillsManager.ts`](src/services/skills/SkillsManager.ts:349,433,458) — lifecycle management methods used by the Settings UI. These are not mentioned in the Architecture or Discovery Process sections.
+
+### Overlapping File Names
+
+Three distinct files share the name `skills.ts`, disambiguated only by parenthetical suffixes in the Key Files table:
+
+| File                                            | Actual Role                                    |
+| ----------------------------------------------- | ---------------------------------------------- |
+| `src/shared/skills.ts`                          | Shared types (`SkillMetadata`, `SkillContent`) |
+| `src/core/prompts/sections/skills.ts`           | System prompt section generator                |
+| `src/core/prompts/tools/native-tools/skills.ts` | Native tool schema (default export)            |
+
+This naming collision makes `grep` and cross-reference harder than necessary. Consider renaming to `skillTypes.ts`, `skillPromptSection.ts`, `skillToolSchema.ts`.
+
+### Missing Documentation for Name Validation
+
+The doc says "1-64 chars, lowercase alphanumeric with hyphens" but does not reference the shared validation source:
+
+- **`validateSkillNameShared()`** imported from `@shofer/types` — the authoritative validation function
+- **`SkillNameValidationError`** enum — `Empty`, `TooLong`, `InvalidFormat` error codes
+- **`SKILL_NAME_MAX_LENGTH`** constant = 64
+
+The `SkillsManager` has a private `validateSkillName()` wrapper and a `getSkillNameErrorMessage()` converter that maps error codes to i18n strings. These are not mentioned in the doc but are critical for understanding why certain names are rejected.
+
+### Deprecated `mode` Field
+
+The `SkillMetadata` type ([`skills.ts`](src/shared/skills.ts:11-14)) includes a **deprecated `mode?: string`** field alongside the current `modeSlugs?: string[]`. The frontmatter parser in `loadSkillMetadata()` handles both formats with priority: `modeSlugs` > `mode` > directory-based mode. The doc's frontmatter fields table only shows `modeSlugs`.
+
+### Mention-Loaded Skills
+
+The doc mentions "Skills inserted via `/skill-name` in messages also trigger loading" but does not explain the mechanism. When a user types `/my-skill` in chat, `processUserContentMentions()` (in [`Task.ts`](src/core/task/Task.ts:135)) parses the mention, resolves the skill, and populates `loadedSkills` **before** the task loop starts — bypassing the `skills` tool entirely. This path is used for the "Send Now" flow (see comment at [`Task.ts`](src/core/task/Task.ts:6008-6010)).
+
+### Approval UX
+
+The `SkillsTool.execute()` handler calls `askApproval("tool", toolMessage)`, which renders a user-facing approval prompt. The doc says "Asks for user approval" without noting that this is an interactive ask (blocks the task loop until the user clicks Accept/Reject). If skills auto-approval is configured (via the `ALWAYS_AVAILABLE_TOOLS` list), this prompt is skipped by the auto-approval fast-path.
+
+### SkillsManager is Missing from Terminology
+
+The architecture section (§5) of [`terminology.md`](terminology.md) does not list `SkillsManager`. It should be added alongside other backend services like `McpHub`, `CodeIndexManager`, etc.
+
+### No Coverage of SKILL.md Validation Flow
+
+The validation flow after frontmatter parsing includes these steps (in order), but the doc only mentions steps 1, 2, and 4:
+
+1. Required field checks (`name`, `description` present and string-typed)
+2. Name matches directory name
+3. Name passes `validateSkillNameShared()` (regex: `/^[a-z0-9]+(-[a-z0-9]+)*$/`, length ≤ 64)
+4. Description length validation (1-1024 chars after `trim()`)
+5. `modeSlugs` / `mode` parsing with priority fallback
+
+### No Mention of Symbolic Link Support
+
+`scanSkillsDirectory()` iterates subdirectories and resolves symlinks ([`SkillsManager.ts`](src/services/skills/SkillsManager.ts:59)). Symlinked skill directories are followed, allowing skill sharing without duplication. This is not documented.
+
 ## Key Files
 
-| File                                                                            | Purpose                                            |
-| ------------------------------------------------------------------------------- | -------------------------------------------------- |
-| [`Task.ts`](src/core/task/Task.ts:549)                                          | `loadedSkills` Map, condense clearing              |
-| [`SkillsTool.ts`](src/core/tools/SkillsTool.ts)                                 | Handler: no-op check, tracking, approval           |
-| [`SkillsManager.ts`](src/services/skills/SkillsManager.ts)                      | Discovery, caching, file watching                  |
-| [`skillInvocation.ts`](src/services/skills/skillInvocation.ts)                  | Content loading, result formatting                 |
-| [`skills.ts`](src/shared/skills.ts)                                             | Type definitions (`SkillMetadata`, `SkillContent`) |
-| [`skills.ts` (prompt)](src/core/prompts/sections/skills.ts)                     | System prompt section generation                   |
-| [`skills.ts`](src/core/prompts/tools/native-tools/skills.ts)                    | Native tool schema                                 |
-| [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts)           | IPC handlers (requestSkills, create, delete, move) |
-| [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)           | Popover UI with loaded/unloaded split + refresh    |
-| [`ExtensionStateContext.tsx`](webview-ui/src/context/ExtensionStateContext.tsx) | `loadedSkills` state management                    |
+| File                                                                            | Purpose                                                                                                                                                        |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`Task.ts`](src/core/task/Task.ts:549)                                          | `loadedSkills` Map, condense clearing                                                                                                                          |
+| [`SkillsTool.ts`](src/core/tools/SkillsTool.ts)                                 | Handler: no-op check, tracking, approval                                                                                                                       |
+| [`SkillsManager.ts`](src/services/skills/SkillsManager.ts)                      | Discovery (`discoverSkills`, `getSkillsMetadata`, `getSkillsForMode`, `getSkillContent`), lifecycle (`createSkill`, `deleteSkill`, `moveSkill`), file watching |
+| [`skillInvocation.ts`](src/services/skills/skillInvocation.ts)                  | Content loading, result formatting                                                                                                                             |
+| [`skills.ts`](src/shared/skills.ts)                                             | Type definitions (`SkillMetadata`, `SkillContent`)                                                                                                             |
+| [`skills.ts` (prompt)](src/core/prompts/sections/skills.ts)                     | System prompt section generation                                                                                                                               |
+| [`skills.ts`](src/core/prompts/tools/native-tools/skills.ts)                    | Native tool schema                                                                                                                                             |
+| [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts)           | IPC handlers (requestSkills, create, delete, move)                                                                                                             |
+| [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)           | Popover UI with loaded/unloaded split + refresh                                                                                                                |
+| [`ExtensionStateContext.tsx`](webview-ui/src/context/ExtensionStateContext.tsx) | `loadedSkills` state management                                                                                                                                |

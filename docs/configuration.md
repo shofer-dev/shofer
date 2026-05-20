@@ -291,3 +291,117 @@ excluded from prompt generation and rejected at execution time.
 
 Enable loading `AGENTS.md` files for agent-specific rules. See
 [agent-rules.org](https://agent-rules.org/). Defaults to `true`.
+
+---
+
+## Gaps & Known Issues
+
+This document was verified against [`src/package.json`](../src/package.json)
+`contributes.configuration` and
+[`globalSettingsSchema`](../packages/types/src/global-settings.ts) on
+2026-05-20. The following gaps and issues were identified.
+
+### Configuration-key sources
+
+Shofer has **two** setting storage backends and it is critical to
+document which one a setting uses:
+
+| Storage                  | Declaration                                                       | Settings UI                                                     |
+| ------------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| VS Code configuration    | `contributes.configuration.properties` in `src/package.json`      | Has settings-panel rows (API & Providers, Debug, etc.)          |
+| ContextProxy GlobalState | `globalSettingsSchema` in `packages/types/src/global-settings.ts` | No settings-panel rows (configure via `settings.json` directly) |
+
+A setting that appears in **both** places (e.g. `enableLlmProviderIntegration`)
+is stored in both backends, but the GlobalState copy is what ContextProxy
+serves to runtime code. The two copies can drift if a user edits
+`settings.json` directly for one but not the other.
+
+### `commandExecutionTimeout` / `commandTimeoutAllowlist` naming confusion
+
+The VS Code `contributes.configuration` registers these as
+[`shofer.devmandExecutionTimeout`](../src/package.json:370) and
+[`shofer.devmandTimeoutAllowlist`](../src/package.json:377) — note the
+`devmand` prefix. The `globalSettingsSchema` stores them as
+[`commandExecutionTimeout`](../packages/types/src/global-settings.ts:116)
+and [`commandTimeoutAllowlist`](../packages/types/src/global-settings.ts:117).
+
+Neither `shofer.devmandExecutionTimeout` nor
+`shofer.devmandTimeoutAllowlist` has a **single consumer** in the
+TypeScript source tree — they are dead code. The runtime reads these
+values from `globalSettingsSchema` via
+[`ContextProxy.getValue()`](../src/core/config/ContextProxy.ts:509).
+
+**Impact on users:** Setting `shofer.devmandExecutionTimeout` in
+`settings.json` has no effect. The runtime reads
+`shofer.commandExecutionTimeout` from ContextProxy instead, but that key
+does not appear in the VS Code settings UI (no settings-panel row).
+
+### `maxUsd: 0` is invalid per the schema
+
+The [`costLimitSchema`](../packages/types/src/history.ts:74) requires
+`maxUsd: z.number().positive()` — strictly greater than zero. The
+`defaultCostLimit` example in this doc shows `"maxUsd": 0`, which would
+be rejected by Zod validation. Cost limiting is actually disabled by
+setting `defaultCostLimit: null` (the `nullish()` wrapper on the
+[`globalSettingsSchema`](../packages/types/src/global-settings.ts:234)
+default).
+
+### `enableLlmProviderIntegration` "Since 3.56.x" is unverifiable
+
+No source file, changelog entry, or tag in the repository contains
+`3.56`. The version string appears only in this document.
+
+### `codeIndex.embeddingBatchSize` missing range
+
+The doc omits the Range row that `package.json` declares: `minimum: 1`,
+`maximum: 200` at [`src/package.json`](../src/package.json:440-442).
+
+### Missing setting sections
+
+The `globalSettingsSchema` defines ~80+ keys. Only **5** are documented
+here (`defaultCostLimit`, `disabledTools`, `useAgentRules`,
+`commandExecutionTimeout`, `commandTimeoutAllowlist` — the last two
+with the naming confusion noted above). Entire functional areas are
+absent:
+
+- **Auto-approval** — `autoApprovalEnabled`, `alwaysAllowReadOnly`,
+  `alwaysAllowWrite`, `alwaysAllowBrowser`, `alwaysAllowMcp`,
+  `alwaysAllowExecute`, `alwaysAllowModeSwitch`, `alwaysAllowSubtasks`
+- **Context window** — `autoCondenseContext`,
+  `autoCondenseContextPercent`, `maxOpenTabsContext`, `maxWorkspaceFiles`
+- **Terminal** — `terminalOutputPreviewSize`,
+  `terminalShellIntegrationTimeout`, `terminalCommandDelay`
+- **Checkpoints** — `enableCheckpoints`, `checkpointTimeout`
+- **Modes** — `mode`, `modeApiConfigs`, `customModes`,
+  `customModePrompts`
+- **Rate limiting** — `allowedMaxRequests`, `allowedMaxCost`,
+  `rateLimitSeconds`
+- **Images** — `maxImageFileSize`, `maxTotalImageSize`
+- **Environment details** — `includeCurrentTime`, `includeCurrentCost`,
+  `maxGitStatusFiles`, `includeDiagnosticMessages`,
+  `maxDiagnosticMessages`
+- **Write delay** — `writeDelayMs`
+
+### `newTaskRequireTodos` has no consumers
+
+This setting is registered in `package.json` (line 433) but has zero
+references in any TypeScript source file. Either the feature was never
+wired up or it is dead configuration.
+
+### Inaccurate "debug mode (F5)" description
+
+The doc says `debugProxy.enabled` is "Only active in debug mode (F5)".
+The actual gate is
+[`extensionContext.extensionMode === vscode.ExtensionMode.Development`](../src/utils/networkProxy.ts:207),
+not the F5 key — these are different concepts (the extension can run in
+development mode from a `.vsix` install too).
+
+### Missing `enabled`-style column for non-stored settings
+
+The doc does not distinguish between settings that are stored in
+`contributes.configuration` (VS Code schema, UI controls) and settings
+that are stored in `globalSettingsSchema` (ContextProxy, JSON-only).
+This distinction is material because Global Settings bypass the VS Code
+`settings.json` schema validation. A typo in a Global Setting value
+(e.g. `"maxUsd": "0"` as a string) passes silently through VS Code
+validation and is only caught at runtime by Zod.

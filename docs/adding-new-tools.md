@@ -269,6 +269,47 @@ Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts
 
 ---
 
+## Gaps & Areas for Improvement
+
+This section tracks known gaps, undocumented steps, and design warts in the native tool implementation workflow. These are not bugs in this doc — they are places where the codebase plumbing is more complex than the checklist captures, or where a missing step will silently break tool integration.
+
+### Checklist gaps (items not in the 11-step list but needed in practice)
+
+- **`TOOL_DISPLAY_NAMES`** (in [`tool.ts`](../packages/types/src/tool.ts)): Mentioned in a sentence under Step 3 but not listed as its own checklist row. Every tool needs a human-readable display name here — it drives the tools-UI panel and auto-approval setting labels. Without it the tool is unnamed in the SettingsView.
+
+- **`SAY_TOOL_TO_NATIVE_NAME`** (in [`tools.ts`](../src/core/auto-approval/tools.ts)): The camelCase → snake_case mapping used by `getToolGroupForSayTool()`. A tool in the `read` / `write` / `execute` / `browser` group that uses `ask:"tool"` MUST have an entry here. Step 10 mentions this in prose but it's easy to miss. Without it, auto-approval falls through to `"ask"` even with the toggle on.
+
+- **`toolParamNames`** (in [`src/shared/tools.ts`](../src/shared/tools.ts)): If a tool introduces a new parameter name not already in the `toolParamNames` const array, it must be added there. This array drives the `ToolParamName` type used in `ToolUse.params` — a missing entry means the streaming infrastructure cannot type the parameter and the partial-json parser may drop it.
+
+### Tool group pitfalls
+
+- **`write` group `customTools`**: The `write` group has two arrays — `tools` (always available when write is allowed) and `customTools` (opt-in only, gated behind `experiments.customTools`). Adding a write-mutating tool to `customTools` instead of `tools` means it won't appear unless the user has custom tools enabled. The doc shows merging both arrays in the example but doesn't explain the distinction.
+
+- **9 groups only**: There are exactly 9 tool groups. Adding a 10th requires changes to `toolGroups` const, `TOOL_GROUPS`, `toolGroupsSchema`, the `<Mode × Allowed Groups>` matrix in `tool-categories.md`, and the auto-approval switch in `index.ts`. The doc has no warning about this.
+
+### Auto-approval fragmentation
+
+The auto-approval system requires 4 separate code locations for full integration of a tool that uses `ask:"tool"` and belongs to `subtasks`, `mode`, or `mcp`:
+
+1. [`checkAutoApproval()`](../src/core/auto-approval/index.ts) — the hardcoded per-group camelCase allowlists
+2. [`SAY_TOOL_TO_NATIVE_NAME`](../src/core/auto-approval/tools.ts) — the camelCase → snake_case mapping
+3. [`TOOL_GROUPS`](../packages/types/src/tool.ts) — the snake_case → group mapping
+4. Handler code — constructing the `ShoferSayTool.tool` camelCase string
+
+For `read` / `write` / `execute` / `browser` groups the chain is symbolic (group-driven), but for `subtasks` / `mode` / `mcp` it is hardcoded. A developer adding a new subtask-group tool must remember to edit BOTH the `TOOL_GROUPS` entry AND the hardcoded allowlist in `checkAutoApproval()`. Missing the allowlist edit silently breaks auto-approval.
+
+### Handler example omissions
+
+The Step 4 handler example is intentionally minimal, but real tool implementations also need:
+
+- **File Change Tracking**: Tools that mutate workspace files must call `task.fileContextTracker.captureOriginal(relPath, content)` before mutation and `task.fileContextTracker.trackFileContext(relPath, "shofer_edited")` after. Without these, the file won't appear in the FileChangesPanel. See [`file-change-tracking.md`](file-change-tracking.md).
+
+- **`checkpointSaveAndMark`**: File-mutating tools get a `checkpointSaveAndMark(shofer)` call in the `presentAssistantMessage.ts` switch before the tool's `.handle()` is invoked (see Step 5b). The handler itself does not call checkpoint — the router does.
+
+- **`resetPartialState()`**: Tools that override `handlePartial()` must call `this.resetPartialState()` at the end of `execute()` on both success and error paths. Skipping this causes the next invocation to short-circuit on a stale stabilized path.
+
+---
+
 ## Related Documentation
 
 | Document                                   | Covers                                                                                      |

@@ -156,3 +156,34 @@ Both capture points call [`snapshotApiReqError()`](../src/core/task/Task.ts) whi
 | ------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
 | 0.11.7  | 2026-05-16 | Added `error`, `retryAttempt`, `wireRequest` fields; fixed field name mismatch; added error-only call handling |
 | 0.11.6  | 2026-05-14 | Initial JSON export with `api_req_started`-based metadata                                                      |
+
+## Gaps & Areas for Improvement
+
+### Undocumented Dependencies
+
+- **`TaskHistoryStore`** — [`src/core/task-persistence/TaskHistoryStore.ts`](../src/core/task-persistence/TaskHistoryStore.ts) writes `history_item.json` but its file path is never given in the doc.
+- **`GlobalFileNames`** constants — [`src/shared/globalFileNames.ts`](../src/shared/globalFileNames.ts) provides `apiConversationHistory` and `uiMessages` keys used in `getTaskWithId()` to construct task-directory file paths. Not mentioned.
+- **`resolveDefaultSaveUri` / `saveLastExportPath`** — [`src/utils/export.ts`](../src/utils/export.ts) provides export path resolution and last-path persistence used by both export flows. Not mentioned.
+- **`ExtendedContentBlock`** — [`export-json.ts`](../src/integrations/misc/export-json.ts) imports this union type from [`export-markdown.ts`](../src/integrations/misc/export-markdown.ts). The cross-file dependency is implicit.
+
+### Missing Edge Case Coverage
+
+- **Concurrent read/write**: The doc does not discuss what happens when `exportTaskWithIdJson` reads `ui_messages.json` while `Task.saveShoferMessages()` is writing it (race between export read and live-task write).
+- **Schema version mismatch**: The three persisted JSON files have no embedded `version` field. Exporting a task persisted by an older Shofer version may produce a trace whose shape the current `buildJsonTrace()` cannot parse correctly. The `try/catch` around `JSON.parse` in `getTaskWithId` provides a safety net but is not documented.
+
+### Missing Flow Steps
+
+- **Filename generation**: `ShoferProvider.exportTaskWithId()` calls `getTaskFileName()` to build the default filename BEFORE calling `downloadTask()`. The Data Flow diagram skips this intermediate step.
+- **Filesystem pre-check**: `ShoferProvider.exportTaskWithIdJson()` calls `fs.stat()` to check `ui_messages.json` existence before reading — a defensive guard not mentioned in the doc.
+
+### Token Estimation Trigger
+
+The doc says token estimation fires "when the provider does not emit `usage` chunks in streaming mode", but the actual trigger in [`buildJsonTrace()`](../src/integrations/misc/export-json.ts) is broader: `calls.every(c => c.inputTokens === 0 && c.outputTokens === 0)` — it fires whenever ALL calls have zero tokens, regardless of cause (e.g., all error-only calls, or a provider that emits usage but the capture failed).
+
+### Missing Glossary Terms
+
+No formal definitions for:
+
+- **`api_req_started`** — the `ShoferSay` type used as the anchor for per-call metadata in both export formats.
+- **Error-only call** — an API call that never received an assistant response; export produces a `JsonExportCall` with `messages: []` and `toolCalls: []` but carries error and wire metadata.
+- **Token estimation** — the char/4 fallback heuristic, marked by `_tokensEstimated: true`.

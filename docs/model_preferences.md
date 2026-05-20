@@ -157,3 +157,21 @@ These are opt-in tools in the `edit.customTools` array:
 | `apply_patch`    | Unified diff (`@@` hunks)                    | OpenAI models      |
 
 They are only available when explicitly included via `modelInfo.includedTools`.
+
+---
+
+## Gaps, Issues & Improvement Areas
+
+This section records deficiencies discovered during the May 2026 verification review. Revisit when the tool-preference subsystem changes.
+
+1. **Code example is a pedagogic simplification, not byte-for-byte source.** The OpenAI router prefs block (lines 32–37) shows a literal `if` with bare `excludedTools: […]` / `includedTools: […]` syntax. The actual source in [`router-tool-preferences.ts`](../src/api/providers/utils/router-tool-preferences.ts:22-26) uses spread-into-Set deduplication (`[...new Set([...(result.excludedTools||[]), "apply_diff", "write_to_file"])]`). The simplified version is clearer for human readers but won't match a grep of the codebase. Consider adding a note that the code is "simplified for clarity" or showing the real source verbatim.
+
+2. **Missing coverage of other native providers.** The doc covers Gemini, Vertex, and OpenAI-via-router but doesn't mention Anthropic, DeepSeek, Ollama, or VS Code LM providers. If any of those gain tool preferences, this doc will silently go stale. Add a section or an explicit note that "these providers currently apply no tool preferences."
+
+3. **Shofer Cloud fetcher entry point not documented.** The doc describes resolution logic but doesn't link to the actual fetcher that loads settings from the API. The closest reference is [`versionedSettings.ts`](../src/api/providers/fetchers/versionedSettings.ts) which only handles version-keyed resolution — it doesn't perform the API fetch. Add a pointer to the file that calls `resolveVersionedSettings` (likely a model-info fetcher).
+
+4. **`disabledTools` setting not mentioned.** The filter pipeline in [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts:310) also supports a `disabledTools` array that removes tools regardless of mode groups or model preferences. This is a user-facing knob orthogonal to the model-preference mechanism and should be documented.
+
+5. **`edit.customTools` source not linked.** The Legacy/Custom Edit Tools table lists `edit_file`, `search_replace`, and `apply_patch` as being in `edit.customTools` but doesn't link to the `TOOL_GROUPS` constant where `edit` group's `customTools` array is actually defined. Add a link to [`packages/types/src/tool.ts`](../packages/types/src/tool.ts).
+
+6. **"OpenAI (Native Provider)" section is a no-op placeholder.** It says "Not explicitly set in code — uses default tool set." If the native OpenAI provider ever gets preferences, this line will silently go out of date with no mechanism to flag it. Consider either linking to the `OpenAiHandler.getModel()` source to prove the claim, or removing the section and adding a note to the summary table that only the router path applies preferences.

@@ -265,11 +265,79 @@ When either limit is exceeded, the user is prompted regardless of per-tool toggl
 
 ## Related Files
 
-| File                                                                                                | Purpose                                      |
-| --------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)                             | Main decision logic                          |
-| [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)                             | `isReadOnlyToolAction` / `isWriteToolAction` |
-| [`src/core/auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                                 | MCP per-tool `alwaysAllow` check             |
-| [`src/core/auto-approval/commands.ts`](../src/core/auto-approval/commands.ts)                       | Command allowlist/denylist evaluation        |
-| [`src/core/auto-approval/AutoApprovalHandler.ts`](../src/core/auto-approval/AutoApprovalHandler.ts) | Cost & request limit tracking                |
-| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                       | `ALWAYS_AVAILABLE_TOOLS`, tool groups        |
+| File                                                                                                | Purpose                                                 |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)                             | Main decision logic                                     |
+| [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)                             | `isReadOnlyToolAction` / `isWriteToolAction`            |
+| [`src/core/auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                                 | Uncategorized MCP tool check (`isMcpToolUncategorized`) |
+| [`src/core/auto-approval/commands.ts`](../src/core/auto-approval/commands.ts)                       | Command allowlist/denylist evaluation                   |
+| [`src/core/auto-approval/AutoApprovalHandler.ts`](../src/core/auto-approval/AutoApprovalHandler.ts) | Cost & request limit tracking                           |
+| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                       | `ALWAYS_AVAILABLE_TOOLS`, tool groups                   |
+
+---
+
+## Gaps, Issues & Improvement Areas
+
+_Discovered during the 2026-05-20 verification review against source at [`index.ts`](../src/core/auto-approval/index.ts) (rev ffde35c) and
+[`tools.ts`](../src/core/auto-approval/tools.ts)._
+
+### Documentation Gaps (Corrected)
+
+1. **Missing unconditionally-approved tools** — `give_feedback`, `check_mcp_call_status`, and `wait_for_mcp_call`
+   were unconditionally approved in code but absent from the doc. Added as Meta-Operations and
+   Async MCP Call Status Tools respectively.
+
+2. **Missing `cancel_tasks` / `answer_subtask_question` from `alwaysAllowSubtasks`** — the doc claimed
+   the toggle controlled only `new_task` and `finishTask`. The actual gate covers all four
+   control-plane subtask tools. Expanded the toggles table, subtasks table, and callout.
+
+3. **Missing `alwaysAllowUncategorized` toggle** — defined as an `AutoApprovalState`
+   variant in code but absent from the toggles table. Added as additional option for `alwaysAllowMcp`.
+
+4. **Missing `git_search` and `ask_assistant_agent`** from the `alwaysAllowReadOnly` tool table.
+   Both are in `TOOL_GROUPS.read` and therefore gated by this toggle.
+
+5. **Incorrect `run_slash_command` in `alwaysAllowReadOnly` table** — `run_slash_command` is
+   NOT in `TOOL_GROUPS.read` (it lives in `ALWAYS_AVAILABLE_TOOLS` only). Removing it from
+   the gated table was correct; the old listing would mislead readers into thinking the
+   toggle gates the tool.
+
+### Factual Errors (Corrected)
+
+6. **`skill` / `skills` name mismatch** — the doc used the canonical tool name `skill`; the
+   code uses the SayTool name `skills`. Changed to match code.
+
+7. **MCP per-tool `alwaysAllow` flag** — the `McpTool` type has no `alwaysAllow` field
+   (only `name`, `description`, `inputSchema`, `enabledForPrompt`, `group`). Rewrote the MCP
+   section to describe the actual mechanism (group-based gating + `alwaysAllowUncategorized`).
+
+8. **`rag_search` not unconditionally auto-approved** — the doc's `ALWAYS_AVAILABLE_TOOLS` vs
+   Auto-Approval section used `rag_search` as an example of unconditional auto-approval, but
+   it's actually gated by `alwaysAllowReadOnly`. Replaced with `fetch_web_page` which IS
+   unconditionally approved.
+
+### Structural / Completeness Issues (Open)
+
+9. **No mention of `call_mcp_tool_async` routing** — `call_mcp_tool_async` goes through the
+   `use_mcp_server` ask gate (not the `tool` ask path) and therefore falls under `alwaysAllowMcp`.
+   The `check_mcp_call_status` / `wait_for_mcp_call` pair goes through the `tool` ask path and
+   is unconditionally approved. This asymmetry is not documented.
+
+10. **"Non-blocking asks" terminology ambiguous** — step 1 of the Decision Flow says "Non-blocking
+    asks" but the actual code calls `isAutoApprovableAsk()`. Today this is only `command_output`,
+    which is indeed non-blocking, but the underlying concept is "auto-approvable at the ask level"
+    rather than "non-blocking." The two may diverge if additional asks are added to `autoApprovableAsks`.
+
+11. **No test coverage reference** — the auto-approval system has tests (e.g.,
+    [`auto-approval/__tests__/`](../src/core/auto-approval/__tests__/) if it exists) but the
+    doc doesn't link to them. Adding test references would help developers verify behavior.
+
+12. **Multiple independent lists of unconditionally-approved tools** — the `index.ts` code
+    has four separate `if` blocks that unconditionally approve different tool sets
+    (meta-operations, subtask status, async MCP status, lightweight read-only). These are
+    conceptually related but not labelled in code. A consolidated comment or helper function
+    would reduce the risk of the next tool being added to the wrong block.
+
+13. **`mcp.ts` purpose description in Related Files is stale** — the table says "MCP per-tool
+    `alwaysAllow` check" but the function `isMcpToolUncategorized` checks the `group` field,
+    not `alwaysAllow`. The description should read "uncategorized MCP tool check" or similar.

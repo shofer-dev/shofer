@@ -319,3 +319,31 @@ Keys in [`quickAccess.json`](extensions/shofer/webview-ui/src/i18n/locales/en/qu
 - [ ] Keyboard shortcuts for quick access
 - [ ] Task-state-aware button behavior (disable/hide during active tasks if desired)
 - [ ] `use_skill` built-in slash command for explicit skill invocation
+
+## Gaps, Issues, and Areas for Improvement
+
+> Discovered during the 2026-05-20 doc-source verification pass.
+
+### 1. Undocumented header icons in popovers
+
+Both `CommandsButton` and `SkillsButton` render a Lucide icon next to the popover title text (`Zap` for commands, `GraduationCap` for skills). The design details tables do not mention these header icons.
+
+### 2. Undocumented refresh button behavior
+
+Both popovers include a refresh button (↻, `RefreshCw` from lucide-react) between the title and the gear icon. The refresh button re-reads `.shofer/commands` or `.shofer/skills` directories via a `requestCommands` / `requestSkills` IPC message. This behavior was entirely undocumented before the 2026-05-20 verification pass.
+
+### 3. SkillsButton re-requests on every popover open
+
+`SkillsButton` calls `vscode.postMessage({ type: "requestSkills" })` not only on mount but also **every time the popover opens** (`handleOpenChange` with `isOpen === true`). This ensures the loaded/unloaded split reflects skills loaded since the popover was last opened. The doc does not mention this refresh-on-open behavior.
+
+### 4. `requestLoadedSkills` and `searchSkills` message types have no handlers
+
+The `WebviewMessage` union in [`vscode-extension-host.ts`](packages/types/src/vscode-extension-host.ts) defines `"requestLoadedSkills"` and `"searchSkills"` message types, and the `ExtensionMessage` type includes corresponding `loadedSkills` and `skillSearchResults` payload fields. However, no handler is registered for either message type in [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts) or [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts). These are dead types — defined but not wired.
+
+### 5. Settings gear uses codicon, not Lucide
+
+Both popovers' settings gear button uses `<span className="codicon codicon-settings-gear" />` — a VS Code codicon, not a Lucide icon. The doc says "gear icon" generically; it would be more precise to say "`codicon-settings-gear`" to distinguish from Lucide `Settings`/`Settings2` icons used elsewhere.
+
+### 6. One built-in command only (`init`), despite doc implying multiple
+
+The [built-in-commands.ts](src/services/command/built-in-commands.ts) file defines only one built-in command: `init`. The `CommandsButton` groups commands by source including `"built-in"`, so the "Built-in Commands" group would appear only if built-in commands exist. The doc's user-flow diagram shows only Project and Global groups — this is consistent with the current single-command reality but was not explicitly called out.

@@ -129,9 +129,34 @@ Tools without an explicit `group` field continue to work — they default to `un
 2. Ensure the group exists as a valid [`ToolGroup`](../packages/types/src/tool.ts) value
 3. For prefix-based automatic classification (used by browser tools), the `browser_` prefix maps to `"browser"` and `ide_` prefix maps to `"execute"` in [`getToolGroupForSayTool()`](../src/core/auto-approval/tools.ts)
 
+## Gaps, Issues & Areas for Improvement
+
+This section tracks known deficiencies in this document and in the tool-group system itself, discovered during verification against source.
+
+### Document structure gaps
+
+- **No coverage of `TOOL_ALIASES`**: The [`TOOL_ALIASES`](../packages/types/src/tool.ts) constant maps deprecated tool names to canonical ones (e.g., `write_file` → `write_to_file`, `search_and_replace` → `edit`). This document does not explain how aliases interact with tool groups — aliased tools inherit the group of their canonical form.
+- **No coverage of `customTools`**: The `write` group has a `customTools` array (`["edit", "search_replace", "edit_file", "apply_patch"]`). These are legacy/alias edit tools that receive special handling in the parser. The document does not explain what `customTools` means or how they differ from regular `tools`.
+- **No coverage of `filterPrivateToolsForMode`**: The document mentions `filterNativeToolsForMode` and `filterMcpToolsForMode` (implicitly), but the third filter — `filterPrivateToolsForMode` (for extension-registered private tools like `ide_*`) — is not discussed. All three filters live in [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts).
+- **No discussion of how `uncategorized` actually gates access**: The `uncategorized` group is listed as a fallback, but the document does not explain that a mode must explicitly include `"uncategorized"` in its `groups` array for uncategorized tools to be available. Currently only `code` and `debug` include it; `architect`, `ask`, and `orchestrator` do not.
+- **Missing external-tool group resolution detail**: External LM tools (`ide_*` from `arkware-vscode-tools`) get their groups from `arkware.vscodeTools.toolGroups` in `package.json`, processed by `filterPrivateToolsForMode`. For auto-approval, `getToolGroupForSayTool()` in [`auto-approval/tools.ts`](../src/core/auto-approval/tools.ts) falls back to prefix-based inference (`ide_*` → `"execute"`, `browser_*` → `"browser"`). These two resolution paths are not documented on the same page.
+
+### Source-of-truth risks
+
+- **Fragile `#L141` line anchor**: The link to [`TOOL_GROUPS`](../packages/types/src/tool.ts#L141) points to line 141, but the constant is at line 175. Line-number anchors in documentation are inherently fragile. Consider linking to the symbol name only.
+- **No version pin in the doc**: The doc says "Last Updated: 2026-05-04" but has no version number that can be correlated with the extension version that last changed `TOOL_GROUPS` or `DEFAULT_MODES`. Consider adding a `Version` field that matches the extension version at the time of last verification.
+
+### Tool-group system design observations
+
+- **`alwaysAvailable` is not a group-level property**: The old doc erroneously showed `alwaysAvailable: true` as a field on the `mode` group entry in `TOOL_GROUPS`. In reality, `ToolGroupConfig` has only `tools` and `customTools`; always-availability is a separate constant `ALWAYS_AVAILABLE_TOOLS` that is checked independently of groups.
+- **`new_task` lives in `subtasks`, not `mode`**: Although `new_task` is about task lifecycle, it belongs to the `subtasks` group (alongside `check_task_status`, `wait_for_task`, etc.), not the `mode` group (which contains only `switch_mode`). The `subtasks` group is the correct home because `new_task` is a control-plane subtask tool that shares the `alwaysAllowSubtasks` auto-approval toggle.
+- **`give_feedback` is always-available but not in any group**: [`give_feedback`](../packages/types/src/tool.ts) is in `ALWAYS_AVAILABLE_TOOLS` but does not appear in any `TOOL_GROUPS` entry. This is intentional — always-available tools are injected into every mode's tool set regardless of group membership.
+- **browser group has zero native tools**: The `browser` group contains `tools: []` — all browser tools come from the `arkware-browser-tools` MCP server, classified by the `browser_` prefix. The group exists solely as a mode-filtering/auto-approval category for these external tools.
+
 ## References
 
 - [ToolGroup Type Definitions](../packages/types/src/tool.ts)
 - [Mode Configuration](../packages/types/src/mode.ts)
 - [External Tool Resolution](../src/core/task/build-tools.ts)
 - [MCP Hub — Tool Metadata](../src/services/mcp/McpHub.ts)
+- [Auto-Approval Tool Group Inference](../src/core/auto-approval/tools.ts)

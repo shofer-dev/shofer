@@ -341,6 +341,30 @@ Following the [adding-new-tools.md](adding-new-tools.md) 11-step checklist:
 
 ---
 
+## Gaps, Issues & Improvement Areas
+
+_These items were identified during verification of this document against the live codebase (2026-05-20)._
+
+1. **Config table was missing `codebaseIndexGitPollIntervalMinutes`** — the Zod schema at [`codebase-index.ts`](packages/types/src/codebase-index.ts:137) defines this field, but the configuration table in §"Configuration" omitted it. Added during correction.
+
+2. **Config table had wrong default for `codebaseIndexGitBranch`** — the table said `"master"` but the source default in [`git-index-manager.ts`](src/services/git-index/git-index-manager.ts) is the empty string `""` (meaning HEAD). Corrected.
+
+3. **Truncation limit was wrong** — the error-handling table claimed commit messages are truncated at 8000 characters; the actual constant `MAX_CONTENT_LENGTH` in [`git-log-extractor.ts`](src/services/git-index/processors/git-log-extractor.ts:38) is `4000`. Corrected.
+
+4. **Data-flow diagram used wrong class name `GitHistoryManager`** — no such class exists. The entry-point is `GitIndexManager`, which delegates to `GitHistoryOrchestrator`. Corrected and added the intermediate `GitHistoryOrchestrator.startIndexing()` call.
+
+5. **Data-flow diagram omitted `--encoding=UTF-8` flag** — the actual `_buildLogArgs()` method always appends this flag. Added.
+
+6. **Indexing pipeline description misses the catch-up step** — the prose says "filter by maxHistoryDays" after extraction, but the actual `startIndexing()` in [`git-history-orchestrator.ts`](src/services/git-index/git-history-orchestrator.ts:88) performs a catch-up incremental scan first (when `lastCommitDate` exists in cache), then the full scan. The data-flow diagram does not show this catch-up path.
+
+7. **No mention of `GitCacheManager.lastCommitDate`** — the data model section (§Data Model) describes `GitCommitBlock` and the Qdrant point structure but does not mention the `lastCommitDate` field persisted in the cache, which drives Phase 2 incremental indexing.
+
+8. **`GitWatcher` described as "stub in Phase 1" in architecture diagram but not updated** — the architecture tree (line 21) still says `GitWatcher — polls for new commits (stub in Phase 1)` even though Phase 2 is marked ✅ Complete and the watcher is fully implemented.
+
+9. **`toolDescription()` case is trivial** — the doc references a `toolDescription()` switch case in the integration checklist, but the actual implementation in [`presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts:417) is a one-liner: `` `[${block.name} for '${block.params.query}']` ``. Any new parameter added to the tool must also update this string, but the doc doesn't call this out.
+
+10. **No coverage of submodule-aware scanning** — the git-index subsystem descends into submodules (via `listSubmoduleDisplayPaths()` in [`git-history-orchestrator.ts`](src/services/git-index/git-history-orchestrator.ts)), but this is not documented.
+
 ## State Machine
 
 ```

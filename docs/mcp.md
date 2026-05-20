@@ -305,17 +305,38 @@ MCP tool execution sends real-time status updates:
 
 ## Key Files
 
-| File                                                                                     | Role                                                |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [`McpHub.ts`](../src/services/mcp/McpHub.ts)                                             | Central hub: connections, tool discovery, execution |
-| [`McpServerManager.ts`](../src/services/mcp/McpServerManager.ts)                         | Singleton lifecycle, provider notification          |
-| [`mcpLogger.ts`](../src/services/mcp/mcpLogger.ts)                                       | Output-channel logger                               |
-| [`UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts)                               | `use_mcp_tool` handler and native MCP tool executor |
-| [`accessMcpResourceTool.ts`](../src/core/tools/accessMcpResourceTool.ts)                 | `access_mcp_resource` handler                       |
-| [`mcp_server.ts`](../src/core/prompts/tools/native-tools/mcp_server.ts)                  | Generates LLM tool schemas from connected servers   |
-| [`mcp-name.ts`](../src/utils/mcp-name.ts)                                                | Name sanitization, parsing, fuzzy matching          |
-| [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts)       | Parses `mcp--` prefixed tool calls from LLM         |
-| [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) | Routes `mcp_tool_use` blocks to handler             |
-| [`build-tools.ts`](../src/core/task/build-tools.ts)                                      | Assembles the final tool list sent to the LLM       |
-| [`auto-approval/index.ts`](../src/core/auto-approval/index.ts)                           | Decides auto-approval for MCP tool calls            |
-| [`auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                               | Uncategorized tool detection                        |
+| File                                                                                     | Role                                                  |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [`McpHub.ts`](../src/services/mcp/McpHub.ts)                                             | Central hub: connections, tool discovery, execution   |
+| [`McpServerManager.ts`](../src/services/mcp/McpServerManager.ts)                         | Singleton lifecycle, provider notification            |
+| [`mcpLogger.ts`](../src/services/mcp/mcpLogger.ts)                                       | Output-channel logger                                 |
+| [`UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts)                               | `use_mcp_tool` handler and native MCP tool executor   |
+| [`accessMcpResourceTool.ts`](../src/core/tools/accessMcpResourceTool.ts)                 | `access_mcp_resource` handler                         |
+| [`mcp_server.ts`](../src/core/prompts/tools/native-tools/mcp_server.ts)                  | Generates LLM tool schemas from connected servers     |
+| [`mcp-name.ts`](../src/utils/mcp-name.ts)                                                | Name sanitization, parsing, fuzzy matching            |
+| [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts)       | Parses `mcp--` prefixed tool calls from LLM           |
+| [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) | Routes `mcp_tool_use` blocks to handler               |
+| [`build-tools.ts`](../src/core/task/build-tools.ts)                                      | Assembles the final tool list sent to the LLM         |
+| [`auto-approval/index.ts`](../src/core/auto-approval/index.ts)                           | Decides auto-approval for MCP tool calls              |
+| [`auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                               | Uncategorized tool detection                          |
+| [`use-mcp-shared.ts`](../src/core/tools/mcp/use-mcp-shared.ts)                           | Shared helpers for both sync and async MCP tool paths |
+
+---
+
+## Gaps, Issues & Improvement Areas
+
+_This section captures deficiencies discovered during doc verification. Address these items in future work._
+
+1. **Missing Key File entry** — [`use-mcp-shared.ts`](../src/core/tools/mcp/use-mcp-shared.ts) was absent from the Key Files table. Added during this review. It contains the shared `validateMcpToolExists()`, `processMcpToolContent()`, `runMcpToolCall()`, and `sendExecutionStatus()` helpers used by both `use_mcp_tool` and `call_mcp_tool_async` paths.
+
+2. **Missing line numbers for lifecycle methods** — [`McpHub.dispose()`](../src/services/mcp/McpHub.ts) (line 2033) and [`McpServerManager.cleanup()`](../src/services/mcp/McpServerManager.ts) (line 80) are referenced in §"Server Lifecycle → Shutdown" without line numbers. Add these for consistency with other references.
+
+3. **UI Components table lacks file paths** — The three UI components (`McpToolApproval`, `McpServerStatus`, `McpServerConfiguration`) list only conceptual locations ("auto-approval flow", "settings view") instead of actual source file paths. This makes them undiscoverable for agents and developers.
+
+4. **Config schema doesn't document `watchPaths`** — The Server Schema table (§Configuration) lists 13 config fields but omits `watchPaths` (per-server file/directory watch list for auto-restart). It is mentioned only in prose under §File Watching.
+
+5. **Webview communication uses callback injection, not direct method** — The doc originally referenced a non-existent `notifyWebviewOfServerChanges()`. The actual pattern is:[`McpServerManager`](../src/services/mcp/McpServerManager.ts) injects a `notifyAllProvidersFn` callback into [`McpHub`](../src/services/mcp/McpHub.ts) via [`setNotifyAllProviders()`](../src/services/mcp/McpHub.ts) (line 189), which broadcasts an `"mcpServers"` `ExtensionMessage` to all registered webview providers. This indirection avoids a circular import between `McpHub` and `McpServerManager`. Verified and corrected during this review.
+
+6. **No doc coverage for `call_mcp_tool_async` flow** — The async MCP path (`call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`) shares the same `runMcpToolCall()` + `processMcpToolContent()` + `sendExecutionStatus()` helpers as the synchronous path, but this is not documented. The async path also passes `AbortSignal` through for cooperative cancellation.
+
+7. **Line numbers are drift-prone** — This review corrected 18 line-number references. Every future refactoring of `McpHub.ts` (2080 lines) or `NativeToolCallParser.ts` (1640 lines) will invalidate these anchors again. Consider whether line numbers add enough value to justify the maintenance burden, or whether function-name-only references (without line numbers) would be more stable.

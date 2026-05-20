@@ -131,3 +131,61 @@ channel:
 2. Store tools in a private registry.
 3. Expose two commands: `getDefinitions` and `invokeTool`.
 4. Register the provider in `shofer.privateToolProviders` config.
+
+## Gaps, Issues & Improvements
+
+### Config namespace mismatch between shofer and vscode-tools
+
+The [`vscode-tools` `package.json`](../../vscode-tools/package.json) contributes its
+private-tool-provider defaults under the `arkware.privateToolProviders` config key, but
+[`build-tools.ts`](../src/core/task/build-tools.ts:107-108) reads from
+`shofer.privateToolProviders`. Since these are different VS Code configuration
+namespaces, the defaults set in `vscode-tools/package.json` are never visible to
+shofer's discovery loop. The user must set `shofer.privateToolProviders` explicitly in
+their `settings.json` (as shown in the example above). vscode-tools and shofer should
+agree on one standard config key.
+
+### `getAllDefinitions()` does not include `group`
+
+The reference implementation's [`getAllDefinitions()`](../../vscode-tools/src/tools/registry.ts:52)
+returns `IdeToolDefinition[]` which has no `group` field. The Tool Group Assignment
+resolution order places "Tool-level `group`" first, but no vscode-tools definitions
+will ever carry a group. The three-tier resolution therefore always falls through to
+provider-level config for vscode-tools. Either `IdeToolDefinition` should be extended
+with an optional `group`, or the documentation should clarify that tool-level `group`
+is an optional contract extension that providers can opt into.
+
+### `browser-tools` provider is hypothetical
+
+The `settings.json` example includes a `"browser-tools"` provider entry with
+`arkware.browserTools.*` commands. No such extension exists in the codebase, and no
+matching commands (`arkware.browserTools.getDefinitions`, `arkware.browserTools.invokeTool`)
+are registered anywhere. The example should be replaced with a real second provider, or
+annotated as hypothetical.
+
+### No built-in `shofer.privateToolProviders` schema contribution
+
+The shofer extension does not contribute a `shofer.privateToolProviders` schema
+definition in its own `package.json` (under `contributes.configuration`). This means
+VS Code cannot provide IntelliSense / autocomplete for the `getDefinitionsCommand` and
+`invokeToolCommand` properties when the user edits `settings.json`. The schema shown
+in the first code block (lines 14–41) is aspirational — shofer should contribute it so
+that users get editor assistance.
+
+### Missing coverage of external tool invocation in [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts)
+
+The document describes the discovery pipeline (`getDefinitionsCommand` → `getPrivateLmToolMeta()`
+→ `resolvePrivateToolGroup()` → `_privateToolInvokeMap`) but does not cover how
+invocations flow at execution time. The execution path (`isPrivateLmTool()` →
+`getPrivateToolInvokeCommand()` → `vscode.commands.executeCommand(...)`) in
+`presentAssistantMessage.ts` is the second half of the contract and should be
+documented alongside discovery.
+
+### Error handling in `getPrivateLmToolMeta()`
+
+[`getPrivateLmToolMeta()`](../src/core/task/build-tools.ts:106) silently catches and
+discards errors from `vscode.commands.executeCommand(providerCfg.getDefinitionsCommand)`
+(line 140). A provider whose command throws (extension not installed, activation
+failed) is silently skipped with no user feedback or telemetry. This makes
+misconfiguration invisible. Consider surfacing a warning or logging to the output
+channel when a configured provider fails discovery.

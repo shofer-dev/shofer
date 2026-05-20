@@ -1069,3 +1069,95 @@ Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
 
 Where `<globalStorage>` defaults to `context.globalStorageUri.fsPath`, overridable
 via the `shofer.customStoragePath` VS Code setting.
+
+---
+
+## 14. Gaps, Issues & Improvement Areas
+
+This section documents deficiencies discovered during verification against the
+live codebase. Each item includes the current state and a suggested remedy.
+
+### 14a. Built-in Mode Count Is Stale
+
+§2d lists only five built-in modes (`architect`, `code`, `ask`, `debug`,
+`orchestrator`). The actual [`DEFAULT_MODES`](../packages/types/src/mode.ts:195)
+array defines **nine** built-in modes, adding `reviewer`, `search`, `opinion`,
+and `browser`. The code example and surrounding prose should be updated.
+
+### 14b. `custom_modes.yaml` Merge Logic Contains Duplicate Code
+
+[`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManager.ts:364)
+implements the project-vs-global merge **twice** in the same function: once as a
+two-map approach (lines 380–393) and again as a filter-and-spread approach
+(lines 396–401). The first implementation builds `projectModes` and `globalModes`
+maps that are never consumed after being built; only `mergedModes` (from the
+second implementation) is used. The dead maps should be removed or the two
+passages unified.
+
+### 14c. No Documentation of `ProviderSettingsManager.SCOPE_PREFIX`
+
+[`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts:59)
+defines `SCOPE_PREFIX = "shofer_config_"` which composes with `"api_config"`
+to produce the actual SecretStorage key `shofer_config_api_config`. This
+indirection is not explained in §1a — the doc previously showed the old
+hard-coded `roo_cline_config_api_config` value instead. The distinction
+between the prefix constant and the constructed key should be documented.
+
+### 14d. `ContextProxy.export()` Returns Only `GlobalSettings`
+
+§10a describes the full-settings export as producing a single JSON file with
+both `providerProfiles` and `globalSettings`. However,
+[`ContextProxy.export()`](../src/core/config/ContextProxy.ts:532) returns only
+`GlobalSettings` (the `globalSettings` half). The full export is orchestrated at
+a higher level — the `providerProfiles` block comes from
+[`ProviderSettingsManager.export()`](../src/core/config/ProviderSettingsManager.ts:512),
+and the caller in the Settings UI or
+[`exportSettings()`](../src/core/config/importExport.ts:247) stitches them
+together. The doc should clarify this split responsibility.
+
+### 14e. Per-Mode Import/Export Methods Not Referenced in §10g
+
+§10g references `customModesManager.exportModeWithRules()` and the `importMode`
+IPC flow but does not name or link to the actual methods:
+[`CustomModesManager.exportModeWithRules()`](../src/core/config/CustomModesManager.ts:724)
+and
+[`CustomModesManager.importModeWithRules()`](../src/core/config/CustomModesManager.ts:935).
+These line-level references should be added.
+
+### 14f. `globalStorage` Path Format Inconsistency
+
+The `globalStorage` directory path is derived from
+`context.globalStorageUri.fsPath`, which VS Code constructs as
+`<userData>/globalStorage/<publisher>.<extension-name>/`. The actual publisher
+and extension name are defined in `package.json` (currently `"name": "shofer-code"`).
+The doc should reference the `package.json` fields that determine this path
+rather than hard-coding Linux examples, since the path varies by platform and
+can be overridden via `shofer.customStoragePath`.
+
+### 14g. No Documentation of `GlobalFileNames` Consumer Interaction
+
+§12 lists all `GlobalFileNames` constants but does not explain how the
+storage subsystem (`getSettingsDirectoryPath`, `getTaskDirectoryPath`,
+`getCacheDirectoryPath` from [`src/utils/storage.ts`](../src/utils/storage.ts))
+resolves these filenames into absolute paths by joining
+`<globalStorage>/settings/`, `<globalStorage>/tasks/<id>/`, or
+`<globalStorage>/cache/` respectively. This is important context for
+understanding the write paths in §5 and the persisted task files in §13.
+
+### 14h. File Watcher Debounce Details Missing
+
+§7 describes MCP config file watching with a 500ms debounce but does not
+mention that [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:317)
+groups by `(source, filePath)` key and that **programmatic updates**
+(`isProgrammaticUpdate = true`) skip the watcher-triggered re-read
+entirely. This is an important behavioral detail for anyone debugging
+double-reload issues.
+
+### 14i. `.shofermodes` Path Resolution Details
+
+The doc uses the bare filename `.shofermodes` but the actual path is
+resolved by [`CustomModesManager.getWorkspaceRoomodes()`](../src/core/config/CustomModesManager.ts)
+which joins the workspace root with the `SHOFERMODES_FILENAME` constant.
+The filename constant is not separately documented; the watcher code in
+§7 constructs `shofermodesPath` via `path.join(workspaceRoot, SHOFERMODES_FILENAME)`,
+not a hard-coded string.

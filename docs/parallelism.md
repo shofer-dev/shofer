@@ -437,6 +437,42 @@ Task instances are **not** automatically rehydrated — tasks remain idle until 
 
 ---
 
+## Gaps & Improvement Opportunities
+
+Discovered during source-code verification. These are areas where the documentation could be expanded or the implementation could be tightened.
+
+### Documentation Gaps
+
+1. **`blockingChildResolvers` mechanism**: The sync `new_task` flow relies on `ShoferProvider.blockingChildResolvers` — a `Map<childTaskId, resolveFn>` set by `NewTaskTool.execute()` before the child runs. When the child calls `attempt_completion`, `resumeBlockingParent()` fires the resolver to unblock the parent's suspended `NewTaskTool.execute()`. This resolver-registration protocol is not described in the doc.
+
+2. **`cleanupBackgroundChildren()` on Task**: [`Task.cleanupBackgroundChildren()`](src/core/task/Task.ts:276) reaps dead children whose instances are no longer alive in `TaskManager`, consulting persisted history for final status. This method exists but has no corresponding documentation.
+
+3. **`TaskManager` events consumed by tools**: `wait_for_task` listens for `managedTask:completed`, `managedTask:error`, and `managedTask:needs-parent-input` events to implement its event-driven (non-polling) blocking. `check_task_status` consults `managedTasks` map for live state. Neither tool's event dependency is documented.
+
+4. **`PendingParentQuestionInfo` interface**: Defined in [`@shofer/types/src/task.ts`](../packages/types/src/task.ts:194) with fields `{ question, suggestions }`. The parent-question routing flow (steps 1–6 in §"`ask_followup_question` routing") uses this interface but it isn't formally introduced.
+
+5. **Auto-approval granularity for background tools**: The `check_task_status`, `wait_for_task`, and `list_background_tasks` tools are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts:207). `cancel_tasks` and `answer_subtask_question` are gated by `alwaysAllowSubtasks` ([`index.ts:200`](../src/core/auto-approval/index.ts:200)). The doc could explain why these two tiers exist.
+
+6. **`backgroundTimeout` not explained**: `TaskResourceLimits.backgroundTimeout` (default 30s) exists in source but no prose describes what it does or where it's enforced.
+
+### Observability Gaps
+
+1. **No `task_created_subtask` telemetry**: When `new_task` spawns a background child, no telemetry event captures the parent→child relationship for analytics. The only trace is the `childIds` field on the parent `HistoryItem`.
+
+2. **No timeout enforcement on `wait_for_task`**: The `timeout` parameter is described as a soft cap ("returns current statuses"), but there's no mechanism to cancel or warn when a child takes longer than expected. A timed-out `wait_for_task` becomes indistinguishable from a normal return.
+
+3. **Orphaned children on crash**: Children whose parent crashes continue running independently. On next restore, they are marked as errored. A periodic "orphan sweep" or explicit orphan-recovery path could improve resilience.
+
+### Potential Improvements
+
+1. **Background child status heartbeat**: `check_task_status` could surface the child's idle duration (`lastActiveAt`) to help the parent decide whether to cancel a stalled child.
+
+2. **Partial `wait_for_task`**: The `"any"` wait strategy returns on first completion, but the parent must repeat calls for remaining children. A `"progress"` mode that returns incrementally as children finish could reduce LLM round-trips.
+
+3. **`cancel_tasks` with reason propagation**: When a parent cancels a child, the cancellation reason is not forwarded to the child's `TaskAbortedInfo.reason`. Adding a `cancelReason` parameter would let the child distinguish "parent completed" from "parent aborted" in telemetry/debugging.
+
+---
+
 ## Related Documents
 
 - [`native_tools.md`](native_tools.md) — Complete tool reference with parameter schemas

@@ -191,6 +191,48 @@ harmless no-op because `cleanup` has removed the entry.
 8. The Task's tool wrapper observes the rejected promise and unwinds; the loop
    exits at the next abort checkpoint.
 
+## Gaps and Known Issues
+
+### 1. Tool call site indirection omitted from the diagram
+
+The doc's §3 ("Tool call sites") lists [`UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts)
+as the file that calls `mcpHub.callTool()`. In reality `UseMcpToolTool` delegates to
+[`runMcpToolCall`](../src/core/tools/mcp/use-mcp-shared.ts:172), which is the shared
+helper that actually passes `task.abortSignal` into `mcpHub.callTool()`. A reader sent
+to `UseMcpToolTool.ts` will find no direct `mcpHub.callTool` call there.
+
+The doc should mention `use-mcp-shared.ts` as the shared call site for both tools.
+
+### 2. Async MCP tool calls (`call_mcp_tool_async`) not covered
+
+The cancellation flow diagram and end-to-end sequence only cover synchronous MCP
+tool calls through `mcpHub.callTool()`. However, `Task.abortTask()` at
+[`Task.ts:2887-2901`](../src/core/task/Task.ts:2887) also handles async MCP tool
+calls (`mcpAsyncCalls`) with per-call `AbortController` instances, capturing
+cancellation telemetry via `captureMcpAsyncCallCancelled`. This path is not documented.
+
+### 3. `_softCancelForQueuedMessage` not mentioned
+
+The doc describes `cancelAndProcessQueuedMessages` replacing the abort controller
+but does not mention the `_softCancelForQueuedMessage` flag. When the streaming
+catch block detects this flag, it `break`s out of the loop instead of calling
+`abortTask()` -- preserving the Task instance for restart. Without this detail,
+the mechanism that prevents the task from being destroyed during Send Now is opaque.
+
+### 4. Only MCP-layer cancellation is detailed
+
+The cancellation flow is scoped to MCP tool calls. The same `task.abortSignal`
+is also relevant for LLM API calls (via `currentRequestAbortController` at
+[`Task.ts:5356`](../src/core/task/Task.ts:5356)) and other long-running operations
+subscribed to the signal. The doc does not mention these.
+
+### 5. End-to-end sequence only describes Stop, not Send Now
+
+The end-to-end sequence (§"End-to-end sequence") covers only the user-clicked-Stop
+path. The Send Now path (`cancelAndProcessQueuedMessages`) uses the same abort
+signal but follows a different flow: soft-cancel → abort controller → replace
+controller → restart loop. A parallel sequence diagram for Send Now would be useful.
+
 ## Testing notes
 
 - Manual: trigger any slow MCP tool (e.g. a `browser_*` action with a

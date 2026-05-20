@@ -114,4 +114,52 @@ When `isAtBottom` becomes `false` while already in `ANCHORED_FOLLOWING` during s
 
 ## Session Search Integration
 
-The `<SessionSearch>` overlay (Ctrl+F) can navigate to a specific message. When the user jumps to a search result, `virtuosoRef.current.scrollToIndex({ index, align: "center" })` is called directly from `ChatView` — bypassing the scroll lifecycle hook. This intentionally leaves the phase unchanged (the user is actively seeking a message, not passively browsing).
+The `<SessionSearch>` overlay (Ctrl+F) can navigate to a specific message. When the user jumps to a search result, `virtuosoRef.current.scrollToIndex({ index, align: "center" })` is called directly from `ChatView` — bypassing the scroll lifecycle phase transitions. This intentionally leaves the phase unchanged (the user is actively seeking a message, not passively browsing).
+
+## Gaps & Areas for Improvement
+
+The following issues were identified during an audit of this doc against the source implementation in [`useScrollLifecycle.ts`](../webview-ui/src/hooks/useScrollLifecycle.ts) and [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx).
+
+### Undocumented hook parameters
+
+The [`UseScrollLifecycleOptions`](../webview-ui/src/hooks/useScrollLifecycle.ts:56) interface accepts four parameters not described above: `isStreaming`, `isHidden`, `hasTask`, and `taskTs` (mentioned only implicitly). Their behavioral effects are significant:
+
+- `isStreaming` — gates the safety-net re-scroll in `atBottomStateChangeCallback` (line 403) and enables `shouldForcePinForAnchoredStreaming` in `handleRowHeightChange` (line 324), which triggers `scrollToBottomSmooth` even when `isAtBottomRef` is `false`.
+- `isHidden` — when `true`, disables keyboard-nav-up disengagement (line 511), preventing `PageUp`/`Home`/`ArrowUp` from escaping sticky follow while the chat panel is not visible.
+- `hasTask` — same guard on keyboard-nav-up disengagement (line 511).
+
+### `handleRowHeightChange` force-pin logic
+
+The doc states "Row grew taller → `scrollToBottomSmooth()`, Row shrank → `scrollToBottomAuto()`", but omits the critical additional condition: during `ANCHORED_FOLLOWING` with `isStreaming`, **both** variants are triggered regardless of `isAtBottomRef` (the `shouldForcePinForAnchoredStreaming` branch at [line 324](../webview-ui/src/hooks/useScrollLifecycle.ts:324)). This means streaming content growth always pulls the viewport down even if the user has drifted slightly from the absolute bottom.
+
+### `followOutput` returns `"auto"` for all non-browsing phases
+
+The doc's `ANCHORED_FOLLOWING` section says "Virtuoso's `followOutput` prop returns `"auto"`" but does not clarify that `followOutputCallback` returns `"auto"` for `HYDRATING_PINNED_TO_BOTTOM` as well — only `USER_BROWSING_HISTORY` returns `false` (line 360). The table in §"Components Involved" should reflect this.
+
+### Ref types simplified
+
+The Key Refs table lists bare types (`HTMLDivElement`, `boolean`, `ScrollPhase`) where the actual types are React ref wrappers (`React.RefObject<HTMLDivElement | null>`, `React.MutableRefObject<boolean>`, `React.MutableRefObject<ScrollPhase>`). The nullable nature of `virtuosoRef` and `scrollContainerRef` matters for callers that null-check before imperative commands.
+
+### External dependencies not listed
+
+The hook depends on three external packages not mentioned:
+
+- [`react-virtuoso`](https://virtuoso.dev/) — `<Virtuoso>` component and `VirtuosoHandle` type
+- [`react-use`](https://github.com/streamich/react-use) — `useEvent` hook for window-level event listeners (wheel, pointerdown, pointerup, scroll, keydown)
+- [`debounce`](https://www.npmjs.com/package/debounce) — used via `useMemo` to create `scrollToBottomSmooth`
+
+### Debug `console.log` instrumentation
+
+The hook contains 10 `console.log` statements logging every phase transition, scroll command, and state change. These are intentional debug instrumentation but are not gated behind a debug flag. A future improvement would be to replace them with the IPC-forwarded logger or a `__DEV__` guard.
+
+### Pointer-scroll tracking deserves a dedicated subsection
+
+The pointer-scroll-up detection mechanism (lines 432–501) tracks `pointerdown` → set active element + last `scrollTop` → `scroll` compare → `pointerup`/`pointercancel` clear. The doc compresses this into a single table row; a dedicated subsection with the three-event lifecycle would improve clarity.
+
+### Missing cleanup guards
+
+The hook uses `isMountedRef` (line 91) to prevent state updates after unmount, and `cancelReanchorFrame` to cancel pending animation frames. Neither is mentioned in the doc.
+
+### `ChatRow.onHeightChange` wiring
+
+The doc does not explain how `ChatView` propagates row height changes to the hook. `ChatRow` receives `onHeightChange={handleRowHeightChange}` ([line 1732](../webview-ui/src/components/chat/ChatView.tsx:1732)); the implementation of `onHeightChange` inside `ChatRow` (likely a `ResizeObserver`) is undocumented.
