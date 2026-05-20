@@ -279,7 +279,7 @@ This section tracks known gaps, undocumented steps, and design warts in the nati
 
 - **`SAY_TOOL_TO_NATIVE_NAME`** (in [`tools.ts`](../src/core/auto-approval/tools.ts)): The camelCase → snake_case mapping used by `getToolGroupForSayTool()`. A tool in the `read` / `write` / `execute` / `browser` group that uses `ask:"tool"` MUST have an entry here. Step 10 mentions this in prose but it's easy to miss. Without it, auto-approval falls through to `"ask"` even with the toggle on.
 
-- **`toolParamNames`** (in [`src/shared/tools.ts`](../src/shared/tools.ts)): If a tool introduces a new parameter name not already in the `toolParamNames` const array, it must be added there. This array drives the `ToolParamName` type used in `ToolUse.params` — a missing entry means the streaming infrastructure cannot type the parameter and the partial-json parser may drop it.
+- **`toolParamNames`** (in [`src/shared/tools.ts`](../src/shared/tools.ts)): If a tool introduces a new parameter name not already in the `toolParamNames` const array, it must be added there. This array is used as a validation whitelist in `NativeToolCallParser.parseToolCall()` — any parameter not in the list triggers an `"Unknown parameter 'X' for tool 'Y'"` warning and is **silently dropped** (via `continue`), so the tool never receives it. Every tool parameter defined in `NativeToolArgs` (Step 6) that isn't already in `toolParamNames` MUST be added here, or the parameter won't reach the handler.
 
 ### Tool group pitfalls
 
