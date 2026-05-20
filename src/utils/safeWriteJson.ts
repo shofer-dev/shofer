@@ -17,6 +17,19 @@ export interface SafeWriteJsonOptions {
 	 * @default false
 	 */
 	prettyPrint?: boolean
+	/**
+	 * Pre-serialized JSON string. When provided, the writer skips the
+	 * streaming serializer entirely and writes this string verbatim to the
+	 * tmp file. Use this when the caller has already produced a synchronous
+	 * snapshot of the data (e.g. via `JSON.stringify`) to avoid an extra
+	 * O(n) traversal/clone of the in-memory object across an async boundary.
+	 *
+	 * H6: replaces the `structuredClone` defensive snapshot in
+	 * `Task.saveShoferMessages`. The caller is responsible for ensuring the
+	 * string is valid JSON; `data` is ignored when this is set but is still
+	 * required by the signature for type safety / future-proofing.
+	 */
+	preSerialized?: string
 }
 // Module-level per-file write queue. Serializes same-file writes within this process
 // so we never race on proper-lockfile from concurrent async callers. The lockfile's
@@ -120,7 +133,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 			`.${path.basename(absoluteFilePath)}.new_${Date.now()}_${Math.random().toString(36).substring(2)}.tmp`,
 		)
 
-		await _streamDataToFile(actualTempNewFilePath, data, options?.prettyPrint)
+		await _streamDataToFile(actualTempNewFilePath, data, options?.prettyPrint, options?.preSerialized)
 
 		// Step 2: Check if the target file exists. If so, rename it to a backup path.
 		try {
@@ -226,13 +239,34 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 /**
  * Helper function to stream JSON data to a file.
  * @param targetPath The path to write the stream to.
- * @param data The data to stream.
+ * @param data The data to stream (ignored when `preSerialized` is provided).
  * @param prettyPrint Whether to format the JSON with indentation.
+ * @param preSerialized Optional pre-serialized JSON string; when provided
+ *   the function writes this string verbatim instead of streaming `data`
+ *   through `JsonStreamStringify`. See `SafeWriteJsonOptions.preSerialized`.
  * @returns Promise<void>
  */
-async function _streamDataToFile(targetPath: string, data: any, prettyPrint = false): Promise<void> {
+async function _streamDataToFile(
+	targetPath: string,
+	data: any,
+	prettyPrint = false,
+	preSerialized?: string,
+): Promise<void> {
 	// Stream data to avoid high memory usage for large JSON objects.
 	const fileWriteStream = fsSync.createWriteStream(targetPath, { encoding: "utf8" })
+
+	// Fast path: caller already produced a JSON snapshot synchronously, so
+	// there is nothing to traverse — just push the string and close the
+	// stream. This avoids the O(n) walk inside JsonStreamStringify and the
+	// per-token write overhead for large arrays of small objects (the shape
+	// of `ui_messages.json`).
+	if (preSerialized !== undefined) {
+		return new Promise<void>((resolve, reject) => {
+			fileWriteStream.on("error", reject)
+			fileWriteStream.on("finish", resolve)
+			fileWriteStream.end(preSerialized)
+		})
+	}
 
 	// JsonStreamStringify traverses the object and streams tokens directly
 	// The 'spaces' parameter adds indentation during streaming, not via a separate pass

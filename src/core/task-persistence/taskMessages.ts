@@ -48,10 +48,19 @@ export type SaveTaskMessagesOptions = {
 	messages: ShoferMessage[]
 	taskId: string
 	globalStoragePath: string
+	/**
+	 * Optional pre-serialized JSON form of `messages`. When provided, the
+	 * writer skips serialization and writes this string verbatim to disk.
+	 * The caller is responsible for producing it synchronously from the
+	 * same `messages` reference (e.g. via `JSON.stringify`) to capture a
+	 * snapshot that cannot be mutated mid-write. See H6 in
+	 * `todos/performance_optimizations.md`.
+	 */
+	serialized?: string
 }
 
-export async function saveTaskMessages({ messages, taskId, globalStoragePath }: SaveTaskMessagesOptions) {
+export async function saveTaskMessages({ messages, taskId, globalStoragePath, serialized }: SaveTaskMessagesOptions) {
 	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
 	const filePath = path.join(taskDir, GlobalFileNames.uiMessages)
-	await safeWriteJson(filePath, messages)
+	await safeWriteJson(filePath, messages, serialized !== undefined ? { preSerialized: serialized } : undefined)
 }

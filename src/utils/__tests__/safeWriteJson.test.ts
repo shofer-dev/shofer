@@ -122,6 +122,24 @@ describe("safeWriteJson", () => {
 		expect(content).toEqual(newData)
 	})
 
+	test("should write preSerialized payload verbatim, ignoring the data argument (H6)", async () => {
+		// When `preSerialized` is provided, safeWriteJson must bypass
+		// JsonStreamStringify entirely and write the supplied string as-is.
+		// This is the optimization path used by Task.saveShoferMessages to
+		// avoid a structuredClone + a second traversal inside the streamer.
+		const dataIgnored = { ignored: "this should not appear in the file" }
+		const serialized = JSON.stringify({ message: "from preSerialized", n: 42 })
+
+		await safeWriteJson(currentTestFilePath, dataIgnored, { preSerialized: serialized })
+
+		const content = await readFileContent(currentTestFilePath)
+		expect(content).toEqual({ message: "from preSerialized", n: 42 })
+
+		// Byte-for-byte equivalence (compact form, no pretty-printing).
+		const onDisk = await fs.readFile(currentTestFilePath, "utf-8")
+		expect(onDisk).toBe(serialized)
+	})
+
 	// Failure Scenarios
 	test("should handle failure when writing to tempNewFilePath", async () => {
 		// currentTestFilePath exists due to beforeEach, allowing lock acquisition.
