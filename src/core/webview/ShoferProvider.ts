@@ -2377,10 +2377,19 @@ export class ShoferProvider
 	}
 
 	async postStateToWebview() {
+		const t0 = Date.now()
 		const state = await this.getStateToPostToWebview()
 		this.shoferMessagesSeq++
 		state.shoferMessagesSeq = this.shoferMessagesSeq
 		this.postMessageToWebview({ type: "state", state })
+		if (process.env.DEBUG) {
+			// Cheap byte-size metric: round-trips through JSON anyway (the
+			// postMessage bridge serializes), so the cost here is roughly
+			// the same as what the runtime would pay. Useful for spotting
+			// payload-size regressions (e.g. taskHistory bloat).
+			const bytes = JSON.stringify(state).length
+			this.debug(`[postState] full bytes=${bytes} elapsed=${Date.now() - t0}ms seq=${this.shoferMessagesSeq}`)
+		}
 	}
 
 	/**
