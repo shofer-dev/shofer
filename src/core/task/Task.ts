@@ -1486,8 +1486,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async saveShoferMessages(): Promise<boolean> {
 		try {
+			// H6: Capture a synchronous snapshot of the messages BEFORE yielding
+			// to the event loop. `JSON.stringify` is single-tick and produces a
+			// frozen string that cannot be mutated by concurrent
+			// `addToShoferMessages`/`updateShoferMessage` callers while the
+			// async write is in flight. This replaces a `structuredClone` deep
+			// copy that traversed every message twice (once to clone, once
+			// inside JsonStreamStringify) and held two full copies of the
+			// array in memory for the duration of the write.
+			const serialized = JSON.stringify(this.shoferMessages)
 			await saveTaskMessages({
-				messages: structuredClone(this.shoferMessages),
+				messages: this.shoferMessages,
+				serialized,
 				taskId: this.taskId,
 				globalStoragePath: this.globalStoragePath,
 			})
@@ -2503,7 +2513,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			return
 		}
 
-		const modifiedShoferMessages = await this.getSavedShoferMessages()
+		// H1: Issue both disk reads concurrently. They touch independent
+		// files (`ui_messages.json` and `api_conversation_history.json`)
+		// and the sanitization step below only depends on the first.
+		const preloadT0 = Date.now()
+		const [modifiedShoferMessages, apiConversationHistory] = await Promise.all([
+			this.getSavedShoferMessages(),
+			this.getSavedApiConversationHistory(),
+		])
+		const readMs = Date.now() - preloadT0
 
 		// Remove any resume messages that may have been added before.
 		const lastRelevantMessageIndex = findLastIndex(
@@ -2543,14 +2561,35 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 
-		await this.overwriteShoferMessages(modifiedShoferMessages)
-		this.shoferMessages = await this.getSavedShoferMessages()
-		// Make sure that the api conversation history can be resumed by the API,
-		// even if it goes out of sync with shofer messages.
-		this.apiConversationHistory = await this.getSavedApiConversationHistory()
-
+		// H3: Publish in-memory state immediately from the sanitized array.
+		// The previous code did overwriteShoferMessages → getSavedShoferMessages,
+		// re-reading the same file we just wrote so that the in-memory copy
+		// would match the parsed-back form (timestamps, undefined elision,
+		// etc.). Since sanitization here is pure JS that only removes
+		// elements, the in-memory array is already byte-equivalent to what
+		// the round-trip would yield, so we can skip the read.
+		this.shoferMessages = modifiedShoferMessages
+		this.apiConversationHistory = apiConversationHistory
 		this.historyPreloaded = true
 		this._messagesReadyResolve()
+
+		// Persist the sanitized snapshot in the background. The task is
+		// already usable; the write only matters for subsequent reloads.
+		// Errors are logged but do not block the resume flow.
+		const writeT0 = Date.now()
+		void this.overwriteShoferMessages(modifiedShoferMessages)
+			.then(() => {
+				if (process.env.DEBUG) {
+					outputLog(
+						`[preload] task=${this.taskId} read=${readMs}ms sanitize+write=${
+							Date.now() - writeT0
+						}ms msgs=${modifiedShoferMessages.length} apiTurns=${apiConversationHistory.length}`,
+					)
+				}
+			})
+			.catch((err) => {
+				outputWarn(`preloadShoferMessages: background sanitized save failed: ${err}`)
+			})
 	}
 
 	/**
