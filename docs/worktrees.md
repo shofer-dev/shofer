@@ -196,6 +196,35 @@ The trigger is always rendered (it does not auto-hide on a single-worktree repo)
 
 i18n translations: [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../webview-ui/src/i18n/locales/en/worktreeStatus.json)
 
+## Gaps, Issues & Areas for Improvement
+
+This section catalogues discrepancies, omissions, and enhancement opportunities discovered during doc-to-source verification.
+
+### Doc-Source Gaps
+
+| #   | Issue                                                    | Location                               | Detail                                                                                                                                                                                                                                                                                                             |
+| --- | -------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **`handleGetWorktreeStatus` `cwdOverride` undocumented** | §2 VSCode Bridge / §Worktree Indicator | The handler accepts an optional second parameter `cwdOverride?: string` so callers can get status for worktrees that differ from `provider.cwd`. This parameter is absent from both the handler listing and the IPC table (which shows `getWorktreeStatus` payload as `(none)`).                                   |
+| 2   | **Missing handler functions**                            | §2 VSCode Bridge                       | `handleGetAvailableBranches`, `handleGetWorktreeIncludeStatus`, `handleCheckBranchWorktreeInclude`, `handleCreateWorktreeInclude`, and `handleCheckoutBranch` exist in [`handlers.ts`](src/core/webview/worktree/handlers.ts) but are not enumerated in the handler list. Only the five most-used ones are listed. |
+| 3   | **Missing types**                                        | §Type Definitions                      | `BranchInfo` (return of `getAvailableBranches`), `WorktreeDefaultsResponse` (return of `handleGetWorktreeDefaults`), and `CopyProgress`/`CopyProgressCallback` (`.worktreeinclude` copy progress) are defined in source but omitted from the type listing.                                                         |
+| 4   | **No mention of `RepoPerTaskCheckpointService`**         | §4 Checkpoint Isolation                | The section only references `ShadowCheckpointService`, but the per-task orchestration is done by [`RepoPerTaskCheckpointService`](src/services/checkpoints/RepoPerTaskCheckpointService.ts) which constructs scoped instances.                                                                                     |
+
+### Diagram vs. Reality
+
+| #   | Issue                                                | Detail                                                                                                                                                                                                                                                                                    |
+| --- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5   | **Architecture diagram omits `@shofer/types` layer** | The diagram shows Webview UI → VSCode Bridge → `@shofer/core`. In reality, `@shofer/types` (at [`packages/types/src/worktree.ts`](packages/types/src/worktree.ts)) is the cross-cutting source of truth for all IPC payload shapes, and should appear between the Bridge and Core layers. |
+| 6   | **`@shofer/core` vs directory path mismatch**        | The diagram labels the bottom layer as `@shofer/core` but the actual source directory is `packages/core/`. The import alias is correct, but a reader navigating the file tree may be confused.                                                                                            |
+
+### Improvement Opportunities
+
+| #   | Area                                                                 | Suggestion                                                                                                                                                                                                                                                                                                                       |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7   | **Add sequence diagrams**                                            | A sequence diagram for worktree creation (webview → `createWorktree` → `handleCreateWorktree` → `WorktreeService.createWorktree` + `WorktreeIncludeService.copyWorktreeIncludeFiles` → `worktreeCopyProgress` → result) would clarify the multi-step flow.                                                                       |
+| 8   | **Document `handleGetWorktreeStatus` parallelism**                   | The handler runs 5+ git queries in parallel (`getCurrentBranch`, `detectBaseBranch`, `listWorktrees`, `git log`, `git status`, then `git rev-list` ahead/behind). This performance design choice should be surfaced in the Architecture section.                                                                                 |
+| 9   | **Cross-reference checkpoint isolation with `submodule-support.md`** | The checkpoint section should explicitly link to how `GIT_DIR` sanitization in `createSanitizedGit` (see [`ShadowCheckpointService.ts`](src/services/checkpoints/ShadowCheckpointService.ts:34-60)) prevents submodule gitlink pollution. This is mentioned for submodules (§Caveats) but not for the checkpoint section itself. |
+| 10  | **Document the embedded-worktree path enforcement**                  | `handleCreateWorktree` normalizes any path outside `.shofer/worktrees/` by prepending the convention prefix (see [`handlers.ts:172-182`](src/core/webview/worktree/handlers.ts:172)). This enforcement should be documented in §2 or §5.                                                                                         |
+
 ## Known Limitations
 
 1. **No multi-root workspace support** — Workspaces with multiple folders cannot use worktrees

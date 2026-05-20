@@ -435,3 +435,53 @@ Implementation: [`ShoferProtectedController`](../src/core/protect/ShoferProtecte
 | `.shofer/skills/`        | `<available_skills>`                 | Task start                  |
 | `.shoferignore`          | `# .shoferignore` instructions       | Task start (if file exists) |
 | Custom instructions (UI) | `USER'S CUSTOM INSTRUCTIONS`         | Every system prompt         |
+
+---
+
+## Gaps, Issues & Areas for Improvement
+
+This section documents inaccuracies and gaps discovered during a full audit
+of this document against the live codebase (2026-05-20). Issues are listed
+for transparency; some have been corrected inline above.
+
+### 1. Fabricated `.shoferignore` error message (corrected)
+
+The doc previously quoted a specific error message for blocked file access
+that did not exist anywhere in the source code. `ShoferIgnoreController`
+returns booleans (or `undefined` for commands); no tool produces the quoted
+wording. Replaced with a factual description of the controller's API.
+
+### 2. `ShoferIgnoreController` is dead code
+
+[`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
+is defined but **never imported or instantiated** anywhere in the `extensions/`
+directory. The `.shoferignore` enforcement path is either implemented
+elsewhere (e.g., in the worktree extensions) or not yet wired. If the file
+is truly unused, it should be removed or integrated.
+
+### 3. Duplicate `.shoferrules*` in `PROTECTED_PATTERNS`
+
+[`ShoferProtectedController.PROTECTED_PATTERNS`](../src/core/protect/ShoferProtectedController.ts:16-27)
+lists `.shoferrules*` twice (lines 18-19). Harmless but redundant.
+
+### 4. Missing patterns in write-protected summary table
+
+The write-protected summary table (§ Summary: Write-Protected Files) does
+not list `.shoferrules*` or `.shoferprotected`, even though both are in
+`PROTECTED_PATTERNS`. `.shoferrules*` is NOT covered by `.shofer/**` because
+`.shoferrules*` files live at the workspace root. The table should list all
+protected patterns.
+
+### 5. `.shoferprotected` is reserved but has a pattern entry
+
+§ `.shoferprotected` is documented as "Reserved for future use" (TBD format).
+However, it is already an active entry in `PROTECTED_PATTERNS`, meaning
+any file named `.shoferprotected` at the workspace root would be
+write-protected today, despite no subsystem loading it.
+
+### 6. Legacy rules files NOT in legacy compatibility table
+
+§ Legacy Compatibility Files does not list `.shoferrules` / `.shoferrules-<mode>`
+as a legacy filename, yet `.shoferrules*` is in `PROTECTED_PATTERNS`.
+Either this was an intentional intermediate rebrand name or it should be
+documented alongside `.roorules` / `.clinerules`.

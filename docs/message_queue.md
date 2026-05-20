@@ -298,7 +298,10 @@ changes but always sees the latest text.
 ## Files
 
 - [src/core/message-queue/MessageQueueService.ts](../src/core/message-queue/MessageQueueService.ts) —
-  per-Task FIFO queue; `addMessage` / `prependMessage` / `dequeueMessage`.
+  per-Task FIFO queue; `addMessage` / `prependMessage` / `dequeueMessage`
+  / `removeMessage` / `updateMessage` / `isEmpty` / `dispose`. Each
+  mutation emits `"stateChanged"` with the full `QueuedMessage[]` so
+  the webview can re-render the queued-message bubbles reactively.
 - [src/core/task/Task.ts](../src/core/task/Task.ts) —
   `messageQueueService` ownership, `handleWebviewAskResponse`,
   `processQueuedMessages`, `cancelAndProcessQueuedMessages`,
@@ -317,3 +320,69 @@ changes but always sees the latest text.
   end-to-end. Send Now is a _soft_ variant of that flow that avoids the
   final `abortTask()`/`dispose()` step.
 - [task_states.md](task_states.md) — Task lifecycle and focus model.
+
+## Gaps, Issues & Improvement Areas
+
+This section captures deficiencies discovered during the 2026-05-20
+factual review. They are not immediate correctness problems but
+represent missing coverage that future write-ups should address.
+
+1. **Undocumented `QueuedMessage` shape.** The [`MessageQueueService`](extensions/shofer/src/core/message-queue/MessageQueueService.ts:41)
+   wraps each message as `{ id: string (uuidv7), timestamp: number,
+text: string, images?: string[] }`. The `timestamp` and `id` fields
+   are never mentioned in this doc; the `id` is relevant because
+   `prependMessage` assigns a **new** uuid rather than restoring the
+   original message identity.
+
+2. **Undocumented methods: `removeMessage`, `updateMessage`, `isEmpty`.**
+   Only `addMessage` / `prependMessage` / `dequeueMessage` appear in the
+   diagram and the FIFO section. `isEmpty()` is the predicate used by
+   [`AttemptCompletionTool`](extensions/shofer/src/core/tools/AttemptCompletionTool.ts)
+   per the Terminal-State Queue-Drain Rule. `removeMessage` and
+   `updateMessage` support the host-side edit/delete message flow.
+
+3. **Event plumbing not explained.** Every queue mutation calls
+   `this.emit("stateChanged", this._messages)`, which triggers a
+   `postStateToWebview` round-trip so the webview's
+   [`QueuedMessages`](extensions/shofer/webview-ui/src/components/chat/QueuedMessages.tsx)
+   component re-renders reactively. The doc mentions
+   `"stateChanged"` in the diagram but never explains the
+   publication → subscription path (event types `QueueEvents`,
+   `MessageQueueState`).
+
+4. **`questionQueue` interaction.** When the assistant agent asks the
+   user a follow-up question while a task message is queued, the two
+   queue subsystems interact. This doc covers the per-task webview queue
+   but not the assistant-agent `question-queue.ts`.
+
+5. **`prependMessage` ID semantics.** The doc says `prependMessage`
+   re-inserts "a message that was just dequeued" at the front. In
+   reality it constructs a brand-new `QueuedMessage` with a fresh
+   `uuidv4()` — the original dequeued message's `id` is discarded. This
+   is fine for FIFO ordering but matters if any consumer depended on
+   message-id stability across re-enqueue.
+
+6. **Diagnostic logging not covered.** `cancelAndProcessQueuedMessages`
+   and related paths emit detailed `diagLog` messages tagged
+   `[Task#…]`. These are valuable for debugging Send Now races but
+   aren't mentioned.
+
+7. **`Cancellation` sequence diagram granularity.** The end-to-end
+   Send Now sequence diagram (lines 222–242) omits the
+   `currentRequestAbortController.abort()`, `_taskAbortController.abort()`,
+   `_cleanupOrphanedToolUses()`, and `_taskAbortController` replacement
+   steps that exist in the real
+   [`cancelAndProcessQueuedMessages`](extensions/shofer/src/core/task/Task.ts:5923).
+   Add these steps or label the diagram as simplified.
+
+8. **No mention of `webviewMessageHandler` routing.** The `queueMessage`
+   IPC type is dispatched in
+   [`webviewMessageHandler.ts`](extensions/shofer/src/core/webview/webviewMessageHandler.ts),
+   which is the entry point for `addMessage()` calls. The doc shows the
+   webview-to-Task path conceptually but never names the handler file.
+
+9. **No mention of `attempt_completion` queue-drain integration.**
+   The Terminal-State Queue-Drain Rule (see
+   [AGENTS.md](../AGENTS.md)) requires `attempt_completion` to check
+   `messageQueueService.isEmpty()` before finalizing. This is the
+   primary consumer of `isEmpty()` but isn't cross-referenced here.

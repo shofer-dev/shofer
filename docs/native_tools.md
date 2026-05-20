@@ -607,6 +607,43 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `give_feedback`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `run_slash_command`       |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
 
+---
+
+## Gaps, Issues, and Areas of Improvement
+
+This section catalogues known issues, incomplete areas, and future improvements identified during documentation review and ongoing maintenance.
+
+### Stale references discovered and corrected (2026-05-20)
+
+During a source-verification pass, the following factual inaccuracies were found and surgically corrected:
+
+| #   | Issue                                                                                                              | Affected Section                     | Root Cause                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------- |
+| 1   | Tool name listed as `skill` instead of canonical `skills`                                                          | Task Management summary, Mode Matrix | Doc drifted from [`toolNames`](../packages/types/src/tool.ts)                               |
+| 2   | `execute_command` parameter named `execute` instead of `command`; `timeout` missing                                | Execution & System detail            | Doc used old parameter name                                                                 |
+| 3   | `read_file` parameters listed as `start_line`/`end_line` instead of `path`/`mode`/`offset`/`limit`/`indentation.*` | File Operations detail               | Doc predated the slice/indentation rewrite                                                  |
+| 4   | `git_search` described as searching "commit messages + diffs" but actually only searches commit messages           | Search & Discovery summary + detail  | Doc inferred diff search from intent; implementation is embedding search over messages only |
+| 5   | Mode Availability table used `edit`/`command` group names instead of canonical `write`/`execute`                   | Mode Availability table              | Doc used old group names predating the rename                                               |
+| 6   | `read_command_output` missing `search`/`offset`/`limit` parameters                                                 | Execution & System detail            | Added params not reflected in doc                                                           |
+| 7   | `rag_search` missing `maxResults` parameter                                                                        | Search & Discovery detail            | Added param not reflected in doc                                                            |
+| 8   | `new_task` `softResultLength`/`softTimeoutSec` marked required but have host-side defaults                         | Task Management detail               | Doc treated advisory params as mandatory                                                    |
+| 9   | Table column alignment garbled in `sed` detail                                                                     | File Operations detail               | Markdown table formatting error                                                             |
+| 10  | `get_changed_files` detailed text referenced `roo_edited` instead of `shofer_edited`                               | Code Analysis detail                 | Pre-rebrand leftover                                                                        |
+
+### Known documentation gaps
+
+- **`access_mcp_resource` feature gate**: Marked 🔒 ("Requires MCP resources") — this is a deployment dependency, not a code-level feature flag. The tool works whenever MCP servers expose resources. The gate indicator may overstate the restriction.
+- **`generate_image` parameters**: The feature-gated tools table lists `generate_image` but the detail section is omitted. If the tool is permanently gated, a brief parameter summary would still help readers understand its interface.
+- **Orchestrator mode groups**: The Mode Availability table says "varies" for the Orchestrator row. In actuality Orchestrator mode has `groups: []` (empty) in [`DEFAULT_MODES`](../packages/types/src/mode.ts). The mode delegates entirely via `new_task`.
+- **`new_task` `task_id` parameter**: Present in [`NewTaskParams`](../src/core/tools/NewTaskTool.ts) but not documented in the parameter table. Used internally for resumption.
+- **`read_file` description text**: The File Operations summary table says "Read file contents with line range" — this under-sells the tool, which supports two reading modes (slice + indentation with full parameterization). Consider updating to reflect the richer capability.
+
+### Areas for future improvement
+
+- **Automatic parameter-table generation**: The parameter tables are manually maintained and drift is inevitable. Consider a lint rule or CI check that extracts tool params interfaces (e.g., `ExecuteCommandParams`, `ReadFileParams`) and diffs them against the doc tables.
+- **Feature-gate documentation**: Feature-gated tools (`generate_image`, `run_slash_command`, `rag_search`, `access_mcp_resource`) lack consistent detail sections explaining what the gate depends on and how to enable it.
+- **Legacy/alias tools completeness**: The Legacy tools section lists 5 tools but `TOOL_ALIASES` also maps `write_file` → `write_to_file`. Consider documenting all aliases in one place or cross-referencing the Canonical column.
+
 **Notes:**
 
 - ✓ (md) = Architect mode restricts edit tools to markdown files only (`\.md$`)

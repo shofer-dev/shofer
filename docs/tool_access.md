@@ -205,3 +205,56 @@ short-circuits.
     - allows from `tools_allowed` whitelist alone (no `groups`),
     - additive OR semantics when both `groups` and `tools_allowed` are set,
     - `tools_denied` priority over `tools_allowed`.
+
+## Known Gaps, Issues & Improvement Areas
+
+### JSON Schema vs Zod Schema discrepancy
+
+The Zod schema in
+[`packages/types/src/mode.ts`](../packages/types/src/mode.ts) allows `tools_allowed`
+without `groups` (the `refine` on the `modeConfigSchema` checks
+`data.groups !== undefined || data.tools_allowed !== undefined`). However, the
+exported JSON schema in
+[`schemas/shofermodes.json`](../schemas/shofermodes.json) (line 120) lists
+`groups` in `required`, which would reject mode definitions that rely solely on
+`tools_allowed`. The JSON schema should be regenerated from the Zod source or
+manually corrected to match.
+
+### Decision rule omits `ALWAYS_AVAILABLE_TOOLS` fast-path
+
+The check order documented in §Decision rule describes
+deny → tools_allowed → groups → false. The actual implementation in
+[`isToolAllowedForMode()`](../src/core/tools/validateToolUse.ts:200) has a
+fast-path before any of those checks: `ALWAYS_AVAILABLE_TOOLS` (comprising
+`attempt_completion`, `update_todo_list`, `run_slash_command`, `skills`,
+`set_task_title`, and `give_feedback`) unconditionally returns `true`. This
+means these six tools always pass mode-level checks regardless of `groups`,
+`tools_allowed`, or `tools_denied`. Disabling them requires the `disabledTools`
+setting (checked earlier in `validateToolUse()` via `toolRequirements`), not
+mode configuration.
+
+### Schema code block omits Zod error messages
+
+The code block in §Schema matches the structural shape of
+`modeConfigObjectSchema` but omits the error-message arguments present in the
+actual source (e.g. `z.string().min(1, "Name is required")` vs
+`z.string().min(1)`). The "Defined in" link is sufficient for look-up, but
+reproducing the exact source would prevent false-"it differs" impressions
+during code reviews.
+
+### Stale references from past tool deprecation
+
+The removed `list_code_definition_names` tool (CHANGELOG PR #10005) was still
+referenced in §Example 2 (replaced with `lsp_search` during this review).
+There is no automated mechanism to surface stale tool-name references in docs
+when a tool is deprecated. The existing "Native Tool Documentation Sync Rule"
+in [`AGENTS.md`](../AGENTS.md) covers `docs/native_tools.md` but other
+documentation files (like this one) are not covered. The
+"Tool Deprecation Doc-Cleanup Rule" was added to `AGENTS.md` to address this.
+
+### Stale group names from past renames
+
+The `edit` and `command` groups were renamed to `write` and `execute`
+(respectively) but four occurrences in this document's worked examples still
+used the old names (corrected during this review). The "Group Rename Doc-Sync
+Rule" was added to `AGENTS.md` to prevent this class of staleness.

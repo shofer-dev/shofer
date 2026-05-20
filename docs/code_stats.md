@@ -146,3 +146,40 @@ git ls-tree -r <commit> --name-only | \
   grep -v 'node_modules\|pnpm-lock\|package-lock\|yarn.lock\|locales/\|\.snap$\|dist/\|out/\|\.vsix$\|CHANGELOG\|\.svg$\|releases/' | \
   xargs -I{} git show <commit>:{} 2>/dev/null | wc -l
 ```
+
+---
+
+## Verification Notes
+
+This document was reviewed on 2026-05-20 against the live codebase at HEAD (`502facb10`).
+
+### Verified as Accurate
+
+- All 6 git commit hashes are valid commits in the `extensions/shofer` repo.
+- Dates for stage boundaries match `git log --date=short` output.
+- All 10 subsystem directories (`src/core/webview/`, `src/core/tools/`, etc.) exist on disk.
+- 18 locale directories confirmed (`ca`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pl`, `pt-BR`, `ru`, `tr`, `vi`, `zh-CN`, `zh-TW`).
+- `docs/` directory contains all referenced doc links.
+- 10 `.github/workflows/` files, 4 issue templates, 2 docker-compose files all verified.
+- 35 provider files in `src/api/providers/`, consistent with "30+ LLM provider integrations".
+
+### Known Gaps and Issues
+
+1. **Deleted file in Top Test Files**: [`ShoferProvider.spec.ts`] was deleted in Alexandros phase commit `bd2434099` ("remove test files referencing deleted @shofer/cloud package"). It no longer exists at HEAD but its historical contribution (3,677 lines) is correctly reported. The monolithic spec was split into ~20 focused spec files (e.g., `ShoferProvider.lockApiConfig.spec.ts`, `ShoferProvider.sticky-profile.spec.ts`, etc.) that collectively cover the same surface. Future readers should be aware the original file is gone.
+
+2. **Minor line-count drift**: `pnpm-lock.yaml` is 22,406 lines at HEAD (doc states 22,438 — off by 32 lines, ~0.14%). Expected for a lockfile that changes with dependency updates.
+
+3. **Package manifest count**: The doc states "18 `package.json` files". At HEAD there are 17 source `package.json` files (excluding `.next/` build artifacts). This is a historical snapshot count; the exact number depends on the monorepo layout at the time the stats were generated.
+
+4. **Historical-data nature**: All line counts and file lists in this document are _cumulative git-diff statistics_, not current file sizes or counts. Referenced file paths may have since been renamed, moved, or deleted. A file with "3,677 Lines Added" reflects insertion count over the entire Shofer phase — not the file's line count at HEAD.
+
+### Areas for Improvement
+
+- Add a "Last verified" date and regenerate the stats periodically if the document is meant to stay current.
+- For the Top Test Files table, add a column indicating whether each file still exists at HEAD.
+- The raw commands in the appendix work but could be replaced with a reproducible script that outputs Markdown tables directly.
+- Consider splitting "codebase size at each boundary" into an automatically-generated CI artifact rather than a manually-maintained doc.
+
+```
+
+```

@@ -571,6 +571,46 @@ If you have enabled the integration but still see `cost: $0` for every
 request and the budget limit never trips, check the Shofer output
 channel for these messages.
 
+### Gaps, Issues & Improvements
+
+These are accuracy and maintainability issues discovered during the
+May 2026 doc-review verification (all corrected inline).
+
+#### Line-Number Drift (caused by file growth)
+
+When originally written, `Task.ts` was ~3,250 lines. By May 2026 it
+had grown to 6,122 lines. Every code-example line number was off by
+170–300 lines. There is no automated mechanism to detect this drift
+other than a manual grep-and-compare pass.
+
+**Corrected references:**
+
+| Symbol                         | Doc claimed | Actual (May 2026) |
+| ------------------------------ | ----------- | ----------------- |
+| `api_req_started` emission     | ~3150       | 3418              |
+| `case "usage":`                | 3438-3441   | 3735-3741         |
+| `updateApiReqMsg()` definition | 3261        | 3554              |
+| Orphan cleanup check           | 2344-2350   | 2517-2519         |
+
+#### Code Example Simplifications
+
+- The `api_req_started` example omitted the `model: modelId` and
+  `retryAttempt` fields present in the actual source.
+- The `consolidateTokenUsage.ts` example omitted the
+  `message.type === "say"` guard and the `typeof` numeric checks
+  that the real code uses for defensive parsing.
+
+#### Potential Future Improvements
+
+- [ ] Add a CI/lint rule or script that verifies doc line numbers
+      against current source (similar to a link checker).
+- [ ] Mark code examples that are simplified with a visible
+      "(simplified)" annotation (already done for
+      `consolidateTokenUsage.ts` in this review).
+- [ ] Consider using symbol names (e.g. `#updateApiReqMsg`) instead
+      of line numbers in doc anchors, since line numbers drift but
+      function names are stable.
+
 ### Versioning
 
 Shipped as Shofer **3.53.0** (minor bump): new user-visible

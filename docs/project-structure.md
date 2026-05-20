@@ -183,3 +183,63 @@ deploy.sh dev build shofer-code
 # Install in code-server
 deploy.sh dev install-extensions
 ```
+
+---
+
+## Gaps, Issues & Improvement Areas
+
+Issues discovered during factual-accuracy verification of this document.
+
+### Directory tree omissions
+
+The tree shows a simplified subset of the monorepo. Missing from the diagram:
+
+- `packages/types/src/events.ts` — ShoferEventName enum (TaskStarted, TaskCompleted, etc.), referenced in Key Components.
+- `packages/core/` — shared worktree, task-history, custom-tools, debug-log, and message-utils packages.
+- `packages/telemetry/` — TelemetryService, PostHogTelemetryClient.
+- `packages/ipc/` — IPC client/server for CLI ↔ extension communication.
+- `src/core/tools/` — 15+ native tool implementations (ApplyDiffTool.ts, AskAssistantAgentTool.ts, AttemptCompletionTool.ts, etc.).
+- `src/core/auto-approval/` — AutoApprovalHandler, per-group approval policies.
+- `src/services/code-index/` — RAG codebase indexing (embedders, file-watcher, git-ignore-filter).
+- `src/services/assistant-agent/` — persistent LLM-based codebase Q&A service.
+- `src/services/mcp/` — MCP server hub and server manager.
+- `src/services/skills/` — skills discovery, caching, and lifecycle management.
+- `webview-ui/src/components/chat/` — ~50+ React components, not just the 3 listed.
+
+### Task events section is incomplete
+
+The "Key events emitted" block under Task.ts lists only 5 events. The [`events.ts`](extensions/shofer/packages/types/src/events.ts) `ShoferEventName` enum defines 25+ events. Missing categories:
+
+- **Subtask lifecycle**: `TaskPaused`, `TaskUnpaused`, `TaskSpawned`, `TaskDelegated`, `TaskDelegationCompleted`, `TaskDelegationResumed`
+- **Execution**: `TaskModeSwitched`, `TaskAskResponded`, `TaskUserMessage`, `QueuedMessagesUpdated`
+- **Analytics**: `TaskTokenUsageUpdated`, `TaskToolFailed`
+- **Configuration**: `ModeChanged`, `ProviderProfileChanged`
+
+### TaskCompleted event description is imprecise
+
+The doc says "Task finished with token/tool usage". In the actual schema, `TaskCompleted` carries a tuple of `[string (taskId), TokenUsage, ToolUsage, { rating: CompletionRating, isSubtask: boolean }]`. Token/tool usage is a separate tuple position from the review metadata.
+
+### TaskManager events list is incomplete
+
+The "Key events emitted" block lists 3 events. The actual [`TaskManagerEvents`](extensions/shofer/src/services/task-manager/TaskManager.ts:46) interface defines 7 events. Missing:
+
+- `managedTask:needs-parent-input` — background child routes a question to its parent
+- `managedTask:completed` — task reached completed lifecycle
+- `managedTask:error` — task reached error lifecycle
+- `managedTask:tool-error` — a tool invocation in the task failed irrecoverably
+
+### Communication flow message types are approximated
+
+The diagram shows `{type: "state", ...}`, `{type: "parallelTasksUpdated"}`, `{type: "taskNotification"}` as `ExtensionMessage` discriminants. While conceptually accurate, the exact TypeScript type discriminants in the source differ. This should be verified against `ExtensionMessageSchema` in `@shofer/types` at next review.
+
+### Event flow: "gray indicator" for idle after completion is ambiguous
+
+The doc describes completed/idle tasks as "gray indicator" but the actual `LIFECYCLE_VISUAL` renders terminal states (`completed`, `error`) with color: `completed` uses `var(--vscode-charts-green,#16a34a)` and `error` uses `var(--vscode-errorForeground,#ef4444)`. Only `idle` (no lifecycle yet) uses `var(--vscode-descriptionForeground)`.
+
+### Sections that would improve the doc
+
+1. **Tool architecture overview** — how native tools, MCP tools, and private LM tools are dispatched.
+2. **Auto-approval flow** — how `checkAutoApproval` gates tool execution.
+3. **Message persistence layout** — where `ui_messages.json`, `api_conversation_history.json`, and `history_item.json` live on disk.
+4. **Checkpoint (shadow-git) model** — how `ShadowCheckpointService` provides undo/redo.
+5. **Context management** — condense, truncation, FileContextTracker.

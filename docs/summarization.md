@@ -174,3 +174,25 @@ Message data fields ([`packages/types/src/message.ts`](extensions/shofer/package
 - Types: [`packages/types/src/message.ts`](extensions/shofer/packages/types/src/message.ts) (ShoferMessage, ContextCondense, ContextTruncation), [`packages/types/src/context-management.ts`](extensions/shofer/packages/types/src/context-management.ts) (event types)
 - Task integration: [`src/core/task/Task.ts`](extensions/shofer/src/core/task/Task.ts) (attemptApiRequest, handleContextWindowExceededError, condenseContext)
 - i18n: [`src/i18n/locales/en/common.json`](extensions/shofer/src/i18n/locales/en/common.json) (condense error strings)
+
+## Gaps & Areas for Improvement
+
+1. **`TruncationResult` type not documented** — The [`TruncationResult`](extensions/shofer/src/core/context-management/index.ts:47) type (`{ messages, truncationId, messagesRemoved }`) exists alongside [`ContextManagementResult`](extensions/shofer/src/core/context-management/index.ts:243) but is not mentioned in this doc. It is the return type of [`truncateConversation()`](extensions/shofer/src/core/context-management/index.ts:68).
+
+2. **`convertToolBlocksToText()` not documented** — The document references [`transformMessagesForCondensing()`](extensions/shofer/src/core/condense/index.ts:103), but the actual per-message conversion workhorse is [`convertToolBlocksToText()`](extensions/shofer/src/core/condense/index.ts:72). The former is a thin mapper over the latter.
+
+3. **`SUMMARY_PROMPT` constant not mentioned** — The prompt construction section (step 5) describes `customCondensingPrompt` and `supportPrompt.default.CONDENSE` but omits [`SUMMARY_PROMPT`](extensions/shofer/src/core/condense/index.ts:115-124), the system-level prefix prepended to every condensing call. This prompt disables tool calls and re-frames the task as summarization-only.
+
+4. **`maybeRemoveImageBlocks()` import path not shown** — This function (step 4 of Process) is imported from [`../../api/transform/image-cleaning`](extensions/shofer/src/api/transform/image-cleaning.ts), not defined in the condense module. The doc should clarify this is an external dependency.
+
+5. **`toolTokens` counting not documented** — In [`summarizeConversation()`](extensions/shofer/src/core/condense/index.ts:509-513), the `newContextTokens` calculation includes tool definition tokens (`metadata.tools`) via a separate `apiHandler.countTokens()` call on the JSON-serialized tools array. This detail is invisible in the current doc.
+
+6. **`SummarizeResponse` ← `ContextManagementResult` relationship not explicit** — [`ContextManagementResult`](extensions/shofer/src/core/context-management/index.ts:243) extends [`SummarizeResponse`](extensions/shofer/src/core/condense/index.ts:215) with `prevContextTokens`, `truncationId?`, `messagesRemoved?`, and `newContextTokensAfterTruncation?`. The doc documents both types independently but doesn't explain that one is a superset of the other.
+
+7. **Telemetry not documented** — Both [`summarizeConversation()`](extensions/shofer/src/core/condense/index.ts:271) and [`truncateConversation()`](extensions/shofer/src/core/context-management/index.ts:69) emit telemetry events (`captureContextCondensed`, `captureSlidingWindowTruncation`). The Events Emitted section only covers ShoferMessage events (`condense_context`, `sliding_window_truncation`), not telemetry.
+
+8. **`maxCharacters` default for file folding not API-verified** — The doc states the default `maxCharacters` is 50000 (line 60), which matches the source default in [`generateFoldedFileContext()`](extensions/shofer/src/core/condense/foldedFileContext.ts:81). However, no tests verify this constant across the folded-file pipeline, so a change in the default could go unnoticed.
+
+9. **No section on abort/cancellation interaction** — Condensation calls `apiHandler.createMessage()` inside [`summarizeConversation()`](extensions/shofer/src/core/condense/index.ts:342), which iterates a stream. There's no discussion of what happens when the user cancels the task mid-condensation — whether the stream is aborted, partial summaries are discarded, or stale `condenseParent` tags are left behind.
+
+10. **No section on the dual-path threshold resolution** — The effective threshold is resolved identically in both [`manageContext()`](extensions/shofer/src/core/context-management/index.ts:295-312) and [`willManageContext()`](extensions/shofer/src/core/context-management/index.ts:188-198). These are copy-pasted blocks that could drift apart. The doc could note this as a maintenance hazard.

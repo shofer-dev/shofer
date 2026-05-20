@@ -121,4 +121,42 @@ The existing `say("type", text, images?, partial?)` machinery already handles
 in-place row updates — when `partial=true` and the previous message has the
 same `say` type, `Task.ts` calls `updateShoferMessage()` which replaces the
 row instead of appending. Reusing this avoids duplicating the
-save/post/update infrastructure.
+
+## Issues & improvement areas
+
+### Missing timer-based heartbeat
+
+The original design described a 5s re-emission heartbeat, but
+[`language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts)
+does not include a timer. The `lastVisibleEmitMs` variable (line 365) is
+assigned in four places but never read. Re-emission piggybacks on every
+tool call delta carrying a `function.name` — this works while deltas flow
+but leaves the progress row frozen during network stalls.
+
+**Suggested fix**: Add a `setInterval` that reads `lastVisibleEmitMs` and,
+when >5s have elapsed since the last visible emission, re-emits the marker
+for any in-progress tool call. Clear on `finishReason`.
+
+### i18n key unused in ChatRow.tsx
+
+The key `chat.toolPreparing.preparing` was added to
+[`chat.json`](../webview-ui/src/i18n/locales/en/chat.json) (line 361) but
+[`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx) line 1360
+uses the hardcoded string `"Preparing"` instead of
+`t("chat.toolPreparing.preparing", { toolName })`. This violates the i18n
+String Rule in AGENTS.md. Either wire the i18n key or remove the unused
+entry.
+
+### `lastVisibleEmitMs` is dead code
+
+The variable is initialized on line 365 and updated on lines 386, 393, 425
+but never read. If a timer-based heartbeat is not planned, remove the
+variable and all four assignments. If it IS planned, add a TODO comment.
+
+### No explicit stop guard
+
+Emission stops only because the stream ends on `finishReason` — there is no
+`isPreparing` boolean flag to prevent accidental marker leaks if the stream
+model changes. A defensive flag set on first emit and cleared on
+`finishReason` would be safer.
+.

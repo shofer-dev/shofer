@@ -367,6 +367,33 @@ keys consumed by host code (modal dialogs, toasts shown by
 `webviewMessageHandler.ts`) live in `common.json` because the host
 i18next instance loads the `common` namespace, not `chat`.
 
+## Gaps & Areas for Improvement
+
+### Legacy naming
+
+- `FileContextTracker.getFilesEditedByRoo()` retains the old "Roo" name. Renaming to `getFilesEditedByShofer()` would align with the rebranding.
+- The internal `recentlyEditedByRoo` set in [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts) still carries the legacy name.
+
+### No test coverage for ChangedFilesService
+
+There is no `__tests__/` directory under `src/core/file-changes/`. The service handles snapshot hashing, unified diff computation, absent/add/delete state derivation, and the accept/revert flow — all of which would benefit from unit tests against known fixtures.
+
+### `shofer-original:` content provider is an anonymous class
+
+The virtual document scheme is registered via an anonymous `class implements vscode.TextDocumentContentProvider` inline in [`extension.ts`](../src/extension.ts:277). Extracting it into a named module (e.g., `src/integrations/editor/ShoferOriginalContentProvider.ts`) would make it independently testable and visible in stack traces.
+
+### No snapshot size limit
+
+`captureOriginal` writes verbatim file copies under `base/<relPath>`. For a task that edits many large files, the per-task working directory can grow unbounded. There is no pruning, no LRU eviction, and no configurable maximum size per task directory.
+
+### `acceptFile` disk-read is not atomic with `overwriteOriginalBase`
+
+Between `readDiskText(task.cwd, posix)` and `overwriteOriginalBase(posix, content)` the file could change on disk (user edit, auto-save, formatter run). The hash stored in the originals snapshot could reflect an intermediate state that doesn't match what was promoted. A racy re-read of the file after promotion to verify the hash would close this gap.
+
+### Checkpoint restore interaction stalls base/final cleanup
+
+After a checkpoint restore, `base/` and `final/` directories are stale until cleared manually or by the next new task. See the [Checkpoint restore interaction](#checkpoint-restore-interaction) section for details.
+
 ## TODO / Future work
 
 - Clear `<taskDir>/base/`, `<taskDir>/final/`, `<taskDir>/originals/`, and `<taskDir>/finals/` after a successful checkpoint restore so the next edits start with fresh baselines (see [Checkpoint restore interaction](#checkpoint-restore-interaction)).

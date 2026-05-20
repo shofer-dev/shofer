@@ -29,6 +29,7 @@ This document catalogues every **user-facing feature** and **opinionated change*
 17. [Cloud removal and marketplace/telemetry feature flags](#17-cloud-removal-and-marketplacetelemetry-feature-flags)
 18. [Provider Improvements](#18-provider-improvements)
 19. [UI/UX Opinionated Changes](#19-uiux-opinionated-changes)
+20. [Known Gaps & Areas for Improvement](#20-known-gaps--areas-for-improvement)
 
 ---
 
@@ -40,12 +41,12 @@ Previously, the codebase supported only one task at a time — starting a new ta
 
 ### What Was Built
 
-| Capability                    | Description                                                                                                                                                                                                             |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Multiple concurrent tasks** | Each task runs independently with its own LLM conversation, state, tool approvals, and history. Users can switch between tasks freely — they continue running in the background.                                        |
-| **Task state indicators**     | Every task has a visible state: _running_, _paused_, _completed_, _error_. The state is reflected in the TaskSelector, task header, and notifications. See [`task_states.md`](task_states.md) for the full state model. |
-| **Task notifications**        | When a background task requires approval or completes, a webview notification alerts the user. Existing notifications are delivered when the webview launches.                                                          |
-| **Per-task isolation**        | Mode, drafts, scroll position, and queued messages are scoped per-task. Switching tasks never leaks state.                                                                                                              |
+| Capability                    | Description                                                                                                                                                                                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Multiple concurrent tasks** | Each task runs independently with its own LLM conversation, state, tool approvals, and history. Users can switch between tasks freely — they continue running in the background.                                                                         |
+| **Task state indicators**     | Every task has a visible state, shown as a colored dot in the TaskSelector. Core user-facing states include _running_, _paused_, _waiting_, _completed_, and _error_. See [`task_states.md`](task_states.md) for the full 7-value `TaskLifecycle` model. |
+| **Task notifications**        | When a background task requires approval or completes, a webview notification alerts the user. Existing notifications are delivered when the webview launches.                                                                                           |
+| **Per-task isolation**        | Mode, drafts, scroll position, and queued messages are scoped per-task. Switching tasks never leaks state.                                                                                                                                               |
 
 ### Architecture
 
@@ -157,9 +158,7 @@ See [`drag_n_drop.md`](drag_n_drop.md) for the full design.
 
 ## 7. New Native Tools
 
-Twelve native tools were implemented to provide functionality on par with Copilot, and in some cases better.
-
-See [`native_tools.md`](native_tools.md) for the complete tool reference.
+Seventeen native tools are listed below — see [`native_tools.md`](native_tools.md) for the complete reference of all 50+ tools.
 
 | Tool                                                                  | Description                                                                                                                                                                                     |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -356,11 +355,11 @@ Given that Shofer runs entirely locally with no server-side dependencies, other 
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Thinking/reasoning blocks**   | Streaming reasoning/thinking content is now surfaced in the chat UI as collapsible thinking blocks. Models using the VS Code LM API (including GitHub Copilot models) can show their reasoning process. |
 | **MaxTokens from model config** | The provider now passes `maxTokens` from the model configuration to the LLM, respecting model-specific output limits.                                                                                   |
-| **TaskId as conversationId**    | Each task's ID is now optionally passisng a `conversationId` in model options for better conversation tracking and continuity.                                                                          |
+| **TaskId as conversationId**    | Each task's ID is now optionally passed as a `conversationId` in model options for better conversation tracking and continuity.                                                                         |
 
 ### Tool Preparing Progress
 
-A new progress indicator appears in chat while the LLM streams tool call arguments. Previously, there was no visual indicator and the cha appeared idle. Now users now see that a tool invocation is in progress before it executes. This addition significantly improves the perceived responsiveness and transparency of tool calls. Users know something is happening while arguments stream in.
+A new progress indicator appears in chat while the LLM streams tool call arguments. Previously, there was no visual indicator and the chat appeared idle. Users now see that a tool invocation is in progress before it executes. This addition significantly improves the perceived responsiveness and transparency of tool calls.
 
 See [`tool-preparing-progress.md`](tool-preparing-progress.md) for the full design.
 
@@ -381,7 +380,44 @@ These are deliberate design decisions that changed the default behavior or appea
 
 ---
 
-## Document Index
+## 20. Known Gaps & Areas for Improvement
+
+This section catalogues issues and omissions discovered during a path/entity verification audit of this document (May 2026). Future editors should address these.
+
+### Factual Inaccuracies Corrected
+
+| Line(s)  | Issue                                                                                                     | Status   |
+| -------- | --------------------------------------------------------------------------------------------------------- | -------- |
+| 52–54    | Tool paths pointed to `src/core/task/tools/XTool.ts` — directory never existed                            | ✅ Fixed |
+| 54       | `TaskManager` path: `src/core/task/` → `src/services/task-manager/`                                       | ✅ Fixed |
+| 181      | `skills` tool linked to `packages/types/src/tool.ts` instead of implementation file                       | ✅ Fixed |
+| 18,25,29 | Three ToC anchors mismatched section headings                                                             | ✅ Fixed |
+| 46       | Task states listed as 4 values; actual `TaskLifecycle` has 7 (`idle`, `waiting_input`, `waiting` missing) | ✅ Fixed |
+| 160      | Claimed "Twelve native tools" but table listed 17; codebase has 50+                                       | ✅ Fixed |
+| 359      | Typo: "passisng" → "passing"                                                                              | ✅ Fixed |
+| 363      | Typo: "the cha appeared idle" → "the chat appeared idle"                                                  | ✅ Fixed |
+
+### Content Gaps (not yet addressed)
+
+| Gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Severity | Suggested Action                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| §7 lists only 17 of 50+ native tools. Missing notable tools: `rag_search`, `git_search`, `view_image`, `find_files`, `ask_assistant_agent`, `call_mcp_tool_async`, `read_command_output`, `cancel_tasks`, `answer_subtask_question`, `read_project_structure`, `create_directory`, `sleep`, `update_todo_list`, `get_changed_files`, `get_errors`, `get_project_setup_info`, `switch_mode`, `ask_followup_question`, `access_mcp_resource`, `generate_image`, `run_slash_command`. | High     | Expand §7 into subcategories or link to `native_tools.md` comprehensively        |
+| §17 (Cloud removal) is 3 sentences with no feature-level detail                                                                                                                                                                                                                                                                                                                                                                                                                    | Medium   | Expand to list what was decoupled, removed, and what replaced each cloud feature |
+| No section on **Assistant Agent** (`ask_assistant_agent` tool + `AssistantAgentManager` service)                                                                                                                                                                                                                                                                                                                                                                                   | High     | Add a new section or subsection under §7 or §18                                  |
+| No section on **Async MCP** (`call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`)                                                                                                                                                                                                                                                                                                                                                                                  | Medium   | Add a subsection under §14 (Cancellation) or a new section                       |
+| No section on **Checkpoint system overhaul** (shadow-git → `GIT_DIR` isolation, `RepoPerTaskCheckpointService`)                                                                                                                                                                                                                                                                                                                                                                    | Medium   | Add as its own section or expand §15                                             |
+| No section on **RAG / Code Index** (`rag_search`, `CodeIndexManager`, file-watcher, embedders)                                                                                                                                                                                                                                                                                                                                                                                     | Medium   | Add a new section                                                                |
+| §13 (Worktree) doesn't mention worktree handler naming convention or `.worktreeinclude`                                                                                                                                                                                                                                                                                                                                                                                            | Low      | Expand with handler API details                                                  |
+| No section on `git_search` — semantic commit-history search                                                                                                                                                                                                                                                                                                                                                                                                                        | Low      | Add to §7 or a new subsection                                                    |
+| No section on `read_command_output` — truncated command output retrieval                                                                                                                                                                                                                                                                                                                                                                                                           | Low      | Add to §7 or §18                                                                 |
+| No section on `edit` / `edit_file` tool aliases and their relationship to `apply_diff`                                                                                                                                                                                                                                                                                                                                                                                             | Low      | Add to §7 or §8                                                                  |
+
+### Structural Improvements
+
+- The Document Index (§Document Index) is alphabetically ordered but doesn't follow the same order as the ToC. Consider reordering to match.
+- Section 17 is the only section without a `### What Was Built` subsection, making it visually inconsistent.
+- Screenshots are all marked `📸 TODO`. A future pass should capture and embed them.
+- The `Table of Contents` numbering uses `1.`, `2.`, … while the section headings use `## 1.`, `## 2.`, … — some renderers interpret the heading `## 1.` as a list item rather than a heading anchor.
 
 | Document                                                           | Topic                                            |
 | ------------------------------------------------------------------ | ------------------------------------------------ |

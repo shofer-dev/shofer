@@ -251,3 +251,33 @@ The JSON export mirrors the chrome-extension's in-task trace format ([`sidepanel
 - [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts) — `exportTaskWithId()` and `exportTaskWithIdJson()` methods
 - [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) — `exportCurrentTask`, `exportCurrentTaskJson`, `exportTaskWithId`, `exportTaskWithIdJson` handlers
 - [`TaskActions.tsx`](../webview-ui/src/components/chat/TaskActions.tsx) — Export buttons in the task header
+
+## Gaps and Known Issues
+
+### Source comment inaccuracy
+
+The `apiProtocol` field comment in [`export-json.ts:19`](../src/integrations/misc/export-json.ts:19) says `(e.g. "anthropic", "openai-native")`. Runtime values produced by [`getApiProtocol()`](../packages/types/src/provider-settings.ts:549) are `"anthropic"` and `"openai"` — `"openai-native"` never appears as an `apiProtocol`. The source comment should be corrected to match runtime reality.
+
+### Markdown example accuracy
+
+The Markdown example (§Format) wraps user messages in `<user_message>` XML tags. The actual exporter writes raw content without XML wrapping. The example is illustrative; consider replacing it with verbatim sample output.
+
+### Missing data pipeline detail
+
+The Data Sources table lists `history_item.json` as a source. This file is read by [`TaskHistoryStore`](../src/core/task-persistence/TaskHistoryStore.ts) during task lookup — exporters receive the `HistoryItem` indirectly via [`ShoferProvider.getTaskWithId()`](../src/core/webview/ShoferProvider.ts:2119), not by reading `history_item.json` directly. The table is correct as a logical dependency but the indirection through `TaskHistoryStore` is not documented.
+
+### No test coverage for exporters
+
+Neither [`export-markdown.ts`](../src/integrations/misc/export-markdown.ts) nor [`export-json.ts`](../src/integrations/misc/export-json.ts) has dedicated test files. The Markdown formatter (`formatContentBlockToMarkdown`) and the JSON trace builder (`buildJsonTrace`) are pure functions amenable to unit testing.
+
+### UI button documentation
+
+The "How to Export" section and Quick Reference table should reference the actual lucide-react icon components ([`DownloadIcon`](../webview-ui/src/components/chat/TaskActions.tsx:29), [`FileJsonIcon`](../webview-ui/src/components/chat/TaskActions.tsx:34)) and their i18n tooltip keys (`chat:task.export`, `chat:task.exportJson`) rather than emoji approximations. Fixed in this revision.
+
+### Token estimation heuristic
+
+The char/4 heuristic in [`estimimateTokens()`](../src/integrations/misc/export-json.ts:140) is not calibrated against any provider's tokeniser and may drift significantly for non-English text or code-heavy messages. The `_tokensEstimated` flag is a reasonable signal but consumers should treat estimated counts as diagnostic, not authoritative.
+
+### Tool result extraction fragility
+
+Tool results are extracted from the _next_ user message's `tool_result` blocks ([`export-json.ts:261`](../src/integrations/misc/export-json.ts:261)). If the conversation has been truncated or the tool-result ordering is non-standard, results may be silently missing from the export.

@@ -481,3 +481,43 @@ Standby ──startIndexing()──→ Indexing ──scan complete──→ Ind
            │
            └──recoverFromError()──→ Standby (clean slate)
 ```
+
+---
+
+## Gaps, Issues & Areas for Improvement
+
+Discovered during the 2026-05-20 review that verified every file path, line number, entity name, constant value, and code example against the live source.
+
+### Documentation Accuracy
+
+- **`serialized-embedder.ts` not documented** — the embedders directory contains a 9th file (`serialized-embedder.ts`) that wraps an `IEmbedder` in a concurrency lane (`embedder-lane.ts`). Neither file is mentioned in the embedder provider table (§8) or architecture diagram.
+
+- **`embeddingModels.ts` path is imprecise** — the doc says "resolved via `shared/embeddingModels.ts`" (§8). The file lives at [`src/shared/embeddingModels.ts`](extensions/shofer/src/shared/embeddingModels.ts), not under `src/services/code-index/shared/`. The doc should use an absolute or workspace-relative link.
+
+### Interfaces
+
+- **`interfaces/index.ts` barrel export is incomplete** — the barrel re-exports `embedder`, `vector-store`, `file-processor`, and `manager`, but omits `cache` and `config`. `ICacheManager` and `CodeIndexConfig` are therefore not available through a single `interfaces/` import, which the interface table implies.
+
+- **`ICodeIndexManager` interface methods not listed** — the doc says "public API contract" but doesn't enumerate the actual methods: `dispose()`, `stopWatcher()`, `loadConfiguration()`, `getCurrentStatus()`, `clearIndexData()`, etc. The `ICacheManager` entry lists methods explicitly; the `ICodeIndexManager` entry should too for consistency.
+
+### Constants
+
+- **The constants table (§Key Constants) presents a flattened list** — in the source, constants are grouped by consumer: `/**Parser */`, `/**Search */`, `/**File Watcher */`, `/**Directory Scanner */`, `/**OpenAI Embedder */`, `/**Gemini Embedder */`. The doc table loses this grouping, making it unclear which subsystem owns each constant.
+
+### Multi-Workspace Support
+
+- **Collection naming is not explained** — the doc says each workspace gets its own Qdrant collection "derived from a hash of the workspace path" but doesn't show the hash function or the collection name pattern. This is relevant for anyone debugging Qdrant directly.
+
+### Architecture Diagram
+
+- **The architecture diagram (§Architecture) is prose-only** — the text-based tree is good for hierarchy but doesn't show data flow arcs (embedding API calls, Qdrant gRPC/HTTP, file-system reads). A Mermaid or ASCII-art dataflow diagram would help readers understand the embedding round-trips.
+
+### Concurrency
+
+- **`embedder-lane.ts` not mentioned** — the Per-Provider Concurrency Lane Rule (from `AGENTS.md`) is implemented in [`embedder-lane.ts`](extensions/shofer/src/services/code-index/embedders/embedder-lane.ts), which wraps every `IEmbedder` in a `PQueue`-based lane keyed by `(provider, endpoint)`. The doc describes the embedding flow but never mentions this wrapper or the concurrency guarantees it provides.
+
+- **`serialized-embedder.ts` is the lane-wrapped embedder** — it calls `embedder-lane.ts`'s `getOrCreateLane()` and queues every `createEmbeddings()` call through `lane.add(() => inner.createEmbeddings(...))`. The doc should mention both files together.
+
+### Auth
+
+- **Qdrant API key support not detailed** — the config schema lists `qdrantApiKey?: string` but the doc never explains when authenticated Qdrant is needed or how the key is used.

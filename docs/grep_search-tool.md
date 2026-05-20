@@ -181,3 +181,19 @@ Defaults: `isRegex=true`, `caseSensitive=false`, `wholeWord=false`, `fileTypes=n
 | File                            | Reason                     |
 | ------------------------------- | -------------------------- |
 | `src/services/ripgrep/index.ts` | Still used by `list_files` |
+
+## Gaps, Issues & Improvement Areas
+
+1. **Trade-offs table `.shoferignore` row is stale.** The table says "Post-filter via `ShoferIgnoreController`" but the current implementation also passes `--ignore-file <path-to-.shoferignore>` to ripgrep natively (see [`buildRipgrepArgs`](../src/core/tools/GrepSearchTool.ts:220-222)), so ignored files are excluded at the search level — not solely via post-filter. The post-filter in `execute()` is retained as a safety net. The doc should reflect the dual `.shoferignore` exclusion strategy (native rg flag + post-filter safety net).
+
+2. **Ripgrep CLI Mapping code example is simplified.** The code block at §Ripgrep CLI Mapping omits the `--ignore-file` argument that `buildRipgrepArgs` adds when `.shoferignore` is loaded. It also omits the `directoryPath` → `resolvedPath` (absolute) conversion. These are acceptable simplifications for a conceptual mapping, but they differ from the actual source.
+
+3. **Output format example match-line padding off by one space.** The code at [`formatResults`](../src/core/tools/GrepSearchTool.ts:489-491) produces `${prefix} ${paddedNum}` where `paddedNum` is `String(lineNum).padStart(4, " ")`. For match lines this yields `>   42 |` (3 spaces between `>` and the number). The doc example shows `>  42 |` (2 spaces). The format spec says "4-digit padded" which is correct; the example drifted.
+
+4. **"No results" message inconsistency across error paths.** When ripgrep executes successfully but produces no hits, the tool returns `No results found for: <query>`. When ripgrep itself errors (binary missing, spawn failure), the tool returns `"Search failed: Could not find ripgrep binary"` for missing binary OR `No results found for: <query>` for generic spawn errors (line 383). The doc only documents the `No results found for: <query>` message — the binary-missing message is an undocumented variant.
+
+5. **The `2× maxResults` fetch buffer is not documented.** The tool fetches `2 * maxResults * linesPerResult` worth of ripgrep lines to ensure the post-processing hit count can exceed `maxResults` and trigger the truncation flag. This implementation detail is not mentioned in the doc but matters for understanding why the tool might return fewer than `maxResults` results even when more exist — if all `maxResults` hits come from the first `maxResults * linesPerResult` lines, the buffer is never exceeded.
+
+6. **OpenAI schema `required` array marks all 10 params as required.** Although `fileTypes`, `excludePattern`, `isRegex`, etc. all have `null` defaults and are semantically optional, the schema declares them all `required` (lines 105-116 of `grep_search.ts`). This is intentional for `strict: true` mode but can confuse readers who see the doc's "Required" column showing ✅ for nullable params.
+
+7. **Cross-reference to related tools not present.** The doc does not mention sibling search tools (`rag_search`, `git_search`) that share the same result-cap infrastructure via [`searchCap.ts`](../src/core/tools/helpers/searchCap.ts). Users choosing between `grep_search`, `rag_search`, and `git_search` would benefit from a brief comparison. The shared `formatTruncationHeader` ensures consistent header wording, which is an intentional design decision worth noting.

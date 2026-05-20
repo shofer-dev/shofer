@@ -231,6 +231,39 @@ Image generation uses provider-specific endpoints (not the chat completions API)
 | [`ChatView.preserve-images.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatView.preserve-images.spec.tsx) | Test suite for image preservation behavior               |
 | [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)                         | Test suite for textarea image behavior                   |
 
+## Gaps, Issues & Improvement Areas
+
+- **Fixed: Phantom setting name `maxReadFileImageSize`** (line 207) — The actual settings are
+  [`maxImageFileSize`](../packages/types/src/global-settings.ts:170) (per-file MB limit, default 5) and
+  [`maxTotalImageSize`](../packages/types/src/global-settings.ts:171) (per-operation total MB limit, default 20).
+  The `read_file` tool does not reference its own dedicated size constant; it uses the global settings.
+  Corrected to `maxImageFileSize`.
+
+- **Fixed: Broken cross-doc anchor `tool_access.md#image-generation`** (line 215) —
+  [`tool_access.md`](tool_access.md) contains no `image-generation` section and never mentions
+  `generate_image`. The tool is documented under the **Feature-Gated Tools** section of
+  [`native_tools.md`](native_tools.md#feature-gated-tools) (line 530). Corrected.
+
+- **Flow diagram simplifications** — The "Image Sending Flow" diagram mentions
+  `Task.addMessage(role: "user", content: [...])` and `possiblyRemoveImageBlocks` as
+  distinct steps. The actual implementation routes through
+  [`messageQueueService.addMessage()`](../src/core/message-queue/MessageQueueService.ts:36)
+  and the provider-specific transform modules. The diagram is conceptually correct but uses
+  simplified function names that don't correspond to exact source identifiers.
+
+- **Missing coverage** — The doc describes three image input methods (paste, drag-drop, file picker)
+  but does not cover image `@`-mention resolution (the `@`-mention flow that resolves file paths
+  to image data URLs via [`resolveImageMentions`](../src/core/mentions/resolveImageMentions.ts:60)).
+  Changelog references this feature (v3.39.0) but the main body doesn't document how it works.
+
+- **Poe provider** — The changelog entry for v3.52.0 references "Poe provider support" as a
+  "new vision-capable provider." Poe may no longer be an active provider; this entry can be
+  verified against the current provider catalog.
+
+- **Thumbnails sizing** — The doc states thumbnails are "34×34px" (line 70). This is a
+  visual-design detail that could drift without notice. Consider verifying against
+  [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx) styles.
+
 ## Changelog History
 
 - **v3.54.34** — VS Code LM provider: forward user-message images as `LanguageModelDataPart` (paired with llm-provider 0.6.6 which translates them to OpenAI-style `image_url` parts on the wire). Replaces the previous text-placeholder behaviour that caused models to reply 'I see an image was shared, but it's not supported by VSCode LM API'.

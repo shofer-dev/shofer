@@ -102,3 +102,64 @@ There are two additional drop handlers inside the webview:
 
 Both handlers delegate to the same `droppedContextFiles` React state,
 ensuring consistent behavior regardless of which path processes the drop.
+
+## Shared URI parsers
+
+All three drop paths (native TreeView, ChatView root, ChatTextArea
+container) share the same URI parsing logic via
+[`webview-ui/src/utils/droppedContextFiles.ts`](../webview-ui/src/utils/droppedContextFiles.ts):
+
+| Export               | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| `DroppedContextFile` | Type: `{ path: string, isFile: boolean }`                          |
+| `extractUriPayload`  | Extracts a URI-list string from a `DataTransfer` object, probing   |
+|                      | `text/uri-list`, `text/plain`, and `application/vnd.code.uri-list` |
+|                      | MIME types in that order.                                          |
+| `parseDroppedUris`   | Parses newline-separated URI strings into `DroppedContextFile[]`,  |
+|                      | resolving workspace-relative paths and deduplicating.              |
+
+The native TreeView uses its own `addUrisToContext` helper (in
+`ContextDropZoneProvider.ts`) which duplicates the URI-parsing logic
+but also adds the `stat()` best-effort `isFile` detection and the
+status-bar message.
+
+## Per-task scoped state
+
+`droppedContextFiles` is scoped per task. When the user switches
+tasks, `ChatView` saves the current task's state into a
+`taskScopedState` map (keyed by `taskId`) and restores the
+incoming task's state — including `droppedContextFiles`. This
+prevents file tags from one task leaking into another, and
+preserves tags per task across task switches.
+
+## Gaps & improvements
+
+- **Missing component in the Architecture diagram**: The diagram only
+  shows the native TreeView → ChatView path. The ChatTextArea drop
+  handler and the shared `droppedContextFiles.ts` utility module are
+  not represented, giving an incomplete picture of the data flow.
+
+- **Missing `addUrisToContext` entry in the Components table**: The
+  exported helper function that is shared between the TreeView drop
+  handler and the Explorer context-menu command
+  (`shofer.addFilesToContext`) is not documented. It handles
+  the `postMessageToWebview`, status-bar message, and sidebar-focus
+  side effects.
+
+- **No test coverage listed**: The doc does not reference the existing
+  test coverage. The `ChatTextArea` drop handler has tests in
+  [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)
+  covering path drops, empty lines, image drops, long paths, special
+  characters, and outside-workspace paths. The native
+  `ContextDropZoneProvider` and the `droppedContextFiles.ts` parser
+  have no dedicated tests.
+
+- **`ShoferIgnoreController` not mentioned**: The doc describes files
+  being added to context unconditionally. The
+  [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
+  (currently defined but not wired) would filter dropped files against
+  `.shoferignore` rules. The doc should note this pending integration.
+
+- **No light/dark theme screenshot**: The UI section describes the
+  drop-zone appearance in prose but lacks a screenshot showing what it
+  actually looks like in the sidebar.

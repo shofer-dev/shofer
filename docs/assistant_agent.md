@@ -1016,3 +1016,36 @@ All 5 phase commits pass:
 - **ESLint**: `pnpm run lint` — zero warnings
 - **TypeScript**: `pnpm run check-types` — only pre-existing test file errors (unrelated `AttemptCompletionToolUse` rating type issue)
 - **VSCE Packaging**: `./deploy.sh dev build shofer` — produces `shofer-0.5.0.vsix` (31.74 MB)
+
+---
+
+## Gaps, Issues & Areas for Improvement
+
+_Audit performed 2026-05-20 — cross-referencing the design document against the actual source code._
+
+### Resolved in This Review
+
+These items were inaccurate in the doc and have been corrected above:
+
+1. **Missing module: `tool-executor.ts`** — The architecture diagram and Key Source Files table omitted [`tool-executor.ts`](extensions/shofer/src/services/assistant-agent/tool-executor.ts:1) (383 lines), a significant module imported by the manager. Added.
+2. **Stale line counts** — The Key Source Files table had `manager.ts` ~820 (actual: 912), `llm-client.ts` ~210 (actual: 320), `ask_assistant_agent.ts` 51 (actual: 74), `AskAssistantAgentTool.ts` 102 (actual: 151), `AssistantAgentChatProvider.ts` 134 (actual: 467). All corrected.
+3. **Outdated configuration model** — `AssistantAgentConfig` and settings schema described pre-refactor per-provider keys. Now documents the actual linked API Configuration profile model (`assistantAgentApiConfigId`).
+4. **Section numbering gap** — Skipped §6 entirely. Renumbered.
+5. **Wrong UI placement** — Described a VS Code status bar button; actual implementation uses a toolbar badge + popover in the chat-input toolbar. Corrected.
+6. **Stale Integration Points rows** — Removed phantom `registerStatusBar.ts` reference; marked `system.ts` as deferred.
+7. **Overstated deferred items** — `ShoferProvider.ts` and `webviewMessageHandler.ts` were listed as deferred but are fully implemented. Removed.
+8. **`CONVERSATION_STORE_VERSION` → 2** — Persisted format version is `z.literal(2)`, not `1`. Fixed.
+9. **Constants count 11 → 13** — Missing `DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC` and `DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH`. Fixed.
+10. **Files Created 13 → 14** — Missing `tool-executor.ts`. Fixed.
+
+### Open Issues (Not Yet Addressed in Source)
+
+11. **`file-watcher.ts` does not consult `.shoferignore`** — The design doc claims `.shoferignore`-aware filtering. The implementation hardcodes a `SKIP_PARTS` set (`node_modules`, `.git`, `__pycache__`, `.cache`, `dist`, `out`, `build`, `target`, `.next`, `.turbo`) and prefix-checks `.shofer/worktrees/` and `.shofer/`. No `.shoferignore` integration.
+
+12. **`directory-tree.ts` does not consult `.shoferignore`** — Same gap as above. The tree generator uses its own hardcoded exclusion set, not `.shoferignore` patterns.
+
+13. **No test coverage for `tool-executor.ts`, `directory-tree.ts`, `file-watcher.ts`, `llm-client.ts`** — Tests exist only for `ConversationStore`, `QuestionQueue`, and `ContextWindow`. The other modules are untested.
+
+14. **Agent loop max tool-call iteration cap unverified** — The design doc claims "max 25 tool-call iterations" but this constant was not found during the review. The cap may be elsewhere or differently enforced.
+
+15. **`AssistantAgentChatProvider` test coverage** — The 467-line webview panel manager has no spec file.
