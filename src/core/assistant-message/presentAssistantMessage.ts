@@ -210,22 +210,24 @@ export async function presentAssistantMessage(shofer: Task) {
 
 				// Emit tool result to the webview so ChatRow can show an expandable
 				// output section beneath the MCP tool invocation block.
-				// Cap output at 32 KB to avoid bloating IPC messages and persisted
-				// ui_messages.json with multi-MB results.
-				const MAX_TOOL_RESULT = 32768
-				const mcpTruncatedOutput =
-					resultContent.length > MAX_TOOL_RESULT
-						? resultContent.substring(0, MAX_TOOL_RESULT) +
-							`\n\n[Output truncated: ${resultContent.length.toLocaleString()} chars total]`
-						: resultContent
+				// Skip when the tool produced no meaningful output.
+				// Cap output at 2 KB to avoid bloating IPC messages.
+				if (resultContent && resultContent !== "(tool did not return anything)") {
+					const MAX_TOOL_RESULT = 2048
+					const mcpTruncatedOutput =
+						resultContent.length > MAX_TOOL_RESULT
+							? resultContent.substring(0, MAX_TOOL_RESULT) +
+								`\n\n[Output truncated: ${resultContent.length.toLocaleString()} chars total]`
+							: resultContent
 
-				shofer.say(
-					"tool_result",
-					JSON.stringify({
-						tool: `mcp__${mcpBlock.serverName}__${mcpBlock.toolName}`,
-						output: mcpTruncatedOutput,
-					} satisfies import("@shofer/types").ShoferSayToolResult),
-				)
+					shofer.say(
+						"tool_result",
+						JSON.stringify({
+							tool: `mcp__${mcpBlock.serverName}__${mcpBlock.toolName}`,
+							output: mcpTruncatedOutput,
+						} satisfies import("@shofer/types").ShoferSayToolResult),
+					)
+				}
 
 				hasToolResult = true
 			}
@@ -606,22 +608,26 @@ export async function presentAssistantMessage(shofer: Task) {
 
 				// Emit tool result to the webview so ChatRow can show an expandable
 				// output section beneath the tool invocation block.
-				// Cap output at 32 KB to avoid bloating IPC messages and persisted
+				// Skip when the tool produced no meaningful output (e.g. attempt_completion,
+				// update_todo_list, set_task_title).
+				// Cap output at 2 KB to avoid bloating IPC messages and persisted
 				// ui_messages.json with multi-MB grep/file results.
-				const MAX_TOOL_RESULT = 32768
-				const truncatedOutput =
-					resultContent.length > MAX_TOOL_RESULT
-						? resultContent.substring(0, MAX_TOOL_RESULT) +
-							`\n\n[Output truncated: ${resultContent.length.toLocaleString()} chars total]`
-						: resultContent
+				if (resultContent && resultContent !== "(tool did not return anything)") {
+					const MAX_TOOL_RESULT = 2048
+					const truncatedOutput =
+						resultContent.length > MAX_TOOL_RESULT
+							? resultContent.substring(0, MAX_TOOL_RESULT) +
+								`\n\n[Output truncated: ${resultContent.length.toLocaleString()} chars total]`
+							: resultContent
 
-				shofer.say(
-					"tool_result",
-					JSON.stringify({
-						tool: block.name,
-						output: truncatedOutput,
-					} satisfies import("@shofer/types").ShoferSayToolResult),
-				)
+					shofer.say(
+						"tool_result",
+						JSON.stringify({
+							tool: block.name,
+							output: truncatedOutput,
+						} satisfies import("@shofer/types").ShoferSayToolResult),
+					)
+				}
 
 				hasToolResult = true
 			}
