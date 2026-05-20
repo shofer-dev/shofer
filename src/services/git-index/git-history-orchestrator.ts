@@ -128,7 +128,7 @@ export class GitHistoryOrchestrator {
 			const newCommits = commits.filter((c) => !this.cacheManager.isUnchanged(c.commit_hash, c.contentHash))
 
 			if (newCommits.length === 0) {
-				this.stateManager.setSystemState("Indexed", "All commits already indexed (including submodules).")
+				this.stateManager.setSystemState("Indexed", "Including submodules.")
 				this.cacheManager.updateLastCommitDateFromBatch(commits)
 				await this.cacheManager.persist()
 				this._startWatcher()
