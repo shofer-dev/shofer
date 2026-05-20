@@ -137,7 +137,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 	 * @param model - Optional model ID to override the default.
 	 * @returns A promise that resolves to an EmbeddingResponse containing the embeddings and usage data.
 	 */
-	async createEmbeddings(texts: string[], model?: string): Promise<EmbeddingResponse> {
+	async createEmbeddings(texts: string[], model?: string, signal?: AbortSignal): Promise<EmbeddingResponse> {
 		const modelToUse = model || this.defaultModelId
 		const url = `${this.baseUrl}/api/embed` // Endpoint as specified
 
@@ -202,9 +202,29 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 					`modelCtx=${modelContextTokens} usableTokens=${usableTokens} cap=${maxSafeChars}`,
 			)
 
-			// Add timeout to prevent indefinite hanging
-			const controller = new AbortController()
-			const timeoutId = setTimeout(() => controller.abort(), OLLAMA_EMBEDDING_TIMEOUT_MS)
+			// Merge the external abort signal (e.g. from the orchestrator's "Stop
+			// Indexing") with the internal 60 s timeout so that whichever fires
+			// first wins.  Without the external signal the timeout is the sole
+			// abort guard; with it the user can cancel in-flight embedding work
+			// immediately.
+			const timeoutController = new AbortController()
+			const timeoutId = setTimeout(() => timeoutController.abort(), OLLAMA_EMBEDDING_TIMEOUT_MS)
+
+			const effectiveSignal = signal
+				? AbortSignal.any([signal, timeoutController.signal])
+				: timeoutController.signal
+
+			// Clean up the timeout when the external signal fires so we don't
+			// leak a dangling timer.
+			if (signal) {
+				signal.addEventListener(
+					"abort",
+					() => {
+						clearTimeout(timeoutId)
+					},
+					{ once: true },
+				)
+			}
 
 			const response = await fetch(url, {
 				method: "POST",
@@ -220,7 +240,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 					// is harmless but redundant; we pass exactly that value.
 					options: { num_ctx: modelContextTokens },
 				}),
-				signal: controller.signal,
+				signal: effectiveSignal,
 			})
 			clearTimeout(timeoutId)
 
