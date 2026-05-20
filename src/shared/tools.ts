@@ -115,6 +115,14 @@ export const toolParamNames = [
 	// attempt_completion rating + feedback
 	"rating",
 	"feedback",
+	// grep_search parameters
+	"fileTypes",
+	"excludePattern",
+	"isRegex",
+	"caseSensitive",
+	"wholeWord",
+	"contextBefore",
+	"contextAfter",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
