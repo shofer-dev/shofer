@@ -1,3 +1,17 @@
+// H5.a — Raise libuv's POSIX thread pool size BEFORE any module that touches
+// `fs` is imported. libuv reads UV_THREADPOOL_SIZE exactly once, on first use
+// of the pool; setting it after the first fs call has no effect. The default
+// of 4 is easily exhausted by concurrent task switch + background saves +
+// checkpoint writes (each `safeWriteJson` is 3 fs ops: tmp/fsync/rename),
+// producing artificial head-of-line blocking. 16 is a conservative ceiling
+// that costs ~16 MB of thread stack reservation.
+//
+// LLM hint: this assignment MUST stay above every other import. Do not
+// reorganize the import block to alphabetize or group these lines.
+if (!process.env.UV_THREADPOOL_SIZE) {
+	process.env.UV_THREADPOOL_SIZE = "16"
+}
+
 import * as vscode from "vscode"
 import * as dotenvx from "@dotenvx/dotenvx"
 import * as fs from "fs"
