@@ -1,5 +1,57 @@
 # Shofer Changelog
 
+## 0.22.17 — 2026-05-20 (Current)
+
+### Features
+
+- **Async MCP tool calling**: Added `call_mcp_tool_async` (fire-and-forget), `check_mcp_call_status` (poll for completion), and `wait_for_mcp_call` (block until done) tools supporting arbitrary parallelism. Async calls display a distinctive async badge in the chat UI. Completed calls are automatically trimmed to "delete-on-read" to limit context bloat.
+- **Background subtask answer routing**: `ask_followup_question` from background child tasks is now routed to the parent task instead of the user. The parent surfaces pending questions through `check_task_status` and answers via the new `answer_subtask_question` tool. Foreground subtasks retain the normal user-facing ask flow.
+- **Background task cancellation**: Added `cancel_tasks` tool to terminate one or more background children. Parent task abort now propagates to all background children. Added `include_activity` flag to `check_task_status` for live progress visibility.
+- **Waiting lifecycle**: Tasks blocked in `wait_for_task`/`wait_for_mcp_call` now transition to a distinct `waiting` lifecycle (with visual indicator), separate from both `idle` and `running`. The state is transient (downgraded to `idle` on restart) but visible in TaskSelector.
+- **Tabbed tool input/output in ChatRow**: Tool calls now render expandable/collapsible input and output sections in the chat UI, gated behind an experimental flag. Tool result output is capped at 32KB on the IPC wire (2KB for most tools) and suppressed entirely for tools with dedicated inline UI (e.g., `execute_command`).
+- **Code indexer — per-segment deduplication**: Incremental indexing now deduplicates at the segment level using `deletePointsByIds`, preventing duplicate embeddings when files are re-indexed.
+- **Code indexer — GitIgnoreFilter oracle**: Replaced flat `ignore().add()` gitignore parsing with `git ls-files -z --cached --others --exclude-standard`, which honors nested `.gitignore` files, `.git/info/exclude`, global `core.excludesfile`, and negation patterns. A `**/.gitignore` file watcher refreshes the filter on rule changes.
+- **Code indexer — submodule-aware scanning**: Both the code-index file scanner and git-history watcher now descend into submodules declared in `.gitmodules` rather than treating the outer repo's index as authoritative.
+- **Git indexer — submodule & branch support**: `git_search` now walks submodule histories and reports the live branch for the working tree, with `codebaseIndexGitBranch` setting to scope indexing to a specific branch.
+- **GitWatcher structured logging**: Added structured log output for git-index poll ticks, branch resolution, and submodule HEAD SHA display.
+- **Code indexer surfacing**: Settings panel now shows cumulative file/commit counts and last-indexed diagnostics via the RAG Indexer section.
+- **Code indexer stat-only fast-path**: Startup reconciliation now uses `stat()`-only mtime+size comparison for a fast path before falling back to content hashing, dramatically reducing indexer startup time on large workspaces.
+- **Indexer policy centralized**: `CODEBASE_INDEX_FILE_EXTENSIONS` and `CODEBASE_INDEX_IGNORED_DIRS` moved to `@shofer/types` as the single source of truth; backend consumers re-export rather than redeclaring.
+- **Per-provider embedder concurrency lane**: External embedder providers (Ollama, cloud) now share a module-scoped concurrency limiter keyed by `(provider, endpoint)`, preventing N-workspace reindex storms from tripping rate limits.
+- **GFM table rendering in chat**: Assistant agent responses and markdown blocks now render GitHub-flavored markdown tables using the standard table component.
+- **Hero logo animation redesign**: Welcome screen hero animation changed to a road/parallax wheel-roll theme.
+- **Performance optimizations**: Parallelized `preloadShoferMessages` with `preSerialized` fast-path in `safeWriteJson`, raised `UV_THREADPOOL_SIZE` to 16, added per-task `messageUpdated` webview push gating.
+- **switch_mode scoped to task**: Mode switching no longer leaks across concurrent tasks — each task's mode is isolated.
+- **auto-approval group toggles**: `cancel_tasks` and `answer_subtask_question` are now gated under the `alwaysAllowSubtasks` toggle alongside `new_task` and `attempt_completion`.
+- **New documentation**: Added comprehensive MCP architecture reference, 40+ docs verified and corrected against current source, new AGENTS.md session-derived rules (Preload-Before-Publish, Advisory Parameter Defaults, Linked-Profile Re-Init, and many more).
+
+### Bug Fixes
+
+- **Ollama embedding stability**: Probing model context via `/api/show` instead of trusting `MAX_ITEM_TOKENS`; `num_ctx` now set explicitly; per-item token truncation added to prevent oversized-request failures.
+- **CSS indexing fix**: Removed `#match?` predicates from the tree-sitter CSS query that silently blocked all production CSS files from being indexed.
+- **.elm/.htm crash fix**: Added tree-sitter parser cases for Elm and a Scala query fix — previously caused crashes on encounter.
+- **Small-file indexing**: Lowered `MIN_BLOCK_CHARS` to 10 so small files are no longer silently excluded from the RAG index.
+- **GitIgnoreFilter staleness**: File-watcher batches now refresh the `GitIgnoreFilter` snapshot before processing, preventing stale-ignore misses. Flat ignore fallback receives a no-op `refresh()` for interface contract compliance.
+- **Git-index cache persistence**: Incremental cache now persists after each batch rather than only at shutdown, surviving restarts without data loss.
+- **Submodule dirty changes indexed**: Startup incremental scan now includes dirty files in submodules.
+- **Window-listener crashes**: `ErrorBoundary` at React `createRoot()` level prevents white-screen crash on unhandled webview exceptions. Increased EventEmitter maxListeners to prevent `MaxListenersExceededWarning`.
+- **Preload-before-publish race**: Rehydrated tasks now preload shofer messages before being published on the stack, eliminating the "task-switch home-screen flash" where a blank conversation appeared momentarily.
+- **Scroll snap-back during streaming**: Fixed stale React state in `followOutput` causing chat to snap back up when the user scrolled up during streaming. `atBottomThreshold` reduced from 10 to 1 for more reliable stick-to-bottom.
+- **Hero logo animation glitch**: Changed the hero animation to a wheel-roll theme, fixing the glitchy kangaroo bounce on the welcome screen.
+- **Settings stale-state fixes**: Modes-tab text edits now persist via cached-state buffers. Code-index inputs bound to local cached state to eliminate race conditions.
+- **grep_search .shoferignore compliance**: `grep_search` now respects `.shoferignore` by passing `--ignore-file` to ripgrep.
+- **search_files backend restored**: Replaced the `workspace.findTextInFiles` backend with ripgrep for `search_files`, fixing correctness regressions.
+- **suppress tool_result output**: Tools with dedicated inline UI (e.g., `execute_command`) no longer emit duplicated tool_result content to the chat, reducing noise.
+- **Soft `new_task` parameters**: `softResultLength` and `softTimeoutSec` are now schema-optional with host-side defaults, eliminating churn when the model omits advisory hints.
+- **Missing `grep_search` parameters**: Added `maxResults`, `contextBefore`, `contextAfter`, `isRegex`, `caseSensitive`, `wholeWord` to the `toolParamNames` whitelist so they reach the model correctly.
+- **Per-task `update_todo_list` approval**: Approval state for the todo tool is now scoped per-task.
+- **Background child `ask_followup_question` ChatRow**: ChatRow now renders correctly when a background child's question is routed to the parent.
+- **Subfolder `.shofer/` discovery**: Root worktree snapshots no longer starve subfolder `.shofer/` configuration discovery.
+- **Linked profile context-window resolution**: Assistant agent now resolves context window from linked API configuration profiles reliably; reinitialized on any profile mutation.
+- **vscode-lm chunk warnings**: Eliminated spurious "Unknown chunk type" warnings for `thinking`/`tool_preparing` chunks in VS Code LM API integration.
+- **Debug log hygiene**: Removed all `[DIAG-WEBVIEW-SEND]`, `[DIAG-WEBVIEW-RX]`, `[TOOL_CALL_DEBUG]`, `[MCP-DEBUG]`, and `CONTEXT-DIAG` diagnostic log statements. Added structured debug log level and downgraded noisy lifecycle messages. `console.*` across the extension host now redirects to the output channel logger.
+- **Task state model unification**: `HistoryItem.status` removed; task lifecycle now exclusively uses the two-axis `TaskExecutionState = { lifecycle, rating }` model. `attempt_completion` rating changed from numeric enum to string enum (`"poor"`, `"well"`, `"excellent"`). `NativeToolCallParser` no longer strips rating/feedback from `attempt_completion` calls. `TaskIdle` no longer emitted for `resume_completed_task`. `TaskStarted` emitted only on first API request. `restoreManagedTasks` called at startup for state consistency.
+
 ## 0.2.16 — 2026-05-14
 
 ### Features
@@ -233,14 +285,14 @@
 
 ### Patch Changes
 
-- Add correct JSON schema for `.shofermodes` configuration files (#11790 by @algorhythm85, PR #11791 by @app/roomote-v0)
+- Add correct JSON schema for `.roomodes` configuration files (#11790 by @algorhythm85, PR #11791 by @app/roomote-v0)
 - Remove the hiring announcement from the VS Code extension UI (PR #12108 by @app/roomote-v0)
 
 ## 3.52.0
 
 ### Minor Changes
 
-- Add Poe as an AI provider so users can access Poe models directly in Shofer (PR #12015 by @kamilio)
+- Add Poe as an AI provider so users can access Poe models directly in Roo Code (PR #12015 by @kamilio)
 - Improve the xAI provider by migrating it to the Responses API with reusable transform utilities (#11961 by @carlesso, PR #11962 by @carlesso)
 - Fix MiniMax model listings and context window handling for more reliable configuration (#11999 by @Rexarrior, PR #12069 by @Rexarrior)
 - Add xAI Grok-4.20 models and update the default xAI model selection (#11955 by @carlesso, PR #11956 by @carlesso)
@@ -263,7 +315,7 @@
 
 ### Minor Changes
 
-- Add OpenAI GPT-5.4 and GPT-5.3 Chat Latest model support so Shofer can use the newest OpenAI chat models (PR #11848 by @PeterDaveHello)
+- Add OpenAI GPT-5.4 and GPT-5.3 Chat Latest model support so Roo Code can use the newest OpenAI chat models (PR #11848 by @PeterDaveHello)
 - Add support for exposing skills as slash commands with skill fallback execution for faster workflows (PR #11834 by @hannesrudolph)
 - Add CLI support for `--create-with-session-id` plus UUID session validation for more controlled session creation (PR #11859 by @cte)
 - Add support for choosing a specific shell when running terminal commands (PR #11851 by @jr)
@@ -296,14 +348,14 @@
 - Chore: Prepare CLI release v0.1.4 (PR #11751 by @cte)
 - Chore: Prepare CLI release v0.1.5 (PR #11772 by @cte)
 - Chore: Prepare CLI release v0.1.6 (PR #11780 by @cte)
-- Release Shofer v1.113.0 (PR #11782 by @cte)
+- Release Roo Code v1.113.0 (PR #11782 by @cte)
 - Chore: Prepare CLI release v0.1.7 (PR #11812 by @cte)
 - Chore: Prepare CLI release v0.1.8 (PR #11816 by @cte)
 - Chore: Prepare CLI release v0.1.9 (PR #11818 by @cte)
 - Chore: Prepare CLI release v0.1.10 (PR #11821 by @cte)
-- Release Shofer v1.114.0 (PR #11822 by @cte)
+- Release Roo Code v1.114.0 (PR #11822 by @cte)
 - Chore: Prepare CLI release v0.1.11 (PR #11832 by @cte)
-- Release Shofer v1.115.0 (PR #11833 by @cte)
+- Release Roo Code v1.115.0 (PR #11833 by @cte)
 - Chore: Prepare CLI release v0.1.12 (PR #11836 by @cte)
 - Chore: Prepare CLI release v0.1.13 (PR #11837 by @hannesrudolph)
 - Chore: Prepare CLI release v0.1.14 (PR #11843 by @cte)
@@ -317,7 +369,7 @@
 - Add OpenAI's GPT-5.3-Codex model support
 - Add OpenAI's GPT-5.4 model support
 - Add OpenAI's GPT-5.3-Codex model support (PR #11728 by @PeterDaveHello)
-- Warm Shofer models on CLI startup for faster initial responses (PR #11722 by @cte)
+- Warm Roo models on CLI startup for faster initial responses (PR #11722 by @cte)
 - Fix spelling/grammar and casing inconsistencies (#11478 by @PeterDaveHello, PR #11485 by @PeterDaveHello)
 - Fix: Restore Linear integration page (PR #11725 by @roomote)
 - Chore: Prepare CLI release v0.1.1 (PR #11723 by @cte)
@@ -355,7 +407,7 @@
 - Add per-workspace indexing opt-in and stop/cancel indexing controls (#11455 by @JamesRobert20, PR #11456 by @JamesRobert20)
 - Add per-task file-based history store for cross-instance safety (PR #11490 by @roomote)
 - Fix: Redesign rehydration scroll lifecycle for smoother chat experience (PR #11483 by @hannesrudolph)
-- Fix: Bump @shofer/types metadata version to 1.111.0 after revert regression (PR #11588 by @roomote)
+- Fix: Bump @roo-code/types metadata version to 1.111.0 after revert regression (PR #11588 by @roomote)
 
 ## [3.48.1] - 2026-02-18
 
@@ -393,7 +445,7 @@
 - Fix: Harden command auto-approval against inline JS false positives (PR #11382 by @hannesrudolph)
 - Fix: Make tab close best-effort in DiffViewProvider.open (PR #11363 by @0xMink)
 - Fix: Canonicalize core.worktree comparison to prevent Windows path mismatch failures (PR #11346 by @0xMink)
-- Fix: Make removeShoferFromStack() delegation-aware to prevent orphaned parent tasks (PR #11302 by @app/roomote)
+- Fix: Make removeClineFromStack() delegation-aware to prevent orphaned parent tasks (PR #11302 by @app/roomote)
 - Fix task resumption in the API module (PR #11369 by @cte)
 - Make defaultTemperature required in getModelParams to prevent silent temperature overrides (PR #11218 by @app/roomote)
 - Remove noisy console.warn logs from NativeToolCallParser (PR #11264 by @daniel-lxs)
@@ -401,13 +453,13 @@
 - Clean up repo-facing mode rules (PR #11410 by @hannesrudolph)
 - Implement ModelMessage storage layer with AI SDK response messages (PR #11409 by @daniel-lxs)
 - Extract translation and merge resolver modes into reusable skills (PR #11215 by @app/roomote)
-- Add blog section with initial posts to shofer.dev (PR #11127 by @app/roomote)
+- Add blog section with initial posts to roocode.com (PR #11127 by @app/roomote)
 - Replace Roomote Control with Linear Integration in cloud features grid (PR #11280 by @app/roomote)
 - Add IPC query handlers for commands, modes, and models (PR #11279 by @cte)
 - Add stdin stream mode for the CLI (PR #11476 by @cte)
 - Make CLI auto-approve by default with require-approval opt-in (PR #11424 by @cte)
 - Update CLI default model from Opus 4.5 to Opus 4.6 (PR #11273 by @app/roomote)
-- Add linux-arm64 support for the Shofer CLI (PR #11314 by @cte)
+- Add linux-arm64 support for the Roo CLI (PR #11314 by @cte)
 - CLI release: v0.0.51 (PR #11274 by @cte)
 - CLI release: v0.0.52 (PR #11324 by @cte)
 - CLI release: v0.0.53 (PR #11425 by @cte)
@@ -417,7 +469,7 @@
 
 ![3.45.0 Release - Smart Code Folding](/releases/3.45.0-release.png)
 
-- Smart Code Folding: Context condensation now intelligently preserves a lightweight map of files you worked on—function signatures, class declarations, and type definitions—so Shofer can continue referencing them accurately after condensing. Files are prioritized by most recent access, with a ~50k character budget ensuring your latest work is always preserved. (Idea by @shariqriazz, PR #10942 by @hannesrudolph)
+- Smart Code Folding: Context condensation now intelligently preserves a lightweight map of files you worked on—function signatures, class declarations, and type definitions—so Roo can continue referencing them accurately after condensing. Files are prioritized by most recent access, with a ~50k character budget ensuring your latest work is always preserved. (Idea by @shariqriazz, PR #10942 by @hannesrudolph)
 
 ## [3.44.2] - 2026-01-27
 
@@ -430,13 +482,13 @@
 
 - Fix LiteLLM tool ID validation errors for Bedrock proxy (PR #10990 by @daniel-lxs)
 - Add temperature=0.9 and top_p=0.95 to zai-glm-4.7 model for better generation quality (PR #10945 by @sebastiand-cerebras)
-- Add quality checks to marketing site deployment workflows (PR #10959 by @mp-shofer)
+- Add quality checks to marketing site deployment workflows (PR #10959 by @mp-roocode)
 
 ## [3.44.0] - 2026-01-26
 
 ![3.44.0 Release - Worktrees](/releases/3.44.0-release.png)
 
-- Add worktree selector and creation UX (PR #10940 by @brunobergher, thanks Shofer!)
+- Add worktree selector and creation UX (PR #10940 by @brunobergher, thanks Cline!)
 - Improve subtask visibility and navigation in history and chat views (PR #10864 by @brunobergher)
 - Add wildcard support for MCP alwaysAllow configuration (PR #10948 by @app/roomote)
 - Fix: Prevent nested condensing from including previously-condensed content (PR #10985 by @hannesrudolph)
@@ -494,14 +546,14 @@
 - Fix: Remove custom condensing model option (PR #10901 by @hannesrudolph)
 - Unify user content tags to <user_message> for consistent prompt formatting (#10658 by @hannesrudolph, PR #10723 by @app/roomote)
 - Clarify linked SKILL.md file handling in prompts (PR #10907 by @hannesrudolph)
-- Fix: Padding on Shofer Cloud teaser (PR #10889 by @app/roomote)
+- Fix: Padding on Roo Code Cloud teaser (PR #10889 by @app/roomote)
 
 ## [3.41.3] - 2026-01-18
 
 - Fix: Thinking block word-breaking to prevent horizontal scroll in the chat UI (PR #10806 by @roomote)
-- Add Claude-like CLI flags and authentication fixes for the Shofer CLI (PR #10797 by @cte)
+- Add Claude-like CLI flags and authentication fixes for the Roo Code CLI (PR #10797 by @cte)
 - Improve CLI authentication by using a redirect instead of a fetch (PR #10799 by @cte)
-- Fix: Shofer Router fixes for the CLI (PR #10789 by @cte)
+- Fix: Roo Code Router fixes for the CLI (PR #10789 by @cte)
 - Release CLI v0.0.48 with latest improvements (PR #10800 by @cte)
 - Release CLI v0.0.47 (PR #10798 by @cte)
 - Revert E2E tests enablement to address stability issues (PR #10794 by @cte)
@@ -563,10 +615,10 @@
 
 ## [3.39.3] - 2026-01-10
 
-![3.39.3 Release - Shofer Router](/releases/3.39.3-release.png)
+![3.39.3 Release - Roo Code Router](/releases/3.39.3-release.png)
 
-- Rename Shofer Cloud Provider to Shofer Router for clearer branding (PR #10560 by @roomote)
-- Update Shofer Router service name throughout the codebase (PR #10607 by @mrubens)
+- Rename Roo Code Cloud Provider to Roo Code Router for clearer branding (PR #10560 by @roomote)
+- Update Roo Code Router service name throughout the codebase (PR #10607 by @mrubens)
 - Update router name in types for consistency (PR #10605 by @mrubens)
 - Improve ExtensionHost code organization and cleanup (PR #10600 by @cte)
 - Add local installation option to CLI release script for testing (PR #10597 by @cte)
@@ -588,8 +640,8 @@
 - Chore: Stop overriding tool allow/deny lists for Gemini (PR #10592 by @hannesrudolph)
 - Chore: Change default CLI model to anthropic/claude-opus-4.5 (PR #10544 by @mrubens)
 - Chore: Update Terms of Service effective January 9, 2026 (PR #10568 by @mrubens)
-- Chore: Move more types to @shofer/types for CLI support (PR #10583 by @cte)
-- Chore: Add functionality to @shofer/core for CLI support (PR #10584 by @cte)
+- Chore: Move more types to @roo-code/types for CLI support (PR #10583 by @cte)
+- Chore: Add functionality to @roo-code/core for CLI support (PR #10584 by @cte)
 - Chore: Add slash commands useful for CLI development (PR #10586 by @cte)
 
 ## [3.39.1] - 2026-01-08
@@ -608,13 +660,13 @@
 - Add debug-mode proxy routing for debugging API calls (#7042 by @SleeperSmith, PR #10467 by @hannesrudolph)
 - Add Kimi K2 thinking model to Fireworks AI provider (#9201 by @kavehsfv, PR #9202 by @roomote)
 - Add xhigh reasoning effort to OpenAI compatible endpoints (#10060 by @Soorma718, PR #10061 by @roomote)
-- Filter @ mention file search results using .shoferignore (#10169 by @jerrill-johnson-bitwerx, PR #10174 by @roomote)
+- Filter @ mention file search results using .rooignore (#10169 by @jerrill-johnson-bitwerx, PR #10174 by @roomote)
 - Add image support documentation to read_file native tool description (#10440 by @nabilfreeman, PR #10442 by @roomote)
 - Add zai-glm-4.7 to Cerebras models (PR #10500 by @sebastiand-cerebras)
-- VSCode shim and basic CLI for running Shofer headlessly (PR #10452 by @cte)
-- Add CLI installer for headless Shofer (PR #10474 by @cte)
+- VSCode shim and basic CLI for running Roo Code headlessly (PR #10452 by @cte)
+- Add CLI installer for headless Roo Code (PR #10474 by @cte)
 - Add option to use CLI for evals (PR #10456 by @cte)
-- Remember last Shofer model selection in web-evals and add evals skill (PR #10470 by @hannesrudolph)
+- Remember last Roo model selection in web-evals and add evals skill (PR #10470 by @hannesrudolph)
 - Tweak the style of follow up suggestion modes (PR #9260 by @mrubens)
 - Fix: Handle PowerShell ENOENT error in os-name on Windows (#9859 by @Yang-strive, PR #9897 by @roomote)
 - Fix: Make command chaining examples shell-aware for Windows compatibility (#10352 by @AlexNek, PR #10434 by @roomote)
@@ -629,7 +681,7 @@
 
 ## [3.38.3] - 2026-01-03
 
-- Feat: Add option in Context settings to recursively load `.shofer/rules` and `AGENTS.md` from subdirectories (PR #10446 by @mrubens)
+- Feat: Add option in Context settings to recursively load `.roo/rules` and `AGENTS.md` from subdirectories (PR #10446 by @mrubens)
 - Fix: Stop frequent Claude Code sign-ins by hardening OAuth refresh token handling (PR #10410 by @hannesrudolph)
 - Fix: Add `maxConcurrentFileReads` limit to native `read_file` tool schema (PR #10449 by @app/roomote)
 - Fix: Add type check for `lastMessage.text` in TTS useEffect to prevent runtime errors (PR #10431 by @app/roomote)
@@ -661,12 +713,12 @@
 
 ![3.38.0 Release - Skills](/releases/3.38.0-release.png)
 
-- Add support for [Agent Skills](https://agentskills.io/), enabling reusable packages of prompts, tools, and resources to extend Shofer's capabilities (PR #10335 by @mrubens)
+- Add support for [Agent Skills](https://agentskills.io/), enabling reusable packages of prompts, tools, and resources to extend Roo's capabilities (PR #10335 by @mrubens)
 - Add optional mode field to slash command front matter, allowing commands to automatically switch to a specific mode when triggered (PR #10344 by @app/roomote)
 - Add support for npm packages and .env files to custom tools, allowing custom tools to import dependencies and access environment variables (PR #10336 by @cte)
 - Remove simpleReadFileTool feature, streamlining the file reading experience (PR #10254 by @app/roomote)
 - Remove OpenRouter Transforms feature (PR #10341 by @app/roomote)
-- Fix mergeToolResultText handling in Shofer provider (PR #10359 by @mrubens)
+- Fix mergeToolResultText handling in Roo provider (PR #10359 by @mrubens)
 
 ## [3.37.1] - 2025-12-23
 
@@ -677,7 +729,7 @@
 - Fix: Drain queued messages while waiting for ask to prevent message loss (PR #10315 by @hannesrudolph)
 - Feat: Add grace retry for empty assistant messages to improve reliability (PR #10297 by @hannesrudolph)
 - Feat: Enable mergeToolResultText for all OpenAI-compatible providers for better tool result handling (PR #10299 by @hannesrudolph)
-- Feat: Enable mergeToolResultText for Shofer Router (PR #10301 by @hannesrudolph)
+- Feat: Enable mergeToolResultText for Roo Code Router (PR #10301 by @hannesrudolph)
 - Feat: Strengthen native tool-use guidance in prompts for improved model behavior (PR #10311 by @hannesrudolph)
 - UX: Account-centric signup flow for improved onboarding experience (PR #10306 by @brunobergher)
 
@@ -757,7 +809,7 @@
 - Fix: Normalize MCP tool schemas for Bedrock and OpenAI strict mode to ensure proper tool compatibility (PR #10148 by @daniel-lxs)
 - Fix: Remove dots and colons from MCP tool names for Bedrock compatibility (PR #10152 by @daniel-lxs)
 - Fix: Convert tool_result to XML text when native tools disabled for Bedrock (PR #10155 by @daniel-lxs)
-- Fix: Refresh Shofer models cache with session token on auth state change to resolve model list refresh issues (PR #10156 by @daniel-lxs)
+- Fix: Refresh Roo models cache with session token on auth state change to resolve model list refresh issues (PR #10156 by @daniel-lxs)
 - Fix: Support AWS GovCloud and China region ARNs in Bedrock provider for expanded regional support (PR #10157 by @app/roomote)
 
 ## [3.36.10] - 2025-12-17
@@ -848,7 +900,7 @@
 - Refactor: Unified context-management architecture with improved UX for better context control (PR #9795 by @hannesrudolph)
 - Add new `search_replace` native tool for single-replacement operations with improved editing precision (PR #9918 by @hannesrudolph)
 - Streaming tool stats and token usage throttling for better real-time feedback during generation (PR #9926 by @hannesrudolph)
-- Add versioned settings support with minPluginVersion gating for Shofer provider (PR #9934 by @hannesrudolph)
+- Add versioned settings support with minPluginVersion gating for Roo provider (PR #9934 by @hannesrudolph)
 - Make Architect mode save plans to `/plans` directory and gitignore it (PR #9944 by @brunobergher)
 - Add announcement support CTA and social icons to UI (PR #9945 by @hannesrudolph)
 - Add ability to save screenshots from the browser tool (PR #9963 by @mrubens)
@@ -867,7 +919,7 @@
 - Fix: Respect explicit supportsReasoningEffort array values for proper model configuration (PR #9970 by @hannesrudolph)
 - Add timeout configuration to OpenAI Compatible Provider Client (PR #9898 by @dcbartlett)
 - Revert default tool protocol change from xml to native for stability (PR #9956 by @mrubens)
-- Remove defaultTemperature from Shofer provider configuration (PR #9932 by @mrubens)
+- Remove defaultTemperature from Roo provider configuration (PR #9932 by @mrubens)
 - Improve OpenAI error messages to be more useful for debugging (PR #9639 by @mrubens)
 - Better error logs for parseToolCall exceptions (PR #9857 by @cte)
 - Improve cloud job error logging for RCC provider errors (PR #9924 by @cte)
@@ -892,7 +944,7 @@
 ![3.36.2 Release - Dynamic API Settings](/releases/3.36.2-release.png)
 
 - Restrict GPT-5 tool set to apply_patch for improved compatibility (PR #9853 by @hannesrudolph)
-- Add dynamic settings support for Shofer models from API, allowing model-specific configurations to be fetched dynamically (PR #9852 by @hannesrudolph)
+- Add dynamic settings support for Roo models from API, allowing model-specific configurations to be fetched dynamically (PR #9852 by @hannesrudolph)
 - Fix: Resolve Chutes provider model fetching issue (PR #9854 by @cte)
 
 ## [3.36.1] - 2025-12-04
@@ -906,7 +958,7 @@
 - ChatView: Smoother stick-to-bottom behavior during streaming (PR #8999 by @hannesrudolph)
 - UX: Improved error messages and documentation links (PR #9777 by @brunobergher)
 - Fix: Overly round follow-up question suggestions styling (PR #9829 by @brunobergher)
-- Add symlink support for slash commands in .shofer/commands folder (PR #9838 by @mrubens)
+- Add symlink support for slash commands in .roo/commands folder (PR #9838 by @mrubens)
 - Ignore input to the execa terminal process for safer command execution (PR #9827 by @mrubens)
 - Be safer about large file reads (PR #9843 by @jr)
 - Add gpt-5.1-codex-max model to OpenAI provider (PR #9848 by @hannesrudolph)
@@ -919,8 +971,8 @@
 ![3.36.0 Release - Rewind Kangaroo](/releases/3.36.0-release.png)
 
 - Fix: Restore context when rewinding after condense (#8295 by @hannesrudolph, PR #9665 by @hannesrudolph)
-- Add reasoning_details support to Shofer provider for enhanced model reasoning visibility (PR #9796 by @app/roomote)
-- Default to native tools for all models in the Shofer provider for improved performance (PR #9811 by @mrubens)
+- Add reasoning_details support to Roo provider for enhanced model reasoning visibility (PR #9796 by @app/roomote)
+- Default to native tools for all models in the Roo provider for improved performance (PR #9811 by @mrubens)
 - Enable search_and_replace for Minimax models (PR #9780 by @mrubens)
 - Fix: Resolve Vercel AI Gateway model fetching issues (PR #9791 by @cte)
 - Fix: Apply conservative max tokens for Cerebras provider (PR #9804 by @sebastiand-cerebras)
@@ -954,7 +1006,7 @@
 ![3.35.2 Release - Model Default Temperatures](/releases/3.35.2-release.png)
 
 - Allow models to contain default temperature settings for provider-specific optimal defaults (PR #9734 by @mrubens)
-- Add tag-based native tool calling detection for Shofer provider models (PR #9735 by @mrubens)
+- Add tag-based native tool calling detection for Roo provider models (PR #9735 by @mrubens)
 - Enable native tool support for all LiteLLM models by default (PR #9736 by @mrubens)
 - Pass app version to provider for improved request tracking (PR #9730 by @cte)
 
@@ -971,7 +1023,7 @@
 - Native tool calling support expanded across many providers: Bedrock (PR #9698 by @mrubens), Cerebras (PR #9692 by @mrubens), Chutes with auto-detection from API (PR #9715 by @daniel-lxs), DeepInfra (PR #9691 by @mrubens), DeepSeek and Doubao (PR #9671 by @daniel-lxs), Groq (PR #9673 by @daniel-lxs), LiteLLM (PR #9719 by @daniel-lxs), Ollama (PR #9696 by @mrubens), OpenAI-compatible providers (PR #9676 by @daniel-lxs), Requesty (PR #9672 by @daniel-lxs), Unbound (PR #9699 by @mrubens), Vercel AI Gateway (PR #9697 by @mrubens), Vertex Gemini (PR #9678 by @daniel-lxs), and xAI with new Grok 4 Fast and Grok 4.1 Fast models (PR #9690 by @mrubens)
 - Fix: Preserve tool_use blocks in summary for parallel tool calls (#9700 by @SilentFlower, PR #9714 by @SilentFlower)
 - Default Grok Code Fast to native tools for better performance (PR #9717 by @mrubens)
-- UX improvements to the Shofer Router-centric onboarding flow (PR #9709 by @brunobergher)
+- UX improvements to the Roo Code Router-centric onboarding flow (PR #9709 by @brunobergher)
 - UX toolbar cleanup and settings consolidation for a cleaner interface (PR #9710 by @brunobergher)
 - Add model-specific tool customization via `excludedTools` and `includedTools` configuration (PR #9641 by @daniel-lxs)
 - Add new `apply_patch` native tool for more efficient file editing operations (PR #9663 by @hannesrudolph)
@@ -1029,13 +1081,13 @@
 - Set native tools as default for minimax-m2 and claude-haiku-4.5 (PR #9586 by @daniel-lxs)
 - Make single file read only apply to XML tools (PR #9600 by @mrubens)
 - Enhance web-evals dashboard with dynamic tool columns and UX improvements (PR #9592 by @hannesrudolph)
-- Revert "Add support for Shofer Cloud as an embeddings provider" while we fix some issues (PR #9602 by @mrubens)
+- Revert "Add support for Roo Code Cloud as an embeddings provider" while we fix some issues (PR #9602 by @mrubens)
 
 ## [3.34.4] - 2025-11-25
 
 ![3.34.4 Release - BFL Image Generation](/releases/3.34.4-release.png)
 
-- Add new Black Forest Labs image generation models, free on Shofer Cloud and also available on OpenRouter (PR #9587 and #9589 by @mrubens)
+- Add new Black Forest Labs image generation models, free on Roo Code Cloud and also available on OpenRouter (PR #9587 and #9589 by @mrubens)
 - Fix: Preserve dynamic MCP tool names in native mode API history to prevent tool name mismatches (PR #9559 by @daniel-lxs)
 - Fix: Preserve tool_use blocks in summary message during condensing with native tools to maintain conversation context (PR #9582 by @daniel-lxs)
 
@@ -1047,9 +1099,9 @@
 - Add Claude Opus 4.5 model to Claude Code provider (PR #9560 by @mrubens)
 - Add Claude Opus 4.5 model to Bedrock provider (#9571 by @pisicode, PR #9572 by @roomote)
 - Enable caching for Opus 4.5 model to improve performance (#9567 by @iainRedro, PR #9568 by @roomote)
-- Add support for Shofer Cloud as an embeddings provider (PR #9543 by @mrubens)
+- Add support for Roo Code Cloud as an embeddings provider (PR #9543 by @mrubens)
 - Fix ask_followup_question streaming issue and add missing tool cases (PR #9561 by @daniel-lxs)
-- Add contact links to About Shofer settings page (PR #9570 by @roomote)
+- Add contact links to About Roo Code settings page (PR #9570 by @roomote)
 - Switch from asdf to mise-en-place in bare-metal evals setup script (PR #9548 by @cte)
 
 ## [3.34.2] - 2025-11-24
@@ -1058,7 +1110,7 @@
 
 - Add support for Claude Opus 4.5 in Anthropic and Vertex providers (PR #9541 by @daniel-lxs)
 - Add support for Claude Opus 4.5 in OpenRouter with prompt caching and reasoning budget (PR #9540 by @daniel-lxs)
-- Add Shofer Cloud as an image generation provider (PR #9528 by @mrubens)
+- Add Roo Code Cloud as an image generation provider (PR #9528 by @mrubens)
 - Fix: Gracefully skip unsupported content blocks in Gemini transformer (PR #9537 by @daniel-lxs)
 - Fix: Flush LiteLLM cache when credentials change on refresh (PR #9536 by @daniel-lxs)
 - Fix: Ensure XML parser state matches tool protocol on config update (PR #9535 by @daniel-lxs)
@@ -1070,7 +1122,7 @@
 - Show the prompt for image generation in the UI (PR #9505 by @mrubens)
 - Fix double todo list display issue (PR #9517 by @mrubens)
 - Add tracking for cloud synced messages (PR #9518 by @mrubens)
-- Enable the Shofer Router in evals (PR #9492 by @cte)
+- Enable the Roo Code Router in evals (PR #9492 by @cte)
 
 ## [3.34.0] - 2025-11-21
 
@@ -1080,7 +1132,7 @@
 - Add support for Baseten as a new AI provider (PR #9461 by @AlexKer)
 - Improve base OpenAI compatible provider with better error handling and configuration (PR #9462 by @mrubens)
 - Add provider-oriented welcome screen to improve onboarding experience (PR #9484 by @mrubens)
-- Pin Shofer provider to the top of the provider list for better discoverability (PR #9485 by @mrubens)
+- Pin Roo provider to the top of the provider list for better discoverability (PR #9485 by @mrubens)
 - Enhance native tool descriptions with examples and clarifications for better AI understanding (PR #9486 by @daniel-lxs)
 - Fix: Make cancel button immediately responsive during streaming (#9435 by @jwadow, PR #9448 by @daniel-lxs)
 - Fix: Resolve apply_diff performance regression from earlier changes (PR #9474 by @daniel-lxs)
@@ -1150,7 +1202,7 @@
 - Use VSCode theme color for outline button borders (PR #9336 by @app/roomote)
 - Replace broken badgen.net badges with shields.io (PR #9318 by @app/roomote)
 - Add max git status files setting to evals (PR #9322 by @mrubens)
-- Shofer Router pricing page and changes elsewhere (PR #9195 by @brunobergher)
+- Roo Code Router pricing page and changes elsewhere (PR #9195 by @brunobergher)
 
 ## [3.32.1] - 2025-11-14
 
@@ -1176,7 +1228,7 @@
 ![3.31.3 Release - Kangaroo Decrypting a Message](/releases/3.31.3-release.png)
 
 - Fix: OpenAI Native encrypted_content handling and remove gpt-5-chat-latest verbosity flag (#9225 by @politsin, PR by @hannesrudolph)
-- Fix: Shofer Router Anthropic input token normalization to avoid double-counting (thanks @hannesrudolph!)
+- Fix: Roo Code Router Anthropic input token normalization to avoid double-counting (thanks @hannesrudolph!)
 - Refactor: Rename sliding-window to context-management and truncateConversationIfNeeded to manageContext (thanks @hannesrudolph!)
 
 ## [3.31.2] - 2025-11-12
@@ -1205,7 +1257,7 @@
 - Fix: Prevent crash when streaming chunks have null choices array (thanks @daniel-lxs!)
 - Fix: Prevent context condensing on settings save when provider/model unchanged (#4430 by @hannesrudolph, PR by @daniel-lxs)
 - Fix: Respect custom OpenRouter URL for all API operations (#8947 by @sstraus, PR by @roomote)
-- Add comprehensive error logging to Shofer Cloud provider (thanks @daniel-lxs!)
+- Add comprehensive error logging to Roo Cloud provider (thanks @daniel-lxs!)
 - UX: Less caffeinated kangaroo (thanks @brunobergher!)
 
 ## [3.30.3] - 2025-11-06
@@ -1261,7 +1313,7 @@
 
 ## [3.29.5] - 2025-11-01
 
-- Fix: Resolve Qdrant rag_search error by adding keyword index for type field (#8963 by @rossdonald, PR by @app/roomote)
+- Fix: Resolve Qdrant codebase_search error by adding keyword index for type field (#8963 by @rossdonald, PR by @app/roomote)
 - Fix cost and token tracking between provider styles to ensure accurate usage metrics (thanks @mrubens!)
 
 ## [3.29.4] - 2025-10-30
@@ -1275,7 +1327,7 @@
 - Fix: prevent MCP server restart when toggling tool permissions (#8231 by @hannesrudolph, PR by @heyseth)
 - Fix: truncate type definition to match max read line (#8149 by @chenxluo, PR by @elianiva)
 - Fix: auto-sync enableReasoningEffort with reasoning dropdown selection (thanks @daniel-lxs!)
-- Fix: Gate auth-driven Shofer model refresh to active provider only (thanks @daniel-lxs!)
+- Fix: Gate auth-driven Roo model refresh to active provider only (thanks @daniel-lxs!)
 - Prevent a noisy cloud agent exception (thanks @cte!)
 - Feat: improve @ file search for large projects (#5721 by @Naituw, PR by @daniel-lxs)
 - Feat: add zai-glm-4.6 model to Cerebras and set gpt-oss-120b as default (thanks @kevint-cerebras!)
@@ -1286,7 +1338,7 @@
 
 - Update Gemini models with latest 09-2025 versions including Gemini 2.5 Pro and Flash (#8485 by @cleacos, PR by @roomote)
 - Add reasoning support for Z.ai GLM binary thinking mode (#8465 by @BeWater799, PR by @daniel-lxs)
-- Enable reasoning in Shofer provider (thanks @mrubens!)
+- Enable reasoning in Roo provider (thanks @mrubens!)
 - Add settings to configure time and cost display in system prompt (#8450 by @jaxnb, PR by @roomote)
 - Fix: Use max_output_tokens when available in LiteLLM fetcher (#8454 by @fabb, PR by @roomote)
 - Fix: Process queued messages after context condensing completes (#8477 by @JosXa, PR by @roomote)
@@ -1299,7 +1351,7 @@
 
 - Add support for LongCat-Flash-Thinking-FP8 models in Chutes AI provider (#8425 by @leakless21, PR by @roomote)
 - Fix: Remove specific Claude model version from settings descriptions to avoid outdated references (#8435 by @rwydaegh, PR by @roomote)
-- Fix: Correct caching logic in Shofer provider to improve performance (thanks @mrubens!)
+- Fix: Correct caching logic in Roo provider to improve performance (thanks @mrubens!)
 - Fix: Ensure free models don't display pricing information in the UI (thanks @mrubens!)
 
 ## [3.29.1] - 2025-10-26
@@ -1316,8 +1368,8 @@
 
 - Add token-budget based file reading with intelligent preview to avoid context overruns (thanks @daniel-lxs!)
 - Enable browser-use tool for all image-capable models (#8116 by @hannesrudolph, PR by @app/roomote!)
-- Add dynamic model loading for Shofer Router (thanks @app/roomote!)
-- Fix: Respect nested .gitignore files in grep_search (#7921 by @hannesrudolph, PR by @daniel-lxs)
+- Add dynamic model loading for Roo Code Router (thanks @app/roomote!)
+- Fix: Respect nested .gitignore files in search_files (#7921 by @hannesrudolph, PR by @daniel-lxs)
 - Fix: Preserve trailing newlines in stripLineNumbers for apply_diff (#8020 by @liyi3c, PR by @app/roomote)
 - Fix: Exclude max tokens field for models that don't support it in export (#7944 by @hannesrudolph, PR by @elianiva)
 - Retry API requests on stream failures instead of aborting task (thanks @daniel-lxs!)
@@ -1331,7 +1383,7 @@
 - Update Mistral Medium model name (#8362 by @ThomsenDrake, PR by @ThomsenDrake)
 - Remove GPT-5 instructions/reasoning_summary from UI message metadata to prevent ui_messages.json bloat (thanks @hannesrudolph!)
 - Normalize docs-extractor audience tags; remove admin/stakeholder; strip tool invocations (thanks @hannesrudolph!)
-- Update X/Twitter username from roo_code to shofer (thanks @app/roomote!)
+- Update X/Twitter username from roo_code to roocode (thanks @app/roomote!)
 - Update Configuring Profiles video link (thanks @app/roomote!)
 - Fix link text for Roomote Control in README (thanks @laz-001!)
 - Remove verbose error for cloud agents (thanks @cte!)
@@ -1412,8 +1464,8 @@
 ![3.28.9 Release - Supernova Upgrade](/releases/3.28.9-release.png)
 
 - The free Supernova model now has a 1M token context window (thanks @mrubens!)
-- Experiment to show the Shofer provider on the welcome screen (thanks @mrubens!)
-- Web: Website improvements to https://shofer.dev/ (thanks @brunobergher!)
+- Experiment to show the Roo provider on the welcome screen (thanks @mrubens!)
+- Web: Website improvements to https://roocode.com/ (thanks @brunobergher!)
 - Fix: Remove <thinking> tags from prompts for cleaner output and fewer tokens (#8318 by @hannesrudolph, PR by @app/roomote)
 - Correct tool use suggestion to improve model adherence to suggestion (thanks @hannesrudolph!)
 - feat: log out from cloud when resetting extension state (thanks @app/roomote!)
@@ -1427,7 +1479,7 @@
 
 - Fix: Resolve frequent "No tool used" errors by clarifying tool-use rules (thanks @hannesrudolph!)
 - Fix: Include initial ask in condense summarization (thanks @hannesrudolph!)
-- Add support for more free models in the Shofer provider (thanks @mrubens!)
+- Add support for more free models in the Roo provider (thanks @mrubens!)
 - Show cloud switcher and option to add a team when logged in (thanks @mrubens!)
 - Add Opengraph image for web (thanks @brunobergher!)
 
@@ -1474,7 +1526,7 @@
 - UX: Responsive Auto-Approve (thanks @brunobergher!)
 - Add telemetry retry queue for network resilience (thanks @daniel-lxs!)
 - Fix: Transform keybindings in nightly build to fix command+y shortcut (thanks @app/roomote!)
-- New code-supernova stealth model in the Shofer Router (thanks @mrubens!)
+- New code-supernova stealth model in the Roo Code Router (thanks @mrubens!)
 
 ## [3.28.3] - 2025-09-16
 
@@ -1512,8 +1564,8 @@
 
 ![3.28.1 Release - Kangaroo riding rocket to the clouds](/releases/3.28.1-release.png)
 
-- Announce Shofer Cloud!
-- Add cloud task button for opening tasks in Shofer Cloud (thanks @app/roomote!)
+- Announce Roo Code Cloud!
+- Add cloud task button for opening tasks in Roo Code Cloud (thanks @app/roomote!)
 - Make Posthog telemetry the default (thanks @mrubens!)
 - Show notification when the checkpoint initialization fails (thanks @app/roomote!)
 - Bust cache in generated image preview (thanks @mrubens!)
@@ -1522,9 +1574,9 @@
 
 ## [3.28.0] - 2025-09-10
 
-![3.28.0 Release - Continue tasks in Shofer Cloud](/releases/3.28.0-release.png)
+![3.28.0 Release - Continue tasks in Roo Code Cloud](/releases/3.28.0-release.png)
 
-- feat: Continue tasks in Shofer Cloud (thanks @brunobergher!)
+- feat: Continue tasks in Roo Code Cloud (thanks @brunobergher!)
 - feat: Support connecting to Cloud without redirect handling (thanks @mrubens!)
 - feat: Add toggle to control task syncing to Cloud (thanks @jr!)
 - feat: Add click-to-edit, ESC-to-cancel, and fix padding consistency for chat messages (#7788 by @hannesrudolph, PR by @app/roomote)
@@ -1562,9 +1614,9 @@
 ![3.26.7 Release - OpenAI Service Tiers](/releases/3.26.7-release.png)
 
 - Feature: Add OpenAI Responses API service tiers (flex/priority) with UI selector and pricing (thanks @hannesrudolph!)
-- Feature: Add DeepInfra as a model provider in Shofer (#7661 by @Thachnh, PR by @Thachnh)
+- Feature: Add DeepInfra as a model provider in Roo Code (#7661 by @Thachnh, PR by @Thachnh)
 - Feature: Update kimi-k2-0905-preview and kimi-k2-turbo-preview models on the Moonshot provider (thanks @CellenLee!)
-- Feature: Add kimi-k2-0905-preview to Groq, Moonshot, and Fireworks (thanks @daniel-lxs and Shofer!)
+- Feature: Add kimi-k2-0905-preview to Groq, Moonshot, and Fireworks (thanks @daniel-lxs and Cline!)
 - Fix: Prevent countdown timer from showing in history for answered follow-up questions (#7624 by @XuyiK, PR by @daniel-lxs)
 - Fix: Moonshot's maximum return token count limited to 1024 issue resolved (#6936 by @greyishsong, PR by @wangxiaolong100)
 - Fix: Add error transform to cryptic OpenAI SDK errors when API key is invalid (#7483 by @A0nameless0man, PR by @app/roomote)
@@ -1616,7 +1668,7 @@
 
 - feat: Add experimental image generation tool with OpenRouter integration (thanks @daniel-lxs!)
 - Fix: Resolve GPT-5 Responses API issues with condensing and image support (#7334 by @nlbuescher, PR by @daniel-lxs)
-- Fix: Hide .shoferignore'd files from environment details by default (#7368 by @AlexBlack772, PR by @app/roomote)
+- Fix: Hide .rooignore'd files from environment details by default (#7368 by @AlexBlack772, PR by @app/roomote)
 - Fix: Exclude browser scroll actions from repetition detection (#7470 by @cgrierson-smartsheet, PR by @app/roomote)
 
 ## [3.26.1] - 2025-08-27
@@ -1636,7 +1688,7 @@
 ![3.26.0 Release - Kangaroo Speed Racer](/releases/3.26.0-release.png)
 
 - Sonic -> Grok Code Fast
-- feat: Add Qwen Code CLI API Support with OAuth Authentication (thanks @evinelias and Shofer!)
+- feat: Add Qwen Code CLI API Support with OAuth Authentication (thanks @evinelias and Cline!)
 - feat: Add Deepseek v3.1 to Fireworks AI provider (#7374 by @dmarkey, PR by @app/roomote)
 - Add a built-in /init slash command (thanks @mrubens and @hannesrudolph!)
 - Fix: Make auto approve toggle trigger stay (#3909 by @kyle-apex, PR by @elianiva)
@@ -1657,7 +1709,7 @@
 
 - feat: add custom base URL support for Requesty provider (thanks @requesty-JohnCosta27!)
 - feat: add DeepSeek V3.1 model to Chutes AI provider (#7294 by @dmarkey, PR by @app/roomote)
-- Revert "feat: enable loading Shofer modes from multiple files in .shofer/modes directory" temporarily to fix a bug with mode installation
+- Revert "feat: enable loading Roo modes from multiple files in .roo/modes directory" temporarily to fix a bug with mode installation
 
 ## [3.25.22] - 2025-08-22
 
@@ -1674,9 +1726,9 @@
 - Improved MDM handling
 - Handle nullish token values in ContextCondenseRow to prevent UI crash (thanks @s97712)
 - Improved context window error handling for OpenAI and other providers
-- Add "installed" filter to Shofer Marketplace (thanks @semidark)
+- Add "installed" filter to Roo Marketplace (thanks @semidark)
 - Improve filesystem access checks (thanks @elianiva)
-- Support for loading Shofer modes from multiple YAML files in the `.shofer/modes/` directory (thanks @farazoman)
+- Support for loading Roo modes from multiple YAML files in the `.roo/modes/` directory (thanks @farazoman)
 - Add Featherless provider (thanks @DarinVerheijke)
 
 ## [3.25.20] - 2025-08-19
@@ -1685,11 +1737,11 @@
 
 ## [3.25.19] - 2025-08-19
 
-- Fix issue where new users couldn't select the Shofer Router (thanks @daniel-lxs!)
+- Fix issue where new users couldn't select the Roo Code Router (thanks @daniel-lxs!)
 
 ## [3.25.18] - 2025-08-19
 
-- Add new stealth Sonic model through the Shofer Router
+- Add new stealth Sonic model through the Roo Code Router
 - Fix: respect enableReasoningEffort setting when determining reasoning usage (#7048 by @ikbencasdoei, PR by @app/roomote)
 - Fix: prevent duplicate LM Studio models with case-insensitive deduplication (#6954 by @fbuechler, PR by @daniel-lxs)
 - Feat: simplify ask_followup_question prompt documentation (thanks @daniel-lxs!)
@@ -1712,7 +1764,7 @@
 - Add an API for resuming tasks by ID (thanks @mrubens!)
 - Emit event when a task ask requires interaction (thanks @cte!)
 - Make enhance with task history default to true (thanks @liwilliam2021!)
-- Fix: Use shofer.cwd as primary source for workspace path in ragSearchTool (thanks @NaccOll!)
+- Fix: Use cline.cwd as primary source for workspace path in codebaseSearchTool (thanks @NaccOll!)
 - Hotfix multiple folder workspace checkpoint (thanks @NaccOll!)
 
 ## [3.25.15] - 2025-08-14
@@ -1741,7 +1793,7 @@
 - Add: Minimal reasoning support to OpenRouter (thanks @daniel-lxs!)
 - Fix: Add configurable API request timeout for local providers (#6521 by @dabockster, PR by @app/roomote)
 - Fix: Add --no-sandbox flag to browser launch options (#6632 by @QuinsZouls, PR by @QuinsZouls)
-- Fix: Ensure JSON files respect .shoferignore during indexing (#6690 by @evermoving, PR by @app/roomote)
+- Fix: Ensure JSON files respect .rooignore during indexing (#6690 by @evermoving, PR by @app/roomote)
 - Add: New Chutes provider models (#6698 by @fstandhartinger, PR by @app/roomote)
 - Add: OpenAI gpt-oss models to Amazon Bedrock dropdown (#6752 by @josh-clanton-powerschool, PR by @app/roomote)
 - Fix: Correct tool repetition detector to not block first tool call when limit is 1 (#6834 by @NaccOll, PR by @app/roomote)
@@ -1758,13 +1810,13 @@
 - Add: IO Intelligence Provider support (thanks @ertan2002!)
 - Fix: MCP startup issues and remove refresh notifications (thanks @hannesrudolph!)
 - Fix: Improvements to GPT-5 OpenAI provider configuration (thanks @hannesrudolph!)
-- Fix: Clarify rag_search path parameter as optional and improve tool descriptions (thanks @app/roomote!)
+- Fix: Clarify codebase_search path parameter as optional and improve tool descriptions (thanks @app/roomote!)
 - Fix: Bedrock provider workaround for LiteLLM passthrough issues (thanks @jr!)
 - Fix: Token usage and cost being underreported on cancelled requests (thanks @chrarnoldus!)
 
 ## [3.25.10] - 2025-08-07
 
-- Add support for GPT-5 (thanks Shofer and @app/roomote!)
+- Add support for GPT-5 (thanks Cline and @app/roomote!)
 - Fix: Use CDATA sections in XML examples to prevent parser errors (#4852 by @hannesrudolph, PR by @hannesrudolph)
 - Fix: Add missing MCP error translation keys (thanks @app/roomote!)
 
@@ -1777,7 +1829,7 @@
 ## [3.25.8] - 2025-08-06
 
 - Fix: Prevent disabled MCP servers from starting processes and show correct status (#6036 by @hannesrudolph, PR by @app/roomote)
-- Fix: Handle current directory path "." correctly in rag_search tool (#6514 by @hannesrudolph, PR by @app/roomote)
+- Fix: Handle current directory path "." correctly in codebase_search tool (#6514 by @hannesrudolph, PR by @app/roomote)
 - Fix: Trim whitespace from OpenAI base URL to fix model detection (#6559 by @vauhochzett, PR by @app/roomote)
 - Feat: Reduce Gemini 2.5 Pro minimum thinking budget to 128 (thanks @app/roomote!)
 - Fix: Improve handling of net::ERR_ABORTED errors in URL fetching (#6632 by @QuinsZouls, PR by @app/roomote)
@@ -1851,7 +1903,7 @@
 - Fix: Prevent input clearing when clicking chat buttons (thanks @hassoncs!)
 - Update PR reviewer rules and mode configuration (thanks @daniel-lxs!)
 - Add translation check action to pull_request.opened event (thanks @app/roomote!)
-- Remove "(prev Shofer)" from extension title in all languages (thanks @app/roomote!)
+- Remove "(prev Roo Cline)" from extension title in all languages (thanks @app/roomote!)
 - Remove event types mention from PR reviewer rules (thanks @daniel-lxs!)
 
 ## [3.25.2] - 2025-07-29
@@ -1904,7 +1956,7 @@
 
 ## [3.23.19] - 2025-07-23
 
-- Add Shofer Cloud Waitlist CTAs (thanks @brunobergher!)
+- Add Roo Code Cloud Waitlist CTAs (thanks @brunobergher!)
 - Split commands on newlines when evaluating auto-approve
 - Smarter auto-deny of commands
 
@@ -1947,7 +1999,7 @@
 
 - Fix configurable delay for diagnostics to prevent premature error reporting
 - Add command timeout allowlist
-- Add description and whenToUse fields to custom modes in .shofermodes (thanks @RandalSchwartz!)
+- Add description and whenToUse fields to custom modes in .roomodes (thanks @RandalSchwartz!)
 - Fix Claude model detection by name for API protocol selection (thanks @daniel-lxs!)
 - Move marketplace icon from overflow menu to top navigation
 - Optional setting to prevent completion with open todos
@@ -2072,7 +2124,7 @@
 - Chat index UI enhancements (thanks @MuriloFP!)
 - Fix model search being prefilled on dropdown (thanks @kevinvandijk!)
 - Improve chat UI - add camera icon margin and make placeholder non-selectable (thanks @MuriloFP!)
-- Delete .shofer/rules-{mode} folder when custom mode is deleted
+- Delete .roo/rules-{mode} folder when custom mode is deleted
 - Enforce file restrictions for all edit tools in architect mode
 - Add User-Agent header to API providers
 - Fix auto question timer unmount (thanks @liwilliam2021!)
@@ -2118,7 +2170,7 @@
 
 ## [3.22.3] - 2025-06-27
 
-- Restore JSON backwards compatibility for .shofermodes files (thanks @daniel-lxs!)
+- Restore JSON backwards compatibility for .roomodes files (thanks @daniel-lxs!)
 
 ## [3.22.2] - 2025-06-27
 
@@ -2130,7 +2182,7 @@
 
 ## [3.22.1] - 2025-06-26
 
-- Add Gemini CLI provider (thanks Shofer!)
+- Add Gemini CLI provider (thanks Cline!)
 - Fix undefined mcp command (thanks @qdaxb!)
 - Use upstream_inference_cost for OpenRouter BYOK cost calculation and show cached token count (thanks @chrarnoldus!)
 - Update maxTokens value for qwen/qwen3-32b model on Groq (thanks @KanTakahiro!)
@@ -2139,7 +2191,7 @@
 ## [3.22.0] - 2025-06-25
 
 - Add 1-click task sharing
-- Add support for loading rules from a global .shofer directory (thanks @samhvw8!)
+- Add support for loading rules from a global .roo directory (thanks @samhvw8!)
 - Modes selector improvements (thanks @brunobergher!)
 - Use safeWriteJson for all JSON file writes to avoid task history corruption (thanks @KJ7LNW!)
 - Improve YAML error handling when editing modes
@@ -2204,7 +2256,7 @@
 
 ## [3.21.0] - 2025-06-17
 
-- Add Shofer Marketplace to make it easy to discover and install great MCPs and modes!
+- Add Roo Marketplace to make it easy to discover and install great MCPs and modes!
 - Add Gemini 2.5 models (Pro, Flash and Flash Lite) (thanks @daniel-lxs!)
 - Add support for Excel (.xlsx) files in tools (thanks @chrarnoldus!)
 - Add max tokens checkbox option for OpenAI compatible provider (thanks @AlexandruSmirnov!)
@@ -2215,7 +2267,7 @@
 - Fix codebase indexing alignment with list-files hidden directory filtering (thanks @daniel-lxs!)
 - Fix subtask completion mismatch (thanks @feifei325!)
 - Fix Windows path normalization in MCP variable injection (thanks @daniel-lxs!)
-- Update marketplace branding to 'Shofer Marketplace' (thanks @SannidhyaSah!)
+- Update marketplace branding to 'Roo Marketplace' (thanks @SannidhyaSah!)
 - Refactor to more consistent history UI (thanks @elianiva!)
 - Adjust context menu positioning to be near Copilot
 - Update evals Docker setup to work on Windows (thanks @StevenTCramer!)
@@ -2235,7 +2287,7 @@
 
 ## [3.20.2] - 2025-06-13
 
-- Limit grep_search to only look within the workspace for improved security
+- Limit search_files to only look within the workspace for improved security
 - Force tar-fs >=2.1.3 for security vulnerability fix
 - Add cache breakpoints for custom vertex models on Unbound (thanks @pugazhendhi-m!)
 - Reapply reasoning for bedrock with fix (thanks @daniel-lxs!)
@@ -2253,7 +2305,7 @@
 
 ## [3.20.0] - 2025-06-12
 
-- Add experimental Marketplace for extensions and modes (thanks @Smartsheet-JB-Brown, @elianiva, @monkeyDluffy6017, @NamesMT, @daniel-lxs, Shofer, and more!)
+- Add experimental Marketplace for extensions and modes (thanks @Smartsheet-JB-Brown, @elianiva, @monkeyDluffy6017, @NamesMT, @daniel-lxs, Cline, and more!)
 - Add experimental multi-file edits (thanks @samhvw8!)
 - Move concurrent reads setting to context settings with default of 5
 - Improve MCP execution UX (thanks @samhvw8!)
@@ -2267,7 +2319,7 @@
 - Update O3 model pricing
 - Add manual OpenAI-compatible format specification and parsing (thanks @dflatline!)
 - Add core tools integration tests for comprehensive coverage
-- Add JSDoc documentation for ShoferAsk and ShoferSay types (thanks @hannesrudolph!)
+- Add JSDoc documentation for ClineAsk and ClineSay types (thanks @hannesrudolph!)
 - Populate whenToUse descriptions for built-in modes
 - Fix file write tool with early relPath & newContent validation checks (thanks @Ruakij!)
 - Fix TaskItem display and copy issues with HTML tags in task messages (thanks @forestyoo!)
@@ -2308,10 +2360,10 @@
 - Fix multiple memory leaks in ChatView component (thanks @kiwina!)
 - Fix WorkspaceTracker resource leaks by disposing FileSystemWatcher (thanks @kiwina!)
 - Fix RooTips setTimeout cleanup to prevent state updates on unmounted components (thanks @kiwina!)
-- Fix FileSystemWatcher leak in ShoferIgnoreController (thanks @kiwina!)
+- Fix FileSystemWatcher leak in RooIgnoreController (thanks @kiwina!)
 - Fix clipboard memory leak by clearing setTimeout in useCopyToClipboard (thanks @kiwina!)
-- Fix ShoferProvider instance cleanup (thanks @xyOz-dev!)
-- Enforce rag_search as primary tool for code understanding tasks (thanks @hannesrudolph!)
+- Fix ClineProvider instance cleanup (thanks @xyOz-dev!)
+- Enforce codebase_search as primary tool for code understanding tasks (thanks @hannesrudolph!)
 - Improve Docker setup for evals
 - Move evals into pnpm workspace, switch from SQLite to Postgres
 - Refactor MCP to use getDefaultEnvironment for stdio client transport (thanks @samhvw8!)
@@ -2354,9 +2406,9 @@
 - Skip condense and show error if context grows during condensing
 - Transform Prompts tab into Modes tab and move support prompts to Settings for better organization
 - Add DeepSeek R1 0528 model support to Chutes provider (thanks @zeozeozeo!)
-- Fix @directory not respecting .shoferignore files (thanks @xyOz-dev!)
+- Fix @directory not respecting .rooignore files (thanks @xyOz-dev!)
 - Add rooignore checking for insert_content and search_and_replace tools
-- Fix menu breaking when Shofer is moved between primary and secondary sidebars (thanks @chrarnoldus!)
+- Fix menu breaking when Roo is moved between primary and secondary sidebars (thanks @chrarnoldus!)
 - Resolve memory leak in ChatView by stabilizing callback props (thanks @samhvw8!)
 - Fix write_to_file to properly create empty files when content is empty (thanks @Ruakij!)
 - Fix chat input clearing during running tasks (thanks @xyOz-dev!)
@@ -2416,7 +2468,7 @@
 - Add support for Gemini 2.5 Flash preview models (thanks @shariqriazz and @daniel-lxs!)
 - Add button to task header to intelligently condense content with visual feedback
 - Add YAML support for mode definitions (thanks @R-omk!)
-- Add allowedMaxRequests feature to cap consecutive auto-approved requests (inspired by Shofer, thanks @hassoncs!)
+- Add allowedMaxRequests feature to cap consecutive auto-approved requests (inspired by Cline, thanks @hassoncs!)
 - Add Qwen3 model series to the Chutes provider (thanks @zeozeozeo!)
 - Fix more causes of grey screen issues (thanks @xyOz-dev!)
 - Add LM Studio reasoning support (thanks @avtc!)
@@ -2435,7 +2487,7 @@
 
 ## [3.17.2] - 2025-05-15
 
-- Revert "Switch to the new Shofer message parser" (appears to cause a tool parsing bug)
+- Revert "Switch to the new Roo message parser" (appears to cause a tool parsing bug)
 - Lock the versions of vsce and ovsx
 
 ## [3.17.1] - 2025-05-15
@@ -2449,15 +2501,15 @@
 - Add "when to use" section to mode definitions to enable better orchestration
 - Add experimental feature to intelligently condense the task context instead of truncating it
 - Fix one of the causes of the gray screen issue (thanks @xyOz-dev!)
-- Focus improvements for better UI interactions (thanks Shofer!)
-- Switch to the new Shofer message parser for improved performance (thanks Shofer!)
+- Focus improvements for better UI interactions (thanks Cline!)
+- Switch to the new Roo message parser for improved performance (thanks Cline!)
 - Enable source maps for improved debugging (thanks @KJ7LNW!)
 - Update OpenRouter provider to use provider-specific model info (thanks @daniel-lxs!)
 - Fix Requesty cost/token reporting (thanks @dtrugman!)
 - Improve command execution UI
 - Add more in-app links to relevant documentation
 - Update the new task tool description and the ask mode custom instructions in the system prompt
-- Add IPC types to shofer-code.d.ts
+- Add IPC types to roo-code.d.ts
 - Add build VSIX workflow to pull requests (thanks @SmartManoj!)
 - Improve apply_diff tool to intelligently deduce line numbers (thanks @samhvw8!)
 - Fix command validation for shell array indexing (thanks @KJ7LNW!)
@@ -2524,7 +2576,7 @@
 - Fix display issue of the programming language dropdown in the code block component (thanks @zhangtony239)
 - MCP server errors are now captured and shown in a new "Errors" tab (thanks @robertheadley)
 - Error logging will no longer break MCP functionality if the server is properly connected (thanks @ksze)
-- You can now toggle the `terminal.integrated.inheritEnv` VSCode setting directly for the Shofer settings (thanks @KJ7LNW)
+- You can now toggle the `terminal.integrated.inheritEnv` VSCode setting directly for the Roo Code settings (thanks @KJ7LNW)
 - Add `gemini-2.5-pro-preview-05-06` to the Vertex and Gemini providers (thanks @zetaloop)
 - Ensure evals exercises are up-to-date before running evals (thanks @shariqriazz)
 - Lots of general UI improvements (thanks @elianiva)
@@ -2541,7 +2593,7 @@
 
 ## [3.15.4] - 2025-05-04
 
-- Fix a nasty bug that would cause Shofer to hang, particularly in orchestrator mode
+- Fix a nasty bug that would cause Roo Code to hang, particularly in orchestrator mode
 - Improve Gemini caching efficiency
 
 ## [3.15.3] - 2025-05-02
@@ -2580,8 +2632,8 @@
 - Improve the auto-approve toggle buttons for some high-contrast VSCode themes
 - Offload expensive count token operations to a web worker (thanks @samhvw8)
 - Improve support for multi-root workspaces (thanks @snoyiatk)
-- Simplify and streamline Shofer's quick actions
-- Allow Shofer settings to be imported from the welcome screen (thanks @julionav)
+- Simplify and streamline Roo Code's quick actions
+- Allow Roo Code settings to be imported from the welcome screen (thanks @julionav)
 - Remove unused types (thanks @wkordalski)
 - Improve the performance of mode switching (thanks @dlab-anton)
 - Fix importing & exporting of custom modes (thanks @julionav)
@@ -2595,7 +2647,7 @@
 - Clean up settings data model
 - Omit reasoning params for non-reasoning models
 - Clearer documentation for adding settings (thanks @shariqriazz!)
-- Fix word wrapping in Shofer message title (thanks @zhangtony239!)
+- Fix word wrapping in Roo message title (thanks @zhangtony239!)
 - Update default model id for Unbound from claude 3.5 to 3.7 (thanks @pugazhendhi-m!)
 
 ## [3.14.2] - 2025-04-24
@@ -2682,7 +2734,7 @@
 
 ## [3.12.0] - 2025-04-15
 
-- Add xAI provider and expose reasoning effort options for Grok on OpenRouter (thanks Shofer!)
+- Add xAI provider and expose reasoning effort options for Grok on OpenRouter (thanks Cline!)
 - Make diff editing config per-profile and improve pre-diff string normalization
 - Make checkpoints faster and more reliable
 - Add a search bar to mode and profile select dropdowns (thanks @samhvw8!)
@@ -2693,7 +2745,7 @@
 
 ## [3.11.17] - 2025-04-14
 
-- Improvements to OpenAI cache reporting and cost estimates (thanks @monotykamary and Shofer!)
+- Improvements to OpenAI cache reporting and cost estimates (thanks @monotykamary and Cline!)
 - Visual improvements to the auto-approve toggles (thanks @sachasayan!)
 - Bugfix to diff apply logic (thanks @avtc for the test case!) and telemetry to track errors going forward
 - Fix race condition in capturing short-running terminal commands (thanks @KJ7LNW!)
@@ -2745,12 +2797,12 @@
 - Improve readFileTool XML output format (thanks @KJ7LNW!)
 - Add o1-pro support (thanks @arthurauffray!)
 - Follow symlinked rules files/directories to allow for more flexible rule setups
-- Focus Shofer in the sidebar when running tasks in the sidebar via the API
+- Focus Roo Code in the sidebar when running tasks in the sidebar via the API
 - Improve subtasks UI
 
 ## [3.11.10] - 2025-04-08
 
-- Fix bug where nested .shofer/rules directories are not respected properly (thanks @taisukeoe!)
+- Fix bug where nested .roo/rules directories are not respected properly (thanks @taisukeoe!)
 - Handle long command output more efficiently in the chat row (thanks @samhvw8!)
 - Fix cache usage tracking for OpenAI-compatible providers
 - Add custom translation instructions for zh-CN (thanks @System233!)
@@ -2759,15 +2811,15 @@
 ## [3.11.9] - 2025-04-07
 
 - Rate-limit setting updated to be per-profile (thanks @ross and @olweraltuve!)
-- You can now place multiple rules files in the .shofer/rules/ and .shofer/rules-{mode}/ folders (thanks @upamune!)
+- You can now place multiple rules files in the .roo/rules/ and .roo/rules-{mode}/ folders (thanks @upamune!)
 - Prevent unnecessary autoscroll when buttons appear (thanks @shtse8!)
 - Add Gemini 2.5 Pro Preview to Vertex AI (thanks @nbihan-mediware!)
-- Tidy up following ShoferProvider refactor (thanks @diarmidmackenzie!)
+- Tidy up following ClineProvider refactor (thanks @diarmidmackenzie!)
 - Clamp negative line numbers when reading files (thanks @KJ7LNW!)
 - Enhance Rust tree-sitter parser with advanced language structures (thanks @KJ7LNW!)
 - Persist settings on api.setConfiguration (thanks @gtaylor!)
 - Add deep links to settings sections
-- Add command to focus Shofer input field (thanks @axkirillov!)
+- Add command to focus Roo Code input field (thanks @axkirillov!)
 - Add resize and hover actions to the browser (thanks @SplittyDev!)
 - Add resumeTask and isTaskInHistory to the API (thanks @franekp!)
 - Fix bug displaying boolean/numeric suggested answers
@@ -2816,7 +2868,7 @@
 - Fix issue where prompts and settings tabs were not scrollable when accessed from dropdown menus
 - Update AWS region dropdown menu to the most recent data (thanks @Smartsheet-JB-Brown!)
 - Fix prompt enhancement for Bedrock (thanks @Smartsheet-JB-Brown!)
-- Allow processes to access the Shofer API via a unix socket
+- Allow processes to access the Roo Code API via a unix socket
 - Improve zh-TW Traditional Chinese translations (thanks @PeterDaveHello!)
 - Add support for Azure AI Inference Service with DeepSeek-V3 model (thanks @thomasjeung!)
 - Fix off-by-one error in tree-sitter line numbers
@@ -2841,7 +2893,7 @@
 ## [3.11.0] - 2025-03-30
 
 - Replace single-block-diff with multi-block-diff fast editing strategy
-- Support project-level MCP config in .shofer/mcp.json (thanks @aheizi!)
+- Support project-level MCP config in .roo/mcp.json (thanks @aheizi!)
 - Show OpenRouter and Requesty key balance on the settings screen
 - Support import/export of settings
 - Add pinning and sorting for API configuration dropdown (thanks @jwcraig!)
@@ -2853,7 +2905,7 @@
 - Fix list_code_definition_names to support files (thanks @KJ7LNW!)
 - Refactor tool-calling logic to make the code a lot easier to work with (thanks @diarmidmackenzie, @bramburn, @KJ7LNW, and everyone else who helped!)
 - Prioritize “Add to Context” in the code actions and include line numbers (thanks @samhvw8!)
-- Add an activation command that other extensions can use to interface with Shofer (thanks @gtaylor!)
+- Add an activation command that other extensions can use to interface with Roo Code (thanks @gtaylor!)
 - Preserve language characters in file @-mentions (thanks @aheizi!)
 - Browser tool improvements (thanks @afshawnlotfi!)
 - Display info about partial reads in the chat row
@@ -2882,7 +2934,7 @@
 - Rename and migrate global MCP and modes files (thanks @StevenTCramer!)
 - Add watchPaths option to McpHub for file change detection (thanks @01Rian!)
 - Read image responses from MCP calls (thanks @nevermorec!)
-- Add taskCreated event to API and subscribe to Shofer events earlier (thanks @wkordalski!)
+- Add taskCreated event to API and subscribe to Cline events earlier (thanks @wkordalski!)
 - Fixes to numeric formatting suffix internationalization (thanks @feifei325!)
 - Fix open tab support in the context mention suggestions (thanks @aheizi!)
 - Better display of OpenRouter “overloaded” error messages
@@ -2923,7 +2975,7 @@
 - More consistent @-mention lookups of files and folders
 - Consolidate code actions into a submenu (thanks samhvw8!)
 - Fix MCP error logging (thanks aheizi!)
-- Improvements to grep_search tool formatting and logic (thanks KJ7LNW!)
+- Improvements to search_files tool formatting and logic (thanks KJ7LNW!)
 - Fix changelog formatting in GitHub Releases (thanks pdecat!)
 - Add fake provider for integration tests (thanks franekp!)
 - Reflect Cross-region inference option in ap-xx region (thanks Yoshino-Yukitaro!)
@@ -2941,13 +2993,13 @@
 
 ## [3.9.1] - 2025-03-18
 
-- Pass current language to system prompt correctly so Shofer thinks and speaks in the selected language
+- Pass current language to system prompt correctly so Roo thinks and speaks in the selected language
 
 ## [3.9.0] - 2025-03-18
 
-- Internationalize Shofer into Catalan, German, Spanish, French, Hindi, Italian, Japanese, Korean, Polish, Portuguese, Turkish, Vietnamese, Simplified Chinese, and Traditional Chinese (thanks @feifei325!)
+- Internationalize Roo Code into Catalan, German, Spanish, French, Hindi, Italian, Japanese, Korean, Polish, Portuguese, Turkish, Vietnamese, Simplified Chinese, and Traditional Chinese (thanks @feifei325!)
 - Bring back support for MCP over SSE (thanks @aheizi!)
-- Add a text-to-speech option to have Shofer talk to you as it works (thanks @heyseth!)
+- Add a text-to-speech option to have Roo talk to you as it works (thanks @heyseth!)
 - Choose a specific provider when using OpenRouter (thanks PhunkyBob!)
 - Support batch deletion of task history (thanks @aheizi!)
 - Internationalize Human Relay, adjust the layout, and make it work on the welcome screen (thanks @NyxJae!)
@@ -2958,9 +3010,9 @@
 - Fix to task history saving when running multiple Roos (thanks @samhvw8!)
 - Improve task deletion when underlying files are missing (thanks @GitlyHallows!)
 - Improve support for NixOS & direnv (thanks @wkordalski!)
-- Fix wheel scrolling when Shofer is opened in editor tabs (thanks @GitlyHallows!)
+- Fix wheel scrolling when Roo is opened in editor tabs (thanks @GitlyHallows!)
 - Don’t automatically mention the file when using the "Add to context" code action (thanks @qdaxb!)
-- Expose task stack in `ShoferAPI` (thanks @franekp!)
+- Expose task stack in `RooCodeAPI` (thanks @franekp!)
 - Give the models visibility into the current task's API cost
 
 ## [3.8.6] - 2025-03-13
@@ -2998,7 +3050,7 @@
 ## [3.8.4] - 2025-03-09
 
 - Roll back multi-diff progress indicator temporarily to fix a double-confirmation in saving edits
-- Add an option in the prompts tab to save tokens by disabling the ability to ask Shofer to create/edit custom modes for you (thanks @hannesrudolph!)
+- Add an option in the prompts tab to save tokens by disabling the ability to ask Roo to create/edit custom modes for you (thanks @hannesrudolph!)
 
 ## [3.8.3] - 2025-03-09
 
@@ -3025,17 +3077,17 @@
 
 ## [3.8.0] - 2025-03-07
 
-- Add opt-in telemetry to help us improve Shofer faster (thanks Shofer!)
+- Add opt-in telemetry to help us improve Roo Code faster (thanks Cline!)
 - Fix terminal overload / gray screen of death, and other terminal issues
 - Add a new experimental diff editing strategy that applies multiple diff edits at once (thanks @qdaxb!)
-- Add support for a .shoferignore to prevent Shofer from read/writing certain files, with a setting to also exclude them from search/lists (thanks Shofer!)
+- Add support for a .rooignore to prevent Roo Code from read/writing certain files, with a setting to also exclude them from search/lists (thanks Cline!)
 - Update the new_task tool to return results to the parent task on completion, supporting better orchestration (thanks @shaybc!)
-- Support running Shofer in multiple editor windows simultaneously (thanks @samhvw8!)
+- Support running Roo in multiple editor windows simultaneously (thanks @samhvw8!)
 - Make checkpoints asynchronous and exclude more files to speed them up
 - Redesign the settings page to make it easier to navigate
 - Add credential-based authentication for Vertex AI, enabling users to easily switch between Google Cloud accounts (thanks @eonghk!)
 - Update the DeepSeek provider with the correct baseUrl and track caching correctly (thanks @olweraltuve!)
-- Add a new “Human Relay” provider that allows you to manually copy information to a Web AI when needed, and then paste the AI's response back into Shofer (thanks @NyxJae)!
+- Add a new “Human Relay” provider that allows you to manually copy information to a Web AI when needed, and then paste the AI's response back into Roo Code (thanks @NyxJae)!
 - Add observability for OpenAI providers (thanks @refactorthis!)
 - Support speculative decoding for LM Studio local models (thanks @adamwlarson!)
 - Improve UI for mode/provider selectors in chat
@@ -3064,7 +3116,7 @@
 
 - Add Gemini models on Vertex AI (thanks @ashktn!)
 - Keyboard shortcuts to switch modes (thanks @aheizi!)
-- Add support for Mermaid diagrams (thanks Shofer!)
+- Add support for Mermaid diagrams (thanks Cline!)
 
 ## [3.7.9] - 2025-03-01
 
@@ -3098,7 +3150,7 @@
 
 ## [3.7.5] - 2025-02-26
 
-- Fix context window truncation math (see [#1173](https://github.com/shofer-dev/shofer/issues/1173))
+- Fix context window truncation math (see [#1173](https://github.com/RooCodeInc/Roo-Code/issues/1173))
 - Fix various issues with the model picker (thanks @System233!)
 - Fix model input / output cost parsing (thanks @System233!)
 - Add drag-and-drop for files
@@ -3124,7 +3176,7 @@
 
 ## [3.7.0] - 2025-02-24
 
-- Introducing Shofer 3.7, with support for the new Claude Sonnet 3.7. Because who cares about skipping version numbers anymore? Thanks @lupuletic and @cte for the PRs!
+- Introducing Roo Code 3.7, with support for the new Claude Sonnet 3.7. Because who cares about skipping version numbers anymore? Thanks @lupuletic and @cte for the PRs!
 
 ## [3.3.26] - 2025-02-27
 
@@ -3152,7 +3204,7 @@
 - Add support for setting custom preferred languages on the Prompts tab, as well as adding Catalan to the list of languages (thanks @alarno!)
 - Add a button to delete MCP servers (thanks @hannesrudolph!)
 - Fix a bug where the button to copy the system prompt preview always copied the Code mode version
-- Fix a bug where the .shofermodes file was not automatically created when adding custom modes from the Prompts tab
+- Fix a bug where the .roomodes file was not automatically created when adding custom modes from the Prompts tab
 - Allow setting a wildcard (`*`) to auto-approve all command execution (use with caution!)
 
 ## [3.3.21] - 2025-02-17
@@ -3160,13 +3212,13 @@
 - Fix input box revert issue and configuration loss during profile switch (thanks @System233!)
 - Fix default preferred language for zh-cn and zh-tw (thanks @System233!)
 - Fix Mistral integration (thanks @d-oit!)
-- Feature to mention `@terminal` to pull terminal output into context (thanks Shofer!)
-- Fix system prompt to make sure Shofer knows about all available modes
+- Feature to mention `@terminal` to pull terminal output into context (thanks Cline!)
+- Fix system prompt to make sure Roo knows about all available modes
 - Enable streaming mode for OpenAI o1
 
 ## [3.3.20] - 2025-02-14
 
-- Support project-specific custom modes in a .shofermodes file
+- Support project-specific custom modes in a .roomodes file
 - Add more Mistral models (thanks @d-oit and @bramburn!)
 - By popular request, make it so Ask mode can't write to Markdown files and is purely for chatting with
 - Add a setting to control the number of open editor tabs to tell the model about (665 is probably too many!)
@@ -3178,7 +3230,7 @@
 - Honor the VS Code theme for dialog backgrounds
 - Make it possible to clear out the default custom instructions for built-in modes
 - Add a help button that links to our new documentation site (which we would love help from the community to improve!)
-- Switch checkpoints logic to use a shadow git repository to work around issues with hot reloads and polluting existing repositories (thanks Shofer for the inspiration!)
+- Switch checkpoints logic to use a shadow git repository to work around issues with hot reloads and polluting existing repositories (thanks Cline for the inspiration!)
 
 ## [3.3.18] - 2025-02-11
 
@@ -3265,11 +3317,11 @@
 - Capture reasoning from more variants of DeepSeek R1 (thanks @Szpadel!)
 - Use an exponential backoff for API retries (if delay after first error is 5s, delay after second consecutive error will be 10s, then 20s, etc)
 - Add a slider in advanced settings to enable rate limiting requests to avoid overloading providers (i.e. wait at least 10 seconds between API requests)
-- Prompt tweaks to make Shofer better at creating new custom modes for you
+- Prompt tweaks to make Roo better at creating new custom modes for you
 
 ## [3.3.6]
 
-- Add a "new task" tool that allows Shofer to start new tasks with an initial message and mode
+- Add a "new task" tool that allows Roo to start new tasks with an initial message and mode
 - Fix a bug that was preventing the use of qwen-max and potentially other OpenAI-compatible providers (thanks @Szpadel!)
 - Add support for perplexity/sonar-reasoning (thanks @Szpadel!)
 - Visual fixes to dropdowns (thanks @psv2522!)
@@ -3313,7 +3365,7 @@
 - Ask and Architect modes can now edit markdown files
 - Custom modes can now be restricted to specific file patterns (for example, a technical writer who can only edit markdown files 👋)
 - Support for configuring the Bedrock provider with AWS Profiles
-- New Shofer community Discord at https://shofer.dev/discord!
+- New Roo Code community Discord at https://roocode.com/discord!
 
 ## [3.2.8]
 
@@ -3345,15 +3397,15 @@
 
 ## [3.2.0 - 3.2.2]
 
-- **Name Change From Shofer to Shofer:** We're excited to announce our new name! After growing beyond 50,000 installations, we've rebranded from Shofer to Shofer to better reflect our identity as we chart our own course.
+- **Name Change From Roo Cline to Roo Code:** We're excited to announce our new name! After growing beyond 50,000 installations, we've rebranded from Roo Cline to Roo Code to better reflect our identity as we chart our own course.
 
-- **Custom Modes:** Create your own personas for Shofer! While our built-in modes (Code, Architect, Ask) are still here, you can now shape entirely new ones:
+- **Custom Modes:** Create your own personas for Roo Code! While our built-in modes (Code, Architect, Ask) are still here, you can now shape entirely new ones:
     - Define custom prompts
     - Choose which tools each mode can access
     - Create specialized assistants for any workflow
     - Just type "Create a new mode for <X>" or visit the Prompts tab in the top menu to get started
 
-Join us at https://www.reddit.com/r/Shofer to share your custom modes and be part of our next chapter!
+Join us at https://www.reddit.com/r/RooCode to share your custom modes and be part of our next chapter!
 
 ## [3.1.7]
 
@@ -3363,7 +3415,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [3.1.6]
 
-- Add Mistral (thanks Shofer!)
+- Add Mistral (thanks Cline!)
 - Fix bug with VSCode LM configuration profile saving (thanks @samhvw8!)
 
 ## [3.1.4 - 3.1.5]
@@ -3372,7 +3424,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [3.1.3]
 
-- Add auto-approve chat bar (thanks Shofer!)
+- Add auto-approve chat bar (thanks Cline!)
 - Fix bug with VS Code Language Models integration
 
 ## [3.1.2]
@@ -3394,7 +3446,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [3.0.3]
 
-- Update required vscode engine to ^1.84.0 to match shofer
+- Update required vscode engine to ^1.84.0 to match cline
 
 ## [3.0.2]
 
@@ -3406,7 +3458,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [3.0.0]
 
-- This release adds chat modes! Now you can ask Shofer questions about system architecture or the codebase without immediately jumping into writing code. You can even assign different API configuration profiles to each mode if you prefer to use different models for thinking vs coding. Would love feedback in the new Shofer Reddit! https://www.reddit.com/r/Shofer
+- This release adds chat modes! Now you can ask Roo Code questions about system architecture or the codebase without immediately jumping into writing code. You can even assign different API configuration profiles to each mode if you prefer to use different models for thinking vs coding. Would love feedback in the new Roo Code Reddit! https://www.reddit.com/r/RooCode
 
 ## [2.2.46]
 
@@ -3527,7 +3579,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.2.16]
 
-- Incorporate Premshay's [PR](https://github.com/shofer-dev/shofer/pull/60) to add support for Amazon Nova and Meta Llama Models via Bedrock (3, 3.1, 3.2) and unified Bedrock calls using BedrockClient and Bedrock Runtime API
+- Incorporate Premshay's [PR](https://github.com/RooCodeInc/Roo-Code/pull/60) to add support for Amazon Nova and Meta Llama Models via Bedrock (3, 3.1, 3.2) and unified Bedrock calls using BedrockClient and Bedrock Runtime API
 
 ## [2.2.14 - 2.2.15]
 
@@ -3571,7 +3623,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.2.0]
 
-- Incorporate MCP changes from Shofer 2.2.0
+- Incorporate MCP changes from Cline 2.2.0
 
 ## [2.1.21]
 
@@ -3599,7 +3651,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.1.15]
 
-- Incorporate dbasclpy's [PR](https://github.com/shofer-dev/shofer/pull/54) to add support for gemini-exp-1206
+- Incorporate dbasclpy's [PR](https://github.com/RooCodeInc/Roo-Code/pull/54) to add support for gemini-exp-1206
 - Make it clear that diff editing is very experimental
 
 ## [2.1.14]
@@ -3609,19 +3661,19 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.1.13]
 
-- Fix https://github.com/shofer-dev/shofer/issues/50 where sound effects were not respecting settings
+- Fix https://github.com/RooCodeInc/Roo-Code/issues/50 where sound effects were not respecting settings
 
 ## [2.1.12]
 
-- Incorporate JoziGila's [PR](https://github.com/shofer/shofer/pull/158) to add support for editing through diffs
+- Incorporate JoziGila's [PR](https://github.com/cline/cline/pull/158) to add support for editing through diffs
 
 ## [2.1.11]
 
-- Incorporate lloydchang's [PR](https://github.com/shofer-dev/shofer/pull/42) to add support for OpenRouter compression
+- Incorporate lloydchang's [PR](https://github.com/RooCodeInc/Roo-Code/pull/42) to add support for OpenRouter compression
 
 ## [2.1.10]
 
-- Incorporate HeavenOSK's [PR](https://github.com/shofer/shofer/pull/818) to add sound effects to Shofer
+- Incorporate HeavenOSK's [PR](https://github.com/cline/cline/pull/818) to add sound effects to Cline
 
 ## [2.1.9]
 
@@ -3629,7 +3681,7 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.1.8]
 
-- Shofer now allows configuration of which commands are allowed without approval!
+- Roo Cline now allows configuration of which commands are allowed without approval!
 
 ## [2.1.7]
 
@@ -3637,13 +3689,13 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.2.0]
 
-- Add support for Model Context Protocol (MCP), enabling Shofer to use custom tools like web-search tool or GitHub tool
+- Add support for Model Context Protocol (MCP), enabling Cline to use custom tools like web-search tool or GitHub tool
 - Add MCP server management tab accessible via the server icon in the menu bar
-- Add ability for Shofer to dynamically create new MCP servers based on user requests (e.g., "add a tool that gets the latest npm docs")
+- Add ability for Cline to dynamically create new MCP servers based on user requests (e.g., "add a tool that gets the latest npm docs")
 
 ## [2.1.6]
 
-- Shofer now runs in all VSCode-compatible editors
+- Roo Cline now runs in all VSCode-compatible editors
 
 ## [2.1.5]
 
@@ -3651,11 +3703,11 @@ Join us at https://www.reddit.com/r/Shofer to share your custom modes and be par
 
 ## [2.1.4]
 
-- Shofer now can run side-by-side with Shofer
+- Roo Cline now can run side-by-side with Cline
 
 ## [2.1.3]
 
-- Shofer now allows browser actions without approval when `alwaysAllowBrowser` is true
+- Roo Cline now allows browser actions without approval when `alwaysAllowBrowser` is true
 
 ## [2.1.2]
 
