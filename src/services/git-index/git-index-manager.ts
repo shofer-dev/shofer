@@ -1,3 +1,4 @@
+import * as path from "path"
 import * as vscode from "vscode"
 import { execFile } from "child_process"
 import { promisify } from "util"
@@ -16,6 +17,7 @@ import { GitCacheManager } from "./git-cache-manager"
 import { GitHistoryStateManager } from "./git-state-manager"
 import { GitHistoryOrchestrator } from "./git-history-orchestrator"
 import { GitSearchService } from "./git-search-service"
+import { listSubmoduleDisplayPaths } from "../../utils/git-submodules"
 
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
@@ -246,7 +248,7 @@ export class GitIndexManager {
 
 		const gitMaxHistoryDays = this._readGitConfig("codebaseIndexGitMaxHistoryDays", 365)
 		const gitMaxCommits = this._readGitConfig("codebaseIndexGitMaxCommits", 10000)
-		const gitBranch = this._readGitConfig("codebaseIndexGitBranch", "master")
+		const gitBranch = this._readGitConfig("codebaseIndexGitBranch", "")
 
 		try {
 			await this._orchestrator.startIndexing(gitMaxHistoryDays, gitMaxCommits, gitBranch)
@@ -409,7 +411,7 @@ export class GitIndexManager {
 			// orchestrator unconditionally so a Settings → Save with only a
 			// branch change is picked up by the watcher on its next poll
 			// tick (via the lazy getter wired in _startWatcher).
-			this._orchestrator?.updateBranch(this._readGitConfig("codebaseIndexGitBranch", "master"))
+			this._orchestrator?.updateBranch(this._readGitConfig("codebaseIndexGitBranch", ""))
 		}
 	}
 
@@ -445,18 +447,57 @@ export class GitIndexManager {
 	}
 
 	/**
-	 * Reads the short (7-char) HEAD SHA via `git rev-parse` and forwards
-	 * it to the state manager. Best-effort: errors are swallowed because
-	 * a missing/transient git state should never break indexing.
+	 * Reads the short (7-char) HEAD SHA from the parent repo and all
+	 * initialised submodules, then reports the one with the most recent
+	 * commit date. This ensures that a fresh commit in a submodule
+	 * (e.g. `extensions/shofer`) is reflected in the popover diagnostic
+	 * rather than being hidden behind a stale parent-repo HEAD.
+	 *
+	 * Best-effort: any individual repo that fails (detached HEAD, not a
+	 * git repo, submodule de-init'd mid-flight) is skipped; the worst
+	 * case is the previous SHA is retained.
 	 */
 	private async _refreshHeadSha(): Promise<void> {
 		try {
-			const { stdout } = await execFileAsync("git", ["rev-parse", "--short=7", "HEAD"], {
-				cwd: this.workspacePath,
-			})
-			const hash = stdout.trim()
-			if (hash) {
-				this._stateManager.setLatestCommitHash(hash)
+			const submoduleDisplayPaths = await listSubmoduleDisplayPaths(this.workspacePath)
+			const repoPaths = [
+				this.workspacePath,
+				...submoduleDisplayPaths.map((p) => path.resolve(this.workspacePath, p)),
+			]
+
+			// Query each repo for HEAD short SHA + author date in parallel.
+			// We use `git log -1` rather than `git rev-parse` so we also get
+			// the author date for comparison.
+			const results = (
+				await Promise.allSettled(
+					repoPaths.map(async (repoPath) => {
+						const { stdout } = await execFileAsync("git", ["log", "-1", "--format=%h %aI", "HEAD"], {
+							cwd: repoPath,
+						})
+						const trimmed = stdout.trim()
+						if (!trimmed) return null
+						const spaceIdx = trimmed.indexOf(" ")
+						if (spaceIdx === -1) return null
+						return {
+							hash: trimmed.substring(0, spaceIdx),
+							date: trimmed.substring(spaceIdx + 1),
+						}
+					}),
+				)
+			)
+				.map((r) => (r.status === "fulfilled" ? r.value : null))
+				.filter((v): v is { hash: string; date: string } => v !== null)
+
+			// Pick the repo with the most recent commit date.
+			let best: { hash: string; date: string } | null = null
+			for (const entry of results) {
+				if (!best || entry.date > best.date) {
+					best = entry
+				}
+			}
+
+			if (best) {
+				this._stateManager.setLatestCommitHash(best.hash)
 			}
 		} catch {
 			// Non-fatal: leave latestCommitHash as-is.
