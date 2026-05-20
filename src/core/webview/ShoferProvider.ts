@@ -152,6 +152,12 @@ export class ShoferProvider
 	private currentWorkspacePath: string | undefined
 	private _disposed = false
 
+	// Diagnostic: monotonic counter so we can correlate paired lifecycle events
+	// (resolve → html-set → visibility change → dispose) for a single WebviewView
+	// instance across multiple resolveWebviewView calls.
+	private static webviewInstanceCounter = 0
+	private webviewInstanceId?: number
+
 	private recentTasksCache?: string[]
 	public readonly taskHistoryStore: TaskHistoryStore
 	public readonly taskManager: TaskManager
@@ -856,9 +862,44 @@ export class ShoferProvider
 	}
 
 	async resolveWebviewView(webviewView: vscode.WebviewView | vscode.WebviewPanel) {
-		this.view = webviewView
 		const inTabMode = "onDidChangeViewState" in webviewView
-		this.log(`[webview-lifecycle] resolveWebviewView called (mode: ${inTabMode ? "tab" : "sidebar"})`)
+		const instanceId = ++ShoferProvider.webviewInstanceCounter
+		const priorId = this.webviewInstanceId
+		// `visible` is available on both WebviewView and WebviewPanel; `active`
+		// only on WebviewPanel. Capture both for diagnostics.
+		const visible = (webviewView as { visible?: boolean }).visible
+		const active = (webviewView as { active?: boolean }).active
+		this.log(
+			`[webview-lifecycle] resolveWebviewView called (mode: ${inTabMode ? "tab" : "sidebar"}, instanceId: ${instanceId}, priorInstanceId: ${priorId ?? "none"}, sameRef: ${this.view === webviewView}, visible: ${visible}, active: ${active}, disposed: ${this._disposed})`,
+		)
+
+		// Idempotency guard: VS Code can invoke resolveWebviewView more than once
+		// during activation/restore (e.g. sidebar visibility flips, hot-restart
+		// races, or rapid renderer recreation under memory pressure). A second
+		// call on the *same* WebviewView would re-set `webview.html` and
+		// `webview.options` while the first document is still loading, which
+		// triggers Chromium's
+		//   "Could not register service worker: InvalidStateError: Failed to
+		//    register a ServiceWorker: The document is in an invalid state."
+		// because the existing service-worker registration is still in flight
+		// against the previous document. Short-circuit when the view is
+		// unchanged. If we get a *different* WebviewView instance (proper
+		// dispose/recreate cycle), tear down the previous subscriptions before
+		// re-initializing so we don't leak listeners.
+		if (this.view === webviewView) {
+			this.log(
+				`[webview-lifecycle] resolveWebviewView#${instanceId} ignored — same WebviewView already resolved (priorInstanceId=${priorId})`,
+			)
+			return
+		}
+		if (this.view) {
+			this.log(
+				`[webview-lifecycle] resolveWebviewView#${instanceId} replacing prior view (priorInstanceId=${priorId}) — clearing webview resources`,
+			)
+			this.clearWebviewResources()
+		}
+		this.view = webviewView
+		this.webviewInstanceId = instanceId
 
 		if (inTabMode) {
 			setPanel(webviewView, "tab")
@@ -906,11 +947,37 @@ export class ShoferProvider
 			enableScripts: true,
 			localResourceRoots: resourceRoots,
 		}
+		this.log(
+			`[webview-lifecycle] resolveWebviewView#${instanceId} webview.options set (resourceRoots=${resourceRoots.length})`,
+		)
 
-		webviewView.webview.html =
-			this.contextProxy.extensionMode === vscode.ExtensionMode.Development
-				? await this.getHMRHtmlContent(webviewView.webview)
-				: await this.getHtmlContent(webviewView.webview)
+		const isHmr = this.contextProxy.extensionMode === vscode.ExtensionMode.Development
+		const htmlStart = Date.now()
+		this.log(`[webview-lifecycle] resolveWebviewView#${instanceId} building ${isHmr ? "HMR" : "prod"} HTML…`)
+		const html = isHmr
+			? await this.getHMRHtmlContent(webviewView.webview)
+			: await this.getHtmlContent(webviewView.webview)
+		this.log(
+			`[webview-lifecycle] resolveWebviewView#${instanceId} HTML built (${html.length} bytes, ${Date.now() - htmlStart}ms). Assigning webview.html…`,
+		)
+		// If a *newer* resolve has raced past us while we were building HTML,
+		// abort: assigning to the stale view's `webview.html` is exactly what
+		// triggers the "document is in an invalid state" service-worker error.
+		if (this.view !== webviewView) {
+			this.log(
+				`[webview-lifecycle] resolveWebviewView#${instanceId} ABORTING html assignment — a newer resolve (instanceId=${this.webviewInstanceId}) has superseded this one`,
+			)
+			return
+		}
+		try {
+			webviewView.webview.html = html
+			this.log(`[webview-lifecycle] resolveWebviewView#${instanceId} webview.html assigned`)
+		} catch (err) {
+			this.log(
+				`[webview-lifecycle] resolveWebviewView#${instanceId} FAILED to assign webview.html: ${err instanceof Error ? `${err.message}\n${err.stack}` : String(err)}`,
+			)
+			throw err
+		}
 
 		// Sets up an event listener to listen for messages passed from the webview view context
 		// and executes code based on the message that is received.
@@ -979,6 +1046,9 @@ export class ShoferProvider
 		// This happens when the user closes the view or when the view is closed programmatically
 		webviewView.onDidDispose(
 			async () => {
+				this.log(
+					`[webview-lifecycle] onDidDispose fired (mode: ${inTabMode ? "tab" : "sidebar"}, instanceId: ${instanceId}, currentInstanceId: ${this.webviewInstanceId})`,
+				)
 				if (inTabMode) {
 					this.log("Disposing ShoferProvider instance for tab view")
 					await this.dispose()
@@ -989,6 +1059,10 @@ export class ShoferProvider
 					this.codeIndexManager = undefined
 					this.gitIndexManager = undefined
 					this.assistantAgentManager = undefined
+					if (this.webviewInstanceId === instanceId) {
+						this.view = undefined
+						this.webviewInstanceId = undefined
+					}
 				}
 			},
 			null,
@@ -3174,15 +3248,19 @@ export class ShoferProvider
 	// logging
 
 	public log(message: string) {
+		// `this.outputChannel` is the same `OutputChannel` instance that
+		// activate() registers as the shared global channel via
+		// `setExtensionOutputChannel`, so calling both `appendLine` here and
+		// `outputLog` would double every line in the "Shofer" output panel.
+		// The provider owns the channel directly; `outputLog` is the fallback
+		// for utility modules that don't have a provider handle.
 		this.outputChannel.appendLine(message)
-		outputLog(message)
 	}
 
 	/** Debug-level logging: only emitted when process.env.DEBUG is set. */
 	public debug(message: string) {
 		if (process.env.DEBUG) {
 			this.outputChannel.appendLine(message)
-			outputLog(message)
 		}
 	}
 
