@@ -106,8 +106,12 @@ export default defineConfig(({ mode }) => {
 			outDir,
 			emptyOutDir: true,
 			reportCompressedSize: false,
-			// Generate complete source maps with original TypeScript sources
-			sourcemap: true,
+			// Generate source maps as hidden so browsers don't auto-load them.
+			// sourceMappingURL comments in JS files cause Chrome to preload large
+			// .map files (~16 MB) which triggers "preloaded but not used" warnings
+			// in the VS Code webview console. Hidden mode keeps the .map files on
+			// disk for offline debugging without browser preloads.
+			sourcemap: "hidden",
 			// Ensure source maps are properly included in the build
 			minify: mode === "production" ? "esbuild" : false,
 			// Use a single combined CSS bundle so all webviews share styles
