@@ -11,8 +11,6 @@ interface UpdateTodoListParams {
 	todos: string
 }
 
-let approvedTodoList: TodoItem[] | undefined = undefined
-
 export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 	readonly name = "update_todo_list" as const
 
@@ -53,17 +51,24 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 				todos: normalizedTodos,
 			})
 
-			approvedTodoList = cloneDeep(normalizedTodos)
+			// Per-task snapshot so concurrent tasks don't overwrite each other's
+			// pending approval state (replaces former module-level global).
+			task.pendingTodoApproval = cloneDeep(normalizedTodos)
 			const didApprove = await askApproval("tool", approvalMsg)
 			if (!didApprove) {
+				task.pendingTodoApproval = undefined
 				pushToolResult("User declined to update the todoList.")
 				return
 			}
 
+			// Check whether the webview mutated the pending approval while we
+			// were awaiting the user's response (the user edited the todos).
+			const pendingApproval = task.pendingTodoApproval
+			task.pendingTodoApproval = undefined
 			const isTodoListChanged =
-				approvedTodoList !== undefined && JSON.stringify(normalizedTodos) !== JSON.stringify(approvedTodoList)
+				pendingApproval !== undefined && JSON.stringify(normalizedTodos) !== JSON.stringify(pendingApproval)
 			if (isTodoListChanged) {
-				normalizedTodos = approvedTodoList ?? []
+				normalizedTodos = pendingApproval
 				task.say(
 					"user_edit_todos",
 					JSON.stringify({
@@ -199,10 +204,6 @@ export function parseMarkdownChecklist(md: string): TodoItem[] {
 		})
 	}
 	return todos
-}
-
-export function setPendingTodoList(todos: TodoItem[]) {
-	approvedTodoList = todos
 }
 
 function validateTodos(todos: any[]): { valid: boolean; error?: string } {
