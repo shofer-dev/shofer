@@ -85,9 +85,11 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
     write:       { tools: ["apply_diff", ..., "my_tool"] },  // if content-mutating
     execute:     { tools: ["execute_command", ..., "my_tool"] }, // if runs commands
     browser:     { tools: [] },
-    mcp:         { tools: ["use_mcp_tool", "access_mcp_resource"] },
-    mode:        { tools: ["switch_mode", "new_task"] },
-    subtasks:    { tools: ["check_task_status", "wait_for_task", "list_background_tasks"] },
+    mcp:         { tools: ["use_mcp_tool", "access_mcp_resource",
+                          "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
+    mode:        { tools: ["switch_mode"] },
+    subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task",
+                          "list_background_tasks", "cancel_tasks", "answer_subtask_question"] },
     questions:   { tools: ["ask_followup_question"] },
     uncategorized: { tools: [] },
 }
@@ -95,7 +97,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 
 If the tool should bypass mode filtering entirely, add it to `ALWAYS_AVAILABLE_TOOLS` instead. Also add a display name in `TOOL_DISPLAY_NAMES`.
 
-> **This group assignment** is the **single source of truth** — it drives mode filtering, auto-approval classification, and the tools UI. See [`auto_approval.md`](auto_approval.md) for how the group maps to the auto-approval toggle (e.g., a tool in the `write` group is controlled by the "Write" toggle).
+> **TOOL_GROUPS drives mode filtering and the tools UI** — but it is _not_ the single source of truth for auto-approval. The `read`, `write`, `execute`, `browser`, and `questions` groups _are_ group-driven (via `getToolGroupForSayTool` in [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)), so adding a tool there is enough. The `subtasks`, `mode`, and `mcp` groups use **separate hardcoded camelCase allowlists** inside `checkAutoApproval()` in [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts) — a new tool in any of those three groups MUST also be added to the relevant list there, or it will fall through to the default "ask" branch and prompt the user even when the matching `alwaysAllow*` toggle is on. See Step 10 below.
 
 ## Step 4: Tool Handler
 
@@ -210,14 +212,27 @@ In [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParse
 
 ## Step 10: Auto-Approval
 
-For the ToolGroup-driven auto-approval system (see [`auto_approval.md`](auto_approval.md)):
+Auto-approval decisions happen in `checkAutoApproval()` in [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts), dispatched on the `ask` kind that the tool posts:
 
-- **If the tool belongs to an existing group** (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`): no code changes needed — it inherits the group's toggle automatically.
-- **If the tool should be unconditionally auto-approved**: add it to the appropriate list in `src/core/auto-approval/index.ts`.
-- **If the tool needs a new auto-approval toggle**: add the toggle following the pattern in [`auto_approval.md`](auto_approval.md).
+| Ask kind           | Used by                                                      | How the tool is matched                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"tool"`           | Most native tools (handler calls `askApproval("tool", …)`)   | `JSON.parse(text).tool` (camelCase, e.g. `"newTask"`) is matched against per-group branches. For `read`/`write`/`browser` the branch resolves the group via `getToolGroupForSayTool` ([`tools.ts`](../src/core/auto-approval/tools.ts)) — **purely group-driven**. For `subtasks`/`mode`/MCP-status tools the branch uses a **hardcoded camelCase allowlist** that must be edited directly. |
+| `"command"`        | `execute_command`                                            | Gated by `alwaysAllowExecute` + the allow/deny command lists.                                                                                                                                                                                                                                                                                                                               |
+| `"use_mcp_server"` | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async` | `JSON.parse(text).type` must be `"use_mcp_tool"` or `"access_mcp_resource"`; gated by `alwaysAllowMcp` (plus `alwaysAllowUncategorized` for tools not in a configured MCP server group).                                                                                                                                                                                                    |
+| `"followup"`       | `ask_followup_question`                                      | Gated by `alwaysAllowFollowupQuestions` + `followupAutoApproveTimeoutMs`.                                                                                                                                                                                                                                                                                                                   |
 
-The `alwaysAllow*` toggles in Settings → Auto-Approve map directly to ToolGroups:
-`read`→Read, `write`→Write, `execute`→Execute, `browser`→Browser, `mcp`→MCP, `mode`→Mode, `subtasks`→Subtasks, `questions`→Question, `uncategorized`→Uncategorized.
+**Decision matrix for a new tool:**
+
+- **`read` / `write` / `execute` / `browser` group, `ask:"tool"`** — no auto-approval code changes needed beyond Step 3. Make sure the camelCase → snake_case entry exists in `SAY_TOOL_TO_NATIVE_NAME` in [`tools.ts`](../src/core/auto-approval/tools.ts) so `getToolGroupForSayTool` can resolve the group.
+- **`subtasks` group, `ask:"tool"`** — add the camelCase name to the `["newTask", "finishTask", "cancelTasks", "answerSubtaskQuestion"]` allowlist (gated by `alwaysAllowSubtasks`) **or** to the unconditional `["waitForTask", "checkTaskStatus", "listBackgroundTasks"]` list if it is a purely informational query that mutates nothing.
+- **`mode` group, `ask:"tool"`** — add to the `switchMode` branch gated by `alwaysAllowModeSwitch`.
+- **MCP status/management tool with `ask:"tool"`** — add to the unconditional `["checkMcpCallStatus", "waitForMcpCall"]` list if purely informational.
+- **MCP invocation with `ask:"use_mcp_server"`** — the payload's `type` field MUST be `"use_mcp_tool"` or `"access_mcp_resource"`; any other value falls through to the default `ask` branch and the `alwaysAllowMcp` toggle will not apply. Pattern for async invocations: post `type: "use_mcp_tool"` plus an `async: true` flag (see [`CallMcpToolAsyncTool.ts`](../src/core/tools/CallMcpToolAsyncTool.ts)).
+- **Unconditionally auto-approved (no toggle)** — add the camelCase name to the appropriate "approve" list near the top of the `ask === "tool"` branch (e.g. alongside `updateTodoList`, `skills`, `fetchWebPage`, …).
+- **New toggle needed** — add a new `alwaysAllow*` setting following the pattern in [`auto_approval.md`](auto_approval.md), then add a new branch in `checkAutoApproval`.
+
+The `alwaysAllow*` toggles in Settings → Auto-Approve map by intent (not 1:1 to TOOL_GROUPS):
+`read`→Read, `write`→Write, `execute`→Execute, `browser`→Browser, `mcp`→MCP (gates both the `use_mcp_server` ask path and any MCP `ask:"tool"` calls), `subtasks`→Subtasks (covers `new_task` / `attempt_completion` / `cancel_tasks` / `answer_subtask_question`), `modeSwitch`→Mode, `followupQuestions`→Question, `uncategorized`→Uncategorized.
 
 ## Step 11: i18n
 
