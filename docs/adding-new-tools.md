@@ -1,4 +1,4 @@
-# Adding New Tools to Shofer
+# Adding New Tools to Shofer.
 
 ## Three Kinds of Tools
 
