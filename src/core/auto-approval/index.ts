@@ -190,7 +190,14 @@ export async function checkAutoApproval({
 			return state.alwaysAllowModeSwitch === true ? { decision: "approve" } : { decision: "ask" }
 		}
 
-		if (["newTask", "finishTask"].includes(tool?.tool)) {
+		// Subtasks-group tools that the parent task uses to control its background children.
+		// All gated by the single `alwaysAllowSubtasks` toggle:
+		//   - newTask / finishTask: spawn / complete a subtask
+		//   - cancelTasks:          stop one or more background children (destructive — in-flight work is lost)
+		//   - answerSubtaskQuestion: reply to a question a background child routed up to the parent
+		// (waitForTask / checkTaskStatus / listBackgroundTasks are purely informational and
+		// unconditionally approved further down — same UX as updateTodoList / skills.)
+		if (["newTask", "finishTask", "cancelTasks", "answerSubtaskQuestion"].includes(tool?.tool)) {
 			return state.alwaysAllowSubtasks === true ? { decision: "approve" } : { decision: "ask" }
 		}
 
