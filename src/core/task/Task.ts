@@ -295,6 +295,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	todoList?: TodoItem[]
 
+	/**
+	 * Per-task snapshot of the pending todo list approval. Used by
+	 * UpdateTodoListTool to detect user edits made in the webview
+	 * between the tool's ask and the approval response.
+	 *
+	 * Replaces the former module-level `approvedTodoList` global
+	 * that leaked between concurrent Task instances.
+	 */
+	pendingTodoApproval?: TodoItem[]
+
 	readonly rootTask: Task | undefined = undefined
 	readonly parentTask: Task | undefined = undefined
 	readonly taskNumber: number
@@ -944,6 +954,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Only set up listener if provider has the on method (may not exist in test mocks)
 		if (typeof provider.on !== "function") {
 			return
+		}
+
+		// Remove any previously registered listener to prevent duplicates
+		// (can happen if setup is called multiple times on the same Task instance).
+		if (this.providerProfileChangeListener) {
+			provider.off(ShoferEventName.ProviderProfileChanged, this.providerProfileChangeListener)
 		}
 
 		this.providerProfileChangeListener = async () => {

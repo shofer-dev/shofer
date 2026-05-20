@@ -75,7 +75,6 @@ import { getCommand } from "../../utils/commands"
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
-import { setPendingTodoList } from "../tools/UpdateTodoListTool"
 import { outputError, outputLog } from "../../utils/outputChannelLogger"
 import {
 	handleListWorktrees,
@@ -1965,10 +1964,16 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "updateTodoList": {
+			// Route the user-edited todo list to the current task's per-instance
+			// pending approval snapshot, scoping the edit to the correct task.
+			// Replaces the former module-level global `approvedTodoList`.
 			const payload = message.payload as { todos?: any[] }
 			const todos = payload?.todos
 			if (Array.isArray(todos)) {
-				await setPendingTodoList(todos)
+				const currentTask = provider.getCurrentTask()
+				if (currentTask) {
+					currentTask.pendingTodoApproval = todos as any
+				}
 			}
 			break
 		}
