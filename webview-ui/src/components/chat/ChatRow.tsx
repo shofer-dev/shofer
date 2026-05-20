@@ -621,38 +621,44 @@ export const ChatRowContent = ({
 				)
 			case "ragSearch": {
 				return (
-					<div style={headerStyle}>
-						{toolIcon("search")}
-						<span style={{ fontWeight: "bold" }}>
-							{tool.path ? (
-								<Trans
-									i18nKey="chat:ragSearch.wantsToSearchWithPath"
-									components={{ code: <code></code> }}
-									values={{ query: tool.query, path: tool.path }}
-								/>
-							) : (
-								<Trans
-									i18nKey="chat:ragSearch.wantsToSearch"
-									components={{ code: <code></code> }}
-									values={{ query: tool.query }}
-								/>
-							)}
-						</span>
-					</div>
+					<>
+						<div style={headerStyle}>
+							{toolIcon("search")}
+							<span style={{ fontWeight: "bold" }}>
+								{tool.path ? (
+									<Trans
+										i18nKey="chat:ragSearch.wantsToSearchWithPath"
+										components={{ code: <code></code> }}
+										values={{ query: tool.query, path: tool.path }}
+									/>
+								) : (
+									<Trans
+										i18nKey="chat:ragSearch.wantsToSearch"
+										components={{ code: <code></code> }}
+										values={{ query: tool.query }}
+									/>
+								)}
+							</span>
+						</div>
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
+					</>
 				)
 			}
 			case "gitSearch": {
 				return (
-					<div style={headerStyle}>
-						{toolIcon("search")}
-						<span style={{ fontWeight: "bold" }}>
-							<Trans
-								i18nKey="chat:gitSearch.wantsToSearch"
-								components={{ code: <code></code> }}
-								values={{ query: tool.query }}
-							/>
-						</span>
-					</div>
+					<>
+						<div style={headerStyle}>
+							{toolIcon("search")}
+							<span style={{ fontWeight: "bold" }}>
+								<Trans
+									i18nKey="chat:gitSearch.wantsToSearch"
+									components={{ code: <code></code> }}
+									values={{ query: tool.query }}
+								/>
+							</span>
+						</div>
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
+					</>
 				)
 			}
 			case "updateTodoList" as any: {
@@ -824,6 +830,7 @@ export const ChatRowContent = ({
 								onToggleExpand={handleToggleExpand}
 							/>
 						</div>
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
 					</>
 				)
 			case "listFilesRecursive":
@@ -850,6 +857,7 @@ export const ChatRowContent = ({
 								onToggleExpand={handleToggleExpand}
 							/>
 						</div>
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
 					</>
 				)
 			case "grepSearch":

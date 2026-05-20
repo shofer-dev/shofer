@@ -210,11 +210,20 @@ export async function presentAssistantMessage(shofer: Task) {
 
 				// Emit tool result to the webview so ChatRow can show an expandable
 				// output section beneath the MCP tool invocation block.
+				// Cap output at 32 KB to avoid bloating IPC messages and persisted
+				// ui_messages.json with multi-MB results.
+				const MAX_TOOL_RESULT = 32768
+				const mcpTruncatedOutput =
+					resultContent.length > MAX_TOOL_RESULT
+						? resultContent.substring(0, MAX_TOOL_RESULT) +
+							`\n\n[Output truncated: ${resultContent.length.toLocaleString()} chars total]`
+						: resultContent
+
 				shofer.say(
 					"tool_result",
 					JSON.stringify({
 						tool: `mcp__${mcpBlock.serverName}__${mcpBlock.toolName}`,
-						output: resultContent,
+						output: mcpTruncatedOutput,
 					} satisfies import("@shofer/types").ShoferSayToolResult),
 				)
 
@@ -597,11 +606,20 @@ export async function presentAssistantMessage(shofer: Task) {
 
 				// Emit tool result to the webview so ChatRow can show an expandable
 				// output section beneath the tool invocation block.
+				// Cap output at 32 KB to avoid bloating IPC messages and persisted
+				// ui_messages.json with multi-MB grep/file results.
+				const MAX_TOOL_RESULT = 32768
+				const truncatedOutput =
+					resultContent.length > MAX_TOOL_RESULT
+						? resultContent.substring(0, MAX_TOOL_RESULT) +
+							`\n\n[Output truncated: ${resultContent.length.toLocaleString()} chars total]`
+						: resultContent
+
 				shofer.say(
 					"tool_result",
 					JSON.stringify({
 						tool: block.name,
-						output: resultContent,
+						output: truncatedOutput,
 					} satisfies import("@shofer/types").ShoferSayToolResult),
 				)
 
