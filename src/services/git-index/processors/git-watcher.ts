@@ -4,6 +4,9 @@ import * as vscode from "vscode"
 import type { IGitWatcher, GitCommitBlock } from "../interfaces/git"
 import { GitLogExtractor } from "./git-log-extractor"
 import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
+import { logger } from "../../../utils/logging"
+
+const LOG_PREFIX = "[GitWatcher]"
 
 /**
  * Default polling interval in milliseconds (5 minutes).
@@ -108,10 +111,21 @@ export class GitWatcher implements IGitWatcher {
 
 	private async _pollTick(): Promise<void> {
 		const getter = this._getLastCommitDate
-		if (!getter) return
+		if (!getter) {
+			logger.warn(`${LOG_PREFIX} Poll tick skipped: no lastCommitDate getter available`, { ctx: "git-index" })
+			return
+		}
 
 		const sinceDate = getter()
-		if (!sinceDate) return
+		if (!sinceDate) {
+			logger.info(
+				`${LOG_PREFIX} Poll tick skipped: no lastCommitDate cached yet (initial index may still be running)`,
+				{
+					ctx: "git-index",
+				},
+			)
+			return
+		}
 
 		// Resolve branch on every tick so Settings → Save changes take effect
 		// without restarting the watcher.
@@ -127,27 +141,59 @@ export class GitWatcher implements IGitWatcher {
 				...submoduleDisplayPaths.map((p) => path.resolve(this.workspacePath, p)),
 			]
 
+			logger.info(
+				`${LOG_PREFIX} Polling ${repoPaths.length} repo(s) for commits since ${sinceDate}` +
+					(submoduleDisplayPaths.length > 0
+						? ` (${submoduleDisplayPaths.length} submodule(s): ${submoduleDisplayPaths.join(", ")})`
+						: ""),
+				{ ctx: "git-index" },
+			)
+
 			// Parent (idx 0) honours the configured branch; submodules always
 			// follow their own HEAD because the parent's branch name almost
 			// never exists in a submodule (which often has detached HEAD or a
 			// different default branch).
 			const perRepo = await Promise.all(
-				repoPaths.map((repo, idx) =>
-					this._logExtractor
-						.extractCommitsSince(repo, sinceDate, INCREMENTAL_MAX_COMMITS, idx === 0 ? branch : "")
-						.catch(() => [] as GitCommitBlock[]),
-				),
+				repoPaths.map(async (repo, idx) => {
+					try {
+						const commits = await this._logExtractor.extractCommitsSince(
+							repo,
+							sinceDate,
+							INCREMENTAL_MAX_COMMITS,
+							idx === 0 ? branch : "",
+						)
+						if (commits.length > 0) {
+							logger.info(
+								`${LOG_PREFIX} Found ${commits.length} new commit(s) in ${path.relative(this.workspacePath, repo) || "."}`,
+								{ ctx: "git-index" },
+							)
+						}
+						return commits
+					} catch (err) {
+						logger.warn(
+							`${LOG_PREFIX} Failed to extract commits from ${path.relative(this.workspacePath, repo) || "."}: ${err instanceof Error ? err.message : String(err)}`,
+							{ ctx: "git-index" },
+						)
+						return [] as GitCommitBlock[]
+					}
+				}),
 			)
 			const newCommits = perRepo.flat()
 
 			if (newCommits.length > 0) {
+				logger.info(`${LOG_PREFIX} Emitting ${newCommits.length} total new commit(s) from poll tick`, {
+					ctx: "git-index",
+				})
 				this._onNewCommits.fire(newCommits)
+			} else {
+				logger.info(`${LOG_PREFIX} Poll tick complete: no new commits found`, { ctx: "git-index" })
 			}
 		} catch (error) {
 			// Swallow — the polling loop must survive transient failures.
-			// Structured logging is deliberately omitted here to avoid
-			// coupling the git-index layer to TelemetryService. Errors
-			// during incremental indexing are non-critical.
+			logger.warn(
+				`${LOG_PREFIX} Poll tick failed (non-critical): ${error instanceof Error ? error.message : String(error)}`,
+				{ ctx: "git-index" },
+			)
 		}
 	}
 }
