@@ -100,8 +100,8 @@
 	"about": "Shofer, düzenleyicinizdeki bütün bir yapay zeka geliştirme ekibidir.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Bu çalışma alanındaki görev listeniz boş.",
 	"selectMode": "Etkileşim modunu seçin",

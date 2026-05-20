@@ -100,8 +100,8 @@
 	"about": "Shofer ist ein ganzes KI-Entwicklerteam in deinem Editor.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Deine Aufgabenliste in diesem Arbeitsbereich ist leer.",
 	"selectMode": "Interaktionsmodus auswählen",

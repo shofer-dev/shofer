@@ -100,8 +100,8 @@
 	"about": "Shofer आपके संपादक में एक पूरी AI देव टीम है।",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "इस कार्यक्षेत्र में आपकी कार्य सूची खाली है।",
 	"selectMode": "इंटरैक्शन मोड चुनें",

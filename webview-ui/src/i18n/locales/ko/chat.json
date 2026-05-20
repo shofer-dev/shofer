@@ -100,8 +100,8 @@
 	"about": "Shofer는 편집기 안에 있는 전체 AI 개발팀입니다.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "이 작업 공간의 작업 목록이 비어 있습니다.",
 	"selectMode": "상호작용 모드 선택",

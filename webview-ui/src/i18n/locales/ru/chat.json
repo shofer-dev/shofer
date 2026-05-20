@@ -100,8 +100,8 @@
 	"about": "Shofer — это целая команда разработчиков ИИ в вашем редакторе.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Ваш список задач в этом рабочем пространстве пуст.",
 	"selectMode": "Выберите режим взаимодействия",

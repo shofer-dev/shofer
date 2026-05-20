@@ -100,8 +100,8 @@
 	"about": "Shoferは、エディタに常駐するAI開発チームです。",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "このワークスペースのタスクリストは空です。",
 	"selectMode": "対話モードを選択",
