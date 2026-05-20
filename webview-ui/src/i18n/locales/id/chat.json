@@ -130,8 +130,8 @@
 	"about": "Shofer adalah seluruh tim pengembang AI di editor Anda.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Daftar tugas Anda di ruang kerja ini kosong.",
 	"selectMode": "Pilih mode untuk interaksi",

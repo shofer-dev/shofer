@@ -100,8 +100,8 @@
 	"about": "Shofer è un intero team di sviluppo AI nel tuo editor.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "La tua lista di attività in questo spazio di lavoro è vuota.",
 	"selectMode": "Seleziona modalità di interazione",

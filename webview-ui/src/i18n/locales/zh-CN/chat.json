@@ -100,8 +100,8 @@
 	"about": "Shofer 是您编辑器中的整个 AI 开发团队。",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code? — improvements & migration guide",
-		"copilot": "Coming from Copilot? — improvements & migration guide"
+		"roocode": "Coming from Roo-Code?",
+		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "此工作区中的任务列表为空。",
 	"selectMode": "选择交互模式",
