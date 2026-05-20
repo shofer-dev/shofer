@@ -1,0 +1,393 @@
+# Integration test scenarios: Shofer features for Roo-Code migrants
+#
+# Covers the 19 user-facing feature areas described in
+#   docs/shofer_for_roocode_users.md
+#
+# Each scenario is a self-contained sequence of steps that exercises one
+# feature or interaction.  Tests are ordered by architectural dependency —
+# the parallel-task foundations come first because everything else builds on
+# them.
+
+scenarios:
+
+  # ---------------------------------------------------------------------------
+  # §1  Parallel Task Architecture
+  # ---------------------------------------------------------------------------
+
+  - id: parallel-tasks-basic
+    description: >
+      Start a task, then start a second task without losing the first.
+      The first task continues in the background.
+    steps:
+      - Open Shofer sidebar.
+      - Send a message that triggers a long-running tool (e.g. "run sleep 30").
+      - While the first task is running, click the Plus (+) button in the title bar.
+      - Verify the new-task prompt appears and the first task remains visible in the TaskSelector.
+      - Send a simple query in the new task (e.g. "What is 2+2?").
+      - Switch back to the first task via the TaskSelector dropdown.
+      - Verify the first task's conversation, mode, and state are intact.
+
+  - id: task-state-indicators
+    description: >
+      Every task shows a colored state badge that updates in real time.
+    steps:
+      - Create a task that will error (e.g. ask for a non-existent file).
+      - Create a task that completes successfully.
+      - Create a task and pause it via the Stop button.
+      - In the TaskSelector, verify green pulse on running tasks, green checkmark
+        on completed, orange on paused, and red on errored.
+
+  - id: task-notifications
+    description: >
+      Background tasks that need approval or finish trigger webview notifications.
+    steps:
+      - Start a foreground task.
+      - Start a background task that calls `ask_followup_question`.
+      - While viewing the foreground task, wait for the background-task notification.
+      - Verify a notification banner appears.
+      - Click the notification and verify it switches to the background task.
+
+  - id: per-task-isolation
+    description: >
+      Mode, drafts, scroll position, and queued messages are scoped per task.
+    steps:
+      - In Task A: switch mode to Architect, type "draft for task A" in the input.
+      - Switch to Task B: verify mode is NOT Architect, input is empty.
+      - Type "draft for task B" in Task B.
+      - Switch back to Task A: verify mode is Architect, input shows "draft for task A".
+
+  # ---------------------------------------------------------------------------
+  # §2  Async / Background Tasks
+  # ---------------------------------------------------------------------------
+
+  - id: background-task-spawning
+    description: >
+      The LLM spawns a background child and the parent continues its own work.
+    steps:
+      - Send a message asking the LLM to spawn 2 background tasks:
+        1. "Write a haiku about programming"
+        2. "List the files in the current directory"
+      - While children run, send a follow-up question to the parent.
+      - Verify the parent responds without waiting for children.
+
+  - id: wait-for-task-all
+    description: >
+      Parent blocks on wait_for_task(all) until every child finishes.
+    steps:
+      - Send a message asking the LLM to spawn 2 background tasks and then
+        call wait_for_task with wait="all".
+      - Verify the parent does not respond until both children complete.
+      - Verify the final response includes results from both children.
+
+  - id: check-task-status
+    description: >
+      Parent polls a child's status via check_task_status.
+    steps:
+      - Start a long-running background child (sleep 10).
+      - Immediately ask the parent to call check_task_status.
+      - Verify the response shows the child is still running.
+      - Wait for completion and call check_task_status again.
+      - Verify the response shows the child completed.
+
+  - id: parent-cancel-propagates-to-children
+    description: >
+      Stopping a parent task cancels all its background children.
+    steps:
+      - Send a message spawning 2 background children doing sleep 30.
+      - Stop the parent task via the Stop button.
+      - Verify both children are canceled (no longer running in TaskSelector).
+
+  # ---------------------------------------------------------------------------
+  # §3  TaskSelector UX
+  # ---------------------------------------------------------------------------
+
+  - id: task-pin-and-archive
+    description: >
+      Tasks can be pinned to the top and archived.
+    steps:
+      - Create 3 tasks.
+      - Pin the oldest task.
+      - Verify it appears at the top of the TaskSelector list.
+      - Archive the newest task.
+      - Toggle the archive filter off — verify the archived task is hidden.
+      - Toggle the archive filter on — verify the archived task appears.
+
+  # ---------------------------------------------------------------------------
+  # §4  Message Queue & Send Now
+  # ---------------------------------------------------------------------------
+
+  - id: message-queue-while-busy
+    description: >
+      Typing while the LLM is streaming enqueues the message.
+    steps:
+      - Start a task with a message that triggers a long LLM response
+        (e.g. "Write a 500-word essay on the history of computing").
+      - While the response is streaming, type "Stop and tell me the time instead".
+      - Verify the QueuedMessages section appears with the new message.
+      - Click Send Now.
+      - Verify the current response stops and the task resumes with "Stop and tell me the time instead".
+
+  - id: per-task-drafts-persist
+    description: >
+      Unsent input is saved per task across switches.
+    steps:
+      - In Task A: type "unfinished message for A" without sending.
+      - Switch to Task B: verify input is empty.
+      - Switch back to Task A: verify "unfinished message for A" is restored.
+
+  # ---------------------------------------------------------------------------
+  # §5  Task Export
+  # ---------------------------------------------------------------------------
+
+  - id: export-markdown
+    description: >
+      A completed task can be exported as Markdown.
+    steps:
+      - Complete a task with at least one tool call and one reasoning block.
+      - Open TaskActions (⋮) menu and select "Export as Markdown".
+      - Verify a `.md` file is downloaded.
+      - Open the file: verify it contains the conversation text, tool calls,
+        tool results, and reasoning blocks in a readable format.
+
+  - id: export-json
+    description: >
+      A completed task can be exported as JSON.
+    steps:
+      - Export the same task as JSON.
+      - Verify a `.json` file is downloaded.
+      - Verify it contains `version`, `taskId`, `calls[]`, `totalTokens`,
+        `totalCostUsd`, and per-call `toolCalls[]` with `name`, `input`, `result`.
+
+  # ---------------------------------------------------------------------------
+  # §6  Drag & Drop
+  # ---------------------------------------------------------------------------
+
+  - id: drag-drop-files
+    description: >
+      Dragging files into the drop zone adds them as context tags.
+    steps:
+      - Drag a `.ts` file from the VS Code file explorer into the chat drop zone.
+      - Verify a removable tag appears above the chat input.
+      - Click the X on the tag — verify the tag is removed.
+      - Drag two files and send a message.
+      - Verify the message text includes `@mentions` for both files.
+
+  # ---------------------------------------------------------------------------
+  # §7  Native Tools (spot-check critical tools from the 17 listed)
+  # ---------------------------------------------------------------------------
+
+  - id: lsp-search-tool
+    description: >
+      lsp_search returns symbols via the language server.
+    steps:
+      - Send a message asking the LLM to use lsp_search for "handleUserLogin".
+      - Verify the tool call renders in chat with arguments.
+      - Verify the result includes symbol matches or a fallback text search.
+
+  - id: sed-tool-with-file-tracking
+    description: >
+      sed modifies files and appears in the File Changes panel.
+    steps:
+      - Create a temporary `.txt` file with known content.
+      - Ask the LLM to use `sed` to replace a word.
+      - Verify the File Changes panel shows the file with Accept/Revert buttons.
+
+  - id: file-tool-rm-mv
+    description: >
+      The file tool performs rm/mv with subcommand-specific approval labels.
+    steps:
+      - Create a temp file.
+      - Ask the LLM to rename it via `file mv`.
+      - Verify the approval prompt says "Move File".
+      - Approve and verify the file moved.
+
+  # ---------------------------------------------------------------------------
+  # §8  File Changes System
+  # ---------------------------------------------------------------------------
+
+  - id: accept-and-revert
+    description: >
+      Accept promotes changes; Revert restores originals.
+    steps:
+      - Ask the LLM to modify a tracked file.
+      - In the File Changes panel, click Accept on the file.
+      - Verify the file no longer shows in the panel.
+      - Modify it again; click Revert.
+      - Verify the file content is restored to the pre-modification state.
+
+  # ---------------------------------------------------------------------------
+  # §9  Auto-Approval & Tool Categories
+  # ---------------------------------------------------------------------------
+
+  - id: auto-approve-tool-category
+    description: >
+      Toggling a category auto-approves all tools in that group.
+    steps:
+      - Open AutoApproveDropdown.
+      - Toggle the "read" category ON.
+      - Send a message that triggers a read-only tool (e.g. list_files).
+      - Verify the tool executes without an approval prompt.
+      - Toggle "read" OFF and trigger list_files again.
+      - Verify the approval prompt appears.
+
+  # ---------------------------------------------------------------------------
+  # §10 Skills System
+  # ---------------------------------------------------------------------------
+
+  - id: skills-button-and-rehydration
+    description: >
+      Loaded skills persist across task switches.
+    steps:
+      - Load a skill via the Skills button or mention.
+      - Verify the SkillsButton shows the skill as loaded.
+      - Switch to another task and back.
+      - Verify the skill is still shown as loaded.
+
+  # ---------------------------------------------------------------------------
+  # §11 Modes & Tool Access
+  # ---------------------------------------------------------------------------
+
+  - id: mode-is-sticky-per-task
+    description: >
+      Each task remembers its mode across switches.
+    steps:
+      - Switch Task A to Debug mode.
+      - Switch to Task B (starts in Code mode).
+      - Verify Task B shows Code in ModeSelector.
+      - Switch back to Task A — verify Debug is selected.
+
+  # ---------------------------------------------------------------------------
+  # §12 External LM Tool Providers
+  # ---------------------------------------------------------------------------
+
+  - id: external-tool-renders-as-mcp-row
+    description: >
+      Tools from companion extensions render with the same UI as native tools.
+    steps:
+      - (Requires `arkware-vscode-tools` or `arkware-browser-tools` installed.)
+      - Send a message that triggers an external tool.
+      - Verify the chat row shows the tool name, arguments, and result
+        in the same style as MCP tool rows.
+
+  # ---------------------------------------------------------------------------
+  # §13 Native Worktree Support
+  # ---------------------------------------------------------------------------
+
+  - id: worktree-indicator-shows-branch
+    description: >
+      The WorktreeIndicator shows the current branch and git status.
+    steps:
+      - Open a workspace that is a git worktree.
+      - Verify the WorktreeIndicator chip shows the branch name.
+      - Verify it shows dirty/clean status.
+      - Click the chip and verify worktree management options appear.
+
+  # ---------------------------------------------------------------------------
+  # §14 Cancellation Flow
+  # ---------------------------------------------------------------------------
+
+  - id: stop-button-always-responsive
+    description: >
+      Stop works during streaming, reasoning, and tool execution.
+    steps:
+      - Start a task with a long LLM response.
+      - Click Stop while text is streaming — verify the stream stops immediately.
+      - Start a task that triggers a long-running tool (sleep 10).
+      - Click Stop during tool execution — verify the tool aborts.
+      - Verify the Stop button is never disabled or unresponsive.
+
+  # ---------------------------------------------------------------------------
+  # §15 Submodule & Nested Git Support
+  # ---------------------------------------------------------------------------
+
+  - id: checkpoints-with-submodules
+    description: >
+      Checkpoints function in repos with submodules.
+    steps:
+      - Open a workspace that contains git submodules.
+      - Make a file change.
+      - Verify checkpoints save and restore without "nested git" errors.
+
+  # ---------------------------------------------------------------------------
+  # §16 Cost Calculation & Limits
+  # ---------------------------------------------------------------------------
+
+  - id: cost-limit-pauses-task
+    description: >
+      Setting a cost limit pauses the task when exceeded.
+    steps:
+      - Set a very low cost limit ($0.01) via BudgetLimitDialog.
+      - Start a task that makes an API call.
+      - Verify the task pauses and a dialog asks whether to increase the limit.
+
+  - id: subtask-cost-aggregation
+    description: >
+      Parent task shows cumulative cost of all subtasks.
+    steps:
+      - Start a task that spawns 2 background children making API calls.
+      - Wait for all to complete.
+      - Verify the parent's TaskHeader shows a cost that is >= the sum of
+        the children's individual costs.
+
+  # ---------------------------------------------------------------------------
+  # §17 Cloud Removal
+  # ---------------------------------------------------------------------------
+
+  - id: fully-local-operation
+    description: >
+      Shofer operates without cloud dependencies (other than the LLM provider).
+    steps:
+      - Disconnect from the internet (except LLM API endpoint).
+      - Create and complete a task.
+      - Export the task.
+      - Verify all operations succeed without cloud errors.
+
+  # ---------------------------------------------------------------------------
+  # §18 Provider Improvements
+  # ---------------------------------------------------------------------------
+
+  - id: reasoning-blocks-collapsible
+    description: >
+      Models with reasoning capability show collapsible thinking blocks.
+    steps:
+      - Use a model that supports reasoning (e.g. deepseek-v4, claude+thinking).
+      - Send a complex question.
+      - Verify a collapsible ReasoningBlock appears in chat.
+      - Click to expand — verify reasoning content is visible.
+      - Click to collapse — verify it hides.
+
+  - id: tool-preparing-progress
+    description: >
+      An inline spinner appears while tool call arguments stream.
+    steps:
+      - Start a task that calls a tool with large arguments (e.g. apply_diff
+        on a large file).
+      - Verify a "Preparing <tool_name>…" row with spinner and byte count
+        appears BEFORE the tool approval prompt.
+
+  # ---------------------------------------------------------------------------
+  # §19 UI/UX Opinionated Changes
+  # ---------------------------------------------------------------------------
+
+  - id: default-mode-is-code
+    description: >
+      New tasks default to Code mode, not Architect.
+    steps:
+      - Start a new task without selecting a mode.
+      - Verify the ModeSelector shows Code (💻 Code).
+
+  - id: auto-approval-label-is-all
+    description: >
+      The auto-approval label is "All", not "BRRR".
+    steps:
+      - Open the AutoApproveDropdown.
+      - Verify the top-level label reads "All" (not "BRRR" or "YOLO").
+
+  - id: api-req-started-row-auto-hides
+    description: >
+      The API request row hides on success, persists on error.
+    steps:
+      - Start a task with a simple successful query.
+      - Verify no "API request started" row remains after the response.
+      - Send a query to a non-existent model (to trigger an error).
+      - Verify the "API request started" row persists with error details.

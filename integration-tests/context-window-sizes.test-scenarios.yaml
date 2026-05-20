@@ -1,0 +1,185 @@
+# Integration Test Scenarios — Context Window Size Resolution
+#
+# These scenarios exercise the end-to-end pipeline that delivers per-model
+# context window sizes from the Go backend (llm-router) through the
+# TypeScript provider layer to the React webview UI.
+#
+# Data flow paths tested:
+#   Path A: llm-router /v1/models → llm-provider → vscode-lm handler → webview
+#   Path B: Shofer Router → contextWindow on ModelInfo → webview
+#
+# See docs/contextlength.md for the full pipeline documentation.
+
+scenarios:
+
+  # ── Path A: Shofer Router (direct API) ────────────────────────────────
+
+  - name: "Shofer Router model reports correct context window from registry"
+    description: >
+      A model configured through the Shofer Router should report its
+      context window size from llm-router's ModelRegistry.ContextLength.
+    given:
+      api_config: shofer-router
+      model: deepseek/deepseek-v4-pro
+    test:
+      - assert: model_info.contextWindow
+        equals: 1000000
+        # from llm-router/internal/types/model_registry.go:218 — ContextLength: 1000000
+
+  - name: "Shofer Router model with small context window"
+    description: >
+      Models with smaller context windows (e.g., 32K) should report
+      accurately; the UI should not fall back to a larger default.
+    given:
+      api_config: shofer-router
+      model: openai/gpt-3.5-turbo
+    test:
+      - assert: model_info.contextWindow
+        equals: 16385
+
+  - name: "Shofer Router unknown model falls back to 128K"
+    description: >
+      When a model is not in the registry, the UI should use the
+      openAiModelInfoSaneDefaults.contextWindow of 128_000.
+      This tests the fallback path in useSelectedModel.ts.
+    given:
+      api_config: shofer-router
+      model: some-provider/unknown-model
+    test:
+      - assert: model_info.contextWindow
+        equals: 128000
+
+  # ── Path B: VSCode LM API ────────────────────────────────────────────
+
+  - name: "VSCode LM model receives context window from llm-provider enrichment"
+    description: >
+      VS Code LM models should get their context window from
+      llm-provider's createModelInfo() which uses clientModelInfo.contextLength.
+      The 128K fallback should NOT be used for known models.
+    given:
+      api_config: vscode-lm
+      model: copilot/gpt-4o
+      # llm-provider returns context_length from llm-router /v1/models
+    test:
+      - assert: model_info.contextWindow
+        not_equals: 128000
+        # The old bug caused all vscode-lm models to show 128K
+      - assert: model_info.contextWindow
+        greater_than: 0
+
+  - name: "VSCode LM model with missing context_length falls back to 4096"
+    description: >
+      In createModelInfo() (language-model-provider.ts:976), the expression
+      `clientModelInfo.contextLength ?? 4096` means a missing/null
+      context_length defaults to 4096, NOT 128_000.
+    given:
+      api_config: vscode-lm
+      model: copilot/model-without-context-length
+      mock_llm_provider_context_length: null
+    test:
+      - assert: model_info.contextWindow
+        equals: 4096
+        # NOT 128_000 (only openAiModelInfoSaneDefaults should yield 128K)
+
+  - name: "VSCode LM model receives side-channel capabilities and pricing"
+    description: >
+      The VsCodeLmChatInfo interface carries shoferCapabilities and
+      shoferPricing alongside maxInputTokens. All three must be populated
+      when the model is known to llm-router.
+    given:
+      api_config: vscode-lm
+      model: copilot/claude-sonnet-4
+    test:
+      - assert: vs_code_lm_chat_info.maxInputTokens
+        greater_than: 0
+      - assert: vs_code_lm_chat_info.shoferCapabilities
+        not_null: true
+      - assert: vs_code_lm_chat_info.shoferPricing
+        not_null: true
+
+  # ── UI: Context Window Bar ───────────────────────────────────────────
+
+  - name: "ContextWindowProgress bar reflects correct max for selected model"
+    description: >
+      When a model is selected, the ContextWindowProgress bar in TaskHeader
+      should show that model's context window as the max (right endpoint).
+    given:
+      selected_model: deepseek/deepseek-v4-pro
+      context_window: 1000000
+      tokens_used: 150000
+    test:
+      - assert: context_window_bar.max_tokens
+        equals: 1000000
+      - assert: context_window_bar.used_tokens
+        equals: 150000
+      - assert: context_window_bar.fill_percent
+        equals: 15
+
+  - name: "ContextWindowProgress bar updates when model is switched"
+    description: >
+      Switching from a 200K model to a 32K model should immediately update
+      the bar's max endpoint.
+    given:
+      initial_model_context_window: 200000
+      tokens_used: 50000
+    action:
+      switch_model_to_context_window: 32000
+    test:
+      - assert: context_window_bar.max_tokens
+        equals: 32000
+      - assert: context_window_bar.fill_percent
+        equals: 156
+        # 50K tokens exceeds 32K max → overfull bar
+
+  # ── IPC: requestVsCodeLmModels ──────────────────────────────────────
+
+  - name: "requestVsCodeLmModels handler returns enriched model list"
+    description: >
+      The webviewMessageHandler case for 'requestVsCodeLmModels' should
+      return an array of VsCodeLmChatInfo objects, each with maxInputTokens,
+      shoferCapabilities, and shoferPricing populated.
+    given:
+      ipc_message_type: requestVsCodeLmModels
+    test:
+      - assert: response_type
+        equals: vsCodeLmModels
+      - assert: response.payload
+        is_array: true
+      - assert: response.payload[0].maxInputTokens
+        greater_than: 0
+      - assert: response.payload[0].shoferCapabilities
+        not_null: true
+      - assert: response.payload[0].shoferPricing
+        not_null: true
+
+  # ── Fallback & Edge Cases ────────────────────────────────────────────
+
+  - name: "Empty vsCodeLmModels state provides graceful fallback"
+    description: >
+      If the vsCodeLmModels array is empty (not yet populated), the
+      model selector should fall back to the static map or sane defaults
+      without crashing.
+    given:
+      vs_code_lm_models: []
+      model: copilot/unknown-model
+    test:
+      - assert: model_info.contextWindow
+        is_defined: true
+      - assert: model_info.contextWindow
+        greater_than: 0
+      # Should not throw, blank screen, or NaN
+
+  - name: "Model without contextWindow in ModelInfo still renders bar"
+    description: >
+      A ModelInfo object with contextWindow: undefined should not crash
+      the ContextWindowProgress component. The bar should show 0 or a
+      disabled state.
+    given:
+      model_info:
+        contextWindow: null
+    test:
+      - assert: context_window_bar.visible
+        equals: true
+      - assert: context_window_bar.max_tokens
+        is_defined: true
+      # Should not throw or render NaN

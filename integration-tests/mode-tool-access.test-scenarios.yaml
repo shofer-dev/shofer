@@ -1,0 +1,269 @@
+# Integration Test Scenarios — Mode Tool Access Control
+#
+# These scenarios exercise the full tool-access decision pipeline:
+#   .shofermodes → CustomModesManager → getToolsForMode →
+#   filterNativeToolsForMode / filterMcpToolsForMode / filterPrivateToolsForMode →
+#   isToolAllowedForMode → validateToolUse
+#
+# Each scenario specifies a mode configuration (groups, tools_allowed,
+# tools_denied) and the expected allow/deny outcome for key tools.
+
+scenarios:
+  # ── Basic groups ────────────────────────────────────────────────────────
+
+  - name: "groups-only: read group grants read_file"
+    mode:
+      groups: [read]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: write_to_file
+        expect: denied
+
+  - name: "groups-only: write group does not grant execute_command"
+    mode:
+      groups: [write]
+    test:
+      - tool: apply_diff
+        expect: allowed
+      - tool: execute_command
+        expect: denied
+
+  - name: "groups-only: code mode (all groups) allows every tool"
+    mode:
+      groups: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: write_to_file
+        expect: allowed
+      - tool: execute_command
+        expect: allowed
+      - tool: new_task
+        expect: allowed
+      - tool: switch_mode
+        expect: allowed
+
+  # ── tools_allowed only (no groups) ──────────────────────────────────────
+
+  - name: "tools_allowed-only: grants listed tools"
+    mode:
+      tools_allowed: [read_file, grep_search]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: grep_search
+        expect: allowed
+      - tool: list_files
+        expect: denied
+
+  - name: "tools_allowed-only: mode without groups is valid"
+    mode:
+      tools_allowed: [read_file]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: ask_followup_question
+        expect: allowed  # always-available tool
+
+  # ── groups + tools_allowed (OR semantics) ───────────────────────────────
+
+  - name: "OR: tool from tools_allowed allowed even when group differs"
+    mode:
+      groups: [read]
+      tools_allowed: [new_task]
+    test:
+      - tool: read_file
+        expect: allowed   # via groups
+      - tool: new_task
+        expect: allowed   # via tools_allowed (subtasks group not in groups)
+      - tool: execute_command
+        expect: denied    # neither source grants it
+
+  # ── tools_denied (hard veto) ────────────────────────────────────────────
+
+  - name: "deny: blocks tool even when group grants it"
+    mode:
+      groups: [read, write, execute]
+      tools_denied: [execute_command]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: write_to_file
+        expect: allowed
+      - tool: execute_command
+        expect: denied
+
+  - name: "deny wins over tools_allowed"
+    mode:
+      tools_allowed: [read_file, execute_command]
+      tools_denied: [execute_command]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: execute_command
+        expect: denied   # tools_denied overrides tools_allowed
+
+  - name: "deny alone without allow-source is rejected at schema level"
+    mode:
+      tools_denied: [execute_command]
+    validation:
+      expect: error
+      message_contains: "Either 'groups' or 'tools_allowed' must be provided"
+
+  # ── Scoped groups ────────────────────────────────────────────────────────
+
+  - name: "scoped allowed: only listed tools granted from that group"
+    mode:
+      groups:
+        - read:
+            allowed: [read_file]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: grep_search
+        expect: denied   # read group grants it but scope excludes it
+
+  - name: "scoped denied: removes tools from group's normal set"
+    mode:
+      groups:
+        - read:
+            denied: [grep_search]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: grep_search
+        expect: denied
+
+  # ── fileRegex on write group ────────────────────────────────────────────
+
+  - name: "fileRegex: write to matching file allowed"
+    mode:
+      groups:
+        - - write
+          - fileRegex: "\\.md$"
+      toolParams:
+        path: "docs/README.md"
+    test:
+      - tool: write_to_file
+        expect: allowed
+      - tool: apply_diff
+        expect: allowed
+
+  - name: "fileRegex: write to non-matching file throws FileRestrictionError"
+    mode:
+      groups:
+        - - write
+          - fileRegex: "\\.md$"
+      toolParams:
+        path: "src/index.ts"
+    test:
+      - tool: write_to_file
+        expect: file_restriction_error  # throws, not just denied
+
+  # ── Always-available tools ──────────────────────────────────────────────
+
+  - name: "always-available: attempt_completion works regardless of groups"
+    mode:
+      groups: []
+      tools_allowed: [read_file]
+    test:
+      - tool: attempt_completion
+        expect: allowed
+      - tool: update_todo_list
+        expect: allowed
+      - tool: give_feedback
+        expect: allowed
+      - tool: set_task_title
+        expect: allowed
+
+  - name: "always-available: can still be blocked via disabledTools setting"
+    mode:
+      groups: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
+      toolRequirements:
+        attempt_completion: false
+    test:
+      - tool: attempt_completion
+        expect: denied
+
+  # ── Dynamic MCP tools ───────────────────────────────────────────────────
+
+  - name: "dynamic MCP: mcp_* tools allowed when mcp group present"
+    mode:
+      groups: [read, mcp]
+    test:
+      - tool: "mcp_context7_resolve-library-id"
+        expect: allowed
+      - tool: "mcp_serverName_toolName"
+        expect: allowed
+
+  - name: "dynamic MCP: mcp_* tools denied when mcp group absent"
+    mode:
+      groups: [read, write]
+    test:
+      - tool: "mcp_context7_resolve-library-id"
+        expect: denied
+      - tool: "mcp_serverName_toolName"
+        expect: denied
+
+  # ── Custom mode overrides built-in ──────────────────────────────────────
+
+  - name: "custom overrides built-in: restricted code mode"
+    mode:
+      slug: code  # overrides built-in code mode
+      groups: [read]
+    test:
+      - tool: read_file
+        expect: allowed
+      - tool: write_to_file
+        expect: denied
+      - tool: execute_command
+        expect: denied
+
+  # ── Unknown / invalid tool ──────────────────────────────────────────────
+
+  - name: "unknown tool name throws descriptive error"
+    mode:
+      groups: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
+    test:
+      - tool: unknown_tool
+        expect: error
+        error_contains: "Unknown tool"
+
+  # ── Deprecated group name auto-translation ──────────────────────────────
+
+  - name: "old group name 'edit' auto-maps to 'write'"
+    mode:
+      groups: [edit]
+    test:
+      - tool: apply_diff
+        expect: allowed      # belongs to write group
+      - tool: write_to_file
+        expect: allowed
+
+  - name: "old group name 'command' auto-maps to 'execute'"
+    mode:
+      groups: [command]
+    test:
+      - tool: execute_command
+        expect: allowed      # belongs to execute group
+      - tool: sleep
+        expect: allowed
+
+  # ── System prompt tool listing ──────────────────────────────────────────
+
+  - name: "filterNativeToolsForMode only returns allowed tools"
+    mode:
+      groups: [read]
+    test:
+      - assert: "system prompt tool list contains read_file"
+        expect: true
+      - assert: "system prompt tool list does NOT contain write_to_file"
+        expect: true
+
+  - name: "filterMcpToolsForMode hides MCP tools when mcp group absent"
+    mode:
+      groups: [read]
+    test:
+      - assert: "MCP tool list returned to system prompt is empty"
+        expect: true
