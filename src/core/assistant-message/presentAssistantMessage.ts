@@ -614,6 +614,7 @@ export async function presentAssistantMessage(shofer: Task) {
 				// section adds noise without value.
 				const TOOLS_WITH_INLINE_RESULT = new Set([
 					"attempt_completion",
+					"execute_command",
 					"update_todo_list",
 					"set_task_title",
 					"give_feedback",
