@@ -284,9 +284,6 @@ export async function summarizeConversation(options: SummarizeConversationOption
 			messages.length <= 1
 				? t("common:errors.condense_not_enough_messages")
 				: t("common:errors.condensed_recently")
-		outputLog(
-			`[CONTEXT-DIAG] summarizeConversation BAIL — messagesToSummarize=${messagesToSummarize.length}, totalMessages=${messages.length}, reason="${error}"`,
-		)
 		return { ...response, error }
 	}
 
@@ -295,9 +292,6 @@ export async function summarizeConversation(options: SummarizeConversationOption
 
 	if (recentSummaryExists && messagesToSummarize.length <= 2) {
 		const error = t("common:errors.condensed_recently")
-		outputLog(
-			`[CONTEXT-DIAG] summarizeConversation BAIL — recentSummaryExists, messagesToSummarize=${messagesToSummarize.length}`,
-		)
 		return { ...response, error }
 	}
 
