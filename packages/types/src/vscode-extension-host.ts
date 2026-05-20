@@ -1099,6 +1099,18 @@ export interface ShoferSayTool {
 	costUSD?: number
 }
 
+/**
+ * Payload for `say: "tool_result"` messages. Emitted after every tool execution so
+ * the ChatRow can show the raw tool output in an expandable section beneath the
+ * tool invocation block.
+ */
+export interface ShoferSayToolResult {
+	/** The canonical tool name that produced this result (e.g. "read_file", "grep_search"). */
+	tool: string
+	/** The raw result text returned by the tool execution. */
+	output: string
+}
+
 export interface ShoferAskUseMcpServer {
 	serverName: string
 	type: "use_mcp_tool" | "access_mcp_resource"

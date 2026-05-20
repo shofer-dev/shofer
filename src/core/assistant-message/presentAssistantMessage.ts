@@ -208,6 +208,16 @@ export async function presentAssistantMessage(shofer: Task) {
 					}
 				}
 
+				// Emit tool result to the webview so ChatRow can show an expandable
+				// output section beneath the MCP tool invocation block.
+				shofer.say(
+					"tool_result",
+					JSON.stringify({
+						tool: `mcp__${mcpBlock.serverName}__${mcpBlock.toolName}`,
+						output: resultContent,
+					} satisfies import("@shofer/types").ShoferSayToolResult),
+				)
+
 				hasToolResult = true
 			}
 
@@ -584,6 +594,16 @@ export async function presentAssistantMessage(shofer: Task) {
 				if (imageBlocks.length > 0) {
 					shofer.userMessageContent.push(...imageBlocks)
 				}
+
+				// Emit tool result to the webview so ChatRow can show an expandable
+				// output section beneath the tool invocation block.
+				shofer.say(
+					"tool_result",
+					JSON.stringify({
+						tool: block.name,
+						output: resultContent,
+					} satisfies import("@shofer/types").ShoferSayToolResult),
+				)
 
 				hasToolResult = true
 			}
