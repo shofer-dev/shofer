@@ -189,6 +189,11 @@ export class ShoferProvider
 		_mdmService?: any,
 	) {
 		super()
+
+		// Allow many parallel tasks to each register their own ProviderProfileChanged
+		// listener without Node.js emitting MaxListenersExceededWarning.
+		this.setMaxListeners(100)
+
 		this.currentWorkspacePath = getWorkspacePath()
 
 		ShoferProvider.activeInstances.add(this)
