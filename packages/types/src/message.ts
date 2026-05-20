@@ -215,6 +215,7 @@ export const shoferSays = [
 	"too_many_tools_warning",
 	"tool",
 	"tool_preparing",
+	"tool_result",
 ] as const
 
 export const shoferSaySchema = z.enum(shoferSays)

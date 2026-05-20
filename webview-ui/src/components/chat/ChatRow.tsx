@@ -46,6 +46,7 @@ import { Markdown } from "./Markdown"
 import { CommandExecution } from "./CommandExecution"
 import { CommandExecutionError } from "./CommandExecutionError"
 import { AutoApprovedRequestLimitWarning } from "./AutoApprovedRequestLimitWarning"
+import { ToolInputSection, ToolOutputSection } from "./ToolInputOutput"
 import { InProgressRow, CondensationResultRow, CondensationErrorRow, TruncationResultRow } from "./context-management"
 import RagSearchResultsDisplay from "./RagSearchResultsDisplay"
 import { appendImages } from "@src/utils/imageUtils"
@@ -511,6 +512,11 @@ export const ChatRowContent = ({
 		}
 		return null
 	}, [message.type, message.ask, message.partial, message.text])
+	const [showToolInput, setShowToolInput] = useState(false)
+
+	const handleToggleToolInput = useCallback(() => {
+		setShowToolInput((prev) => !prev)
+	}, [])
 
 	if (tool) {
 		switch (tool.tool as string) {
@@ -572,6 +578,7 @@ export const ChatRowContent = ({
 								diffStats={tool.diffStats}
 							/>
 						</div>
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
 					</>
 				)
 			case "insertContent":
@@ -721,6 +728,7 @@ export const ChatRowContent = ({
 								</ToolUseBlockHeader>
 							</ToolUseBlock>
 						</div>
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
 					</>
 				)
 			case "skills": {
@@ -882,6 +890,7 @@ export const ChatRowContent = ({
 								onToggleExpand={handleToggleExpand}
 							/>
 						</div>
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
 					</>
 				)
 			case "askAssistantAgent": {
@@ -1280,7 +1289,12 @@ export const ChatRowContent = ({
 				// even if no tool-specific renderer exists yet. This prevents the silent
 				// `return null` UX where users see no indication that a tool was invoked
 				// (or, worse, an invisible approval prompt blocking the conversation).
-				return renderGenericToolBlock(tool, message.type === "ask", headerStyle, t)
+				return (
+					<>
+						{renderGenericToolBlock(tool, message.type === "ask", headerStyle, t)}
+						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
+					</>
+				)
 		}
 	}
 
@@ -1799,6 +1813,12 @@ export const ChatRowContent = ({
 							</div>
 						</div>
 					)
+				case "tool_result": {
+					// Render raw tool output in an expandable section beneath the tool invocation.
+					const resultInfo = safeJsonParse<import("@shofer/types").ShoferSayToolResult>(message.text || "{}")
+					if (!resultInfo) return null
+					return <ToolOutputSection tool={resultInfo.tool} output={resultInfo.output} />
+				}
 				case "user_edit_todos":
 					return <UpdateTodoListToolBlock userEdited onChange={() => {}} />
 				case "tool" as any:
@@ -1874,6 +1894,11 @@ export const ChatRowContent = ({
 											</ToolUseBlockHeader>
 										</ToolUseBlock>
 									</div>
+									<ToolInputSection
+										tool={sayTool}
+										isExpanded={showToolInput}
+										onToggle={handleToggleToolInput}
+									/>
 								</>
 							)
 						}
@@ -1909,21 +1934,37 @@ export const ChatRowContent = ({
 							}
 
 							return (
-								<div style={headerStyle}>
-									<FileCode2 className="w-4 shrink-0" aria-label="Read command output icon" />
-									<span style={{ fontWeight: "bold" }}>{t("chat:readCommandOutput.title")}</span>
-									{infoText && (
-										<span
-											className="text-xs ml-1"
-											style={{ color: "var(--vscode-descriptionForeground)" }}>
-											({infoText})
-										</span>
-									)}
-								</div>
+								<>
+									<div style={headerStyle}>
+										<FileCode2 className="w-4 shrink-0" aria-label="Read command output icon" />
+										<span style={{ fontWeight: "bold" }}>{t("chat:readCommandOutput.title")}</span>
+										{infoText && (
+											<span
+												className="text-xs ml-1"
+												style={{ color: "var(--vscode-descriptionForeground)" }}>
+												({infoText})
+											</span>
+										)}
+									</div>
+									<ToolInputSection
+										tool={sayTool}
+										isExpanded={showToolInput}
+										onToggle={handleToggleToolInput}
+									/>
+								</>
 							)
 						}
 						default:
-							return renderGenericToolBlock(sayTool, false, headerStyle, t)
+							return (
+								<>
+									{renderGenericToolBlock(sayTool, false, headerStyle, t)}
+									<ToolInputSection
+										tool={sayTool}
+										isExpanded={showToolInput}
+										onToggle={handleToggleToolInput}
+									/>
+								</>
+							)
 					}
 				case "image":
 					// Parse the JSON to get imageUri and imagePath
