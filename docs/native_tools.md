@@ -146,6 +146,7 @@ Creates a new workspace/project directory structure with optional subdirectories
 | `list_code_usages`    | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                       |
 | `rag_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)             |
 | `lsp_search`          | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback                  |
+| `git_search`          | 🟣 AW  | read  |        –         |   ✅   | Search git history (commit messages + diffs)           |
 | `ask_assistant_agent` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent assistant agent a codebase question |
 
 ### `grep_search`
@@ -191,6 +192,15 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 | Param        | Type           | Required | Description                         |
 | ------------ | -------------- | :------: | ----------------------------------- |
 | `query`      | string         |    ✅    | Symbol name or text to search for   |
+| `maxResults` | number \| null |    ✅    | Max results to return (default: 20) |
+
+### `git_search`
+
+Searches the workspace git history for commit messages and patches matching a query. Returns a list of matching commits with author, date, subject, and a snippet of the diff.
+
+| Param        | Type           | Required | Description                         |
+| ------------ | -------------- | :------: | ----------------------------------- |
+| `query`      | string         |    ✅    | Text to search for in git history   |
 | `maxResults` | number \| null |    ✅    | Max results to return (default: 20) |
 
 ### `rag_search`
@@ -289,6 +299,7 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 | --------------------- | :----: | ------- | :--------------: | :----: | -------------------------------------- |
 | `execute_command`     | 🔵 RC  | execute |        –         |   ✅   | Execute a CLI command                  |
 | `read_command_output` | 🔵 RC  | execute |        –         |   ✅   | Get full output of a truncated command |
+| `sleep`               | 🟣 AW  | execute |        –         |   ✅   | Pause execution for N seconds          |
 | `fetch_web_page`      | 🆕 WS  | read    |        –         |   ✅   | Fetch and extract web page content     |
 
 ### `execute_command`
@@ -317,23 +328,33 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 | `urls`  | string[]       |    ✅    | URLs to fetch                      |
 | `query` | string \| null |    ✅    | Filter query for extracted content |
 
+### `sleep`
+
+Pauses agent execution for the given number of seconds. Useful for polling external resources where a small back-off is needed between checks.
+
+| Param     | Type   | Required | Description                  |
+| --------- | ------ | :------: | ---------------------------- |
+| `seconds` | number |    ✅    | How long to wait, in seconds |
+
 ---
 
 ## Task & Workflow Management
 
-| Tool                    | Origin | Group | Always Available | Status | Description                                                 |
-| ----------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------------------- |
-| `ask_followup_question` | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question                                     |
-| `attempt_completion`    | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                      |
-| `switch_mode`           | 🔵 RC  | mode  |        ✅        |   ✅   | Switch to a different mode                                  |
-| `new_task`              | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                       |
-| `check_task_status`     | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task              |
-| `wait_for_task`         | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any) |
-| `list_background_tasks` | 🟣 AW  | –     |        ✅        |   ✅   | List all background child tasks started by this task        |
-| `update_todo_list`      | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                        |
-| `skill`                 | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
-| `set_task_title`        | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
-| `give_feedback`         | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                  |
+| Tool                      | Origin | Group | Always Available | Status | Description                                                 |
+| ------------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------------------- |
+| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question                                     |
+| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                      |
+| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch to a different mode                                  |
+| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                       |
+| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task              |
+| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any) |
+| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks           |
+| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task          |
+| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List all background child tasks started by this task        |
+| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                        |
+| `skill`                   | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
+| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
+| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                  |
 
 ### `new_task`
 
@@ -353,11 +374,12 @@ Create a new task instance in the chosen mode. Supports two execution models:
 
 ### `check_task_status`
 
-Check the current status of a background child task started with `new_task` using `is_background=true`. Returns the task's status and, if it has completed or errored, its result or error message.
+Check the current status of a background child task started with `new_task` using `is_background=true`. Returns the task's status and, if it has completed/errored/cancelled, its result or error message. If the child is blocked waiting for clarification from the parent (it called `ask_followup_question`), the pending question is surfaced here so the parent can answer it via `answer_subtask_question`. Set `include_activity` to `true` to also see what the child is currently doing.
 
-| Param     | Type   | Required | Description                                           |
-| --------- | ------ | :------: | ----------------------------------------------------- |
-| `task_id` | string |    ✅    | The task ID returned when the background task started |
+| Param              | Type            | Required | Description                                                                    |
+| ------------------ | --------------- | :------: | ------------------------------------------------------------------------------ |
+| `task_id`          | string          |    ✅    | The task ID returned when the background task started                          |
+| `include_activity` | boolean \| null |    ✅    | When `true`, include the child's most recent tool calls and messages in output |
 
 ### `wait_for_task`
 
@@ -370,6 +392,23 @@ Block until one or more background child tasks (started with `is_background=true
 | `timeout`  | number             |    –     | Max seconds to wait (default: 120). Returns current statuses if exceeded.    |
 
 Returns: the completed task IDs plus per-task status and result/error text.
+
+### `cancel_tasks`
+
+Stop one or more background child tasks. Already-completed or errored tasks are unaffected. Use this to terminate redundant parallel work — e.g. when one search subtask found the answer and the others are no longer needed. Requires user approval (cancellation is destructive: the child's in-flight work is lost).
+
+| Param      | Type     | Required | Description                                             |
+| ---------- | -------- | :------: | ------------------------------------------------------- |
+| `task_ids` | string[] |    ✅    | One or more task IDs of background child tasks to stop. |
+
+### `answer_subtask_question`
+
+Answer a question that a background child task asked via `ask_followup_question`. When a background child needs clarification, its question is routed to the parent (not to the user). The parent uses this tool to provide the answer and unblock the child.
+
+| Param     | Type   | Required | Description                                                                         |
+| --------- | ------ | :------: | ----------------------------------------------------------------------------------- |
+| `task_id` | string |    ✅    | The task ID of the background child that asked the question.                        |
+| `answer`  | string |    ✅    | The parent's answer. Be specific and actionable so the child can continue its work. |
 
 ### `list_background_tasks`
 
@@ -437,10 +476,42 @@ Load and execute a skill by name. Skills provide specialized instructions for co
 
 ## MCP (Model Context Protocol)
 
-| Tool                  | Origin | Group | Always Available | Status | Description                                     |
-| --------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------- |
-| `use_mcp_tool`        | 🔵 RC  | mcp   |        –         |   ✅   | Call an MCP server tool                         |
-| `access_mcp_resource` | 🔵 RC  | mcp   |        –         |   🔒   | Access an MCP resource (requires MCP resources) |
+| Tool                    | Origin | Group | Always Available | Status | Description                                                                 |
+| ----------------------- | :----: | ----- | :--------------: | :----: | --------------------------------------------------------------------------- |
+| `use_mcp_tool`          | 🔵 RC  | mcp   |        –         |   ✅   | Call an MCP server tool synchronously                                       |
+| `access_mcp_resource`   | 🔵 RC  | mcp   |        –         |   🔒   | Access an MCP resource (requires MCP resources)                             |
+| `call_mcp_tool_async`   | 🟣 AW  | mcp   |        –         |   ✅   | Call an MCP server tool asynchronously (fire-and-forget, returns `call_id`) |
+| `check_mcp_call_status` | 🟣 AW  | mcp   |        –         |   ✅   | Poll the status/result of an async MCP call by `call_id`                    |
+| `wait_for_mcp_call`     | 🟣 AW  | mcp   |        –         |   ✅   | Block until one or more async MCP calls complete (all/any)                  |
+
+### `call_mcp_tool_async`
+
+Call an MCP server tool asynchronously. Returns immediately with a `call_id`; use `check_mcp_call_status` to poll or `wait_for_mcp_call` to block. Prefer this over `use_mcp_tool` for long-running calls or when fanning out multiple independent MCP calls in parallel.
+
+| Param         | Type                            | Required | Description                                                                         |
+| ------------- | ------------------------------- | :------: | ----------------------------------------------------------------------------------- |
+| `server_name` | string                          |    ✅    | The name of the MCP server providing the tool                                       |
+| `tool_name`   | string                          |    ✅    | The name of the tool to execute on the MCP server                                   |
+| `arguments`   | object \| null                  |    ✅    | JSON object with the tool's input parameters; `null` if the tool takes no arguments |
+| `source`      | `"global" \| "project" \| null` |    ✅    | Disambiguator when multiple servers share a name. `null` = default resolution       |
+
+### `check_mcp_call_status`
+
+Check the current status of an asynchronous MCP call started via `call_mcp_tool_async`. Returns the call's status and, if it has completed/errored, its result or error.
+
+| Param     | Type   | Required | Description                                          |
+| --------- | ------ | :------: | ---------------------------------------------------- |
+| `call_id` | string |    ✅    | The call ID returned when the async MCP call started |
+
+### `wait_for_mcp_call`
+
+Block until one or more async MCP calls (started with `call_mcp_tool_async`) reach a terminal state, then return their results. Event-driven — does not poll. Supports `wait=all` (default) to wait for every listed call, or `wait=any` to return as soon as the first one completes.
+
+| Param      | Type             | Required | Description                                                                  |
+| ---------- | ---------------- | :------: | ---------------------------------------------------------------------------- |
+| `call_ids` | string[]         |    ✅    | One or more call IDs returned when the async MCP calls were started          |
+| `wait`     | `"all" \| "any"` |    –     | `"all"` (default) — wait for all calls; `"any"` — return on first completion |
+| `timeout`  | number           |    –     | Max seconds to wait (default: 120). Returns current statuses if exceeded.    |
 
 ---
 
@@ -471,51 +542,58 @@ These are alternative edit tool implementations selectable per-model. They map t
 
 Checkmark (✓) means the tool is available in that mode by default.
 
-| Tool                     | 🏗️ Architect | 💻 Code | ❓ Ask | 🪲 Debug | Always |
-| ------------------------ | :----------: | :-----: | :----: | :------: | :----: |
-| **Read group**           |
-| `read_file`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `grep_search`            |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `find_files`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `read_project_structure` |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `view_image`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_code_usages`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_errors`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_project_setup_info` |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_changed_files`      |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `rag_search`             |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| `lsp_search`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `fetch_web_page`         |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `ask_assistant_agent`    |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| **Write group**          |
-| `apply_diff`             |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `write_to_file`          |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `insert_edit`            |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `rename_symbol`          |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `create_directory`       |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `create_new_workspace`   |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `sed`                    |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `generate_image`         |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
-| **Execute group**        |
-| `execute_command`        |              |    ✓    |        |    ✓     |        |
-| `read_command_output`    |              |    ✓    |        |    ✓     |        |
-| **MCP group**            |
-| `use_mcp_tool`           |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `access_mcp_resource`    |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| **Always available**     |
-| `ask_followup_question`  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `attempt_completion`     |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `switch_mode`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `new_task`               |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `update_todo_list`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `check_task_status`      |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `wait_for_task`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `list_background_tasks`  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `skill`                  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `set_task_title`         |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `give_feedback`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `run_slash_command`      |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
+| Tool                      | 🏗️ Architect | 💻 Code | ❓ Ask | 🪲 Debug | Always |
+| ------------------------- | :----------: | :-----: | :----: | :------: | :----: |
+| **Read group**            |
+| `read_file`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `grep_search`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `list_files`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `find_files`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `read_project_structure`  |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `view_image`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `list_code_usages`        |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_errors`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_project_setup_info`  |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `get_changed_files`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `rag_search`              |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
+| `lsp_search`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `git_search`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `fetch_web_page`          |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `ask_assistant_agent`     |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| **Write group**           |
+| `apply_diff`              |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `write_to_file`           |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `insert_edit`             |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `rename_symbol`           |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `create_directory`        |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `create_new_workspace`    |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `sed`                     |    ✓ (md)    |    ✓    |        |    ✓     |        |
+| `generate_image`          |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
+| **Execute group**         |
+| `execute_command`         |              |    ✓    |        |    ✓     |        |
+| `read_command_output`     |              |    ✓    |        |    ✓     |        |
+| `sleep`                   |              |    ✓    |        |    ✓     |        |
+| **MCP group**             |
+| `use_mcp_tool`            |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `access_mcp_resource`     |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
+| `call_mcp_tool_async`     |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `check_mcp_call_status`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| `wait_for_mcp_call`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
+| **Always available**      |
+| `ask_followup_question`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `attempt_completion`      |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `switch_mode`             |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `new_task`                |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `update_todo_list`        |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `check_task_status`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `wait_for_task`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `cancel_tasks`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `answer_subtask_question` |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `list_background_tasks`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `skill`                   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `set_task_title`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `give_feedback`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `run_slash_command`       |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
 
 **Notes:**
 
