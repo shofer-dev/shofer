@@ -663,6 +663,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private _cachedTokenUsage: import("@shofer/types").TokenUsage | undefined
 	private _tokenBearingMessageCount = -1
 
+	// Performance instrumentation — saveShoferMessages latency tracking.
+	// Holds a rolling window of the most recent save durations (ms) for
+	// periodic p50/p95 reporting.  DEBUG-gated; no runtime cost in release.
+	private _savePerfCount = 0
+	private readonly _savePerfRecentMs: number[] = []
+	private static readonly _savePerfWindow = 50
+
 	// Initial execution state for the task's history item (set at creation time to avoid race conditions)
 	private readonly initialState?: TaskState
 
@@ -1495,7 +1502,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const provider = this.providerRef.deref()
 		// Avoid resending large, mostly-static fields (notably taskHistory) on every chat message update.
 		// taskHistory is maintained in-memory in the webview and updated via taskHistoryItemUpdated.
-		await provider?.postStateToWebviewWithoutTaskHistory()
+		// H9: Only push state when this task is focused.  Background tasks accumulate
+		// messages in-memory (still persisted to disk); the webview picks them up
+		// via the full postStateToWebview on focusTask() swap (ShoferProvider.ts:4245).
+		if (provider && provider.taskManager?.getFocusedTaskId() === this.taskId) {
+			await provider.postStateToWebviewWithoutTaskHistory()
+		}
 		this.emit(ShoferEventName.Message, { action: "created", message })
 		await this._debouncedSaveShoferMessages()
 	}
@@ -1526,6 +1538,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async saveShoferMessages(): Promise<boolean> {
+		const saveT0 = Date.now()
+		this._savePerfCount++
 		try {
 			// H6: Capture a synchronous snapshot of the messages BEFORE yielding
 			// to the event loop. `JSON.stringify` is single-tick and produces a
@@ -1586,6 +1600,30 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 
 			await this.providerRef.deref()?.updateTaskHistory(historyItem)
+
+			if (process.env.DEBUG) {
+				const durationMs = Date.now() - saveT0
+				// Ring buffer for periodic percentile reporting
+				if (this._savePerfRecentMs.length >= Task._savePerfWindow) {
+					this._savePerfRecentMs.shift()
+				}
+				this._savePerfRecentMs.push(durationMs)
+
+				const byteSize = Buffer.byteLength(serialized, "utf8")
+				let summary = ""
+				if (this._savePerfCount % Task._savePerfWindow === 0 && this._savePerfRecentMs.length > 0) {
+					const sorted = [...this._savePerfRecentMs].sort((a, b) => a - b)
+					const p50 = sorted[Math.floor(sorted.length * 0.5)]
+					const p95 = sorted[Math.floor(sorted.length * 0.95)]
+					summary = ` p50=${p50}ms p95=${p95}ms`
+				}
+				outputLog(
+					`[saveMsgs] task=${this.taskId} count=${this._savePerfCount} ` +
+						`dur=${durationMs}ms size=${byteSize} ` +
+						`msgs=${this.shoferMessages.length}${summary}`,
+				)
+			}
+
 			return true
 		} catch (error) {
 			outputError("Failed to save Shofer messages:", error)
@@ -3697,7 +3735,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Must flush synchronously — the API call that follows reads
 			// on-disk state and depends on this save being visible.
 			await this._flushSaveShoferMessages()
-			await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+			// H9: Only push state when this task is focused (see addToShoferMessages).
+			if (this.providerRef.deref()?.taskManager?.getFocusedTaskId() === this.taskId) {
+				await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+			}
 
 			try {
 				let cacheWriteTokens = 0
@@ -4519,7 +4560,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 
 				await this._debouncedSaveShoferMessages()
-				await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+				// H9: Only push state when this task is focused (see addToShoferMessages).
+				if (this.providerRef.deref()?.taskManager?.getFocusedTaskId() === this.taskId) {
+					await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+				}
 
 				// No legacy text-stream tool parser state to reset.
 
