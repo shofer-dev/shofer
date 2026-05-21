@@ -644,6 +644,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private readonly TOKEN_USAGE_EMIT_INTERVAL_MS = 2000 // 2 seconds
 	private debouncedEmitTokenUsage: ReturnType<typeof debounce>
 
+	// Save Debouncing — reduces write amplification during streaming.
+	// During an agent turn, saveShoferMessages can fire hundreds of times
+	// (once per streamed chunk). A short trailing-only debounce collapses
+	// a burst of streaming updates into a single write, dramatically
+	// reducing the fsync+rename rate. Flush at turn boundaries (ask/say
+	// completion, abort) guarantees persistence at every observable
+	// checkpoint.
+	private static readonly SAVE_DEBOUNCE_INTERVAL_MS = 250
+	private _debouncedSaveShoferMessages: ReturnType<typeof debounce>
+
+	// H2.bis — Incremental token-usage caching.
+	// tokenMetadata() re-walks the entire message array on every save to
+	// recompute token usage.  Most saves happen during streaming where only
+	// api_req_started / condense_context messages carry token data.  Track
+	// the count of those messages and reuse the cached TokenUsage when
+	// unchanged — avoids an O(n) walk per save.
+	private _cachedTokenUsage: import("@shofer/types").TokenUsage | undefined
+	private _tokenBearingMessageCount = -1
+
 	// Initial execution state for the task's history item (set at creation time to avoid race conditions)
 	private readonly initialState?: TaskState
 
@@ -838,6 +857,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			},
 			this.TOKEN_USAGE_EMIT_INTERVAL_MS,
 			{ leading: true, trailing: true, maxWait: this.TOKEN_USAGE_EMIT_INTERVAL_MS },
+		)
+
+		// Initialize debounced save function.
+		// Trailing-only debounce with a short interval: bursts of streaming
+		// updates collapse to a single write.  The maxWait (4× the interval)
+		// guarantees forward progress even under continuous streaming load.
+		//
+		// NOTE: this is fire-and-forget — await is a no-op on the leading
+		// edge because lodash.debounce returns the previous invocation's
+		// result, not the pending one.  Callers that genuinely need
+		// fsync-completion must use _flushSaveShoferMessages().
+		this._debouncedSaveShoferMessages = debounce(
+			() => {
+				void this.saveShoferMessages()
+			},
+			Task.SAVE_DEBOUNCE_INTERVAL_MS,
+			{ leading: false, trailing: true, maxWait: Task.SAVE_DEBOUNCE_INTERVAL_MS * 4 },
 		)
 
 		onCreated?.(this)
@@ -1461,11 +1497,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// taskHistory is maintained in-memory in the webview and updated via taskHistoryItemUpdated.
 		await provider?.postStateToWebviewWithoutTaskHistory()
 		this.emit(ShoferEventName.Message, { action: "created", message })
-		await this.saveShoferMessages()
+		await this._debouncedSaveShoferMessages()
 	}
 
 	public async overwriteShoferMessages(newMessages: ShoferMessage[]) {
 		this.shoferMessages = newMessages
+		// H2.bis: Invalidate the token-usage cache since the entire
+		// message array has been replaced (preload / restore path).
+		this._cachedTokenUsage = undefined
+		this._tokenBearingMessageCount = -1
+		this._debouncedSaveShoferMessages.cancel() // prevent trailing fire of stale state
 		restoreTodoListForTask(this)
 		await this.saveShoferMessages()
 	}
@@ -1506,6 +1547,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await this.taskApiConfigReady
 			}
 
+			// H2.bis: Skip the O(n) token-usage walk when no token-bearing
+			// messages (api_req_started, condense_context) have been added
+			// since the last computation.  Pass the cached TokenUsage via
+			// tokenUsageOverride so taskMetadata reuses it.
+			const tokenBearingCount = this._countTokenBearingMessages()
+			const useCachedTokenUsage =
+				this._cachedTokenUsage !== undefined && tokenBearingCount === this._tokenBearingMessageCount
+
 			const { historyItem, tokenUsage } = await taskMetadata({
 				taskId: this.taskId,
 				rootTaskId: this.rootTaskId,
@@ -1513,20 +1562,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskNumber: this.taskNumber,
 				messages: this.shoferMessages,
 				globalStoragePath: this.globalStoragePath,
-				// Use workspacePath (the VS Code workspace root) so all tasks
-				// within the same workspace — including embedded worktree tasks —
-				// share the same workspace identifier for history filtering.
 				workspace: this.workspacePath,
-				// Persist the per-task cwd (e.g., worktree subdirectory) for
-				// correct rehydration when resuming from history.
 				cwd: this._cwd !== this.workspacePath ? this._cwd : undefined,
-				mode: this._taskMode || defaultModeSlug, // Use the task's own mode, not the current provider mode.
-				apiConfigName: this._taskApiConfigName, // Use the task's own provider profile, not the current provider profile.
+				mode: this._taskMode || defaultModeSlug,
+				apiConfigName: this._taskApiConfigName,
 				initialState: this.initialState,
 				isBackground: this.isBackground,
 				costLimit: this.costLimit,
 				loadedSkills: this.loadedSkills.size > 0 ? Array.from(this.loadedSkills.keys()) : undefined,
+				...(useCachedTokenUsage ? { tokenUsageOverride: this._cachedTokenUsage } : {}),
 			})
+
+			if (!useCachedTokenUsage) {
+				this._cachedTokenUsage = tokenUsage
+				this._tokenBearingMessageCount = tokenBearingCount
+			}
 
 			// Emit token/tool usage updates using debounced function
 			// The debounce with maxWait ensures:
@@ -1541,6 +1591,38 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			outputError("Failed to save Shofer messages:", error)
 			return false
 		}
+	}
+
+	/**
+	 * Count messages that carry token-usage data.
+	 * Used by the H2.bis token-usage cache to detect when a recomputation
+	 * is actually needed vs. when the cached value is still valid.
+	 */
+	private _countTokenBearingMessages(): number {
+		let count = 0
+		for (const m of this.shoferMessages) {
+			if (
+				(m.type === "say" && m.say === "api_req_started" && m.text) ||
+				(m.type === "say" && m.say === "condense_context")
+			) {
+				count++
+			}
+		}
+		return count
+	}
+
+	/**
+	 * Cancel any pending debounced save and persist immediately.
+	 *
+	 * Called at turn boundaries (ask/say completion, abort, dispose) to
+	 * guarantee that persisted state matches in-memory state at every
+	 * observable checkpoint, regardless of the debounce window.
+	 *
+	 * Idempotent: safe to call even when no debounced save is pending.
+	 */
+	private async _flushSaveShoferMessages(): Promise<void> {
+		this._debouncedSaveShoferMessages.cancel()
+		await this.saveShoferMessages()
 	}
 
 	private findMessageByTimestamp(ts: number): ShoferMessage | undefined {
@@ -1631,6 +1713,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					lastMessage.partial = false
 					lastMessage.progressStatus = progressStatus
 					lastMessage.isProtected = isProtected
+					this._debouncedSaveShoferMessages.cancel()
 					await this.saveShoferMessages()
 					this.updateShoferMessage(lastMessage)
 				} else {
@@ -1725,6 +1808,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				if (approval.decision === "approve" && askMessage.type === "ask" && askMessage.ask === "tool") {
 					askMessage.isAnswered = true
 				}
+				this._debouncedSaveShoferMessages.cancel()
 				await this.saveShoferMessages()
 				this.updateShoferMessage(askMessage)
 			}
@@ -2283,6 +2367,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 					// Instead of streaming partialMessage events, we do a save
 					// and post like normal to persist to disk.
+					this._debouncedSaveShoferMessages.cancel()
 					await this.saveShoferMessages()
 
 					// More performant than an entire `postStateToWebview`.
@@ -3005,7 +3090,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Save the countdown message in the automatic retry or other content.
 		try {
 			// Save the countdown message in the automatic retry or other content.
-			await this.saveShoferMessages()
+			await this._flushSaveShoferMessages()
 		} catch (error) {
 			outputError(`Error saving messages during abort for task ${this.taskId}.${this.instanceId}:`, error)
 		}
@@ -3245,6 +3330,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	public dispose(): void {
 		outputLog(`[Task#dispose] disposing task ${this.taskId}.${this.instanceId}`)
+
+		// Drain any pending debounced save before tearing down listeners, so
+		// the trailing fire cannot execute against a half-disposed instance.
+		// Best-effort: dispose is sync, so we cancel the pending fire and
+		// kick off a final save without awaiting — abortTask already
+		// guarantees synchronous persistence on the abort path.
+		try {
+			this._debouncedSaveShoferMessages.cancel()
+			void this.saveShoferMessages()
+		} catch (error) {
+			outputError("Error draining debounced save during dispose:", error)
+		}
 
 		// Cancel any in-progress HTTP request
 		try {
@@ -3597,7 +3694,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				retryAttempt: currentItem.retryAttempt ?? 0,
 			} satisfies ShoferApiReqInfo)
 
-			await this.saveShoferMessages()
+			// Must flush synchronously — the API call that follows reads
+			// on-disk state and depends on this save being visible.
+			await this._flushSaveShoferMessages()
 			await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 
 			try {
@@ -3675,7 +3774,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Update `api_req_started` to have cancelled and cost, so that
 					// we can display the cost of the partial stream and the cancellation reason
 					updateApiReqMsg(cancelReason, streamingFailedMessage)
-					await this.saveShoferMessages()
+					// In-place mutation of api_req_started invalidates the H2.bis
+					// token-usage cache (count unchanged; cancellation cost did change).
+					this._cachedTokenUsage = undefined
+					// Must flush synchronously — abortTask depends on the saved
+					// messages being visible on disk.
+					await this._flushSaveShoferMessages()
 
 					// Signals to provider that it can retrieve the saved messages
 					// from disk, as abortTask can not be awaited on in nature.
@@ -4098,7 +4202,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 								// Update the API request message with the latest usage data
 								updateApiReqMsg()
-								await this.saveShoferMessages()
+								// In-place mutation invalidates the H2.bis
+								// token-usage cache (count unchanged; values
+								// inside the message did change).
+								this._cachedTokenUsage = undefined
+								await this._debouncedSaveShoferMessages()
 
 								// Update the specific message in the webview
 								const apiReqMessage = this.shoferMessages[messageIndex]
@@ -4410,7 +4518,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					}
 				}
 
-				await this.saveShoferMessages()
+				await this._debouncedSaveShoferMessages()
 				await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
 
 				// No legacy text-stream tool parser state to reset.

@@ -1,6 +1,6 @@
 # Shofer User Manual
 
-Welcome to Shofer — the parallel-first AI coding assistant for VS Code. This manual covers every feature, setting, and concept you'll encounter while using Shofer.
+Welcome to Shofer. This manual covers every feature, setting, and concept you'll encounter while using Shofer.
 
 ---
 
@@ -102,7 +102,7 @@ The conversation appears as a scrollable list of messages. Each message is rende
 
 ### Modes
 
-The **Mode** determines what Shofer is allowed to do and how it behaves. You select a mode via the **Mode Selector** in the Chat Input Bar.
+The **Mode** determines what Shofer is allowed to do and how it behaves. You select a mode via the **Mode Selector** in the Chat Input Bar. Shofer ships with five built-in modes:
 
 | Mode             | Icon | Best For                                                         |
 | ---------------- | ---- | ---------------------------------------------------------------- |
@@ -110,13 +110,9 @@ The **Mode** determines what Shofer is allowed to do and how it behaves. You sel
 | **Architect**    | 🏗️   | Planning and designing before writing any code.                  |
 | **Ask**          | ❓   | Getting explanations, answers, or recommendations.               |
 | **Debug**        | 🪲   | Troubleshooting errors and diagnosing root causes.               |
-| **Reviewer**     | 👀   | Reviewing code for issues without making changes.                |
-| **Search**       | 🔎   | Searching the codebase for specific information.                 |
-| **Opinion**      | 💭   | Getting an expert opinion on technology choices or architecture. |
-| **Browser**      | 🌐   | Web browsing, research, and data extraction.                     |
 | **Orchestrator** | 🪃   | Coordinating complex multi-step work by delegating to sub-tasks. |
 
-Custom modes can be created via [`.shofermodes` files](#31-special-files).
+You can add any number of custom modes via [`.shofermodes` files](#31-special-files). Common examples include a read-only **Reviewer**, a fast **Search** agent, an **Opinion** advisor, or a **Browser** mode for web interaction.
 
 <!-- XXX: Screenshot of the Mode Selector dropdown showing all modes with their icons. -->
 
@@ -3843,7 +3839,7 @@ Skills provide domain-specific instructions to the LLM. Access them via the **Sk
 
 ### Modes & Tool Access
 
-<!-- XXX screenshot: ModeSelector dropdown showing all 9 modes (Code, Architect, Ask, Debug, Reviewer, Search, Opinion, Browser, Orchestrator) with Code selected -->
+<!-- XXX screenshot: ModeSelector dropdown showing all 5 built-in modes (Code, Architect, Ask, Debug, Orchestrator) plus any custom modes, with Code selected -->
 
 Choose a mode from the **ModeSelector** dropdown in the chat input bar. Each mode controls which tool groups are available and the LLM's role definition.
 

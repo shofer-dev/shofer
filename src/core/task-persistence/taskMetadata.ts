@@ -34,6 +34,9 @@ export type TaskMetadataOptions = {
 	costLimit?: import("@shofer/types").CostLimit
 	/** Names of skills loaded via skills for this task. */
 	loadedSkills?: string[]
+	/** Pre-computed token usage, bypassing the O(n) message walk.
+	 *  Caller guarantees the value is accurate for the given messages. */
+	tokenUsageOverride?: import("@shofer/types").TokenUsage
 }
 
 export async function taskMetadata({
@@ -51,6 +54,7 @@ export async function taskMetadata({
 	isBackground,
 	costLimit,
 	loadedSkills,
+	tokenUsageOverride,
 }: TaskMetadataOptions) {
 	const taskDir = await getTaskDirectoryPath(globalStoragePath, id)
 
@@ -90,7 +94,7 @@ export async function taskMetadata({
 
 		timestamp = lastRelevantMessage.ts
 
-		tokenUsage = getApiMetrics(combineApiRequests(combineCommandSequences(messages.slice(1))))
+		tokenUsage = tokenUsageOverride ?? getApiMetrics(combineApiRequests(combineCommandSequences(messages.slice(1))))
 
 		// Get task directory size
 		const cachedSize = taskSizeCache.get<number>(taskDir)
