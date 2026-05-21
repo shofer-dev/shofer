@@ -1,10 +1,10 @@
 import type OpenAI from "openai"
 
-const SED_DESCRIPTION = `Request to perform regex find-and-replace on a workspace file, similar to \`sed 's/pattern/replacement/g'\`.
+const SED_DESCRIPTION = `Request to perform regex find-and-replace on a workspace file, similar to \`sed 's/pattern/replacement/g'\`. If the regex produces zero matches and the pattern contains regex metacharacters (* . + ? etc.), the tool automatically retries with all metacharacters escaped as a literal string — so you can write patterns like "**Bold text**" without escaping.
 
 Parameters:
 - path: (required) The path of the file to modify, relative to the workspace
-- pattern: (required) The regex pattern to search for (JavaScript RegExp syntax)
+- pattern: (required) The regex pattern to search for (JavaScript RegExp syntax). If it contains special characters and produces zero matches as a regex, the tool falls back to a literal search automatically.
 - replacement: (required) The replacement string. Supports capture group backreferences ($1, $2, etc.)
 - global: (optional) Whether to replace all occurrences (default: true)
 
@@ -18,7 +18,7 @@ Example: Single (non-global) replacement
 { "path": "src/app.ts", "pattern": "TODO", "replacement": "DONE", "global": false }`
 
 const PATH_PARAMETER_DESCRIPTION = `The path of the file to modify, relative to the workspace`
-const PATTERN_PARAMETER_DESCRIPTION = `The regex pattern to search for (JavaScript RegExp syntax)`
+const PATTERN_PARAMETER_DESCRIPTION = `The regex pattern to search for (JavaScript RegExp syntax). If it contains special characters (* . + ? etc.) and produces zero matches as a regex, the tool automatically falls back to a literal search.`
 const REPLACEMENT_PARAMETER_DESCRIPTION = `The replacement string. Supports capture group backreferences ($1, $2, etc.)`
 const GLOBAL_PARAMETER_DESCRIPTION = `Whether to replace all occurrences (default: true)`
 
