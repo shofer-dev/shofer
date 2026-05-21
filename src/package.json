@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer-dev",
-	"version": "0.22.26",
+	"version": "0.22.27",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
