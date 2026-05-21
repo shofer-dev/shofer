@@ -2,18 +2,27 @@
 
 ## Overview
 
-Shofer stores configuration across **three distinct categories**, each with its own storage backend, merge strategy, and scope. This document explains all storage layers, how they merge at runtime, and the import/export mechanics.
+Shofer stores configuration across **four backends**, with a planned
+consolidation to reduce complexity (see [`todos/config-cleanup.md`](../../todos/config-cleanup.md)).
+This document explains all storage layers, how they merge at runtime, and
+the import/export mechanics.
 
 ---
 
 ## Config Types at a Glance
 
-| Category                 | Backend                                                            | Scope                        | Merge Priority                                  |
-| ------------------------ | ------------------------------------------------------------------ | ---------------------------- | ----------------------------------------------- |
-| **API Provider Configs** | VS Code `SecretStorage` + `globalState`                            | Per-extension (machine-wide) | Profile IDs resolve per-mode                    |
-| **Mode Definitions**     | `.shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | `.shofermodes` > `custom_modes.yaml` > built-in |
-| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                    | Per-extension (machine-wide) | Single file; no overlay                         |
-| **Global Settings**      | VS Code `globalState` (SQLite-backed)                              | Per-extension (machine-wide) | Flat key-value; no overlay                      |
+| Category                 | Backend                                                                   | Scope                        | Count         | Merge Priority                                  |
+| ------------------------ | ------------------------------------------------------------------------- | ---------------------------- | ------------- | ----------------------------------------------- |
+| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 18            | —                                               |
+| **API Provider Configs** | VS Code `SecretStorage` (profiles blob + individual keys) + `globalState` | Per-extension (machine-wide) | ~30 + 31 keys | Profile IDs resolve per-mode                    |
+| **Mode Definitions**     | `.shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS)        | Per-project + per-extension  | —             | `.shofermodes` > `custom_modes.yaml` > built-in |
+| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                           | Per-extension (machine-wide) | —             | Single file; no overlay                         |
+| **Global Settings**      | VS Code `globalState` (SQLite-backed)                                     | Per-extension (machine-wide) | ~96           | Flat key-value; no overlay                      |
+
+> **Planned simplification:** 14 of the 18 VS Code config keys are portable to
+> `globalState` (the other 4 are dead code or bootstrapping-only). The 31 individual
+> `SecretStorage` API keys duplicate the profiles blob and can be eliminated. See
+> [`todos/config-cleanup.md`](../../todos/config-cleanup.md) for the full plan.
 
 ---
 
@@ -275,9 +284,15 @@ The file is watched for changes via `chokidar` at
 [`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:558). On any change,
 servers are re-read and connections re-established.
 
-> **Note:** There is no project-level MCP config file. All MCP servers are defined in
-> this single global file. The file name constant is defined in
+> **Note:** Project-level MCP servers can be defined in `.shofer/mcp.json`
+> (see §7 for the project file watcher). The global file constant is defined in
 > [`GlobalFileNames.mcpSettings`](../src/shared/globalFileNames.ts:4).
+>
+> **Planned VS Code compatibility:** Shofer uses its own MCP config files and does not
+> yet read VS Code's `.vscode/mcp.json` or user-level MCP config. Servers configured
+> for Copilot/VS Code's LM must be manually re-entered in Shofer. See
+> [`todos/vscode-mcp-compatibility.md`](../../todos/vscode-mcp-compatibility.md) for
+> the auto-discovery plan.
 
 ### 3b. MCP Tool Visibility
 
@@ -1161,3 +1176,128 @@ which joins the workspace root with the `SHOFERMODES_FILENAME` constant.
 The filename constant is not separately documented; the watcher code in
 §7 constructs `shofermodesPath` via `path.join(workspaceRoot, SHOFERMODES_FILENAME)`,
 not a hard-coded string.
+
+### 14j. VS Code Settings Editor Only Exposes a Small Minority of Settings — and Cannot Replace the Webview
+
+[`configuration.md`](configuration.md:3) opens with "Complete reference for
+all `shofer.*` VS Code settings." This creates the false impression that most
+Shofer settings live in — or could be moved into — the VS Code Settings
+editor. In reality only **18 of ~140+ settings** appear there, and the rich
+Shofer webview Settings UI cannot be replaced by `package.json`
+`contributes.configuration.properties` for fundamental expressivity reasons.
+
+#### Current distribution
+
+| Backend                                | Count | Visible in VS Code Settings Editor? |
+| -------------------------------------- | ----- | ----------------------------------- |
+| `contributes.configuration.properties` | 18    | ✅ Yes                              |
+| `globalSettingsSchema` (`globalState`) | ~96   | ❌ No                               |
+| `ProviderSettings` (`globalState`)     | ~30   | ❌ No                               |
+| `SecretStorage` (API keys)             | 30+   | ❌ No                               |
+
+#### Feasibility of porting all settings to VS Code configuration
+
+VS Code `contributes.configuration.properties` supports only the JSON Schema
+subset: `string` (with `enum`/`pattern`/`multilineText`), `number`/`integer`
+(with `minimum`/`maximum`), `boolean`, `object` (with `properties`/`required`),
+and `array` (with `items`/`minItems`/`maxItems`). It renders as a flat list
+of standard form controls — text fields, number inputs, checkboxes,
+dropdowns, and basic object/array editors. There are **no extension points**
+for custom widgets, dynamic data fetching, or interactive layouts.
+
+The 19 Shofer settings tabs break down as follows:
+
+| Tab                    | Complexity | Portable to VS Code config?                                                                                                                                                                                             |
+| ---------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Providers**          | Extreme    | ❌ **Impossible** — profile CRUD (create/rename/delete), provider-conditional forms (30+ providers × different fields), dynamic model picker (fetched from API), password toggles, token sliders, rate-limit dashboards |
+| **Modes**              | Extreme    | ❌ **Impossible** — full mode editor (slug, role, groups with checkboxes, custom instructions per mode), per-mode import/export, built-in vs custom distinction, delete confirmation                                    |
+| **MCP**                | Extreme    | ❌ **Impossible** — server CRUD (transport command/args/env), tool/resource trees with collapsible rows, connection status badges, real-time error states                                                               |
+| **Skills**             | Extreme    | ❌ **Impossible** — create/rename/delete skills, each with name, description, instructions, and mode assignment                                                                                                         |
+| **Slash Commands**     | Extreme    | ❌ **Impossible** — create/edit/delete commands, each with name, description, body, and mode binding                                                                                                                    |
+| **Worktrees**          | Extreme    | ❌ **Impossible** — create/list/delete worktrees with status display and branch selection                                                                                                                               |
+| **Tools**              | High       | ⚠️ **Degraded** — array of tool names editable but loses group headers, always-available badges, per-tool descriptions, tooltip docs, and MCP tool rows                                                                 |
+| **Auto-Approve**       | Medium     | ⚠️ **Degraded** — boolean toggles map directly, but loses slider controls (followup timeout), command-list editors (allowedCommands), and inter-field layout grouping                                                   |
+| **Context Management** | Medium     | ⚠️ **Degraded** — booleans and numbers map, but loses sliders, rich descriptions, and collapsible sections                                                                                                              |
+| **Prompts**            | Medium     | ⚠️ **Degraded** — multiline text works, but per-mode prompt sections, collapsible groups, and markdown preview are lost                                                                                                 |
+| **Experimental**       | Low        | ⚠️ **Degraded** — feature toggle checkboxes work but lose per-feature descriptions and inline docs                                                                                                                      |
+| **Terminal**           | Low        | ✅ Mostly portable — toggles (boolean), timeout (number), preview size (enum)                                                                                                                                           |
+| **Codebase Index**     | Low        | ✅ Mostly portable — enable (boolean), config object (nested object editor, basic but functional)                                                                                                                       |
+| **Checkpoints**        | Low        | ✅ Portable — enable (boolean), timeout (number)                                                                                                                                                                        |
+| **Notifications**      | Low        | ✅ Portable — toggles (boolean), volume/speed (number, no slider)                                                                                                                                                       |
+| **Assistant Agent**    | Low        | ⚠️ **Degraded** — enable (boolean) works, but profile picker needs dynamic list and context window config is a nested object                                                                                            |
+| **UI**                 | Low        | ✅ Portable — toggles (boolean), enter behavior (enum), collapse (boolean)                                                                                                                                              |
+| **Language**           | Low        | ✅ Portable — language selector (enum)                                                                                                                                                                                  |
+| **About**              | —          | ❌ **Impossible** — export/import/reset buttons, version display, diagnostic info are actions, not settings                                                                                                             |
+
+**Result:** Only **5 of 19 tabs** (~26%) are fully portable. **8 tabs** are
+completely impossible because they require CRUD operations on multi-item
+entities, dynamic API-driven data, or custom interactive widgets. The
+remaining **6 tabs** would work but with degraded UX (no sliders, no rich
+descriptions, no grouping, no interactive validation).
+
+The fundamental gap is that VS Code configuration is a **declarative JSON
+Schema with static rendering**, while the Shofer Settings UI is a **full
+React application** with async data fetching, conditional rendering, CRUD
+operations, and custom widget composition. These are not different backends
+for the same data — they are different capability tiers. Simple key-value
+settings already live in `package.json` (the 18 that fit). Everything else
+lives in the webview because it _must_.
+
+### 14k. Individual SecretStorage API Keys Duplicate the Profiles Blob
+
+API keys are stored in **two places** in `SecretStorage`:
+
+1. **Profiles blob** (`shofer_config_api_config`) — a single JSON blob containing
+   ALL profiles with their full data, including API keys (e.g.,
+   `apiConfigs["my-profile"].apiKey`). Managed by
+   [`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts:577).
+   This is the source of truth.
+
+2. **Individual keys** — 31 separate SecretStorage entries (`apiKey`,
+   `openRouterApiKey`, `openAiApiKey`, …). Each holds only the **currently
+   active** profile's API key. Written by
+   [`ContextProxy.setProviderSettings()`](../src/core/config/ContextProxy.ts:485)
+   when a profile is activated.
+
+The individual keys are a **denormalized cache** from an earlier era (before
+multi-profile support). They exist because runtime code calls
+`contextProxy.getValue("apiKey")` → `getSecret("apiKey")` → individual
+SecretStorage read, rather than going through `ProviderSettingsManager`.
+Acknowledged as debt at [`importExport.ts:172-174`](../src/core/config/importExport.ts:172):
+
+> "It seems like we don't need to have the provider settings in the proxy;
+> we can just use providerSettingsManager as the source of truth."
+
+These can be eliminated by routing ContextProxy secret reads/writes through
+`ProviderSettingsManager` instead of individual SecretStorage entries. See
+[`todos/config-cleanup.md`](../../todos/config-cleanup.md) Part B.
+
+### 14l. `allowedCommands` and `deniedCommands` Are Dual-Written
+
+These are written to BOTH `globalState` AND vscode config on every change
+([`webviewMessageHandler.ts:749`](../src/core/webview/webviewMessageHandler.ts:749) and
+[`ShoferProvider.ts:3613`](../src/core/webview/ShoferProvider.ts:3613)). At
+initialization, `extension.ts:135` seeds `globalState` from vscode config. The
+vscode config path should be removed — these settings already have Settings UI
+rows in the Shofer webview and are stored in `globalState`. See
+[`todos/config-cleanup.md`](../../todos/config-cleanup.md) Part A1–A2.
+
+---
+
+## 15. Planned Simplification
+
+A comprehensive cleanup plan exists at
+[`todos/config-cleanup.md`](../../todos/config-cleanup.md). Summary:
+
+| Step  | What                                                    | Impact                                                                      |
+| ----- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **A** | Port 14 VS Code config keys to `globalState`            | Removes `package.json` dependency for 14 settings; adds Settings UI rows    |
+| **B** | Eliminate 31 individual SecretStorage keys              | SecretStorage reduced to single `shofer_config_api_config` blob             |
+| **C** | Remove 2 dead config keys                               | `devmandExecutionTimeout` and `devmandTimeoutAllowlist` have zero consumers |
+| **D** | Collapse `ProviderSettings` into `globalSettingsSchema` | Flattens schema split; all stored in `globalState`                          |
+
+After cleanup, the backend count drops from 5 (vscode config + globalState +
+SecretStorage-individual + SecretStorage-blob + files) to 3 (globalState +
+SecretStorage-blob + files). Only `customStoragePath` and `autoImportSettingsPath`
+must remain in vscode config due to bootstrapping timing (read before
+ContextProxy initializes).
