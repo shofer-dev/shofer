@@ -560,10 +560,14 @@ export class NativeToolCallParser {
 				break
 
 			case "grep_search":
-				if (partialArgs.path !== undefined || partialArgs.query !== undefined) {
+				if (
+					partialArgs.path !== undefined ||
+					partialArgs.query !== undefined ||
+					partialArgs.pattern !== undefined
+				) {
 					nativeArgs = {
 						path: partialArgs.path,
-						query: partialArgs.query,
+						query: partialArgs.query ?? partialArgs.pattern,
 						fileTypes: partialArgs.fileTypes ?? partialArgs.file_pattern,
 						excludePattern: partialArgs.excludePattern,
 						isRegex: this.coerceOptionalBoolean(partialArgs.isRegex),
@@ -1182,10 +1186,10 @@ export class NativeToolCallParser {
 					break
 
 				case "grep_search":
-					if (args.path !== undefined && args.query !== undefined) {
+					if (args.path !== undefined && (args.query !== undefined || args.pattern !== undefined)) {
 						nativeArgs = {
 							path: args.path,
-							query: args.query,
+							query: args.query ?? args.pattern,
 							fileTypes: args.fileTypes ?? args.file_pattern,
 							excludePattern: args.excludePattern,
 							isRegex: this.coerceOptionalBoolean(args.isRegex) ?? true,
