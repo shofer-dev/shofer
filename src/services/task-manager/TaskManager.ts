@@ -60,15 +60,6 @@ export interface TaskManagerEvents {
 }
 
 /**
- * Resource limits for concurrent tasks.
- */
-export interface TaskResourceLimits {
-	maxConcurrentActive: number
-	maxConcurrentStreaming: number
-	backgroundTimeout: number
-}
-
-/**
  * TaskManager handles multiple concurrent tasks.
  *
  * The manager is the single authority for task lifecycle/rating state. It:
@@ -87,20 +78,11 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	/** Set to true once `restoreManagedTasks` (or an explicit empty restore) has run. */
 	private restored = false
 
-	private resourceLimits: TaskResourceLimits = {
-		maxConcurrentActive: 3,
-		maxConcurrentStreaming: 2,
-		backgroundTimeout: 30,
-	}
-
 	private providerRef: WeakRef<ShoferProvider>
 
-	constructor(provider: ShoferProvider, limits?: Partial<TaskResourceLimits>) {
+	constructor(provider: ShoferProvider) {
 		super()
 		this.providerRef = new WeakRef(provider)
-		if (limits) {
-			this.resourceLimits = { ...this.resourceLimits, ...limits }
-		}
 	}
 
 	// ────────────────────────────── State helpers ──────────────────────────────
@@ -275,13 +257,6 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const task = this.activeTasks.get(targetTaskId)
 		if (!task) {
 			throw new Error(`Task for managed task ${targetTaskId} not found`)
-		}
-
-		const runningCount = Array.from(this.managedTasks.values()).filter(
-			(s) => s.state.lifecycle === "running",
-		).length
-		if (runningCount >= this.resourceLimits.maxConcurrentActive) {
-			throw new Error(`Maximum concurrent active tasks (${this.resourceLimits.maxConcurrentActive}) reached`)
 		}
 
 		this.setState(targetTaskId, TaskManager.makeState("running"))
@@ -516,20 +491,6 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		const cleanupSymbol = Symbol.for("taskManager.cleanup")
 		;(task as any)[cleanupSymbol] = cleanup
-	}
-
-	// ────────────────────────────── Resource Management ──────────────────────────────
-
-	getResourceLimits(): TaskResourceLimits {
-		return { ...this.resourceLimits }
-	}
-
-	setResourceLimits(limits: Partial<TaskResourceLimits>): void {
-		this.resourceLimits = { ...this.resourceLimits, ...limits }
-	}
-
-	canCreateManagedTask(): boolean {
-		return this.activeTasks.size < this.resourceLimits.maxConcurrentActive
 	}
 
 	// ────────────────────────────── HistoryItem Integration ──────────────────────────────

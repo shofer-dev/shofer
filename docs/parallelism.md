@@ -345,21 +345,6 @@ Titles are rendered as `title ?? task_id` — the UI gracefully handles missing 
 
 ---
 
-## Resource Limits
-
-```typescript
-interface TaskResourceLimits {
-	maxConcurrentActive: number // Default: 3 (prevent API rate limits)
-	maxConcurrentStreaming: number // Default: 2 (memory/bandwidth)
-	backgroundTimeout: number // Default: 30 (seconds)
-```
-
-- `maxConcurrentActive` caps the number of simultaneously running tasks (focused + background).
-- Background tasks yield to the focused task for API throughput.
-- Background tasks use 0ms `statusMutationTimeout` (immediate state changes) vs. 2000ms for focused tasks, ensuring responsive state indicators.
-
----
-
 ## Background Task Behavior
 
 When a task is **not focused** but **active**:
@@ -452,8 +437,6 @@ Discovered during source-code verification. These are areas where the documentat
 4. **`PendingParentQuestionInfo` interface**: Defined in [`@shofer/types/src/task.ts`](../packages/types/src/task.ts:194) with fields `{ question, suggestions }`. The parent-question routing flow (steps 1–6 in §"`ask_followup_question` routing") uses this interface but it isn't formally introduced.
 
 5. **Auto-approval granularity for background tools**: The `check_task_status`, `wait_for_task`, and `list_background_tasks` tools are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts:207). `cancel_tasks` and `answer_subtask_question` are gated by `alwaysAllowSubtasks` ([`index.ts:200`](../src/core/auto-approval/index.ts:200)). The doc could explain why these two tiers exist.
-
-6. **`backgroundTimeout` not explained**: `TaskResourceLimits.backgroundTimeout` (default 30s) exists in source but no prose describes what it does or where it's enforced.
 
 ### Observability Gaps
 

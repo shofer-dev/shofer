@@ -199,20 +199,7 @@ resumes.
 **Expected:** Timeout returns current statuses gracefully. The child
 continues running.
 
-### 14. Resource limits reject new children when at capacity
-
-**Goal:** Verify `maxConcurrentActive` is enforced.
-
-1. Spawn background children until you reach the default limit of 3
-   concurrent active tasks.
-2. Attempt to spawn one more background child.
-3. Confirm the `new_task` call returns an error message about the
-   concurrent limit.
-
-**Expected:** New task creation is rejected with a clear error when at
-capacity.
-
-### 15. Task state restore after VS Code restart
+### 14. Task state restore after VS Code restart
 
 **Goal:** Verify states are sanitized correctly on reload.
 
@@ -227,7 +214,7 @@ capacity.
 downgraded to `idle`. Terminal states (`completed`, `error`, `paused`) are
 preserved.
 
-### 16. Hierarchical `list_background_tasks` per-parent
+### 15. Hierarchical `list_background_tasks` per-parent
 
 **Goal:** Verify each parent only sees its own children.
 
@@ -240,7 +227,7 @@ preserved.
 **Expected:** Each parent's `backgroundChildren` map is scoped to that
 parent.
 
-### 17. Nested delegation: background child spawns its own child
+### 16. Nested delegation: background child spawns its own child
 
 **Goal:** Verify multi-level delegation works.
 
@@ -252,7 +239,7 @@ parent.
 **Expected:** Multi-level parent→child→grandchild hierarchy is tracked
 correctly.
 
-### 18. `switch_mode` from background child does not affect focused task
+### 17. `switch_mode` from background child does not affect focused task
 
 **Goal:** Verify mode isolation for background tasks.
 
