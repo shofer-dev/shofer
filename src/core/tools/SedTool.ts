@@ -85,23 +85,62 @@ export class SedTool extends BaseTool<"sed"> {
 			// Read the original content
 			const originalContent = await fs.readFile(absolutePath, "utf-8")
 
-			// Compile the regex, handling the global flag
+			// Detect regex metacharacters for literal fallback logic below.
+			const METACHAR_REGEX = /[.*+?^${}()|[\]\\]/
+
+			// Compile the regex; if it fails and the pattern has metacharacters,
+			// retry as a literal string before reporting an error.
 			let regex: RegExp
+			let matchSource: "regex" | "literal" = "regex"
 			try {
 				const flags = global ? "g" : ""
 				regex = new RegExp(pattern, flags)
-			} catch (err) {
-				task.consecutiveMistakeCount++
-				task.recordToolError("sed")
-				const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${err instanceof Error ? err.message : String(err)}\n</error_details>`
-				await task.say("error", formattedError)
-				task.didToolFailInCurrentTurn = true
-				pushToolResult(formattedError)
-				return
+			} catch (compileErr) {
+				if (METACHAR_REGEX.test(pattern)) {
+					try {
+						const escapedPattern = pattern.replace(METACHAR_REGEX, "\\$&")
+						regex = new RegExp(escapedPattern, global ? "g" : "")
+						matchSource = "literal"
+					} catch {
+						// Literal also failed — report original compile error.
+						task.consecutiveMistakeCount++
+						task.recordToolError("sed")
+						const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}\n</error_details>`
+						await task.say("error", formattedError)
+						task.didToolFailInCurrentTurn = true
+						pushToolResult(formattedError)
+						return
+					}
+				} else {
+					task.consecutiveMistakeCount++
+					task.recordToolError("sed")
+					const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}\n</error_details>`
+					await task.say("error", formattedError)
+					task.didToolFailInCurrentTurn = true
+					pushToolResult(formattedError)
+					return
+				}
 			}
 
-			// Apply the substitution
-			const newContent = originalContent.replace(regex, replacement)
+			// Apply the substitution — try regex first; if zero matches and the
+			// pattern contains regex metacharacters, retry as a literal string.
+			// This handles cases where the model intended a literal search but
+			// used characters like * . + ? ( ) [ ] { } ^ $ | \ without escaping.
+			let newContent = originalContent.replace(regex, replacement)
+
+			if (newContent === originalContent && matchSource !== "literal" && METACHAR_REGEX.test(pattern)) {
+				try {
+					const escapedPattern = pattern.replace(METACHAR_REGEX, "\\$&")
+					const literalRegex = new RegExp(escapedPattern, global ? "g" : "")
+					const literalContent = originalContent.replace(literalRegex, replacement)
+					if (literalContent !== originalContent) {
+						newContent = literalContent
+						matchSource = "literal"
+					}
+				} catch {
+					// Literal regex compilation failed — fall through to the no-match message.
+				}
+			}
 
 			// Check if anything changed
 			if (newContent === originalContent) {
@@ -111,8 +150,12 @@ export class SedTool extends BaseTool<"sed"> {
 
 			task.consecutiveMistakeCount = 0
 
-			// Count matches
-			const matchCount = (originalContent.match(regex) || []).length
+			// Count matches using the effective regex (literal or original)
+			const effectiveRegex =
+				matchSource === "literal"
+					? new RegExp(pattern.replace(METACHAR_REGEX, "\\$&"), global ? "g" : "")
+					: regex
+			const matchCount = (originalContent.match(effectiveRegex) || []).length
 
 			// Generate backend-unified diff for display in chat/webview
 			const unifiedPatchRaw = formatResponse.createPrettyPatch(relPath, originalContent, newContent)
@@ -201,7 +244,9 @@ export class SedTool extends BaseTool<"sed"> {
 			// Get the formatted response message
 			const message = await task.diffViewProvider.pushToolWriteResult(task, task.cwd, false)
 
-			pushToolResult(`${matchCount} replacement(s) made.\n${message}`)
+			const literalNote =
+				matchSource === "literal" ? " (literal match — regex special characters were escaped)" : ""
+			pushToolResult(`${matchCount} replacement(s) made${literalNote}.\n${message}`)
 
 			await task.diffViewProvider.reset()
 			this.resetPartialState()
