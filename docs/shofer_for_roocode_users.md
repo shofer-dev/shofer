@@ -12,24 +12,27 @@ This document catalogues every **user-facing feature** and **opinionated change*
 
 1. [Parallel Task Architecture](#1-parallel-task-architecture)
 2. [Async / Background Tasks](#2-async--background-tasks)
-3. [TaskSelector UX](#3-taskselector-ux)
-4. [Message Queue, Send Now & Per-Task Drafts](#4-message-queue-send-now--per-task-drafts)
-5. [Task Export (JSON + Markdown)](#5-task-export-json--markdown)
-6. [Drag & Drop Workaround](#6-drag--drop-workaround)
-7. [New Native Tools](#7-new-native-tools)
-8. [File Changes System](#8-file-changes-system)
-9. [Auto-Approval & Tool Categories](#9-auto-approval--tool-categories)
-10. [Skills System Overhaul](#10-skills-system-overhaul)
-11. [Modes & Tool Access Control](#11-modes--tool-access-control)
-12. [External LM Tool Providers](#12-external-lm-tool-providers)
-13. [Native Worktree Support](#13-native-worktree-support)
-14. [Cancellation Flow](#14-cancellation-flow)
-15. [Submodule & Nested Git Support](#15-submodule--nested-git-support)
-16. [Cost Calculation & Limits](#16-cost-calculation--limits)
-17. [Cloud removal and marketplace/telemetry feature flags](#17-cloud-removal-and-marketplacetelemetry-feature-flags)
-18. [Provider Improvements](#18-provider-improvements)
-19. [UI/UX Opinionated Changes](#19-uiux-opinionated-changes)
-20. [Known Gaps & Areas for Improvement](#20-known-gaps--areas-for-improvement)
+3. [Background Subtask Control](#3-background-subtask-control)
+4. [Async MCP Tool Calling](#4-async-mcp-tool-calling)
+5. [TaskSelector UX](#5-taskselector-ux)
+6. [Message Queue, Send Now & Per-Task Drafts](#6-message-queue-send-now--per-task-drafts)
+7. [Task Export (JSON + Markdown)](#7-task-export-json--markdown)
+8. [Drag & Drop Workaround](#8-drag--drop-workaround)
+9. [New Native Tools](#9-new-native-tools)
+10. [File Changes System](#10-file-changes-system)
+11. [Auto-Approval & Tool Categories](#11-auto-approval--tool-categories)
+12. [Skills System Overhaul](#12-skills-system-overhaul)
+13. [Modes & Tool Access Control](#13-modes--tool-access-control)
+14. [External LM Tool Providers](#14-external-lm-tool-providers)
+15. [Native Worktree Support](#15-native-worktree-support)
+16. [Cancellation Flow](#16-cancellation-flow)
+17. [Submodule & Nested Git Support](#17-submodule--nested-git-support)
+18. [Code Indexer & Semantic Search](#18-code-indexer--semantic-search)
+19. [Cost Calculation & Limits](#19-cost-calculation--limits)
+20. [Cloud removal and marketplace/telemetry feature flags](#20-cloud-removal-and-marketplacetelemetry-feature-flags)
+21. [Provider Improvements](#21-provider-improvements)
+22. [UI/UX Opinionated Changes](#22-uiux-opinionated-changes)
+23. [Known Gaps & Areas for Improvement](#23-known-gaps--areas-for-improvement)
 
 ---
 
@@ -55,7 +58,7 @@ Previously, the codebase supported only one task at a time — starting a new ta
 - The [`TaskManager`](../src/services/task-manager/TaskManager.ts) orchestrates lifecycle: create, pause, resume, abort, rehydrate.
 - Task state is persisted to disk so tasks survive extension reloads and VS Code restarts.
 
-> 📸 TODO: screenshot of TaskSelector showing multiple tasks with different state badges (running, paused, completed)
+> 📸 TODO: screenshot of TaskSelector showing multiple tasks with different state badges (running, paused, waiting, completed)
 
 ---
 
@@ -92,7 +95,51 @@ Parent calls wait_for_task([A, B, C], wait="all") — resumes when all complete.
 
 ---
 
-## 3. TaskSelector UX
+## 3. Background Subtask Control
+
+Background child tasks can now be managed mid-flight — the parent can answer the child's questions directly, cancel children, and inspect their live activity.
+
+Previously, `ask_followup_question` from a background child was escalated to the user, and there was no way to cancel specific children without aborting the entire parent task.
+
+### What Was Built
+
+| Feature                                                                     | Description                                                                                                                                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Subtask question routing to parent**                                      | `ask_followup_question` from background children is routed to the **parent task** instead of the user. The parent surfaces pending questions through `check_task_status`. |
+| [`answer_subtask_question`](../src/core/tools/AnswerSubtaskQuestionTool.ts) | Answer a pending question from a background child. The parent evaluates and provides a response, unblocking the child.                                                    |
+| [`cancel_tasks`](../src/core/tools/CancelTasksTool.ts)                      | Stop one or more background children by task ID. Already-completed children are unaffected.                                                                               |
+| **`include_activity` parameter**                                            | `check_task_status` now accepts `include_activity: true` to return the child's most recent tool calls and messages — showing what it's currently working on.              |
+| **Abort on parent completion**                                              | Background children are automatically aborted when the parent task completes, preventing orphaned runaway tasks.                                                          |
+| **Dedicated `alwaysAllowSubtasks` toggle**                                  | `cancel_tasks` and `answer_subtask_question` share the `alwaysAllowSubtasks` auto-approval toggle alongside `new_task` and `attempt_completion`.                          |
+| **Waiting lifecycle**                                                       | Tasks blocked inside `wait_for_task` transition to a distinct `waiting` state — visible in the TaskSelector, separate from both `idle` and `running`.                     |
+
+> 📸 TODO: screenshot of `check_task_status` row showing pending question from a background child
+
+---
+
+## 4. Async MCP Tool Calling
+
+MCP tools can now be invoked asynchronously, enabling true parallelism — fan out multiple MCP calls and collect results when they're ready.
+
+Previously, all MCP tool calls were synchronous and blocking. The agent had to wait for each call to complete before the next one could be dispatched.
+
+### What Was Built
+
+| Feature                                                                    | Description                                                                                                                                               |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`call_mcp_tool_async`](../src/core/tools/CallMcpToolAsyncTool.ts)**     | Fire-and-forget MCP tool invocation. Returns immediately with a `call_id`.                                                                                |
+| **[`check_mcp_call_status`](../src/core/tools/CheckMcpCallStatusTool.ts)** | Non-blocking status check for a previously-started async call. Returns `running`, `completed`, `error`, or `cancelled`.                                   |
+| **[`wait_for_mcp_call`](../src/core/tools/WaitForMcpCallTool.ts)**         | Block until one or more async calls complete. Supports `all`/`any` wait strategies like `wait_for_task`.                                                  |
+| **Async badge in ChatRow**                                                 | Async MCP calls display a distinctive **async badge** in the chat UI, making it clear which calls are in-flight vs completed.                             |
+| **Delete-on-read trimming**                                                | Completed async call results are automatically trimmed from the API history after being read by the LLM, preventing context bloat from large MCP results. |
+| **Waiting lifecycle for MCP wait**                                         | When the task calls `wait_for_mcp_call`, it transitions to the `waiting` state — visible in the TaskSelector alongside `wait_for_task`.                   |
+| **Telemetry for async MCP**                                                | Async MCP usage is tracked separately from synchronous MCP calls, with dedicated telemetry events for call initiation, completion, and errors.            |
+
+> 📸 TODO: screenshot of ChatRow showing async MCP badge and completion state
+
+---
+
+## 5. TaskSelector UX
 
 The TaskSelector (visible when no task is active) was redesigned to handle multiple concurrent tasks with rich organizational features.
 
@@ -109,7 +156,7 @@ The TaskSelector (visible when no task is active) was redesigned to handle multi
 
 ---
 
-## 4. Message Queue, Send Now & Per-Task Drafts
+## 6. Message Queue, Send Now & Per-Task Drafts
 
 A complete message buffering system that lets users type ahead while the LLM is working, with per-task draft isolation.
 
@@ -129,7 +176,7 @@ See [`message_queue.md`](message_queue.md) for the full design document.
 
 ---
 
-## 5. Task Export (JSON + Markdown)
+## 7. Task Export (JSON + Markdown)
 
 Tasks can be exported in two formats for sharing, archival, or analysis.
 
@@ -146,7 +193,7 @@ See [`task-export.md`](task-export.md) for the full format reference.
 
 ---
 
-## 6. Drag & Drop Workaround
+## 8. Drag & Drop Workaround
 
 Roo's Drag & Drop system was hard to use on the Desktop (Alt key didn't work for me), so Shofer introduces a workaround, with a dedicated drop zone in the sidebar. Dropped files appear as removable tags. Dropped files are prepended as `@mentions` in the message text when sent, making file context explicit.
 
@@ -156,35 +203,38 @@ See [`drag_n_drop.md`](drag_n_drop.md) for the full design.
 
 ---
 
-## 7. New Native Tools
+## 9. New Native Tools
 
-Seventeen native tools are listed below — see [`native_tools.md`](native_tools.md) for the complete reference of all 50+ tools.
+Twenty native tools are listed below — see [`native_tools.md`](native_tools.md) for the complete reference of all 50+ tools.
 
-| Tool                                                                  | Description                                                                                                                                                                                     |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`lsp_search`](../src/core/tools/LspSearchTool.ts)                    | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
-| [`create_new_workspace`](../src/core/tools/CreateNewWorkspaceTool.ts) | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
-| [`fetch_web_page`](../src/core/tools/FetchWebPageTool.ts)             | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
-| [`execute_command`](../src/core/tools/ExecuteCommandTool.ts)          | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
-| [`list_files`](../src/core/tools/ListFilesTool.ts)                    | List directory contents with recursive option.                                                                                                                                                  |
-| [`grep_search`](../src/core/tools/GrepSearchTool.ts)                  | Regex/literal search across files with context display (using VS Code's native search API). See [`grep_search-tool.md`](grep_search-tool.md).                                                   |
-| [`read_file`](../src/core/tools/ReadFileTool.ts)                      | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
-| [`write_to_file`](../src/core/tools/WriteToFileTool.ts)               | Write complete file content, with automatic directory creation.                                                                                                                                 |
-| [`apply_diff`](../src/core/tools/ApplyDiffTool.ts)                    | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
-| [`insert_edit`](../src/core/tools/InsertEditTool.ts)                  | Insert text at a specific line/column position.                                                                                                                                                 |
-| [`rename_symbol`](../src/core/tools/RenameSymbolTool.ts)              | Rename a symbol and all its references via LSP.                                                                                                                                                 |
-| [`list_code_usages`](../src/core/tools/ListCodeUsagesTool.ts)         | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
-| **[`sed`](../src/core/tools/SedTool.ts)**                             | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
-| **[`file`](../src/core/tools/FileTool.ts)**                           | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
-| **[`set_task_title`](../src/core/tools/SetTaskTitleTool.ts)**         | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
-| [`skills`](../src/core/tools/SkillsTool.ts)                           | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
-| **[`give_feedback`](../src/core/tools/GiveFeedbackTool.ts)**          | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
+| Tool                                                                    | Description                                                                                                                                                                                     |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`lsp_search`](../src/core/tools/LspSearchTool.ts)                      | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
+| [`create_new_workspace`](../src/core/tools/CreateNewWorkspaceTool.ts)   | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
+| [`fetch_web_page`](../src/core/tools/FetchWebPageTool.ts)               | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
+| [`execute_command`](../src/core/tools/ExecuteCommandTool.ts)            | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
+| [`list_files`](../src/core/tools/ListFilesTool.ts)                      | List directory contents with recursive option.                                                                                                                                                  |
+| [`grep_search`](../src/core/tools/GrepSearchTool.ts)                    | Regex/literal search across files with context display (using VS Code's native search API). See [`grep_search-tool.md`](grep_search-tool.md).                                                   |
+| **[`rag_search`](../src/core/tools/RagSearchTool.ts)**                  | Semantic code search using embedded vectors. Finds files by meaning rather than exact text matches. See §18.                                                                                    |
+| **[`git_search`](../src/core/tools/GitSearchTool.ts)**                  | Semantic search over git commit history — discover _why_ and _when_ changes were made. See §18.                                                                                                 |
+| [`read_file`](../src/core/tools/ReadFileTool.ts)                        | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
+| [`write_to_file`](../src/core/tools/WriteToFileTool.ts)                 | Write complete file content, with automatic directory creation.                                                                                                                                 |
+| [`apply_diff`](../src/core/tools/ApplyDiffTool.ts)                      | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
+| [`insert_edit`](../src/core/tools/InsertEditTool.ts)                    | Insert text at a specific line/column position.                                                                                                                                                 |
+| [`rename_symbol`](../src/core/tools/RenameSymbolTool.ts)                | Rename a symbol and all its references via LSP.                                                                                                                                                 |
+| [`list_code_usages`](../src/core/tools/ListCodeUsagesTool.ts)           | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
+| **[`read_command_output`](../src/core/tools/ReadCommandOutputTool.ts)** | Retrieve full output from commands that were truncated in the chat. Supports read mode (offset/limit) and search mode (grep-like filtering).                                                    |
+| **[`sed`](../src/core/tools/SedTool.ts)**                               | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
+| **[`file`](../src/core/tools/FileTool.ts)**                             | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
+| **[`set_task_title`](../src/core/tools/SetTaskTitleTool.ts)**           | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
+| [`skills`](../src/core/tools/SkillsTool.ts)                             | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
+| **[`give_feedback`](../src/core/tools/GiveFeedbackTool.ts)**            | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
 
 > 📸 TODO: screenshot of `lsp_search` results in chat
 
 ---
 
-## 8. File Changes System
+## 10. File Changes System
 
 The file changes tracking infrastructure was built from the ground up.
 
@@ -202,7 +252,7 @@ Removed the git-dependent shadow-repository backend in favor of a **working-dire
 
 ---
 
-## 9. Auto-Approval & Tool Categories
+## 11. Auto-Approval & Tool Categories
 
 The auto-approval system was refactored to be driven by a unified set of tool categories, replacing the previous ad-hoc toggle system. Additional categories were added, included `uncategorized` as a catch-all. MCP servers can now voluntarily categorize their tools, instead of all falling into one category, the `MCP` bucket. MCP servers that don't support this feature can still have their tools properly categorized with Shofer-side configuration.
 
@@ -220,7 +270,7 @@ See [`auto_approval.md`](auto_approval.md) and [`tool-categories.md`](tool-categ
 
 ---
 
-## 10. Skills System Overhaul
+## 12. Skills System Overhaul
 
 The skills system was redesigned for discoverability, state management, and persistence.
 
@@ -238,23 +288,24 @@ See [`skills.md`](skills.md) and [`command-skill-buttons.md`](command-skill-butt
 
 ---
 
-## 11. Modes & Tool Access Control
+## 13. Modes & Tool Access Control
 
 The mode system was extended with scoped tool groups, per-task mode binding, and a new default mode.
 
 ### What Was Built
 
-| Feature                               | Description                                                                                                                                                                                                          |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scoped group entries**              | Mode groups now support `allowed`/`denied` lists per group, enabling fine-grained control. Example: a mode can allow `read` group tools but deny `grep_search` specifically. See [`tool_access.md`](tool_access.md). |
-| **Per-task mode binding**             | Each task has its own mode, sticky for its lifetime. Switching tasks restores that task's mode. Starting a new task lets you choose a different mode without affecting running tasks.                                |
-| **Sticky mode across focus switches** | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                      |
+| Feature                                                                 | Description                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scoped group entries**                                                | Mode groups now support `allowed`/`denied` lists per group, enabling fine-grained control. Example: a mode can allow `read` group tools but deny `grep_search` specifically. See [`tool_access.md`](tool_access.md). |
+| **Per-task mode binding**                                               | Each task has its own mode, sticky for its lifetime. Switching tasks restores that task's mode. Starting a new task lets you choose a different mode without affecting running tasks.                                |
+| **Sticky mode across focus switches**                                   | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                      |
+| **[`switch_mode`](../src/core/tools/SwitchModeTool.ts) scoped to task** | Mode switching via `switch_mode` is now isolated to the calling task — it never leaks across concurrent tasks. Each task's mode is independently scoped and persisted.                                               |
 
 > 📸 TODO: screenshot of mode selector dropdown showing scoped group configuration
 
 ---
 
-## 12. External LM Tool Providers
+## 14. External LM Tool Providers
 
 A generic interface for discovering and invoking tools from other VS Code extensions, replacing the tight coupling to `vscode.lm.tools`.
 
@@ -274,7 +325,7 @@ This enables companion extensions to seamlessly contribute tools to Shofer's too
 
 ---
 
-## 13. Native Worktree Support
+## 15. Native Worktree Support
 
 No need to maintain separate VS Code windows per worktree anymore.
 
@@ -291,7 +342,7 @@ See [`worktrees.md`](worktrees.md) for the full architecture.
 
 ---
 
-## 14. Cancellation Flow
+## 16. Cancellation Flow
 
 A complete end-to-end cancellation pipeline that immediately aborts long-running MCP tool calls and resource reads when the user clicks Stop.
 
@@ -307,7 +358,7 @@ See [`cancellation.md`](cancellation.md) for the full cancellation architecture.
 
 ---
 
-## 15. Submodule & Nested Git Support
+## 17. Submodule & Nested Git Support
 
 Checkpoints now work in repositories that contain submodules or nested `.git` directories.
 
@@ -322,7 +373,33 @@ See [`submodule-support.md`](submodule-support.md) for the full design.
 
 ---
 
-## 16. Cost Calculation & Limits
+## 18. Code Indexer & Semantic Search
+
+Shofer includes a RAG-powered code indexing pipeline that enables semantic code search and powers several tools with codebase-aware context.
+
+The indexer processes workspace files through tree-sitter parsing and embedding, storing vectors in a Qdrant instance. The pipeline was substantially hardened in the Shofer fork to handle edge cases, submodules, and git-ignored files correctly.
+
+> See [`rag_indexing.md`](rag_indexing.md) and [`git_search-tool.md`](git_search-tool.md) for the full design.
+
+### What Was Built
+
+| Feature                                                | Description                                                                                                                                                                                                                                                |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`rag_search`](../src/core/tools/RagSearchTool.ts)** | Semantic code search using embedded vectors. Finds files by meaning rather than exact text matches.                                                                                                                                                        |
+| **[`git_search`](../src/core/tools/GitSearchTool.ts)** | Semantic search over git commit history (commit messages only). Discover _why_ and _when_ changes were made, not just _what_.                                                                                                                              |
+| **`GitIgnoreFilter` oracle**                           | Replaced flat `.gitignore` parsing with `git ls-files -z --cached --others --exclude-standard`, honoring nested `.gitignore` files, `.git/info/exclude`, and global `core.excludesfile`. A file watcher auto-refreshes the filter on `.gitignore` changes. |
+| **Submodule-aware scanning**                           | Both the code-index file scanner and git-history watcher descend into submodules declared in `.gitmodules`, ensuring files inside nested repos are indexed.                                                                                                |
+| **Per-segment deduplication**                          | Incremental indexing uses `deletePointsByIds` at the segment level, preventing duplicate embeddings when files are re-indexed.                                                                                                                             |
+| **Stat-only fast-path**                                | Startup reconciliation uses `stat()`-only mtime+size comparison for a fast path, dramatically reducing indexer startup on large workspaces.                                                                                                                |
+| **Per-provider concurrency lane**                      | Embedder providers share a module-scoped concurrency limiter keyed by `(provider, endpoint)`, preventing N-workspace reindex storms from tripping rate limits.                                                                                             |
+| **Cumulative diagnostics**                             | Settings panel surfaces cumulative file/commit counts and last-indexed diagnostics, giving users visibility into indexer state.                                                                                                                            |
+| **Branch-aware git indexing**                          | `git_search` can be scoped to a specific branch via the `codebaseIndexGitBranch` setting; the watcher reports the live branch for the working tree.                                                                                                        |
+
+> 📸 TODO: screenshot of RAG Indexer settings panel showing file/commit counts and diagnostics
+
+---
+
+## 19. Cost Calculation & Limits
 
 A per-root-task cost tracking and capping system that aggregates subtask costs and enforces user-configured spend limits.
 
@@ -341,13 +418,13 @@ See [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for the f
 
 ---
 
-## 17. Cloud removal and marketplace/telemetry feature flags
+## 20. Cloud removal and marketplace/telemetry feature flags
 
 Given that Shofer runs entirely locally with no server-side dependencies, other than your LLM provider, the extension was decoupled from all cloud-related features and dependencies. Additionally, marketplace and telemetry features were disabled.
 
 ---
 
-## 18. Provider Improvements
+## 21. Provider Improvements
 
 ### VS Code Language Model Provider
 
@@ -367,20 +444,23 @@ See [`tool-preparing-progress.md`](tool-preparing-progress.md) for the full desi
 
 ---
 
-## 19. UI/UX Opinionated Changes
+## 22. UI/UX Opinionated Changes
 
 These are deliberate design decisions that changed the default behavior or appearance of the application.
 
-| Change                                    | Rationale                                                                                                                      |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Default mode: Architect → Code**        | Code mode is the primary use case. Architect is still available but no longer the default.                                     |
-| **BRRR → All auto-approval label**        | "BRRR" (from "YOLO") was rebranded to "All" for clarity and professionalism.                                                   |
-| **Background editing enabled by default** | The experiment graduated — background diffs are now the standard editing experience.                                           |
-| **API request started row auto-hides**    | The "API request started" indicator row now hides on success, reducing chat clutter. Only persists on errors or cancellations. |
+| Change                                    | Rationale                                                                                                                                                                                                                               |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Default mode: Architect → Code**        | Code mode is the primary use case. Architect is still available but no longer the default.                                                                                                                                              |
+| **BRRR → All auto-approval label**        | "BRRR" (from "YOLO") was rebranded to "All" for clarity and professionalism.                                                                                                                                                            |
+| **Background editing enabled by default** | The experiment graduated — background diffs are now the standard editing experience.                                                                                                                                                    |
+| **API request started row auto-hides**    | The "API request started" indicator row now hides on success, reducing chat clutter. Only persists on errors or cancellations.                                                                                                          |
+| **Hero logo animation redesigned**        | The welcome screen hero animation was changed from a bouncing kangaroo to a road/parallax wheel-roll theme for a cleaner, more professional look.                                                                                       |
+| **GFM table rendering in chat**           | Assistant agent responses and markdown blocks now render GitHub-flavored markdown tables using the standard table component, improving readability of tabular data.                                                                     |
+| **Expandable tool input/output**          | Tool calls in chat now render expandable/collapsible input and output sections (gated behind an experimental flag). Tool result output is size-capped and suppressed entirely for tools with dedicated inline UI, keeping chat concise. |
 
 ---
 
-## 20. Known Gaps & Areas for Improvement
+## 23. Known Gaps & Areas for Improvement
 
 This section catalogues issues and omissions discovered during a path/entity verification audit of this document (May 2026). Future editors should address these.
 
@@ -399,23 +479,23 @@ This section catalogues issues and omissions discovered during a path/entity ver
 
 ### Content Gaps (not yet addressed)
 
-| Gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Severity | Suggested Action                                                                 |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
-| §7 lists only 17 of 50+ native tools. Missing notable tools: `rag_search`, `git_search`, `view_image`, `find_files`, `ask_assistant_agent`, `call_mcp_tool_async`, `read_command_output`, `cancel_tasks`, `answer_subtask_question`, `read_project_structure`, `create_directory`, `sleep`, `update_todo_list`, `get_changed_files`, `get_errors`, `get_project_setup_info`, `switch_mode`, `ask_followup_question`, `access_mcp_resource`, `generate_image`, `run_slash_command`. | High     | Expand §7 into subcategories or link to `native_tools.md` comprehensively        |
-| §17 (Cloud removal) is 3 sentences with no feature-level detail                                                                                                                                                                                                                                                                                                                                                                                                                    | Medium   | Expand to list what was decoupled, removed, and what replaced each cloud feature |
-| No section on **Assistant Agent** (`ask_assistant_agent` tool + `AssistantAgentManager` service)                                                                                                                                                                                                                                                                                                                                                                                   | High     | Add a new section or subsection under §7 or §18                                  |
-| No section on **Async MCP** (`call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`)                                                                                                                                                                                                                                                                                                                                                                                  | Medium   | Add a subsection under §14 (Cancellation) or a new section                       |
-| No section on **Checkpoint system overhaul** (shadow-git → `GIT_DIR` isolation, `RepoPerTaskCheckpointService`)                                                                                                                                                                                                                                                                                                                                                                    | Medium   | Add as its own section or expand §15                                             |
-| No section on **RAG / Code Index** (`rag_search`, `CodeIndexManager`, file-watcher, embedders)                                                                                                                                                                                                                                                                                                                                                                                     | Medium   | Add a new section                                                                |
-| §13 (Worktree) doesn't mention worktree handler naming convention or `.worktreeinclude`                                                                                                                                                                                                                                                                                                                                                                                            | Low      | Expand with handler API details                                                  |
-| No section on `git_search` — semantic commit-history search                                                                                                                                                                                                                                                                                                                                                                                                                        | Low      | Add to §7 or a new subsection                                                    |
-| No section on `read_command_output` — truncated command output retrieval                                                                                                                                                                                                                                                                                                                                                                                                           | Low      | Add to §7 or §18                                                                 |
-| No section on `edit` / `edit_file` tool aliases and their relationship to `apply_diff`                                                                                                                                                                                                                                                                                                                                                                                             | Low      | Add to §7 or §8                                                                  |
+| Gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Severity | Suggested Action                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------- |
+| §9 now covers 20 of 50+ native tools (added `rag_search`, `git_search`, `read_command_output`). Still missing: `view_image`, `find_files`, `ask_assistant_agent`, `call_mcp_tool_async`, `cancel_tasks`, `answer_subtask_question`, `read_project_structure`, `create_directory`, `sleep`, `update_todo_list`, `get_changed_files`, `get_errors`, `get_project_setup_info`, `switch_mode`, `ask_followup_question`, `access_mcp_resource`, `generate_image`, `run_slash_command`. Many of these are covered in dedicated sections (§3, §4, §18). | Medium   | Continue expanding §9 subcategories or link to `native_tools.md` comprehensively |
+| §20 (Cloud removal) is 3 sentences with no feature-level detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Medium   | Expand to list what was decoupled, removed, and what replaced each cloud feature |
+| No section on **Assistant Agent** (`ask_assistant_agent` tool + `AssistantAgentManager` service)                                                                                                                                                                                                                                                                                                                                                                                                                                                 | High     | Add a new section or subsection under §9 or §21                                  |
+| ~~No section on **Async MCP**~~ → ✅ Added §4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —        | —                                                                                |
+| No section on **Checkpoint system overhaul** (shadow-git → `GIT_DIR` isolation, `RepoPerTaskCheckpointService`)                                                                                                                                                                                                                                                                                                                                                                                                                                  | Medium   | Add as its own section or expand §17                                             |
+| ~~No section on **RAG / Code Index**~~ → ✅ Added §18                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | —        | —                                                                                |
+| §15 (Worktree) doesn't mention worktree handler naming convention or `.worktreeinclude`                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Low      | Expand with handler API details                                                  |
+| ~~No section on `git_search`~~ → ✅ Added to §9 and §18                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | —        | —                                                                                |
+| ~~No section on `read_command_output`~~ → ✅ Added to §9                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | —        | —                                                                                |
+| No section on `edit` / `edit_file` tool aliases and their relationship to `apply_diff`                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Low      | Add to §9 or §10                                                                 |
 
 ### Structural Improvements
 
 - The Document Index (§Document Index) is alphabetically ordered but doesn't follow the same order as the ToC. Consider reordering to match.
-- Section 17 is the only section without a `### What Was Built` subsection, making it visually inconsistent.
+- Section 20 is the only section without a `### What Was Built` subsection, making it visually inconsistent.
 - Screenshots are all marked `📸 TODO`. A future pass should capture and embed them.
 - The `Table of Contents` numbering uses `1.`, `2.`, … while the section headings use `## 1.`, `## 2.`, … — some renderers interpret the heading `## 1.` as a list item rather than a heading anchor.
 
