@@ -1,2 +1,2 @@
 export { TaskManager } from "./TaskManager"
-export type { ManagedTask, TaskManagerEvents, TaskResourceLimits } from "./TaskManager"
+export type { ManagedTask, TaskManagerEvents } from "./TaskManager"
