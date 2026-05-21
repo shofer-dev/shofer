@@ -2463,6 +2463,10 @@ export class ShoferProvider
 			}
 
 			await this.postStateToWebviewWithoutTaskHistory()
+			// Deletion is not communicated via taskHistoryItemUpdated, so push a
+			// lightweight taskHistoryUpdated message so the webview drops the
+			// removed tasks from TaskSelector immediately.
+			await this.broadcastTaskHistoryUpdate()
 		} catch (error) {
 			// If task is not found, just remove it from state
 			if (error instanceof Error && error.message === "Task not found") {
@@ -2478,6 +2482,9 @@ export class ShoferProvider
 		this.recentTasksCache = undefined
 
 		await this.postStateToWebviewWithoutTaskHistory()
+		// See deleteTaskWithId: webview needs an explicit task-history broadcast
+		// to drop the deleted item from the TaskSelector list.
+		await this.broadcastTaskHistoryUpdate()
 	}
 
 	async refreshWorkspace() {
