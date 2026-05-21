@@ -187,6 +187,18 @@ export class ShoferProvider
 	public readonly providerSettingsManager: ProviderSettingsManager
 	public readonly customModesManager: CustomModesManager
 
+	// H8: Static-state memoization.
+	// mergedAllowedCommands / mergedDeniedCommands are rebuilt on every
+	// postStateToWebview call but change only when the underlying
+	// settings change.  Cache them with a generation counter bumped
+	// by ContextProxy.onDidChange and workspace.onDidChangeConfiguration.
+	private _cachedMergedAllowed?: string[]
+	private _cachedMergedDenied?: string[]
+	private _cachedMergedGen = -1
+	private _settingsGeneration = 0
+	private _onDidChangeSettingsDisposable?: vscode.Disposable
+	private _settingsGenerationConfigDisposable?: vscode.Disposable
+
 	constructor(
 		readonly context: vscode.ExtensionContext,
 		private readonly outputChannel: vscode.OutputChannel,
@@ -223,6 +235,23 @@ export class ShoferProvider
 		// comes from taskHistory (same as HistoryView). parallelTasks only tracks tasks with
 		// live Task instances (currently running in this session).
 		this.taskManager = new TaskManager(this)
+
+		// H8: Subscribe to ContextProxy.onDidChange to invalidate the
+		// static-state cache.  When any global setting or secret changes,
+		// bump the generation counter so the next postStateToWebview
+		// rebuilds merged commands / modes from scratch.
+		this._onDidChangeSettingsDisposable = this.contextProxy.onDidChange(({ key }) => {
+			if (key === "allowedCommands" || key === "deniedCommands") {
+				this._settingsGeneration++
+			}
+		})
+		// Invalidate on workspace-config changes too — mergeAllowedCommands
+		// also reads vscode.workspace.getConfiguration("shofer.allowedCommands").
+		this._settingsGenerationConfigDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration("shofer.allowedCommands") || e.affectsConfiguration("shofer.deniedCommands")) {
+				this._settingsGeneration++
+			}
+		})
 
 		// Set up task event forwarding to webview.
 		this.taskManager.on("tasks:updated", (managedTasks) => {
@@ -705,6 +734,12 @@ export class ShoferProvider
 		}
 
 		this._disposed = true
+
+		// H8: Dispose settings-change subscriptions
+		this._onDidChangeSettingsDisposable?.dispose()
+		this._settingsGenerationConfigDisposable?.dispose()
+		this._onDidChangeSettingsDisposable = undefined
+		this._settingsGenerationConfigDisposable = undefined
 
 		// Clear all tasks from the stack.
 		while (this.shoferStack.length > 0) {
@@ -1797,7 +1832,7 @@ export class ShoferProvider
 
 		const lockApiConfigAcrossModes = this.context.workspaceState.get("lockApiConfigAcrossModes", false)
 		if (lockApiConfigAcrossModes) {
-			await this.postStateToWebview()
+			await this.postStateToWebviewWithoutTaskHistory()
 			return
 		}
 
@@ -1837,7 +1872,7 @@ export class ShoferProvider
 			}
 		}
 
-		await this.postStateToWebview()
+		await this.postStateToWebviewWithoutTaskHistory()
 	}
 
 	/**
@@ -1993,7 +2028,7 @@ export class ShoferProvider
 				await this.updateGlobalState("listApiConfigMeta", await this.providerSettingsManager.listConfig())
 			}
 
-			await this.postStateToWebview()
+			await this.postStateToWebviewWithoutTaskHistory()
 			return id
 		} catch (error) {
 			this.log(
@@ -2025,7 +2060,7 @@ export class ShoferProvider
 			listApiConfigMeta: entries,
 		})
 
-		await this.postStateToWebview()
+		await this.postStateToWebviewWithoutTaskHistory()
 	}
 
 	private async persistStickyProviderProfileToCurrentTask(apiConfigName: string): Promise<void> {
@@ -2089,7 +2124,7 @@ export class ShoferProvider
 			await this.persistStickyProviderProfileToCurrentTask(name)
 		}
 
-		await this.postStateToWebview()
+		await this.postStateToWebviewWithoutTaskHistory()
 
 		if (providerSettings.apiProvider) {
 			this.emit(ShoferEventName.ProviderProfileChanged, { name, provider: providerSettings.apiProvider })
@@ -2099,7 +2134,7 @@ export class ShoferProvider
 	async updateCustomInstructions(instructions?: string) {
 		// User may be clearing the field.
 		await this.updateGlobalState("customInstructions", instructions || undefined)
-		await this.postStateToWebview()
+		await this.postStateToWebviewWithoutTaskHistory()
 	}
 
 	// MCP
@@ -2427,7 +2462,7 @@ export class ShoferProvider
 				}
 			}
 
-			await this.postStateToWebview()
+			await this.postStateToWebviewWithoutTaskHistory()
 		} catch (error) {
 			// If task is not found, just remove it from state
 			if (error instanceof Error && error.message === "Task not found") {
@@ -2442,12 +2477,12 @@ export class ShoferProvider
 		await this.taskHistoryStore.delete(id)
 		this.recentTasksCache = undefined
 
-		await this.postStateToWebview()
+		await this.postStateToWebviewWithoutTaskHistory()
 	}
 
 	async refreshWorkspace() {
 		this.currentWorkspacePath = getWorkspacePath()
-		await this.postStateToWebview()
+		await this.postStateToWebviewWithoutTaskHistory()
 	}
 
 	async postStateToWebview() {
@@ -2698,8 +2733,18 @@ export class ShoferProvider
 
 		const telemetryKey = process.env.POSTHOG_API_KEY
 		const machineId = vscode.env.machineId
-		const mergedAllowedCommands = this.mergeAllowedCommands(allowedCommands)
-		const mergedDeniedCommands = this.mergeDeniedCommands(deniedCommands)
+		// H8: Build merged commands from cache when settings haven't changed.
+		// mergeAllowedCommands / mergeDeniedCommands deduplicate and merge
+		// global-state + workspace-config arrays — a pure function of the
+		// input lists that changes only when the underlying settings change.
+		const gen = this._settingsGeneration
+		if (this._cachedMergedGen !== gen) {
+			this._cachedMergedAllowed = this.mergeAllowedCommands(allowedCommands)
+			this._cachedMergedDenied = this.mergeDeniedCommands(deniedCommands)
+			this._cachedMergedGen = gen
+		}
+		const mergedAllowedCommands = this._cachedMergedAllowed
+		const mergedDeniedCommands = this._cachedMergedDenied
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
