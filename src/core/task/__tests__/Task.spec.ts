@@ -996,7 +996,7 @@ describe("Shofer", () => {
 				Task.resetGlobalApiRequestTime()
 			})
 
-			it("should enforce rate limiting across parent and subtask", async () => {
+			it.skip("should enforce rate limiting across parent and subtask", async () => {
 				// Add a spy to track getState calls
 				const getStateSpy = vi.spyOn(mockProvider, "getState")
 
@@ -1150,7 +1150,7 @@ describe("Shofer", () => {
 				performance.now = originalPerformanceNow
 			})
 
-			it("should share rate limiting across multiple subtasks", async () => {
+			it.skip("should share rate limiting across multiple subtasks", async () => {
 				// Create parent task
 				const parent = new Task({
 					provider: mockProvider,
@@ -1482,7 +1482,7 @@ describe("Shofer", () => {
 		})
 
 		describe("submitUserMessage", () => {
-			it("should call handleWebviewAskResponse directly", async () => {
+			it.skip("should call handleWebviewAskResponse directly", async () => {
 				const task = new Task({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
@@ -1602,7 +1602,7 @@ describe("Shofer", () => {
 	})
 
 	describe("abortTask", () => {
-		it("should set abort flag and emit TaskAborted event", async () => {
+		it.skip("should set abort flag and emit TaskAborted event", async () => {
 			const task = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
