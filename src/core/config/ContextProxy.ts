@@ -44,6 +44,12 @@ export class ContextProxy {
 	private secretCache: SecretState
 	private _isInitialized = false
 
+	// H8: EventEmitter so consumers can subscribe to settings changes
+	// without polling.  Fires with the changed key whenever a global-state
+	// or secret value is written through ContextProxy.
+	private readonly _onDidChangeEmitter = new vscode.EventEmitter<{ key: string }>()
+	public readonly onDidChange = this._onDidChangeEmitter.event
+
 	constructor(context: vscode.ExtensionContext) {
 		this.originalContext = context
 		this.stateCache = {}
@@ -335,7 +341,9 @@ export class ContextProxy {
 		}
 
 		this.stateCache[key] = value
-		return this.originalContext.globalState.update(key, value)
+		const result = this.originalContext.globalState.update(key, value)
+		this._onDidChangeEmitter.fire({ key })
+		return result
 	}
 
 	private getAllGlobalState(): GlobalState {
@@ -356,9 +364,12 @@ export class ContextProxy {
 		this.secretCache[key] = value
 
 		// Write directly to context.
-		return value === undefined
-			? this.originalContext.secrets.delete(key)
-			: this.originalContext.secrets.store(key, value)
+		const result =
+			value === undefined
+				? this.originalContext.secrets.delete(key)
+				: this.originalContext.secrets.store(key, value)
+		this._onDidChangeEmitter.fire({ key })
+		return result
 	}
 
 	/**
