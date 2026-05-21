@@ -1,92 +1,51 @@
-<p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=Shofer.dev"><img src="https://img.shields.io/badge/VS_Code_Marketplace-007ACC?style=flat&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace"></a>
-  <a href="https://x.com/shofer"><img src="https://img.shields.io/badge/shofer-000000?style=flat&logo=x&logoColor=white" alt="X"></a>
-  <a href="https://youtube.com/@shoferyt?feature=shared"><img src="https://img.shields.io/badge/YouTube-FF0000?style=flat&logo=youtube&logoColor=white" alt="YouTube"></a>
-  <a href="https://discord.gg/shofer"><img src="https://img.shields.io/badge/Join%20Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Join Discord"></a>
-  <a href="https://www.reddit.com/r/Shofer/"><img src="https://img.shields.io/badge/Join%20r%2FShofer-FF4500?style=flat&logo=reddit&logoColor=white" alt="Join r/Shofer"></a>
-</p>
-<p align="center">
-  <em>Get help fast → <a href="https://discord.gg/shofer">Join Discord</a> • Prefer async? → <a href="https://www.reddit.com/r/Shofer/">Join r/Shofer</a></em>
-</p>
-
 # Shofer
 
 > State-of-the-art open-source AI coding.
-
-## What's New in v3.52.0
-
-- Add Poe as an AI provider so you can access Poe models directly in Shofer.
-- Improve the xAI provider with a Responses API migration, reusable transform utilities, and updated Grok-4.20 defaults.
-- Fix MiniMax model listings and context window handling for more reliable setup.
-
-<details>
-  <summary>🌐 Available languages</summary>
-
-- [English](README.md)
-- [Català](locales/ca/README.md)
-- [Deutsch](locales/de/README.md)
-- [Español](locales/es/README.md)
-- [Français](locales/fr/README.md)
-- [हिंदी](locales/hi/README.md)
-- [Bahasa Indonesia](locales/id/README.md)
-- [Italiano](locales/it/README.md)
-- [日本語](locales/ja/README.md)
-- [한국어](locales/ko/README.md)
-- [Nederlands](locales/nl/README.md)
-- [Polski](locales/pl/README.md)
-- [Português (BR)](locales/pt-BR/README.md)
-- [Русский](locales/ru/README.md)
-- [Türkçe](locales/tr/README.md)
-- [Tiếng Việt](locales/vi/README.md)
-- [简体中文](locales/zh-CN/README.md)
-- [繁體中文](locales/zh-TW/README.md)
-- ...
-    </details>
 
 ---
 
 ## What Can Shofer Do For YOU?
 
-- Generate Code from natural language descriptions and specs
-- Adapt with Modes: Code, Architect, Ask, Debug, and Custom Modes
-- Refactor & Debug existing code
-- Write & Update documentation
-- Answer Questions about your codebase
-- Automate repetitive tasks
-- Utilize MCP Servers
+- Generate, refactor, and debug code across your workspace
+- Run **parallel tasks** with background child tasks — the AI delegates work concurrently
+- **Auto-approve** tool categories you trust; require approval for the rest
+- Choose from 9 built-in **modes**: Code, Architect, Ask, Debug, Reviewer, Search, Opinion, Browser, and Orchestrator
+- Define **custom modes** with per-category tool access and file-scoped restrictions (`.shofermodes`)
+- Query your codebase with **semantic search** (RAG indexing) and **git commit search**
+- Create and install **skills** — reusable, mode-aware instruction packs
+- Connect **MCP servers** for external tools (browser, database, Kubernetes, web search)
+- Use the **Assistant Agent** — a persistent read-only AI companion that accumulates codebase knowledge
+- Manage **git worktrees** for isolated parallel work — all in one VS Code window
+- Review edits in the **File Changes Panel** — accept, revert, or diff every file Shofer modifies
+- **Queue messages** while Shofer is busy; click **Send Now** to redirect it immediately
+- Attach files via **drag & drop**, paste **images** for vision models, and export tasks as **Markdown or JSON**
+- Set **USD cost limits** on any task — pause, abort, or kill when the cap is hit
+- Read the full [User Manual](src/USER_MANUAL.md)
 
 ## Modes
 
-Shofer adapts to how you work:
+Shofer ships with 9 built-in modes — choose from the Mode Selector dropdown in the chat input bar:
 
-- Code Mode: everyday coding, edits, and file ops
-- Architect Mode: plan systems, specs, and migrations
-- Ask Mode: fast answers, explanations, and docs
-- Debug Mode: trace issues, add logs, isolate root causes
-- Custom Modes: build specialized modes for your team or workflow
+| Mode                | Best For                                                                 |
+| ------------------- | ------------------------------------------------------------------------ |
+| 💻 **Code**         | Writing, modifying, and refactoring code. Broadest tool access.          |
+| 🏗️ **Architect**    | Planning and designing before writing code. Read + markdown-only writes. |
+| ❓ **Ask**          | Getting explanations, answers, or recommendations. Read-only + MCP.      |
+| 🪲 **Debug**        | Troubleshooting errors and diagnosing root causes.                       |
+| 👀 **Reviewer**     | Reviewing code for issues without making changes.                        |
+| 🔎 **Search**       | Fast codebase search and retrieval. Read-only.                           |
+| 💭 **Opinion**      | Expert opinion on technology choices or architecture.                    |
+| 🌐 **Browser**      | Web browsing, research, and data extraction.                             |
+| 🪃 **Orchestrator** | Coordinating complex multi-step work by delegating to sub-tasks.         |
 
-Learn more: [Using Modes](https://shofer.dev/docs/basic-usage/using-modes) • [Custom Modes](https://shofer.dev/docs/advanced-usage/custom-modes)
+Create your own modes via [`.shofermodes`](src/USER_MANUAL.md#4-custom-modes) files at the project or global level.
 
-## Tutorial & Feature Videos
-
-<div align="center">
-
-|                                                                                                                                                                         |                                                                                                                                                                            |                                                                                                                                                                          |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| <a href="https://www.youtube.com/watch?v=Mcq3r1EPZ-4"><img src="https://img.youtube.com/vi/Mcq3r1EPZ-4/maxresdefault.jpg" width="100%"></a><br><b>Installing Shofer</b> | <a href="https://www.youtube.com/watch?v=ZBML8h5cCgo"><img src="https://img.youtube.com/vi/ZBML8h5cCgo/maxresdefault.jpg" width="100%"></a><br><b>Configuring Profiles</b> | <a href="https://www.youtube.com/watch?v=r1bpod1VWhg"><img src="https://img.youtube.com/vi/r1bpod1VWhg/maxresdefault.jpg" width="100%"></a><br><b>Codebase Indexing</b>  |
-|   <a href="https://www.youtube.com/watch?v=iiAv1eKOaxk"><img src="https://img.youtube.com/vi/iiAv1eKOaxk/maxresdefault.jpg" width="100%"></a><br><b>Custom Modes</b>    |     <a href="https://www.youtube.com/watch?v=Ho30nyY332E"><img src="https://img.youtube.com/vi/Ho30nyY332E/maxresdefault.jpg" width="100%"></a><br><b>Checkpoints</b>      | <a href="https://www.youtube.com/watch?v=HmnNSasv7T8"><img src="https://img.youtube.com/vi/HmnNSasv7T8/maxresdefault.jpg" width="100%"></a><br><b>Context Management</b> |
-
-</div>
-<p align="center">
-<a href="https://shofer.dev/docs/tutorial-videos">More quick tutorial and feature videos...</a>
-</p>
+Learn more: [User Manual](src/USER_MANUAL.md) • [Custom Modes](src/USER_MANUAL.md#4-custom-modes)
 
 ## Resources
 
-- **[Documentation](https://shofer.dev/docs):** The official guide to installing, configuring, and mastering Shofer.
-- **[YouTube Channel](https://youtube.com/@shoferyt?feature=shared):** Watch tutorials and see features in action.
-- **[Discord Server](https://discord.gg/shofer):** Join the community for real-time help and discussion.
-- **[Reddit Community](https://www.reddit.com/r/Shofer):** Share your experiences and see what others are building.
+- **[User Manual](src/USER_MANUAL.md):** The complete guide to every feature, setting, and concept in Shofer.
+- **[Developer Documentation](https://shofer.dev/docs):** Official docs for installing, configuring, and mastering Shofer.
 - **[GitHub Issues](https://github.com/shofer-dev/shofer/issues):** Report bugs and track development.
 - **[Feature Requests](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Have an idea? Share it with the developers.
 
@@ -174,8 +133,4 @@ We love community contributions! Get started by reading our [CONTRIBUTING.md](CO
 
 ## License
 
-[Apache 2.0 © 2025 Shofer, Inc.](./LICENSE)
-
----
-
-**Enjoy Shofer!** Whether you keep it on a short leash or let it roam autonomously, we can’t wait to see what you build. If you have questions or feature ideas, drop by our [Reddit community](https://www.reddit.com/r/Shofer/) or [Discord](https://discord.gg/shofer). Happy coding!
+[Apache 2.0 © 2026 Shofer, Inc.](./LICENSE)
