@@ -40,6 +40,11 @@ export const workspace = {
 	workspaceFolders: [],
 	getWorkspaceFolder: () => null,
 	onDidChangeWorkspaceFolders: () => mockDisposable,
+	onDidChangeConfiguration: () => mockDisposable,
+	onDidSaveTextDocument: () => mockDisposable,
+	onDidChangeTextDocument: () => mockDisposable,
+	onDidOpenTextDocument: () => mockDisposable,
+	onDidCloseTextDocument: () => mockDisposable,
 	getConfiguration: () => ({
 		get: (key, defaultValue) => defaultValue,
 	}),

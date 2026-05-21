@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import * as vscode from "vscode"
 
+// Break the transitive import chain through extension.ts,
+// which pulls in ContextDropZoneProvider (extends vscode.TreeItem).
+vi.mock("../../../extension", () => ({}))
+
 import { ShoferProvider } from "../ShoferProvider"
 import { Task } from "../../task/Task"
 import { ContextProxy } from "../../config/ContextProxy"
@@ -10,6 +14,13 @@ import type { ProviderSettings, HistoryItem } from "@shofer/types"
 vi.mock("vscode", () => {
 	const mockDisposable = { dispose: vi.fn() }
 	return {
+		TreeItem: class {
+			constructor(_label?: string, _collapsibleState?: number) {}
+		},
+		TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+		ThemeIcon: class {
+			constructor(_id?: string) {}
+		},
 		workspace: {
 			getConfiguration: vi.fn(() => ({
 				get: vi.fn().mockReturnValue([]),
@@ -36,14 +47,65 @@ vi.mock("vscode", () => {
 			}),
 			onDidChangeActiveTextEditor: vi.fn(() => mockDisposable),
 		},
+		commands: { registerCommand: () => mockDisposable, executeCommand: () => Promise.resolve() },
+		languages: {
+			createDiagnosticCollection: () => ({ set: vi.fn(), delete: vi.fn(), clear: vi.fn(), dispose: vi.fn() }),
+		},
 		Uri: {
 			file: vi.fn().mockReturnValue({ toString: () => "file://test" }),
 		},
+		Range: class {
+			constructor() {}
+		},
+		Position: class {
+			constructor() {}
+		},
+		Selection: class {
+			constructor() {}
+		},
+		ExtensionContext: class {},
+		OutputChannel: class {},
+		WebviewView: class {},
+		ExtensionMode: { Production: 1, Development: 2, Test: 3 },
 	}
 })
 
-vi.mock("../../task/Task")
-vi.mock("../../config/ContextProxy")
+vi.mock("../../task/Task", () => ({
+	Task: vi.fn().mockImplementation(() => ({
+		api: undefined,
+		abortTask: vi.fn(),
+		handleWebviewAskResponse: vi.fn(),
+		shoferMessages: [],
+		apiConversationHistory: [],
+		overwriteShoferMessages: vi.fn(),
+		overwriteApiConversationHistory: vi.fn(),
+		getTaskNumber: vi.fn().mockReturnValue(0),
+		setTaskNumber: vi.fn(),
+		setParentTask: vi.fn(),
+		setRootTask: vi.fn(),
+		taskId: "test-task-id",
+		emit: vi.fn(),
+		preloadShoferMessages: vi.fn().mockResolvedValue(undefined),
+		messagesReady: Promise.resolve(),
+		historyPreloaded: true,
+		isHistoryPreloaded: true,
+		on: vi.fn(),
+		startFromHistory: vi.fn(),
+	})),
+}))
+vi.mock("../../config/ContextProxy", () => ({
+	ContextProxy: {
+		getInstance: vi.fn(() => ({
+			onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
+			getValue: vi.fn(),
+			setValue: vi.fn(),
+			getSecret: vi.fn(),
+			storeSecret: vi.fn(),
+			extensionUri: { fsPath: "/test" },
+			globalStorageUri: { fsPath: "/test/storage" },
+		})),
+	},
+}))
 vi.mock("../../../services/mcp/McpServerManager", () => ({
 	McpServerManager: {
 		getInstance: vi.fn().mockResolvedValue({
@@ -133,6 +195,7 @@ describe("ShoferProvider flicker-free cancel", () => {
 			getValue: vi.fn().mockReturnValue(undefined),
 			setValue: vi.fn().mockResolvedValue(undefined),
 			getProviderSettings: vi.fn().mockReturnValue(mockApiConfig),
+			onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
 			extensionUri: mockContext.extensionUri,
 			globalStorageUri: mockContext.globalStorageUri,
 		}
