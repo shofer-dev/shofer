@@ -129,6 +129,7 @@ describe("writeToFileTool", () => {
 				getState: vi.fn().mockResolvedValue({
 					diagnosticsEnabled: true,
 					writeDelayMs: 1000,
+					experiments: { preventFocusDisruption: false },
 				}),
 			}),
 		}

@@ -162,9 +162,9 @@ describe("mode-validator", () => {
 					} as ModeConfig,
 				]
 				// Always-available tools should still be allowed
-				expect(isToolAllowedForMode("ask_followup_question", "minimal-tools-mode", customModes)).toBe(true)
 				expect(isToolAllowedForMode("attempt_completion", "minimal-tools-mode", customModes)).toBe(true)
-				expect(isToolAllowedForMode("switch_mode", "minimal-tools-mode", customModes)).toBe(true)
+				expect(isToolAllowedForMode("update_todo_list", "minimal-tools-mode", customModes)).toBe(true)
+				expect(isToolAllowedForMode("set_task_title", "minimal-tools-mode", customModes)).toBe(true)
 			})
 
 			it("tools_denied blocks tools even when allowed by groups", () => {
@@ -297,7 +297,7 @@ describe("mode-validator", () => {
 		it("throws error when tool requirement is not met", () => {
 			const requirements = { apply_diff: false }
 			expect(() => validateToolUse("apply_diff", codeMode, [], requirements)).toThrow(
-				'Tool "apply_diff" is not allowed in code mode.',
+				'Tool "apply_diff" has been disabled',
 			)
 		})
 
@@ -321,10 +321,10 @@ describe("mode-validator", () => {
 			)
 
 			expect(() => validateToolUse("execute_command", codeMode, [], toolRequirements)).toThrow(
-				'Tool "execute_command" is not allowed in code mode.',
+				'Tool "execute_command" has been disabled',
 			)
 			expect(() => validateToolUse("grep_search", codeMode, [], toolRequirements)).toThrow(
-				'Tool "grep_search" is not allowed in code mode.',
+				'Tool "grep_search" has been disabled',
 			)
 		})
 
