@@ -92,11 +92,16 @@ describe("attemptCompletionTool", () => {
 			ask: vi.fn().mockResolvedValue({ response: "yesButtonClicked", text: "", images: [] }),
 			emitFinalTokenUsageUpdate: vi.fn(),
 			emit: vi.fn(),
+			abortBackgroundChildren: vi.fn().mockResolvedValue(undefined),
 			getTokenUsage: vi.fn().mockReturnValue({}),
 			toolUsage: {},
 			taskId: "task_1",
 			apiConfiguration: { apiProvider: "test" } as any,
 			api: { getModel: vi.fn().mockReturnValue({ id: "test-model", info: {} }) } as any,
+			messageQueueService: {
+				isEmpty: vi.fn().mockReturnValue(true),
+				dequeueMessage: vi.fn().mockReturnValue(null),
+			} as any,
 		}
 	})
 
@@ -526,10 +531,11 @@ describe("attemptCompletionTool", () => {
 					"task_1",
 					expect.anything(),
 					expect.anything(),
+					{ rating: "excellent", isSubtask: false },
 				)
 			})
 
-			it("does not emit TaskCompleted when user provides follow-up feedback", async () => {
+			it("drains queued message and returns instead of completing", async () => {
 				const block: AttemptCompletionToolUse = {
 					type: "tool_use",
 					name: "attempt_completion",
@@ -538,11 +544,13 @@ describe("attemptCompletionTool", () => {
 					partial: false,
 				}
 
-				mockTask.ask = vi.fn().mockResolvedValue({
-					response: "messageResponse",
-					text: "Different question now: what is 3+3?",
-					images: [],
-				})
+				// Simulate a queued message — tool should drain it instead of completing
+				mockTask.messageQueueService = {
+					isEmpty: vi.fn().mockReturnValue(false),
+					dequeueMessage: vi
+						.fn()
+						.mockReturnValue({ text: "Different question now: what is 3+3?", images: [] }),
+				} as any
 
 				const callbacks: AttemptCompletionCallbacks = {
 					askApproval: mockAskApproval,
@@ -558,6 +566,7 @@ describe("attemptCompletionTool", () => {
 				expect(mockCaptureTaskCompleted).not.toHaveBeenCalled()
 				expect(mockTask.emit).not.toHaveBeenCalledWith(
 					ShoferEventName.TaskCompleted,
+					expect.anything(),
 					expect.anything(),
 					expect.anything(),
 					expect.anything(),
