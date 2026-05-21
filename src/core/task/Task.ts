@@ -1502,10 +1502,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const provider = this.providerRef.deref()
 		// Avoid resending large, mostly-static fields (notably taskHistory) on every chat message update.
 		// taskHistory is maintained in-memory in the webview and updated via taskHistoryItemUpdated.
-		// H9: Only push state when this task is focused.  Background tasks accumulate
-		// messages in-memory (still persisted to disk); the webview picks them up
-		// via the full postStateToWebview on focusTask() swap (ShoferProvider.ts:4245).
-		if (provider && provider.taskManager?.getFocusedTaskId() === this.taskId) {
+		// H9: Only push state when this task is the one the user sees.  Uses a dual
+		// check: TaskManager's focusedTaskId (set by focusTask()) OR the current
+		// task on the shoferStack (set by addShoferToStack).  The latter is needed
+		// because addShoferToStack does NOT call taskManager.focusTask(), so
+		// focusedTaskId is null for the common "new task, user is watching" case.
+		// Background tasks (other managed tasks, or tasks popped from the stack)
+		// accumulate messages in-memory (still persisted to disk); the webview picks
+		// them up via the full postStateToWebview on focusTask() swap (line 4245).
+		if (
+			provider &&
+			(provider.taskManager?.getFocusedTaskId() === this.taskId ||
+				provider.getCurrentTask()?.taskId === this.taskId)
+		) {
 			await provider.postStateToWebviewWithoutTaskHistory()
 		}
 		this.emit(ShoferEventName.Message, { action: "created", message })
@@ -1525,13 +1534,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async updateShoferMessage(message: ShoferMessage) {
 		const provider = this.providerRef.deref()
-		// Only push messageUpdated to the webview when this task is the focused
-		// task.  Background tasks and non-focused tasks do not have their
-		// messages in the webview's shoferMessages array (the state pushes
-		// from addToShoferMessages always carry the focused task's messages),
-		// so a targeted update would land on a timestamp the webview doesn't
-		// have — producing a console warning and a dropped update.
-		if (provider && provider.taskManager?.getFocusedTaskId() === this.taskId) {
+		// Only push messageUpdated to the webview when this task is the one the
+		// user sees — either focused via TaskManager or at the top of the
+		// shoferStack.  Background tasks do not have their messages in the
+		// webview's shoferMessages array (state pushes always carry the stack-
+		// current task's messages), so a targeted update would land on a
+		// timestamp the webview doesn't have.
+		if (
+			provider &&
+			(provider.taskManager?.getFocusedTaskId() === this.taskId ||
+				provider.getCurrentTask()?.taskId === this.taskId)
+		) {
 			await provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: message })
 		}
 		this.emit(ShoferEventName.Message, { action: "updated", message })
@@ -3735,9 +3748,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Must flush synchronously — the API call that follows reads
 			// on-disk state and depends on this save being visible.
 			await this._flushSaveShoferMessages()
-			// H9: Only push state when this task is focused (see addToShoferMessages).
-			if (this.providerRef.deref()?.taskManager?.getFocusedTaskId() === this.taskId) {
-				await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+			// H9: Only push state when this task is the one the user sees
+			// (see addToShoferMessages for dual-check rationale).
+			{
+				const p = this.providerRef.deref()
+				if (
+					p &&
+					(p.taskManager?.getFocusedTaskId() === this.taskId || p.getCurrentTask()?.taskId === this.taskId)
+				) {
+					await p.postStateToWebviewWithoutTaskHistory()
+				}
 			}
 
 			try {
@@ -4560,9 +4580,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 
 				await this._debouncedSaveShoferMessages()
-				// H9: Only push state when this task is focused (see addToShoferMessages).
-				if (this.providerRef.deref()?.taskManager?.getFocusedTaskId() === this.taskId) {
-					await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+				// H9: Only push state when this task is the one the user sees
+				// (see addToShoferMessages for dual-check rationale).
+				{
+					const p = this.providerRef.deref()
+					if (
+						p &&
+						(p.taskManager?.getFocusedTaskId() === this.taskId ||
+							p.getCurrentTask()?.taskId === this.taskId)
+					) {
+						await p.postStateToWebviewWithoutTaskHistory()
+					}
 				}
 
 				// No legacy text-stream tool parser state to reset.
