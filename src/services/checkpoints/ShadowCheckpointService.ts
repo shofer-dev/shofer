@@ -550,6 +550,15 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		workspaceDir: string
 	}) {
 		const workspaceRepoDir = this.workspaceRepoDir({ globalStorageDir, workspaceDir })
+
+		// If the shadow repository directory does not exist, checkpoints were
+		// never initialized for this workspace — nothing to clean up.
+		try {
+			await fs.access(workspaceRepoDir)
+		} catch {
+			return
+		}
+
 		const branchName = `shofer-${taskId}`
 		const git = createSanitizedGit(workspaceRepoDir)
 		const success = await this.deleteBranch(git, branchName)
