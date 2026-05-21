@@ -247,7 +247,9 @@ export class ShoferProvider
 		})
 		// Invalidate on workspace-config changes too — mergeAllowedCommands
 		// also reads vscode.workspace.getConfiguration("shofer.allowedCommands").
-		this._settingsGenerationConfigDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
+		// Null-guarded: vscode.workspace.onDidChangeConfiguration is not
+		// available in test environments where the vscode module is a stub.
+		this._settingsGenerationConfigDisposable = vscode.workspace.onDidChangeConfiguration?.((e) => {
 			if (e.affectsConfiguration("shofer.allowedCommands") || e.affectsConfiguration("shofer.deniedCommands")) {
 				this._settingsGeneration++
 			}
@@ -1125,6 +1127,7 @@ export class ShoferProvider
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
 		options?: { startTask?: boolean; keepCurrentTask?: boolean },
 	) {
+		const taskSwitchT0 = Date.now()
 		const isCliRuntime = process.env.SHOFER_CLI_RUNTIME === "1"
 		// CLI injects runtime provider settings from command flags/env at startup.
 		// Restoring provider profiles from task history can overwrite those
@@ -1173,6 +1176,12 @@ export class ShoferProvider
 				}
 				await liveInstance.messagesReady
 				await this.postStateToWebview()
+				if (process.env.DEBUG) {
+					this.debug(
+						`[task-switch] id=${historyItem.id} elapsed=${Date.now() - taskSwitchT0}ms ` +
+							`(live-instance swap)`,
+					)
+				}
 				return liveInstance
 			}
 		}
@@ -1422,6 +1431,15 @@ export class ShoferProvider
 		// dormant.
 		if (originalStartTask) {
 			task.startFromHistory()
+		}
+
+		if (process.env.DEBUG) {
+			const elapsed = Date.now() - taskSwitchT0
+			const msgCount = task.shoferMessages.length
+			const apiTurnCount = task.apiConversationHistory.length
+			this.debug(
+				`[task-switch] id=${task.taskId} elapsed=${elapsed}ms ` + `msgs=${msgCount} apiTurns=${apiTurnCount}`,
+			)
 		}
 
 		return task

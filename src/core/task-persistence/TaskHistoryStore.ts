@@ -7,7 +7,7 @@ import type { HistoryItem } from "@shofer/types"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { getStorageBasePath } from "../../utils/storage"
-import { outputError } from "../../utils/outputChannelLogger"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
 /**
  * Index file format for fast startup reads.
@@ -369,8 +369,15 @@ export class TaskHistoryStore {
 		const indexPath = await this.getIndexPath()
 
 		try {
+			const loadT0 = Date.now()
 			const raw = await fs.readFile(indexPath, "utf8")
+			const byteSize = Buffer.byteLength(raw, "utf8")
 			const index: HistoryIndex = JSON.parse(raw)
+			const loadMs = Date.now() - loadT0
+
+			if (process.env.DEBUG) {
+				outputLog(`[_index] load size=${byteSize} parseMs=${loadMs} entries=${index.entries?.length ?? 0}`)
+			}
 
 			if (index.version === 1 && Array.isArray(index.entries)) {
 				for (const entry of index.entries) {
@@ -389,14 +396,21 @@ export class TaskHistoryStore {
 	 * Write the full index to disk.
 	 */
 	private async writeIndex(): Promise<void> {
+		const writeT0 = Date.now()
 		const indexPath = await this.getIndexPath()
+		const entries = this.getAll()
 		const index: HistoryIndex = {
 			version: 1,
 			updatedAt: Date.now(),
-			entries: this.getAll(),
+			entries,
 		}
 
 		await safeWriteJson(indexPath, index)
+
+		if (process.env.DEBUG) {
+			const writeMs = Date.now() - writeT0
+			outputLog(`[_index] write entries=${entries.length} elapsed=${writeMs}ms`)
+		}
 	}
 
 	/**
