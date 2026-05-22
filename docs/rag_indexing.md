@@ -27,8 +27,9 @@ CodeIndexManager (singleton per workspace)
 | File                                                     | Role                                                                                                                                                             |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/services/code-index/manager.ts`                     | Singleton per workspace. Orchestrates lifecycle: `initialize()` → `startIndexing()` → `searchIndex()`. Handles error recovery and settings changes.              |
-| `src/services/code-index/orchestrator.ts`                | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortSignal`. Phase 2: git-aware short-circuit before directory walk.              |
-| `src/services/code-index/service-factory.ts`             | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config.                                                                          |
+| `src/services/code-index/orchestrator.ts`                | Runs full or incremental scan, starts file watcher. Manages abort/cancel via `AbortSignal`. Wraps `vectorStore.initialize()` with exponential-backoff retry.     |
+| `src/services/code-index/service-factory.ts`             | Creates `IEmbedder`, `IVectorStore`, `DirectoryScanner`, `FileWatcher` based on config. Wraps `validateEmbedder()` with exponential-backoff retry.               |
+| `src/services/code-index/shared/retry.ts`                | `retryWithBackoff()` — reusable exponential-backoff helper used by orchestrator and service factory for service-level recovery.                                  |
 | `src/services/code-index/git/git-source.ts`              | Thin wrapper around VS Code built-in Git extension API. Provides `diffSince()`, `discoverSubmodules()`, `diffSubmoduleSince()`.                                  |
 | `src/services/code-index/processors/scanner.ts`          | Parallel file traversal with concurrency control (`p-limit`). Batches code blocks, creates embeddings, upserts to Qdrant. Handles file deletions.                |
 | `src/services/code-index/processors/parser.ts`           | Uses **web-tree-sitter** for AST-aware parsing. Falls back to line-based chunking for unsupported languages. Also handles Markdown via custom parser.            |
@@ -446,6 +447,9 @@ Defined in `src/services/code-index/constants/index.ts`:
 | `MAX_PENDING_BATCHES`             | 20     | Backpressure limit on pending embedding batches   |
 | `MAX_BATCH_RETRIES`               | 3      | Retry count for failed embedding batches          |
 | `INITIAL_RETRY_DELAY_MS`          | 500    | Initial delay before first batch retry (ms)       |
+| `MAX_SERVICE_RETRIES`             | 5      | Max retries for service-level (Qdrant/Ollama) ops |
+| `SERVICE_INITIAL_RETRY_DELAY_MS`  | 2000   | Initial delay for service-level retry (ms)        |
+| `SERVICE_MAX_BACKOFF_MS`          | 60,000 | Max delay cap for service-level retry (ms)        |
 | `DEFAULT_SEARCH_MIN_SCORE`        | 0.4    | Cosine similarity threshold for search results    |
 | `DEFAULT_MAX_SEARCH_RESULTS`      | 50     | Default max number of search results              |
 
@@ -459,10 +463,28 @@ Defined in `src/services/code-index/constants/index.ts`:
 
 ## Error Handling & Recovery
 
-- **Error recovery**: `recoverFromError()` clears all service instances, forcing a clean re-initialization on next use. Protected against race conditions with `_isRecoveringFromError` flag.
-- **Cache preservation**: If Qdrant connection fails, the cache is preserved for future incremental scans. If indexing fails mid-way (after connecting), the cache is cleared to avoid inconsistency.
-- **Retry logic**: Failed embedding batches retry up to 3 times with exponential backoff (500ms initial delay).
-- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {...})` with location context. The file watcher additionally fires `TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP` once per batch (`captureCodeIndexSegmentDedup({ fileCount, totalBlocks, reused, embedded, deleted })`) so the effectiveness of per-segment dedup can be tracked in production without per-file cardinality or path leakage.
+### Service-Level Retry (Ollama / Qdrant connectivity)
+
+Two entry points wrap their operations with **exponential backoff retry** so that a brief outage of either Ollama or Qdrant does not permanently block indexing:
+
+| Location                                  | Wrapped operation                  | Retries | Initial delay | Max delay |
+| ----------------------------------------- | ---------------------------------- | ------- | ------------- | --------- |
+| `orchestrator.ts` (`startIndexing`)       | `vectorStore.initialize()`         | 5       | 2 s           | 60 s      |
+| `service-factory.ts` (`validateEmbedder`) | `embedder.validateConfiguration()` | 5       | 2 s           | 60 s      |
+
+Backoff schedule: 2 s → 4 s → 8 s → 16 s → 32 s (capped at 60 s). Total worst-case wait ≈ 62 s before giving up. If the signal is aborted mid-backoff the retry loop exits immediately with an `AbortError`.
+
+The orchestrator also updates the UI status on each retry attempt: `"Qdrant connection failed (attempt N/5), retrying in Xs..."` so the user can see that indexing is not stuck — it is waiting for the infrastructure to come back.
+
+### Batch-Level Retry
+
+Failed embedding batches inside the scanner retry up to 3 times with a 500 ms initial delay (`MAX_BATCH_RETRIES`, `INITIAL_RETRY_DELAY_MS` in `constants/index.ts`). This is unchanged.
+
+### Other Recovery
+
+- **`recoverFromError()`** clears all service instances, forcing a clean re-initialization on next use. Protected against race conditions with `_isRecoveringFromError` flag.
+- **Cache preservation**: If Qdrant connection fails before any data is written, the cache is preserved for future incremental scans. If indexing fails mid-way (after connecting), the cache is cleared to avoid inconsistency.
+- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {...})` with location context and `attemptNumber` when they occur inside a retry loop. The file watcher additionally fires `TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP` once per batch (`captureCodeIndexSegmentDedup({ fileCount, totalBlocks, reused, embedded, deleted })`) so the effectiveness of per-segment dedup can be tracked in production without per-file cardinality or path leakage.
 
 ---
 

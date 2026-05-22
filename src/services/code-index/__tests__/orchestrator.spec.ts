@@ -107,6 +107,10 @@ describe("CodeIndexOrchestrator - error path cleanup gating", () => {
 	})
 
 	it("should not call clearCollection() or clear cache when initialize() fails (indexing not started)", async () => {
+		// Use fake timers so the exponential-backoff delays (2s → 4s → 8s → 16s → 32s)
+		// don't slow down the test.  Without this the 5-attempt retry loop takes ~62 real seconds.
+		vitest.useFakeTimers()
+
 		// Arrange: fail at initialize()
 		vectorStore.initialize.mockRejectedValue(new Error("Qdrant unreachable"))
 
@@ -120,8 +124,11 @@ describe("CodeIndexOrchestrator - error path cleanup gating", () => {
 			fileWatcher,
 		)
 
-		// Act
-		await orchestrator.startIndexing()
+		// Act — the orchestrator calls vectorStore.initialize() inside a retryWithBackoff
+		// loop; advance through all 5 sleep delays (2000 + 4000 + 8000 + 16000 + 32000 ms).
+		const startIndexingPromise = orchestrator.startIndexing()
+		await vitest.advanceTimersByTimeAsync(62000)
+		await startIndexingPromise
 
 		// Assert
 		expect(vectorStore.clearCollection).not.toHaveBeenCalled()
@@ -131,7 +138,10 @@ describe("CodeIndexOrchestrator - error path cleanup gating", () => {
 		expect(stateManager.setSystemState).toHaveBeenCalled()
 		const lastCall = stateManager.setSystemState.mock.calls[stateManager.setSystemState.mock.calls.length - 1]
 		expect(lastCall[0]).toBe("Error")
-	})
+
+		// Restore real timers
+		vitest.useRealTimers()
+	}, 30000)
 
 	it("should call clearCollection() and clear cache when an error occurs after initialize() succeeds (indexing started)", async () => {
 		// Arrange: initialize succeeds; fail soon after to enter error path with indexingStarted=true
