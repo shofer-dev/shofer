@@ -414,11 +414,13 @@ export class CodeIndexManager {
 		this._orchestrator = undefined
 		this._searchService = undefined
 
-		// (Re)Initialize service factory
+		// (Re)Initialize service factory — pass a status-update callback so
+		// validateEmbedder can surface Ollama/embedder retry progress to the UI.
 		this._serviceFactory = new CodeIndexServiceFactory(
 			this._configManager!,
 			this.workspacePath,
 			this._cacheManager!,
+			(msg: string) => this._stateManager.setSystemState("Indexing", msg),
 		)
 
 		const workspacePath = this.workspacePath

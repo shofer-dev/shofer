@@ -39,11 +39,17 @@ import { retryWithBackoff } from "./shared/retry"
  * Factory class responsible for creating and configuring code indexing service dependencies.
  */
 export class CodeIndexServiceFactory {
+	// Callback injected by CodeIndexManager to update UI status during retries.
+	private _notifyRetryStatus: ((msg: string) => void) | undefined
+
 	constructor(
 		private readonly configManager: CodeIndexConfigManager,
 		private readonly workspacePath: string,
 		private readonly cacheManager: CacheManager,
-	) {}
+		notifyRetryStatus?: (msg: string) => void,
+	) {
+		this._notifyRetryStatus = notifyRetryStatus
+	}
 
 	/**
 	 * Creates an embedder instance based on the current configuration.
@@ -156,6 +162,10 @@ export class CodeIndexServiceFactory {
 						location: "validateEmbedder:retry",
 						attemptNumber: attempt,
 					})
+					// Update UI status so user knows embedder is being retried, not stuck
+					this._notifyRetryStatus?.(
+						`Embedder connection failed (attempt ${attempt}/${MAX_SERVICE_RETRIES}), retrying in ${Math.round(delayMs / 1000)}s...`,
+					)
 				},
 			})
 		} catch (error) {
