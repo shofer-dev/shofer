@@ -34,12 +34,13 @@ All parameters below are in the OpenAI function-calling schema (`strict: true`, 
 | `query`          | `string`          |    ✅    |    —    | The search pattern (regex or literal text)                                          |
 | `fileTypes`      | `string \| null`  |    ✅    | `null`  | Glob pattern to filter files (e.g., `*.ts`, `**/*.go`). `null` = all files.         |
 | `excludePattern` | `string \| null`  |    ✅    | `null`  | Glob pattern to exclude files (e.g., `**/node_modules/**`). `null` = no exclusions. |
-| `isRegex`        | `boolean \| null` |    ✅    | `true`  | Whether `query` is a regular expression. When `false`, query is matched literally.  |
-| `caseSensitive`  | `boolean \| null` |    ✅    | `false` | Case-sensitive matching.                                                            |
-| `wholeWord`      | `boolean \| null` |    ✅    | `false` | Match whole words only (uses ripgrep `-w` flag). Ignored when `isRegex=true`.       |
-| `maxResults`     | `number \| null`  |    ✅    |  `100`  | Maximum total results across all files.                                             |
-| `contextBefore`  | `number \| null`  |    ✅    |   `1`   | Lines of context to show before each match.                                         |
-| `contextAfter`   | `number \| null`  |    ✅    |   `1`   | Lines of context to show after each match.                                          |
+| `isRegex`        | `boolean \| null` |    —     | `true`  | Whether `query` is a regular expression. When `false`, query is matched literally.  |
+| `regex`          | `boolean \| null` |    —     | `true`  | Alias for `isRegex`. Models may confabulate `regex` as the parameter name.          |
+| `caseSensitive`  | `boolean \| null` |    —     | `false` | Case-sensitive matching.                                                            |
+| `wholeWord`      | `boolean \| null` |    —     | `false` | Match whole words only (uses ripgrep `-w` flag). Ignored when `isRegex=true`.       |
+| `maxResults`     | `number \| null`  |    —     |  `100`  | Maximum total results across all files.                                             |
+| `contextBefore`  | `number \| null`  |    —     |   `1`   | Lines of context to show before each match.                                         |
+| `contextAfter`   | `number \| null`  |    —     |   `1`   | Lines of context to show after each match.                                          |
 
 ## Ripgrep CLI Mapping
 
