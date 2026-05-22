@@ -197,6 +197,17 @@ export class ShoferProvider
 	private _cachedMergedGen = -1
 	private _settingsGeneration = 0
 	private _onDidChangeSettingsDisposable?: vscode.Disposable
+	// ── Heartbeat / health-check fields ──────────────────────────────────────
+	/** Heartbeat timer ID. Cleared on webview reset and on final dispose. */
+	private _heartbeatTimer: NodeJS.Timeout | null = null
+	/** Consecutive ping-miss count. Reset to 0 on each `pong` received. */
+	private _pingMissCount = 0
+
+	/** Interval between `ping` messages sent to the webview (ms). */
+	private static readonly HEARTBEAT_INTERVAL_MS = 1_000 // 15 s
+	/** Number of consecutive misses that triggers a webview reset. */
+	private static readonly PING_MISS_THRESHOLD = 2
+
 	private _settingsGenerationConfigDisposable?: vscode.Disposable
 
 	constructor(
@@ -728,6 +739,81 @@ export class ShoferProvider
 				x.dispose()
 			}
 		}
+		this._stopHeartbeat()
+	}
+
+	// ── Heartbeat / health-check ─────────────────────────────────────────────
+
+	/**
+	 * Called by `webviewMessageHandler` when a `pong` is received from the
+	 * webview. Resets the miss counter so the webview is considered healthy.
+	 */
+	public _recordPong(): void {
+		this._pingMissCount = 0
+	}
+
+	/**
+	 * Starts the ping/pong heartbeat loop. Safe to call multiple times — only
+	 * one interval is ever active at a time.
+	 */
+	private _startHeartbeat(): void {
+		if (this._heartbeatTimer) {
+			return // already running
+		}
+
+		this._pingMissCount = 0
+		this._heartbeatTimer = setInterval(async () => {
+			try {
+				await this.postMessageToWebview({ type: "ping" })
+			} catch {
+				// view may be disposed; stop and let dispose clean up
+				this._stopHeartbeat()
+				return
+			}
+
+			this._pingMissCount++
+			if (this._pingMissCount >= ShoferProvider.PING_MISS_THRESHOLD) {
+				this.log(`[heartbeat] Missed ${this._pingMissCount} consecutive pings — resetting webview`)
+				this._pingMissCount = 0
+				await this._resetWebview()
+			}
+		}, ShoferProvider.HEARTBEAT_INTERVAL_MS)
+	}
+
+	private _stopHeartbeat(): void {
+		if (this._heartbeatTimer) {
+			clearInterval(this._heartbeatTimer)
+			this._heartbeatTimer = null
+		}
+		this._pingMissCount = 0
+	}
+
+	/**
+	 * Re-assigns `webview.html` to force a full reload of the renderer.
+	 * Called automatically when the webview misses `PING_MISS_THRESHOLD`
+	 * consecutive pings. Also callable manually (e.g. on `fatal_error`).
+	 */
+	private async _resetWebview(): Promise<void> {
+		const view = this.view
+		if (!view || this._disposed) {
+			return
+		}
+
+		this._stopHeartbeat()
+		this.clearWebviewResources()
+		this.log("[webview-lifecycle] _resetWebview: re-assigning webview.html")
+
+		try {
+			const html = await this.getHtmlContent(view.webview)
+			view.webview.html = html
+			// Re-wire the message listener and resume health checking
+			this.setWebviewMessageListener(view.webview)
+			this._startHeartbeat()
+		} catch (err) {
+			this.log(
+				`[webview-lifecycle] _resetWebview FAILED: ${err instanceof Error ? `${err.message}\n${err.stack}` : String(err)}`,
+			)
+		}
 	}
 
 	async dispose() {
@@ -778,6 +864,8 @@ export class ShoferProvider
 			clearInterval(this.archivedCleanupTimer)
 			this.archivedCleanupTimer = null
 		}
+
+		this._stopHeartbeat()
 
 		this.taskHistoryStore.dispose()
 		this.flushGlobalStateWriteThrough()
@@ -1019,6 +1107,9 @@ export class ShoferProvider
 		// Sets up an event listener to listen for messages passed from the webview view context
 		// and executes code based on the message that is received.
 		this.setWebviewMessageListener(webviewView.webview)
+
+		// Start the ping/pong heartbeat to detect a frozen / crashed renderer.
+		this._startHeartbeat()
 
 		// Initialize code index status subscription for the current workspace.
 		this.updateCodeIndexStatusSubscription()
