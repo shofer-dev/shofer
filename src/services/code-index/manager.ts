@@ -17,6 +17,7 @@ import { t } from "../../i18n"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { outputError } from "../../utils/outputChannelLogger"
+import { updateCodeIndexMetrics, incCodeIndexError } from "../../metrics/registry"
 
 export class CodeIndexManager {
 	// --- Singleton Implementation ---
@@ -205,11 +206,15 @@ export class CodeIndexManager {
 			// Phase 1/2 fast-path didn't silently drop files.
 			this._cacheManager.onEntryUpdated((relPath) => {
 				this._stateManager.recordFileIndexed(relPath)
-				this._stateManager.setIndexedFileCount(this._cacheManager!.getEntryCount())
+				const count = this._cacheManager!.getEntryCount()
+				this._stateManager.setIndexedFileCount(count)
+				this._emitCodeIndexMetrics(count)
 			})
 			// Seed the cumulative count immediately on (re)load so the popover
 			// shows the persisted total even before any new file change fires.
-			this._stateManager.setIndexedFileCount(this._cacheManager.getEntryCount())
+			const initialCount = this._cacheManager.getEntryCount()
+			this._stateManager.setIndexedFileCount(initialCount)
+			this._emitCodeIndexMetrics(initialCount)
 		}
 
 		// 6. Determine if Core Services Need Recreation
@@ -453,6 +458,7 @@ export class CodeIndexManager {
 				// Workspace has no .gitignore at the root (or the read failed).
 				// Non-fatal: indexing proceeds with no git-derived filtering, with
 				// CODEBASE_INDEX_IGNORED_DIRS and .shoferignore still applied.
+				incCodeIndexError("gitignore")
 				outputError("Unexpected error loading .gitignore:", error)
 				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 					error: error instanceof Error ? error.message : String(error),
@@ -543,6 +549,7 @@ export class CodeIndexManager {
 					await this._recreateServices()
 				} catch (error) {
 					// Error state already set in _recreateServices
+					incCodeIndexError("service-recreate")
 					outputError("Failed to recreate services:", error)
 					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 						error: error instanceof Error ? error.message : String(error),
@@ -554,5 +561,24 @@ export class CodeIndexManager {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Push gauge snapshots for the code-index dashboard row.
+	 *
+	 * embedderQueueDepth is set to 0 here — wiring the per-provider
+	 * concurrency-lane depth requires deeper instrumentation in the embedder
+	 * pipeline and is tracked as a future improvement.
+	 */
+	private _emitCodeIndexMetrics(fileCount: number): void {
+		const provider = this._configManager?.currentEmbedderProvider ?? "unknown"
+		updateCodeIndexMetrics(fileCount, 0, provider)
+	}
+
+	/**
+	 * Dispose the manager and remove it from the singleton instance map.
+	 */
+	public dispose(): void {
+		CodeIndexManager.instances.delete(this.workspacePath)
 	}
 }

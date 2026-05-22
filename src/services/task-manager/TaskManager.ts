@@ -15,6 +15,7 @@ import { ShoferEventName, isTerminalLifecycle, IDLE_TASK_STATE } from "@shofer/t
 import type { Task } from "../../core/task/Task"
 import { outputError } from "../../utils/outputChannelLogger"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
+import { incTaskCreated, incTaskCompleted, incTaskErrored } from "../../metrics/registry"
 
 interface ManagedTaskNotification {
 	targetTaskId: string
@@ -121,6 +122,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		this.setupManagedTaskEventListeners(task)
 		await this.focusTask(managedTask.id)
 		this.emit("tasks:updated", this.getManagedTasks())
+		this._emitTaskCreatedMetric(task)
 		return managedTask
 	}
 
@@ -140,6 +142,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			this.cleanupTaskEventListeners(existingActive)
 			this.activeTasks.set(task.taskId, task)
 			this.setupManagedTaskEventListeners(task)
+			this._emitTaskCreatedMetric(task)
 			return
 		}
 
@@ -441,6 +444,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		) => {
 			if (taskId !== targetTaskId) return
 			this.setState(targetTaskId, TaskManager.makeState("completed", info.rating))
+			this._emitTaskCompletedMetric(targetTaskId, info.rating)
 			this.emit("managedTask:completed", targetTaskId)
 		}
 
@@ -464,9 +468,10 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			}
 		}
 
-		const onTaskError = (taskId: string, _errorType: string) => {
+		const onTaskError = (taskId: string, errorType: string) => {
 			if (taskId !== targetTaskId) return
 			this.setState(targetTaskId, TaskManager.makeState("error"))
+			this._emitTaskErroredMetric(targetTaskId, errorType)
 		}
 
 		task.on(ShoferEventName.TaskStarted, onStarted)
@@ -585,5 +590,33 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			return IDLE_TASK_STATE
 		if (isTerminalLifecycle(state.lifecycle) || state.lifecycle === "idle") return state
 		return IDLE_TASK_STATE
+	}
+
+	// ──────────────────────── Metric helpers ────────────────────────
+
+	private _getTaskMode(taskId: string): string {
+		const task = this.activeTasks.get(taskId)
+		if (!task) return "unknown"
+		try {
+			return task.taskMode
+		} catch {
+			return "unknown"
+		}
+	}
+
+	private _emitTaskCreatedMetric(task: Task): void {
+		try {
+			incTaskCreated(task.taskMode)
+		} catch {
+			incTaskCreated("unknown")
+		}
+	}
+
+	private _emitTaskCompletedMetric(taskId: string, rating: string): void {
+		incTaskCompleted(this._getTaskMode(taskId), rating)
+	}
+
+	private _emitTaskErroredMetric(taskId: string, errorType: string): void {
+		incTaskErrored(this._getTaskMode(taskId), errorType)
 	}
 }

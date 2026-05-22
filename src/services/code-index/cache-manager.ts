@@ -6,6 +6,7 @@ import { safeWriteJson } from "../../utils/safeWriteJson"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName, codebaseIndexCacheSchema, type CodebaseIndexCacheEntry } from "@shofer/types"
 import { outputError } from "../../utils/outputChannelLogger"
+import { recordIndexLoadDuration, recordIndexWriteDuration } from "../../metrics/registry"
 
 /**
  * Manages the cache for code indexing.
@@ -60,6 +61,7 @@ export class CacheManager implements ICacheManager {
 	 * on version mismatch or parse failure discards the cache and starts fresh.
 	 */
 	async initialize(): Promise<void> {
+		const t0 = performance.now()
 		try {
 			const cacheData = await vscode.workspace.fs.readFile(this.cachePath)
 			const raw = JSON.parse(cacheData.toString())
@@ -74,12 +76,14 @@ export class CacheManager implements ICacheManager {
 			// File not found, empty, or unreadable — start fresh
 			this.entries = {}
 		}
+		recordIndexLoadDuration(performance.now() - t0)
 	}
 
 	/**
 	 * Saves the cache to disk in version 3 format.
 	 */
 	private async _performSave(): Promise<void> {
+		const t0 = performance.now()
 		try {
 			await safeWriteJson(this.cachePath.fsPath, {
 				version: 3,
@@ -93,6 +97,7 @@ export class CacheManager implements ICacheManager {
 				location: "_performSave",
 			})
 		}
+		recordIndexWriteDuration(performance.now() - t0)
 	}
 
 	/**
