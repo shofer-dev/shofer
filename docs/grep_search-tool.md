@@ -32,8 +32,8 @@ All parameters below are in the OpenAI function-calling schema (`strict: true`, 
 | ---------------- | ----------------- | :------: | :-----: | ----------------------------------------------------------------------------------- |
 | `path`           | `string`          |    ✅    |    —    | Directory to search recursively, relative to workspace root                         |
 | `query`          | `string`          |    ✅    |    —    | The search pattern (regex or literal text)                                          |
-| `fileTypes`      | `string \| null`  |    ✅    | `null`  | Glob pattern to filter files (e.g., `*.ts`, `**/*.go`). `null` = all files.         |
-| `excludePattern` | `string \| null`  |    ✅    | `null`  | Glob pattern to exclude files (e.g., `**/node_modules/**`). `null` = no exclusions. |
+| `fileTypes`      | `string \| null`  |    —     | `null`  | Glob pattern to filter files (e.g., `*.ts`, `**/*.go`). `null` = all files.         |
+| `excludePattern` | `string \| null`  |    —     | `null`  | Glob pattern to exclude files (e.g., `**/node_modules/**`). `null` = no exclusions. |
 | `isRegex`        | `boolean \| null` |    —     | `true`  | Whether `query` is a regular expression. When `false`, query is matched literally.  |
 | `regex`          | `boolean \| null` |    —     | `true`  | Alias for `isRegex`. Models may confabulate `regex` as the parameter name.          |
 | `caseSensitive`  | `boolean \| null` |    —     | `false` | Case-sensitive matching.                                                            |
