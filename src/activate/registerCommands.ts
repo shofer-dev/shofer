@@ -1,4 +1,7 @@
 import * as vscode from "vscode"
+import * as v8 from "v8"
+import * as path from "path"
+import fs from "fs/promises"
 import delay from "delay"
 
 import type { CommandId } from "@shofer/types"
@@ -303,6 +306,22 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 			vscode.window.showInformationMessage("Git history indexing stopped.")
 		}
 	},
+	heapSnapshot: async () => {
+		const writeHeapSnapshot = (v8 as unknown as { writeHeapSnapshot: (filename?: string) => string })
+			.writeHeapSnapshot
+		const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+		const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
+		const snapshotDir = path.join(workspacePath, ".shofer", "heap-snapshots")
+		await fs.mkdir(snapshotDir, { recursive: true })
+		// `v8.writeHeapSnapshot()` without an arg writes to `process.cwd()` —
+		// ignoring the prepared directory.  Pass an explicit path so the
+		// snapshot lands inside `.shofer/heap-snapshots/`.
+		const targetPath = path.join(snapshotDir, `heap-${timestamp}.heapsnapshot`)
+		const filePath = writeHeapSnapshot(targetPath)
+		outputChannel.appendLine(`[heapSnapshot] Heap snapshot written to: ${filePath}`)
+		vscode.window.showInformationMessage(`Heap snapshot written to ${filePath}`)
+	},
+
 	clearGitIndexData: async () => {
 		const manager = GitIndexManager.getInstance(context)
 		if (!manager) {

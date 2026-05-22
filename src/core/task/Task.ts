@@ -140,6 +140,8 @@ import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
 import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { time } from "../../utils/perf"
+import { recordLlmDuration, incLlmCalls, incLlmErrors, classifyLlmError } from "../../metrics/registry"
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 const DEFAULT_USAGE_COLLECTION_TIMEOUT_MS = 5000 // 5 seconds
@@ -662,13 +664,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// unchanged — avoids an O(n) walk per save.
 	private _cachedTokenUsage: import("@shofer/types").TokenUsage | undefined
 	private _tokenBearingMessageCount = -1
-
-	// Performance instrumentation — saveShoferMessages latency tracking.
-	// Holds a rolling window of the most recent save durations (ms) for
-	// periodic p50/p95 reporting.  DEBUG-gated; no runtime cost in release.
-	private _savePerfCount = 0
-	private readonly _savePerfRecentMs: number[] = []
-	private static readonly _savePerfWindow = 50
 
 	// Initial execution state for the task's history item (set at creation time to avoid race conditions)
 	private readonly initialState?: TaskState
@@ -1551,8 +1546,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async saveShoferMessages(): Promise<boolean> {
-		const saveT0 = Date.now()
-		this._savePerfCount++
+		return time("saveShoferMessages", () => this._saveShoferMessagesImpl())
+	}
+
+	private async _saveShoferMessagesImpl(): Promise<boolean> {
 		try {
 			// H6: Capture a synchronous snapshot of the messages BEFORE yielding
 			// to the event loop. `JSON.stringify` is single-tick and produces a
@@ -1613,29 +1610,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 
 			await this.providerRef.deref()?.updateTaskHistory(historyItem)
-
-			if (process.env.DEBUG) {
-				const durationMs = Date.now() - saveT0
-				// Ring buffer for periodic percentile reporting
-				if (this._savePerfRecentMs.length >= Task._savePerfWindow) {
-					this._savePerfRecentMs.shift()
-				}
-				this._savePerfRecentMs.push(durationMs)
-
-				const byteSize = Buffer.byteLength(serialized, "utf8")
-				let summary = ""
-				if (this._savePerfCount % Task._savePerfWindow === 0 && this._savePerfRecentMs.length > 0) {
-					const sorted = [...this._savePerfRecentMs].sort((a, b) => a - b)
-					const p50 = sorted[Math.floor(sorted.length * 0.5)]
-					const p95 = sorted[Math.floor(sorted.length * 0.95)]
-					summary = ` p50=${p50}ms p95=${p95}ms`
-				}
-				outputLog(
-					`[saveMsgs] task=${this.taskId} count=${this._savePerfCount} ` +
-						`dur=${durationMs}ms size=${byteSize} ` +
-						`msgs=${this.shoferMessages.length}${summary}`,
-				)
-			}
 
 			return true
 		} catch (error) {
@@ -2645,6 +2619,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * and skips its own load prefix when this has already run.
 	 */
 	public async preloadShoferMessages(): Promise<void> {
+		return time("preloadShoferMessages", () => this._preloadShoferMessagesImpl())
+	}
+
+	private async _preloadShoferMessagesImpl(): Promise<void> {
 		if (this.historyPreloaded) {
 			return
 		}
@@ -2652,12 +2630,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// H1: Issue both disk reads concurrently. They touch independent
 		// files (`ui_messages.json` and `api_conversation_history.json`)
 		// and the sanitization step below only depends on the first.
-		const preloadT0 = Date.now()
 		const [modifiedShoferMessages, apiConversationHistory] = await Promise.all([
 			this.getSavedShoferMessages(),
 			this.getSavedApiConversationHistory(),
 		])
-		const readMs = Date.now() - preloadT0
 
 		// Remove any resume messages that may have been added before.
 		const lastRelevantMessageIndex = findLastIndex(
@@ -2712,20 +2688,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Persist the sanitized snapshot in the background. The task is
 		// already usable; the write only matters for subsequent reloads.
 		// Errors are logged but do not block the resume flow.
-		const writeT0 = Date.now()
-		void this.overwriteShoferMessages(modifiedShoferMessages)
-			.then(() => {
-				if (process.env.DEBUG) {
-					outputLog(
-						`[preload] task=${this.taskId} read=${readMs}ms sanitize+write=${
-							Date.now() - writeT0
-						}ms msgs=${modifiedShoferMessages.length} apiTurns=${apiConversationHistory.length}`,
-					)
-				}
-			})
-			.catch((err) => {
-				outputWarn(`preloadShoferMessages: background sanitized save failed: ${err}`)
-			})
+		void this.overwriteShoferMessages(modifiedShoferMessages).catch((err) => {
+			outputWarn(`preloadShoferMessages: background sanitized save failed: ${err}`)
+		})
 	}
 
 	/**
@@ -5617,6 +5582,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			systemPromptHead: systemPrompt.slice(0, 500),
 		})
 
+		// LLM API instrumentation — record timing for Prometheus histograms/counters.
+		// `apiProvider` is the canonical source for the provider label; never
+		// fall back to `modelId` (it pollutes the label cardinality with
+		// model identifiers and is semantically wrong — see prometheus.md §7.6).
+		const _llmProvider = apiConfiguration?.apiProvider ?? "unknown"
+		const _llmModelId = this.api.getModel().id
+		const _llmT0 = performance.now()
+
 		// The provider accepts reasoning items alongside standard messages; cast to the expected parameter type.
 		const stream = this.api.createMessage(
 			systemPrompt,
@@ -5661,6 +5634,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.isWaitingForFirstChunk = false
 			this.currentRequestAbortController = undefined
 
+			// Record LLM API error for Prometheus.
+			recordLlmDuration(_llmProvider, _llmModelId, performance.now() - _llmT0)
+			incLlmCalls(_llmProvider, _llmModelId, "error")
+			incLlmErrors(_llmProvider, _llmModelId, classifyLlmError(error))
 			// Persist structured error info into api_req_started for export diagnostics.
 			this.snapshotApiReqError(this.buildApiReqError(error))
 
@@ -5733,6 +5710,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// )
 			yield chunk
 		}
+
+		// Record successful LLM API call.
+		recordLlmDuration(_llmProvider, _llmModelId, performance.now() - _llmT0)
+		incLlmCalls(_llmProvider, _llmModelId, "success")
 	}
 
 	/**

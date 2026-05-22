@@ -17,6 +17,7 @@ import {
 import type { TodoItem } from "./todo.js"
 import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
+import type { WebviewMetricsPush } from "./metrics.js"
 
 // Types previously from cloud.ts, now defined inline
 type CloudUserInfo = {
@@ -725,6 +726,8 @@ export interface WebviewMessage {
 		| "updateCostLimit"
 		// Diagnostic logging from webview → extension OutputChannel
 		| "webviewLog"
+		// Metrics push from webview → extension host registry (Phase 4)
+		| "pushMetrics"
 	text?: string
 	taskId?: string
 	editedMessageContent?: string
@@ -760,6 +763,8 @@ export interface WebviewMessage {
 	payload?: WebViewMessagePayload
 	source?: "global" | "project"
 	skillName?: string // For skill operations (createSkill, deleteSkill, moveSkill, openSkillFile)
+	/** Typed payload for `pushMetrics` — see {@link WebviewMetricsPush}. */
+	metrics?: WebviewMetricsPush
 	/** @deprecated Use skillModeSlugs instead */
 	skillMode?: string // For skill operations (current mode restriction)
 	/** @deprecated Use newSkillModeSlugs instead */

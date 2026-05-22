@@ -59,6 +59,9 @@ export const commandIds = [
 	"startGitIndexing",
 	"stopGitIndexing",
 	"clearGitIndexData",
+
+	// Diagnostics
+	"heapSnapshot",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]

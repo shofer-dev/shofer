@@ -60,6 +60,8 @@ import { AssistantAgentManager } from "./services/assistant-agent/manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
+import { startMetricsServer, stopMetricsServer } from "./metrics/server"
+import { setupGcObserver, updateMemoryMetrics, updateEventListenerMetrics, registry } from "./metrics/registry"
 
 import {
 	handleUri,
@@ -140,6 +142,25 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	const contextProxy = await ContextProxy.getInstance(context)
+
+	// Start the Prometheus metrics server on a random ephemeral port.
+	// A per-PID port file is written under globalStorage/metrics-ports/ for
+	// scraper discovery (multiple windows on one host are all distinct).
+	const _workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+	await startMetricsServer(context.globalStoragePath, _workspace)
+
+	// GC observation via perf_hooks PerformanceObserver — no V8 flag required.
+	setupGcObserver()
+
+	// Register on-scrape collectors so /metrics returns up-to-date values
+	// without an event-loop-waking timer.  process.memoryUsage() is O(1).
+	registry.registerCollector(() => {
+		updateMemoryMetrics()
+		const provider = ShoferProvider.getVisibleInstance()
+		if (provider) {
+			updateEventListenerMetrics(provider.listenerCount("ShoferEvent"))
+		}
+	})
 
 	// Initialize code index managers for all workspace folders.
 	const codeIndexManagers: CodeIndexManager[] = []
@@ -380,4 +401,5 @@ export async function deactivate() {
 	CodeIndexManager.disposeAll()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
+	await stopMetricsServer()
 }

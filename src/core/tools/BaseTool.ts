@@ -3,6 +3,7 @@ import type { ToolName, ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
 import { outputError } from "../../utils/outputChannelLogger"
+import { recordToolDuration, incToolCalls, incToolErrors, classifyToolError } from "../../metrics/registry"
 
 /**
  * Callbacks passed to tool execution
@@ -176,7 +177,19 @@ export abstract class BaseTool<TName extends ToolName> {
 			return
 		}
 
-		// Execute with typed parameters
-		await this.execute(params, task, callbacks)
+		// Execute with typed parameters — instrument tool duration for Prometheus.
+		const execT0 = performance.now()
+		try {
+			await this.execute(params, task, callbacks)
+			const dur = performance.now() - execT0
+			recordToolDuration(this.name, dur)
+			incToolCalls(this.name, "success")
+		} catch (err) {
+			const dur = performance.now() - execT0
+			recordToolDuration(this.name, dur)
+			incToolCalls(this.name, "error")
+			incToolErrors(this.name, classifyToolError(err))
+			throw err
+		}
 	}
 }
