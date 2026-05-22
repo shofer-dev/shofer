@@ -517,7 +517,11 @@ export class GitIndexManager {
 		// so we pass a lightweight placeholder.
 		const { CacheManager } = await import("../code-index/cache-manager")
 		const placeholderCache = new CacheManager(this.context, this.workspacePath)
-		this._serviceFactory = new CodeIndexServiceFactory(configManager, this.workspacePath, placeholderCache)
+		this._serviceFactory = new CodeIndexServiceFactory({
+			configManager,
+			workspacePath: this.workspacePath,
+			cacheManager: placeholderCache,
+		})
 
 		const embedder = this._serviceFactory.createEmbedder()
 

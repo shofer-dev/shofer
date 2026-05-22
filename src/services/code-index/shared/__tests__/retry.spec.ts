@@ -13,7 +13,7 @@ describe("retryWithBackoff", () => {
 		const fn = vi.fn().mockResolvedValue(42)
 
 		const result = await retryWithBackoff(fn, {
-			maxRetries: 3,
+			maxAttempts: 3,
 			initialDelayMs: 100,
 			maxBackoffMs: 1000,
 		})
@@ -26,7 +26,7 @@ describe("retryWithBackoff", () => {
 		const fn = vi.fn().mockRejectedValueOnce(new Error("fail 1")).mockResolvedValueOnce("success")
 
 		const promise = retryWithBackoff(fn, {
-			maxRetries: 3,
+			maxAttempts: 3,
 			initialDelayMs: 100,
 			maxBackoffMs: 1000,
 		})
@@ -43,7 +43,7 @@ describe("retryWithBackoff", () => {
 		const fn = vi.fn().mockRejectedValue(new Error("persistent failure"))
 
 		const promise = retryWithBackoff(fn, {
-			maxRetries: 3,
+			maxAttempts: 3,
 			initialDelayMs: 100,
 			maxBackoffMs: 1000,
 		})
@@ -65,7 +65,7 @@ describe("retryWithBackoff", () => {
 			.mockResolvedValueOnce("success")
 
 		const promise = retryWithBackoff(fn, {
-			maxRetries: 5,
+			maxAttempts: 5,
 			initialDelayMs: 100,
 			maxBackoffMs: 150, // cap at 150 ms even though 2nd attempt would be 200 ms
 		})
@@ -85,7 +85,7 @@ describe("retryWithBackoff", () => {
 		const onRetry = vi.fn()
 
 		const promise = retryWithBackoff(fn, {
-			maxRetries: 2,
+			maxAttempts: 2,
 			initialDelayMs: 100,
 			maxBackoffMs: 1000,
 			onRetry,
@@ -105,7 +105,7 @@ describe("retryWithBackoff", () => {
 		const fn = vi.fn().mockRejectedValue(new Error("will not recover"))
 
 		const promise = retryWithBackoff(fn, {
-			maxRetries: 3,
+			maxAttempts: 3,
 			initialDelayMs: 100,
 			maxBackoffMs: 1000,
 			signal: controller.signal,
@@ -128,7 +128,7 @@ describe("retryWithBackoff", () => {
 		})
 
 		const promise = retryWithBackoff(fn, {
-			maxRetries: 3,
+			maxAttempts: 3,
 			initialDelayMs: 100,
 			maxBackoffMs: 1000,
 			signal: controller.signal,

@@ -447,7 +447,7 @@ Defined in `src/services/code-index/constants/index.ts`:
 | `MAX_PENDING_BATCHES`             | 20     | Backpressure limit on pending embedding batches   |
 | `MAX_BATCH_RETRIES`               | 3      | Retry count for failed embedding batches          |
 | `INITIAL_RETRY_DELAY_MS`          | 500    | Initial delay before first batch retry (ms)       |
-| `MAX_SERVICE_RETRIES`             | 5      | Max retries for service-level (Qdrant/Ollama) ops |
+| `MAX_SERVICE_ATTEMPTS`            | 5      | Total attempts for service-level (Qdrant/Ollama) ops (4 retries + 1 initial) |
 | `SERVICE_INITIAL_RETRY_DELAY_MS`  | 2000   | Initial delay for service-level retry (ms)        |
 | `SERVICE_MAX_BACKOFF_MS`          | 60,000 | Max delay cap for service-level retry (ms)        |
 | `DEFAULT_SEARCH_MIN_SCORE`        | 0.4    | Cosine similarity threshold for search results    |
@@ -467,14 +467,14 @@ Defined in `src/services/code-index/constants/index.ts`:
 
 Two entry points wrap their operations with **exponential backoff retry** so that a brief outage of either Ollama or Qdrant does not permanently block indexing:
 
-| Location                                  | Wrapped operation                  | Retries | Initial delay | Max delay |
-| ----------------------------------------- | ---------------------------------- | ------- | ------------- | --------- |
-| `orchestrator.ts` (`startIndexing`)       | `vectorStore.initialize()`         | 5       | 2 s           | 60 s      |
-| `service-factory.ts` (`validateEmbedder`) | `embedder.validateConfiguration()` | 5       | 2 s           | 60 s      |
+| Location                                  | Wrapped operation                  | Attempts | Initial delay | Max delay |
+| ----------------------------------------- | ---------------------------------- | -------- | ------------- | --------- |
+| `orchestrator.ts` (`startIndexing`)       | `vectorStore.initialize()`         | 5        | 2 s           | 60 s      |
+| `service-factory.ts` (`validateEmbedder`) | `embedder.validateConfiguration()` | 5        | 2 s           | 60 s      |
 
-Backoff schedule: 2 s → 4 s → 8 s → 16 s → 32 s (capped at 60 s). Total worst-case wait ≈ 62 s before giving up. If the signal is aborted mid-backoff the retry loop exits immediately with an `AbortError`.
+`MAX_SERVICE_ATTEMPTS = 5` counts *total* invocations — the helper sleeps 4 times between them: 2 s → 4 s → 8 s → 16 s (capped at 60 s), so worst-case sleep time before giving up is ≈ 30 s plus the cost of the 5 failed calls themselves. If the signal is aborted mid-backoff the retry loop exits immediately with an `AbortError`.
 
-The orchestrator also updates the UI status on each retry attempt: `"Qdrant connection failed (attempt N/5), retrying in Xs..."` so the user can see that indexing is not stuck — it is waiting for the infrastructure to come back.
+The orchestrator also updates the UI status on each retry attempt: `"Qdrant connection failed (attempt N/5), retrying in Xs..."` so the user can see that indexing is not stuck — it is waiting for the infrastructure to come back. `validateEmbedder` emits the analogous `"Embedder connection failed (attempt N/5), …"` message via a `notifyRetryStatus` callback injected by `CodeIndexManager`. Per-attempt telemetry is intentionally **not** emitted — only a single `CODE_INDEX_ERROR` event at the end of a fully-exhausted retry loop, carrying `retryAttempts: N`, so transient blips do not amplify telemetry volume 5×.
 
 ### Batch-Level Retry
 
