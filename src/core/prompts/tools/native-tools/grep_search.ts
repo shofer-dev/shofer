@@ -40,7 +40,7 @@ const FILE_TYPES_PARAMETER_DESCRIPTION = `Glob pattern to filter files (e.g., '*
 
 const EXCLUDE_PATTERN_PARAMETER_DESCRIPTION = `Glob pattern to exclude files (e.g., '**/node_modules/**'). null = no exclusions.`
 
-const IS_REGEX_PARAMETER_DESCRIPTION = `Whether query is a regular expression (default: true)`
+const IS_REGEX_PARAMETER_DESCRIPTION = `Whether query is a regular expression (default: true). When false, query is matched as a literal string.`
 
 const CASE_SENSITIVE_PARAMETER_DESCRIPTION = `Case-sensitive matching (default: false)`
 
@@ -51,6 +51,8 @@ const MAX_RESULTS_PARAMETER_DESCRIPTION = `Maximum total results across all file
 const CONTEXT_BEFORE_PARAMETER_DESCRIPTION = `Lines of context to show before each match (default: 1)`
 
 const CONTEXT_AFTER_PARAMETER_DESCRIPTION = `Lines of context to show after each match (default: 1)`
+
+const REGEX_PARAMETER_DESCRIPTION = `Alias for isRegex — whether query is a regular expression (default: true)`
 
 export default {
 	type: "function",
@@ -81,6 +83,10 @@ export default {
 					type: ["boolean", "null"],
 					description: IS_REGEX_PARAMETER_DESCRIPTION,
 				},
+				regex: {
+					type: ["boolean", "null"],
+					description: REGEX_PARAMETER_DESCRIPTION,
+				},
 				caseSensitive: {
 					type: ["boolean", "null"],
 					description: CASE_SENSITIVE_PARAMETER_DESCRIPTION,
@@ -102,18 +108,7 @@ export default {
 					description: CONTEXT_AFTER_PARAMETER_DESCRIPTION,
 				},
 			},
-			required: [
-				"path",
-				"query",
-				"fileTypes",
-				"excludePattern",
-				"isRegex",
-				"caseSensitive",
-				"wholeWord",
-				"maxResults",
-				"contextBefore",
-				"contextAfter",
-			],
+			required: ["path", "query", "fileTypes", "excludePattern"],
 			additionalProperties: false,
 		},
 	},
