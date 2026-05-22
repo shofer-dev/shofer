@@ -26,7 +26,6 @@
  *   the rest of the catalog.
  */
 
-import { PerformanceObserver } from "perf_hooks"
 import client from "prom-client"
 import { type CallStatus, type LlmErrorType, type ToolErrorType, type McpErrorType } from "@shofer/types"
 import { setHistogramCallback } from "../utils/perf"
@@ -400,16 +399,6 @@ export function updateCodeIndexMetrics(fileCount: number, embedderQueueDepth: nu
 	})
 }
 
-// --- GC ---
-
-export function recordGcDuration(ms: number): void {
-	registry.observeHistogram("shofer_gc_duration_ms", "GC pause duration (ms).", ms, FAST_BUCKETS_MS)
-}
-
-export function incGcTotalMs(ms: number): void {
-	registry.incCounter("shofer_gc_total_ms", "Cumulative GC pause time since process start (ms).", undefined, ms)
-}
-
 // --- Metrics-pipeline self-observation ---
 
 export function incMetricsScrape(): void {
@@ -434,27 +423,4 @@ export function incWebviewPushError(): void {
 
 export function incMetricsServerRestart(): void {
 	registry.incCounter("shofer_metrics_server_restarts_total", "Times the metrics HTTP server had to rebind.")
-}
-
-// ---------------------------------------------------------------------------
-// GC observer
-//
-// `PerformanceObserver` is a top-level export of `perf_hooks`, NOT a
-// property of `performance` (the prior implementation read it off the wrong
-// object and silently no-op'd).  GC entries are emitted by V8 unconditionally
-// — no V8 flag required.
-// ---------------------------------------------------------------------------
-
-export function setupGcObserver(): void {
-	try {
-		const observer = new PerformanceObserver((list) => {
-			for (const entry of list.getEntries()) {
-				recordGcDuration(entry.duration)
-				incGcTotalMs(entry.duration)
-			}
-		})
-		observer.observe({ entryTypes: ["gc"], buffered: true })
-	} catch {
-		// perf_hooks unavailable in some runtimes — silently skip.
-	}
 }
