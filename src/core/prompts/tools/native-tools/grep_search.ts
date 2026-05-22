@@ -52,14 +52,20 @@ const CONTEXT_BEFORE_PARAMETER_DESCRIPTION = `Lines of context to show before ea
 
 const CONTEXT_AFTER_PARAMETER_DESCRIPTION = `Lines of context to show after each match (default: 1)`
 
-const REGEX_PARAMETER_DESCRIPTION = `Alias for isRegex — whether query is a regular expression (default: true)`
-
 export default {
 	type: "function",
 	function: {
 		name: "grep_search",
 		description: SEARCH_FILES_DESCRIPTION,
-		strict: true,
+		// Note: strict mode is intentionally disabled for this tool.
+		// With strict: true, OpenAI Structured Outputs requires ALL properties in
+		// `properties` to appear in `required` — there is no way to mark a field as
+		// genuinely optional. That forces the model to emit every optional param
+		// (`isRegex`, `caseSensitive`, `wholeWord`, `maxResults`, `contextBefore`,
+		// `contextAfter`) on every call, which bloats tool calls and triggers
+		// 'Missing required parameter' errors when a model omits one. Disabling
+		// strict lets the model omit optional params entirely and fall back to the
+		// defaults documented above. Mirrors the pattern used by `read_command_output`.
 		parameters: {
 			type: "object",
 			properties: {
@@ -82,10 +88,6 @@ export default {
 				isRegex: {
 					type: ["boolean", "null"],
 					description: IS_REGEX_PARAMETER_DESCRIPTION,
-				},
-				regex: {
-					type: ["boolean", "null"],
-					description: REGEX_PARAMETER_DESCRIPTION,
 				},
 				caseSensitive: {
 					type: ["boolean", "null"],

@@ -26,7 +26,7 @@ The tool previously used VS Code's [`workspace.findTextInFiles`](https://code.vi
 
 ## Input Parameters
 
-All parameters below are in the OpenAI function-calling schema (`strict: true`, `additionalProperties: false`).
+The OpenAI function-calling schema uses `additionalProperties: false`. **Strict mode is intentionally disabled** (mirroring `read_command_output`) so that optional parameters can be omitted by the model entirely; under `strict: true` OpenAI requires every property to appear in `required`, which forces verbose tool calls and produces "Missing required parameter" errors when a model omits one. The parser also accepts `regex` as an alias for `isRegex` for models that confabulate the parameter name (handled inside `NativeToolCallParser`, not exposed in the schema).
 
 | Parameter        | Type              | Required | Default | Description                                                                         |
 | ---------------- | ----------------- | :------: | :-----: | ----------------------------------------------------------------------------------- |
@@ -35,7 +35,6 @@ All parameters below are in the OpenAI function-calling schema (`strict: true`, 
 | `fileTypes`      | `string \| null`  |    —     | `null`  | Glob pattern to filter files (e.g., `*.ts`, `**/*.go`). `null` = all files.         |
 | `excludePattern` | `string \| null`  |    —     | `null`  | Glob pattern to exclude files (e.g., `**/node_modules/**`). `null` = no exclusions. |
 | `isRegex`        | `boolean \| null` |    —     | `true`  | Whether `query` is a regular expression. When `false`, query is matched literally.  |
-| `regex`          | `boolean \| null` |    —     | `true`  | Alias for `isRegex`. Models may confabulate `regex` as the parameter name.          |
 | `caseSensitive`  | `boolean \| null` |    —     | `false` | Case-sensitive matching.                                                            |
 | `wholeWord`      | `boolean \| null` |    —     | `false` | Match whole words only (uses ripgrep `-w` flag). Ignored when `isRegex=true`.       |
 | `maxResults`     | `number \| null`  |    —     |  `100`  | Maximum total results across all files.                                             |
