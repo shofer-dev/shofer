@@ -108,7 +108,7 @@ export default {
 					description: CONTEXT_AFTER_PARAMETER_DESCRIPTION,
 				},
 			},
-			required: ["path", "query", "fileTypes", "excludePattern"],
+			required: ["path", "query"],
 			additionalProperties: false,
 		},
 	},
