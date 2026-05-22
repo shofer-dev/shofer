@@ -103,6 +103,8 @@ import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
 import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { perf } from "../../utils/perf"
+import { setProviderReady } from "../../metrics/server"
 
 /**
  * https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
@@ -200,13 +202,25 @@ export class ShoferProvider
 	// ── Heartbeat / health-check fields ──────────────────────────────────────
 	/** Heartbeat timer ID. Cleared on webview reset and on final dispose. */
 	private _heartbeatTimer: NodeJS.Timeout | null = null
-	/** Consecutive ping-miss count. Reset to 0 on each `pong` received. */
-	private _pingMissCount = 0
+	/**
+	 * Timestamp (epoch ms) of the most recently received `pong` — or, when the
+	 * heartbeat first starts, the moment we started ticking. Liveness is
+	 * determined by `Date.now() - _lastPongTs > LIVENESS_TIMEOUT_MS`, not by
+	 * counting ticks. This avoids the previous tick-driven race where every
+	 * tick incremented a miss counter before the in-flight pong could arrive.
+	 */
+	private _lastPongTs = 0
 
 	/** Interval between `ping` messages sent to the webview (ms). */
-	private static readonly HEARTBEAT_INTERVAL_MS = 1_000 // 15 s
-	/** Number of consecutive misses that triggers a webview reset. */
-	private static readonly PING_MISS_THRESHOLD = 2
+	private static readonly HEARTBEAT_INTERVAL_MS = 2_000
+	/**
+	 * Maximum time the webview may go without responding to a ping before we
+	 * declare it dead and reset it. Must be comfortably larger than
+	 * `HEARTBEAT_INTERVAL_MS` plus expected main-thread stalls (large file
+	 * opens, GC pauses, source-map enhancement, …) so transient hiccups don't
+	 * trip the killer.
+	 */
+	private static readonly LIVENESS_TIMEOUT_MS = 10_000
 
 	private _settingsGenerationConfigDisposable?: vscode.Disposable
 
@@ -451,6 +465,7 @@ export class ShoferProvider
 			}
 
 			this.taskHistoryStoreInitialized = true
+			setProviderReady()
 
 			// Seed the TaskManager with persisted task states so the TaskSelector
 			// shows correct state icons on startup without waiting for a re-focus.
@@ -746,22 +761,29 @@ export class ShoferProvider
 
 	/**
 	 * Called by `webviewMessageHandler` when a `pong` is received from the
-	 * webview. Resets the miss counter so the webview is considered healthy.
+	 * webview. Records the timestamp so the next heartbeat tick can compute
+	 * liveness as `now - _lastPongTs`.
 	 */
 	public _recordPong(): void {
-		this._pingMissCount = 0
+		this._lastPongTs = Date.now()
 	}
 
 	/**
 	 * Starts the ping/pong heartbeat loop. Safe to call multiple times — only
 	 * one interval is ever active at a time.
+	 *
+	 * Must NOT be called before the webview has signalled `webviewDidLaunch` —
+	 * otherwise pings sent while the bundle is still loading count against the
+	 * liveness window and trigger an infinite reset loop.
 	 */
 	private _startHeartbeat(): void {
 		if (this._heartbeatTimer) {
 			return // already running
 		}
 
-		this._pingMissCount = 0
+		// Seed `_lastPongTs` with `now` so the first tick has a fresh window —
+		// otherwise `now - 0` would immediately exceed LIVENESS_TIMEOUT_MS.
+		this._lastPongTs = Date.now()
 		this._heartbeatTimer = setInterval(async () => {
 			try {
 				await this.postMessageToWebview({ type: "ping" })
@@ -771,10 +793,11 @@ export class ShoferProvider
 				return
 			}
 
-			this._pingMissCount++
-			if (this._pingMissCount >= ShoferProvider.PING_MISS_THRESHOLD) {
-				this.log(`[heartbeat] Missed ${this._pingMissCount} consecutive pings — resetting webview`)
-				this._pingMissCount = 0
+			const silentFor = Date.now() - this._lastPongTs
+			if (silentFor > ShoferProvider.LIVENESS_TIMEOUT_MS) {
+				this.log(
+					`[heartbeat] No pong received for ${silentFor}ms (> ${ShoferProvider.LIVENESS_TIMEOUT_MS}ms) — resetting webview`,
+				)
 				await this._resetWebview()
 			}
 		}, ShoferProvider.HEARTBEAT_INTERVAL_MS)
@@ -785,7 +808,17 @@ export class ShoferProvider
 			clearInterval(this._heartbeatTimer)
 			this._heartbeatTimer = null
 		}
-		this._pingMissCount = 0
+		this._lastPongTs = 0
+	}
+
+	/**
+	 * Called by `webviewMessageHandler` on each `webviewDidLaunch`. This is the
+	 * earliest signal that the renderer's JS has executed and the `message`
+	 * event listener (which answers pings with pongs) is installed — only now
+	 * is it safe to start the heartbeat loop.
+	 */
+	public _onWebviewLaunched(): void {
+		this._startHeartbeat()
 	}
 
 	/**
@@ -806,9 +839,11 @@ export class ShoferProvider
 		try {
 			const html = await this.getHtmlContent(view.webview)
 			view.webview.html = html
-			// Re-wire the message listener and resume health checking
+			// Re-wire the message listener. The heartbeat is restarted only when
+			// the freshly-loaded webview posts `webviewDidLaunch` — see
+			// `_onWebviewLaunched`. Restarting it eagerly here would re-enter the
+			// infinite reset loop while the new bundle is still loading.
 			this.setWebviewMessageListener(view.webview)
-			this._startHeartbeat()
 		} catch (err) {
 			this.log(
 				`[webview-lifecycle] _resetWebview FAILED: ${err instanceof Error ? `${err.message}\n${err.stack}` : String(err)}`,
@@ -1108,8 +1143,11 @@ export class ShoferProvider
 		// and executes code based on the message that is received.
 		this.setWebviewMessageListener(webviewView.webview)
 
-		// Start the ping/pong heartbeat to detect a frozen / crashed renderer.
-		this._startHeartbeat()
+		// NOTE: The ping/pong heartbeat is started from `_onWebviewLaunched`
+		// (triggered by the webview's `webviewDidLaunch` message), NOT here.
+		// Starting it before the renderer's JS has executed would cause every
+		// ping during the (multi-second) bundle load to count against the
+		// liveness window and trigger an infinite reset loop.
 
 		// Initialize code index status subscription for the current workspace.
 		this.updateCodeIndexStatusSubscription()
@@ -1214,11 +1252,11 @@ export class ShoferProvider
 		}
 	}
 
+	@perf("createTaskWithHistoryItem")
 	public async createTaskWithHistoryItem(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
 		options?: { startTask?: boolean; keepCurrentTask?: boolean },
 	) {
-		const taskSwitchT0 = Date.now()
 		const isCliRuntime = process.env.SHOFER_CLI_RUNTIME === "1"
 		// CLI injects runtime provider settings from command flags/env at startup.
 		// Restoring provider profiles from task history can overwrite those
@@ -1268,10 +1306,7 @@ export class ShoferProvider
 				await liveInstance.messagesReady
 				await this.postStateToWebview()
 				if (process.env.DEBUG) {
-					this.debug(
-						`[task-switch] id=${historyItem.id} elapsed=${Date.now() - taskSwitchT0}ms ` +
-							`(live-instance swap)`,
-					)
+					this.debug(`[task-switch] id=${historyItem.id} (live-instance swap, timing via @perf)`)
 				}
 				return liveInstance
 			}
@@ -1525,12 +1560,9 @@ export class ShoferProvider
 		}
 
 		if (process.env.DEBUG) {
-			const elapsed = Date.now() - taskSwitchT0
 			const msgCount = task.shoferMessages.length
 			const apiTurnCount = task.apiConversationHistory.length
-			this.debug(
-				`[task-switch] id=${task.taskId} elapsed=${elapsed}ms ` + `msgs=${msgCount} apiTurns=${apiTurnCount}`,
-			)
+			this.debug(`[task-switch] id=${task.taskId} msgs=${msgCount} apiTurns=${apiTurnCount} (timing via @perf)`)
 		}
 
 		return task
@@ -2600,21 +2632,12 @@ export class ShoferProvider
 		this.currentWorkspacePath = getWorkspacePath()
 		await this.postStateToWebviewWithoutTaskHistory()
 	}
-
+	@perf("postStateToWebview")
 	async postStateToWebview() {
-		const t0 = Date.now()
 		const state = await this.getStateToPostToWebview()
 		this.shoferMessagesSeq++
 		state.shoferMessagesSeq = this.shoferMessagesSeq
 		this.postMessageToWebview({ type: "state", state })
-		if (process.env.DEBUG) {
-			// Cheap byte-size metric: round-trips through JSON anyway (the
-			// postMessage bridge serializes), so the cost here is roughly
-			// the same as what the runtime would pay. Useful for spotting
-			// payload-size regressions (e.g. taskHistory bloat).
-			const bytes = JSON.stringify(state).length
-			this.debug(`[postState] full bytes=${bytes} elapsed=${Date.now() - t0}ms seq=${this.shoferMessagesSeq}`)
-		}
 	}
 
 	/**
@@ -2623,6 +2646,7 @@ export class ShoferProvider
 	 * Rationale:
 	 * - taskHistory can be large and was being resent on every chat message update.
 	 * - The webview maintains taskHistory in-memory and receives updates via
+	@perf("postStateToWebviewWithoutTaskHistory")
 	 *   `taskHistoryUpdated` / `taskHistoryItemUpdated`.
 	 */
 	async postStateToWebviewWithoutTaskHistory(): Promise<void> {
@@ -2641,6 +2665,7 @@ export class ShoferProvider
 	 *   that have nothing to do with chat messages. Including shoferMessages in these pushes
 	 *   creates race conditions where a stale snapshot of shoferMessages (captured during async
 	 *   getStateToPostToWebview) overwrites newer messages the task has streamed in the meantime.
+	@perf("postStateToWebviewWithoutShoferMessages")
 	 * - This method ensures cloud/mode events only push the state fields they actually affect
 	 *   (cloud auth, org settings, profiles, etc.) without interfering with task message streaming.
 	 */
