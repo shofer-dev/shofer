@@ -27,7 +27,13 @@ import { codeParser, DirectoryScanner, FileWatcher } from "./processors"
 import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
-import { BATCH_SEGMENT_THRESHOLD } from "./constants"
+import {
+	BATCH_SEGMENT_THRESHOLD,
+	MAX_SERVICE_RETRIES,
+	SERVICE_INITIAL_RETRY_DELAY_MS,
+	SERVICE_MAX_BACKOFF_MS,
+} from "./constants"
+import { retryWithBackoff } from "./shared/retry"
 
 /**
  * Factory class responsible for creating and configuring code indexing service dependencies.
@@ -65,7 +71,6 @@ export class CodeIndexServiceFactory {
 		config: ReturnType<CodeIndexConfigManager["getConfig"]>,
 		provider: EmbedderProvider,
 	): IEmbedder {
-
 		if (provider === "openai") {
 			const apiKey = config.openAiOptions?.openAiNativeApiKey
 
@@ -133,14 +138,28 @@ export class CodeIndexServiceFactory {
 
 	/**
 	 * Validates an embedder instance to ensure it's properly configured.
+	 * Retries with exponential backoff if the embedder is temporarily unreachable
+	 * (e.g. Ollama restarting).
+	 *
 	 * @param embedder The embedder instance to validate
 	 * @returns Promise resolving to validation result
 	 */
 	public async validateEmbedder(embedder: IEmbedder): Promise<{ valid: boolean; error?: string }> {
 		try {
-			return await embedder.validateConfiguration()
+			return await retryWithBackoff(() => embedder.validateConfiguration(), {
+				maxRetries: MAX_SERVICE_RETRIES,
+				initialDelayMs: SERVICE_INITIAL_RETRY_DELAY_MS,
+				maxBackoffMs: SERVICE_MAX_BACKOFF_MS,
+				onRetry: (attempt, error, delayMs) => {
+					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
+						error: `validateEmbedder attempt ${attempt} failed: ${error.message}`,
+						location: "validateEmbedder:retry",
+						attemptNumber: attempt,
+					})
+				},
+			})
 		} catch (error) {
-			// Capture telemetry for the error
+			// Capture telemetry for the final error
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,

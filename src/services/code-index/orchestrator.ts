@@ -10,6 +10,8 @@ import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { t } from "../../i18n"
 import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { retryWithBackoff } from "./shared/retry"
+import { MAX_SERVICE_RETRIES, SERVICE_INITIAL_RETRY_DELAY_MS, SERVICE_MAX_BACKOFF_MS } from "./constants"
 
 /**
  * Manages the code indexing workflow, coordinating between different services and managers.
@@ -134,7 +136,20 @@ export class CodeIndexOrchestrator {
 		let indexingStarted = false
 
 		try {
-			const collectionCreated = await this.vectorStore.initialize()
+			// Retry Qdrant connection with exponential backoff so a brief
+			// Qdrant restart doesn't force the user to manually re-index.
+			const collectionCreated = await retryWithBackoff(() => this.vectorStore.initialize(), {
+				maxRetries: MAX_SERVICE_RETRIES,
+				initialDelayMs: SERVICE_INITIAL_RETRY_DELAY_MS,
+				maxBackoffMs: SERVICE_MAX_BACKOFF_MS,
+				signal,
+				onRetry: (attempt, error, delayMs) => {
+					this.stateManager.setSystemState(
+						"Indexing",
+						`Qdrant connection failed (attempt ${attempt}/${MAX_SERVICE_RETRIES}), retrying in ${Math.round(delayMs / 1000)}s...`,
+					)
+				},
+			})
 
 			// Successfully connected to Qdrant
 			indexingStarted = true

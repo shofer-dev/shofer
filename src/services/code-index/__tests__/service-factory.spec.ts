@@ -805,6 +805,9 @@ describe("CodeIndexServiceFactory", () => {
 		})
 
 		it("should handle validation exceptions", async () => {
+			// Use fake timers — retryWithBackoff sleeps 2s → 4s → 8s → 16s → 32s without this.
+			vitest.useFakeTimers()
+
 			// Arrange
 			const testConfig = {
 				embedderProvider: "openai",
@@ -818,16 +821,19 @@ describe("CodeIndexServiceFactory", () => {
 			const networkError = new Error("Network error")
 			mockEmbedderInstance.validateConfiguration.mockRejectedValue(networkError)
 
-			// Act
-			const embedder = factory.createEmbedder()
-			const result = await factory.validateEmbedder(embedder)
+			// Act — advance through all 5 backoff delays (62s total) so the retry loop exits.
+			const validatePromise = factory.validateEmbedder(factory.createEmbedder())
+			await vitest.advanceTimersByTimeAsync(62000)
+			const result = await validatePromise
 
 			// Assert
 			expect(result).toEqual({
 				valid: false,
 				error: "Network error",
 			})
-			expect(mockEmbedderInstance.validateConfiguration).toHaveBeenCalled()
+			expect(mockEmbedderInstance.validateConfiguration).toHaveBeenCalledTimes(5)
+
+			vitest.useRealTimers()
 		})
 
 		it("should return error for invalid embedder configuration", async () => {

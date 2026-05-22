@@ -27,6 +27,13 @@ export const INITIAL_RETRY_DELAY_MS = 500
 export const PARSING_CONCURRENCY = 10
 export const MAX_PENDING_BATCHES = 20 // Maximum number of batches to accumulate before waiting
 
+/**Service Recovery — retry with exponential backoff when the infrastructure
+ * (Ollama, Qdrant) is temporarily unreachable. These govern retries at the
+ * orchestrator/manager level — not the per-batch retries above. */
+export const MAX_SERVICE_RETRIES = 5
+export const SERVICE_INITIAL_RETRY_DELAY_MS = 2000
+export const SERVICE_MAX_BACKOFF_MS = 60000
+
 /**OpenAI Embedder */
 export const MAX_BATCH_TOKENS = 100000
 export const MAX_ITEM_TOKENS = 8191
