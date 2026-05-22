@@ -28,6 +28,13 @@ import type {
 	McpToolCallResponse,
 } from "@shofer/types"
 import { toolGroupsSchema } from "@shofer/types"
+import {
+	recordMcpDuration,
+	incMcpCalls,
+	incMcpErrors,
+	classifyMcpError,
+	mcpErrorTypeToStatus,
+} from "../../metrics/registry"
 
 import { t } from "../../i18n"
 
@@ -1857,17 +1864,32 @@ export class McpHub {
 			}
 		}
 
-		return await connection.client.request(
-			{
-				method: "tools/call",
-				params,
-			},
-			CallToolResultSchema,
-			{
-				timeout,
-				...(signal ? { signal } : {}),
-			},
-		)
+		const mcpT0 = performance.now()
+		try {
+			const result = await connection.client.request(
+				{
+					method: "tools/call",
+					params,
+				},
+				CallToolResultSchema,
+				{
+					timeout,
+					...(signal ? { signal } : {}),
+				},
+			)
+			recordMcpDuration(serverName, toolName, performance.now() - mcpT0)
+			incMcpCalls(serverName, toolName, "success")
+			return result
+		} catch (error) {
+			const dur = performance.now() - mcpT0
+			const errorType = classifyMcpError(error)
+			recordMcpDuration(serverName, toolName, dur)
+			// Map the closed-enum errorType to the call-status label via the
+			// shared helper so the mapping lives in one place.
+			incMcpCalls(serverName, toolName, mcpErrorTypeToStatus(errorType))
+			incMcpErrors(serverName, toolName, errorType)
+			throw error
+		}
 	}
 
 	/**

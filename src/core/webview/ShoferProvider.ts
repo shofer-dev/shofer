@@ -103,7 +103,7 @@ import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
 import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
-import { perf } from "../../utils/perf"
+import { time } from "../../utils/perf"
 import { setProviderReady } from "../../metrics/server"
 
 /**
@@ -1252,8 +1252,14 @@ export class ShoferProvider
 		}
 	}
 
-	@perf("createTaskWithHistoryItem")
 	public async createTaskWithHistoryItem(
+		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
+		options?: { startTask?: boolean; keepCurrentTask?: boolean },
+	) {
+		return time("createTaskWithHistoryItem", () => this._createTaskWithHistoryItemImpl(historyItem, options))
+	}
+
+	private async _createTaskWithHistoryItemImpl(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
 		options?: { startTask?: boolean; keepCurrentTask?: boolean },
 	) {
@@ -2632,12 +2638,13 @@ export class ShoferProvider
 		this.currentWorkspacePath = getWorkspacePath()
 		await this.postStateToWebviewWithoutTaskHistory()
 	}
-	@perf("postStateToWebview")
 	async postStateToWebview() {
-		const state = await this.getStateToPostToWebview()
-		this.shoferMessagesSeq++
-		state.shoferMessagesSeq = this.shoferMessagesSeq
-		this.postMessageToWebview({ type: "state", state })
+		return time("postStateToWebview", async () => {
+			const state = await this.getStateToPostToWebview()
+			this.shoferMessagesSeq++
+			state.shoferMessagesSeq = this.shoferMessagesSeq
+			this.postMessageToWebview({ type: "state", state })
+		})
 	}
 
 	/**
@@ -2646,15 +2653,16 @@ export class ShoferProvider
 	 * Rationale:
 	 * - taskHistory can be large and was being resent on every chat message update.
 	 * - The webview maintains taskHistory in-memory and receives updates via
-	@perf("postStateToWebviewWithoutTaskHistory")
 	 *   `taskHistoryUpdated` / `taskHistoryItemUpdated`.
 	 */
 	async postStateToWebviewWithoutTaskHistory(): Promise<void> {
-		const state = await this.getStateToPostToWebview()
-		this.shoferMessagesSeq++
-		state.shoferMessagesSeq = this.shoferMessagesSeq
-		const { taskHistory: _omit, ...rest } = state
-		this.postMessageToWebview({ type: "state", state: rest })
+		return time("postStateToWebviewWithoutTaskHistory", async () => {
+			const state = await this.getStateToPostToWebview()
+			this.shoferMessagesSeq++
+			state.shoferMessagesSeq = this.shoferMessagesSeq
+			const { taskHistory: _omit, ...rest } = state
+			this.postMessageToWebview({ type: "state", state: rest })
+		})
 	}
 
 	/**
@@ -2665,14 +2673,15 @@ export class ShoferProvider
 	 *   that have nothing to do with chat messages. Including shoferMessages in these pushes
 	 *   creates race conditions where a stale snapshot of shoferMessages (captured during async
 	 *   getStateToPostToWebview) overwrites newer messages the task has streamed in the meantime.
-	@perf("postStateToWebviewWithoutShoferMessages")
 	 * - This method ensures cloud/mode events only push the state fields they actually affect
 	 *   (cloud auth, org settings, profiles, etc.) without interfering with task message streaming.
 	 */
 	async postStateToWebviewWithoutShoferMessages(): Promise<void> {
-		const state = await this.getStateToPostToWebview()
-		const { shoferMessages: _omitMessages, taskHistory: _omitHistory, ...rest } = state
-		this.postMessageToWebview({ type: "state", state: rest })
+		return time("postStateToWebviewWithoutShoferMessages", async () => {
+			const state = await this.getStateToPostToWebview()
+			const { shoferMessages: _omitMessages, taskHistory: _omitHistory, ...rest } = state
+			this.postMessageToWebview({ type: "state", state: rest })
+		})
 	}
 
 	/**

@@ -1,5 +1,5 @@
 import { safeWriteJson } from "../../utils/safeWriteJson"
-import { registry } from "../../metrics/registry"
+import { registry, incWebviewPushError, FAST_BUCKETS_MS } from "../../metrics/registry"
 import * as path from "path"
 import * as os from "os"
 import * as fs from "fs/promises"
@@ -22,6 +22,7 @@ import {
 	ExperimentId,
 	checkoutDiffPayloadSchema,
 	checkoutRestorePayloadSchema,
+	webviewMetricsPushSchema,
 } from "@shofer/types"
 import { customToolRegistry } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
@@ -571,17 +572,30 @@ export const webviewMessageHandler = async (
 			// Diagnostic log forwarded from the webview — only when DEBUG is set.
 			provider.debug?.(`[webview] ${message.text ?? ""}`)
 			break
-		case "pushMetrics":
-			// Phase 4: webview → extension host metric push for shofer_webview_* metrics.
-			// Payload is forwarded directly to the registry as a batch of observations.
-			if (message.values) {
-				for (const [key, value] of Object.entries(message.values)) {
-					if (typeof value === "number") {
-						registry.observeHistogram(key, value)
-					}
-				}
+		case "pushMetrics": {
+			// Phase 4: webview → extension host metric push.
+			// Validate the typed `metrics` payload at the trust boundary;
+			// reject untyped or malformed pushes (records into
+			// `shofer_metrics_webview_push_errors_total`).
+			const parsed = webviewMetricsPushSchema.safeParse(message.metrics)
+			if (!parsed.success) {
+				incWebviewPushError()
+				break
+			}
+			for (const h of parsed.data.histograms ?? []) {
+				registry.observeHistogram(
+					h.name,
+					"Webview-pushed histogram observation.",
+					h.value,
+					FAST_BUCKETS_MS,
+					h.labels,
+				)
+			}
+			for (const c of parsed.data.counters ?? []) {
+				registry.incCounter(c.name, "Webview-pushed counter increment.", c.labels, c.value)
 			}
 			break
+		}
 		case "webviewDidLaunch":
 			provider.log("[webview-lifecycle] webviewDidLaunch received — webview initialized or re-initialized")
 			// Now that the renderer's JS has executed and its message listener
