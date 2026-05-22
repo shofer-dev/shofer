@@ -4080,6 +4080,20 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		case "fatal_error": {
+			const text = (message as { text?: string }).text ?? "(no message)"
+			provider.log(`[fatal_error] ${text}`)
+			vscode.window.showErrorMessage(`Webview error: ${text.slice(0, 200)}`)
+			break
+		}
+
+		case "pong": {
+			// Record that the webview responded. The consecutive-miss counter
+			// is managed by the heartbeat timer in ShoferProvider.
+			provider._recordPong()
+			break
+		}
+
 		default: {
 			// console.log(`Unhandled message type: ${message.type}`)
 			//

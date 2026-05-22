@@ -46,6 +46,20 @@ class ErrorBoundary extends Component<ErrorProps, ErrorState> {
 			errorType: enhancedError.name,
 		})
 
+		// Forward the crash to the extension host so it can log the error and
+		// optionally auto-reset the webview.
+		try {
+			// acquireVsCodeApi singleton; safe to call multiple times.
+			if (typeof acquireVsCodeApi === "function") {
+				acquireVsCodeApi().postMessage({
+					type: "fatal_error",
+					text: `React ErrorBoundary caught error: ${enhancedError.message}\n${enhancedError.sourceMappedStack || enhancedError.stack}`,
+				})
+			}
+		} catch {
+			// Silently ignore — the host may already be gone.
+		}
+
 		this.setState({
 			error: enhancedError.sourceMappedStack || enhancedError.stack,
 			componentStack: enhancedError.sourceMappedComponentStack || componentStack,

@@ -131,6 +131,8 @@ export interface ExtensionMessage {
 		| "fileContent"
 		| "addContextFiles"
 		| "changedFiles/update"
+		// Webview health messages
+		| "ping"
 	text?: string
 	/** For fileContent: { path, content, error? } */
 	fileContent?: { path: string; content: string | null; error?: string }
@@ -692,6 +694,9 @@ export interface WebviewMessage {
 		| "checkoutBranch"
 		| "browseForWorktreePath"
 		| "getWorktreeStatus"
+		// Webview health messages
+		| "fatal_error"
+		| "pong"
 		// Skills messages
 		| "requestSkills"
 		| "createSkill"
