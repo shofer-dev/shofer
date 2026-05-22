@@ -1,4 +1,5 @@
 import { safeWriteJson } from "../../utils/safeWriteJson"
+import { registry } from "../../metrics/registry"
 import * as path from "path"
 import * as os from "os"
 import * as fs from "fs/promises"
@@ -570,8 +571,24 @@ export const webviewMessageHandler = async (
 			// Diagnostic log forwarded from the webview — only when DEBUG is set.
 			provider.debug?.(`[webview] ${message.text ?? ""}`)
 			break
+		case "pushMetrics":
+			// Phase 4: webview → extension host metric push for shofer_webview_* metrics.
+			// Payload is forwarded directly to the registry as a batch of observations.
+			if (message.values) {
+				for (const [key, value] of Object.entries(message.values)) {
+					if (typeof value === "number") {
+						registry.observeHistogram(key, value)
+					}
+				}
+			}
+			break
 		case "webviewDidLaunch":
 			provider.log("[webview-lifecycle] webviewDidLaunch received — webview initialized or re-initialized")
+			// Now that the renderer's JS has executed and its message listener
+			// is wired, it is safe to start the ping/pong heartbeat. Starting
+			// it earlier (e.g. in resolveWebviewView) would count every ping
+			// sent during bundle load as a liveness miss → infinite reset loop.
+			provider._onWebviewLaunched()
 			// Load custom modes first
 			const customModes = await provider.customModesManager.getCustomModes()
 			await updateGlobalState("customModes", customModes)

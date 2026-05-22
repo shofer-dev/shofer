@@ -2,6 +2,7 @@ import React, { Component } from "react"
 import { telemetryClient } from "@src/utils/TelemetryClient"
 import { withTranslation, WithTranslation } from "react-i18next"
 import { enhanceErrorWithSourceMaps } from "@src/utils/sourceMapUtils"
+import { vscode } from "@src/utils/vscode"
 
 type ErrorProps = {
 	children: React.ReactNode
@@ -47,15 +48,13 @@ class ErrorBoundary extends Component<ErrorProps, ErrorState> {
 		})
 
 		// Forward the crash to the extension host so it can log the error and
-		// optionally auto-reset the webview.
+		// optionally auto-reset the webview. Route through the shared `vscode`
+		// singleton — `acquireVsCodeApi()` may only be invoked once per webview.
 		try {
-			// acquireVsCodeApi singleton; safe to call multiple times.
-			if (typeof acquireVsCodeApi === "function") {
-				acquireVsCodeApi().postMessage({
-					type: "fatal_error",
-					text: `React ErrorBoundary caught error: ${enhancedError.message}\n${enhancedError.sourceMappedStack || enhancedError.stack}`,
-				})
-			}
+			vscode.postMessage({
+				type: "fatal_error",
+				text: `React ErrorBoundary caught error: ${enhancedError.message}\n${enhancedError.sourceMappedStack || enhancedError.stack}`,
+			})
 		} catch {
 			// Silently ignore — the host may already be gone.
 		}

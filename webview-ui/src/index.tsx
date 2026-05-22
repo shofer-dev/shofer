@@ -7,23 +7,22 @@ import ErrorBoundary from "./components/ErrorBoundary"
 import "../node_modules/@vscode/codicons/dist/codicon.css"
 
 import { getHighlighter } from "./utils/highlighter"
+import { vscode } from "./utils/vscode"
 
 // ---------------------------------------------------------------------------
 // Global error listeners — marshal uncaught exceptions back to the extension
 // host so they can be logged to the output channel and so the host can
 // auto-reset the webview when it crashes silently.
+//
+// IMPORTANT: `acquireVsCodeApi()` may only be invoked once per webview. We
+// therefore route every post through the shared `vscode` singleton in
+// `utils/vscode.ts` — never call `acquireVsCodeApi()` directly here. Doing so
+// throws synchronously and prevents React from mounting (blank webview).
 // ---------------------------------------------------------------------------
 ;(function installWebviewCrashGuard() {
-	// acquireVsCodeApi may not be available in a browser-side dev server.
-	const api = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null
-
-	if (!api) {
-		return
-	}
-
 	// 1. Uncaught synchronous errors
 	window.addEventListener("error", (event: ErrorEvent) => {
-		api.postMessage({
+		vscode.postMessage({
 			type: "fatal_error",
 			text: `Uncaught Error: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`,
 		})
@@ -43,7 +42,7 @@ import { getHighlighter } from "./utils/highlighter"
 				reason = String(event.reason)
 			}
 		}
-		api.postMessage({
+		vscode.postMessage({
 			type: "fatal_error",
 			text: `Unhandled Promise Rejection: ${reason}`,
 		})
@@ -54,7 +53,7 @@ import { getHighlighter } from "./utils/highlighter"
 	window.addEventListener("message", (event: MessageEvent) => {
 		const message = event.data
 		if (message && message.type === "ping") {
-			api.postMessage({ type: "pong" })
+			vscode.postMessage({ type: "pong" })
 		}
 	})
 })()
