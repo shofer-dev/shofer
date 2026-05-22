@@ -53,7 +53,11 @@ describe("CodeIndexServiceFactory", () => {
 
 		mockCacheManager = {}
 
-		factory = new CodeIndexServiceFactory(mockConfigManager, "/test/workspace", mockCacheManager)
+		factory = new CodeIndexServiceFactory({
+			configManager: mockConfigManager,
+			workspacePath: "/test/workspace",
+			cacheManager: mockCacheManager,
+		})
 	})
 
 	describe("createEmbedder", () => {

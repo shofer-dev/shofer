@@ -1,5 +1,3 @@
-import { outputWarn } from "../../../utils/outputChannelLogger"
-
 /**
  * Retry a function with exponential backoff, capped at a maximum delay.
  *
@@ -8,30 +6,47 @@ import { outputWarn } from "../../../utils/outputChannelLogger"
  * separate from the per-batch retry in {@link DirectoryScanner.processBatch}
  * and the per-request retry in individual embedders.
  *
- * Backoff schedule (defaults):
- *   attempt 1 → 2000 ms, 2 → 4000 ms, 3 → 8000 ms, 4 → 16000 ms, 5 → 32000 ms
- *   total ≈ 62 s
+ * Naming: `maxAttempts` counts *total* invocations of `fn` — not just the
+ * retries after the first. With `maxAttempts: 5` and `initialDelayMs: 2000`,
+ * the call sleeps between attempts 1→2, 2→3, 3→4, 4→5 and never sleeps after
+ * the final attempt.
+ *
+ * Backoff schedule (defaults, maxAttempts=5):
+ *   sleep before attempt 2 → 2000 ms, before 3 → 4000 ms,
+ *   before 4 → 8000 ms,    before 5 → 16000 ms
+ *   total wall-time ≈ 30 s of sleeping plus 5×fn() runtime
+ *
+ * Logging is the caller's responsibility — pass an `onRetry` callback to
+ * surface per-attempt diagnostics. The helper itself emits no logs so callers
+ * are not double-logged.
  *
  * @param fn         The async function to retry.
  * @param options    Retry parameters.
  * @returns          The result of the first successful invocation of `fn`.
- * @throws           The last error if all retries are exhausted, or an
+ * @throws           The last error if all attempts are exhausted, or an
  *                   AbortError if the signal fires between attempts.
  */
 export async function retryWithBackoff<T>(
 	fn: () => Promise<T>,
 	options: {
-		maxRetries: number
+		/** Total number of attempts (≥ 1). With `maxAttempts: N` the helper sleeps `N-1` times. */
+		maxAttempts: number
 		initialDelayMs: number
 		maxBackoffMs: number
 		signal?: AbortSignal
-		/** Called before each retry; useful for logging / state-update callbacks. */
+		/** Called before each retry-sleep; receives the 1-indexed attempt that just failed. */
 		onRetry?: (attempt: number, error: Error, delayMs: number) => void
 	},
 ): Promise<T> {
 	let lastError: Error | undefined
 
-	for (let attempt = 1; attempt <= options.maxRetries; attempt++) {
+	for (let attempt = 1; attempt <= options.maxAttempts; attempt++) {
+		// Honour an abort that fired between iterations (e.g. during a sleep
+		// that resolved at the same tick as the abort signal).
+		if (options.signal?.aborted) {
+			throw new DOMException("Retry aborted", "AbortError")
+		}
+
 		try {
 			return await fn()
 		} catch (err: any) {
@@ -42,14 +57,9 @@ export async function retryWithBackoff<T>(
 				throw lastError
 			}
 
-			if (attempt < options.maxRetries) {
+			if (attempt < options.maxAttempts) {
 				const delayMs = Math.min(options.maxBackoffMs, options.initialDelayMs * Math.pow(2, attempt - 1))
 				options.onRetry?.(attempt, lastError, delayMs)
-
-				outputWarn(
-					`[retryWithBackoff] Attempt ${attempt} failed: ${lastError.message}. ` +
-						`Retrying in ${delayMs}ms...`,
-				)
 
 				await new Promise<void>((resolve, reject) => {
 					const timer = setTimeout(resolve, delayMs)

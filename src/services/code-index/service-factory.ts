@@ -29,26 +29,37 @@ import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
 import {
 	BATCH_SEGMENT_THRESHOLD,
-	MAX_SERVICE_RETRIES,
+	MAX_SERVICE_ATTEMPTS,
 	SERVICE_INITIAL_RETRY_DELAY_MS,
 	SERVICE_MAX_BACKOFF_MS,
 } from "./constants"
 import { retryWithBackoff } from "./shared/retry"
 
 /**
+ * Options for constructing a {@link CodeIndexServiceFactory}.
+ */
+export interface CodeIndexServiceFactoryOptions {
+	configManager: CodeIndexConfigManager
+	workspacePath: string
+	cacheManager: CacheManager
+	/** Optional callback fired during embedder-validation retries so the UI can surface progress. */
+	notifyRetryStatus?: (msg: string) => void
+}
+
+/**
  * Factory class responsible for creating and configuring code indexing service dependencies.
  */
 export class CodeIndexServiceFactory {
-	// Callback injected by CodeIndexManager to update UI status during retries.
-	private _notifyRetryStatus: ((msg: string) => void) | undefined
+	private readonly configManager: CodeIndexConfigManager
+	private readonly workspacePath: string
+	private readonly cacheManager: CacheManager
+	private readonly notifyRetryStatus: ((msg: string) => void) | undefined
 
-	constructor(
-		private readonly configManager: CodeIndexConfigManager,
-		private readonly workspacePath: string,
-		private readonly cacheManager: CacheManager,
-		notifyRetryStatus?: (msg: string) => void,
-	) {
-		this._notifyRetryStatus = notifyRetryStatus
+	constructor(options: CodeIndexServiceFactoryOptions) {
+		this.configManager = options.configManager
+		this.workspacePath = options.workspacePath
+		this.cacheManager = options.cacheManager
+		this.notifyRetryStatus = options.notifyRetryStatus
 	}
 
 	/**
@@ -151,29 +162,31 @@ export class CodeIndexServiceFactory {
 	 * @returns Promise resolving to validation result
 	 */
 	public async validateEmbedder(embedder: IEmbedder): Promise<{ valid: boolean; error?: string }> {
+		// Track the last attempt that ran so the terminal telemetry event can carry
+		// `retryAttempts` instead of fanning out one event per retry (5× amplification).
+		let lastAttempt = 1
 		try {
 			return await retryWithBackoff(() => embedder.validateConfiguration(), {
-				maxRetries: MAX_SERVICE_RETRIES,
+				maxAttempts: MAX_SERVICE_ATTEMPTS,
 				initialDelayMs: SERVICE_INITIAL_RETRY_DELAY_MS,
 				maxBackoffMs: SERVICE_MAX_BACKOFF_MS,
-				onRetry: (attempt, error, delayMs) => {
-					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-						error: `validateEmbedder attempt ${attempt} failed: ${error.message}`,
-						location: "validateEmbedder:retry",
-						attemptNumber: attempt,
-					})
-					// Update UI status so user knows embedder is being retried, not stuck
-					this._notifyRetryStatus?.(
-						`Embedder connection failed (attempt ${attempt}/${MAX_SERVICE_RETRIES}), retrying in ${Math.round(delayMs / 1000)}s...`,
+				onRetry: (attempt, _error, delayMs) => {
+					lastAttempt = attempt
+					// Update UI status so user knows embedder is being retried, not stuck.
+					this.notifyRetryStatus?.(
+						`Embedder connection failed (attempt ${attempt}/${MAX_SERVICE_ATTEMPTS}), retrying in ${Math.round(delayMs / 1000)}s...`,
 					)
 				},
 			})
 		} catch (error) {
-			// Capture telemetry for the final error
+			// Capture a single telemetry event for the final failure, carrying the
+			// retry count so backend dashboards can distinguish transient blips from
+			// persistent outages without per-attempt event amplification.
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
 				location: "validateEmbedder",
+				retryAttempts: lastAttempt,
 			})
 
 			// If validation throws an exception, preserve the original error message

@@ -29,8 +29,12 @@ export const MAX_PENDING_BATCHES = 20 // Maximum number of batches to accumulate
 
 /**Service Recovery — retry with exponential backoff when the infrastructure
  * (Ollama, Qdrant) is temporarily unreachable. These govern retries at the
- * orchestrator/manager level — not the per-batch retries above. */
-export const MAX_SERVICE_RETRIES = 5
+ * orchestrator/manager level — not the per-batch retries above.
+ *
+ * `MAX_SERVICE_ATTEMPTS` is the *total* number of invocations (not retries
+ * after the first); with 5 attempts the helper sleeps 4 times: 2s → 4s → 8s
+ * → 16s, ≈ 30s of backoff total. */
+export const MAX_SERVICE_ATTEMPTS = 5
 export const SERVICE_INITIAL_RETRY_DELAY_MS = 2000
 export const SERVICE_MAX_BACKOFF_MS = 60000
 
