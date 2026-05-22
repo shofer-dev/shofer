@@ -12,7 +12,7 @@ Parameters:
 - excludePattern: (optional) Glob pattern to exclude files from search.
 - isRegex: (optional) Whether the query is a regular expression. When false, query is matched literally. Defaults to true.
 - caseSensitive: (optional) Case-sensitive matching. Defaults to false.
-- wholeWord: (optional) Match whole words only (wraps query in \\b boundaries). Ignored when isRegex=true. Defaults to false.
+- wholeWord: (optional) Match whole words only (wraps query in \\b boundaries). Works with both literal and regex queries. Defaults to false.
 - maxResults: (optional) Maximum total results across all files. Defaults to 100; silently capped at 1000.
 - contextBefore: (optional) Lines of context to show before each match. Defaults to 1.
 - contextAfter: (optional) Lines of context to show after each match. Defaults to 1.
@@ -44,7 +44,7 @@ const IS_REGEX_PARAMETER_DESCRIPTION = `Whether query is a regular expression (d
 
 const CASE_SENSITIVE_PARAMETER_DESCRIPTION = `Case-sensitive matching (default: false)`
 
-const WHOLE_WORD_PARAMETER_DESCRIPTION = `Match whole words only by wrapping the query in \\b word boundary anchors (default: false). Ignored when isRegex=true.`
+const WHOLE_WORD_PARAMETER_DESCRIPTION = `Match whole words only by wrapping the query in \\b word boundary anchors (default: false). Works with both literal and regex queries.`
 
 const MAX_RESULTS_PARAMETER_DESCRIPTION = `Maximum total results across all files (default 100, silently clamped to 1000). Raise only when you need exhaustive coverage — narrowing the query is usually cheaper.`
 
