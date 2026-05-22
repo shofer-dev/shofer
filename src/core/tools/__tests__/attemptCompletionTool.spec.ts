@@ -544,13 +544,18 @@ describe("attemptCompletionTool", () => {
 					partial: false,
 				}
 
-				// Simulate a queued message — tool should drain it instead of completing
-				mockTask.messageQueueService = {
-					isEmpty: vi.fn().mockReturnValue(false),
-					dequeueMessage: vi
-						.fn()
-						.mockReturnValue({ text: "Different question now: what is 3+3?", images: [] }),
-				} as any
+				// Simulate a queued message — tool should drain it instead of completing.
+				// Use Object.defineProperty because messageQueueService is readonly on Task.
+				Object.defineProperty(mockTask, "messageQueueService", {
+					value: {
+						isEmpty: vi.fn().mockReturnValue(false),
+						dequeueMessage: vi
+							.fn()
+							.mockReturnValue({ text: "Different question now: what is 3+3?", images: [] }),
+					},
+					writable: true,
+					configurable: true,
+				})
 
 				const callbacks: AttemptCompletionCallbacks = {
 					askApproval: mockAskApproval,
