@@ -380,10 +380,28 @@ directories. Create parent directories as needed.
 	   |-----------------------------|-------------------------|
 	   | \`cline_mcp_settings.json\` | \`.shofer/mcp.json\`    |
 
-	   HOW: If .shofer/mcp.json does NOT already exist, rename the legacy file.
-	   If .shofer/mcp.json ALREADY exists, print the legacy file's location
-	   and advise the user to manually merge the configurations — do NOT
-	   overwrite the existing .shofer/mcp.json.
+	   The legacy format may use Claude-style MCP server entries without an
+	   explicit \`"type"\` field. Shofer requires \`"type": "stdio"\` for all
+	   command-based servers (see mcp.md for the full Shofer MCP schema).
+
+	   HOW:
+	   1. Read cline_mcp_settings.json with \`read_file\`
+	   2. Parse the JSON — the top-level structure should have an \`"mcpServers"\`
+	      key mapping server names to their config objects
+	   3. For each server entry that has a \`"command"\` field but NO \`"type"\`
+	      field, inject \`"type": "stdio"\` to make it Shofer-compatible
+	   4. Wrap all servers under \`"mcpServers"\` key with \`"type"\` already
+	      injected (Shofer's .shofer/mcp.json uses the same top-level format as
+	      Claude's .mcp.json — \`{"mcpServers": {...}}\`)
+	   5. Write to .shofer/mcp.json using \`write_to_file\`
+	   6. If .shofer/mcp.json ALREADY exists, do NOT overwrite — instead save as
+	      .shofer/mcp-migrated.json and advise the user to manually merge
+
+	   Example conversion:
+	     BEFORE (legacy):
+	       {"mcpServers": {"my-tool": {"command": "node", "args": ["server.js"]}}}
+	     AFTER (Shofer):
+	       {"mcpServers": {"my-tool": {"type": "stdio", "command": "node", "args": ["server.js"]}}}
 	 </mcp_config_migration>
 
 	 <other_ai_assistant_files>
@@ -420,9 +438,11 @@ directories. Create parent directories as needed.
 	 5. **Report action taken** in the final result. For each legacy file
 	    found: state what it was renamed to, or if it was skipped (with reason).
 
-	 6. **Do NOT read file contents.** This is a pure rename operation.
-	    Do not use read_file or any reading tools. Only list_files,
-	    create_directory, and file(mv).
+	 6. **Do NOT read file contents** except for MCP config migration.
+	    The MCP conversion (cline_mcp_settings.json → .shofer/mcp.json)
+	    requires reading the JSON to inject \`"type": "stdio"\` into each
+	    server entry. For all other files, this is a pure rename operation —
+	    use only list_files, create_directory, and file(mv).
 
 	 7. **Stop after migration** — do not modify any file contents.
 	    Do not edit AGENTS.md, .shoferignore, .shofermodes, or the
@@ -720,13 +740,56 @@ modes, and relocating MCP configuration.
 
 	 <mcp_config>
 	   Claude's project-level MCP:
-	   | Claude          | Shofer Action                                                     |
-	   |-----------------|-------------------------------------------------------------------|
-	   | \`.mcp.json\`   | Rename to \`.shofer/mcp.json\` if target does not already exist   |
+	   | Claude          | Shofer Action                                                                     |
+	   |-----------------|-----------------------------------------------------------------------------------|
+	   | \`.mcp.json\`   | Convert format and write to \`.shofer/mcp.json\` if target does not already exist |
+	   | \`.mcp.json\`   | (GitHub Copilot version — Copilot does NOT use local .mcp.json; see copilot.md)   |
+
+	   Claude's .mcp.json uses STDIO-based MCP servers without an explicit
+	   \`"type"\` field. Shofer requires \`"type": "stdio"\` for all
+	   command-based entries (see mcp.md for the full Shofer schema).
 
 	   HOW:
-	   1. If .shofer/mcp.json does NOT exist: use \`file mv\` to rename
-	   2. If .shofer/mcp.json ALREADY exists: report for manual merge — do NOT overwrite
+	   1. Read .mcp.json with \`read_file\`
+	   2. Parse the JSON — top-level structure: \`{"mcpServers": {...}}\`
+	   3. For each server entry that has a \`"command"\` field but NO \`"type"\`
+	      field, inject \`"type": "stdio"\`
+	   4. Preserve ALL other fields: \`command\`, \`args\`, \`env\` — these are
+	      compatible with Shofer as-is
+	   5. Write the converted JSON to .shofer/mcp.json using \`write_to_file\`
+	   6. If .shofer/mcp.json ALREADY exists, do NOT overwrite — save as
+	      .shofer/mcp-migrated.json and advise manual merge
+
+	   Example conversion:
+	     BEFORE (Claude):
+	       {"mcpServers": {
+	         "sqlite-db-explorer": {
+	           "command": "uvx",
+	           "args": ["mcp-server-sqlite", "--db-path", "./data/dev.db"]
+	         },
+	         "custom-tool": {
+	           "command": "node",
+	           "args": ["./scripts/mcp-tool-server.js"],
+	           "env": {"API_SECRET_KEY": "local_dev_key"}
+	         }
+	       }}
+	     AFTER (Shofer):
+	       {"mcpServers": {
+	         "sqlite-db-explorer": {
+	           "type": "stdio",
+	           "command": "uvx",
+	           "args": ["mcp-server-sqlite", "--db-path", "./data/dev.db"]
+	         },
+	         "custom-tool": {
+	           "type": "stdio",
+	           "command": "node",
+	           "args": ["./scripts/mcp-tool-server.js"],
+	           "env": {"API_SECRET_KEY": "local_dev_key"}
+	         }
+	       }}
+
+	   After writing .shofer/mcp.json, do NOT delete the original .mcp.json —
+	   Claude Code still uses it. Report it as "converted (original retained)".
 	 </mcp_config>
 
 	 <settings_report>
