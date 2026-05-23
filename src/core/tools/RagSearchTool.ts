@@ -24,9 +24,9 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 		const { query, path: directoryPrefix } = params
 		// Resolve through the shared cap (default 10, hard ceiling 50). Note that
-		// for semantic search lowering `minScore` is often more useful than raising
-		// this cap — the user-configurable `currentSearchMinScore` setting controls
-		// that and is intentionally NOT exposed here.
+		// the embedding model is lexically biased (word-level token overlap), so
+		// raising this cap is rarely helpful — if the right files aren't in the top
+		// results, the embeddings likely didn't capture the intent.
 		const maxResults = resolveMaxResults(params.maxResults, RAG_SEARCH_CAP)
 
 		const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
