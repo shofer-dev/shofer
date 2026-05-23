@@ -122,24 +122,33 @@ description: "Use this skill when asked to create an automated test file or mock
 
 ## 6. Model Context Protocol (MCP) Integration
 
-Claude orchestrates external tools (databases, browsers, internal APIs) directly at the workspace root.
+Claude Code natively supports a repository-level configuration file called `.mcp.json` at your project root. This allows you to check in codebase-specific tools (like a local database explorer or project linter) that spin up automatically for anyone working on the repository. Claude communicates with MCP servers via JSON-RPC over local process communication (STDIO/SSE).
 
 ### `.mcp.json`
 
 **Function:** Declares repository-scoped Model Context Protocol servers. This connects Claude to tools specific to this single codebase without adding them globally to your computer.
 
-**Syntax:** JSON configuration mapping executable paths and runtime arguments.
+**Syntax:** Structured JSON matching Anthropic's standard MCP host schema. Each server entry specifies a `command`, `args`, and optionally `env` for environment variables.
 
 ```json
 {
 	"mcpServers": {
-		"sqlite-explorer": {
+		"sqlite-db-explorer": {
 			"command": "uvx",
-			"args": ["mcp-server-sqlite", "--db-path", "./dev.db"]
+			"args": ["mcp-server-sqlite", "--db-path", "./data/dev.db"]
+		},
+		"custom-project-tool": {
+			"command": "node",
+			"args": ["./scripts/mcp-tool-server.js"],
+			"env": {
+				"API_SECRET_KEY": "local_dev_key"
+			}
 		}
 	}
 }
 ```
+
+**Protocol:** JSON-RPC local process communication (STDIO/SSE). Unlike Copilot (which uses HTTPS webhooks for cloud-hosted extensions), Claude runs MCP servers as local subprocesses, giving it direct access to your filesystem and terminal.
 
 ## 7. Execution Inclusions
 

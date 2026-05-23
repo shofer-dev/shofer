@@ -129,6 +129,41 @@ While individual developers frequently request a local `.copilotignore` file, of
 
 However, Copilot strictly honors your project's `.gitignore` file for many workspace features (such as import maps or CLI file searches), meaning keeping your local sensitive files tightly tracked in `.gitignore` provides a solid foundational barrier.
 
+## 6. Model Context Protocol (MCP) & External Tools
+
+GitHub Copilot does **not** use a local workspace file like `.mcp.json` to configure tools or protocols. Instead, Copilot handles external tool extensions and integrations through two entirely different architectural layers.
+
+### A. Copilot Extensions (Cloud & Chat Ecosystem)
+
+Instead of running a local MCP server process, GitHub exposes tools as **Copilot Extensions**. These are built as standard HTTPS webhook services hosted on a server or cloud function and are integrated globally via the GitHub Marketplace.
+
+**Syntax/Configuration:** Handled in a centralized manifest file (`github-extension.json` or `manifest.json`) when developing an extension, rather than sitting in your project's working tree. The communication protocol is secure HTTPS webhook endpoints communicating with GitHub Cloud — not local JSON-RPC over STDIO.
+
+### B. Agentic Skills (Local Execution)
+
+For local automation scripts or task-specific tooling running on your machine, Copilot expects you to declare those boundaries in the YAML frontmatter of a Skill file (see §4 above) rather than an MCP configuration block. Use the `tools` field to grant terminal or file access:
+
+```markdown
+---
+name: "run-project-linter"
+description: "Use this skill to clean up formatting errors or check code quality hooks."
+tools: ["terminal"]
+---
+
+# Execution Steps
+
+1. Run `npm run lint --fix` in the root directory.
+2. Check the output for any remaining breaking failures.
+```
+
+### Comparison: Claude vs Copilot Tool Integration
+
+| Feature                | Claude Code / Cowork                                            | GitHub Copilot                                                 |
+| ---------------------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
+| Local Config File      | `.mcp.json` at repository root                                  | None (uses global GitHub Marketplace extensions)               |
+| Protocol Design        | JSON-RPC local process communication (STDIO/SSE)                | Secure HTTPS Webhook endpoints communicating with GitHub Cloud |
+| Local Script Execution | Handled seamlessly inside `.mcp.json` via `node`/`python`/`uvx` | Handled via execution scripts bundled inside `.github/skills/` |
+
 ## Summary Cheat Sheet
 
 | File / Path                              | Scope            | Primary Purpose                                   |
