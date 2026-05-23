@@ -6,6 +6,7 @@ export const EXPERIMENT_IDS = {
 	RUN_SLASH_COMMAND: "runSlashCommand",
 	CUSTOM_TOOLS: "customTools",
 	SHOW_TOOL_INPUT_OUTPUT: "showToolInputOutput",
+	PROMETHEUS_METRICS: "prometheusMetrics",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -22,6 +23,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	RUN_SLASH_COMMAND: { enabled: false },
 	CUSTOM_TOOLS: { enabled: false },
 	SHOW_TOOL_INPUT_OUTPUT: { enabled: false },
+	PROMETHEUS_METRICS: { enabled: false },
 }
 
 export const experimentDefault = Object.fromEntries(

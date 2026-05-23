@@ -1009,6 +1009,10 @@
 		"SHOW_TOOL_INPUT_OUTPUT": {
 			"name": "Show tool input/output sections",
 			"description": "When enabled, each tool invocation in the chat will show expandable Input and Output sections. 'Input' shows the parameters passed to the tool. 'Output' shows the raw result returned by the tool (capped at 2 KB)."
+		},
+		"PROMETHEUS_METRICS": {
+			"name": "Prometheus metrics exporter",
+			"description": "Exposes a /metrics endpoint on port 30099 (127.0.0.1 only) for Prometheus scraping. Restart VS Code after toggling. Intended for developers and operators monitoring Shofer internals."
 		}
 	},
 	"promptCaching": {
