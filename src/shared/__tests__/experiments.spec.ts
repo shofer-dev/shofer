@@ -22,6 +22,7 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				showToolInputOutput: false,
+				prometheusMetrics: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -33,6 +34,7 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				showToolInputOutput: false,
+				prometheusMetrics: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(true)
 		})
@@ -44,6 +46,7 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				showToolInputOutput: false,
+				prometheusMetrics: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
