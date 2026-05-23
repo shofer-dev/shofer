@@ -61,6 +61,7 @@ import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
 import { startMetricsServer, stopMetricsServer } from "./metrics/server"
+import { experiments, EXPERIMENT_IDS } from "./shared/experiments"
 import {
 	updateMemoryMetrics,
 	updateEventListenerMetrics,
@@ -149,11 +150,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const contextProxy = await ContextProxy.getInstance(context)
 
-	// Start the Prometheus metrics server on a random ephemeral port.
-	// A per-PID port file is written under globalStorage/metrics-ports/ for
-	// scraper discovery (multiple windows on one host are all distinct).
+	// Start the Prometheus metrics server only when the 'prometheusMetrics'
+	// experimental flag is enabled (default: off).  Port is the constant 30099
+	// (overridable via SHOFER_METRICS_PORT env var).  If the port is already
+	// bound this will throw.
 	const _workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-	await startMetricsServer(context.globalStoragePath, _workspace)
+	const _experimentsConfig = contextProxy.getValue("experiments") ?? {}
+	if (experiments.isEnabled(_experimentsConfig, EXPERIMENT_IDS.PROMETHEUS_METRICS)) {
+		await startMetricsServer(context.globalStoragePath, _workspace)
+	} else {
+		outputChannel.appendLine(
+			"[metrics] Prometheus exporter disabled (enable via Settings → Experimental → Prometheus Metrics).",
+		)
+	}
 
 	// Register on-scrape collectors so /metrics returns up-to-date values
 	// without an event-loop-waking timer.  process.memoryUsage() is O(1).
