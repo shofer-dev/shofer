@@ -2,7 +2,7 @@
 
 import type { ModelInfo } from "@shofer/types"
 
-import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/cost"
+import { applyCustomPricing, calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/cost"
 
 describe("Cost Utility", () => {
 	describe("calculateApiCostAnthropic", () => {
@@ -301,6 +301,70 @@ describe("Cost Utility", () => {
 			// Cache reads: (0.5 / 1_000_000) * 100000 = 0.05
 			// Total: 1.0 + 0.03 + 0.05 = 1.08
 			expect(result.totalCost).toBeCloseTo(1.08, 6)
+		})
+	})
+
+	describe("applyCustomPricing", () => {
+		const baseModelInfo: ModelInfo = {
+			maxTokens: 8192,
+			contextWindow: 200_000,
+			supportsPromptCache: true,
+			inputPrice: 3.0,
+			outputPrice: 15.0,
+			cacheWritesPrice: 3.75,
+			cacheReadsPrice: 0.3,
+		}
+
+		it("returns modelInfo unchanged when customPricing is undefined", () => {
+			const result = applyCustomPricing(baseModelInfo, undefined)
+			expect(result).toBe(baseModelInfo)
+		})
+
+		it("returns modelInfo unchanged when customPricing has no numeric values", () => {
+			const result = applyCustomPricing(baseModelInfo, {
+				inputPrice: undefined,
+				outputPrice: undefined,
+				cacheReadsPrice: undefined,
+				cacheWritesPrice: undefined,
+			})
+			expect(result).toBe(baseModelInfo)
+		})
+
+		it("overrides inputPrice only", () => {
+			const result = applyCustomPricing(baseModelInfo, { inputPrice: 1.5 })
+			expect(result.inputPrice).toBe(1.5)
+			expect(result.outputPrice).toBe(baseModelInfo.outputPrice)
+			expect(result.cacheWritesPrice).toBe(baseModelInfo.cacheWritesPrice)
+			expect(result.cacheReadsPrice).toBe(baseModelInfo.cacheReadsPrice)
+		})
+
+		it("overrides outputPrice only", () => {
+			const result = applyCustomPricing(baseModelInfo, { outputPrice: 20.0 })
+			expect(result.outputPrice).toBe(20.0)
+			expect(result.inputPrice).toBe(baseModelInfo.inputPrice)
+		})
+
+		it("overrides all four pricing fields", () => {
+			const overrides = { inputPrice: 1.0, outputPrice: 2.0, cacheReadsPrice: 0.1, cacheWritesPrice: 0.5 }
+			const result = applyCustomPricing(baseModelInfo, overrides)
+			expect(result.inputPrice).toBe(1.0)
+			expect(result.outputPrice).toBe(2.0)
+			expect(result.cacheReadsPrice).toBe(0.1)
+			expect(result.cacheWritesPrice).toBe(0.5)
+		})
+
+		it("preserves non-pricing ModelInfo fields", () => {
+			const result = applyCustomPricing(baseModelInfo, { inputPrice: 1.0 })
+			expect(result.maxTokens).toBe(baseModelInfo.maxTokens)
+			expect(result.contextWindow).toBe(baseModelInfo.contextWindow)
+			expect(result.supportsPromptCache).toBe(baseModelInfo.supportsPromptCache)
+		})
+
+		it("custom pricing flows into cost calculation via calculateApiCostAnthropic", () => {
+			const patched = applyCustomPricing(baseModelInfo, { inputPrice: 1.0, outputPrice: 5.0 })
+			const result = calculateApiCostAnthropic(patched, 1_000_000, 1_000_000)
+			// inputCost = (1.0 / 1M) * 1M = 1.0; outputCost = (5.0 / 1M) * 1M = 5.0
+			expect(result.totalCost).toBeCloseTo(6.0, 6)
 		})
 	})
 })
