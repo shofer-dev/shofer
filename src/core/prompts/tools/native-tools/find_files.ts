@@ -3,7 +3,7 @@ import type OpenAI from "openai"
 const FIND_FILES_DESCRIPTION = `Request to find files matching a glob pattern. This tool searches for files by name pattern across the workspace, useful for locating specific file types or files in specific directories.
 
 Parameters:
-- pattern: (required) The glob pattern to match files (e.g., '*.ts', '**/*.json', 'src/**/*.test.js')
+- pattern: (required) The glob pattern to match files (e.g., '*.ts', '**/*.json', 'src/**/*.test.js'). Patterns are resolved relative to the workspace root — if you are unsure of the exact directory prefix, prepend "**/" to search the entire workspace (e.g., "**/browser.ts" instead of "packages/core/src/browser.ts").
 - maxResults: (optional) Maximum number of results to return. Defaults to 100.
 
 Example: Find all TypeScript files
@@ -13,7 +13,10 @@ Example: Find all JSON files in config directory
 { "pattern": "config/**/*.json" }
 
 Example: Find test files with limit
-{ "pattern": "**/*.test.ts", "maxResults": 50 }`
+{ "pattern": "**/*.test.ts", "maxResults": 50 }
+
+Example: Find a file when you don't know the full path prefix
+{ "pattern": "**/browser.ts" }`
 
 const PATTERN_PARAMETER_DESCRIPTION = `Glob pattern to match files (e.g., '*.ts', '**/*.json')`
 

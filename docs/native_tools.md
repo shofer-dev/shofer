@@ -177,12 +177,12 @@ Unified search using VS Code's indexed `workspace.findTextInFiles` API. Supports
 
 ### `find_files`
 
-Find files matching a glob pattern using VS Code's `workspace.findFiles`.
+Find files matching a glob pattern using VS Code's `workspace.findFiles`. Patterns are resolved relative to the workspace root — prepend `**/` when unsure of the exact directory prefix. Excludes `node_modules`, `.git`, `bazel-*`, and `.shofer/worktrees/` automatically.
 
-| Param        | Type   | Required | Description                    |
-| ------------ | ------ | :------: | ------------------------------ |
-| `pattern`    | string |    ✅    | Glob pattern (e.g., `**/*.ts`) |
-| `maxResults` | number |    –     | Max results (default: 100)     |
+| Param        | Type   | Required | Description                                                                  |
+| ------------ | ------ | :------: | ---------------------------------------------------------------------------- |
+| `pattern`    | string |    ✅    | Glob pattern resolved from workspace root (e.g., `**/*.ts`, `**/browser.ts`) |
+| `maxResults` | number |    –     | Max results (default: 100)                                                   |
 
 ### `list_code_usages`
 

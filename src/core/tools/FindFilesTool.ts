@@ -57,9 +57,10 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 			}
 
 			// Find files matching the glob pattern using VS Code's built-in API
+			// Exclude node_modules, .git, bazel artifacts, and .shofer/worktrees (git clones that produce 4-5x noise)
 			const uris = await vscode.workspace.findFiles(
 				new vscode.RelativePattern(task.cwd, pattern),
-				"{**/node_modules/**,**/.git/**,**/bazel-bin/**,**/bazel-out/**,**/bazel-testlogs/**}",
+				"{**/node_modules/**,**/.git/**,**/bazel-bin/**,**/bazel-out/**,**/bazel-testlogs/**,.shofer/worktrees/**}",
 				maxResults + 1,
 			)
 
