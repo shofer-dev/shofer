@@ -352,8 +352,13 @@ export function incTaskErrored(mode: string, errorType: string): void {
 
 // --- Code index ---
 
-export function incCodeIndexError(subsystem: string): void {
-	registry.incCounter("shofer_code_index_errors_total", "Total code-index errors by subsystem.", { subsystem })
+export function incCodeIndexError(subsystem: string, amount = 1): void {
+	registry.incCounter(
+		"shofer_code_index_errors_total",
+		"Total code-index errors by subsystem.",
+		{ subsystem },
+		amount,
+	)
 }
 
 export function recordIndexLoadDuration(ms: number): void {

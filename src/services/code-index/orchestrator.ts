@@ -10,6 +10,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { t } from "../../i18n"
 import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { incCodeIndexError } from "../../metrics/registry"
 import { retryWithBackoff } from "./shared/retry"
 import { MAX_SERVICE_ATTEMPTS, SERVICE_INITIAL_RETRY_DELAY_MS, SERVICE_MAX_BACKOFF_MS } from "./constants"
 
@@ -72,6 +73,7 @@ export class CodeIndexOrchestrator {
 				this.fileWatcher.onDidFinishBatchProcessing((summary: BatchProcessingSummary) => {
 					if (summary.batchError) {
 						outputError(`[CodeIndexOrchestrator] Batch processing failed:`, summary.batchError)
+						incCodeIndexError("orchestrator")
 					} else {
 						const successCount = summary.processedFiles.filter(
 							(f: { status: string }) => f.status === "success",
@@ -79,11 +81,15 @@ export class CodeIndexOrchestrator {
 						const errorCount = summary.processedFiles.filter(
 							(f: { status: string }) => f.status === "error" || f.status === "local_error",
 						).length
+						if (errorCount > 0) {
+							incCodeIndexError("scanner", errorCount)
+						}
 					}
 				}),
 			]
 		} catch (error) {
 			outputError("[CodeIndexOrchestrator] Failed to start file watcher:", error)
+			incCodeIndexError("orchestrator")
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
@@ -262,6 +268,7 @@ export class CodeIndexOrchestrator {
 									this.workspacePath,
 									Array.from(changedSet),
 									(batchError: Error) => {
+										incCodeIndexError("embedder")
 										batchErrors.push(batchError)
 									},
 									handleBlocksIndexed,
@@ -313,6 +320,7 @@ export class CodeIndexOrchestrator {
 							`[CodeIndexOrchestrator] Error during incremental scan batch: ${batchError.message}`,
 							batchError,
 						)
+						incCodeIndexError("embedder")
 						batchErrors.push(batchError)
 					},
 					handleBlocksIndexed,
@@ -377,6 +385,7 @@ export class CodeIndexOrchestrator {
 							`[CodeIndexOrchestrator] Error during initial scan batch: ${batchError.message}`,
 							batchError,
 						)
+						incCodeIndexError("embedder")
 						batchErrors.push(batchError)
 					},
 					handleBlocksIndexed,

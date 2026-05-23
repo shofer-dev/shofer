@@ -61,7 +61,13 @@ import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
 import { startMetricsServer, stopMetricsServer } from "./metrics/server"
-import { updateMemoryMetrics, updateEventListenerMetrics, registry } from "./metrics/registry"
+import {
+	updateMemoryMetrics,
+	updateEventListenerMetrics,
+	updateTaskMetrics,
+	updateFocusedTaskMetrics,
+	registry,
+} from "./metrics/registry"
 
 import {
 	handleUri,
@@ -156,6 +162,22 @@ export async function activate(context: vscode.ExtensionContext) {
 		const provider = ShoferProvider.getVisibleInstance()
 		if (provider) {
 			updateEventListenerMetrics(provider.listenerCount("ShoferEvent"))
+
+			// Task-count gauges: history total and live active count.
+			const historyCount = provider.taskHistoryStore.getAll().length
+			const activeCount = provider.taskManager.getActiveManagedTasks().length
+			updateTaskMetrics(historyCount, activeCount)
+
+			// Focused-task message gauges: message count and serialized byte size.
+			const focusedId = provider.taskManager.getFocusedTaskId()
+			if (focusedId) {
+				const task = provider.taskManager.getManagedTaskInstance(focusedId)
+				if (task) {
+					const msgs = task.shoferMessages
+					const bytes = Buffer.byteLength(JSON.stringify(msgs), "utf8")
+					updateFocusedTaskMetrics(msgs.length, bytes)
+				}
+			}
 		}
 	})
 
