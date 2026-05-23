@@ -27,6 +27,7 @@ import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { fileExistsAtPath } from "../../utils/fs"
 import type { ToolUse } from "../../shared/tools"
 
@@ -79,6 +80,12 @@ export class FileTool extends BaseTool<"file"> {
 
 			task.consecutiveMistakeCount = 0
 
+			const worktreeErr = validateWorktreePath(task, relPath)
+			if (worktreeErr) {
+				pushToolResult(worktreeErr)
+				return
+			}
+
 			const absPath = path.resolve(task.cwd, relPath)
 			if (isPathOutsideWorkspace(absPath)) {
 				pushToolResult(`Error: path '${relPath}' is outside the workspace.`)
@@ -87,6 +94,12 @@ export class FileTool extends BaseTool<"file"> {
 
 			let absDest: string | undefined
 			if (subcommand === "mv") {
+				const destWorktreeErr = validateWorktreePath(task, destination as string)
+				if (destWorktreeErr) {
+					pushToolResult(destWorktreeErr)
+					return
+				}
+
 				absDest = path.resolve(task.cwd, destination as string)
 				if (isPathOutsideWorkspace(absDest)) {
 					pushToolResult(`Error: destination '${destination}' is outside the workspace.`)

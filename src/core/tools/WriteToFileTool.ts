@@ -11,6 +11,7 @@ import { fileExistsAtPath, createDirectoriesForFile } from "../../utils/fs"
 import { stripLineNumbers, everyLineHasLineNumbers } from "../../integrations/misc/extract-text"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
@@ -43,6 +44,15 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 			task.consecutiveMistakeCount++
 			task.recordToolError("write_to_file")
 			pushToolResult(await task.sayAndCreateMissingParamError("write_to_file", "content"))
+			await task.diffViewProvider.reset()
+			return
+		}
+
+		const worktreeErr = validateWorktreePath(task, relPath)
+		if (worktreeErr) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("write_to_file")
+			pushToolResult(worktreeErr)
 			await task.diffViewProvider.reset()
 			return
 		}

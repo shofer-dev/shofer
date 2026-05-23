@@ -16,6 +16,7 @@ import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { fileExistsAtPath } from "../../utils/fs"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeUnifiedDiff, computeDiffStats } from "../diff/stats"
@@ -59,6 +60,15 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				task.recordToolError("insert_edit")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("insert_edit", "text"))
+				return
+			}
+
+			const worktreeErr = validateWorktreePath(task, filePath)
+			if (worktreeErr) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("insert_edit")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(worktreeErr)
 				return
 			}
 

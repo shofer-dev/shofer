@@ -36,6 +36,8 @@ Complete reference for all native tools available in Shofer, their mode availabi
 
 ## File Operations
 
+> **Worktree isolation:** When a task runs inside `.shofer/worktrees/<name>/`, all mutating tools (`write_to_file`, `apply_diff`, `create_directory`, `file`, `insert_edit`, `sed`) validate that the target path stays within the assigned worktree. Attempts to write to the master checkout or another worktree are blocked. See [`worktrees.md §3a`](worktrees.md#3a-path-isolation-mutating-tool-guard).
+
 | Tool                   | Origin | Group | Always Available | Status | Description                                    |
 | ---------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
 | `read_file`            | 🔵 RC  | read  |        –         |   ✅   | Read file contents with line range             |
@@ -238,6 +240,8 @@ The tool is synchronous: the calling task blocks until the assistant returns an 
 
 ## Code Analysis & Refactoring
 
+> **Worktree isolation:** `rename_symbol` validates the source file location but LSP rename may affect files outside the worktree since the workspace scope covers the entire repo. See [`worktrees.md §Known Limitations`](worktrees.md#known-limitations).
+
 | Tool                     | Origin | Group | Always Available | Status | Description                                        |
 | ------------------------ | :----: | ----- | :--------------: | :----: | -------------------------------------------------- |
 | `get_errors`             | 🆕 WS  | read  |        –         |   ✅   | Get compile/lint diagnostics                       |
@@ -302,6 +306,8 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 ---
 
 ## Execution & System
+
+> **Worktree isolation:** `execute_command` is **not sandboxed** — it can escape the worktree via `cd`, absolute paths, or redirects. When running in a worktree task, the approval prompt displays a ⚠️ warning showing the worktree context. See [`worktrees.md §3a`](worktrees.md#3a-path-isolation-mutating-tool-guard).
 
 | Tool                  | Origin | Group   | Always Available | Status | Description                            |
 | --------------------- | :----: | ------- | :--------------: | :----: | -------------------------------------- |

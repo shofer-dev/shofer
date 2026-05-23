@@ -13,6 +13,7 @@ import * as vscode from "vscode"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -51,6 +52,19 @@ export class CreateNewWorkspaceTool extends BaseTool<"create_new_workspace"> {
 
 			const resolvedWsPath = path.isAbsolute(wsPath) ? wsPath : path.resolve(task.cwd, wsPath)
 			const projectRoot = path.join(resolvedWsPath, name)
+
+			// For worktree tasks: prevent creating a new workspace inside the
+			// master checkout or another worktree. Completely external paths
+			// (outside workspacePath) are allowed — that's a new, independent project.
+			const worktreeErr = validateWorktreePath(task, projectRoot)
+			if (worktreeErr) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("create_new_workspace")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(worktreeErr)
+				return
+			}
+
 			const subfolders = folders ?? []
 			const forceNewWindow = openInNewWindow ?? false
 

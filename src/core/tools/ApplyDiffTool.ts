@@ -5,6 +5,7 @@ import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { getReadablePath } from "../../utils/path"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import { fileExistsAtPath } from "../../utils/fs"
@@ -52,6 +53,14 @@ export class ApplyDiffTool extends BaseTool<"apply_diff"> {
 			if (!accessAllowed) {
 				await task.say("shoferignore_error", relPath)
 				pushToolResult(formatResponse.shoferIgnoreError(relPath))
+				return
+			}
+
+			const worktreeErr = validateWorktreePath(task, relPath)
+			if (worktreeErr) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("apply_diff")
+				pushToolResult(worktreeErr)
 				return
 			}
 

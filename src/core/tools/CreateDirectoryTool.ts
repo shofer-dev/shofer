@@ -12,6 +12,7 @@ import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -33,6 +34,15 @@ export class CreateDirectoryTool extends BaseTool<"create_directory"> {
 				task.recordToolError("create_directory")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("create_directory", "path"))
+				return
+			}
+
+			const worktreeErr = validateWorktreePath(task, relDirPath)
+			if (worktreeErr) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("create_directory")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(worktreeErr)
 				return
 			}
 
