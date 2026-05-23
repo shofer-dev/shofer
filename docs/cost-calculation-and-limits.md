@@ -38,13 +38,15 @@ TaskHeader (total cost display)
 
 ### Key Files
 
-| File                                                                                      | Role                                                                                        |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [`Task.ts`](../src/core/task/Task.ts)                                                     | Emits `api_req_started`, accumulates usage during streaming, calls `updateApiReqMsg()`      |
-| [`consolidateTokenUsage.ts`](../packages/core/src/message-utils/consolidateTokenUsage.ts) | Aggregates all `api_req_started` and `condense_context` messages into a `TokenUsage` total  |
-| [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                            | Renders (or hides) the per-request `api_req_started` row in the chat                        |
-| [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)                      | Displays the aggregated total cost                                                          |
-| [`cost.ts`](../src/shared/cost.ts)                                                        | Provider-specific pricing functions (`calculateApiCostAnthropic`, `calculateApiCostOpenAI`) |
+| File                                                                                      | Role                                                                                                              |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [`Task.ts`](../src/core/task/Task.ts)                                                     | Emits `api_req_started`, accumulates usage during streaming, calls `updateApiReqMsg()`                            |
+| [`consolidateTokenUsage.ts`](../packages/core/src/message-utils/consolidateTokenUsage.ts) | Aggregates all `api_req_started` and `condense_context` messages into a `TokenUsage` total                        |
+| [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                            | Renders (or hides) the per-request `api_req_started` row in the chat                                              |
+| [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)                      | Displays the aggregated total cost                                                                                |
+| [`cost.ts`](../src/shared/cost.ts)                                                        | Provider-specific pricing functions (`calculateApiCostAnthropic`, `calculateApiCostOpenAI`, `applyCustomPricing`) |
+| [`api/index.ts`](../src/api/index.ts)                                                     | `buildApiHandler` — wraps `getModel()` to apply `customPricing` overrides when set                                |
+| [`provider-settings.ts`](../packages/types/src/provider-settings.ts)                      | `customPricing` schema field on `baseProviderSettingsSchema`                                                      |
 
 ### Step-by-Step
 
@@ -249,6 +251,65 @@ Without either path, vscode-lm-routed models report `cost: 0` and the
 budget limit can never trip — this is by design (we only enforce on
 real billed cost), but worth flagging to users debugging "why isn't my
 limit firing?".
+
+#### Path 3 — `customPricing` manual override (user-supplied, per-provider-profile)
+
+Users can supply explicit per-token prices (USD / 1 M tokens) in
+**Settings → Providers → Advanced Settings → Pricing Override**. The
+four configurable fields are:
+
+| Field              | Overrides                    |
+| ------------------ | ---------------------------- |
+| `inputPrice`       | `ModelInfo.inputPrice`       |
+| `outputPrice`      | `ModelInfo.outputPrice`      |
+| `cacheReadsPrice`  | `ModelInfo.cacheReadsPrice`  |
+| `cacheWritesPrice` | `ModelInfo.cacheWritesPrice` |
+
+**How it works:**
+
+`customPricing` is stored as an optional field in `ProviderSettings`
+(schema: `baseProviderSettingsSchema.customPricing`). When
+`buildApiHandler` constructs a handler, it wraps the underlying
+handler's `getModel()` with a thin closure:
+
+```ts
+// src/api/index.ts
+raw.getModel = () => {
+	const m = rawGetModel() // auto-discovered
+	return { id: m.id, info: applyCustomPricing(m.info, customPricing) }
+}
+```
+
+`applyCustomPricing` (in `src/shared/cost.ts`) merges only the fields
+that are set to a numeric value; `undefined` fields are silently
+skipped and the auto-discovered value is kept:
+
+```ts
+return { ...modelInfo, ...overrides } // custom values overwrite auto-discovered
+```
+
+**Priority across all three paths:**
+
+```
+customPricing (manual, Path 3)
+    └── overrides ModelInfo returned by getModel()
+            └── Path 1 (static per-token pricing) uses that ModelInfo
+            └── Path 2 (usage.cost from llm-router) wins over Path 1
+                    but does NOT bypass customPricing —
+                    customPricing affects ModelInfo only; if Path 2
+                    delivers totalCost directly, customPricing has no
+                    effect on that value.
+```
+
+In practice: if `customPricing` is set and Path 2 is active (the
+router stamps `totalCost`), the router's value is used as-is and the
+custom prices have no effect. Custom prices are most useful for
+providers where Path 2 is unavailable (non-streaming, unknown models,
+or providers not routed through llm-router).
+
+**Backward compatibility:** `customPricing` is fully optional. Existing
+profiles without the field behave exactly as before — `getModel()` is
+not wrapped and auto-discovery runs unchanged.
 
 ---
 
