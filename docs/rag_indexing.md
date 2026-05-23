@@ -433,25 +433,25 @@ Secrets are stored via VS Code's `SecretStorage` (keyed as `codeIndexOpenAiKey`,
 
 Defined in `src/services/code-index/constants/index.ts`:
 
-| Constant                          | Value  | Purpose                                           |
-| --------------------------------- | ------ | ------------------------------------------------- |
-| `MAX_BLOCK_CHARS`                 | 1000   | Max characters per code block                     |
-| `MIN_BLOCK_CHARS`                 | 10     | Min characters per code block                     |
-| `MIN_CHUNK_REMAINDER_CHARS`       | 200    | Min size for the remainder when splitting a chunk |
-| `MAX_CHARS_TOLERANCE_FACTOR`      | 1.15   | 15% tolerance on max block size                   |
-| `MAX_FILE_SIZE_BYTES`             | 1 MB   | Skip files larger than this                       |
-| `BATCH_SEGMENT_THRESHOLD`         | 60     | Code segments per embedding API call              |
-| `MAX_LIST_FILES_LIMIT_CODE_INDEX` | 50,000 | Max files to scan                                 |
-| `PARSING_CONCURRENCY`             | 10     | Parallel file parsing limit                       |
-| `BATCH_PROCESSING_CONCURRENCY`    | 10     | Parallel embedding batch processing               |
-| `MAX_PENDING_BATCHES`             | 20     | Backpressure limit on pending embedding batches   |
-| `MAX_BATCH_RETRIES`               | 3      | Retry count for failed embedding batches          |
-| `INITIAL_RETRY_DELAY_MS`          | 500    | Initial delay before first batch retry (ms)       |
+| Constant                          | Value  | Purpose                                                                      |
+| --------------------------------- | ------ | ---------------------------------------------------------------------------- |
+| `MAX_BLOCK_CHARS`                 | 1000   | Max characters per code block                                                |
+| `MIN_BLOCK_CHARS`                 | 10     | Min characters per code block                                                |
+| `MIN_CHUNK_REMAINDER_CHARS`       | 200    | Min size for the remainder when splitting a chunk                            |
+| `MAX_CHARS_TOLERANCE_FACTOR`      | 1.15   | 15% tolerance on max block size                                              |
+| `MAX_FILE_SIZE_BYTES`             | 1 MB   | Skip files larger than this                                                  |
+| `BATCH_SEGMENT_THRESHOLD`         | 60     | Code segments per embedding API call                                         |
+| `MAX_LIST_FILES_LIMIT_CODE_INDEX` | 50,000 | Max files to scan                                                            |
+| `PARSING_CONCURRENCY`             | 10     | Parallel file parsing limit                                                  |
+| `BATCH_PROCESSING_CONCURRENCY`    | 10     | Parallel embedding batch processing                                          |
+| `MAX_PENDING_BATCHES`             | 20     | Backpressure limit on pending embedding batches                              |
+| `MAX_BATCH_RETRIES`               | 3      | Retry count for failed embedding batches                                     |
+| `INITIAL_RETRY_DELAY_MS`          | 500    | Initial delay before first batch retry (ms)                                  |
 | `MAX_SERVICE_ATTEMPTS`            | 5      | Total attempts for service-level (Qdrant/Ollama) ops (4 retries + 1 initial) |
-| `SERVICE_INITIAL_RETRY_DELAY_MS`  | 2000   | Initial delay for service-level retry (ms)        |
-| `SERVICE_MAX_BACKOFF_MS`          | 60,000 | Max delay cap for service-level retry (ms)        |
-| `DEFAULT_SEARCH_MIN_SCORE`        | 0.4    | Cosine similarity threshold for search results    |
-| `DEFAULT_MAX_SEARCH_RESULTS`      | 50     | Default max number of search results              |
+| `SERVICE_INITIAL_RETRY_DELAY_MS`  | 2000   | Initial delay for service-level retry (ms)                                   |
+| `SERVICE_MAX_BACKOFF_MS`          | 60,000 | Max delay cap for service-level retry (ms)                                   |
+| `DEFAULT_SEARCH_MIN_SCORE`        | 0.4    | Cosine similarity threshold for search results                               |
+| `DEFAULT_MAX_SEARCH_RESULTS`      | 50     | Default max number of search results                                         |
 
 ---
 
@@ -472,7 +472,7 @@ Two entry points wrap their operations with **exponential backoff retry** so tha
 | `orchestrator.ts` (`startIndexing`)       | `vectorStore.initialize()`         | 5        | 2 s           | 60 s      |
 | `service-factory.ts` (`validateEmbedder`) | `embedder.validateConfiguration()` | 5        | 2 s           | 60 s      |
 
-`MAX_SERVICE_ATTEMPTS = 5` counts *total* invocations — the helper sleeps 4 times between them: 2 s → 4 s → 8 s → 16 s (capped at 60 s), so worst-case sleep time before giving up is ≈ 30 s plus the cost of the 5 failed calls themselves. If the signal is aborted mid-backoff the retry loop exits immediately with an `AbortError`.
+`MAX_SERVICE_ATTEMPTS = 5` counts _total_ invocations — the helper sleeps 4 times between them: 2 s → 4 s → 8 s → 16 s (capped at 60 s), so worst-case sleep time before giving up is ≈ 30 s plus the cost of the 5 failed calls themselves. If the signal is aborted mid-backoff the retry loop exits immediately with an `AbortError`.
 
 The orchestrator also updates the UI status on each retry attempt: `"Qdrant connection failed (attempt N/5), retrying in Xs..."` so the user can see that indexing is not stuck — it is waiting for the infrastructure to come back. `validateEmbedder` emits the analogous `"Embedder connection failed (attempt N/5), …"` message via a `notifyRetryStatus` callback injected by `CodeIndexManager`. Per-attempt telemetry is intentionally **not** emitted — only a single `CODE_INDEX_ERROR` event at the end of a fully-exhausted retry loop, carrying `retryAttempts: N`, so transient blips do not amplify telemetry volume 5×.
 
@@ -533,6 +533,17 @@ Discovered during the 2026-05-20 review that verified every file path, line numb
 ### Architecture Diagram
 
 - **The architecture diagram (§Architecture) is prose-only** — the text-based tree is good for hierarchy but doesn't show data flow arcs (embedding API calls, Qdrant gRPC/HTTP, file-system reads). A Mermaid or ASCII-art dataflow diagram would help readers understand the embedding round-trips.
+
+### Search Ranking Quality
+
+- **Semantic ranking is too lexical in practice** — Despite the tool description promising meaning-based search, the top results for queries like "home screen recent tasks" are dominated by i18n JSON entries (e.g., `"Show worktrees in home screen"`, score 0.65–0.71) that match on word-level substring overlap ("tasks", "home", "screen"). The actual architectural component ([`HistoryPreview.tsx`](extensions/shofer/webview-ui/src/components/history/HistoryPreview.tsx)) does not appear in the top 15. The embeddings (and the [default `cosine` similarity](extensions/shofer/src/services/code-index/vector-store/qdrant-client.ts)) appear to heavily weight lexical token overlap rather than structural/semantic relationships, making the tool unreliable for codebase exploration. In practice, `grep_search` with literal strings like `"Recent Tasks"` or component names like `HistoryPreview` finds the right files instantly. Possible avenues to investigate:
+
+    - **Embedding model quality** — The embedder model (selected via [`codebaseIndexEmbedderProvider`](extensions/shofer/packages/types/src/codebase-index.ts)) may produce embeddings that are too lexically aligned. Testing with a higher-quality model (or a code-specific model) could help.
+    - **Chunking strategy** — Tree-sitter AST blocks may capture too much or too little context for meaningful semantic comparison. The current [`MAX_BLOCK_CHARS`](extensions/shofer/src/services/code-index/constants/index.ts) of 1000 and `MIN_BLOCK_CHARS` of 10 produce blocks of varying granularity; i18n JSON files chunk differently than React components, potentially giving short, keyword-dense strings an unfair ranking advantage.
+    - **Search query preprocessing** — The raw user/agent query is embedded as-is. Adding query expansion, synonym injection, or file-type boosting could improve results.
+    - **Distance metric** — Qdrant's default `cosine` similarity may not be optimal for code search. `dot` product or a learned metric could be worth evaluating.
+
+- **No feedback loop or relevance tuning** — There is no mechanism for the agent or user to signal that a search result was irrelevant or that a missed file should have ranked higher. A relevance-feedback loop (explicit or implicit from tool-call patterns) could progressively improve ranking.
 
 ### Concurrency
 
