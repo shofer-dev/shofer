@@ -1,11 +1,15 @@
 /**
  * Prometheus metrics HTTP server for the Shofer VS Code extension.
  *
- * Starts on `127.0.0.1:0` (random ephemeral port) during extension
- * activation.  Each VS Code window writes a per-PID file under
- * `globalStorage/metrics-ports/` so multiple windows on the same host are
- * all discoverable simultaneously (the previous single-file scheme had
- * the second window overwrite the first).
+ * Binds to `127.0.0.1:<SHOFER_METRICS_PORT>` (default 30099) during
+ * extension activation.  The port is static so Prometheus can be pointed
+ * at a fixed target without a file-SD sidecar.  Each VS Code window still
+ * writes a per-PID file under `globalStorage/metrics-ports/` carrying
+ * windowId / workspace metadata for labelling.
+ *
+ * If the port is already bound (e.g. a second VS Code window on the same
+ * host), `startMetricsServer` rejects — the caller should surface the
+ * error via the output channel.
  *
  * ## Endpoints
  *
@@ -15,6 +19,8 @@
  * | `/health`  | GET   | `200 OK` when provider is initialised; `503` before. |
  *
  * Binds to `127.0.0.1` only — unreachable from remote hosts; no auth.
+ *
+ * Configure the port via the `SHOFER_METRICS_PORT` environment variable.
  */
 
 import * as http from "http"
@@ -25,6 +31,9 @@ import { registry, incMetricsScrape, recordMetricsScrapeDuration, incMetricsServ
 import { getWindowId, setWorkspaceLabel } from "./identity"
 
 const PORT_DIR = "metrics-ports"
+
+/** Static port the metrics server listens on. Configurable via env var. */
+const METRICS_PORT = parseInt(process.env.SHOFER_METRICS_PORT ?? "30099", 10)
 
 // ---------------------------------------------------------------------------
 // State
@@ -147,14 +156,20 @@ export async function startMetricsServer(
 	// before the first scrape.
 	setWorkspaceLabel(workspace)
 
-	return new Promise((resolve) => {
+	return new Promise((resolve, reject) => {
 		_server = http.createServer(buildRequestHandler(() => _providerReady))
 
 		_server.on("error", (err) => {
 			outputError("[metrics-server] Server error:", err)
+			// Propagate bind-time errors (e.g. EADDRINUSE) so the caller can
+			// log a clear message rather than silently losing metrics.
+			if (!_serverPort) {
+				_server = undefined
+				reject(err)
+			}
 		})
 
-		_server.listen(0, "127.0.0.1", () => {
+		_server.listen(METRICS_PORT, "127.0.0.1", () => {
 			_serverPort = (_server!.address() as { port: number }).port
 			outputLog(`[metrics-server] Listening on 127.0.0.1:${_serverPort} (windowId=${getWindowId()})`)
 			void writePortFile(globalStoragePath, _serverPort, workspace)

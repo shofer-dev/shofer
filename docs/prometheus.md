@@ -12,10 +12,13 @@
 
 The extension host runs per VS Code window — one process, one server.
 
-- **Start**: on `activate()` or `ShoferProvider` construction, start an
-  `http.Server` on `127.0.0.1:0` (random port). Write the chosen port to a
-  well-known file (`globalStorage/metrics-port`) so external scrapers can
-  discover it.
+- **Port**: static, read from `SHOFER_METRICS_PORT` env var (default **30099**).
+  A static port lets Prometheus point at a fixed target with no file-SD sidecar.
+  If the port is already bound when a second VS Code window tries to start,
+  `startMetricsServer` rejects and the extension logs an error — one window wins.
+- **Start**: on `activate()` or `ShoferProvider` construction.
+  A per-PID metadata file (`globalStorage/metrics-ports/<pid>-<windowId>.json`)
+  is still written for windowId / workspace labelling.
 - **Stop**: on `deactivate()`, close the server.
 - **Readiness**: the server returns `200 OK` from `/health` once the provider
   is fully initialized (`taskHistoryStoreInitialized === true`).
@@ -44,21 +47,19 @@ pushing on a fixed interval (e.g. every 30 s).
 
 ### 1.4 Scrape config
 
-Prometheus `scrape_configs` snippet:
+Because the port is static, no file-SD sidecar is needed:
 
 ```yaml
 - job_name: shofer
   scrape_interval: 15s
-  file_sd_configs:
-      - files: ["/var/lib/shofer/metrics-ports/*.json"]
+  static_configs:
+      - targets: ["<workstation-ip>:30099"]
+        labels:
+            host: "<hostname>"
 ```
 
-The `file_sd_configs` target file is produced by a small sidecar or cron job
-that reads `<globalStorage>/metrics-port` from each workstation and writes
-`[{ "targets": ["<ip>:<port>"], "labels": { "host": "<hostname>" } }]`.
-
-Note: because VS Code windows come and go, targets will flap. Set
-`scrape_interval: 15s` and expect gaps when the extension host is not running.
+Override the port with the `SHOFER_METRICS_PORT` environment variable when
+30099 conflicts with another service on a host.
 
 ### 1.5 Independence from `TELEMETRY_ENABLED`
 
