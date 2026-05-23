@@ -822,6 +822,90 @@ export class ShoferProvider
 	}
 
 	/**
+	 * Called by `webviewMessageHandler` when a `fatal_error` message arrives
+	 * from the webview (forwarded by `installWebviewCrashGuard` in `index.tsx`
+	 * or by `ErrorBoundary.componentDidCatch`).
+	 *
+	 * The heartbeat alone cannot detect React-level crashes: the raw
+	 * `window.addEventListener("message", …)` pong handler in the IIFE survives
+	 * React errors, so pongs keep arriving even though the app is broken. We
+	 * therefore trigger an unconditional reset on every fatal-error report to
+	 * ensure the renderer is restored without waiting for the liveness window.
+	 */
+	public async _onFatalError(text: string): Promise<void> {
+		this.log(`[fatal_error] Triggering webview reset due to fatal error: ${text.slice(0, 200)}`)
+		await this._resetWebview()
+	}
+
+	/**
+	 * Forces a full reload of the webview renderer. Exposed as the
+	 * `shofer.refreshWebview` command so users can recover from a blank /
+	 * frozen webview without restarting VS Code.
+	 *
+	 * More aggressive than the automatic `_resetWebview` path:
+	 *
+	 * 1. Explicit `webview.html = ""` clear — signals VS Code to tear down the
+	 *    current frame content before we push the new page.
+	 * 2. Focus the panel — `workbench.action.webview.reloadWebviewAction`
+	 *    targets the *focused* webview, so we must ensure ours is active.
+	 * 3. Push the new HTML (with HMR support in dev mode).
+	 * 4. Execute `workbench.action.webview.reloadWebviewAction` — this is the
+	 *    VS Code workbench's native "Developer: Reload Webviews" trigger. Unlike
+	 *    `webview.html` assignment (which is an IPC message that can be silently
+	 *    dropped when the renderer process is in a zombie/stuck state), this
+	 *    command navigates the browser frame itself, bypassing the broken channel.
+	 *
+	 * The heartbeat is restarted automatically when the freshly-loaded page
+	 * emits `webviewDidLaunch`.
+	 */
+	public async refreshWebview(): Promise<void> {
+		const view = this.view
+		if (!view || this._disposed) {
+			return
+		}
+		this.log("[webview-lifecycle] refreshWebview: user-initiated forceful reset")
+		this._stopHeartbeat()
+		this.clearWebviewResources()
+
+		// Step 1: explicit clear so the browser unloads the old frame before
+		// we start building the new HTML (avoids flash of old content during
+		// the async getHtmlContent call).
+		view.webview.html = ""
+
+		// Step 2: build new HTML (HMR in dev, production bundle otherwise).
+		const html =
+			this.contextProxy.extensionMode === vscode.ExtensionMode.Development
+				? await this.getHMRHtmlContent(view.webview)
+				: await this.getHtmlContent(view.webview)
+
+		// Step 3: focus the webview so the workbench reload command (step 4)
+		// targets our panel rather than whatever the user last clicked.
+		if ("show" in view) {
+			;(view as vscode.WebviewView).show(false)
+		} else {
+			;(view as vscode.WebviewPanel).reveal(undefined, false)
+		}
+
+		// Step 4: assign the new HTML content.
+		view.webview.html = html
+		this.setWebviewMessageListener(view.webview)
+
+		// Step 5: belt-and-suspenders — ask the VS Code workbench to navigate
+		// the webview frame at the browser level. This is what "Developer:
+		// Reload Webviews" does and is more forceful than a plain html
+		// assignment when the renderer is stuck / IPC channel is dead. Wrapped
+		// in a try/catch because the command may not be available in all
+		// VS Code versions or code-server builds.
+		try {
+			await vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction")
+		} catch {
+			this.log(
+				"[webview-lifecycle] refreshWebview: workbench reload command unavailable, relying on html reassignment only",
+			)
+		}
+	}
+
+	/**
 	 * Re-assigns `webview.html` to force a full reload of the renderer.
 	 * Called automatically when the webview misses `PING_MISS_THRESHOLD`
 	 * consecutive pings. Also callable manually (e.g. on `fatal_error`).

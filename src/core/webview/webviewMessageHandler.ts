@@ -4114,7 +4114,12 @@ export const webviewMessageHandler = async (
 		case "fatal_error": {
 			const text = (message as { text?: string }).text ?? "(no message)"
 			provider.log(`[fatal_error] ${text}`)
-			vscode.window.showErrorMessage(`Webview error: ${text.slice(0, 200)}`)
+			// The heartbeat alone cannot detect React-level crashes because the
+			// raw pong listener in installWebviewCrashGuard (index.tsx) survives
+			// React errors and keeps responding to pings. Trigger an explicit
+			// reset here so the renderer is restored without waiting for the
+			// 10-second liveness window to expire.
+			await provider._onFatalError(text)
 			break
 		}
 

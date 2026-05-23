@@ -60,6 +60,9 @@ export const commandIds = [
 	"stopGitIndexing",
 	"clearGitIndexData",
 
+	// Webview
+	"refreshWebview",
+
 	// Diagnostics
 	"heapSnapshot",
 ] as const

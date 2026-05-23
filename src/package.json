@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer-dev",
-	"version": "0.22.32",
+	"version": "0.22.34",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -203,6 +203,12 @@
 				"command": "shofer.assistantAgent.clearContext",
 				"title": "Clear Assistant Agent Context",
 				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.refreshWebview",
+				"title": "%command.refreshWebview.title%",
+				"icon": "$(refresh)",
+				"category": "%configuration.title%"
 			}
 		],
 		"menus": {
@@ -235,6 +241,11 @@
 				{
 					"command": "shofer.popoutButtonClicked",
 					"group": "overflow@2",
+					"when": "view == shofer.SidebarProvider"
+				},
+				{
+					"command": "shofer.refreshWebview",
+					"group": "overflow@3",
 					"when": "view == shofer.SidebarProvider"
 				}
 			],
@@ -313,6 +324,11 @@
 				{
 					"command": "shofer.popoutButtonClicked",
 					"group": "overflow@2",
+					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
+				},
+				{
+					"command": "shofer.refreshWebview",
+					"group": "overflow@3",
 					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
 				}
 			]
