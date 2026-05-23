@@ -20,6 +20,7 @@ import { Package } from "../../shared/package"
 import { t } from "../../i18n"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { getWorktreeCommandWarning } from "../../utils/worktreePathGuard"
 import { outputError } from "../../utils/outputChannelLogger"
 
 class ShellIntegrationError extends Error {}
@@ -66,7 +67,15 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 
 			task.consecutiveMistakeCount = 0
 
-			const didApprove = await askApproval("command", canonicalCommand)
+			// For worktree-scoped tasks, prepend a warning to the approval
+			// message so the user can see the command isn't sandboxed.
+			let commandToApprove = canonicalCommand
+			const worktreeWarning = getWorktreeCommandWarning(task)
+			if (worktreeWarning) {
+				commandToApprove = `${worktreeWarning}\n${commandToApprove}`
+			}
+
+			const didApprove = await askApproval("command", commandToApprove)
 
 			if (!didApprove) {
 				return

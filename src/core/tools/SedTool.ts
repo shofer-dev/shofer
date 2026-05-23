@@ -13,6 +13,7 @@ import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { formatResponse } from "../prompts/responses"
 import { fileExistsAtPath } from "../../utils/fs"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
@@ -58,6 +59,15 @@ export class SedTool extends BaseTool<"sed"> {
 				task.recordToolError("sed")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("sed", "replacement"))
+				return
+			}
+
+			const worktreeErr = validateWorktreePath(task, relPath)
+			if (worktreeErr) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("sed")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(worktreeErr)
 				return
 			}
 

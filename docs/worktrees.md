@@ -64,6 +64,29 @@ Each `Task` instance has a `cwd` property (defaults to the workspace root). For 
 - `createManagedTask(name, text, images, worktreeDir?)` creates an in-window task scoped to a worktree directory
 - Webview messages `newTask` and `createParallelTask` both accept a `worktreeDir` field
 
+### 3a. Path Isolation (Mutating Tool Guard)
+
+When a task runs inside an embedded worktree (`task.cwd` points into `.shofer/worktrees/<name>/`), **all mutating native tools enforce path containment**. Any target path that resolves outside the task's assigned worktree directory is blocked with an error message.
+
+**Guarded tools:**
+
+| Tool                   | What is validated                 |
+| ---------------------- | --------------------------------- |
+| `write_to_file`        | `path`                            |
+| `apply_diff`           | `path`                            |
+| `create_directory`     | `path`                            |
+| `file` (rm)            | `path`                            |
+| `file` (mv)            | `path` + `destination`            |
+| `insert_edit`          | `filePath`                        |
+| `sed`                  | `path`                            |
+| `rename_symbol`        | `filePath` (the symbol location)  |
+| `create_new_workspace` | `projectRoot` (path + name)       |
+| `execute_command`      | advisory warning in approval only |
+
+**Implementation:** [`validateWorktreePath()`](../src/utils/worktreePathGuard.ts) resolves the target against `task.cwd` and verifies it stays within the worktree directory. It detects `..` traversal, absolute paths pointing outside, and any symlinks that resolve elsewhere. For non-worktree tasks, the guard is a no-op.
+
+**`execute_command` is advisory only:** Shell commands are not sandboxed — they can escape via `cd`, absolute paths, or redirects. The approval prompt prepends a ⚠️ warning showing the worktree context so the user can inspect the command before approving.
+
 ### 4. Checkpoint Isolation (`src/services/checkpoints/`)
 
 Two parallel tasks running against the same workspace would interfere if their shadow gits both pointed `core.worktree` at the workspace root. The solution uses scoped shadow gits:
@@ -231,3 +254,5 @@ This section catalogues discrepancies, omissions, and enhancement opportunities 
 2. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
 3. **`.worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
 4. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC, but not through a public extension API
+5. **`execute_command` is not sandboxed** — The path isolation guard blocks file-level tool mutations, but shell commands can still escape the worktree via `cd`, absolute paths, or redirects. A warning is displayed in the approval prompt as a best-effort safeguard.
+6. **`rename_symbol` may affect files outside the worktree** — The LSP rename provider operates on workspace scope (the entire repo), so a rename initiated from a worktree file could modify references in the master checkout or other worktrees. The guard validates only the source file's location, not the rename's downstream effects.

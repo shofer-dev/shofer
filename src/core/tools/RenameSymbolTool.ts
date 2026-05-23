@@ -15,6 +15,7 @@ import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -61,6 +62,15 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 				task.recordToolError("rename_symbol")
 				task.didToolFailInCurrentTurn = true
 				pushToolResult(await task.sayAndCreateMissingParamError("rename_symbol", "newName"))
+				return
+			}
+
+			const worktreeErr = validateWorktreePath(task, filePath)
+			if (worktreeErr) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("rename_symbol")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(worktreeErr)
 				return
 			}
 
