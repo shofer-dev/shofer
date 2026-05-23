@@ -878,10 +878,19 @@ export class ShoferProvider
 				? await this.getHMRHtmlContent(view.webview)
 				: await this.getHtmlContent(view.webview)
 
-		// Step 3: focus the webview so the workbench reload command (step 4)
-		// targets our panel rather than whatever the user last clicked.
+		// Step 3: focus the webview AND steal focus into it (the `true` arg).
+		// We need true here, not false, because:
+		//   (a) the workbench reload command (step 5) targets the *focused*
+		//       webview, and the overflow-menu click that triggered us moved
+		//       focus into the menu, not into the webview;
+		//   (b) when the iframe has been re-parented into VS Code's
+		//       position-anchor overlay layer (the post-crash symptom we
+		//       captured), forcing focus dislodges it back into its normal
+		//       view slot.
+		// Trade-off: the sidebar briefly steals focus from the editor. That's
+		// acceptable for a manual recovery action.
 		if ("show" in view) {
-			;(view as vscode.WebviewView).show(false)
+			;(view as vscode.WebviewView).show(true)
 		} else {
 			;(view as vscode.WebviewPanel).reveal(undefined, false)
 		}
@@ -896,6 +905,13 @@ export class ShoferProvider
 		// assignment when the renderer is stuck / IPC channel is dead. Wrapped
 		// in a try/catch because the command may not be available in all
 		// VS Code versions or code-server builds.
+		//
+		// We yield to the event loop first (50 ms) so the focus shift from
+		// step 3 has time to settle — `workbench.action.webview.reloadWebviewAction`
+		// resolves its target by looking up the *currently focused* webview at
+		// command-execution time, and without the delay it can still see the
+		// overflow menu (or whatever had focus before our `show(true)`).
+		await new Promise((resolve) => setTimeout(resolve, 50))
 		try {
 			await vscode.commands.executeCommand("workbench.action.webview.reloadWebviewAction")
 		} catch {
