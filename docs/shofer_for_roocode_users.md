@@ -6,6 +6,8 @@ This document catalogues every **user-facing feature** and **opinionated change*
 
 **Context**: Roo-Code has announced that it is sunsetting its VS Code Extension, Cloud, and Router services on May 15, 2026. The team is pivoting away from IDE-based tools to focus on their new cloud-based agent, Roomote.
 
+> **Quick Start**: Run the `/migrate-from-roocode` slash command to automatically rename your legacy Roo-Code configuration files (`.rooignore`, `.roomodes`, `.roorules*`, `.clinerules*`, `cline_mcp_settings.json`) to Shofer equivalents. See [`shofer_special_files.md`](shofer_special_files.md) for the full migration reference.
+
 ---
 
 ## Table of Contents
