@@ -195,6 +195,18 @@ const baseProviderSettingsSchema = z.object({
 
 	// Model verbosity.
 	verbosity: verbosityLevelsSchema.optional(),
+
+	// Manual pricing override (USD per 1M tokens).
+	// When set, these values override the auto-discovered per-model pricing
+	// for cost calculation and display. Leave fields unset to use defaults.
+	customPricing: z
+		.object({
+			inputPrice: z.number().optional(),
+			outputPrice: z.number().optional(),
+			cacheReadsPrice: z.number().optional(),
+			cacheWritesPrice: z.number().optional(),
+		})
+		.optional(),
 })
 
 // Several of the providers share common model config properties.

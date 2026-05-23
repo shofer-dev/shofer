@@ -899,7 +899,28 @@
 		}
 	},
 	"advancedSettings": {
-		"title": "Advanced settings"
+		"title": "Advanced settings",
+		"pricingOverride": {
+			"heading": "Pricing Override (USD per 1M tokens)",
+			"description": "Manually override the per-model pricing used for cost calculation. Leave fields unset to use auto-discovered values.",
+			"inputPrice": {
+				"label": "Input Price",
+				"description": "Price per 1M input/prompt tokens. Overrides auto-discovered input pricing."
+			},
+			"outputPrice": {
+				"label": "Output Price",
+				"description": "Price per 1M output/completion tokens. Overrides auto-discovered output pricing."
+			},
+			"cacheReadsPrice": {
+				"label": "Cache Reads Price",
+				"description": "Price per 1M tokens read from cache. Overrides auto-discovered cache-read pricing."
+			},
+			"cacheWritesPrice": {
+				"label": "Cache Writes Price",
+				"description": "Price per 1M tokens written to cache. Overrides auto-discovered cache-write pricing."
+			},
+			"clear": "Clear All"
+		}
 	},
 	"advanced": {
 		"diff": {

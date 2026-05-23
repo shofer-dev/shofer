@@ -4,6 +4,7 @@ import OpenAI from "openai"
 import { isRetiredProvider, type ProviderSettings, type ModelInfo } from "@shofer/types"
 
 import { ApiStream } from "./transform/stream"
+import { applyCustomPricing } from "../shared/cost"
 
 import {
 	AnthropicHandler,
@@ -121,64 +122,78 @@ export function buildApiHandler(
 		)
 	}
 
-	switch (apiProvider) {
-		case "anthropic":
-			return new AnthropicHandler(options)
-		case "openrouter":
-			return new OpenRouterHandler(options)
-		case "bedrock":
-			return new AwsBedrockHandler(options)
-		case "vertex":
-			return options.apiModelId?.startsWith("claude")
-				? new AnthropicVertexHandler(options)
-				: new VertexHandler(options)
-		case "openai":
-			return new OpenAiHandler(options)
-		case "ollama":
-			return new NativeOllamaHandler(options)
-		case "lmstudio":
-			return new LmStudioHandler(options)
-		case "gemini":
-			return new GeminiHandler(options)
-		case "openai-codex":
-			return new OpenAiCodexHandler(options)
-		case "openai-native":
-			return new OpenAiNativeHandler(options)
-		case "deepseek":
-			return new DeepSeekHandler(options)
-		case "qwen-code":
-			return new QwenCodeHandler(options)
-		case "moonshot":
-			return new MoonshotHandler(options)
-		case "vscode-lm":
-			return new VsCodeLmHandler(handlerOptions)
-		case "mistral":
-			return new MistralHandler(options)
-		case "requesty":
-			return new RequestyHandler(options)
-		case "unbound":
-			return new UnboundHandler(options)
-		case "fake-ai":
-			return new FakeAIHandler(options)
-		case "xai":
-			return new XAIHandler(options)
-		case "litellm":
-			return new LiteLLMHandler(options)
-		case "sambanova":
-			return new SambaNovaHandler(options)
-		case "zai":
-			return new ZAiHandler(options)
-		case "fireworks":
-			return new FireworksHandler(options)
-		case "vercel-ai-gateway":
-			return new VercelAiGatewayHandler(options)
-		case "minimax":
-			return new MiniMaxHandler(options)
-		case "baseten":
-			return new BasetenHandler(options)
-		case "poe":
-			return new PoeHandler(options)
-		default:
-			return new AnthropicHandler(options)
+	const raw: ApiHandler = (() => {
+		switch (apiProvider) {
+			case "anthropic":
+				return new AnthropicHandler(options)
+			case "openrouter":
+				return new OpenRouterHandler(options)
+			case "bedrock":
+				return new AwsBedrockHandler(options)
+			case "vertex":
+				return options.apiModelId?.startsWith("claude")
+					? new AnthropicVertexHandler(options)
+					: new VertexHandler(options)
+			case "openai":
+				return new OpenAiHandler(options)
+			case "ollama":
+				return new NativeOllamaHandler(options)
+			case "lmstudio":
+				return new LmStudioHandler(options)
+			case "gemini":
+				return new GeminiHandler(options)
+			case "openai-codex":
+				return new OpenAiCodexHandler(options)
+			case "openai-native":
+				return new OpenAiNativeHandler(options)
+			case "deepseek":
+				return new DeepSeekHandler(options)
+			case "qwen-code":
+				return new QwenCodeHandler(options)
+			case "moonshot":
+				return new MoonshotHandler(options)
+			case "vscode-lm":
+				return new VsCodeLmHandler(handlerOptions)
+			case "mistral":
+				return new MistralHandler(options)
+			case "requesty":
+				return new RequestyHandler(options)
+			case "unbound":
+				return new UnboundHandler(options)
+			case "fake-ai":
+				return new FakeAIHandler(options)
+			case "xai":
+				return new XAIHandler(options)
+			case "litellm":
+				return new LiteLLMHandler(options)
+			case "sambanova":
+				return new SambaNovaHandler(options)
+			case "zai":
+				return new ZAiHandler(options)
+			case "fireworks":
+				return new FireworksHandler(options)
+			case "vercel-ai-gateway":
+				return new VercelAiGatewayHandler(options)
+			case "minimax":
+				return new MiniMaxHandler(options)
+			case "baseten":
+				return new BasetenHandler(options)
+			case "poe":
+				return new PoeHandler(options)
+			default:
+				return new AnthropicHandler(options)
+		}
+	})()
+
+	// When customPricing is configured, wrap getModel() to merge overrides.
+	const customPricing = options.customPricing
+	if (customPricing) {
+		const rawGetModel = raw.getModel.bind(raw)
+		raw.getModel = (): { id: string; info: ModelInfo } => {
+			const m = rawGetModel()
+			return { id: m.id, info: applyCustomPricing(m.info, customPricing) }
+		}
 	}
+
+	return raw
 }

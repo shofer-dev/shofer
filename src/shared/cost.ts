@@ -1,4 +1,4 @@
-import type { ModelInfo } from "@shofer/types"
+import type { ModelInfo, ProviderSettings } from "@shofer/types"
 import type { ServiceTier } from "@shofer/types"
 
 export interface ApiCostResult {
@@ -116,3 +116,35 @@ export function calculateApiCostOpenAI(
 }
 
 export const parseApiPrice = (price: any) => (price ? parseFloat(price) * 1_000_000 : undefined)
+
+/**
+ * Apply manual pricing overrides from ProviderSettings.customPricing on top of
+ * the auto-discovered ModelInfo. Override values take precedence; unset fields
+ * keep the original model-info pricing.
+ */
+export function applyCustomPricing(modelInfo: ModelInfo, customPricing?: ProviderSettings["customPricing"]): ModelInfo {
+	if (!customPricing) {
+		return modelInfo
+	}
+
+	const overrides: Partial<ModelInfo> = {}
+
+	if (typeof customPricing.inputPrice === "number") {
+		overrides.inputPrice = customPricing.inputPrice
+	}
+	if (typeof customPricing.outputPrice === "number") {
+		overrides.outputPrice = customPricing.outputPrice
+	}
+	if (typeof customPricing.cacheReadsPrice === "number") {
+		overrides.cacheReadsPrice = customPricing.cacheReadsPrice
+	}
+	if (typeof customPricing.cacheWritesPrice === "number") {
+		overrides.cacheWritesPrice = customPricing.cacheWritesPrice
+	}
+
+	if (Object.keys(overrides).length === 0) {
+		return modelInfo
+	}
+
+	return { ...modelInfo, ...overrides }
+}
