@@ -64,6 +64,8 @@ import {
 	Collapsible,
 	CollapsibleTrigger,
 	CollapsibleContent,
+	Button,
+	StandardTooltip,
 } from "@src/components/ui"
 
 import {
@@ -812,6 +814,151 @@ const ApiOptions = ({
 									}
 									onChange={(value) => setApiConfigurationField("consecutiveMistakeLimit", value)}
 								/>
+								<div className="pt-2 border-t border-vscode-panel-border">
+									<div className="font-medium mb-1">
+										{t("settings:advancedSettings.pricingOverride.heading")}
+									</div>
+									<div className="text-sm text-vscode-descriptionForeground mb-2">
+										{t("settings:advancedSettings.pricingOverride.description")}
+									</div>
+									<div className="flex flex-col gap-3">
+										<div className="grid grid-cols-2 gap-3">
+											<VSCodeTextField
+												value={apiConfiguration?.customPricing?.inputPrice?.toString() ?? ""}
+												type="text"
+												onInput={handleInputChange("customPricing", (e) => ({
+													...apiConfiguration.customPricing,
+													inputPrice: (() => {
+														const v = parseFloat((e.target as HTMLInputElement).value)
+														return isNaN(v) ? undefined : v
+													})(),
+												}))}
+												placeholder="0.00"
+												className="w-full">
+												<div className="flex items-center gap-1">
+													<label className="block font-medium mb-1">
+														{t(
+															"settings:advancedSettings.pricingOverride.inputPrice.label",
+														)}
+													</label>
+													<StandardTooltip
+														content={t(
+															"settings:advancedSettings.pricingOverride.inputPrice.description",
+														)}>
+														<i
+															className="codicon codicon-info text-vscode-descriptionForeground"
+															style={{ fontSize: "12px" }}
+														/>
+													</StandardTooltip>
+												</div>
+											</VSCodeTextField>
+											<VSCodeTextField
+												value={apiConfiguration?.customPricing?.outputPrice?.toString() ?? ""}
+												type="text"
+												onInput={handleInputChange("customPricing", (e) => ({
+													...apiConfiguration.customPricing,
+													outputPrice: (() => {
+														const v = parseFloat((e.target as HTMLInputElement).value)
+														return isNaN(v) ? undefined : v
+													})(),
+												}))}
+												placeholder="0.00"
+												className="w-full">
+												<div className="flex items-center gap-1">
+													<label className="block font-medium mb-1">
+														{t(
+															"settings:advancedSettings.pricingOverride.outputPrice.label",
+														)}
+													</label>
+													<StandardTooltip
+														content={t(
+															"settings:advancedSettings.pricingOverride.outputPrice.description",
+														)}>
+														<i
+															className="codicon codicon-info text-vscode-descriptionForeground"
+															style={{ fontSize: "12px" }}
+														/>
+													</StandardTooltip>
+												</div>
+											</VSCodeTextField>
+											<VSCodeTextField
+												value={
+													apiConfiguration?.customPricing?.cacheReadsPrice?.toString() ?? ""
+												}
+												type="text"
+												onInput={handleInputChange("customPricing", (e) => ({
+													...apiConfiguration.customPricing,
+													cacheReadsPrice: (() => {
+														const v = parseFloat((e.target as HTMLInputElement).value)
+														return isNaN(v) ? undefined : v
+													})(),
+												}))}
+												placeholder="0.00"
+												className="w-full">
+												<div className="flex items-center gap-1">
+													<label className="block font-medium mb-1">
+														{t(
+															"settings:advancedSettings.pricingOverride.cacheReadsPrice.label",
+														)}
+													</label>
+													<StandardTooltip
+														content={t(
+															"settings:advancedSettings.pricingOverride.cacheReadsPrice.description",
+														)}>
+														<i
+															className="codicon codicon-info text-vscode-descriptionForeground"
+															style={{ fontSize: "12px" }}
+														/>
+													</StandardTooltip>
+												</div>
+											</VSCodeTextField>
+											<VSCodeTextField
+												value={
+													apiConfiguration?.customPricing?.cacheWritesPrice?.toString() ?? ""
+												}
+												type="text"
+												onInput={handleInputChange("customPricing", (e) => ({
+													...apiConfiguration.customPricing,
+													cacheWritesPrice: (() => {
+														const v = parseFloat((e.target as HTMLInputElement).value)
+														return isNaN(v) ? undefined : v
+													})(),
+												}))}
+												placeholder="0.00"
+												className="w-full">
+												<div className="flex items-center gap-1">
+													<label className="block font-medium mb-1">
+														{t(
+															"settings:advancedSettings.pricingOverride.cacheWritesPrice.label",
+														)}
+													</label>
+													<StandardTooltip
+														content={t(
+															"settings:advancedSettings.pricingOverride.cacheWritesPrice.description",
+														)}>
+														<i
+															className="codicon codicon-info text-vscode-descriptionForeground"
+															style={{ fontSize: "12px" }}
+														/>
+													</StandardTooltip>
+												</div>
+											</VSCodeTextField>
+										</div>
+										{apiConfiguration.customPricing &&
+											Object.values(apiConfiguration.customPricing).some(
+												(v) => typeof v === "number",
+											) && (
+												<Button
+													variant="secondary"
+													onClick={() =>
+														setApiConfigurationField("customPricing", undefined)
+													}>
+													{t("settings:advancedSettings.pricingOverride.clear")}
+												</Button>
+											)}
+									</div>
+								</div>
+
 								{selectedProvider === "poe" && (
 									<VSCodeTextField
 										value={apiConfiguration?.poeBaseUrl || ""}
