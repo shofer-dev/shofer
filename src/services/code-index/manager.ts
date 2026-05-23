@@ -324,7 +324,7 @@ export class CodeIndexManager {
 	}
 
 	/**
-	 * Cleans up the manager instance.
+	 * Cleans up the manager instance and removes it from the singleton map.
 	 */
 	public dispose(): void {
 		this.stopIndexing()
@@ -334,6 +334,7 @@ export class CodeIndexManager {
 		this._cacheManager?.dispose?.()
 		this._stateManager.dispose()
 		this._disposeGitIgnoreWatcher()
+		CodeIndexManager.instances.delete(this.workspacePath)
 	}
 
 	/**
@@ -573,12 +574,5 @@ export class CodeIndexManager {
 	private _emitCodeIndexMetrics(fileCount: number): void {
 		const provider = this._configManager?.currentEmbedderProvider ?? "unknown"
 		updateCodeIndexMetrics(fileCount, 0, provider)
-	}
-
-	/**
-	 * Dispose the manager and remove it from the singleton instance map.
-	 */
-	public dispose(): void {
-		CodeIndexManager.instances.delete(this.workspacePath)
 	}
 }
