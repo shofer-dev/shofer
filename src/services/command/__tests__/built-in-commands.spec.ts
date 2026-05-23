@@ -5,8 +5,10 @@ describe("Built-in Commands", () => {
 		it("should return all built-in commands", async () => {
 			const commands = await getBuiltInCommands()
 
-			expect(commands).toHaveLength(1)
-			expect(commands.map((cmd) => cmd.name)).toEqual(expect.arrayContaining(["init"]))
+			expect(commands).toHaveLength(4)
+			expect(commands.map((cmd) => cmd.name)).toEqual(
+				expect.arrayContaining(["init", "migrate-from-roocode", "migrate-from-copilot", "migrate-from-claude"]),
+			)
 
 			// Verify all commands have required properties
 			commands.forEach((command) => {
@@ -63,10 +65,17 @@ describe("Built-in Commands", () => {
 		it("should return all built-in command names", async () => {
 			const names = await getBuiltInCommandNames()
 
-			expect(names).toHaveLength(1)
-			expect(names).toEqual(expect.arrayContaining(["init"]))
+			expect(names).toHaveLength(4)
+			expect(names).toEqual(
+				expect.arrayContaining(["init", "migrate-from-roocode", "migrate-from-copilot", "migrate-from-claude"]),
+			)
 			// Order doesn't matter since it's based on filesystem order
-			expect(names.sort()).toEqual(["init"])
+			expect(names.sort()).toEqual([
+				"init",
+				"migrate-from-claude",
+				"migrate-from-copilot",
+				"migrate-from-roocode",
+			])
 		})
 
 		it("should return array of strings", async () => {

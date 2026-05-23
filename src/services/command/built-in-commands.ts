@@ -308,6 +308,501 @@ Please analyze this codebase and create an AGENTS.md file containing:
 
 Remember: The goal is to create documentation that enables AI assistants to be immediately productive in this codebase, focusing on project-specific knowledge that isn't obvious from the code structure alone.`,
 	},
+	"migrate-from-roocode": {
+		name: "migrate-from-roocode",
+		description: "Rename legacy Roo-Code/Cline config files to Shofer equivalents",
+		content: `<task>
+Rename legacy Roo-Code and Cline configuration files in this project to their
+Shofer equivalents. Do NOT modify file contents — only rename/move files and
+directories. Create parent directories as needed.
+</task>
+
+<initialization>
+	 <todo_list_creation>
+	   If the update_todo_list tool is available, create a todo list with these steps:
+
+	   1. Scan for legacy files at workspace root
+	   2. Rename workspace-root files (.rooignore, .roomodes, .roorules*, .clinerules*, .shoferrules*, cline_mcp_settings.json)
+	   3. Convert legacy file-based rules to directory-based (.roorules → .shofer/rules/)
+	   4. Handle mode-specific rule files (.roorules-code → .shofer/rules-code/)
+	   5. Handle legacy MCP config (cline_mcp_settings.json → .shofer/mcp.json)
+	   6. Verify migration completeness
+	 </todo_list_creation>
+</initialization>
+
+<migration_mapping>
+	 <workspace_root_renames>
+	   Rename these files at the workspace root (simple rename):
+
+	   | Legacy                    | Modern             | Notes                                          |
+	   |---------------------------|--------------------|------------------------------------------------|
+	   | \`.rooignore\`            | \`.shoferignore\`  | Ignore patterns for Shofer tools               |
+	   | \`.roomodes\`             | \`.shofermodes\`   | Custom mode definitions                        |
+	 </workspace_root_renames>
+
+	 <file_to_directory_migrations>
+	   These legacy SINGLE FILE rules must become DIRECTORY-based.
+	   For each: create the directory if it doesn't exist, then move the
+	   legacy file into it as the first rule file.
+
+	   <rules_to_rules_dir>
+	     | Legacy                  | Modern                                     |
+	     |-------------------------|--------------------------------------------|
+	     | \`.roorules\`           | \`.shofer/rules/<original-filename>.md\`   |
+	     | \`.clinerules\`         | \`.shofer/rules/<original-filename>.md\`   |
+	     | \`.shoferrules\`        | \`.shofer/rules/<original-filename>.md\`   |
+
+	     HOW: Create .shofer/rules/ directory. Move the legacy file INTO it
+	     with a descriptive name (e.g., .roorules → .shofer/rules/roorules.md).
+	     If .shofer/rules/ already exists with content, append the legacy
+	     file's content as an additional rule file instead.
+	   </rules_to_rules_dir>
+
+	   <mode_rules_to_mode_dir>
+	     Legacy mode-specific rule files use a SUFFIX pattern like
+	     \`.roorules-{mode}\` where {mode} is one of: code, architect, ask,
+	     debug, reviewer, search, opinion, browser, orchestrator.
+
+	     | Legacy                     | Modern                                              |
+	     |----------------------------|-----------------------------------------------------|
+	     | \`.roorules-{mode}\`       | \`.shofer/rules-{mode}/<original-filename>.md\`     |
+	     | \`.clinerules-{mode}\`     | \`.shofer/rules-{mode}/<original-filename>.md\`     |
+	     | \`.shoferrules-{mode}\`    | \`.shofer/rules-{mode}/<original-filename>.md\`     |
+
+	     HOW: For each legacy mode rules file, create .shofer/rules-{mode}/
+	     directory and move the file into it. If the target directory already
+	     has rules, add the legacy file alongside them.
+	   </mode_rules_to_mode_dir>
+	 </file_to_directory_migrations>
+
+	 <mcp_config_migration>
+	   | Legacy                      | Modern                  |
+	   |-----------------------------|-------------------------|
+	   | \`cline_mcp_settings.json\` | \`.shofer/mcp.json\`    |
+
+	   HOW: If .shofer/mcp.json does NOT already exist, rename the legacy file.
+	   If .shofer/mcp.json ALREADY exists, print the legacy file's location
+	   and advise the user to manually merge the configurations — do NOT
+	   overwrite the existing .shofer/mcp.json.
+	 </mcp_config_migration>
+
+	 <other_ai_assistant_files>
+	   These files are NOT renamed but SHOULD be reported to the user
+	   for manual review:
+
+	   | File               | Suggestion                                       |
+	   |--------------------|--------------------------------------------------|
+	   | \`CLAUDE.md\`      | Merge relevant content into AGENTS.md            |
+	   | \`.cursorrules\`   | Merge relevant content into AGENTS.md            |
+	   | \`.cursor/rules/\` | Copy relevant rules into .shofer/rules/          |
+	   | \`.windsurfrules\` | Merge relevant content into AGENTS.md            |
+	 </other_ai_assistant_files>
+</migration_mapping>
+
+<execution_rules>
+	 1. **Use the \`file\` tool** with \`subcommand="mv"\` for all renames
+	    and moves — do NOT use \`execute_command\` with mv/cp/rm.
+	    The \`file\` tool captures changes in the File Changes Panel.
+
+	 2. **Create parent directories first** with \`create_directory\` before
+	    moving files into them. Example: create .shofer/rules/ before
+	    moving .roorules → .shofer/rules/roorules.md.
+
+	 3. **Check for existing targets before moving.** If the target already
+	    exists (e.g., both .roorules and .shofer/rules/ exist), do NOT
+	    overwrite — instead move the legacy file into the target directory
+	    with a descriptive name.
+
+	 4. **List files first.** Use \`list_files\` (recursive=false) at the
+	    workspace root before each rename to confirm the legacy file exists
+	    and the target doesn't conflict.
+
+	 5. **Report action taken** in the final result. For each legacy file
+	    found: state what it was renamed to, or if it was skipped (with reason).
+
+	 6. **Do NOT read file contents.** This is a pure rename operation.
+	    Do not use read_file or any reading tools. Only list_files,
+	    create_directory, and file(mv).
+
+	 7. **Stop after migration** — do not modify any file contents.
+	    Do not edit AGENTS.md, .shoferignore, .shofermodes, or the
+	    migrated files.
+</execution_rules>
+
+<quality_criteria>
+	 - Every legacy file at the workspace root is accounted for
+	 - Targets are checked for existence to avoid data loss
+	 - Parent directories are created before moves
+	 - The final summary lists every file touched
+	 - No file CONTENTS are modified — this is purely rename/move
+	 - Use the \`file\` tool (not shell commands) for all moves
+</quality_criteria>
+
+After migration, print a summary like:
+
+\`\`\`
+Migration complete:
+	 ✓ .rooignore → .shoferignore
+	 ✓ .roomodes → .shofermodes
+	 ✓ .roorules → .shofer/rules/roorules.md
+	 ✓ .roorules-code → .shofer/rules-code/roorules-code.md
+	 ⚠ cline_mcp_settings.json skipped — .shofer/mcp.json already exists
+\`\`\``,
+	},
+	"migrate-from-copilot": {
+		name: "migrate-from-copilot",
+		description: "Migrate GitHub Copilot configuration files to Shofer equivalents",
+		content: `<task>
+Migrate GitHub Copilot configuration files in this project to their Shofer
+equivalents. This involves moving skill directories, merging instruction files,
+converting agent definitions to custom modes, and converting targeted instructions
+to Shofer rules.
+</task>
+
+<initialization>
+	 <todo_list_creation>
+	   If the update_todo_list tool is available, create a todo list with these steps:
+
+	   1. Scan for all Copilot config files (.github/copilot-instructions.md, .github/instructions/, .github/agents/, .github/skills/)
+	   2. Move and merge .github/copilot-instructions.md into AGENTS.md or .shofer/custom-instructions.md
+	   3. Convert .github/instructions/*.instructions.md to .shofer/rules/ files
+	   4. Convert .github/agents/*.agent.md to .shofermodes custom mode entries
+	   5. Move .github/skills/*/ directories to .shofer/skills/
+	   6. Report .vscode/settings.json Copilot settings for manual cleanup
+	   7. Verify migration completeness
+	 </todo_list_creation>
+</initialization>
+
+<migration_mapping>
+	 <global_instructions>
+	   The primary Copilot instructions file:
+	   | Copilot                                | Shofer Action                                                                 |
+	   |----------------------------------------|-------------------------------------------------------------------------------|
+	   | \`.github/copilot-instructions.md\`    | Merge content into \`AGENTS.md\` (appended with a "Copilot Instructions" heading). If AGENTS.md doesn't exist, create it. If AGENTS.md already has Copilot content, skip. |
+
+	   HOW:
+	   1. Read .github/copilot-instructions.md
+	   2. Check if AGENTS.md exists — if not, create it with:
+	      \`# AGENTS.md\n\nThis file provides guidance to agents when working with code in this repository.\n\n## Copilot Instructions (migrated)\n\n<copilot instructions content>\`
+	   3. If AGENTS.md exists, search for "Copilot Instructions" — if found, skip (already migrated)
+	   4. If not found, APPEND the copilot content under a "## Copilot Instructions (migrated)" heading
+
+	   After merging, DO NOT delete the original .github/copilot-instructions.md —
+	   Copilot still uses it. Report it as "merged (original retained)".
+	 </global_instructions>
+
+	 <targeted_instructions>
+	   Copilot's targeted instruction files with \`applyTo\` glob patterns:
+	   | Copilot                                       | Shofer Action                                                          |
+	   |-----------------------------------------------|------------------------------------------------------------------------|
+	   | \`.github/instructions/*.instructions.md\`    | Extract content (strip YAML frontmatter), save as \`.shofer/rules/<name>.md\` |
+
+	   HOW for each file:
+	   1. Read the file — extract YAML frontmatter (description, applyTo)
+	   2. Strip the frontmatter — keep only the markdown body
+	   3. Prepend a header comment with the original filename and applyTo glob:
+	      \`<!-- migrated from .github/instructions/<name>.instructions.md -->\n<!-- original applyTo: <glob> -->\n\n\`
+	   4. Write to .shofer/rules/<name>.md (create .shofer/rules/ directory if needed)
+	   5. If a file with the same name already exists in .shofer/rules/, append with a separator
+
+	   After migration, DO NOT delete the original files — Copilot still uses them.
+	 </targeted_instructions>
+
+	 <agent_definitions>
+	   Copilot's custom agent definitions:
+	   | Copilot                              | Shofer Action                                                                               |
+	   |--------------------------------------|---------------------------------------------------------------------------------------------|
+	   | \`.github/agents/*.agent.md\`        | Convert each agent to a custom mode entry in \`.shofermodes\`                               |
+
+	   HOW for each agent file:
+	   1. Read the file — extract YAML frontmatter (name, description, tools if present)
+	   2. Read the markdown body — this becomes the mode's roleDefinition
+	   3. Map Copilot tools to Shofer tool groups:
+	      - "terminal" → execute group
+	      - "file-viewer" → read group
+	      - "file-editor" → write group
+	      - "browser" → browser group
+	      - If no tools listed or unrecognized, default to ["read", "mcp"]
+	   4. Check if .shofermodes exists:
+	      - If no: create it with the new mode entry
+	      - If yes: read it and append the new mode (if slug doesn't already exist)
+	   5. The mode slug is the agent name lowercased with hyphens (e.g., "Terraform Expert" → "terraform-expert")
+	   6. YAML format to append:
+	      \`\`\`yaml
+	      - slug: <slug>
+	        name: "<agent name>"
+	        roleDefinition: "<agent instructions>"
+	        groups: [<mapped groups>]
+	        source: project
+	      \`\`\`
+
+	   After migration, DO NOT delete the original agent files.
+	 </agent_definitions>
+
+	 <skills>
+	   Copilot Agent Skills (same format as Shofer skills):
+	   | Copilot                                  | Shofer Action                                         |
+	   |------------------------------------------|-------------------------------------------------------|
+	   | \`.github/skills/<name>/SKILL.md\`       | Move entire directory to \`.shofer/skills/<name>/\`   |
+
+	   HOW for each skill directory:
+	   1. List .github/skills/ to discover all skill subdirectories
+	   2. For each skill dir, check if .shofer/skills/<name>/ already exists
+	   3. If target doesn't exist: create .shofer/skills/<name>/ and use \`file mv\` to move each file
+	   4. If target exists: skip with a warning — manual merge required
+	   5. After moving all files, remove the now-empty .github/skills/<name>/ directory
+	   6. After all skills are moved, remove .github/skills/ if empty
+
+	   This is a MOVE operation — the skill is relocated, not copied.
+	 </skills>
+</migration_mapping>
+
+<execution_rules>
+	 1. **Use the \`file\` tool** with \`subcommand="mv"\` for moves/renames.
+	    Use \`write_to_file\` for creating new files (AGENTS.md, .shofer/rules/*.md).
+	    Use \`apply_diff\` or \`insert_edit\` for appending to existing files.
+
+	 2. **Create parent directories first** with \`create_directory\` before
+	    writing or moving files into them (.shofer/rules/, .shofer/skills/).
+
+	 3. **Never overwrite existing files.** Always check with \`list_files\`
+	    before writing. If the target exists, append or skip with a warning.
+
+	 4. **Read before converting.** Use \`read_file\` on Copilot config files
+	    to extract frontmatter and body content for conversion.
+
+	 5. **Report every action.** For each file found, state what was done:
+	    merged, moved, converted, skipped (with reason), or reported for manual review.
+
+	 6. **Do NOT delete Copilot source files.** Copilot may still be in use.
+	    The migration is non-destructive — it creates Shofer equivalents while
+	    preserving the originals. The one exception: skills (move, not copy).
+
+	 7. **Check .vscode/settings.json** for \`github.copilot.*\` keys and
+	    report them for manual cleanup. Do NOT modify settings.json.
+</execution_rules>
+
+<quality_criteria>
+	 - Every Copilot config file/directory is discovered and accounted for
+	 - Content transformations preserve the original meaning
+	 - Targets are checked for existence to avoid overwrites
+	 - Agent→mode conversions produce valid .shofermodes YAML
+	 - Skills are moved (not copied) to avoid duplication
+	 - Source files are preserved (except skills, which are moved)
+	 - The final summary lists every file touched with its outcome
+</quality_criteria>
+
+After migration, print a summary like:
+
+\`\`\`
+Migration complete:
+	 ✓ .github/copilot-instructions.md → merged into AGENTS.md (original retained)
+	 ✓ .github/instructions/react.instructions.md → .shofer/rules/react.md
+	 ✓ .github/instructions/api.instructions.md → .shofer/rules/api.md
+	 ✓ .github/agents/terraform-expert.agent.md → .shofermodes (custom mode added)
+	 ✓ .github/skills/error-handling/ → moved to .shofer/skills/error-handling/
+	 ⚠ .vscode/settings.json — 3 Copilot settings found for manual review
+\`\`\``,
+	},
+	"migrate-from-claude": {
+		name: "migrate-from-claude",
+		description: "Migrate Claude Code configuration files to Shofer equivalents",
+		content: `<task>
+Migrate Claude Code (and Claude Cowork) configuration files in this project to
+their Shofer equivalents. This involves merging instruction files, converting
+rules to Shofer rules, moving skills, converting subagent definitions to custom
+modes, and relocating MCP configuration.
+</task>
+
+<initialization>
+	 <todo_list_creation>
+	   If the update_todo_list tool is available, create a todo list with these steps:
+
+	   1. Scan for all Claude Code config (CLAUDE.md, .claude/rules/, .claude/subagents/, .claude/skills/, .claude/settings*.json, .mcp.json)
+	   2. Merge CLAUDE.md (and .claude/CLAUDE.md) into AGENTS.md
+	   3. Merge hierarchical CLAUDE.md files from subdirectories
+	   4. Convert .claude/rules/*.md to .shofer/rules/
+	   5. Convert .claude/subagents/ to .shofermodes custom mode entries
+	   6. Move .claude/skills/ to .shofer/skills/
+	   7. Migrate .mcp.json to .shofer/mcp.json
+	   8. Report .claude/settings.json and .claude/settings.local.json for manual review
+	   9. Verify migration completeness
+	 </todo_list_creation>
+</initialization>
+
+<migration_mapping>
+	 <core_instructions>
+	   Claude's primary project instruction files:
+	   | Claude                            | Shofer Action                                                               |
+	   |-----------------------------------|-----------------------------------------------------------------------------|
+	   | \`CLAUDE.md\` (workspace root)    | Merge content into \`AGENTS.md\` under "## Claude Code Instructions (migrated)" |
+	   | \`.claude/CLAUDE.md\`             | Same as above (check if CLAUDE.md already covered it)                       |
+	   | \`<subdir>/CLAUDE.md\`            | Each becomes \`.shofer/rules/claude-<dirname>.md\`                          |
+
+	   HOW for root CLAUDE.md (and .claude/CLAUDE.md):
+	   1. If both exist, use the root one (preferred by Claude)
+	   2. Read the file
+	   3. Check if AGENTS.md exists — if not, create it with the Claude content
+	   4. If AGENTS.md exists, search for "Claude Code Instructions" — if found, skip
+	   5. If not found, APPEND under a "## Claude Code Instructions (migrated)" heading
+
+	   HOW for hierarchical CLAUDE.md files (e.g., src/api/CLAUDE.md):
+	   1. For each, extract the subdirectory name
+	   2. Write content to .shofer/rules/claude-<subdir-name>.md
+	   3. Include a header: \`<!-- migrated from <original-path> -->\`
+
+	   After merging, DO NOT delete original CLAUDE.md files — Claude Code still uses them.
+	 </core_instructions>
+
+	 <rules>
+	   Claude's granular rules with \`applyTo\` patterns:
+	   | Claude                       | Shofer Action                                                    |
+	   |------------------------------|------------------------------------------------------------------|
+	   | \`.claude/rules/*.md\`       | Convert to \`.shofer/rules/<name>.md\`                           |
+
+	   HOW for each rule file:
+	   1. Read the file — extract YAML frontmatter (description, applyTo)
+	   2. Strip the frontmatter — keep only the markdown body
+	   3. Prepend a header comment:
+	      \`<!-- migrated from .claude/rules/<filename> -->\n\`
+	      If applyTo glob exists: \`<!-- original applyTo: <glob> -->\n\n\`
+	   4. Write to .shofer/rules/<filename> (create .shofer/rules/ directory if needed)
+	   5. If target already exists, append with a markdown separator (\`---\`)
+
+	   DO NOT delete original files.
+	 </rules>
+
+	 <subagents>
+	   Claude's subagent definitions:
+	   | Claude                                       | Shofer Action                                                       |
+	   |----------------------------------------------|---------------------------------------------------------------------|
+	   | \`.claude/subagents/*.json\`                 | Convert to \`.shofermodes\` custom mode entries                     |
+	   | \`.claude/subagents/*.md\`                   | Same — extract frontmatter (name, systemPrompt, allowedTools)       |
+
+	   HOW for each subagent:
+	   1. Read the file
+	   2. For JSON: parse name, systemPrompt, allowedTools
+	      For Markdown: extract YAML frontmatter (name, description, tools)
+	   3. Map Claude allowedTools to Shofer tool groups:
+	      - "fileViewer" → read group
+	      - "fileEditor" → write group
+	      - "terminal" → execute group
+	      - "browser" → browser group
+	      - If no tools or unrecognized → ["read", "mcp"]
+	   4. The mode slug = agent name lowercased with hyphens
+	   5. Append to .shofermodes (create if needed):
+	      \`\`\`yaml
+	      - slug: <slug>
+	        name: "<agent name>"
+	        roleDefinition: "<systemPrompt>"
+	        groups: [<mapped groups>]
+	        source: project
+	      \`\`\`
+	   6. DO NOT delete original subagent files.
+	 </subagents>
+
+	 <skills>
+	   Claude Agent Skills (same standard as Shofer):
+	   | Claude                                  | Shofer Action                                         |
+	   |-----------------------------------------|-------------------------------------------------------|
+	   | \`.claude/skills/<name>/SKILL.md\`      | Move entire directory to \`.shofer/skills/<name>/\`   |
+
+	   HOW — identical to Copilot migration:
+	   1. List .claude/skills/ to discover all skill subdirectories
+	   2. For each, check if .shofer/skills/<name>/ already exists
+	   3. If not: create target dir and use \`file mv\` for each file
+	   4. If exists: skip with warning
+	   5. Remove empty .claude/skills/<name>/ after move
+	   6. Remove .claude/skills/ if empty
+
+	   This is a MOVE — not a copy.
+	 </skills>
+
+	 <mcp_config>
+	   Claude's project-level MCP:
+	   | Claude          | Shofer Action                                                     |
+	   |-----------------|-------------------------------------------------------------------|
+	   | \`.mcp.json\`   | Rename to \`.shofer/mcp.json\` if target does not already exist   |
+
+	   HOW:
+	   1. If .shofer/mcp.json does NOT exist: use \`file mv\` to rename
+	   2. If .shofer/mcp.json ALREADY exists: report for manual merge — do NOT overwrite
+	 </mcp_config>
+
+	 <settings_report>
+	   Claude's project and local settings — no direct Shofer equivalent:
+	   | Claude                              | Action                                                    |
+	   |-------------------------------------|-----------------------------------------------------------|
+	   | \`.claude/settings.json\`           | Report for manual review (hooks, permissions, model prefs) |
+	   | \`.claude/settings.local.json\`     | Report for manual review (personal overrides)              |
+
+	   These contain team-wide tool permissions, lifecycle hooks, and model
+	   preferences. Shofer does not have a direct equivalent — the user should
+	   manually transfer relevant settings to Shofer's VS Code settings (see
+	   configuration.md) or the Shofer Settings UI.
+	 </settings_report>
+
+	 <worktree_include>
+	   | Claude                 | Shofer Action                                      |
+	   |------------------------|----------------------------------------------------|
+	   | \`.worktreeinclude\`   | Already supported — NO action needed               |
+
+	   Shofer natively supports .worktreeinclude files at the workspace root
+	   with the same syntax. If the file already exists, it will be picked up
+	   automatically.
+	 </worktree_include>
+</migration_mapping>
+
+<execution_rules>
+	 1. **Use the \`file\` tool** with \`subcommand="mv"\` for moves/renames
+	    (.mcp.json, skill directories). Use \`write_to_file\` for creating
+	    new files. Use \`apply_diff\` or \`insert_edit\` for appending.
+
+	 2. **Create parent directories first** with \`create_directory\`
+	    before writing or moving (.shofer/rules/, .shofer/skills/).
+
+	 3. **Never overwrite existing files.** Check with \`list_files\`
+	    before writing. Append or skip if target exists.
+
+	 4. **Read before converting.** Use \`read_file\` on Claude config files
+	    to extract frontmatter/JSON for subagent→mode conversion.
+
+	 5. **Report every action.** For each file: merged, moved, converted,
+	    skipped (with reason), or reported for manual review.
+
+	 6. **Do NOT delete Claude source files** (except skills which are
+	    moved, and .mcp.json which is renamed). Claude Code may still be in use.
+
+	 7. **Handle hierarchical CLAUDE.md files.** Check common subdirectories:
+	    src/, lib/, apps/, packages/. List_files recursive to discover them.
+</execution_rules>
+
+<quality_criteria>
+	 - Every Claude config file/directory is discovered and accounted for
+	 - Hierarchical CLAUDE.md files are preserved with their directory context
+	 - Subagent→mode conversions produce valid .shofermodes YAML
+	 - Skills are moved (not copied)
+	 - .mcp.json is safely migrated (no overwrites)
+	 - Settings files are clearly reported for manual follow-up
+	 - Source files are preserved (except skills + .mcp.json)
+	 - The final summary lists every file with its outcome
+</quality_criteria>
+
+After migration, print a summary like:
+
+\`\`\`
+Migration complete:
+	 ✓ CLAUDE.md → merged into AGENTS.md (original retained)
+	 ✓ src/api/CLAUDE.md → .shofer/rules/claude-api.md
+	 ✓ .claude/rules/db-migrations.md → .shofer/rules/db-migrations.md
+	 ✓ .claude/subagents/security-auditor.json → .shofermodes (custom mode added)
+	 ✓ .claude/skills/generate-test/ → moved to .shofer/skills/generate-test/
+	 ✓ .mcp.json → renamed to .shofer/mcp.json
+	 ⚠ .claude/settings.json — manual review needed (hooks, permissions)
+	 ⚠ .claude/settings.local.json — manual review needed
+	 ℹ .worktreeinclude — already supported, no action needed
+\`\`\``,
+	},
 }
 
 /**
