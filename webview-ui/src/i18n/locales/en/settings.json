@@ -1012,7 +1012,7 @@
 		},
 		"PROMETHEUS_METRICS": {
 			"name": "Prometheus metrics exporter",
-			"description": "Exposes a /metrics endpoint on port 30099 (127.0.0.1 only) for Prometheus scraping. Restart VS Code after toggling. Intended for developers and operators monitoring Shofer internals."
+			"description": "Exposes a /metrics endpoint on port 30099 (127.0.0.1 only) for Prometheus scraping. Intended for developers and operators monitoring Shofer internals. ⚠️ Reload the VS Code window after toggling (Ctrl+Shift+P → Developer: Reload Window)."
 		}
 	},
 	"promptCaching": {
