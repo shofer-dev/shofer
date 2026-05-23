@@ -331,6 +331,14 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		await manager.clearIndexData()
 		vscode.window.showInformationMessage("Git history index cleared.")
 	},
+	// ─── Webview ──────────────────────────────────────────────────────────
+	refreshWebview: async () => {
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+		if (!visibleProvider) {
+			return
+		}
+		await visibleProvider.refreshWebview()
+	},
 })
 
 export const openShoferInNewTab = async ({ context, outputChannel }: Omit<RegisterCommandOptions, "provider">) => {
