@@ -45,25 +45,27 @@ vi.mock("fs/promises", async (importOriginal) => {
 	const mockFunctions = {
 		mkdir: vi.fn().mockResolvedValue(undefined),
 		writeFile: vi.fn().mockResolvedValue(undefined),
+		appendFile: vi.fn().mockResolvedValue(undefined),
+		rename: vi.fn().mockResolvedValue(undefined),
 		readFile: vi.fn().mockImplementation((filePath) => {
-			if (filePath.includes("ui_messages.json")) {
-				return Promise.resolve(JSON.stringify(mockMessages))
+			if (filePath.includes("ui_messages.jsonl") || filePath.includes("ui_messages.json")) {
+				// JSONL format: one record per line. The legacy .json branch is
+				// here only as a defensive default — production code unlinks it.
+				return Promise.resolve(mockMessages.map((m) => JSON.stringify(m)).join("\n") + "\n")
 			}
-			if (filePath.includes("api_conversation_history.json")) {
-				return Promise.resolve(
-					JSON.stringify([
-						{
-							role: "user",
-							content: [{ type: "text", text: "historical task" }],
-							ts: Date.now(),
-						},
-						{
-							role: "assistant",
-							content: [{ type: "text", text: "I'll help you with that task." }],
-							ts: Date.now(),
-						},
-					]),
-				)
+			if (
+				filePath.includes("api_conversation_history.jsonl") ||
+				filePath.includes("api_conversation_history.json")
+			) {
+				const msgs = [
+					{ role: "user", content: [{ type: "text", text: "historical task" }], ts: Date.now() },
+					{
+						role: "assistant",
+						content: [{ type: "text", text: "I'll help you with that task." }],
+						ts: Date.now(),
+					},
+				]
+				return Promise.resolve(msgs.map((m) => JSON.stringify(m)).join("\n") + "\n")
 			}
 			return Promise.resolve("[]")
 		}),
@@ -184,7 +186,12 @@ vi.mock("../../../utils/storage", () => ({
 
 vi.mock("../../../utils/fs", () => ({
 	fileExistsAtPath: vi.fn().mockImplementation((filePath) => {
-		return filePath.includes("ui_messages.json") || filePath.includes("api_conversation_history.json")
+		return (
+			filePath.includes("ui_messages.jsonl") ||
+			filePath.includes("api_conversation_history.jsonl") ||
+			filePath.includes("ui_messages.json") ||
+			filePath.includes("api_conversation_history.json")
+		)
 	}),
 }))
 
@@ -299,8 +306,8 @@ describe("Shofer", () => {
 				totalCost: 0.001,
 			},
 			taskDirPath: "/mock/storage/path/tasks/123",
-			apiConversationHistoryFilePath: "/mock/storage/path/tasks/123/api_conversation_history.json",
-			uiMessagesFilePath: "/mock/storage/path/tasks/123/ui_messages.json",
+			apiConversationHistoryFilePath: "/mock/storage/path/tasks/123/api_conversation_history.jsonl",
+			uiMessagesFilePath: "/mock/storage/path/tasks/123/ui_messages.jsonl",
 			apiConversationHistory: [
 				{
 					role: "user",

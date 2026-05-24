@@ -20,6 +20,8 @@ import { ContextProxy } from "../../config/ContextProxy"
 const {
 	mockSaveApiMessages,
 	mockSaveTaskMessages,
+	mockAppendApiMessage,
+	mockAppendTaskMessage,
 	mockReadApiMessages,
 	mockReadTaskMessages,
 	mockTaskMetadata,
@@ -27,6 +29,8 @@ const {
 } = vi.hoisted(() => ({
 	mockSaveApiMessages: vi.fn().mockResolvedValue(undefined),
 	mockSaveTaskMessages: vi.fn().mockResolvedValue(undefined),
+	mockAppendApiMessage: vi.fn().mockResolvedValue(undefined),
+	mockAppendTaskMessage: vi.fn().mockResolvedValue(undefined),
 	mockReadApiMessages: vi.fn().mockResolvedValue([]),
 	mockReadTaskMessages: vi.fn().mockResolvedValue([]),
 	mockTaskMetadata: vi.fn().mockResolvedValue({
@@ -80,6 +84,8 @@ vi.mock("p-wait-for", () => ({
 vi.mock("../../task-persistence", () => ({
 	saveApiMessages: mockSaveApiMessages,
 	saveTaskMessages: mockSaveTaskMessages,
+	appendApiMessage: mockAppendApiMessage,
+	appendTaskMessage: mockAppendTaskMessage,
 	readApiMessages: mockReadApiMessages,
 	readTaskMessages: mockReadTaskMessages,
 	taskMetadata: mockTaskMetadata,
@@ -332,7 +338,7 @@ describe("Task persistence", () => {
 			vi.useRealTimers()
 		})
 
-		it("snapshots the array before passing to saveApiMessages", async () => {
+		it("passes a synchronous serialized snapshot to saveApiMessages", async () => {
 			mockSaveApiMessages.mockResolvedValueOnce(undefined)
 
 			const task = new Task({
@@ -353,10 +359,15 @@ describe("Task persistence", () => {
 			expect(mockSaveApiMessages).toHaveBeenCalledTimes(1)
 
 			const callArgs = mockSaveApiMessages.mock.calls[0][0]
-			// The messages passed should be a COPY, not the live reference
-			expect(callArgs.messages).not.toBe(task.apiConversationHistory)
-			// But the content should be the same
-			expect(callArgs.messages).toEqual(task.apiConversationHistory)
+			// §4.1 / H6: the snapshot is captured synchronously as a JSONL string
+			// (one record per line) in `serialized`; the `messages` field is the
+			// live reference, intentionally NOT cloned (saves the structuredClone).
+			expect(typeof callArgs.serialized).toBe("string")
+			const parsed = callArgs.serialized
+				.split("\n")
+				.filter((l: string) => l.length > 0)
+				.map((l: string) => JSON.parse(l))
+			expect(parsed).toEqual(task.apiConversationHistory)
 		})
 	})
 
@@ -416,10 +427,14 @@ describe("Task persistence", () => {
 			// The snapshot is captured via JSON.stringify (the `serialized` field),
 			// not by cloning `messages`. The live reference is passed as `messages`
 			// so that callers without a `serialized` string can still fall back to
-			// serializing it themselves.  Verify the pre-serialized snapshot exists
-			// and matches the current array content.
+			// serializing it themselves. Verify the pre-serialized JSONL snapshot
+			// (one record per line) reproduces the current array content.
 			expect(typeof callArgs.serialized).toBe("string")
-			expect(JSON.parse(callArgs.serialized)).toEqual(task.shoferMessages)
+			const parsed = (callArgs.serialized as string)
+				.split("\n")
+				.filter((l) => l.length > 0)
+				.map((l) => JSON.parse(l))
+			expect(parsed).toEqual(task.shoferMessages)
 		})
 	})
 
@@ -427,7 +442,7 @@ describe("Task persistence", () => {
 
 	describe("flushPendingToolResultsToHistory persistence", () => {
 		it("retains userMessageContent on save failure", async () => {
-			mockSaveApiMessages.mockRejectedValueOnce(new Error("disk full"))
+			mockAppendApiMessage.mockRejectedValueOnce(new Error("disk full"))
 
 			const task = new Task({
 				provider: mockProvider,
@@ -459,7 +474,7 @@ describe("Task persistence", () => {
 		})
 
 		it("clears userMessageContent on save success", async () => {
-			mockSaveApiMessages.mockResolvedValueOnce(undefined)
+			mockAppendApiMessage.mockResolvedValueOnce(undefined)
 
 			const task = new Task({
 				provider: mockProvider,

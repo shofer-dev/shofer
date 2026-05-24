@@ -3601,7 +3601,7 @@ export const webviewMessageHandler = async (
 				const taskDirPath = await getTaskDirectoryPath(globalStoragePath, currentTask.taskId)
 
 				const fileName =
-					message.type === "openDebugApiHistory" ? "api_conversation_history.json" : "ui_messages.json"
+					message.type === "openDebugApiHistory" ? "api_conversation_history.jsonl" : "ui_messages.jsonl"
 				const sourceFilePath = path.join(taskDirPath, fileName)
 
 				// Check if file exists
@@ -3610,19 +3610,30 @@ export const webviewMessageHandler = async (
 					break
 				}
 
-				// Read the source file
+				// Read the source JSONL file and prettify into a JSON array for viewing.
 				const content = await fs.readFile(sourceFilePath, "utf8")
-				let jsonContent: unknown
-
-				try {
-					jsonContent = JSON.parse(content)
-				} catch {
+				const lines = content.split("\n")
+				const records: unknown[] = []
+				let parseError: unknown = undefined
+				for (let i = 0; i < lines.length; i++) {
+					const line = lines[i]
+					if (!line) continue
+					try {
+						records.push(JSON.parse(line))
+					} catch (e) {
+						// Tolerate truncated final line; surface anything else.
+						if (i !== lines.length - 1) {
+							parseError = e
+						}
+					}
+				}
+				if (parseError) {
 					vscode.window.showErrorMessage(`Failed to parse ${fileName}`)
 					break
 				}
 
 				// Prettify the JSON
-				const prettifiedContent = JSON.stringify(jsonContent, null, 2)
+				const prettifiedContent = JSON.stringify(records, null, 2)
 
 				// Create a temporary file
 				const tmpDir = os.tmpdir()

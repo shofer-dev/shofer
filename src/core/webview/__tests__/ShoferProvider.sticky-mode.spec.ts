@@ -501,7 +501,7 @@ describe("ShoferProvider - Sticky Mode", () => {
 				historyItem,
 				taskDirPath: "/test/path",
 				apiConversationHistoryFilePath: "/test/path/api_history.json",
-				uiMessagesFilePath: "/test/path/ui_messages.json",
+				uiMessagesFilePath: "/test/path/ui_messages.jsonl",
 				apiConversationHistory: [],
 			})
 
@@ -701,7 +701,7 @@ describe("ShoferProvider - Sticky Mode", () => {
 				historyItem,
 				taskDirPath: "/test/path",
 				apiConversationHistoryFilePath: "/test/path/api_history.json",
-				uiMessagesFilePath: "/test/path/ui_messages.json",
+				uiMessagesFilePath: "/test/path/ui_messages.jsonl",
 				apiConversationHistory: [],
 			})
 
@@ -787,7 +787,7 @@ describe("ShoferProvider - Sticky Mode", () => {
 				historyItem,
 				taskDirPath: "/test/path",
 				apiConversationHistoryFilePath: "/test/path/api_history.json",
-				uiMessagesFilePath: "/test/path/ui_messages.json",
+				uiMessagesFilePath: "/test/path/ui_messages.jsonl",
 				apiConversationHistory: [],
 			})
 
@@ -1190,7 +1190,7 @@ describe("ShoferProvider - Sticky Mode", () => {
 					historyItem,
 					taskDirPath: "/test/path",
 					apiConversationHistoryFilePath: "/test/path/api_history.json",
-					uiMessagesFilePath: "/test/path/ui_messages.json",
+					uiMessagesFilePath: "/test/path/ui_messages.jsonl",
 					apiConversationHistory: [],
 				}
 			})
