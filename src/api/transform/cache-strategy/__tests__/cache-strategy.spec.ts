@@ -921,62 +921,6 @@ describe("Cache Strategy", () => {
 		})
 
 		describe("Cache Point Optimization", () => {
-			// Note: This test is skipped because it's meant to verify the documentation is correct,
-			// but the actual implementation behavior is different. The documentation has been updated
-			// to match the correct behavior.
-			it.skip("documentation example 5 verification", () => {
-				// This test verifies that the documentation for Example 5 is correct
-				// In Example 5, the third cache point at index 10 should cover 660 tokens
-				// (260 tokens from messages 7-8 plus 400 tokens from the new messages)
-
-				// Create messages matching Example 5 from documentation
-				const _messages = [
-					createMessage("user", "Tell me about machine learning.", 100),
-					createMessage("assistant", "Machine learning is a field of study...", 200),
-					createMessage("user", "What about deep learning?", 100),
-					createMessage("assistant", "Deep learning is a subset of machine learning...", 200),
-					createMessage("user", "How do neural networks work?", 100),
-					createMessage("assistant", "Neural networks are composed of layers of nodes...", 200),
-					createMessage("user", "Can you explain backpropagation?", 100),
-					createMessage("assistant", "Backpropagation is an algorithm used to train neural networks...", 200),
-					createMessage("user", "What are some applications of deep learning?", 100),
-					createMessage("assistant", "Deep learning has many applications including...", 160),
-					// New messages with 400 tokens total
-					createMessage("user", "Can you provide a detailed example?", 100),
-					createMessage("assistant", "Here's a detailed example...", 300),
-				]
-
-				// Previous cache point placements from Example 4
-				const _previousCachePointPlacements: CachePointPlacement[] = [
-					{
-						index: 2, // After the second user message
-						type: "message",
-						tokensCovered: 240,
-					},
-					{
-						index: 6, // After the fourth user message
-						type: "message",
-						tokensCovered: 440,
-					},
-					{
-						index: 8, // After the fifth user message
-						type: "message",
-						tokensCovered: 260,
-					},
-				]
-
-				// In the documentation, the algorithm decides to replace the cache point at index 8
-				// with a new one at index 10, and the tokensCovered value should be 660 tokens
-				// (260 tokens from messages 7-8 plus 400 tokens from the new messages)
-
-				// However, the actual implementation may behave differently depending on how
-				// it calculates token counts and makes decisions about cache point placement
-
-				// The important part is that our fix ensures that when a cache point is created,
-				// the tokensCovered value represents all tokens from the previous cache point
-				// to the current cache point, not just the tokens in the new messages
-			})
-
 			it("should not combine cache points when new messages have fewer tokens than the smallest combined gap", () => {
 				// This test verifies that when new messages have fewer tokens than the smallest combined gap,
 				// the algorithm keeps all existing cache points and doesn't add a new one
