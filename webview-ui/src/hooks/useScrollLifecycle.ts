@@ -338,7 +338,7 @@ export function useScrollLifecycle({
 				return
 			}
 
-			const shouldForcePinForAnchoredStreaming = scrollPhaseRef.current === "ANCHORED_FOLLOWING" && isStreaming
+			const shouldForcePinForAnchoredStreaming = scrollPhaseRef.current === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current
 			if (isAtBottomRef.current || shouldForcePinForAnchoredStreaming) {
 				if (isTaller) {
 					scrollToBottomSmooth()
