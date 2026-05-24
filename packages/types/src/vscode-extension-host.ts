@@ -55,6 +55,7 @@ export interface ExtensionMessage {
 		| "invoke"
 		| "messageUpdated"
 		| "shoferMessageAppended"
+		| "blobContent"
 		| "mcpServers"
 		| "enhancedPrompt"
 		| "commitSearchResults"
@@ -171,6 +172,8 @@ export interface ExtensionMessage {
 		path?: string
 	}>
 	shoferMessage?: ShoferMessage
+	/** §4.3 blob fetch response: sha256 ↔ content (or undefined if missing). */
+	blob?: { sha256: string; bytes: number; content?: string; error?: string }
 	routerModels?: RouterModels
 	openAiModels?: string[]
 	ollamaModels?: ModelRecord
@@ -524,6 +527,7 @@ export interface WebviewMessage {
 	type:
 		| "updateTodoList"
 		| "deleteMultipleTasksWithIds"
+		| "getBlobContent"
 		| "currentApiConfigName"
 		| "saveApiConfiguration"
 		| "upsertApiConfiguration"
@@ -731,6 +735,8 @@ export interface WebviewMessage {
 		| "pushMetrics"
 	text?: string
 	taskId?: string
+	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */
+	sha256?: string
 	editedMessageContent?: string
 	tab?: "settings" | "history" | "mcp" | "modes" | "chat" | "marketplace" | "cloud"
 	disabled?: boolean

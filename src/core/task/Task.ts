@@ -95,6 +95,7 @@ import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/
 import { getWorkspacePath } from "../../utils/path"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { getTaskDirectoryPath } from "../../utils/storage"
+import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "../../services/blob-store/BlobStore"
 
 // prompts
 import { formatResponse } from "../prompts/responses"
@@ -678,6 +679,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// MessageManager for high-level message operations (lazy initialized)
 	private _messageManager?: MessageManager
 
+	// §4.3: lazy per-task BlobStore for inline-content externalisation.
+	// Constructed on first access; persists under `<taskDir>/blobs/`.
+	private _blobStore?: BlobStore
+
 	constructor({
 		provider,
 		apiConfiguration,
@@ -1207,6 +1212,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async addToApiConversationHistory(message: Anthropic.MessageParam, reasoning?: string) {
+		// §4.3: externalise any oversized inline text BEFORE the message is
+		// snapshotted into `apiConversationHistory` and persisted to disk.
+		// Mutates `message.content` in place; refs are resolved back to
+		// content only when the message is selected for an outgoing LLM
+		// request (see `prepareMessagesForApi`).
+		await this.externalizeMessageContent(message)
 		// Capture the encrypted_content / thought signatures from the provider (e.g., OpenAI Responses API, Google GenAI) if present.
 		// We only persist data reported by the current response body.
 		const handler = this.api as ApiHandler & {
@@ -1450,8 +1461,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const historyForValidation = lastEffective?.role === "assistant" ? effectiveHistoryForValidation : []
 		const validatedMessage = validateAndFixToolResultIds(userMessage, historyForValidation)
 		const userMessageWithTs = { ...validatedMessage, ts: Date.now() }
+		// §4.3: externalise oversized inline text before snapshotting to
+		// history / disk. Mirrors the hook in `addToApiConversationHistory`
+		// which `flushPending…` bypasses by pushing directly.
+		await this.externalizeMessageContent(userMessageWithTs)
 		this.apiConversationHistory.push(userMessageWithTs as ApiMessage)
-
 		// §4.1: O(1) append rather than full rewrite. On failure, leave
 		// `userMessageContent` populated so the caller can retry via
 		// `retrySaveApiConversationHistory()` (which does a full rewrite).
@@ -1531,7 +1545,149 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return readTaskMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
 	}
 
+	/**
+	 * Lazily-constructed BlobStore for this task. The blob directory lives
+	 * under `<taskDir>/blobs/` and is removed alongside the task on delete.
+	 */
+	public async getBlobStore(): Promise<BlobStore> {
+		if (!this._blobStore) {
+			const taskDir = await getTaskDirectoryPath(this.globalStoragePath, this.taskId)
+			this._blobStore = new BlobStore(taskDir)
+		}
+		return this._blobStore
+	}
+
+	/**
+	 * Resolve the inline-content cap (bytes) for this task. Reads the
+	 * `shoferBlobCapBytes` setting through ContextProxy; falls back to
+	 * `DEFAULT_BLOB_CAP_BYTES` when unset or unavailable. A value of `0`
+	 * disables externalisation entirely.
+	 */
+	public getBlobCapBytes(): number {
+		const provider = this.providerRef.deref()
+		const v = provider?.contextProxy?.getValue?.("shoferBlobCapBytes")
+		return typeof v === "number" && v >= 0 ? v : DEFAULT_BLOB_CAP_BYTES
+	}
+
+	/**
+	 * Externalise any inline text in `message.content` whose UTF-8 byte
+	 * length exceeds the per-task cap. Mutates the message in place so
+	 * persistence and IPC see the ref-token form. Tool-result content can
+	 * be a string or an array of content blocks; both shapes are handled.
+	 * Errors are logged but do not propagate — losing externalisation must
+	 * not break message persistence.
+	 */
+	public async externalizeMessageContent(message: Anthropic.MessageParam): Promise<void> {
+		const cap = this.getBlobCapBytes()
+		if (cap <= 0) return
+		let store: BlobStore
+		try {
+			store = await this.getBlobStore()
+		} catch (error) {
+			outputError("Failed to obtain BlobStore for externalisation:", error)
+			return
+		}
+		const content = message.content as unknown
+		if (typeof content === "string") {
+			try {
+				message.content = (await store.externalizeIfOverCap(content, cap)) as typeof message.content
+			} catch (error) {
+				outputError("Failed to externalise message content:", error)
+			}
+			return
+		}
+		if (!Array.isArray(content)) return
+		for (const block of content as Array<Record<string, unknown>>) {
+			try {
+				if (block?.type === "text" && typeof block.text === "string") {
+					block.text = await store.externalizeIfOverCap(block.text, cap)
+				} else if (block?.type === "tool_result") {
+					const inner = block.content
+					if (typeof inner === "string") {
+						block.content = await store.externalizeIfOverCap(inner, cap)
+					} else if (Array.isArray(inner)) {
+						for (const part of inner as Array<Record<string, unknown>>) {
+							if (part?.type === "text" && typeof part.text === "string") {
+								part.text = await store.externalizeIfOverCap(part.text, cap)
+							}
+						}
+					}
+				}
+			} catch (error) {
+				outputError("Failed to externalise content block:", error)
+			}
+		}
+	}
+
+	/**
+	 * Resolve every `<shofer-blob .../>` reference in a list of API
+	 * messages back to its full content. Operates on a deep-cloned array
+	 * so the persisted `apiConversationHistory` retains its externalised
+	 * form. Returns the cloned, resolved messages.
+	 *
+	 * Used at LLM request-build time: after sliding-window truncation has
+	 * decided which messages survive, expand only those. Messages dropped
+	 * by truncation pay neither the disk read nor the context-tokens cost.
+	 */
+	public async prepareMessagesForApi(messages: Anthropic.MessageParam[]): Promise<Anthropic.MessageParam[]> {
+		let store: BlobStore
+		try {
+			store = await this.getBlobStore()
+		} catch {
+			return messages
+		}
+		const out: Anthropic.MessageParam[] = []
+		for (const message of messages) {
+			const clone: Anthropic.MessageParam = { ...message, content: message.content as any }
+			const content = clone.content as unknown
+			if (typeof content === "string") {
+				clone.content = (await store.resolveRefs(content)) as typeof clone.content
+			} else if (Array.isArray(content)) {
+				const resolvedBlocks: any[] = []
+				for (const block of content as Array<Record<string, unknown>>) {
+					const b: Record<string, unknown> = { ...block }
+					if (b.type === "text" && typeof b.text === "string") {
+						b.text = await store.resolveRefs(b.text)
+					} else if (b.type === "tool_result") {
+						const inner = b.content
+						if (typeof inner === "string") {
+							b.content = await store.resolveRefs(inner)
+						} else if (Array.isArray(inner)) {
+							const innerOut: any[] = []
+							for (const part of inner as Array<Record<string, unknown>>) {
+								const p: Record<string, unknown> = { ...part }
+								if (p.type === "text" && typeof p.text === "string") {
+									p.text = await store.resolveRefs(p.text)
+								}
+								innerOut.push(p)
+							}
+							b.content = innerOut
+						}
+					}
+					resolvedBlocks.push(b)
+				}
+				clone.content = resolvedBlocks as typeof clone.content
+			}
+			out.push(clone)
+		}
+		return out
+	}
+
 	private async addToShoferMessages(message: ShoferMessage) {
+		// §4.3: cap inline `text` before any persistence / IPC. Externalised
+		// content lives in the per-task BlobStore and is referenced inline
+		// via a `<shofer-blob .../>` token. Best-effort: a blob-write error
+		// must not block the message from being recorded, so we log and
+		// fall through with the original text.
+		const cap = this.getBlobCapBytes()
+		if (cap > 0 && typeof message.text === "string" && message.text.length > 0) {
+			try {
+				const store = await this.getBlobStore()
+				message.text = await store.externalizeIfOverCap(message.text, cap)
+			} catch (error) {
+				outputError("Failed to externalise large message text:", error)
+			}
+		}
 		this.shoferMessages.push(message)
 		// §4.1: O(1) JSONL append — must happen BEFORE the debounced metadata
 		// refresh so a crash between the in-memory push and the next compaction
@@ -5682,11 +5838,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const _llmT0 = performance.now()
 
 		// The provider accepts reasoning items alongside standard messages; cast to the expected parameter type.
-		const stream = this.api.createMessage(
-			systemPrompt,
+		// §4.3: expand `<shofer-blob .../>` references back to full content
+		// for messages selected for this outgoing request. Messages dropped
+		// by sliding-window truncation above never reach this step and so
+		// pay neither the disk read nor the context-tokens cost.
+		const resolvedConversationHistory = await this.prepareMessagesForApi(
 			cleanConversationHistory as unknown as Anthropic.Messages.MessageParam[],
-			metadata,
 		)
+		const stream = this.api.createMessage(systemPrompt, resolvedConversationHistory, metadata)
 		const iterator = stream[Symbol.asyncIterator]()
 
 		// Persist the wire request into the api_req_started entry so the

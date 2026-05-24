@@ -260,6 +260,16 @@ export const globalSettingsSchema = z.object({
 	// API Configuration's ApiHandler (or DEFAULT_MAX_CONTEXT_TOKENS).
 	assistantAgentMaxContextTokens: z.number().int().positive().optional(),
 	assistantAgentContextFillThreshold: z.number().min(0).max(1).optional(),
+
+	/**
+	 * Maximum inline byte length of a tool result / message text stored in
+	 * `shoferMessages` and `apiConversationHistory`. Larger payloads are
+	 * externalised to `<taskDir>/blobs/<sha256>.txt` and replaced with a
+	 * `<shofer-blob ... />` reference token. Set to 0 to disable
+	 * externalisation entirely. See §4.3 of `docs/mem-utilization-profiling.md`.
+	 * @default 2048
+	 */
+	shoferBlobCapBytes: z.number().int().min(0).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>
