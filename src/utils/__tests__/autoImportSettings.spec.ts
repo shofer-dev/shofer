@@ -179,7 +179,7 @@ describe("autoImportSettings", () => {
 			get: vi.fn().mockReturnValue("/some/path/to/settings.json"),
 		} as any)
 		vi.mocked(fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(importSettingsFromPath).mockResolvedValue({ success: true })
+		vi.mocked(importSettingsFromPath).mockResolvedValue({ success: true } as any)
 
 		await autoImportSettings(mockOutputChannel, {
 			providerSettingsManager: mockProviderSettingsManager,
