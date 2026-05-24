@@ -413,10 +413,13 @@ describe("Task persistence", () => {
 			expect(mockSaveTaskMessages).toHaveBeenCalledTimes(1)
 
 			const callArgs = mockSaveTaskMessages.mock.calls[0][0]
-			// The messages passed should be a COPY, not the live reference
-			expect(callArgs.messages).not.toBe(task.shoferMessages)
-			// But the content should be the same
-			expect(callArgs.messages).toEqual(task.shoferMessages)
+			// The snapshot is captured via JSON.stringify (the `serialized` field),
+			// not by cloning `messages`. The live reference is passed as `messages`
+			// so that callers without a `serialized` string can still fall back to
+			// serializing it themselves.  Verify the pre-serialized snapshot exists
+			// and matches the current array content.
+			expect(typeof callArgs.serialized).toBe("string")
+			expect(JSON.parse(callArgs.serialized)).toEqual(task.shoferMessages)
 		})
 	})
 
