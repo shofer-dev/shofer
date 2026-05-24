@@ -1011,6 +1011,7 @@ export interface ShoferSayTool {
 		| "callMcpToolAsync"
 		| "checkMcpCallStatus"
 		| "waitForMcpCall"
+		| "sleep"
 	path?: string
 	/** For `removeFile` / `moveFile`: the rm/mv subcommand. */
 	fileOp?: "rm" | "mv"
