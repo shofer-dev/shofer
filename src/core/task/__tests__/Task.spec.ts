@@ -402,62 +402,45 @@ describe("Shofer", () => {
 
 	describe("getEnvironmentDetails", () => {
 		describe("API conversation handling", () => {
-			it.skip("should clean conversation history before sending to API", async () => {
-				// Shofer.create will now use our mocked getEnvironmentDetails
-				const [shofer, task] = Task.create({
+			it("should clean conversation history before sending to API", async () => {
+				// Create task without starting it so mocks can be applied before any API call.
+				const shofer = new Task({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
 					task: "test task",
+					startTask: false,
 				})
-
-				shofer.abandoned = true
-				await task
+				vi.spyOn(shofer as any, "getSystemPrompt").mockResolvedValue("mock system prompt")
 
 				// Set up mock stream.
 				const mockStreamForClean = (async function* () {
 					yield { type: "text", text: "test response" }
-				})()
+				})() as AsyncGenerator<ApiStreamChunk>
 
 				// Set up spy.
 				const cleanMessageSpy = vi.fn().mockReturnValue(mockStreamForClean)
 				vi.spyOn(shofer.api, "createMessage").mockImplementation(cleanMessageSpy)
 
-				// Add test message to conversation history.
-				shofer.apiConversationHistory = [
-					{
-						role: "user" as const,
-						content: [{ type: "text" as const, text: "test message" }],
-						ts: Date.now(),
-					},
-				]
-
-				// Mock abort state
-				Object.defineProperty(shofer, "abort", {
-					get: () => false,
-					set: () => {},
-					configurable: true,
-				})
-
-				// Add a message with extra properties to the conversation history
+				// Add a message with extra properties to the conversation history.
 				const messageWithExtra = {
 					role: "user" as const,
 					content: [{ type: "text" as const, text: "test message" }],
 					ts: Date.now(),
 					extraProp: "should be removed",
 				}
-
 				shofer.apiConversationHistory = [messageWithExtra]
 
-				// Trigger an API request
-				await shofer.recursivelyMakeShoferRequests([{ type: "text", text: "test request" }], false)
+				// Trigger an API request directly via the generator.
+				const iterator = shofer.attemptApiRequest(0)
+				await iterator.next()
 
-				// Get the conversation history from the first API call
+				// Get the conversation history from the first API call.
 				expect(cleanMessageSpy.mock.calls.length).toBeGreaterThan(0)
 				const history = cleanMessageSpy.mock.calls[0]?.[1]
 				expect(history).toBeDefined()
 				expect(history.length).toBeGreaterThan(0)
 
-				// Find our test message
+				// Find our test message.
 				const cleanedMessage = history.find((msg: { content?: Array<{ text: string }> }) =>
 					msg.content?.some((content) => content.text === "test message"),
 				)
@@ -467,11 +450,11 @@ describe("Shofer", () => {
 					content: [{ type: "text", text: "test message" }],
 				})
 
-				// Verify extra properties were removed
+				// Verify extra properties were removed.
 				expect(Object.keys(cleanedMessage!)).toEqual(["role", "content"])
 			})
 
-			it.skip("should handle image blocks based on model capabilities", async () => {
+			it("should handle image blocks based on model capabilities", async () => {
 				// Create two configurations - one with image support, one without
 				const configWithImages = {
 					...mockApiConfig,
@@ -482,42 +465,14 @@ describe("Shofer", () => {
 					apiModelId: "gpt-3.5-turbo",
 				}
 
-				// Create test conversation history with mixed content
-				const conversationHistory: (Anthropic.MessageParam & { ts?: number })[] = [
-					{
-						role: "user" as const,
-						content: [
-							{
-								type: "text" as const,
-								text: "Here is an image",
-							} satisfies Anthropic.TextBlockParam,
-							{
-								type: "image" as const,
-								source: {
-									type: "base64" as const,
-									media_type: "image/jpeg",
-									data: "base64data",
-								},
-							} satisfies Anthropic.ImageBlockParam,
-						],
-					},
-					{
-						role: "assistant" as const,
-						content: [
-							{
-								type: "text" as const,
-								text: "I see the image",
-							} satisfies Anthropic.TextBlockParam,
-						],
-					},
-				]
-
-				// Test with model that supports images
-				const [clineWithImages, taskWithImages] = Task.create({
+				// Test with model that supports images.
+				const clineWithImages = new Task({
 					provider: mockProvider,
 					apiConfiguration: configWithImages,
 					task: "test task",
+					startTask: false,
 				})
+				vi.spyOn(clineWithImages as any, "getSystemPrompt").mockResolvedValue("mock system prompt")
 
 				// Mock the model info to indicate image support
 				vi.spyOn(clineWithImages.api, "getModel").mockReturnValue({
@@ -532,14 +487,14 @@ describe("Shofer", () => {
 					} as ModelInfo,
 				})
 
-				clineWithImages.apiConversationHistory = conversationHistory
-
-				// Test with model that doesn't support images
-				const [clineWithoutImages, taskWithoutImages] = Task.create({
+				// Test with model that doesn't support images.
+				const clineWithoutImages = new Task({
 					provider: mockProvider,
 					apiConfiguration: configWithoutImages,
 					task: "test task",
+					startTask: false,
 				})
+				vi.spyOn(clineWithoutImages as any, "getSystemPrompt").mockResolvedValue("mock system prompt")
 
 				// Mock the model info to indicate no image support
 				vi.spyOn(clineWithoutImages.api, "getModel").mockReturnValue({
@@ -554,38 +509,23 @@ describe("Shofer", () => {
 					} as ModelInfo,
 				})
 
-				clineWithoutImages.apiConversationHistory = conversationHistory
-
-				// Mock abort state for both instances
-				Object.defineProperty(clineWithImages, "abort", {
-					get: () => false,
-					set: () => {},
-					configurable: true,
-				})
-
-				Object.defineProperty(clineWithoutImages, "abort", {
-					get: () => false,
-					set: () => {},
-					configurable: true,
-				})
-
-				// Set up mock streams
+				// Set up mock streams.
 				const mockStreamWithImages = (async function* () {
 					yield { type: "text", text: "test response" }
-				})()
+				})() as AsyncGenerator<ApiStreamChunk>
 
 				const mockStreamWithoutImages = (async function* () {
 					yield { type: "text", text: "test response" }
-				})()
+				})() as AsyncGenerator<ApiStreamChunk>
 
-				// Set up spies
+				// Set up spies.
 				const imagesSpy = vi.fn().mockReturnValue(mockStreamWithImages)
 				const noImagesSpy = vi.fn().mockReturnValue(mockStreamWithoutImages)
 
 				vi.spyOn(clineWithImages.api, "createMessage").mockImplementation(imagesSpy)
 				vi.spyOn(clineWithoutImages.api, "createMessage").mockImplementation(noImagesSpy)
 
-				// Set up conversation history with images
+				// Populate conversation history with mixed image+text content.
 				clineWithImages.apiConversationHistory = [
 					{
 						role: "user",
@@ -596,15 +536,22 @@ describe("Shofer", () => {
 					},
 				]
 
-				clineWithImages.abandoned = true
-				await taskWithImages.catch(() => {})
+				clineWithoutImages.apiConversationHistory = [
+					{
+						role: "user",
+						content: [
+							{ type: "text", text: "Here is an image" },
+							{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "base64data" } },
+						],
+					},
+				]
 
-				clineWithoutImages.abandoned = true
-				await taskWithoutImages.catch(() => {})
+				// Trigger API requests directly via the generator.
+				const iteratorWithImages = clineWithImages.attemptApiRequest(0)
+				await iteratorWithImages.next()
 
-				// Trigger API requests
-				await clineWithImages.recursivelyMakeShoferRequests([{ type: "text", text: "test request" }])
-				await clineWithoutImages.recursivelyMakeShoferRequests([{ type: "text", text: "test request" }])
+				const iteratorWithoutImages = clineWithoutImages.attemptApiRequest(0)
+				await iteratorWithoutImages.next()
 
 				// Get the calls
 				const imagesCalls = imagesSpy.mock.calls
@@ -630,12 +577,15 @@ describe("Shofer", () => {
 				}
 			})
 
-			it.skip("should handle API retry with countdown", async () => {
-				const [shofer, task] = Task.create({
+			it("should handle API retry with countdown", async () => {
+				// Create task without starting it so mocks are applied before any API call.
+				const shofer = new Task({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
 					task: "test task",
+					startTask: false,
 				})
+				vi.spyOn(shofer as any, "getSystemPrompt").mockResolvedValue("mock system prompt")
 
 				// Mock delay to track countdown timing
 				const mockDelay = vi.fn().mockResolvedValue(undefined)
@@ -694,44 +644,34 @@ describe("Shofer", () => {
 					return mockSuccessStream
 				})
 
-				// Set up mock state
-				mockProvider.getState = vi.fn().mockResolvedValue({})
-
-				// Mock previous API request message
-				shofer.shoferMessages = [
-					{
-						ts: Date.now(),
-						type: "say",
-						say: "api_req_started",
-						text: JSON.stringify({
-							tokensIn: 100,
-							tokensOut: 50,
-							cacheWrites: 0,
-							cacheReads: 0,
-						}),
-					},
-				]
+				// Enable auto-approval so the retry uses backoffAndAnnounce instead of
+				// prompting the user. Set requestDelaySeconds to control countdown length.
+				const baseDelay = 3
+				mockProvider.getState = vi.fn().mockResolvedValue({
+					autoApprovalEnabled: true,
+					requestDelaySeconds: baseDelay,
+					mcpEnabled: false,
+					apiConfiguration: mockApiConfig,
+				})
 
 				// Trigger API request
 				const iterator = shofer.attemptApiRequest(0)
 				await iterator.next()
 
-				// Calculate expected delay for first retry
-				const baseDelay = 3 // test retry delay
-
-				// Verify countdown messages
+				// Verify countdown messages — new format uses <retry_timer> tags
 				for (let i = baseDelay; i > 0; i--) {
 					expect(saySpy).toHaveBeenCalledWith(
 						"api_req_retry_delayed",
-						expect.stringContaining(`Retrying in ${i} seconds`),
+						expect.stringContaining(`<retry_timer>${i}</retry_timer>`),
 						undefined,
 						true,
 					)
 				}
 
+				// Verify the final "retrying now" message (just the header text, no timer tag)
 				expect(saySpy).toHaveBeenCalledWith(
 					"api_req_retry_delayed",
-					expect.stringContaining("Retrying now"),
+					expect.stringContaining(mockError.message),
 					undefined,
 					false,
 				)
@@ -740,23 +680,17 @@ describe("Shofer", () => {
 				const totalExpectedDelays = baseDelay // One delay per second for countdown
 				expect(mockDelay).toHaveBeenCalledTimes(totalExpectedDelays)
 				expect(mockDelay).toHaveBeenCalledWith(1000)
-
-				// Verify error message content
-				const errorMessage = saySpy.mock.calls.find((call) => call[1]?.includes(mockError.message))?.[1]
-				expect(errorMessage).toBe(
-					`${mockError.message}\n\nRetry attempt 1\nRetrying in ${baseDelay} seconds...`,
-				)
-
-				await shofer.abortTask(true)
-				await task.catch(() => {})
 			})
 
-			it.skip("should not apply retry delay twice", async () => {
-				const [shofer, task] = Task.create({
+			it("should not apply retry delay twice", async () => {
+				// Create task without starting it so mocks are applied before any API call.
+				const shofer = new Task({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
 					task: "test task",
+					startTask: false,
 				})
+				vi.spyOn(shofer as any, "getSystemPrompt").mockResolvedValue("mock system prompt")
 
 				// Mock delay to track countdown timing
 				const mockDelay = vi.fn().mockResolvedValue(undefined)
@@ -815,37 +749,28 @@ describe("Shofer", () => {
 					return mockSuccessStream
 				})
 
-				// Set up mock state
-				mockProvider.getState = vi.fn().mockResolvedValue({})
-
-				// Mock previous API request message
-				shofer.shoferMessages = [
-					{
-						ts: Date.now(),
-						type: "say",
-						say: "api_req_started",
-						text: JSON.stringify({
-							tokensIn: 100,
-							tokensOut: 50,
-							cacheWrites: 0,
-							cacheReads: 0,
-						}),
-					},
-				]
+				// Enable auto-approval so the retry uses backoffAndAnnounce instead of
+				// prompting the user. Set requestDelaySeconds to control countdown length.
+				const baseDelay = 3
+				mockProvider.getState = vi.fn().mockResolvedValue({
+					autoApprovalEnabled: true,
+					requestDelaySeconds: baseDelay,
+					mcpEnabled: false,
+					apiConfiguration: mockApiConfig,
+				})
 
 				// Trigger API request
 				const iterator = shofer.attemptApiRequest(0)
 				await iterator.next()
 
-				// Verify delay is only applied for the countdown
-				const baseDelay = 3 // test retry delay
+				// Verify delay is only applied for the countdown (not duplicated)
 				const expectedDelayCount = baseDelay // One delay per second for countdown
 				expect(mockDelay).toHaveBeenCalledTimes(expectedDelayCount)
 				expect(mockDelay).toHaveBeenCalledWith(1000) // Each delay should be 1 second
 
-				// Verify countdown messages were only shown once
+				// Verify countdown messages were only shown once — new format uses <retry_timer> tags
 				const retryMessages = saySpy.mock.calls.filter(
-					(call) => call[0] === "api_req_retry_delayed" && call[1]?.includes("Retrying in"),
+					(call) => call[0] === "api_req_retry_delayed" && call[1]?.includes("<retry_timer>"),
 				)
 				expect(retryMessages).toHaveLength(baseDelay)
 
@@ -853,22 +778,19 @@ describe("Shofer", () => {
 				for (let i = baseDelay; i > 0; i--) {
 					expect(saySpy).toHaveBeenCalledWith(
 						"api_req_retry_delayed",
-						expect.stringContaining(`Retrying in ${i} seconds`),
+						expect.stringContaining(`<retry_timer>${i}</retry_timer>`),
 						undefined,
 						true,
 					)
 				}
 
-				// Verify final retry message
+				// Verify final retry message (just the header text, no timer tag)
 				expect(saySpy).toHaveBeenCalledWith(
 					"api_req_retry_delayed",
-					expect.stringContaining("Retrying now"),
+					expect.stringContaining(mockError.message),
 					undefined,
 					false,
 				)
-
-				await shofer.abortTask(true)
-				await task.catch(() => {})
 			})
 
 			describe("processUserContentMentions", () => {
@@ -979,6 +901,8 @@ describe("Shofer", () => {
 					}),
 					getMcpHub: vi.fn().mockReturnValue(undefined),
 					getSkillsManager: vi.fn().mockReturnValue(undefined),
+					getCurrentTask: vi.fn().mockReturnValue(undefined),
+					taskManager: { getFocusedTaskId: vi.fn().mockReturnValue(undefined) },
 					say: vi.fn(),
 					postStateToWebview: vi.fn().mockResolvedValue(undefined),
 					postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
@@ -996,7 +920,7 @@ describe("Shofer", () => {
 				Task.resetGlobalApiRequestTime()
 			})
 
-			it.skip("should enforce rate limiting across parent and subtask", async () => {
+			it("should enforce rate limiting across parent and subtask", async () => {
 				// Add a spy to track getState calls
 				const getStateSpy = vi.spyOn(mockProvider, "getState")
 
@@ -1150,7 +1074,7 @@ describe("Shofer", () => {
 				performance.now = originalPerformanceNow
 			})
 
-			it.skip("should share rate limiting across multiple subtasks", async () => {
+			it("should share rate limiting across multiple subtasks", async () => {
 				// Create parent task
 				const parent = new Task({
 					provider: mockProvider,
@@ -1482,7 +1406,7 @@ describe("Shofer", () => {
 		})
 
 		describe("submitUserMessage", () => {
-			it.skip("should call handleWebviewAskResponse directly", async () => {
+			it("should call handleWebviewAskResponse directly", async () => {
 				const task = new Task({
 					provider: mockProvider,
 					apiConfiguration: mockApiConfig,
@@ -1502,6 +1426,10 @@ describe("Shofer", () => {
 						text: "Initial message",
 					},
 				]
+
+				// Clear any calls made during provider/task initialization (e.g. McpServerManager
+				// resolves between beforeEach and the test, posting mcpServers to the webview).
+				mockProvider.postMessageToWebview.mockClear()
 
 				// Call submitUserMessage
 				task.submitUserMessage("test message", ["image1.png"])
@@ -1602,7 +1530,7 @@ describe("Shofer", () => {
 	})
 
 	describe("abortTask", () => {
-		it.skip("should set abort flag and emit TaskAborted event", async () => {
+		it("should set abort flag and emit TaskAborted event", async () => {
 			const task = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
@@ -1622,8 +1550,8 @@ describe("Shofer", () => {
 			// Verify abort flag is set
 			expect(task.abort).toBe(true)
 
-			// Verify TaskAborted event was emitted
-			expect(emitSpy).toHaveBeenCalledWith("taskAborted")
+			// Verify TaskAborted event was emitted with a reason payload
+			expect(emitSpy).toHaveBeenCalledWith("taskAborted", expect.objectContaining({ reason: expect.any(String) }))
 		})
 
 		it("should be equivalent to clicking Cancel button functionality", async () => {
