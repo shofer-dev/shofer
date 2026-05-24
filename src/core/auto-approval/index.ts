@@ -234,6 +234,10 @@ export async function checkAutoApproval({
 				"readProjectStructure",
 				"listCodeUsages",
 				"lspSearch",
+				// sleep is harmless — it just pauses execution. Without auto-approval it
+				// would prompt the user on every pause, and without a chat row it would
+				// appear as a silent hang.
+				"sleep",
 			].includes(tool?.tool)
 		) {
 			return { decision: "approve" }

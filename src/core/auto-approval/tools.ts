@@ -41,6 +41,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	moveFile: "file",
 	insertEdit: "insert_edit",
 	renameSymbol: "rename_symbol",
+	sleep: "sleep",
 
 	// mode group
 	switchMode: "switch_mode",

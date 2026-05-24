@@ -47,6 +47,15 @@ export class SleepTool extends BaseTool<"sleep"> {
 			const clampedSeconds = Math.min(Math.max(seconds, MIN_SLEEP_SECONDS), MAX_SLEEP_SECONDS)
 			const ms = Math.round(clampedSeconds * 1000)
 
+			// Render a chat-row entry so the user sees the sleep has started.
+			const didApprove = await this.askToolApproval(callbacks, {
+				tool: "sleep",
+				content: `Sleeping for ${clampedSeconds.toFixed(1)} second(s)`,
+			})
+			if (!didApprove) {
+				return
+			}
+
 			// Poll `task.abort` flag every 100ms so the sleep exits promptly
 			// when the user cancels the task or a cost limit triggers abort.
 			const startTime = Date.now()
