@@ -646,6 +646,7 @@ export class ShoferProvider
 					if (parentHistory.delegatedToId !== undefined && parentHistory.awaitingChildId === childTaskId) {
 						await this.updateTaskHistory({
 							...parentHistory,
+							taskState: { lifecycle: "idle" },
 							awaitingChildId: undefined,
 						})
 						this.debug(

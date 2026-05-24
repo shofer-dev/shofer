@@ -36,6 +36,7 @@ describe("ShoferProvider.removeShoferFromStack() delegation awareness", () => {
 			shoferStack: [childTask] as any[],
 			taskEventListeners: new Map(),
 			log: vi.fn(),
+			debug: vi.fn(),
 			getTaskWithId,
 			updateTaskHistory,
 		}
@@ -55,7 +56,7 @@ describe("ShoferProvider.removeShoferFromStack() delegation awareness", () => {
 				tokensIn: 0,
 				tokensOut: 0,
 				totalCost: 0,
-				status: "delegated",
+				taskState: { lifecycle: "running" },
 				awaitingChildId: "child-1",
 				delegatedToId: "child-1",
 				childIds: ["child-1"],
@@ -76,13 +77,13 @@ describe("ShoferProvider.removeShoferFromStack() delegation awareness", () => {
 		expect(updatedParent).toEqual(
 			expect.objectContaining({
 				id: "parent-1",
-				status: "active",
+				taskState: expect.objectContaining({ lifecycle: "idle" }),
 				awaitingChildId: undefined,
 			}),
 		)
 
-		// Log the repair
-		expect(provider.log).toHaveBeenCalledWith(expect.stringContaining("Repaired parent parent-1 metadata"))
+		// Debug-log the repair
+		expect(provider.debug).toHaveBeenCalledWith(expect.stringContaining("Repaired parent parent-1 metadata"))
 	})
 
 	it("does NOT modify parent metadata when the task has no parentTaskId (non-delegated)", async () => {
