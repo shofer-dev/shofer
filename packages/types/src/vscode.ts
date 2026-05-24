@@ -62,6 +62,10 @@ export const commandIds = [
 
 	// Webview
 	"refreshWebview",
+	// Webview
+	"refreshWebview",
+	"reloadWindow",
+
 
 	// Diagnostics
 	"heapSnapshot",

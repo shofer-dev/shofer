@@ -339,6 +339,23 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		}
 		await visibleProvider.refreshWebview()
 	},
+	reloadWindow: async () => {
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+		if (!visibleProvider) {
+			return
+		}
+		// Show a confirmation dialog before nuking the VS Code window.
+		// This is a last-resort recovery for when the webview iframe is
+		// stuck at the workbench level and refreshWebview() didn't help.
+		const answer = await vscode.window.showWarningMessage(
+			"Reload the entire VS Code window? All unsaved editor changes will be lost.",
+			{ modal: true },
+			"Reload Window",
+		)
+		if (answer === "Reload Window") {
+			await vscode.commands.executeCommand("workbench.action.reloadWindow")
+		}
+	},
 })
 
 export const openShoferInNewTab = async ({ context, outputChannel }: Omit<RegisterCommandOptions, "provider">) => {
