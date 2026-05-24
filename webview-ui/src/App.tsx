@@ -48,7 +48,7 @@ const tabsByMessageAction: Partial<Record<NonNullable<ExtensionMessage["action"]
 	chatButtonClicked: "chat",
 	settingsButtonClicked: "settings",
 	historyButtonClicked: "history",
-	marketplaceButtonClicked: "marketplace",
+	...(MARKETPLACE_ENABLED ? { marketplaceButtonClicked: "marketplace" as const } : {}),
 }
 
 const App = () => {

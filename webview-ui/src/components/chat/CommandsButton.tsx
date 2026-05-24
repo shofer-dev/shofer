@@ -45,9 +45,9 @@ export const CommandsButton = () => {
 	const grouped = useMemo(() => {
 		const groups: { source: Command["source"]; label: string; items: Command[] }[] = []
 
-		const projectCmds = commands.filter((c) => c.source === "project")
-		const globalCmds = commands.filter((c) => c.source === "global")
-		const builtInCmds = commands.filter((c) => c.source === "built-in")
+		const projectCmds = (commands ?? []).filter((c) => c.source === "project")
+		const globalCmds = (commands ?? []).filter((c) => c.source === "global")
+		const builtInCmds = (commands ?? []).filter((c) => c.source === "built-in")
 
 		if (projectCmds.length > 0) {
 			groups.push({ source: "project", label: t("quickAccess:commands.projectCommands"), items: projectCmds })
@@ -93,7 +93,7 @@ export const CommandsButton = () => {
 	}, [])
 
 	// Hidden when no commands available
-	if (commands.length === 0) {
+	if (!commands?.length) {
 		return null
 	}
 

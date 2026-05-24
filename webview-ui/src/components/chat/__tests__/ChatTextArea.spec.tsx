@@ -72,6 +72,7 @@ describe("ChatTextArea", () => {
 			},
 			taskHistory: [],
 			cwd: "/test/workspace",
+			commands: [],
 		})
 	})
 
@@ -282,6 +283,7 @@ describe("ChatTextArea", () => {
 			const dataTransfer = {
 				getData: vi.fn((type: string) => (type === mime ? text : "")),
 				files: [],
+				types: [mime],
 			}
 			fireEvent.drop(container.querySelector(".chat-text-area")!, {
 				dataTransfer,
