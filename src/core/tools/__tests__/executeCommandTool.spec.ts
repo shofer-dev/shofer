@@ -41,7 +41,7 @@ vitest.mock("../../prompts/responses")
 import * as executeCommandModule from "../ExecuteCommandTool"
 const { executeCommandTool } = executeCommandModule
 
-describe.skip("executeCommandTool", () => {
+describe("executeCommandTool", () => {
 	// Setup common test variables
 	let mockShofer: any & { consecutiveMistakeCount: number; didRejectTool: boolean }
 	let mockAskApproval: any
@@ -81,6 +81,7 @@ describe.skip("executeCommandTool", () => {
 			},
 			lastMessageTs: Date.now(),
 			cwd: "/test/workspace",
+			workspacePath: "/test/workspace",
 		}
 
 		mockAskApproval = vitest.fn().mockResolvedValue(true)
