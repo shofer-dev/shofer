@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from "react"
+import React, { memo, useEffect, useMemo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import styled from "styled-components"
 import { visit } from "unist-util-visit"
@@ -13,6 +13,78 @@ import MermaidBlock from "./MermaidBlock"
 
 interface MarkdownBlockProps {
 	markdown?: string
+}
+
+/**
+ * §4.3: webview-side resolver for `<shofer-blob sha256="..." bytes="N"/>`
+ * reference tokens emitted by the extension host when a tool-result /
+ * message body exceeded the configured byte cap. The token is detected
+ * here, an inline placeholder is rendered, and a `getBlobContent` request
+ * is dispatched per unique sha256. When the host replies with a
+ * `blobContent` extension message the cache is populated and the token is
+ * replaced inline with the resolved text (or an error banner on miss).
+ */
+const BLOB_REF_PATTERN = /<shofer-blob sha256="([0-9a-f]{64})" bytes="(\d+)"\/>/g
+
+type BlobState = { kind: "loading" } | { kind: "loaded"; content: string } | { kind: "error"; error: string }
+
+const useBlobResolver = (markdown: string | undefined): string => {
+	const [cache, setCache] = useState<Record<string, BlobState>>({})
+
+	// Collect unique sha256s present in the current markdown.
+	const refs = useMemo(() => {
+		if (!markdown || !markdown.includes("<shofer-blob ")) return [] as string[]
+		const set = new Set<string>()
+		for (const m of markdown.matchAll(BLOB_REF_PATTERN)) set.add(m[1])
+		return Array.from(set)
+	}, [markdown])
+
+	useEffect(() => {
+		if (refs.length === 0) return
+		const pending = refs.filter((sha) => !(sha in cache))
+		if (pending.length === 0) return
+		setCache((prev) => {
+			const next = { ...prev }
+			for (const sha of pending) next[sha] = { kind: "loading" }
+			return next
+		})
+		for (const sha256 of pending) {
+			vscode.postMessage({ type: "getBlobContent", sha256 })
+		}
+	}, [refs, cache])
+
+	useEffect(() => {
+		const handler = (event: MessageEvent) => {
+			const msg = event.data
+			if (msg?.type !== "blobContent" || !msg.blob?.sha256) return
+			const { sha256, content, error } = msg.blob as {
+				sha256: string
+				content?: string
+				error?: string
+			}
+			setCache((prev) => ({
+				...prev,
+				[sha256]:
+					content !== undefined ? { kind: "loaded", content } : { kind: "error", error: error ?? "missing" },
+			}))
+		}
+		window.addEventListener("message", handler)
+		return () => window.removeEventListener("message", handler)
+	}, [])
+
+	return useMemo(() => {
+		if (!markdown || refs.length === 0) return markdown ?? ""
+		return markdown.replace(BLOB_REF_PATTERN, (_match, sha256: string, bytes: string) => {
+			const state = cache[sha256]
+			if (!state || state.kind === "loading") {
+				return `\n\n_📎 Externalised content (${bytes} bytes, sha256 ${sha256.slice(0, 12)}…) — loading…_\n\n`
+			}
+			if (state.kind === "error") {
+				return `\n\n_📎 Externalised content (${bytes} bytes, sha256 ${sha256.slice(0, 12)}…) — ${state.error}_\n\n`
+			}
+			return state.content
+		})
+	}, [markdown, refs, cache])
 }
 
 const StyledMarkdown = styled.div`
@@ -204,6 +276,7 @@ const StyledMarkdown = styled.div`
 `
 
 const MarkdownBlock = memo(({ markdown }: MarkdownBlockProps) => {
+	const resolvedMarkdown = useBlobResolver(markdown)
 	const components = useMemo(
 		() => ({
 			table: ({ children, ...props }: any) => {
@@ -323,7 +396,7 @@ const MarkdownBlock = memo(({ markdown }: MarkdownBlockProps) => {
 				]}
 				rehypePlugins={[rehypeKatex as any]}
 				components={components}>
-				{markdown || ""}
+				{resolvedMarkdown || ""}
 			</ReactMarkdown>
 		</StyledMarkdown>
 	)

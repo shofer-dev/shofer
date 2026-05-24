@@ -572,6 +572,50 @@ export const webviewMessageHandler = async (
 			// Diagnostic log forwarded from the webview — only when DEBUG is set.
 			provider.debug?.(`[webview] ${message.text ?? ""}`)
 			break
+		case "getBlobContent": {
+			// §4.3: webview-side resolution of a `<shofer-blob/>` reference.
+			// The renderer requests by sha256; we route to the currently
+			// focused task's BlobStore. If no task is current or the blob
+			// is missing on disk, return an error payload — the UI shows a
+			// banner rather than silently hiding.
+			const sha256 = typeof message.sha256 === "string" ? message.sha256 : undefined
+			if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256)) {
+				await provider.postMessageToWebview({
+					type: "blobContent",
+					blob: { sha256: sha256 ?? "", bytes: 0, error: "invalid sha256" },
+				})
+				break
+			}
+			const task = provider.getCurrentTask()
+			if (!task) {
+				await provider.postMessageToWebview({
+					type: "blobContent",
+					blob: { sha256, bytes: 0, error: "no active task" },
+				})
+				break
+			}
+			try {
+				const store = await task.getBlobStore()
+				const content = await store.read(sha256)
+				await provider.postMessageToWebview({
+					type: "blobContent",
+					blob:
+						content === undefined
+							? { sha256, bytes: 0, error: "not found" }
+							: { sha256, bytes: Buffer.byteLength(content, "utf8"), content },
+				})
+			} catch (error) {
+				await provider.postMessageToWebview({
+					type: "blobContent",
+					blob: {
+						sha256,
+						bytes: 0,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				})
+			}
+			break
+		}
 		case "pushMetrics": {
 			// Phase 4: webview → extension host metric push.
 			// Validate the typed `metrics` payload at the trust boundary;
