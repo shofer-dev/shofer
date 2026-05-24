@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { createOutputChannelLogger, createDualLogger } from "../outputChannelLogger"
+import { createOutputChannelLogger, createDualLogger, stringifyForLog } from "../outputChannelLogger"
 
 // Mock VSCode output channel
 const mockOutputChannel = {
@@ -65,6 +65,41 @@ describe("outputChannelLogger", () => {
 				3,
 				JSON.stringify({ key: "value" }, expect.any(Function), 2),
 			)
+		})
+
+		it("should cap oversized object output and append a remaining-bytes marker", () => {
+			const logger = createOutputChannelLogger(mockOutputChannel)
+			// 64 KiB string — far above the 8 KiB per-arg cap.
+			const obj = { big: "x".repeat(64 * 1024) }
+			logger(obj)
+
+			expect(mockOutputChannel.appendLine).toHaveBeenCalledTimes(1)
+			const line = (mockOutputChannel.appendLine as any).mock.calls[0][0] as string
+			expect(line.length).toBeLessThan(9 * 1024)
+			expect(line).toMatch(/…\[\+\d+ more bytes\]$/)
+		})
+	})
+
+	describe("stringifyForLog", () => {
+		it("should return the full serialised form when under the cap", () => {
+			expect(stringifyForLog({ a: 1, b: "x" })).toBe(`{"a":1,"b":"x"}`)
+		})
+
+		it("should truncate and annotate when over the byte cap", () => {
+			const out = stringifyForLog({ big: "y".repeat(20_000) }, 1024)
+			expect(out.length).toBeLessThan(1024 + 64)
+			expect(out.endsWith(" more bytes]")).toBe(true)
+		})
+
+		it("should return a sentinel for non-serialisable values", () => {
+			const cyclic: any = {}
+			cyclic.self = cyclic
+			const out = stringifyForLog(cyclic)
+			expect(out.startsWith("[Non-serializable")).toBe(true)
+		})
+
+		it("should render undefined as the string 'undefined'", () => {
+			expect(stringifyForLog(undefined)).toBe("undefined")
 		})
 	})
 

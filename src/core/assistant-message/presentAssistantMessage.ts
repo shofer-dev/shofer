@@ -69,7 +69,7 @@ import { sleepTool } from "../tools/SleepTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
-import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { outputError, outputLog, outputWarn, stringifyForLog } from "../../utils/outputChannelLogger"
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -125,7 +125,7 @@ export async function presentAssistantMessage(shofer: Task) {
 		outputError(`ERROR cloning block:`, error)
 		outputError(
 			`Block content:`,
-			JSON.stringify(shofer.assistantMessageContent[shofer.currentStreamingContentIndex], null, 2),
+			stringifyForLog(shofer.assistantMessageContent[shofer.currentStreamingContentIndex]),
 		)
 		shofer.presentAssistantMessageLocked = false
 		return
@@ -1287,8 +1287,11 @@ export async function presentAssistantMessage(shofer: Task) {
 								task: shofer,
 							})
 
+							// §4.9: cap stringified args/result so a large custom-tool
+							// payload (e.g. file contents) cannot allocate a multi-MB
+							// string in the `large_object` space just for logging.
 							outputLog(
-								`${customTool.name}.execute(): ${JSON.stringify(customToolArgs)} -> ${JSON.stringify(result)}`,
+								`${customTool.name}.execute(): ${stringifyForLog(customToolArgs)} -> ${stringifyForLog(result)}`,
 							)
 
 							pushToolResult(result)

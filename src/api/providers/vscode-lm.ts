@@ -15,7 +15,7 @@ import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../trans
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { outputLog } from "../../utils/outputChannelLogger"
+import { outputLog, stringifyForLog } from "../../utils/outputChannelLogger"
 
 /**
  * Converts OpenAI-format tools to VSCode Language Model tools.
@@ -677,7 +677,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						// Log tool call details for Xiaomi
 						if (isXiaomiModel) {
 							getOutputChannel()?.appendLine(
-								`[XIAOMI] [vscode-lm] Received LanguageModelToolCallPart: name=${chunk.name}, callId=${chunk.callId}, input=${JSON.stringify(chunk.input)}`,
+								`[XIAOMI] [vscode-lm] Received LanguageModelToolCallPart: name=${chunk.name}, callId=${chunk.callId}, input=${stringifyForLog(chunk.input)}`,
 							)
 						}
 
@@ -764,7 +764,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						}
 					} else {
 						getOutputChannel()?.appendLine(
-							`[WARN] Shofer <Language Model API>: Unknown chunk type received: ${JSON.stringify(chunk)}`,
+							`[WARN] Shofer <Language Model API>: Unknown chunk type received: ${stringifyForLog(chunk)}`,
 						)
 					}
 				}
