@@ -142,7 +142,7 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 				let images: string[] = []
 
 				if (r.result) {
-					const shaped = processMcpToolContent(r.result)
+					const shaped = processMcpToolContent(r.result, task.getMcpMaxResponseBytes?.())
 					resultText =
 						(r.result.isError ? "Error:\n" : "") +
 						(shaped.text || (shaped.images.length > 0 ? `[${shaped.images.length} image(s) received]` : ""))

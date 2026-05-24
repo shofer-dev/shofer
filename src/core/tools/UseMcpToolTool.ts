@@ -77,7 +77,7 @@ export class UseMcpToolTool extends BaseTool<"use_mcp_tool"> {
 			let toolResultPretty = "(No response)"
 			let images: string[] = []
 			if (toolResult) {
-				const shaped = processMcpToolContent(toolResult)
+				const shaped = processMcpToolContent(toolResult, task.getMcpMaxResponseBytes?.())
 				toolResultPretty =
 					(toolResult.isError ? "Error:\n" : "") +
 					(shaped.text || (shaped.images.length > 0 ? `[${shaped.images.length} image(s) received]` : ""))
