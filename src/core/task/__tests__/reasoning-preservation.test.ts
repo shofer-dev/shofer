@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { ShoferProvider } from "../../webview/ShoferProvider"
 import type { ProviderSettings, ModelInfo } from "@shofer/types"
 
+// Prevent the transitive import graph from loading extension.ts,
+// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
+vi.mock("../../../extension", () => ({}))
+
 // All vi.mock() calls are hoisted to the top of the file by Vitest
 // and are applied before any imports are resolved
 

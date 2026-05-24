@@ -53,6 +53,7 @@ vi.mock("vscode", () => ({
 		showWarningMessage: vi.fn(),
 		showErrorMessage: vi.fn(),
 		onDidChangeActiveTextEditor: vi.fn(() => ({ dispose: vi.fn() })),
+		createTextEditorDecorationType: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 	},
 	workspace: {
 		getConfiguration: vi.fn().mockReturnValue({
@@ -73,7 +74,21 @@ vi.mock("vscode", () => ({
 		Development: 2,
 		Test: 3,
 	},
+	CodeActionKind: {
+		QuickFix: { value: "quickfix" },
+		RefactorRewrite: { value: "refactor.rewrite" },
+	},
 	version: "1.85.0",
+	TreeItem: vi.fn(),
+	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+	ThemeIcon: vi.fn(),
+	EventEmitter: vi.fn().mockImplementation(() => ({
+		event: vi.fn(() => ({ dispose: vi.fn() })),
+		fire: vi.fn(),
+		dispose: vi.fn(),
+	})),
+	TreeDragAndDropController: vi.fn(),
+	TreeDataProvider: vi.fn(),
 }))
 
 vi.mock("../../../utils/tts", () => ({

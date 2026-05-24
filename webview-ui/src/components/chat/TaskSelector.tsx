@@ -69,10 +69,11 @@ function buildFlatTree(taskHistory: HistoryItem[]): TaskTreeNode[] {
  *
  * `dot` is the legacy small colored dot used by external surfaces (e.g.
  * TaskHeader title). `icon` + `iconColor` together produce the leading
- * codicon for dropdown rows. Completion ratings are layered on top via
- * `RATING_VISUAL` rather than expanding this table combinatorially.
+ * codicon for dropdown rows. `borderColor` drives the left accent border
+ * on task cards in HistoryView/WelcomeView. Completion ratings are layered
+ * on top via `RATING_VISUAL` rather than expanding this table combinatorially.
  */
-type LifecycleVisual = { dot: string; label: string; pulse: boolean; icon: string; iconColor: string }
+type LifecycleVisual = { dot: string; label: string; pulse: boolean; icon: string; iconColor: string; borderColor: string }
 
 export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 	idle: {
@@ -81,6 +82,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		pulse: false,
 		icon: "codicon-circle-large-outline",
 		iconColor: "text-[var(--vscode-descriptionForeground)]",
+		borderColor: "border-transparent",
 	},
 	running: {
 		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
@@ -88,6 +90,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		pulse: true,
 		icon: "codicon-sync codicon-modifier-spin",
 		iconColor: "text-[var(--vscode-charts-blue,#3b82f6)]",
+		borderColor: "border-[var(--vscode-charts-blue,#3b82f6)]",
 	},
 	waiting_input: {
 		dot: "bg-[var(--vscode-charts-yellow,#eab308)]",
@@ -95,6 +98,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		pulse: true,
 		icon: "codicon-question",
 		iconColor: "text-[var(--vscode-charts-yellow,#eab308)]",
+		borderColor: "border-[var(--vscode-charts-yellow,#eab308)]",
 	},
 	waiting: {
 		dot: "bg-[var(--vscode-charts-blue,#3b82f6)]",
@@ -102,6 +106,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		pulse: true,
 		icon: "codicon-watch",
 		iconColor: "text-[var(--vscode-charts-blue,#3b82f6)]",
+		borderColor: "border-[var(--vscode-charts-blue,#3b82f6)]",
 	},
 	paused: {
 		dot: "bg-[var(--vscode-charts-orange,#f97316)]",
@@ -109,6 +114,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		pulse: false,
 		icon: "codicon-debug-pause",
 		iconColor: "text-[var(--vscode-charts-orange,#f97316)]",
+		borderColor: "border-[var(--vscode-charts-orange,#f97316)]",
 	},
 	completed: {
 		// Default visuals for `completed` without a rating; ratings override below.
@@ -117,6 +123,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		pulse: false,
 		icon: "codicon-pass",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
+		borderColor: "border-[var(--vscode-charts-green,#16a34a)]",
 	},
 	error: {
 		dot: "bg-[var(--vscode-errorForeground,#ef4444)]",
@@ -124,6 +131,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 		pulse: false,
 		icon: "codicon-error",
 		iconColor: "text-[var(--vscode-errorForeground,#ef4444)]",
+		borderColor: "border-[var(--vscode-errorForeground,#ef4444)]",
 	},
 }
 
@@ -132,24 +140,27 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
  * Picking from the codicon set keeps every state rendered through the same
  * `<span class="codicon …">` mechanism — no special-cased SVGs.
  */
-const RATING_VISUAL: Record<CompletionRating, Pick<LifecycleVisual, "label" | "icon" | "iconColor" | "dot">> = {
+const RATING_VISUAL: Record<CompletionRating, Pick<LifecycleVisual, "label" | "icon" | "iconColor" | "dot" | "borderColor">> = {
 	poor: {
 		label: "Completed · Poor",
 		dot: "bg-[var(--vscode-descriptionForeground)]",
 		icon: "codicon-circle-large-outline",
 		iconColor: "text-[var(--vscode-descriptionForeground)]",
+		borderColor: "border-[var(--vscode-descriptionForeground)]",
 	},
 	well: {
 		label: "Completed · Well",
 		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
 		icon: "codicon-circle-large-filled",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)] opacity-60",
+		borderColor: "border-[var(--vscode-charts-green,#16a34a)]",
 	},
 	excellent: {
 		label: "Completed · Excellent",
 		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
 		icon: "codicon-pass-filled",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
+		borderColor: "border-[var(--vscode-charts-green,#16a34a)]",
 	},
 }
 

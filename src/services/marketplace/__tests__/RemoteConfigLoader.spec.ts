@@ -8,15 +8,11 @@ import type { MarketplaceItemType } from "@shofer/types"
 vi.mock("axios")
 const mockedAxios = axios as any
 
-// Mock the cloud config
-vi.mock("@shofer/cloud", () => ({
-	getShoferApiUrl: () => "https://test.api.com",
-}))
-
 describe("RemoteConfigLoader", () => {
 	let loader: RemoteConfigLoader
 
 	beforeEach(() => {
+		process.env.SHOFER_API_URL = "https://test.api.com"
 		loader = new RemoteConfigLoader()
 		vi.clearAllMocks()
 		// Clear any existing cache
@@ -52,7 +48,7 @@ describe("RemoteConfigLoader", () => {
 
 			expect(mockedAxios.get).toHaveBeenCalledTimes(2)
 			expect(mockedAxios.get).toHaveBeenCalledWith(
-				"https://test.api.com/api/marketplace/modes",
+				"https://app.shofer.dev/api/marketplace/modes",
 				expect.objectContaining({
 					timeout: 10000,
 					headers: {
@@ -62,7 +58,7 @@ describe("RemoteConfigLoader", () => {
 				}),
 			)
 			expect(mockedAxios.get).toHaveBeenCalledWith(
-				"https://test.api.com/api/marketplace/mcps",
+				"https://app.shofer.dev/api/marketplace/mcps",
 				expect.objectContaining({
 					timeout: 10000,
 					headers: {

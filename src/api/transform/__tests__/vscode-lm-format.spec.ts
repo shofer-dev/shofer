@@ -59,6 +59,7 @@ vitest.mock("vscode", () => {
 	}
 
 	return {
+		LanguageModelDataPart: undefined, // explicitly absent so imageBlockToContentPart falls back to text placeholder
 		LanguageModelChatMessage: {
 			Assistant: vitest.fn((content) => ({
 				role: LanguageModelChatMessageRole.Assistant,

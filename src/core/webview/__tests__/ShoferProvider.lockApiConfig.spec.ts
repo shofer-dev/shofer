@@ -9,6 +9,10 @@ vi.mock("vscode", () => ({
 	ExtensionContext: vi.fn(),
 	OutputChannel: vi.fn(),
 	WebviewView: vi.fn(),
+	EventEmitter: vi.fn().mockImplementation(() => ({
+		event: vi.fn(),
+		fire: vi.fn(),
+	})),
 	TreeItem: vi.fn(),
 	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
 	Uri: {

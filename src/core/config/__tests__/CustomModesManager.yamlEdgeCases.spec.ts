@@ -227,7 +227,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test role",
-						groups: ["read", ["edit", { fileRegex: "\\.md$", description: "Markdown files only" }]],
+						groups: ["read", ["write", { fileRegex: "\\.md$", description: "Markdown files only" }]],
 					},
 				],
 			})
@@ -242,7 +242,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 			// Should successfully parse the complex fileRegex syntax
 			expect(modes).toHaveLength(1)
 			expect(modes[0].groups).toHaveLength(2)
-			expect(modes[0].groups![1]).toEqual(["edit", { fileRegex: "\\.md$", description: "Markdown files only" }])
+			expect(modes[0].groups![1]).toEqual(["write", { fileRegex: "\\.md$", description: "Markdown files only" }])
 		})
 
 		it("should handle invalid fileRegex syntax with clear error", async () => {
@@ -253,7 +253,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 			 roleDefinition: "Test role"
 			 groups:
 			   - read
-			   - ["edit", { fileRegex: "\\.md$" }]  # This line has invalid YAML syntax`
+			   - ["write", { fileRegex: "\\.md$" }]  # This line has invalid YAML syntax`
 
 			mockFsReadFile({
 				[mockRoomodes]: invalidYaml,
@@ -422,7 +422,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						groups: [
 							"read",
 							[
-								"edit",
+								"write",
 								{
 									fileRegex: "\\.md$",
 									description: "Markdown files with \u2018special\u2019 chars",
@@ -444,7 +444,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 			expect(modes[0].name).toBe("Complex Mode's Name")
 			expect(modes[0].roleDefinition).toBe('Complex role with "quotes" and -dashes-')
 			expect(modes[0].groups![1]).toEqual([
-				"edit",
+				"write",
 				{
 					fileRegex: "\\.md$",
 					description: "Markdown files with 'special' chars",

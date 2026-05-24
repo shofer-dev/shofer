@@ -7,14 +7,20 @@ import { MessageManager } from "../../message-manager"
 // Mock dependencies
 vi.mock("../../task-persistence")
 vi.mock("../checkpointRestoreHandler")
-vi.mock("vscode", () => ({
-	window: {
-		showErrorMessage: vi.fn(),
-	},
-	workspace: {
-		workspaceFolders: undefined,
-	},
-}))
+vi.mock("vscode", async (importOriginal) => {
+	const actual: any = await importOriginal()
+	return {
+		...actual,
+		window: {
+			...actual.window,
+			showErrorMessage: vi.fn(),
+		},
+		workspace: {
+			...actual.workspace,
+			workspaceFolders: undefined,
+		},
+	}
+})
 
 describe("webviewMessageHandler - checkpoint operations", () => {
 	let mockProvider: any

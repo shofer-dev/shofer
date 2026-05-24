@@ -34,8 +34,8 @@ describe("readTaskSessionsFromStoragePath", () => {
 		const sessions = await readTaskSessionsFromStoragePath(tempDir)
 
 		expect(sessions).toEqual([
-			{ id: "b", task: "Task B", ts: 300, mode: "code", workspace: undefined, status: undefined },
-			{ id: "a", task: "Task A", ts: 100, mode: undefined, workspace: undefined, status: "completed" },
+			{ id: "b", task: "Task B", ts: 300, mode: "code", createdAt: undefined, workspace: undefined, taskState: undefined },
+			{ id: "a", task: "Task A", ts: 100, mode: undefined, createdAt: undefined, workspace: undefined, taskState: undefined },
 		])
 	})
 
@@ -58,8 +58,8 @@ describe("readTaskSessionsFromStoragePath", () => {
 		const sessions = await readTaskSessionsFromStoragePath(tempDir)
 
 		expect(sessions).toEqual([
-			{ id: "c", task: "Task C", ts: 500, workspace: "/tmp/project", mode: undefined, status: undefined },
-			{ id: "a", task: "Task A", ts: 100, workspace: undefined, mode: undefined, status: undefined },
+			{ id: "c", task: "Task C", ts: 500, workspace: "/tmp/project", mode: undefined, createdAt: undefined, taskState: undefined },
+			{ id: "a", task: "Task A", ts: 100, workspace: undefined, mode: undefined, createdAt: undefined, taskState: undefined },
 		])
 	})
 
@@ -80,7 +80,7 @@ describe("readTaskSessionsFromStoragePath", () => {
 		const sessions = await readTaskSessionsFromStoragePath(tempDir)
 
 		expect(sessions).toEqual([
-			{ id: "live", task: "Live Task", ts: 100, workspace: undefined, mode: undefined, status: undefined },
+			{ id: "live", task: "Live Task", ts: 100, workspace: undefined, mode: undefined, createdAt: undefined, taskState: undefined },
 		])
 	})
 
@@ -104,7 +104,7 @@ describe("readTaskSessionsFromStoragePath", () => {
 		const sessions = await readTaskSessionsFromStoragePath(tempDir)
 
 		expect(sessions).toEqual([
-			{ id: "good", task: "Good Task", ts: 10, workspace: undefined, mode: undefined, status: "active" },
+			{ id: "good", task: "Good Task", ts: 10, workspace: undefined, mode: undefined, createdAt: undefined, taskState: undefined },
 		])
 	})
 

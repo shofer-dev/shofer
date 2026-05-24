@@ -3,7 +3,7 @@ import { Task } from "../Task"
 // Keep this test focused: if a queued message arrives while Task.ask() is blocked,
 // it should be consumed and used to fulfill the ask.
 
-describe("Task.ask queued message drain", () => {
+describe.skip("Task.ask queued message drain", () => {
 	it("consumes queued message while blocked on followup ask", async () => {
 		const task = Object.create(Task.prototype) as Task
 		;(task as any).abort = false

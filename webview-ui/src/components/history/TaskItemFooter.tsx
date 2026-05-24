@@ -7,6 +7,8 @@ import { DeleteButton } from "./DeleteButton"
 import { StandardTooltip } from "../ui/standard-tooltip"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { Split } from "lucide-react"
+import { resolveStateVisual } from "@src/components/chat/TaskSelector"
+import { cn } from "@/lib/utils"
 
 export interface TaskItemFooterProps {
 	item: HistoryItem
@@ -24,6 +26,8 @@ const TaskItemFooter: React.FC<TaskItemFooterProps> = ({
 	onDelete,
 }) => {
 	const { t } = useAppTranslation()
+	const taskState = item.taskState ?? { lifecycle: "idle" as const }
+	const stateConfig = resolveStateVisual(taskState)
 
 	return (
 		<div className="text-xs text-vscode-descriptionForeground flex justify-between items-center">
@@ -33,6 +37,39 @@ const TaskItemFooter: React.FC<TaskItemFooterProps> = ({
 					<>
 						<Split className="size-3" />
 						<span>{t("history:subtaskTag")}</span>
+						<span>·</span>
+					</>
+				)}
+				{/* State icon + label (from TaskSelector) */}
+				{taskState.lifecycle !== "idle" && (
+					<>
+						<StandardTooltip content={stateConfig.label}>
+							<span
+								className={cn(
+									"codicon flex-shrink-0 text-xs leading-none",
+									stateConfig.icon,
+									stateConfig.iconColor,
+								)}
+								aria-label={stateConfig.label}
+							/>
+						</StandardTooltip>
+						<span>{stateConfig.label}</span>
+						<span>·</span>
+					</>
+				)}
+				{/* Insertions/deletions (from TaskSelector) */}
+				{(item.insertions !== undefined || item.deletions !== undefined) && (
+					<>
+						{item.insertions !== undefined && item.insertions > 0 && (
+							<span className="text-[var(--vscode-charts-green,#16a34a)]">
+								+{item.insertions}
+							</span>
+						)}
+						{item.deletions !== undefined && item.deletions > 0 && (
+							<span className="text-[var(--vscode-charts-red,#ef4444)] ml-0.5">
+								-{item.deletions}
+							</span>
+						)}
 						<span>·</span>
 					</>
 				)}

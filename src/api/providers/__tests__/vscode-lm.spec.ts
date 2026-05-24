@@ -1,5 +1,16 @@
 import type { Mock } from "vitest"
 
+// Break the transitive import chain through extension.ts, which pulls in
+// ContextDropZoneProvider (extends vscode.TreeItem) and other UI-heavy modules.
+vi.mock("../../../extension", () => ({
+	getOutputChannel: vi.fn(() => ({
+		appendLine: vi.fn(),
+		append: vi.fn(),
+		show: vi.fn(),
+		dispose: vi.fn(),
+	})),
+}))
+
 // Mocks must come first, before imports
 vi.mock("vscode", () => {
 	class MockLanguageModelTextPart {
@@ -19,6 +30,15 @@ vi.mock("vscode", () => {
 	return {
 		workspace: {
 			onDidChangeConfiguration: vi.fn((_callback) => ({
+				dispose: vi.fn(),
+			})),
+			getConfiguration: vi.fn(() => ({
+				get: vi.fn().mockReturnValue(false),
+			})),
+		},
+		window: {
+			createTextEditorDecorationType: vi.fn(() => ({
+				key: "mock-decoration",
 				dispose: vi.fn(),
 			})),
 		},
@@ -50,6 +70,9 @@ vi.mock("vscode", () => {
 		LanguageModelToolCallPart: MockLanguageModelToolCallPart,
 		lm: {
 			selectChatModels: vi.fn(),
+		},
+		commands: {
+			executeCommand: vi.fn().mockResolvedValue(undefined),
 		},
 	}
 })

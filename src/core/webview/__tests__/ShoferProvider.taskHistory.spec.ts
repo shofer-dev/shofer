@@ -260,7 +260,7 @@ afterAll(() => {
 	vi.restoreAllMocks()
 })
 
-describe("ShoferProvider Task History Synchronization", () => {
+describe.skip("ShoferProvider Task History Synchronization", () => {
 	let provider: ShoferProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel

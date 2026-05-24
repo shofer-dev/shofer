@@ -26,6 +26,7 @@ vi.mock("vscode", () => ({
 		showWarningMessage: vi.fn(),
 		showErrorMessage: vi.fn(),
 		onDidChangeActiveTextEditor: vi.fn(() => ({ dispose: vi.fn() })),
+		createTextEditorDecorationType: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 	},
 	workspace: {
 		getConfiguration: vi.fn().mockReturnValue({
@@ -51,6 +52,16 @@ vi.mock("vscode", () => ({
 		Test: 3,
 	},
 	version: "1.85.0",
+	TreeItem: vi.fn(),
+	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+	ThemeIcon: vi.fn(),
+	EventEmitter: vi.fn().mockImplementation(() => ({
+		event: vi.fn(() => ({ dispose: vi.fn() })),
+		fire: vi.fn(),
+		dispose: vi.fn(),
+	})),
+	TreeDragAndDropController: vi.fn(),
+	TreeDataProvider: vi.fn(),
 }))
 
 // Create a counter for unique task IDs.
@@ -76,6 +87,10 @@ vi.mock("../../task/Task", () => ({
 		setTaskApiConfigName: vi.fn(),
 		_taskApiConfigName: options.historyItem?.apiConfigName,
 		taskApiConfigName: options.historyItem?.apiConfigName,
+		preloadShoferMessages: vi.fn().mockResolvedValue(undefined),
+		preloadedMessages: false,
+		historyPreloaded: true,
+		startFromHistory: vi.fn().mockResolvedValue(undefined),
 	})),
 }))
 

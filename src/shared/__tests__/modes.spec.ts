@@ -36,8 +36,8 @@ describe("isToolAllowedForMode", () => {
 	]
 
 	it("allows always available tools", () => {
-		expect(isToolAllowedForMode("ask_followup_question", "markdown-editor", customModes)).toBe(true)
 		expect(isToolAllowedForMode("attempt_completion", "markdown-editor", customModes)).toBe(true)
+		expect(isToolAllowedForMode("set_task_title", "markdown-editor", customModes)).toBe(true)
 	})
 
 	it("allows unrestricted tools", () => {
@@ -609,11 +609,11 @@ describe("FileRestrictionError", () => {
 			const debugMode = modes.find((mode) => mode.slug === "debug")
 			expect(debugMode).toBeDefined()
 			expect(debugMode).toMatchObject({
-				slug: "debug",
-				name: "🪲 Debug",
-				roleDefinition:
-					"You are Shofer, an expert software debugger specializing in systematic problem diagnosis and resolution.",
-				groups: ["read", "write", "command", "mcp"],
+					slug: "debug",
+					name: "🪲 Debug",
+					roleDefinition:
+						"You are Shofer, an expert software debugger specializing in systematic problem diagnosis and resolution.",
+					groups: ["read", "write", "execute", "mcp", "subtasks", "questions", "uncategorized"],
 			})
 			expect(debugMode?.customInstructions).toContain(
 				"Reflect on 5-7 different possible sources of the problem, distill those down to 1-2 most likely sources, and then add logs to validate your assumptions. Explicitly ask the user to confirm the diagnosis before fixing the problem.",

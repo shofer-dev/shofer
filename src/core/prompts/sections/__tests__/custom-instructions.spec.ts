@@ -138,7 +138,7 @@ describe("loadRuleFiles", () => {
 		})
 
 		const result = await loadRuleFiles("/fake/path")
-		expect(result).toBe("\n# Rules from .roorules:\nroo rules content\n")
+		expect(result).toBe("\n# Rules from .roorules:\nshofer rules content\n")
 	})
 
 	it("should handle when no rule files exist", async () => {
@@ -397,7 +397,7 @@ describe("loadRuleFiles", () => {
 		})
 
 		const result = await loadRuleFiles("/fake/path")
-		expect(result).toBe("\n# Rules from .roorules:\nroo rules content\n")
+		expect(result).toBe("\n# Rules from .roorules:\nshofer rules content\n")
 	})
 
 	it("should handle errors when reading directory", async () => {
@@ -418,7 +418,7 @@ describe("loadRuleFiles", () => {
 		})
 
 		const result = await loadRuleFiles("/fake/path")
-		expect(result).toBe("\n# Rules from .roorules:\nroo rules content\n")
+		expect(result).toBe("\n# Rules from .roorules:\nshofer rules content\n")
 	})
 
 	it("should read files from nested subdirectories in .shofer/rules/", async () => {
