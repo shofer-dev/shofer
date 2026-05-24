@@ -81,7 +81,10 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 			inputTokens = 0
 		}
 
-		let assistantText = ""
+		// §4.5: collect emitted text into an array of references and join once
+		// at the end instead of growing a single string by O(n²) reallocation per
+		// chunk. The accumulator is only used for the final countTokens() call.
+		const assistantChunks: string[] = []
 
 		try {
 			const params: OpenAI.Chat.ChatCompletionCreateParamsStreaming & { draft_model?: string } = {
@@ -119,7 +122,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 				const finishReason = chunk.choices[0]?.finish_reason
 
 				if (delta?.content) {
-					assistantText += delta.content
+					assistantChunks.push(delta.content)
 					for (const processedChunk of matcher.update(delta.content)) {
 						yield processedChunk
 					}
@@ -153,7 +156,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 
 			let outputTokens = 0
 			try {
-				outputTokens = await this.countTokens([{ type: "text", text: assistantText }])
+				outputTokens = await this.countTokens([{ type: "text", text: assistantChunks.join("") }])
 			} catch (err) {
 				outputError("[LmStudio] Failed to count output tokens:", err)
 				outputTokens = 0

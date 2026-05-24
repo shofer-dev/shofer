@@ -393,19 +393,21 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 * @returns A promise resolving to the token count
 	 */
 	override async countTokens(content: Array<Anthropic.Messages.ContentBlockParam>): Promise<number> {
-		// Convert Anthropic content blocks to a string for VSCode LM token counting
-		let textContent = ""
+		// §4.5: build the text via a string-ref array + single join, not
+		// repeated `+=` reallocations. The array is short-lived and never
+		// surfaces past this function.
+		const parts: string[] = []
 
 		for (const block of content) {
 			if (block.type === "text") {
-				textContent += block.text || ""
+				parts.push(block.text || "")
 			} else if (block.type === "image") {
 				// VSCode LM doesn't support images directly, so we'll just use a placeholder
-				textContent += "[IMAGE]"
+				parts.push("[IMAGE]")
 			}
 		}
 
-		return this.internalCountTokens(textContent)
+		return this.internalCountTokens(parts.join(""))
 	}
 
 	/**
@@ -594,8 +596,10 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		// Calculate input tokens before starting the stream
 		const totalInputTokens: number = await this.calculateTotalInputTokens(vsCodeLmMessages)
 
-		// Accumulate the text and count at the end of the stream to reduce token counting overhead.
-		let accumulatedText: string = ""
+		// §4.5: collect emitted text + tool-call arguments into an array and join
+		// once at stream end, avoiding O(n²) string reallocation per chunk for
+		// long responses. Only used for final token counting and Xiaomi logging.
+		const accumulatedChunks: string[] = []
 
 		try {
 			// Create the response stream with required options
@@ -663,7 +667,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						)
 					}
 
-					accumulatedText += chunk.value
+					accumulatedChunks.push(chunk.value)
 					yield {
 						type: "text",
 						text: chunk.value,
@@ -709,7 +713,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						// Yield native tool_call chunk when tools are provided
 						if (metadata?.tools?.length) {
 							const argumentsString = JSON.stringify(chunk.input)
-							accumulatedText += argumentsString
+							accumulatedChunks.push(argumentsString)
 							if (isXiaomiModel) {
 								getOutputChannel()?.appendLine(
 									`[XIAOMI] [vscode-lm] Yielding tool_call: id=${chunk.callId}, name=${chunk.name}, args=${argumentsString}`,
@@ -767,6 +771,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			}
 
 			// Count tokens in the accumulated text after stream completion
+			const accumulatedText = accumulatedChunks.join("")
 			const totalOutputTokens: number = await this.internalCountTokens(accumulatedText)
 
 			// Log complete stream summary for Xiaomi models
@@ -933,13 +938,15 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				},
 				new vscode.CancellationTokenSource().token,
 			)
-			let result = ""
+			// §4.5: chunks array + join() at end (one allocation) instead of
+			// per-chunk `result += ...` string reallocation.
+			const resultChunks: string[] = []
 			for await (const chunk of response.stream) {
 				if (chunk instanceof vscode.LanguageModelTextPart) {
-					result += chunk.value
+					resultChunks.push(chunk.value)
 				}
 			}
-			return result
+			return resultChunks.join("")
 		} catch (error) {
 			if (error instanceof Error) {
 				throw new Error(`VSCode LM completion error: ${error.message}`)
