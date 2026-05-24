@@ -315,14 +315,32 @@ export class DiffViewProvider {
 	}
 
 	/**
-	 * Formats a standardized response for file write operations
+	 * Formats a standardized response for file write operations.
+	 *
+	 * Strategy-specific details (e.g. apply_diff block stats) are passed in via
+	 * `extra` so this method stays agnostic of any particular diff format. The
+	 * caller owns parsing its own payload and decides what to surface to the
+	 * model.
 	 *
 	 * @param task Task instance to get protocol info
 	 * @param cwd Current working directory for path resolution
 	 * @param isNewFile Whether this is a new file or an existing file being modified
+	 * @param extra Optional strategy-specific summary / hint / structured stats
 	 * @returns Formatted message (JSON)
 	 */
-	async pushToolWriteResult(task: Task, cwd: string, isNewFile: boolean): Promise<string> {
+	async pushToolWriteResult(
+		task: Task,
+		cwd: string,
+		isNewFile: boolean,
+		extra?: {
+			/** Replaces the default "File X was created/modified." leading sentence. */
+			summary?: string
+			/** Optional follow-up sentence appended after the summary (e.g. remediation hint). */
+			hint?: string
+			/** Opaque structured stats forwarded to the model as `diff_stats`. */
+			stats?: Record<string, number>
+		},
+	): Promise<string> {
 		if (!this.relPath) {
 			throw new Error("No file path available in DiffViewProvider")
 		}
@@ -342,6 +360,8 @@ export class DiffViewProvider {
 
 		// Build notices array
 		const notices = [
+			extra?.summary ?? `File ${this.relPath} was ${isNewFile ? "created" : "modified"}.`,
+			...(extra?.hint ? [extra.hint] : []),
 			"You do not need to re-read the file, as you have seen all changes",
 			"Proceed with the task using these changes as the new baseline.",
 			...(this.userEdits
@@ -355,12 +375,17 @@ export class DiffViewProvider {
 			path: string
 			operation: "created" | "modified"
 			notice: string
+			diff_stats?: Record<string, number>
 			user_edits?: string
 			problems?: string
 		} = {
 			path: this.relPath,
 			operation: isNewFile ? "created" : "modified",
 			notice: notices.join(" "),
+		}
+
+		if (extra?.stats) {
+			result.diff_stats = extra.stats
 		}
 
 		if (this.userEdits) {

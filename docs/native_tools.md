@@ -80,6 +80,11 @@ Create a new file or overwrite an existing file with content.
 
 Apply precise, targeted modifications to an existing file using a diff format.
 
+> **⚠️ Common pitfall:** If the SEARCH or REPLACE content contains lines that
+> look like diff markers (`=======`, `<<<<<<<`, `>>>>>>>`), you MUST prepend a
+> backslash (`\`) to those lines to escape them (e.g., `\=======`). The parser
+> treats unescaped markers as block delimiters.
+
 | Param  | Type   | Required | Description                             |
 | ------ | ------ | :------: | --------------------------------------- |
 | `path` | string |    ✅    | File path                               |
@@ -125,6 +130,12 @@ Inserts text at a specific position in a file using VS Code's WorkspaceEdit API.
 ### `sed`
 
 Performs regex find-and-replace on a workspace file, similar to `sed 's/pattern/replacement/g'`. Uses JavaScript RegExp syntax. Supports capture group backreferences ($1, $2, etc.).
+
+> **⚠️ Common pitfall:** The `.` character in regex matches ANY character (not
+> just a literal dot/period). To match a literal dot, use `\.` or `[.]`. If
+> the regex produces zero matches, the tool automatically falls back to a
+> literal search — but if it finds unexpected matches (e.g., `.` matching `/`),
+> the literal fallback is not triggered because matches were found.
 
 | Param         | Type            | Required | Description                                |
 | ------------- | --------------- | :------: | ------------------------------------------ |

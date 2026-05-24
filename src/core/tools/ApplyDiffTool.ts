@@ -240,27 +240,39 @@ export class ApplyDiffTool extends BaseTool<"apply_diff"> {
 
 			// Used to determine if we should wait for busy terminal to update before sending api request
 			task.didEditFile = true
-			let partFailHint = ""
 
-			if (diffResult.failParts && diffResult.failParts.length > 0) {
-				partFailHint = `But unable to apply all diff parts to file: ${absolutePath}. Use the read_file tool to check the newest file version and re-apply diffs.\n`
+			// Compute block-level stats once and surface them to the model via
+			// pushToolWriteResult's opaque `extra` channel. Keeping the
+			// `<<<<<<< SEARCH` parsing here (the only place that owns the
+			// apply_diff format) avoids leaking strategy concerns into the
+			// generic DiffViewProvider used by 9 different write tools.
+			const totalBlocks = (diffContent.match(/<<<<<<< SEARCH/g) || []).length
+			const failedBlocks = diffResult.failParts?.filter((p) => !p.success).length ?? 0
+			const appliedBlocks = totalBlocks - failedBlocks
+
+			const extra: Parameters<typeof task.diffViewProvider.pushToolWriteResult>[3] = {}
+			if (totalBlocks > 1 || failedBlocks > 0) {
+				extra.summary = `${appliedBlocks}/${totalBlocks} blocks applied to ${relPath}.`
+				extra.stats = {
+					total_blocks: totalBlocks,
+					applied_blocks: appliedBlocks,
+					failed_blocks: failedBlocks,
+				}
+			}
+			if (failedBlocks > 0) {
+				extra.hint = `${failedBlocks} block(s) did not match — use read_file to verify the current file state and re-apply the failed blocks.`
 			}
 
 			// Get the formatted response message
-			const message = await task.diffViewProvider.pushToolWriteResult(task, task.cwd, !fileExists)
+			const message = await task.diffViewProvider.pushToolWriteResult(task, task.cwd, !fileExists, extra)
 
-			// Check for single SEARCH/REPLACE block warning
-			const searchBlocks = (diffContent.match(/<<<<<<< SEARCH/g) || []).length
+			// Single-block hint: nudge the model toward batching related edits.
 			const singleBlockNotice =
-				searchBlocks === 1
+				totalBlocks === 1
 					? "\n<notice>Making multiple related changes in a single apply_diff is more efficient. If other changes are needed in this file, please include them as additional SEARCH/REPLACE blocks.</notice>"
 					: ""
 
-			if (partFailHint) {
-				pushToolResult(partFailHint + message + singleBlockNotice)
-			} else {
-				pushToolResult(message + singleBlockNotice)
-			}
+			pushToolResult(message + singleBlockNotice)
 
 			await task.diffViewProvider.reset()
 			this.resetPartialState()
