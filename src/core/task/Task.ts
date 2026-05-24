@@ -116,6 +116,8 @@ import { ShoferProvider } from "../webview/ShoferProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import {
 	type ApiMessage,
+	appendApiMessage,
+	appendTaskMessage,
 	readApiMessages,
 	saveApiMessages,
 	readTaskMessages,
@@ -861,10 +863,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			{ leading: true, trailing: true, maxWait: this.TOKEN_USAGE_EMIT_INTERVAL_MS },
 		)
 
-		// Initialize debounced save function.
-		// Trailing-only debounce with a short interval: bursts of streaming
-		// updates collapse to a single write.  The maxWait (4× the interval)
-		// guarantees forward progress even under continuous streaming load.
+		// Initialize debounced metadata refresh.
+		//
+		// Per §4.1 of `docs/mem-utilization-profiling.md`, individual messages
+		// are now persisted via `appendTaskMessage` at the call sites
+		// (`addToShoferMessages`, `updateShoferMessage`), so the debounced
+		// callback only needs to refresh the lightweight metadata (taskMetadata
+		// + updateTaskHistory + token-usage emit) — it does NOT rewrite the
+		// full JSONL log. Full rewrites happen only at turn boundaries via
+		// `_flushSaveShoferMessages` → `saveShoferMessages`.
 		//
 		// NOTE: this is fire-and-forget — await is a no-op on the leading
 		// edge because lodash.debounce returns the previous invocation's
@@ -872,7 +879,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// fsync-completion must use _flushSaveShoferMessages().
 		this._debouncedSaveShoferMessages = debounce(
 			() => {
-				void this.saveShoferMessages()
+				void this._refreshTaskMetadata()
 			},
 			Task.SAVE_DEBOUNCE_INTERVAL_MS,
 			{ leading: false, trailing: true, maxWait: Task.SAVE_DEBOUNCE_INTERVAL_MS * 4 },
@@ -1357,7 +1364,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.apiConversationHistory.push(messageWithTs)
 		}
 
-		await this.saveApiConversationHistory()
+		// §4.1: O(1) append to JSONL log. Full rewrites happen only via
+		// `overwriteApiConversationHistory` / `retrySaveApiConversationHistory`.
+		try {
+			const last = this.apiConversationHistory[this.apiConversationHistory.length - 1]
+			await appendApiMessage({
+				message: last,
+				taskId: this.taskId,
+				globalStoragePath: this.globalStoragePath,
+			})
+		} catch (error) {
+			outputError("Failed to append API message:", error)
+		}
 	}
 
 	// NOTE: We intentionally do NOT mutate stored messages to merge consecutive user turns.
@@ -1434,7 +1452,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const userMessageWithTs = { ...validatedMessage, ts: Date.now() }
 		this.apiConversationHistory.push(userMessageWithTs as ApiMessage)
 
-		const saved = await this.saveApiConversationHistory()
+		// §4.1: O(1) append rather than full rewrite. On failure, leave
+		// `userMessageContent` populated so the caller can retry via
+		// `retrySaveApiConversationHistory()` (which does a full rewrite).
+		let saved = true
+		try {
+			await appendApiMessage({
+				message: userMessageWithTs as ApiMessage,
+				taskId: this.taskId,
+				globalStoragePath: this.globalStoragePath,
+			})
+		} catch (error) {
+			saved = false
+			outputError("Failed to append pending tool-result message:", error)
+		}
 
 		if (saved) {
 			// Clear the pending content since it's now saved
@@ -1450,8 +1481,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async saveApiConversationHistory(): Promise<boolean> {
 		try {
+			// §4.1: serialize synchronously into a JSONL string so the async
+			// write captures an H6-style snapshot (no `structuredClone` of the
+			// entire array). Per-message JSON.stringify runs single-tick before
+			// yielding, so concurrent in-place mutations (reasoning-block
+			// injection, etc.) cannot race with the write.
+			const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
+			const serialized = serializeJsonLines(this.apiConversationHistory)
 			await saveApiMessages({
-				messages: structuredClone(this.apiConversationHistory),
+				messages: this.apiConversationHistory,
+				serialized,
 				taskId: this.taskId,
 				globalStoragePath: this.globalStoragePath,
 			})
@@ -1494,6 +1533,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async addToShoferMessages(message: ShoferMessage) {
 		this.shoferMessages.push(message)
+		// §4.1: O(1) JSONL append — must happen BEFORE the debounced metadata
+		// refresh so a crash between the in-memory push and the next compaction
+		// does not lose the message.
+		try {
+			await appendTaskMessage({
+				message,
+				taskId: this.taskId,
+				globalStoragePath: this.globalStoragePath,
+			})
+		} catch (error) {
+			outputError("Failed to append Shofer message:", error)
+		}
 		const provider = this.providerRef.deref()
 		// Avoid resending large, mostly-static fields (notably taskHistory) on every chat message update.
 		// taskHistory is maintained in-memory in the webview and updated via taskHistoryItemUpdated.
@@ -1542,6 +1593,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		) {
 			await provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: message })
 		}
+		// §4.1: persist the in-place mutation by appending a new JSONL line
+		// with the same `ts`. `readTaskMessages` collapses duplicates so the
+		// last appended copy wins while position is preserved. The next
+		// compaction (turn-boundary flush) rewrites to canonical form.
+		try {
+			await appendTaskMessage({
+				message,
+				taskId: this.taskId,
+				globalStoragePath: this.globalStoragePath,
+			})
+		} catch (error) {
+			outputError("Failed to append updated Shofer message:", error)
+		}
 		this.emit(ShoferEventName.Message, { action: "updated", message })
 	}
 
@@ -1551,15 +1615,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async _saveShoferMessagesImpl(): Promise<boolean> {
 		try {
-			// H6: Capture a synchronous snapshot of the messages BEFORE yielding
-			// to the event loop. `JSON.stringify` is single-tick and produces a
-			// frozen string that cannot be mutated by concurrent
-			// `addToShoferMessages`/`updateShoferMessage` callers while the
-			// async write is in flight. This replaces a `structuredClone` deep
-			// copy that traversed every message twice (once to clone, once
-			// inside JsonStreamStringify) and held two full copies of the
-			// array in memory for the duration of the write.
-			const serialized = JSON.stringify(this.shoferMessages)
+			// §4.1: serialize synchronously (H6 snapshot) and atomically replace
+			// the JSONL log. This is the compaction path — called at turn
+			// boundaries and from `overwriteShoferMessages`. Streaming updates
+			// do NOT go through here; they append via `appendTaskMessage` at
+			// the `addToShoferMessages` / `updateShoferMessage` call sites.
+			const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
+			const serialized = serializeJsonLines(this.shoferMessages)
 			await saveTaskMessages({
 				messages: this.shoferMessages,
 				serialized,
@@ -1567,6 +1629,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				globalStoragePath: this.globalStoragePath,
 			})
 
+			return await this._refreshTaskMetadata()
+		} catch (error) {
+			outputError("Failed to save Shofer messages:", error)
+			return false
+		}
+	}
+
+	/**
+	 * Metadata-only refresh used by the debounced path.
+	 *
+	 * Walks `shoferMessages` for token-usage and history-item derivation,
+	 * then calls `updateTaskHistory`. Does NOT write the JSONL log — that
+	 * is the responsibility of `appendTaskMessage` (incremental) and
+	 * `_saveShoferMessagesImpl` (compaction).
+	 */
+	private async _refreshTaskMetadata(): Promise<boolean> {
+		try {
 			if (this._taskApiConfigName === undefined) {
 				await this.taskApiConfigReady
 			}
@@ -1613,7 +1692,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			return true
 		} catch (error) {
-			outputError("Failed to save Shofer messages:", error)
+			outputError("Failed to refresh task metadata:", error)
 			return false
 		}
 	}

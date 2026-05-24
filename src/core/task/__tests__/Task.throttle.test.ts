@@ -36,8 +36,10 @@ vi.mock("@shofer/telemetry", () => ({
 vi.mock("../../task-persistence", () => ({
 	readApiMessages: vi.fn().mockResolvedValue([]),
 	saveApiMessages: vi.fn().mockResolvedValue(undefined),
+	appendApiMessage: vi.fn().mockResolvedValue(undefined),
 	readTaskMessages: vi.fn().mockResolvedValue([]),
 	saveTaskMessages: vi.fn().mockResolvedValue(undefined),
+	appendTaskMessage: vi.fn().mockResolvedValue(undefined),
 	taskMetadata: vi.fn().mockResolvedValue({
 		historyItem: {
 			id: "test-task-id",

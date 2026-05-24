@@ -2593,24 +2593,22 @@ export class ShoferProvider
 		}
 
 		const { getTaskDirectoryPath } = await import("../../utils/storage")
+		const { readApiMessages } = await import("../task-persistence/apiMessages")
 		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 		const taskDirPath = await getTaskDirectoryPath(globalStoragePath, id)
 		const apiConversationHistoryFilePath = path.join(taskDirPath, GlobalFileNames.apiConversationHistory)
 		const uiMessagesFilePath = path.join(taskDirPath, GlobalFileNames.uiMessages)
-		const fileExists = await fileExistsAtPath(apiConversationHistoryFilePath)
 
 		let apiConversationHistory: Anthropic.MessageParam[] = []
-
-		if (fileExists) {
-			try {
-				apiConversationHistory = JSON.parse(await fs.readFile(apiConversationHistoryFilePath, "utf8"))
-			} catch (error) {
-				outputWarn(
-					`[getTaskWithId] api_conversation_history.json corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
-				)
-			}
-		} else {
-			outputWarn(`[getTaskWithId] api_conversation_history.json missing for task ${id}, returning empty history`)
+		try {
+			apiConversationHistory = await readApiMessages({ taskId: id, globalStoragePath })
+		} catch (error) {
+			outputWarn(
+				`[getTaskWithId] api_conversation_history.jsonl corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+		if (apiConversationHistory.length === 0) {
+			outputWarn(`[getTaskWithId] api_conversation_history.jsonl missing or empty for task ${id}`)
 		}
 
 		return {
@@ -2685,21 +2683,17 @@ export class ShoferProvider
 	 * provides.
 	 */
 	async exportTaskWithIdJson(id: string) {
-		const { historyItem, apiConversationHistory, uiMessagesFilePath } = await this.getTaskWithId(id)
+		const { historyItem, apiConversationHistory } = await this.getTaskWithId(id)
 
-		// Read ui_messages.json for per-request metadata.
+		// Read ui_messages for per-request metadata via the JSONL reader.
 		let uiMessages: Array<{ type: string; say?: string; ts: number; text?: string }> = []
 		try {
-			const exists = await fs
-				.stat(uiMessagesFilePath)
-				.then(() => true)
-				.catch(() => false)
-			if (exists) {
-				uiMessages = JSON.parse(await fs.readFile(uiMessagesFilePath, "utf8"))
-			}
+			const { readTaskMessages } = await import("../task-persistence/taskMessages")
+			const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
+			uiMessages = (await readTaskMessages({ taskId: id, globalStoragePath })) as typeof uiMessages
 		} catch (err) {
 			outputWarn(
-				`[exportTaskWithIdJson] Could not read ui_messages.json for task ${id}: ${err instanceof Error ? err.message : String(err)}`,
+				`[exportTaskWithIdJson] Could not read ui_messages.jsonl for task ${id}: ${err instanceof Error ? err.message : String(err)}`,
 			)
 		}
 

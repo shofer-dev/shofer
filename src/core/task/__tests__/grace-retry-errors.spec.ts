@@ -39,6 +39,8 @@ vi.mock("fs/promises", async (importOriginal) => {
 	const mockFunctions = {
 		mkdir: vi.fn().mockResolvedValue(undefined),
 		writeFile: vi.fn().mockResolvedValue(undefined),
+		appendFile: vi.fn().mockResolvedValue(undefined),
+		rename: vi.fn().mockResolvedValue(undefined),
 		readFile: vi.fn().mockImplementation(() => Promise.resolve("[]")),
 		unlink: vi.fn().mockResolvedValue(undefined),
 		rmdir: vi.fn().mockResolvedValue(undefined),

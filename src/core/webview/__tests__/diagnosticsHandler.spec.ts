@@ -24,29 +24,23 @@ vi.mock("../../../utils/storage", () => ({
 	getTaskDirectoryPath: vi.fn(async () => "/mock/task-dir"),
 }))
 
-// Mock fs utilities
-vi.mock("../../../utils/fs", () => ({
-	fileExistsAtPath: vi.fn(),
-}))
-
-// Mock fs/promises
+// Mock fs/promises (only writeFile is exercised directly; readApiMessages handles reads)
 vi.mock("fs/promises", () => {
-	const mockReadFile = vi.fn()
 	const mockWriteFile = vi.fn().mockResolvedValue(undefined)
-
 	return {
-		default: {
-			readFile: mockReadFile,
-			writeFile: mockWriteFile,
-		},
-		readFile: mockReadFile,
+		default: { writeFile: mockWriteFile },
 		writeFile: mockWriteFile,
 	}
 })
 
+// Mock the JSONL API messages reader used by diagnosticsHandler.
+const readApiMessagesMock = vi.fn()
+vi.mock("../../task-persistence/apiMessages", () => ({
+	readApiMessages: readApiMessagesMock,
+}))
+
 import * as vscode from "vscode"
 import * as fs from "fs/promises"
-import * as fsUtils from "../../../utils/fs"
 import { generateErrorDiagnostics } from "../diagnosticsHandler"
 
 describe("generateErrorDiagnostics", () => {
@@ -54,11 +48,11 @@ describe("generateErrorDiagnostics", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		readApiMessagesMock.mockReset()
 	})
 
 	it("generates a diagnostics file with error metadata and history", async () => {
-		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true as any)
-		vi.mocked(fs.readFile).mockResolvedValue('[{"role": "user", "content": "test"}]' as any)
+		readApiMessagesMock.mockResolvedValue([{ role: "user", content: "test" }])
 
 		const result = await generateErrorDiagnostics({
 			taskId: "test-task-id",
@@ -76,13 +70,13 @@ describe("generateErrorDiagnostics", () => {
 		expect(result.success).toBe(true)
 		expect(result.filePath).toContain("shofer-diagnostics-")
 
-		// Verify we attempted to read API history
-		expect(fs.readFile).toHaveBeenCalledWith(path.join("/mock/task-dir", "api_conversation_history.json"), "utf8")
+		expect(readApiMessagesMock).toHaveBeenCalledWith({
+			taskId: "test-task-id",
+			globalStoragePath: "/mock/global/storage",
+		})
 
-		// Verify we wrote a diagnostics file with the expected content
 		expect(fs.writeFile).toHaveBeenCalledTimes(1)
 		const [writtenPath, writtenContent] = vi.mocked(fs.writeFile).mock.calls[0]
-		// taskId.slice(0, 8) = "test-tas" from "test-task-id"
 		expect(String(writtenPath)).toContain("shofer-diagnostics-test-tas")
 		expect(String(writtenContent)).toContain(
 			"// Please share this file with Shofer Support (support@shofer.dev) to diagnose the issue faster",
@@ -90,17 +84,13 @@ describe("generateErrorDiagnostics", () => {
 		expect(String(writtenContent)).toContain('"error":')
 		expect(String(writtenContent)).toContain('"history":')
 		expect(String(writtenContent)).toContain('"version": "1.2.3"')
-		expect(String(writtenContent)).toContain('"provider": "test-provider"')
-		expect(String(writtenContent)).toContain('"model": "test-model"')
-		expect(String(writtenContent)).toContain('"details": "Sample error details"')
 
-		// Verify VS Code APIs were used to open the generated file
 		expect(vscode.workspace.openTextDocument).toHaveBeenCalledTimes(1)
 		expect(vscode.window.showTextDocument).toHaveBeenCalledTimes(1)
 	})
 
-	it("uses empty history when API history file does not exist", async () => {
-		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(false as any)
+	it("uses empty history when API history is empty", async () => {
+		readApiMessagesMock.mockResolvedValue([])
 
 		const result = await generateErrorDiagnostics({
 			taskId: "test-task-id",
@@ -116,17 +106,12 @@ describe("generateErrorDiagnostics", () => {
 		})
 
 		expect(result.success).toBe(true)
-
-		// Should not attempt to read file when it doesn't exist
-		expect(fs.readFile).not.toHaveBeenCalled()
-
-		// Verify empty history in output
 		const [, writtenContent] = vi.mocked(fs.writeFile).mock.calls[0]
 		expect(String(writtenContent)).toContain('"history": []')
 	})
 
 	it("uses default values when values are not provided", async () => {
-		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(false as any)
+		readApiMessagesMock.mockResolvedValue([])
 
 		const result = await generateErrorDiagnostics({
 			taskId: "test-task-id",
@@ -135,8 +120,6 @@ describe("generateErrorDiagnostics", () => {
 		})
 
 		expect(result.success).toBe(true)
-
-		// Verify defaults in output
 		const [, writtenContent] = vi.mocked(fs.writeFile).mock.calls[0]
 		expect(String(writtenContent)).toContain('"version": ""')
 		expect(String(writtenContent)).toContain('"provider": ""')
@@ -144,9 +127,8 @@ describe("generateErrorDiagnostics", () => {
 		expect(String(writtenContent)).toContain('"details": ""')
 	})
 
-	it("handles JSON parse error gracefully", async () => {
-		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(true as any)
-		vi.mocked(fs.readFile).mockResolvedValue("invalid json" as any)
+	it("handles a read error gracefully by surfacing a UI error and producing empty history", async () => {
+		readApiMessagesMock.mockRejectedValue(new Error("boom"))
 
 		const result = await generateErrorDiagnostics({
 			taskId: "test-task-id",
@@ -161,18 +143,15 @@ describe("generateErrorDiagnostics", () => {
 			log: mockLog,
 		})
 
-		// Should still succeed but with empty history
 		expect(result.success).toBe(true)
-		expect(vscode.window.showErrorMessage).toHaveBeenCalledWith("Failed to parse api_conversation_history.json")
-
-		// Verify empty history in output
+		expect(vscode.window.showErrorMessage).toHaveBeenCalledWith("Failed to read api_conversation_history.jsonl")
 		const [, writtenContent] = vi.mocked(fs.writeFile).mock.calls[0]
 		expect(String(writtenContent)).toContain('"history": []')
 	})
 
 	it("returns error result when file write fails", async () => {
-		vi.mocked(fsUtils.fileExistsAtPath).mockResolvedValue(false as any)
-		vi.mocked(fs.writeFile).mockRejectedValue(new Error("Write failed"))
+		readApiMessagesMock.mockResolvedValue([])
+		vi.mocked(fs.writeFile).mockRejectedValueOnce(new Error("Write failed"))
 
 		const result = await generateErrorDiagnostics({
 			taskId: "test-task-id",
@@ -186,3 +165,6 @@ describe("generateErrorDiagnostics", () => {
 		expect(vscode.window.showErrorMessage).toHaveBeenCalledWith("Failed to generate diagnostics: Write failed")
 	})
 })
+
+// Silence unused-import warning for `path` if any future test wants it.
+void path

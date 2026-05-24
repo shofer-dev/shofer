@@ -1,14 +1,25 @@
-import { safeWriteJson } from "../../utils/safeWriteJson"
+/**
+ * apiMessages.ts — JSONL persistence for per-task `apiConversationHistory`.
+ *
+ * Mirrors `taskMessages.ts`: one `ApiMessage` JSON record per line in
+ * `api_conversation_history.jsonl`. `appendApiMessage` is the O(1) hot path
+ * (`addToApiConversationHistory`, `flushPendingToolResultsToHistory`);
+ * `saveApiMessages` is the atomic compaction used by
+ * `overwriteApiConversationHistory` and `retrySaveApiConversationHistory`.
+ *
+ * Hard cutover: both `api_conversation_history.json` and the pre-rename
+ * `claude_messages.json` are unlinked on first read and treated as missing.
+ */
+
 import * as path from "path"
 import * as fs from "fs/promises"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { fileExistsAtPath } from "../../utils/fs"
-
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { getTaskDirectoryPath } from "../../utils/storage"
-import { outputError, outputWarn } from "../../utils/outputChannelLogger"
+import { outputWarn } from "../../utils/outputChannelLogger"
+import { appendJsonLine, dedupeByKey, readJsonLines, serializeJsonLines, writeJsonLines } from "./jsonlLog"
 
 export type ApiMessage = Anthropic.MessageParam & {
 	ts?: number
@@ -38,6 +49,27 @@ export type ApiMessage = Anthropic.MessageParam & {
 	isTruncationMarker?: boolean
 }
 
+const LEGACY_API_FILES = ["api_conversation_history.json", "claude_messages.json"]
+
+async function apiHistoryPath(taskId: string, globalStoragePath: string): Promise<string> {
+	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
+	return path.join(taskDir, GlobalFileNames.apiConversationHistory)
+}
+
+async function unlinkLegacyIfPresent(taskDir: string): Promise<void> {
+	for (const name of LEGACY_API_FILES) {
+		const legacy = path.join(taskDir, name)
+		try {
+			await fs.unlink(legacy)
+			outputWarn(`[readApiMessages] unlinked legacy ${name} (hard cutover to JSONL)`)
+		} catch (e: any) {
+			if (e && e.code !== "ENOENT") {
+				outputWarn(`[readApiMessages] failed to unlink ${legacy}: ${e.message}`)
+			}
+		}
+	}
+}
+
 export async function readApiMessages({
 	taskId,
 	globalStoragePath,
@@ -47,76 +79,51 @@ export async function readApiMessages({
 }): Promise<ApiMessage[]> {
 	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
 	const filePath = path.join(taskDir, GlobalFileNames.apiConversationHistory)
-
-	if (await fileExistsAtPath(filePath)) {
-		const fileContent = await fs.readFile(filePath, "utf8")
-		try {
-			const parsedData = JSON.parse(fileContent)
-			if (!Array.isArray(parsedData)) {
-				outputWarn(
-					`[readApiMessages] Parsed data is not an array (got ${typeof parsedData}), returning empty. TaskId: ${taskId}, Path: ${filePath}`,
-				)
-				return []
-			}
-			if (parsedData.length === 0) {
-				outputError(
-					`[Shofer-Debug] readApiMessages: Found API conversation history file, but it's empty (parsed as []). TaskId: ${taskId}, Path: ${filePath}`,
-				)
-			}
-			return parsedData
-		} catch (error) {
-			outputWarn(
-				`[readApiMessages] Error parsing API conversation history file, returning empty. TaskId: ${taskId}, Path: ${filePath}, Error: ${error}`,
-			)
-			return []
-		}
-	} else {
-		const oldPath = path.join(taskDir, "claude_messages.json")
-
-		if (await fileExistsAtPath(oldPath)) {
-			const fileContent = await fs.readFile(oldPath, "utf8")
-			try {
-				const parsedData = JSON.parse(fileContent)
-				if (!Array.isArray(parsedData)) {
-					outputWarn(
-						`[readApiMessages] Parsed OLD data is not an array (got ${typeof parsedData}), returning empty. TaskId: ${taskId}, Path: ${oldPath}`,
-					)
-					return []
-				}
-				if (parsedData.length === 0) {
-					outputError(
-						`[Shofer-Debug] readApiMessages: Found OLD API conversation history file (claude_messages.json), but it's empty (parsed as []). TaskId: ${taskId}, Path: ${oldPath}`,
-					)
-				}
-				await fs.unlink(oldPath)
-				return parsedData
-			} catch (error) {
-				outputWarn(
-					`[readApiMessages] Error parsing OLD API conversation history file (claude_messages.json), returning empty. TaskId: ${taskId}, Path: ${oldPath}, Error: ${error}`,
-				)
-				// DO NOT unlink oldPath if parsing failed.
-				return []
-			}
-		}
+	const parsed = await readJsonLines<ApiMessage>(filePath)
+	if (parsed === null) {
+		await unlinkLegacyIfPresent(taskDir)
+		return []
 	}
-
-	// If we reach here, neither the new nor the old history file was found.
-	outputError(
-		`[Shofer-Debug] readApiMessages: API conversation history file not found for taskId: ${taskId}. Expected at: ${filePath}`,
-	)
-	return []
+	return dedupeByKey(parsed, (m) => m.ts)
 }
 
+export type AppendApiMessageOptions = {
+	message: ApiMessage
+	taskId: string
+	globalStoragePath: string
+}
+
+/**
+ * Append a single `ApiMessage` to the JSONL log. O(1) per call.
+ * The read path dedupes by `ts`, so callers may safely re-append a mutated
+ * message in place (same `ts`).
+ */
+export async function appendApiMessage({ message, taskId, globalStoragePath }: AppendApiMessageOptions): Promise<void> {
+	const filePath = await apiHistoryPath(taskId, globalStoragePath)
+	await appendJsonLine(filePath, message)
+}
+
+export type SaveApiMessagesOptions = {
+	messages: ApiMessage[]
+	taskId: string
+	globalStoragePath: string
+	/**
+	 * Optional pre-serialized JSONL payload. See `taskMessages.ts` for H6
+	 * snapshot semantics.
+	 */
+	serialized?: string
+}
+
+/**
+ * Compaction: atomic full rewrite of the JSONL log.
+ */
 export async function saveApiMessages({
 	messages,
 	taskId,
 	globalStoragePath,
-}: {
-	messages: ApiMessage[]
-	taskId: string
-	globalStoragePath: string
-}) {
-	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
-	const filePath = path.join(taskDir, GlobalFileNames.apiConversationHistory)
-	await safeWriteJson(filePath, messages)
+	serialized,
+}: SaveApiMessagesOptions): Promise<void> {
+	const filePath = await apiHistoryPath(taskId, globalStoragePath)
+	const content = serialized ?? serializeJsonLines(messages)
+	await writeJsonLines(filePath, content)
 }

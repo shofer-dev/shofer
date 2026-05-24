@@ -4,7 +4,6 @@ import * as fs from "fs/promises"
 import * as vscode from "vscode"
 
 import { getTaskDirectoryPath } from "../../utils/storage"
-import { fileExistsAtPath } from "../../utils/fs"
 
 export interface ErrorDiagnosticsValues {
 	timestamp?: string
@@ -38,18 +37,14 @@ export async function generateErrorDiagnostics(params: GenerateDiagnosticsParams
 	try {
 		const taskDirPath = await getTaskDirectoryPath(globalStoragePath, taskId)
 
-		// Load API conversation history from the same file used by openDebugApiHistory
-		const apiHistoryPath = path.join(taskDirPath, "api_conversation_history.json")
+		// Load API conversation history from the JSONL log used by openDebugApiHistory.
+		const { readApiMessages } = await import("../task-persistence/apiMessages")
 		let history: unknown = []
-
-		if (await fileExistsAtPath(apiHistoryPath)) {
-			const content = await fs.readFile(apiHistoryPath, "utf8")
-			try {
-				history = JSON.parse(content)
-			} catch {
-				// If parsing fails, fall back to empty history but still generate diagnostics file
-				vscode.window.showErrorMessage("Failed to parse api_conversation_history.json")
-			}
+		try {
+			history = await readApiMessages({ taskId, globalStoragePath })
+		} catch (e) {
+			vscode.window.showErrorMessage("Failed to read api_conversation_history.jsonl")
+			log(`Failed to read api_conversation_history.jsonl: ${e instanceof Error ? e.message : String(e)}`)
 		}
 
 		const diagnostics = {
