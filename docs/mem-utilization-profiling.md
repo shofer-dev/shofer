@@ -9,6 +9,22 @@ It is a debugging playbook, not a refactor proposal. It does not change any
 code; it lists the changes that would. Pick from the menu based on what the
 profiling data points at — do not implement everything upfront.
 
+> **Related prior work.** Several items in §4 overlap with the
+> performance / latency tuning tracked in
+> [`../../../todos/done/performance_optimizations.md`](../../../todos/done/performance_optimizations.md)
+> (H0–H9). That document already landed: debounced `saveShoferMessages`
+> during streaming (H0), a sync `JSON.stringify` snapshot replacing
+> `structuredClone` (H6), incremental token accounting for `taskMetadata`
+> (H2.bis), eight callers switched from `postStateToWebview` to the
+> skinnier `*WithoutTaskHistory` variant (H4 partial), and the
+> single-message `messageUpdated` delta channel. Those changes reduced
+> save **frequency** and per-save **clone** cost but did not eliminate the
+> per-save **serialise** cost or the per-state-push **full-array clone**
+> cost — which is precisely what §4.1 and §4.2 below target. Read the
+> performance doc first to avoid re-proposing changes already in tree, and
+> see §7 below for which §4 items also have a meaningful UI-responsiveness
+> (lagginess) payoff on top of their memory benefit.
+
 ---
 
 ## Table of Contents
@@ -19,8 +35,9 @@ profiling data points at — do not implement everything upfront.
 4. [Design Changes by Culprit](#4-design-changes-by-culprit)
 5. [Profiling Toolbox](#5-profiling-toolbox)
 6. [Recommended Investigation Sequence](#6-recommended-investigation-sequence)
-7. [Known Constraints](#7-known-constraints)
-8. [Related Files](#8-related-files)
+7. [Performance / Lagginess Impact](#7-performance--lagginess-impact)
+8. [Known Constraints](#8-known-constraints)
+9. [Related Files](#9-related-files)
 
 ---
 
@@ -174,6 +191,14 @@ is an independent change with a self-contained mitigation.
 
 ### 4.1 Streaming JSON write for conversation snapshots
 
+> **Prior art.** H0 in
+> [`performance_optimizations.md`](../../../todos/done/performance_optimizations.md)
+> debounced `saveShoferMessages` (250 ms trailing, 1000 ms maxWait) and H6
+> replaced the per-save `structuredClone` with a sync `JSON.stringify`
+> snapshot. Both reduce **how often** and **how much extra** memory we
+> spend per save, but every save still materialises a string the size of
+> the entire conversation. This item is the next step beyond H0/H6.
+
 Replace `JSON.stringify(messages)` + `fs.writeFile` with an
 **append-only / streaming** persistence layer:
 
@@ -190,6 +215,15 @@ Unless Asked** rule in the repo conventions, the migration can be one-shot
 on first load.
 
 ### 4.2 Webview state diffs instead of full snapshots
+
+> **Prior art.** H4 in
+> [`performance_optimizations.md`](../../../todos/done/performance_optimizations.md)
+> landed eight call-site conversions from `postStateToWebview()` to
+> `postStateToWebviewWithoutTaskHistory()` and the single-message
+> `messageUpdated` delta channel already exists. The remaining gap is the
+> **generalised per-array delta protocol** for `shoferMessages` /
+> `apiConversationHistory` / `taskHistory` — today every full-snapshot
+> call site still ships the whole array.
 
 `postStateToWebview` already has skinnier variants
 (`postStateToWebviewWithoutTaskHistory`,
@@ -387,7 +421,120 @@ long-running headless capture (CI, long sessions).
 
 ---
 
-## 7. Known Constraints
+## 7. Performance / Lagginess Impact
+
+The §4 items target memory peaks, but several of them are independently
+the biggest realistic UI-responsiveness wins in the extension. The mental
+model: the extension host is single-threaded. Anything that allocates a
+multi-MB object, serialises a multi-MB string, or structured-clones a big
+payload across the IPC boundary **stalls the event loop for the duration**.
+That stall is what the user perceives as lag — typing freezes, cursor
+stutter, scroll jank in the chat, slow chip clicks, delayed tool approvals.
+GC pauses on large heaps compound it: a major GC on a 1.5 GiB heap is
+100–300 ms, visible as a hitch even when nothing is "wrong".
+
+The ranking below is by **expected lagginess win**, which is a different
+order from the OOM-win ranking implicit in §3.
+
+### 7.1 High impact
+
+- **§4.2 — Webview state diffs instead of full `postStateToWebview`
+  snapshots.** Almost certainly the #1 lag win. Today every change to the
+  conversation (every streamed chunk that triggers a non-partial
+  `addToShoferMessages`, every tool result, every status flip) triggers a
+  serialise + structured-clone of the entire state object containing the
+  full conversation arrays. On a long task that's tens of MiB cloned
+  hundreds of times per minute. Each clone is a synchronous main-thread
+  stall on **both** sides (host serialises, renderer deserialises).
+  Switching to append/patch IPC drops per-message cost to O(1) instead of
+  O(history). Users will feel this immediately as smoother streaming and
+  snappier UI during long sessions. H4 already removed some of the
+  worst-offending call sites; this is the generalisation that closes the
+  gap.
+
+- **§4.5 — Eliminate `+=` accumulation in streaming providers.** O(n²)
+  string growth on every streamed chunk means each chunk reallocates and
+  copies the whole accumulated response. Mid-stream, a single chunk
+  arriving when the response is already 500 KiB costs a 1 MiB allocation +
+  memcpy + the old string becoming GC-eligible. Replace with
+  `chunks.push(…) + join` at end, O(n) total. Visible win: streaming feels
+  even-paced instead of "fast then sluggish".
+
+- **§4.1 — Streaming JSON write for conversation snapshots.** H0 already
+  debounced the saves and H6 already removed the per-save `structuredClone`
+  but, when the debounced save does fire on a long task, `JSON.stringify`
+  on the full array is still a synchronous multi-hundred-ms event-loop
+  stall. JSONL append makes the steady-state save O(1 message). Visible
+  win: no periodic typing-freeze every few seconds during long tasks.
+
+### 7.2 Medium impact
+
+- **§4.3 — Inline-content caps + blob externalisation.** Indirect lag win:
+  smaller messages → cheaper §4.2 (less to diff) → cheaper §4.1 (less to
+  serialise) → less GC pressure overall. Also makes the sliding-window
+  truncation pass cheaper because it walks shorter strings.
+
+- **§4.9 — Defer `JSON.stringify` in log calls.** Tiny code change,
+  surprisingly large effect if any hot path is doing
+  `appendLine(JSON.stringify(state))`. A single accidental full-state
+  stringify in a logger called per-chunk could be the lag source by
+  itself.
+
+- **§4.6 — Bounded code-indexer batches.** Indexing is supposed to be
+  background, but unbounded batches periodically jam the event loop with
+  file-IO bursts and embedding-vector allocations. Capping bytes-in-flight
+  smooths that into a steady drip the user doesn't feel.
+
+### 7.3 Low impact on lag
+
+- **§4.4 — LLM request-body streaming.** OOM-relevant, but the one-shot
+  serialise happens once per turn, not per chunk — not a major lag source.
+- **§4.7 — MCP response caps.** Pure defence against worst-case payloads;
+  no steady-state lag win.
+- **§4.8 — Terminal output ring buffer.** Only matters during very chatty
+  commands. Niche.
+
+### 7.4 Why GC pressure matters regardless of which §4 items land
+
+- **GC pressure scales superlinearly with live heap.** If steady-state
+  working set drops from ~600 MiB to ~256 MiB (which §4.1 + §4.2 + §4.3
+  plausibly achieve), major GCs become both shorter and less frequent.
+  That alone removes a class of periodic hitches the user currently
+  perceives as random sluggishness.
+- **`large_object` allocations are paged separately and not movable.** A
+  churn of multi-MB allocations fragments that space and is one of the
+  few cases where V8 does a stop-the-world compaction. Killing the source
+  of large-object churn (§4.1, §4.2, §4.5) eliminates that pause entirely.
+
+### 7.5 Recommended sequencing for the lagginess goal
+
+Different from §6's OOM-driven order. If the goal is responsiveness:
+
+1. **§4.5** — smallest change, immediate effect on streaming smoothness.
+   An afternoon's audit across providers.
+2. **§4.9** — even smaller; may surface a "wait, we were stringifying
+   _that_?" moment.
+3. **§4.2** — biggest steady-state lag win but real design work. The diff
+   protocol is small (per §4.2 above) but the host and webview reducers
+   need careful wiring and good tests around message-ordering edge cases.
+   Picks up directly where H4 stopped.
+4. **§4.1** — pairs naturally with §4.2; together they collapse the
+   §3.1+§3.2 peak that's both the OOM cause and the periodic-stall cause.
+
+§4.5 and §4.9 are worth landing first as cheap wins while §4.1+§4.2 are
+designed properly. They are independently testable and don't interact.
+
+### 7.6 Anti-pattern: raising `--max-old-space-size`
+
+A larger heap means longer GCs, which makes lag **worse** even when it
+postpones OOM. The right order is shrink the working set first; bump the
+cap only as insurance once the steady-state allocation rate is under
+control. See also §8's first bullet on why the env-var route doesn't even
+work today.
+
+---
+
+## 8. Known Constraints
 
 - **VS Code strips `NODE_OPTIONS` from the extension host.** This is visible
   in [`code-server/lib/vscode/src/vs/platform/agentHost/electron-main/electronAgentHostStarter.ts`](../../../code-server/lib/vscode/src/vs/platform/agentHost/electron-main/electronAgentHostStarter.ts)
@@ -417,16 +564,17 @@ long-running headless capture (CI, long sessions).
 
 ---
 
-## 8. Related Files
+## 9. Related Files
 
-| File                                                                                            | Role                                                                   |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [`src/core/task/Task.ts`](../src/core/task/Task.ts)                                             | `saveApiConversationHistory`, `saveShoferMessages` — the §3.1 culprits |
-| [`src/utils/safeWriteJson.ts`](../src/utils/safeWriteJson.ts)                                   | Shared JSON write path used by the persistence layer                   |
-| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                   | `postStateToWebview` and skinnier variants — the §3.2 culprit          |
-| [`src/api/providers/`](../src/api/providers/)                                                   | LLM provider implementations — §3.3, §3.4                              |
-| [`src/services/code-index/processors/`](../src/services/code-index/processors/)                 | Batch readers / embedders — §3.6                                       |
-| [`src/services/helper-agent/context-window.ts`](../src/services/helper-agent/context-window.ts) | Helper-agent prompt assembly — §3.8                                    |
-| [`src/activate/registerCommands.ts`](../src/activate/registerCommands.ts)                       | `shofer.heapSnapshot` command (§5.2)                                   |
-| [`src/metrics/registry.ts`](../src/metrics/registry.ts)                                         | Histograms for `saveShoferMessages` and `postStateToWebview*`          |
-| [`build-code-server.sh`](../../../build-code-server.sh)                                         | Where the (currently-stripped) `NODE_OPTIONS` is set — see §7          |
+| File                                                                                                   | Role                                                                   |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [`src/core/task/Task.ts`](../src/core/task/Task.ts)                                                    | `saveApiConversationHistory`, `saveShoferMessages` — the §3.1 culprits |
+| [`src/utils/safeWriteJson.ts`](../src/utils/safeWriteJson.ts)                                          | Shared JSON write path used by the persistence layer                   |
+| [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                          | `postStateToWebview` and skinnier variants — the §3.2 culprit          |
+| [`src/api/providers/`](../src/api/providers/)                                                          | LLM provider implementations — §3.3, §3.4                              |
+| [`src/services/code-index/processors/`](../src/services/code-index/processors/)                        | Batch readers / embedders — §3.6                                       |
+| [`src/services/helper-agent/context-window.ts`](../src/services/helper-agent/context-window.ts)        | Helper-agent prompt assembly — §3.8                                    |
+| [`src/activate/registerCommands.ts`](../src/activate/registerCommands.ts)                              | `shofer.heapSnapshot` command (§5.2)                                   |
+| [`src/metrics/registry.ts`](../src/metrics/registry.ts)                                                | Histograms for `saveShoferMessages` and `postStateToWebview*`          |
+| [`build-code-server.sh`](../../../build-code-server.sh)                                                | Where the (currently-stripped) `NODE_OPTIONS` is set — see §8          |
+| [`../../../todos/done/performance_optimizations.md`](../../../todos/done/performance_optimizations.md) | Prior performance/latency work (H0–H9) referenced from §4.1, §4.2, §7  |
