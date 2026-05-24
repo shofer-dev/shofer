@@ -25,7 +25,7 @@ import { ContextWindowProgress } from "./ContextWindowProgress"
 import { Mention } from "./Mention"
 import { TodoListDisplay } from "./TodoListDisplay"
 import { LucideIconButton } from "./LucideIconButton"
-import { TaskSelector, getTaskDisplayName, resolveStateVisual } from "./TaskSelector"
+import { getTaskDisplayName, resolveStateVisual } from "./TaskSelector"
 import { BudgetLimitDialog } from "./BudgetLimitDialog"
 
 export interface TaskHeaderProps {
@@ -68,7 +68,7 @@ const TaskHeader = ({
 	onUpdateCostLimit,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
-	const { apiConfiguration, currentTaskItem, shoferMessages, taskHistory, parallelTasks } = useExtensionState()
+	const { apiConfiguration, currentTaskItem, shoferMessages, parallelTasks } = useExtensionState()
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 	const [showLongRunningTaskMessage, setShowLongRunningTaskMessage] = useState(false)
@@ -193,13 +193,6 @@ const TaskHeader = ({
 					</Button>
 				)}
 			</div>
-			{/* Drawer host: the trigger lives in the VS Code title bar, but the
-			 * drawer markup must be mounted in the webview. */}
-			<TaskSelector
-				taskHistory={taskHistory || []}
-				parallelTasks={parallelTasks || []}
-				currentTaskId={currentTaskItem?.id}
-			/>
 			{showLongRunningTaskMessage && !isTaskComplete && (
 				<DismissibleUpsell
 					upsellId="longRunningTask"

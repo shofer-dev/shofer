@@ -12,6 +12,7 @@ import { telemetryClient } from "./utils/TelemetryClient"
 import { initializeSourceMaps, exposeSourceMapsForDebugging } from "./utils/sourceMapInitializer"
 import { ExtensionStateContextProvider, useExtensionState } from "./context/ExtensionStateContext"
 import ChatView, { ChatViewRef } from "./components/chat/ChatView"
+import { TaskSelector } from "./components/chat/TaskSelector"
 import HistoryView from "./components/history/HistoryView"
 import SettingsView, { SettingsViewRef } from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeViewProvider"
@@ -64,6 +65,9 @@ const App = () => {
 		cloudOrganizations: _cloudOrganizations,
 		renderContext,
 		mdmCompliant,
+		taskHistory,
+		parallelTasks,
+		currentTaskItem,
 	} = useExtensionState()
 
 	// Create a persistent state manager (only when marketplace is enabled)
@@ -249,6 +253,15 @@ const App = () => {
 				isHidden={tab !== "chat"}
 				showAnnouncement={showAnnouncement}
 				hideAnnouncement={() => setShowAnnouncement(false)}
+			/>
+			{/* TaskSelector drawer — rendered at App level so it is always
+			 * mounted regardless of which tab is active. ChatView gets
+			 * display:none when history/settings/marketplace is shown, which
+			 * would hide a fixed-position drawer nested inside it. */}
+			<TaskSelector
+				taskHistory={taskHistory || []}
+				parallelTasks={parallelTasks || []}
+				currentTaskId={currentTaskItem?.id}
 			/>
 			{deleteMessageDialogState.hasCheckpoint ? (
 				<MemoizedCheckpointRestoreDialog
