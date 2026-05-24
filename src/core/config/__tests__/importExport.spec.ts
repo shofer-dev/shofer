@@ -453,6 +453,7 @@ describe("importExport", () => {
 				settingsImportedAt: 0,
 				postStateToWebview: vi.fn().mockResolvedValue(undefined),
 				postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
+				postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 			}
 
 			// Mock the showErrorMessage to capture the error

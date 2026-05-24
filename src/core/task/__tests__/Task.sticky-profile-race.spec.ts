@@ -127,6 +127,7 @@ describe("Task - sticky provider profile init race", () => {
 			off: vi.fn(),
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),
 			postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
+			postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
 		} as unknown as ShoferProvider
 

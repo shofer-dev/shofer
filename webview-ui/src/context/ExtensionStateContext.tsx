@@ -454,6 +454,33 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					})
 					break
 				}
+				case "shoferMessageAppended": {
+					// §4.2: Per-message append delta. The host avoids resending the
+					// full `shoferMessages` array during streaming and instead
+					// emits this event after each `addToShoferMessages`. We
+					// dedupe by `ts` defensively — under normal flow this is a
+					// pure append, but a late state push that includes the
+					// already-appended message followed by a redelivered
+					// `shoferMessageAppended` (e.g. on reconnection) must not
+					// duplicate.
+					const shoferMessage = message.shoferMessage
+					if (!shoferMessage) {
+						break
+					}
+					setState((prevState) => {
+						const existingIndex = findLastIndex(
+							prevState.shoferMessages,
+							(msg) => msg.ts === shoferMessage.ts,
+						)
+						if (existingIndex !== -1) {
+							const newShoferMessages = [...prevState.shoferMessages]
+							newShoferMessages[existingIndex] = shoferMessage
+							return { ...prevState, shoferMessages: newShoferMessages }
+						}
+						return { ...prevState, shoferMessages: [...prevState.shoferMessages, shoferMessage] }
+					})
+					break
+				}
 				case "skills": {
 					console.log(
 						"[ExtensionStateContext] received 'skills' message. loadedSkills:",
