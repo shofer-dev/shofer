@@ -206,24 +206,22 @@ End Namespace
 	})
 
 	it("should use fallback chunking for other configured fallback extensions", async () => {
-		// Test with Scala which is in our fallback list
-		const content = `object ScalaExample {
-			def main(args: Array[String]): Unit = {
-				println("This is a Scala file that should use fallback chunking")
-				val numbers = List(1, 2, 3, 4, 5)
-				val doubled = numbers.map(_ * 2)
-				println(s"Doubled numbers: $doubled")
-			}
-			
-			def factorial(n: Int): Int = {
-				if (n <= 1) 1
-				else n * factorial(n - 1)
-			}
-		}`
+		// Test with Elm which is in our fallback list (no WASM parser available)
+		const content = `module Main exposing (main)
 
-		const result = await parser.parseFile("test.scala", {
+		import Html exposing (text)
+
+		main =
+			text "This is an Elm file that should use fallback chunking"
+
+		add : Int -> Int -> Int
+		add x y =
+			x + y
+		`
+
+		const result = await parser.parseFile("test.elm", {
 			content: content,
-			fileHash: "test-hash-scala",
+			fileHash: "test-hash-elm",
 		})
 
 		// Should have results from fallback chunking
@@ -240,10 +238,11 @@ describe("Fallback Extensions Configuration", () => {
 	it("should correctly identify extensions that need fallback chunking", () => {
 		// Extensions that should use fallback
 		expect(shouldUseFallbackChunking(".vb")).toBe(true)
-		expect(shouldUseFallbackChunking(".scala")).toBe(true)
 		expect(shouldUseFallbackChunking(".swift")).toBe(true)
+		expect(shouldUseFallbackChunking(".elm")).toBe(true)
 
-		// Extensions that should not use fallback (have working parsers)
+		// Extensions with proper tree-sitter parsers — no fallback needed
+		expect(shouldUseFallbackChunking(".scala")).toBe(false) // Scala query wired in f847a04
 		expect(shouldUseFallbackChunking(".js")).toBe(false)
 		expect(shouldUseFallbackChunking(".ts")).toBe(false)
 		expect(shouldUseFallbackChunking(".py")).toBe(false)
@@ -256,7 +255,9 @@ describe("Fallback Extensions Configuration", () => {
 	it("should be case-insensitive", () => {
 		expect(shouldUseFallbackChunking(".VB")).toBe(true)
 		expect(shouldUseFallbackChunking(".Vb")).toBe(true)
-		expect(shouldUseFallbackChunking(".SCALA")).toBe(true)
-		expect(shouldUseFallbackChunking(".Scala")).toBe(true)
+		expect(shouldUseFallbackChunking(".ELM")).toBe(true)
+		expect(shouldUseFallbackChunking(".Elm")).toBe(true)
+		expect(shouldUseFallbackChunking(".SWIFT")).toBe(true)
+		expect(shouldUseFallbackChunking(".SCALA")).toBe(false) // Scala has a proper tree-sitter parser
 	})
 })
