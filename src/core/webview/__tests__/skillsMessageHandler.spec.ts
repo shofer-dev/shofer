@@ -43,7 +43,7 @@ import {
 	handleOpenSkillFile,
 } from "../skillsMessageHandler"
 
-describe.skip("skillsMessageHandler", () => {
+describe("skillsMessageHandler", () => {
 	const mockLog = vi.fn()
 	const mockPostMessageToWebview = vi.fn()
 	const mockGetSkillsMetadata = vi.fn()
@@ -53,9 +53,12 @@ describe.skip("skillsMessageHandler", () => {
 	const mockGetSkill = vi.fn()
 	const mockFindSkillByNameAndSource = vi.fn()
 
+	const mockDiscoverSkills = vi.fn().mockResolvedValue(undefined)
+
 	const createMockProvider = (hasSkillsManager: boolean = true): ShoferProvider => {
 		const skillsManager = hasSkillsManager
 			? {
+					discoverSkills: mockDiscoverSkills,
 					getSkillsMetadata: mockGetSkillsMetadata,
 					createSkill: mockCreateSkill,
 					deleteSkill: mockDeleteSkill,
