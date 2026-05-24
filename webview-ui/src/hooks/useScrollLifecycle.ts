@@ -120,6 +120,16 @@ export function useScrollLifecycle({
 	const userDisengagedRef = useRef(false)
 	const userDisengagedTimeoutRef = useRef<number | null>(null)
 
+	// --- User-intent scroll-up flag ---
+	// Set synchronously by escape-intent detectors (wheel, keyboard, pointer)
+	// BEFORE calling enterUserBrowsingHistory. Checked by
+	// atBottomStateChangeCallback to prevent the "not-at-bottom during
+	// ANCHORED_FOLLOWING+streaming → auto-scroll-back" path from fighting
+	// genuine user scroll-up intent. Cleared on re-anchor or after a brief
+	// safety timeout.
+	const userIntentScrollUpRef = useRef(false)
+	const userIntentScrollUpTimeoutRef = useRef<number | null>(null)
+
 	// -----------------------------------------------------------------------
 	// Phase transitions
 	// -----------------------------------------------------------------------
@@ -136,6 +146,8 @@ export function useScrollLifecycle({
 		(reason?: string) => {
 			transitionScrollPhase("ANCHORED_FOLLOWING", reason)
 			setShowScrollToBottom(false)
+			// Clear the user-intent flag when re-engaging follow mode.
+			userIntentScrollUpRef.current = false
 		},
 		[transitionScrollPhase],
 	)
@@ -155,6 +167,16 @@ export function useScrollLifecycle({
 				userDisengagedRef.current = false
 				userDisengagedTimeoutRef.current = null
 			}, 500)
+			// Clear the user-intent-scroll-up flag after a brief safety
+			// window. By this point atBottomStateChangeCallback has had
+			// time to see the flag and skip the auto-scroll-back.
+			if (userIntentScrollUpTimeoutRef.current !== null) {
+				window.clearTimeout(userIntentScrollUpTimeoutRef.current)
+			}
+			userIntentScrollUpTimeoutRef.current = window.setTimeout(() => {
+				userIntentScrollUpRef.current = false
+				userIntentScrollUpTimeoutRef.current = null
+			}, 200)
 		},
 		[transitionScrollPhase],
 	)
@@ -264,6 +286,9 @@ export function useScrollLifecycle({
 			scrollToBottomSmooth.clear()
 			if (userDisengagedTimeoutRef.current !== null) {
 				window.clearTimeout(userDisengagedTimeoutRef.current)
+			}
+			if (userIntentScrollUpTimeoutRef.current !== null) {
+				window.clearTimeout(userIntentScrollUpTimeoutRef.current)
 			}
 		}
 	}, [cancelReanchorFrame, clearHydrationWindow, scrollToBottomSmooth])
@@ -383,7 +408,7 @@ export function useScrollLifecycle({
 				return
 			}
 
-			if (currentPhase === "ANCHORED_FOLLOWING" && isStreaming) {
+			if (currentPhase === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current) {
 				scrollToBottomAuto()
 				setShowScrollToBottom(false)
 				return
@@ -402,6 +427,10 @@ export function useScrollLifecycle({
 		(event: Event) => {
 			const wheelEvent = event as WheelEvent
 			if (wheelEvent.deltaY < 0 && scrollContainerRef.current?.contains(wheelEvent.target as Node)) {
+				// Set the flag synchronously BEFORE the phase transition so
+				// atBottomStateChangeCallback can see it even if it fires
+				// before enterUserBrowsingHistory completes.
+				userIntentScrollUpRef.current = true
 				enterUserBrowsingHistory("wheel-up")
 			}
 		},
@@ -472,6 +501,10 @@ export function useScrollLifecycle({
 			pointerScrollLastTopRef.current = currentTop
 
 			if (previousTop !== null && currentTop < previousTop) {
+				// Set the flag synchronously BEFORE the phase transition so
+				// atBottomStateChangeCallback can see it even if it fires
+				// before enterUserBrowsingHistory completes.
+				userIntentScrollUpRef.current = true
 				enterUserBrowsingHistory("pointer-scroll-up")
 			}
 		},
@@ -514,6 +547,10 @@ export function useScrollLifecycle({
 				keyEvent.target instanceof Node && !!scrollContainerRef.current?.contains(keyEvent.target)
 
 			if (focusInsideChat || eventTargetInsideChat || activeElement === document.body) {
+				// Set the flag synchronously BEFORE the phase transition so
+				// atBottomStateChangeCallback can see it even if it fires
+				// before enterUserBrowsingHistory completes.
+				userIntentScrollUpRef.current = true
 				enterUserBrowsingHistory("keyboard-nav-up")
 			}
 		},
