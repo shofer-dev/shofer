@@ -1,6 +1,7 @@
 import * as path from "path"
 import * as fs from "fs/promises"
 import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
+import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 
 /**
  * AssistantAgentDirectoryTree — generates a workspace `find .`-style tree
@@ -17,10 +18,12 @@ import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
 export class AssistantAgentDirectoryTree {
 	private readonly _workspacePath: string
 	private readonly _maxContextTokens: number
+	private readonly _shoferIgnoreController?: ShoferIgnoreController
 
-	constructor(workspacePath: string, maxContextTokens: number) {
+	constructor(workspacePath: string, maxContextTokens: number, shoferIgnoreController?: ShoferIgnoreController) {
 		this._workspacePath = workspacePath
 		this._maxContextTokens = maxContextTokens
+		this._shoferIgnoreController = shoferIgnoreController
 	}
 
 	/** Max tokens allowed for the tree (~10% of context window). */
@@ -87,7 +90,12 @@ export class AssistantAgentDirectoryTree {
 				}
 
 				// Skip common excluded directories
-				if (item.isDirectory() && SKIP_DIRECTORIES.has(item.name)) {
+				if (item.isDirectory() && SKIP_PARTS.has(item.name)) {
+					continue
+				}
+
+				// Respect .shoferignore patterns
+				if (this._shoferIgnoreController && !this._shoferIgnoreController.validateAccess(relPath)) {
 					continue
 				}
 
@@ -142,7 +150,7 @@ interface TreeEntry {
 }
 
 /** Directories to skip during scanning. */
-const SKIP_DIRECTORIES = new Set([
+export const SKIP_PARTS = new Set([
 	"node_modules",
 	".git",
 	".shofer",
@@ -154,5 +162,4 @@ const SKIP_DIRECTORIES = new Set([
 	"target",
 	".next",
 	".turbo",
-	"coverage",
 ])
