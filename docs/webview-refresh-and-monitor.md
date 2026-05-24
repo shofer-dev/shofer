@@ -5,10 +5,21 @@ This document describes the end-to-end design and implementation of the
 recovers from webview crashes) and the **Refresh Webview** command (the manual
 recovery button in Shofer's toolbar overflow menu).
 
-> **⚠️ Known issue (2026-05-24):** The `refreshWebview()` recovery path sometimes
-> fails to revive a stuck webview iframe. §14 ("Recovery Escalation Ladder")
-> documents the current user-facing fallback to `Reload Window`; §15 ("Hardening
-> Plan") describes the verified-escalation design that will replace it.
+> **Status update (2026-05-24):** The persistent unresponsiveness symptom that
+> originally motivated §15 turned out **not** to be a stuck webview iframe but
+> a V8 OOM in the extension-host process itself (the Node side, not the
+> renderer). When the host runs out of memory, every IPC channel — including
+> this webview's — goes silent at the same time. See
+> [`mem-utilization-profiling.md`](mem-utilization-profiling.md) for the
+> diagnosis and the actual fix surface.
+>
+> The heartbeat (§5), the `fatal_error` path (§6.2), the auto-reset (§7), and
+> the **Refresh Webview** / **Reload Window** buttons (§8, §14) remain useful
+> as written — they correctly handle the renderer-only failure modes
+> (uncaught exceptions, React crashes, GPU process death) and are the user's
+> only escape hatch from a wedged renderer. §15 is retained as a deferred
+> design sketch; do **not** implement it until a failure that is actually
+> renderer-local is reproduced (see §15 for the reassessment).
 
 ---
 
@@ -28,7 +39,7 @@ recovery button in Shofer's toolbar overflow menu).
 12. [Key Bugs Fixed](#12-key-bugs-fixed)
 13. [Diagnostic Instrumentation](#13-diagnostic-instrumentation)
 14. [Recovery Escalation Ladder](#14-recovery-escalation-ladder)
-15. [Hardening Plan — Verified Escalation Ladder](#15-hardening-plan--verified-escalation-ladder)
+15. [Deferred Hardening Plan (do not implement yet)](#15-deferred-hardening-plan-do-not-implement-yet)
 16. [Related Files](#16-related-files)
 
 ---
@@ -728,23 +739,85 @@ reloadWindow: async () => {
 
 ---
 
-## 15. Hardening Plan — Verified Escalation Ladder
+## 15. Deferred Hardening Plan (do not implement yet)
 
-**The issue is still present.** `refreshWebview()` sometimes returns "successfully"
-while the iframe stays stuck (blank, frozen, or running stale code). The root
-cause is that today's flow is **fire-and-forget** — we mutate `webview.html`,
-call `reloadWebviewAction`, and have no way to tell whether either actually
-revived the renderer before declaring success. The user is then forced into
-`Reload Window`.
+### 15.0 Why this is deferred
 
-The fix is to make recovery **verified** and **escalating**: every attempt is
-followed by waiting on the heartbeat for proof of life, and only when an
-attempt fails to produce a pong do we escalate to the next, more aggressive
-strategy. The heartbeat we already have is the natural verification primitive
-— we just have to wire it into the recovery path.
+The original motivation for this section was a recurring "webview is stuck,
+`refreshWebview()` did not bring it back, user had to `Reload Window`"
+symptom. After Grafana-based heap analysis on 2026-05-24, the root cause
+turned out to be **V8 OOM in the extension-host (Node) process**, not a
+wedged renderer:
 
-The four sub-sections below are listed in implementation order. (1) and (2)
-must land together because (2) depends on (1). (3) and (4) are independent
+- The extension host hit `CALL_AND_RETRY_LAST Allocation failed - JavaScript
+heap out of memory` at ~2.5 GiB, with `large_object` space dominating the
+  spike.
+- VS Code logged `Extension host (LocalProcess pid: …) is unresponsive.`
+- When the host process is dead/unresponsive, _every_ webview channel goes
+  silent simultaneously. From the user's seat this is indistinguishable
+  from a stuck renderer, but no amount of `webview.html =` or
+  `reloadWebviewAction` on the host side can help — the host is the part
+  that is broken.
+
+The actual fix surface for that failure mode lives in
+[`mem-utilization-profiling.md`](mem-utilization-profiling.md) (transient
+bloat from conversation-history serialisation, full-state webview pushes,
+LLM request-body assembly, etc.).
+
+The verified-escalation ladder described below is therefore parked. It is
+still a sound design for a **genuinely renderer-local** failure (Chromium
+GPU panic, iframe reparented into a wrong DOM position, IPC channel
+degraded but host alive), but we have no current evidence such a failure is
+happening to Shofer users in practice — the symptoms we attributed to it
+were all collateral from host OOM. **Do not implement §15.1–15.4 until
+a renderer-local failure has been independently reproduced with the host
+still alive** (verifiable by checking that the host process is still
+responding to other VS Code IPC, or that `process.memoryUsage()` looks
+healthy at the moment of webview silence).
+
+The rest of this section is preserved as a design sketch for that future
+day.
+
+---
+
+### 15.0a What stays valuable regardless
+
+Nothing in §1–§14 is invalidated by the OOM diagnosis. Specifically:
+
+- The **three-layer crash guard** (§3–§5) still catches uncaught webview
+  exceptions, React rendering crashes, and silent renderer death. These
+  are real and orthogonal to host OOM.
+- The **heartbeat timer** (§5) is also the most useful generic
+  "something is wrong" signal we have: when the host OOMs, the heartbeat
+  stops ticking from the host side and the next user interaction will
+  surface the symptom through the existing path. It costs ~one
+  `postMessage` per 2 s and gives us free RTT history in the output
+  channel.
+- The **Refresh Webview** and **Reload Window** buttons (§8, §14) remain
+  the only escape hatches the user has from a wedged UI — whether the
+  wedge is renderer-local (refresh fixes it) or host-wide (reload fixes
+  it). Keep them.
+
+---
+
+### 15.0b Original motivation (preserved for context)
+
+The original framing of this section read:
+
+> `refreshWebview()` sometimes returns "successfully" while the iframe stays
+> stuck (blank, frozen, or running stale code). The root cause is that
+> today's flow is **fire-and-forget** — we mutate `webview.html`, call
+> `reloadWebviewAction`, and have no way to tell whether either actually
+> revived the renderer before declaring success.
+
+That critique is **still factually correct** about `refreshWebview()` — it
+is fire-and-forget. The reason we are not acting on it is that the
+observed failures the critique was supposed to fix turned out to be a
+different bug, and engineering effort is better spent on the actual cause.
+If evidence later shows a residual renderer-local failure rate after the
+OOM is addressed, the sub-sections below describe the design that would
+address it. They are listed in implementation order: (1) and (2) must land
+together because (2) depends on (1); (3) and (4) are independent
 follow-ups, each strictly more powerful (and more expensive) than the
 previous step.
 
