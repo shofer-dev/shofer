@@ -327,9 +327,11 @@ describe("ChatView scroll behavior regression coverage", () => {
 		harness.emitAtBottom = () => {}
 	})
 
-	it("existing-task entry does not set a top-most initial anchor", async () => {
+	it("existing-task entry sets initialTopMostItemIndex to the message count", async () => {
 		await hydrate(2)
-		expect(harness.initialTopMostItemIndex).toBeUndefined()
+		// Since bb0681c29 simplified the scroll lifecycle to always scroll to bottom on
+		// task entry, initialTopMostItemIndex is now always set to groupedMessages.length.
+		expect(harness.initialTopMostItemIndex).toBe(2)
 	})
 
 	it("rehydration uses bounded bottom pinning", async () => {
@@ -360,14 +362,16 @@ describe("ChatView scroll behavior regression coverage", () => {
 		expect(resolveFollowOutput(false)).toBe("auto")
 	})
 
-	it("delayed last-row growth during hydration keeps anchored follow with one bounded repin", async () => {
+	it("delayed last-row growth during hydration converges with bounded retries", async () => {
 		harness.delayedGrowthMs = 320
 		await hydrate(3)
 		await waitForCalls(1, 1_200)
 
 		await sleep(950)
 
-		expect(harness.scrollCalls).toBe(2)
+		// With MAX_HYDRATION_RETRIES=3 and atBottomAfterCalls=3, the hook needs
+		// 3 scroll attempts before isAtBottom becomes true.
+		expect(harness.scrollCalls).toBe(3)
 		expect(resolveFollowOutput(false)).toBe("auto")
 		expect(document.querySelector(".codicon-chevron-down")).toBeNull()
 	})

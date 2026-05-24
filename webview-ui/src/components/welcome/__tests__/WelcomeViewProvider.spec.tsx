@@ -138,8 +138,8 @@ describe("WelcomeViewProvider", () => {
 			fireEvent.click(getStartedButton)
 
 			// Should now show provider configuration screen
-			expect(screen.getByText(/welcome:providerSignup.useAnotherProvider/)).toBeInTheDocument()
-			expect(screen.getByText(/welcome:providerSignup.useAnotherProviderDescription/)).toBeInTheDocument()
+			expect(screen.getByText("welcome:providerSignup.useAnotherProvider")).toBeInTheDocument()
+			expect(screen.getByText("welcome:providerSignup.useAnotherProviderDescription")).toBeInTheDocument()
 			expect(screen.getByTestId("api-options")).toBeInTheDocument()
 		})
 	})
@@ -155,8 +155,8 @@ describe("WelcomeViewProvider", () => {
 			navigateToConfigureProvider()
 
 			// Should show heading and description
-			expect(screen.getByText(/welcome:providerSignup.useAnotherProvider/)).toBeInTheDocument()
-			expect(screen.getByText(/welcome:providerSignup.useAnotherProviderDescription/)).toBeInTheDocument()
+			expect(screen.getByText("welcome:providerSignup.useAnotherProvider")).toBeInTheDocument()
+			expect(screen.getByText("welcome:providerSignup.useAnotherProviderDescription")).toBeInTheDocument()
 
 			// Should show API options
 			expect(screen.getByTestId("api-options")).toBeInTheDocument()

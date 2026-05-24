@@ -847,20 +847,20 @@ describe("ChatView - Message Queueing Tests", () => {
 			fireEvent.keyDown(input, { key: "Enter", code: "Enter" })
 		})
 
-		// Verify that the message was sent as askResponse, not queued
+		// Verify that the message was queued (no pending ask, so queueMessage is correct per Webview Send-Path Rule)
 		await waitFor(() => {
 			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "askResponse",
-				askResponse: "messageResponse",
+				type: "queueMessage",
 				text: "follow-up after completion",
 				images: [],
 			})
 		})
 
-		// Verify it was NOT queued
+		// Verify it was NOT sent as a direct askResponse
 		expect(vscode.postMessage).not.toHaveBeenCalledWith(
 			expect.objectContaining({
-				type: "queueMessage",
+				type: "askResponse",
+				askResponse: "messageResponse",
 			}),
 		)
 	})

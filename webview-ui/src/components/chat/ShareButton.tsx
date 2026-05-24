@@ -33,16 +33,7 @@ export const ShareButton = ({ item, disabled = false }: ShareButtonProps) => {
 	const [shareSuccess, setShareSuccess] = useState<{ visibility: ShareVisibility; url: string } | null>(null)
 	const [wasConnectInitiatedFromShare, setWasConnectInitiatedFromShare] = useState(false)
 	const { t } = useTranslation()
-	const { cloudUserInfo } = useExtensionState()
-
-	// Use enhanced cloud upsell hook with auto-open on auth success
-	const _connectModalOpen = false
-	const cloudIsAuthenticated = false
-	const sharingEnabled = false
-	const publicSharingEnabled = false
-	const openUpsell = () => {}
-	const _closeUpsell = () => {}
-	const handleConnect = () => {}
+	const { cloudUserInfo, cloudIsAuthenticated, sharingEnabled, publicSharingEnabled } = useExtensionState()
 
 	// Auto-open popover when user becomes authenticated after clicking Connect from share button
 	useEffect(() => {
@@ -91,24 +82,17 @@ export const ShareButton = ({ item, disabled = false }: ShareButtonProps) => {
 		// Don't close the dropdown immediately - let success message show first
 	}
 
-	const _handleConnectToCloud = () => {
+	const handleConnectToCloud = () => {
 		setWasConnectInitiatedFromShare(true)
-		handleConnect()
+		vscode.postMessage({ type: "shoferCloudSignIn" })
+		telemetryClient.capture(TelemetryEventName.SHARE_CONNECT_TO_CLOUD_CLICKED)
 		setShareDropdownOpen(false)
 	}
 
 	const handleShareButtonClick = () => {
 		// Send telemetry for share button click
 		telemetryClient.capture(TelemetryEventName.SHARE_BUTTON_CLICKED)
-
-		if (!cloudIsAuthenticated) {
-			// Show modal for unauthenticated users
-			openUpsell()
-			telemetryClient.capture(TelemetryEventName.SHARE_CONNECT_TO_CLOUD_CLICKED)
-		} else {
-			// Show popover for authenticated users
-			setShareDropdownOpen(true)
-		}
+		setShareDropdownOpen(true)
 	}
 
 	// Determine share button state
@@ -117,7 +101,7 @@ export const ShareButton = ({ item, disabled = false }: ShareButtonProps) => {
 			return {
 				disabled: false,
 				title: t("chat:task.share"),
-				showPopover: false, // We'll show modal instead
+				showPopover: true,
 			}
 		} else if (!sharingEnabled) {
 			return {
@@ -158,7 +142,17 @@ export const ShareButton = ({ item, disabled = false }: ShareButtonProps) => {
 					</StandardTooltip>
 
 					<PopoverContent className="w-56 p-0" align="start">
-						{shareSuccess ? (
+						{!cloudIsAuthenticated ? (
+							// Unauthenticated: show connect to cloud prompt
+							<div className="p-3 flex flex-col gap-2">
+								<span className="text-sm font-medium">{t("cloud:cloudBenefitsTitle")}</span>
+								<button
+									className="text-sm text-vscode-button-foreground bg-vscode-button-background px-2 py-1 rounded"
+									onClick={handleConnectToCloud}>
+									{t("cloud:connect")}
+								</button>
+							</div>
+						) : shareSuccess ? (
 							<div className="p-3">
 								<div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
 									<span className="codicon codicon-check"></span>
