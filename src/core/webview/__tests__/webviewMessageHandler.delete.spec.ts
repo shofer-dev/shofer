@@ -15,38 +15,55 @@ vi.mock("../../../i18n", () => ({
 	changeLanguage: vi.fn(),
 }))
 
-vi.mock("vscode", () => ({
-	window: {
-		showErrorMessage: vi.fn(),
-		showWarningMessage: vi.fn(),
-		showInformationMessage: vi.fn(),
-	},
-	workspace: {
-		workspaceFolders: undefined,
-		getConfiguration: vi.fn(() => ({
-			get: vi.fn(),
-			update: vi.fn(),
-		})),
-	},
-	ConfigurationTarget: {
-		Global: 1,
-		Workspace: 2,
-		WorkspaceFolder: 3,
-	},
-	Uri: {
-		parse: vi.fn((str) => ({ toString: () => str })),
-		file: vi.fn((path) => ({ fsPath: path })),
-	},
-	env: {
-		openExternal: vi.fn(),
-		clipboard: {
-			writeText: vi.fn(),
+vi.mock("vscode", async (importOriginal) => {
+	const actual: any = await importOriginal()
+	const showErrorMessage = vi.fn()
+	const showWarningMessage = vi.fn()
+	const showInformationMessage = vi.fn()
+	const getConfiguration = vi.fn(() => ({
+		get: vi.fn(),
+		update: vi.fn(),
+	}))
+	const uriParse = vi.fn((str: string) => ({ toString: () => str }))
+	const uriFile = vi.fn((p: string) => ({ fsPath: p }))
+	const openExternal = vi.fn()
+	const clipboardWriteText = vi.fn()
+	const executeCommand = vi.fn()
+
+	return {
+		...actual,
+		window: {
+			...actual.window,
+			showErrorMessage,
+			showWarningMessage,
+			showInformationMessage,
 		},
-	},
-	commands: {
-		executeCommand: vi.fn(),
-	},
-}))
+		workspace: {
+			...actual.workspace,
+			workspaceFolders: undefined,
+			getConfiguration,
+		},
+		ConfigurationTarget: {
+			Global: 1,
+			Workspace: 2,
+			WorkspaceFolder: 3,
+		},
+		Uri: {
+			...actual.Uri,
+			parse: uriParse,
+			file: uriFile,
+		},
+		env: {
+			...actual.env,
+			openExternal,
+			clipboard: { writeText: clipboardWriteText },
+		},
+		commands: {
+			...actual.commands,
+			executeCommand,
+		},
+	}
+})
 
 describe("webviewMessageHandler delete functionality", () => {
 	let provider: any

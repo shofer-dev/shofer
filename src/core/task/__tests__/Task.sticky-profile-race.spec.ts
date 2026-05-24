@@ -3,6 +3,11 @@
 import * as vscode from "vscode"
 
 import type { ProviderSettings } from "@shofer/types"
+
+// Prevent the transitive import graph from loading extension.ts,
+// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
+vi.mock("../../../extension", () => ({}))
+
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
 

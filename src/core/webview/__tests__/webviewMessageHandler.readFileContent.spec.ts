@@ -4,17 +4,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("../../../api/providers/fetchers/modelCache")
 
-vi.mock("vscode", () => ({
-	window: {
-		showInformationMessage: vi.fn(),
-		showErrorMessage: vi.fn(),
-		showTextDocument: vi.fn(),
-	},
-	workspace: {
-		workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
-		openTextDocument: vi.fn().mockResolvedValue({}),
-	},
-}))
+vi.mock("vscode", async (importOriginal) => {
+	const actual: any = await importOriginal()
+	const showInformationMessage = vi.fn()
+	const showErrorMessage = vi.fn()
+	const showTextDocument = vi.fn()
+	const openTextDocument = vi.fn().mockResolvedValue({})
+
+	return {
+		...actual,
+		window: {
+			...actual.window,
+			showInformationMessage,
+			showErrorMessage,
+			showTextDocument,
+		},
+		workspace: {
+			...actual.workspace,
+			workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
+			openTextDocument,
+		},
+	}
+})
 
 vi.mock("../../../i18n", () => ({
 	t: vi.fn((key: string) => key),

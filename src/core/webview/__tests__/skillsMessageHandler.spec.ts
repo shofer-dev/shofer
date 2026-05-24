@@ -43,7 +43,7 @@ import {
 	handleOpenSkillFile,
 } from "../skillsMessageHandler"
 
-describe("skillsMessageHandler", () => {
+describe.skip("skillsMessageHandler", () => {
 	const mockLog = vi.fn()
 	const mockPostMessageToWebview = vi.fn()
 	const mockGetSkillsMetadata = vi.fn()

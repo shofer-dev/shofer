@@ -1,3 +1,10 @@
+// Must be FIRST — hoisted above imports so the module-level
+// const TELEMETRY_ENABLED = process.env.TELEMETRY_ENABLED === "true"
+// in PostHogTelemetryClient.ts evaluates to true.
+vi.hoisted(() => {
+	process.env.TELEMETRY_ENABLED = "true"
+})
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // pnpm --filter @shofer/telemetry test src/__tests__/PostHogTelemetryClient.test.ts

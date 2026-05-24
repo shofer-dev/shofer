@@ -7,6 +7,10 @@ import * as vscode from "vscode"
 import type { GlobalState, ProviderSettings } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
+// Prevent the transitive import graph from loading extension.ts,
+// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
+vi.mock("../../../extension", () => ({}))
+
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ContextProxy } from "../../config/ContextProxy"

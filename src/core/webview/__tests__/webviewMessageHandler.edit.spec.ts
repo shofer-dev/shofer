@@ -2,25 +2,38 @@ import type { Mock } from "vitest"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // Mock dependencies first
-vi.mock("vscode", () => ({
-	window: {
-		showWarningMessage: vi.fn(),
-		showErrorMessage: vi.fn(),
-	},
-	workspace: {
-		workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
-		getConfiguration: vi.fn().mockReturnValue({
-			get: vi.fn(),
-			update: vi.fn(),
-		}),
-	},
-	Uri: {
-		file: vi.fn((path) => ({ fsPath: path })),
-	},
-	env: {
-		uriScheme: "vscode",
-	},
-}))
+vi.mock("vscode", async (importOriginal) => {
+	const actual: any = await importOriginal()
+	const showWarningMessage = vi.fn()
+	const showErrorMessage = vi.fn()
+	const getConfigurationMock = vi.fn().mockReturnValue({
+		get: vi.fn(),
+		update: vi.fn(),
+	})
+	const uriFile = vi.fn((p: string) => ({ fsPath: p }))
+
+	return {
+		...actual,
+		window: {
+			...actual.window,
+			showWarningMessage,
+			showErrorMessage,
+		},
+		workspace: {
+			...actual.workspace,
+			workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
+			getConfiguration: getConfigurationMock,
+		},
+		Uri: {
+			...actual.Uri,
+			file: uriFile,
+		},
+		env: {
+			...actual.env,
+			uriScheme: "vscode",
+		},
+	}
+})
 
 vi.mock("../../task-persistence", () => ({
 	saveTaskMessages: vi.fn(),

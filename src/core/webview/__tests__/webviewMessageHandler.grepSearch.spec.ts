@@ -13,15 +13,21 @@ import { ShoferIgnoreController } from "../../ignore/ShoferIgnoreController"
 
 const mockSearchWorkspaceFiles = searchWorkspaceFiles as Mock<typeof searchWorkspaceFiles>
 
-vi.mock("vscode", () => ({
-	window: {
-		showInformationMessage: vi.fn(),
-		showErrorMessage: vi.fn(),
-	},
-	workspace: {
-		workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
-	},
-}))
+vi.mock("vscode", async (importOriginal) => {
+	const actual: any = await importOriginal()
+	return {
+		...actual,
+		window: {
+			...actual.window,
+			showInformationMessage: vi.fn(),
+			showErrorMessage: vi.fn(),
+		},
+		workspace: {
+			...actual.workspace,
+			workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
+		},
+	}
+})
 
 describe("webviewMessageHandler - grepSearch with ShoferIgnore filtering", () => {
 	let mockShoferProvider: ShoferProvider

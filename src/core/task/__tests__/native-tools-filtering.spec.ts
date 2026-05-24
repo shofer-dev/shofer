@@ -48,8 +48,8 @@ describe("Native Tools Filtering by Mode", () => {
 			expect(architectAllowedTools.has("read_file")).toBe(true)
 			expect(architectAllowedTools.has("list_files")).toBe(true)
 
-			// Architect SHOULD have always-available tools
-			expect(architectAllowedTools.has("ask_followup_question")).toBe(true)
+			// ask_followup_question is in the "questions" group, not always-available
+			expect(architectAllowedTools.has("ask_followup_question")).toBe(false)
 			expect(architectAllowedTools.has("attempt_completion")).toBe(true)
 
 			// Test code mode - SHOULD have edit tools

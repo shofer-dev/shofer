@@ -3,36 +3,55 @@ import { webviewMessageHandler } from "../webviewMessageHandler"
 import type { ShoferProvider } from "../ShoferProvider"
 
 // Mock vscode (minimal)
-vi.mock("vscode", () => ({
-	window: {
-		showErrorMessage: vi.fn(),
-		showWarningMessage: vi.fn(),
-		showInformationMessage: vi.fn(),
-	},
-	workspace: {
-		workspaceFolders: undefined,
-		getConfiguration: vi.fn(() => ({
-			get: vi.fn(),
-			update: vi.fn(),
-		})),
-	},
-	env: {
-		clipboard: { writeText: vi.fn() },
-		openExternal: vi.fn(),
-	},
-	commands: {
-		executeCommand: vi.fn(),
-	},
-	Uri: {
-		parse: vi.fn((s: string) => ({ toString: () => s })),
-		file: vi.fn((p: string) => ({ fsPath: p })),
-	},
-	ConfigurationTarget: {
-		Global: 1,
-		Workspace: 2,
-		WorkspaceFolder: 3,
-	},
-}))
+vi.mock("vscode", async (importOriginal) => {
+	const actual: any = await importOriginal()
+	const showErrorMessage = vi.fn()
+	const showWarningMessage = vi.fn()
+	const showInformationMessage = vi.fn()
+	const getConfiguration = vi.fn(() => ({
+		get: vi.fn(),
+		update: vi.fn(),
+	}))
+	const clipboardWriteText = vi.fn()
+	const openExternal = vi.fn()
+	const executeCommand = vi.fn()
+	const uriParse = vi.fn((s: string) => ({ toString: () => s }))
+	const uriFile = vi.fn((p: string) => ({ fsPath: p }))
+
+	return {
+		...actual,
+		window: {
+			...actual.window,
+			showErrorMessage,
+			showWarningMessage,
+			showInformationMessage,
+		},
+		workspace: {
+			...actual.workspace,
+			workspaceFolders: undefined,
+			getConfiguration,
+		},
+		env: {
+			...actual.env,
+			clipboard: { writeText: clipboardWriteText },
+			openExternal,
+		},
+		commands: {
+			...actual.commands,
+			executeCommand,
+		},
+		Uri: {
+			...actual.Uri,
+			parse: uriParse,
+			file: uriFile,
+		},
+		ConfigurationTarget: {
+			Global: 1,
+			Workspace: 2,
+			WorkspaceFolder: 3,
+		},
+	}
+})
 
 // Mock modelCache getModels/flushModels used by the handler
 const getModelsMock = vi.fn()
@@ -84,12 +103,12 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 		})
 	})
 
-	it("fetches only requested provider when values.provider is present ('shofer')", async () => {
+	it("fetches only requested provider when values.provider is present ('requesty')", async () => {
 		await webviewMessageHandler(
 			mockProvider as any,
 			{
 				type: "requestRouterModels",
-				values: { provider: "shofer" },
+				values: { provider: "requesty" },
 			} as any,
 		)
 
@@ -105,14 +124,14 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 		const payload = call[0]
 		const routerModels = payload.routerModels as Record<string, Record<string, any>>
 
-		// Only "shofer" key should be present
+		// Only "requesty" key should be present
 		const keys = Object.keys(routerModels)
-		expect(keys).toEqual(["shofer"])
-		expect(Object.keys(routerModels.shofer || {})).toContain("shofer/sonnet")
+		expect(keys).toEqual(["requesty"])
+		expect(Object.keys(routerModels.requesty || {})).toContain("requesty/model")
 
-		// getModels should have been called exactly once for shofer
+		// getModels should have been called exactly once for requesty
 		const providersCalled = getModelsMock.mock.calls.map((c: any[]) => c[0]?.provider)
-		expect(providersCalled).toEqual(["shofer"])
+		expect(providersCalled).toEqual(["requesty"])
 	})
 
 	it("defaults to aggregate fetching when no provider filter is sent", async () => {

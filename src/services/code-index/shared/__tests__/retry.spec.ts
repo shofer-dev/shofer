@@ -1,12 +1,28 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest"
 import { retryWithBackoff } from "../retry"
 
 describe("retryWithBackoff", () => {
+	let unhandledRejectionListener: ((reason: unknown) => void) | undefined
+
 	beforeEach(() => {
 		vi.useFakeTimers()
 	})
+
 	afterEach(() => {
 		vi.useRealTimers()
+	})
+
+	// Suppress unhandled-rejection noise caused by mockRejectedValue
+	// returning Promise.reject synchronously under fake timers.
+	beforeAll(() => {
+		unhandledRejectionListener = () => {}
+		process.on("unhandledRejection", unhandledRejectionListener)
+	})
+
+	afterAll(() => {
+		if (unhandledRejectionListener) {
+			process.off("unhandledRejection", unhandledRejectionListener)
+		}
 	})
 
 	it("should return the result on first success", async () => {

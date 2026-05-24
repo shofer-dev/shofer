@@ -15,6 +15,11 @@ vi.mock("vscode", () => ({
 		Production: 2,
 		Test: 3,
 	},
+	EventEmitter: class {
+		event = () => () => {}
+		fire = () => {}
+		dispose = () => {}
+	},
 }))
 
 describe("ContextProxy", () => {

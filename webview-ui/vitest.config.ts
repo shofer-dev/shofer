@@ -19,6 +19,7 @@ export default defineConfig({
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
 			"@src": path.resolve(__dirname, "./src"),
+			"@shofer/core": path.resolve(__dirname, "../packages/core/src"),
 			"@shofer/shared": path.resolve(__dirname, "../src/shared"),
 			"@shofer/types": path.resolve(__dirname, "../packages/types/src"),
 			"@shofer": path.resolve(__dirname, "../src/shared"),

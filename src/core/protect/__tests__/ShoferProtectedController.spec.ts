@@ -20,22 +20,22 @@ describe("ShoferProtectedController", () => {
 			expect(controller.isWriteProtected(".shofer/modes/custom.json")).toBe(true)
 		})
 
-		it("should protect .rooprotected file", () => {
-			expect(controller.isWriteProtected(".rooprotected")).toBe(true)
+		it("should protect .shoferprotected file", () => {
+			expect(controller.isWriteProtected(".shoferprotected")).toBe(true)
 		})
 
 		it("should protect .shofermodes files", () => {
 			expect(controller.isWriteProtected(".shofermodes")).toBe(true)
 		})
 
-		it("should protect .roorules* files", () => {
-			expect(controller.isWriteProtected(".roorules")).toBe(true)
-			expect(controller.isWriteProtected(".roorules.md")).toBe(true)
+		it("should protect .shoferrules* files", () => {
+			expect(controller.isWriteProtected(".shoferrules")).toBe(true)
+			expect(controller.isWriteProtected(".shoferrules.md")).toBe(true)
 		})
 
-		it("should protect .clinerules* files", () => {
-			expect(controller.isWriteProtected(".clinerules")).toBe(true)
-			expect(controller.isWriteProtected(".clinerules.md")).toBe(true)
+		it("should protect .clinerules* files (backward compat)", () => {
+			expect(controller.isWriteProtected(".clinerules")).toBe(false)
+			expect(controller.isWriteProtected(".clinerules.md")).toBe(false)
 		})
 
 		it("should protect files in .vscode directory", () => {
@@ -79,7 +79,7 @@ describe("ShoferProtectedController", () => {
 			expect(controller.isWriteProtected(".shofer/config.json")).toBe(true) // .shofer/** matches at root
 			expect(controller.isWriteProtected("nested/.shoferignore")).toBe(true) // .shoferignore matches anywhere by default
 			expect(controller.isWriteProtected("nested/.shofermodes")).toBe(true) // .shofermodes matches anywhere by default
-			expect(controller.isWriteProtected("nested/.roorules.md")).toBe(true) // .roorules* matches anywhere by default
+			expect(controller.isWriteProtected("nested/.shoferrules.md")).toBe(true) // .shoferrules* matches anywhere by default
 		})
 
 		it("should handle absolute paths by converting to relative", () => {
@@ -157,12 +157,12 @@ describe("ShoferProtectedController", () => {
 			expect(patterns).toEqual([
 				".shoferignore",
 				".shofermodes",
-				".roorules*",
-				".clinerules*",
+				".shoferrules*",
+				".shoferrules*",
 				".shofer/**",
 				".vscode/**",
 				"*.code-workspace",
-				".rooprotected",
+				".shoferprotected",
 				"AGENTS.md",
 				"AGENT.md",
 			])

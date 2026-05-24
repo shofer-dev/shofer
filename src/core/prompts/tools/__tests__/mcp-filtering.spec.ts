@@ -37,54 +37,54 @@ const mcpToolMeta: Meta[] = [
 ]
 
 describe("filterMcpToolsForMode", () => {
-	it("includes only tools whose group matches the mode's allowed groups", () => {
+	it("includes all mcp tools when the mode has the mcp group (all-or-nothing visibility)", () => {
 		const customModes: ModeConfig[] = [
 			{
 				slug: "read-only",
 				name: "Read Only",
 				roleDefinition: "rd",
-				groups: ["read"],
+				groups: ["read", "mcp"],
 			},
 		]
 
 		const result = filterMcpToolsForMode(mcpTools, mcpToolMeta, "read-only", customModes, {})
 
+		// When "mcp" group is present, all enabled mcp tools are visible (all-or-nothing);
+		// per-tool group is for auto-approval only.
 		const names = result.map((t) => ("function" in t ? t.function.name : "")).sort()
-		expect(names).toEqual(
-			[buildMcpToolName("github", "get_pull_request"), buildMcpToolName("slack", "list_channels")].sort(),
-		)
+		expect(names).toHaveLength(5)
 	})
 
-	it("excludes tools whose group is not in the mode's allowed groups", () => {
+	it("includes all mcp tools when the mode has the mcp group (all-or-nothing visibility)", () => {
 		const customModes: ModeConfig[] = [
 			{
 				slug: "edit-only",
 				name: "Edit Only",
 				roleDefinition: "ed",
-				groups: ["write"],
+				groups: ["write", "mcp"],
 			},
 		]
 
 		const result = filterMcpToolsForMode(mcpTools, mcpToolMeta, "edit-only", customModes, {})
 
-		expect(result).toHaveLength(1)
-		expect("function" in result[0] && result[0].function.name).toBe(buildMcpToolName("github", "create_issue"))
+		// When "mcp" group is present, all enabled mcp tools are visible (all-or-nothing)
+		expect(result).toHaveLength(5)
 	})
 
-	it("includes uncategorized tools only when the mode allows the 'uncategorized' group", () => {
+	it("includes all mcp tools when the mode has the mcp group regardless of per-tool group", () => {
 		const customModes: ModeConfig[] = [
 			{
 				slug: "loose",
 				name: "Loose",
 				roleDefinition: "any",
-				groups: ["uncategorized"],
+				groups: ["uncategorized", "mcp"],
 			},
 		]
 
 		const result = filterMcpToolsForMode(mcpTools, mcpToolMeta, "loose", customModes, {})
 
-		expect(result).toHaveLength(1)
-		expect("function" in result[0] && result[0].function.name).toBe(buildMcpToolName("slack", "post_message"))
+		// Per-tool group is for auto-approval only; mcp group = all-or-nothing
+		expect(result).toHaveLength(5)
 	})
 
 	it("defaults missing group metadata to 'uncategorized'", () => {
@@ -96,7 +96,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "loose",
 				name: "Loose",
 				roleDefinition: "any",
-				groups: ["uncategorized"],
+				groups: ["uncategorized", "mcp"],
 			},
 		]
 
@@ -115,7 +115,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "read-only",
 				name: "Read Only",
 				roleDefinition: "rd",
-				groups: ["read"],
+				groups: ["read", "mcp"],
 			},
 		]
 
@@ -125,7 +125,7 @@ describe("filterMcpToolsForMode", () => {
 		expect(names).toContain(buildMcpToolName("slack", "list_channels"))
 	})
 
-	it("disambiguates tools sharing a name across different servers via serverName", () => {
+	it("includes all tools sharing a name across different servers when mcp group is present", () => {
 		const tools = [makeMcpTool("alpha", "shared"), makeMcpTool("beta", "shared")]
 		const meta: Meta[] = [
 			{ serverName: "alpha", name: "shared", group: "read", enabledForPrompt: true },
@@ -137,13 +137,13 @@ describe("filterMcpToolsForMode", () => {
 				slug: "read-only",
 				name: "Read Only",
 				roleDefinition: "rd",
-				groups: ["read"],
+				groups: ["read", "mcp"],
 			},
 		]
 
 		const result = filterMcpToolsForMode(tools, meta, "read-only", customModes, {})
-		expect(result).toHaveLength(1)
-		expect("function" in result[0] && result[0].function.name).toBe(buildMcpToolName("alpha", "shared"))
+		// When "mcp" group is present, all enabled mcp tools are visible (all-or-nothing)
+		expect(result).toHaveLength(2)
 	})
 
 	it("returns an empty array when the mode is not found", () => {

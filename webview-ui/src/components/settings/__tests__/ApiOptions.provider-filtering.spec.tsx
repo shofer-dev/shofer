@@ -91,6 +91,7 @@ vi.mock("@src/components/ui", () => ({
 	CommandEmpty: ({ children }: any) => <div>{children}</div>,
 	CommandGroup: ({ children }: any) => <div>{children}</div>,
 	CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+	StandardTooltip: ({ children, content }: any) => <div title={content}>{children}</div>,
 }))
 
 describe("ApiOptions Provider Filtering", () => {

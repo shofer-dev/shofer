@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 import TaskItemFooter from "./TaskItemFooter"
 import { StandardTooltip } from "../ui"
+import { resolveStateVisual } from "@src/components/chat/TaskSelector"
 
 interface TaskItemProps {
 	item: DisplayHistoryItem
@@ -41,13 +42,16 @@ const TaskItem = ({
 	}
 
 	const isCompact = variant === "compact"
+	const taskState = item.taskState ?? { lifecycle: "idle" as const }
+	const { borderColor } = resolveStateVisual(taskState)
 
 	return (
 		<div
 			key={item.id}
 			data-testid={`task-item-${item.id}`}
 			className={cn(
-				"cursor-pointer group relative overflow-hidden",
+				"cursor-pointer group relative overflow-hidden border-l-2",
+				borderColor,
 				"text-vscode-foreground/80 hover:text-vscode-foreground transition-colors",
 				hasSubtasks ? "rounded-t-xl" : "rounded-xl",
 				className,

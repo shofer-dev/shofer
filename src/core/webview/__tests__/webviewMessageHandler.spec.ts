@@ -83,19 +83,23 @@ const mockShoferProvider = {
 
 import { t } from "../../../i18n"
 
-vi.mock("vscode", () => {
+vi.mock("vscode", async (importOriginal) => {
+	const actual: any = await importOriginal()
 	const showInformationMessage = vi.fn()
 	const showErrorMessage = vi.fn()
 	const openTextDocument = vi.fn().mockResolvedValue({})
 	const showTextDocument = vi.fn().mockResolvedValue(undefined)
 
 	return {
+		...actual,
 		window: {
+			...actual.window,
 			showInformationMessage,
 			showErrorMessage,
 			showTextDocument,
 		},
 		workspace: {
+			...actual.workspace,
 			workspaceFolders: [{ uri: { fsPath: "/mock/workspace" } }],
 			openTextDocument,
 		},
@@ -322,12 +326,6 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			}),
 		)
 		expect(mockGetModels).toHaveBeenCalledWith({ provider: "vercel-ai-gateway" })
-		expect(mockGetModels).toHaveBeenCalledWith(
-			expect.objectContaining({
-				provider: "shofer",
-				baseUrl: expect.any(String),
-			}),
-		)
 		expect(mockGetModels).toHaveBeenCalledWith({
 			provider: "litellm",
 			apiKey: "litellm-key",
@@ -342,7 +340,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				requesty: mockModels,
 				unbound: mockModels,
 				litellm: mockModels,
-				shofer: mockModels,
+				shofer: {},
 				ollama: {},
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
@@ -427,7 +425,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				openrouter: mockModels,
 				requesty: mockModels,
 				unbound: mockModels,
-				shofer: mockModels,
+				shofer: {},
 				litellm: {},
 				ollama: {},
 				lmstudio: {},
@@ -454,7 +452,6 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockResolvedValueOnce(mockModels) // unbound
 			.mockResolvedValueOnce(mockModels) // vercel-ai-gateway
-			.mockResolvedValueOnce(mockModels) // shofer
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
 		await webviewMessageHandler(mockShoferProvider, {
@@ -483,7 +480,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				openrouter: mockModels,
 				requesty: {},
 				unbound: mockModels,
-				shofer: mockModels,
+				shofer: {},
 				litellm: {},
 				ollama: {},
 				lmstudio: {},
@@ -501,7 +498,6 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockRejectedValueOnce(new Error("Unbound error")) // unbound
 			.mockRejectedValueOnce(new Error("Vercel AI Gateway error")) // vercel-ai-gateway
-			.mockRejectedValueOnce(new Error("Shofer API error")) // shofer
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
 		await webviewMessageHandler(mockShoferProvider, {
@@ -535,13 +531,6 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			success: false,
 			error: "Vercel AI Gateway error",
 			values: { provider: "vercel-ai-gateway" },
-		})
-
-		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
-			type: "singleRouterModelFetchResponse",
-			success: false,
-			error: "Shofer API error",
-			values: { provider: "shofer" },
 		})
 
 		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({

@@ -248,6 +248,13 @@ describe("ShoferProvider flicker-free cancel", () => {
 			emit: vi.fn(),
 			on: vi.fn(),
 			off: vi.fn(),
+			preloadShoferMessages: vi.fn().mockResolvedValue(undefined),
+			shoferMessages: [],
+			apiConversationHistory: [],
+			messagesReady: Promise.resolve(),
+			historyPreloaded: true,
+			isHistoryPreloaded: true,
+			startFromHistory: vi.fn(),
 		}
 
 		// Mock Task constructor

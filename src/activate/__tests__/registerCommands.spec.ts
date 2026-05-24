@@ -13,6 +13,13 @@ vi.mock("vscode", () => ({
 		QuickFix: { value: "quickfix" },
 		RefactorRewrite: { value: "refactor.rewrite" },
 	},
+	TreeItem: class {},
+	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+	ThemeIcon: class { constructor(_id: string) {} },
+	EventEmitter: class {
+		event = vi.fn()
+		fire = vi.fn()
+	},
 	window: {
 		createTextEditorDecorationType: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 	},
@@ -28,6 +35,7 @@ vi.mock("vscode", () => ({
 }))
 
 vi.mock("../../core/webview/ShoferProvider")
+vi.mock("../../extension", () => ({}))
 
 describe("getVisibleProviderOrLog", () => {
 	let mockOutputChannel: vscode.OutputChannel
