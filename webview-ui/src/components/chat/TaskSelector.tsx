@@ -73,7 +73,14 @@ function buildFlatTree(taskHistory: HistoryItem[]): TaskTreeNode[] {
  * on task cards in HistoryView/WelcomeView. Completion ratings are layered
  * on top via `RATING_VISUAL` rather than expanding this table combinatorially.
  */
-type LifecycleVisual = { dot: string; label: string; pulse: boolean; icon: string; iconColor: string; borderColor: string }
+type LifecycleVisual = {
+	dot: string
+	label: string
+	pulse: boolean
+	icon: string
+	iconColor: string
+	borderColor: string
+}
 
 export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
 	idle: {
@@ -140,23 +147,27 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
  * Picking from the codicon set keeps every state rendered through the same
  * `<span class="codicon …">` mechanism — no special-cased SVGs.
  */
-const RATING_VISUAL: Record<CompletionRating, Pick<LifecycleVisual, "label" | "icon" | "iconColor" | "dot" | "borderColor">> = {
+const RATING_VISUAL: Record<
+	CompletionRating,
+	Pick<LifecycleVisual, "label" | "icon" | "iconColor" | "dot" | "borderColor">
+> = {
 	poor: {
-		label: "Completed · Poor",
+		label: "Completed",
 		dot: "bg-[var(--vscode-descriptionForeground)]",
 		icon: "codicon-circle-large-outline",
-		iconColor: "text-[var(--vscode-descriptionForeground)]",
+		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
 		borderColor: "border-[var(--vscode-descriptionForeground)]",
 	},
 	well: {
-		label: "Completed · Well",
+		label: "Completed",
 		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
 		icon: "codicon-circle-large-filled",
-		iconColor: "text-[var(--vscode-charts-green,#16a34a)] opacity-60",
+		iconColor:
+			"text-transparent bg-clip-text bg-gradient-to-r from-[var(--vscode-charts-green,#16a34a)] from-50% to-transparent to-50%",
 		borderColor: "border-[var(--vscode-charts-green,#16a34a)]",
 	},
 	excellent: {
-		label: "Completed · Excellent",
+		label: "Completed",
 		dot: "bg-[var(--vscode-charts-green,#16a34a)]",
 		icon: "codicon-pass-filled",
 		iconColor: "text-[var(--vscode-charts-green,#16a34a)]",
