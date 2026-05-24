@@ -226,6 +226,12 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				)
 			}
 
+			// Diagnostic: log the full text of each item being sent to Ollama
+			// for vector construction.
+			for (let i = 0; i < processedTexts.length; i++) {
+				log(`embed item[${i}] (len=${processedTexts[i].length}): ${processedTexts[i]}`)
+			}
+
 			const response = await fetch(url, {
 				method: "POST",
 				headers: {

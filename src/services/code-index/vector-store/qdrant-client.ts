@@ -407,6 +407,20 @@ export class QdrantVectorStore implements IVectorStore {
 				return point
 			})
 
+			// Diagnostic: log the full payload of each point being sent to
+			// Qdrant for storage, with vector arrays summarized.
+			for (const point of processedPoints) {
+				const vectorSummary =
+					point.vector.length > 0
+						? `[${point.vector.length} floats: ${point.vector[0].toFixed(6)} ... ${point.vector[point.vector.length - 1].toFixed(6)}]`
+						: "[empty]"
+				outputLog(
+					`[QdrantVectorStore] upsert point id=${point.id} ` +
+						`vector=${vectorSummary} ` +
+						`payload=${JSON.stringify(point.payload)}`,
+				)
+			}
+
 			await this.client.upsert(this.collectionName, {
 				points: processedPoints,
 				wait: true,
