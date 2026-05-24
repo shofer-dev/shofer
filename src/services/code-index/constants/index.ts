@@ -22,6 +22,12 @@ export const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024 // 1MB
 /**Directory Scanner */
 export const MAX_LIST_FILES_LIMIT_CODE_INDEX = 50_000
 export const BATCH_SEGMENT_THRESHOLD = 60 // Number of code segments to batch for embeddings/upserts
+// Byte cap on an in-flight scanner batch. Flushes whenever either the
+// segment count OR the accumulated text bytes exceed their threshold.
+// Keeps peak embedding memory deterministic regardless of segment size
+// (e.g. minified files, generated bundles, or huge docstrings).
+// See docs/mem-utilization-profiling.md §4.6.
+export const MAX_BATCH_BYTES = 2 * 1024 * 1024 // 2 MiB of UTF-8 text per batch
 export const MAX_BATCH_RETRIES = 3
 export const INITIAL_RETRY_DELAY_MS = 500
 export const PARSING_CONCURRENCY = 10
