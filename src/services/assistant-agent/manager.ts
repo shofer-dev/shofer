@@ -45,6 +45,7 @@ import { ContextProxy } from "../../core/config/ContextProxy"
 import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
 import { buildApiHandler } from "../../api"
 import { logger } from "../../utils/logging"
+import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 
 import { AssistantAgentDirectoryTree } from "./directory-tree"
 import { AssistantAgentFileWatcher } from "./file-watcher"
@@ -122,6 +123,9 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 	/** External-edit detector — invalidates file context on writes. */
 	private _fileWatcher: AssistantAgentFileWatcher | null = null
+
+	/** .shoferignore controller — filters file watcher, directory tree, and notifications. */
+	private _shoferIgnoreController?: ShoferIgnoreController
 
 	/** Read-only tool dispatcher used inside the agent loop. */
 	private _toolExecutor: AssistantAgentToolExecutor | null = null
@@ -248,10 +252,14 @@ export class AssistantAgentManager implements vscode.Disposable {
 	 * Notify the assistant agent that a file was modified by a task tool.
 	 * The path is accumulated and surfaced as a hint on the next question
 	 * (no eviction → preserves the LLM provider's KV cache).
+	 *
+	 * Files matching .shoferignore patterns are silently skipped.
 	 */
 	public notifyFileModified(filePath: string): void {
 		if (!filePath) return
 		if (filePath.startsWith(".shofer/")) return
+		// Respect .shoferignore patterns
+		if (this._shoferIgnoreController && !this._shoferIgnoreController.validateAccess(filePath)) return
 		this._recentlyModifiedFiles.add(filePath)
 	}
 
@@ -637,6 +645,10 @@ export class AssistantAgentManager implements vscode.Disposable {
 			this._fileWatcher.dispose()
 			this._fileWatcher = null
 		}
+		if (this._shoferIgnoreController) {
+			this._shoferIgnoreController.dispose()
+			this._shoferIgnoreController = undefined
+		}
 		this.cancelAllQuestions()
 		this._stateChangeEmitter.dispose()
 		this._conversationUpdateEmitter.dispose()
@@ -746,7 +758,11 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 	private async _initDirectoryTree(): Promise<void> {
 		try {
-			this._directoryTree = new AssistantAgentDirectoryTree(this.workspacePath, this._window.maxContextTokens)
+			this._directoryTree = new AssistantAgentDirectoryTree(
+				this.workspacePath,
+				this._window.maxContextTokens,
+				this._shoferIgnoreController,
+			)
 			this._directoryTreeString = await this._directoryTree.generate()
 		} catch (error) {
 			logger.warn(
@@ -759,13 +775,17 @@ export class AssistantAgentManager implements vscode.Disposable {
 	private _startFileWatcher(): void {
 		if (this._fileWatcher) return
 
-		this._fileWatcher = new AssistantAgentFileWatcher(this.workspacePath, (filePath, event) => {
-			if (event === "deleted") {
-				this._window.removeFileContext(filePath)
-			} else {
-				this._window.invalidateFileContext(filePath)
-			}
-		})
+		this._fileWatcher = new AssistantAgentFileWatcher(
+			this.workspacePath,
+			(filePath, event) => {
+				if (event === "deleted") {
+					this._window.removeFileContext(filePath)
+				} else {
+					this._window.invalidateFileContext(filePath)
+				}
+			},
+			this._shoferIgnoreController,
+		)
 
 		this._fileWatcher.start()
 	}

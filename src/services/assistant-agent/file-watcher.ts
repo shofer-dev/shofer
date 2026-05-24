@@ -1,5 +1,7 @@
 import * as vscode from "vscode"
 import * as path from "path"
+import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import { SKIP_PARTS } from "./directory-tree"
 
 /**
  * AssistantAgentFileWatcher — watches workspace files for external changes
@@ -8,17 +10,27 @@ import * as path from "path"
  * Detects create/modify/delete events and notifies the manager so
  * it can evict stale file context entries. Uses VSCode's built-in
  * FileSystemWatcher with debouncing per file.
+ *
+ * Accepts an optional ShoferIgnoreController to filter changes through
+ * .shoferignore patterns (files matching ignored patterns are silently
+ * skipped).
  */
 export class AssistantAgentFileWatcher {
 	private readonly _workspacePath: string
 	private readonly _onFileChanged: (filePath: string, event: "changed" | "deleted") => void
+	private readonly _shoferIgnoreController?: ShoferIgnoreController
 	private _watcher?: vscode.FileSystemWatcher
 	private _debounceTimers = new Map<string, NodeJS.Timeout>()
 	private readonly _debounceMs = 500
 
-	constructor(workspacePath: string, onFileChanged: (filePath: string, event: "changed" | "deleted") => void) {
+	constructor(
+		workspacePath: string,
+		onFileChanged: (filePath: string, event: "changed" | "deleted") => void,
+		shoferIgnoreController?: ShoferIgnoreController,
+	) {
 		this._workspacePath = workspacePath
 		this._onFileChanged = onFileChanged
+		this._shoferIgnoreController = shoferIgnoreController
 	}
 
 	/**
@@ -71,7 +83,8 @@ export class AssistantAgentFileWatcher {
 	}
 
 	/**
-	 * Check if a file path should be skipped (hidden dirs, worktrees, etc.).
+	 * Check if a file path should be skipped (hidden dirs, worktrees,
+	 * .shoferignore patterns, etc.).
 	 */
 	private _shouldSkip(filePath: string): boolean {
 		if (!filePath) return true
@@ -87,20 +100,13 @@ export class AssistantAgentFileWatcher {
 			if (SKIP_PARTS.has(part)) return true
 		}
 
+		// Respect .shoferignore patterns
+		if (this._shoferIgnoreController && !this._shoferIgnoreController.validateAccess(filePath)) {
+			return true
+		}
+
 		return false
 	}
 }
 
-/** Path segments to skip. */
-const SKIP_PARTS = new Set([
-	"node_modules",
-	".git",
-	"__pycache__",
-	".cache",
-	"dist",
-	"out",
-	"build",
-	"target",
-	".next",
-	".turbo",
-])
+// SKIP_PARTS imported from ./directory-tree — single source of truth
