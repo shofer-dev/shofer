@@ -75,11 +75,28 @@ vi.mock("@/i18n/TranslationContext", () => ({
 			const cleanKey = key.includes(":") ? key.split(":")[1] : key
 
 			const translations: Record<string, string> = {
+				// Legacy keys (kept for compatibility)
 				"indexingStatus.ready": "Index ready",
 				"indexingStatus.indexing":
 					params?.percentage !== undefined ? `Indexing ${params.percentage}%` : "Indexing",
 				"indexingStatus.error": "Index error",
 				"indexingStatus.indexed": "Indexed",
+				// Code index status keys
+				"indexingStatus.codeReady": "Code index ready",
+				"indexingStatus.codeIndexing":
+					params?.percentage !== undefined ? `Code indexing ${params.percentage}%` : "Code indexing",
+				"indexingStatus.codeIndexed": "Code indexed",
+				"indexingStatus.codeStopping": "Code index stopping",
+				"indexingStatus.codeError": "Code index error",
+				"indexingStatus.codeStatus": "Code index status",
+				// Git index status keys
+				"indexingStatus.gitReady": "Git index ready",
+				"indexingStatus.gitIndexing": "Git indexing",
+				"indexingStatus.gitIndexed": "Git indexed",
+				"indexingStatus.gitStopping": "Git index stopping",
+				"indexingStatus.gitError": "Git index error",
+				"indexingStatus.gitStatus": "Git index status",
+				// Tooltip keys
 				"indexingStatus.tooltip.ready": "The codebase index is ready for use",
 				"indexingStatus.tooltip.indexing":
 					params?.percentage !== undefined
@@ -112,7 +129,8 @@ describe("IndexingStatusBadge", () => {
 	it("shows standby status by default", () => {
 		renderComponent()
 		const button = screen.getByRole("button")
-		expect(button).toHaveAttribute("aria-label", "Index ready")
+		// Component shows combined code + git status separated by newline
+		expect(button).toHaveAttribute("aria-label", "Code index ready\nGit index ready")
 	})
 
 	it("opens popover when clicked", () => {
@@ -162,7 +180,8 @@ describe("IndexingStatusBadge", () => {
 
 		await waitFor(() => {
 			const button = screen.getByRole("button")
-			expect(button).toHaveAttribute("aria-label", "Indexing 50%")
+			// Combined code (50%) + git (still at Standby) status
+			expect(button).toHaveAttribute("aria-label", "Code indexing 50%\nGit index ready")
 		})
 	})
 
@@ -188,7 +207,8 @@ describe("IndexingStatusBadge", () => {
 
 		await waitFor(() => {
 			const button = screen.getByRole("button")
-			expect(button).toHaveAttribute("aria-label", "Index error")
+			// Combined code (Error) + git (still at Standby) status
+			expect(button).toHaveAttribute("aria-label", "Code index error\nGit index ready")
 		})
 	})
 
@@ -214,7 +234,8 @@ describe("IndexingStatusBadge", () => {
 
 		await waitFor(() => {
 			const button = screen.getByRole("button")
-			expect(button).toHaveAttribute("aria-label", "Indexed")
+			// Combined code (Indexed) + git (still at Standby) status
+			expect(button).toHaveAttribute("aria-label", "Code indexed\nGit index ready")
 		})
 	})
 
@@ -258,7 +279,8 @@ describe("IndexingStatusBadge", () => {
 
 			await waitFor(() => {
 				const button = screen.getByRole("button")
-				expect(button).toHaveAttribute("aria-label", `Indexing ${testCase.expected}%`)
+				// Combined code (Indexing N%) + git (still at Standby) status
+				expect(button).toHaveAttribute("aria-label", `Code indexing ${testCase.expected}%\nGit index ready`)
 			})
 		}
 	})

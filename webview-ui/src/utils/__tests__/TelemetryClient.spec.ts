@@ -1,3 +1,9 @@
+// Set TELEMETRY_ENABLED before the module is loaded so the module-level
+// constant evaluates to true and the posthog guard is bypassed in tests.
+vi.hoisted(() => {
+	process.env.TELEMETRY_ENABLED = "true"
+})
+
 import posthog from "posthog-js"
 
 import { telemetryClient } from "../TelemetryClient"
