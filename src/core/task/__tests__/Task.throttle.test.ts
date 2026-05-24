@@ -59,7 +59,7 @@ vi.mock("../../task-persistence", () => ({
 	}),
 }))
 
-describe.skip("Task token usage throttling", () => {
+describe("Task token usage throttling", () => {
 	let mockProvider: any
 	let mockApiConfiguration: ProviderSettings
 	let task: Task
@@ -106,6 +106,19 @@ describe.skip("Task token usage throttling", () => {
 		}
 	})
 
+	/**
+	 * Flush the 250-ms save debounce and drain the resulting async chain.
+	 * addToShoferMessages schedules a trailing-only debounce; emission only
+	 * happens after that save completes. Advancing 300 ms fires the debounce,
+	 * then three microtask flushes drain taskMetadata → debouncedEmitTokenUsage.
+	 */
+	const flushSave = async () => {
+		vi.advanceTimersByTime(300)
+		await Promise.resolve()
+		await Promise.resolve()
+		await Promise.resolve()
+	}
+
 	test("should emit TaskTokenUsageUpdated immediately on first change", async () => {
 		const emitSpy = vi.spyOn(task, "emit")
 
@@ -116,8 +129,9 @@ describe.skip("Task token usage throttling", () => {
 			say: "text",
 			text: "Test message",
 		})
+		await flushSave()
 
-		// Should emit immediately on first change
+		// Should emit on first change (leading edge of emit throttle)
 		expect(emitSpy).toHaveBeenCalledWith(
 			ShoferEventName.TaskTokenUsageUpdated,
 			task.taskId,
@@ -156,26 +170,28 @@ describe.skip("Task token usage throttling", () => {
 
 		const emitSpy = vi.spyOn(task, "emit")
 
-		// First message - should emit
+		// First message - should emit on leading edge
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 1",
 		})
+		await flushSave() // flush 250-ms save debounce → emit fires (leading)
 
 		const firstEmitCount = emitSpy.mock.calls.filter(
 			(call) => call[0] === ShoferEventName.TaskTokenUsageUpdated,
 		).length
 
-		// Second message immediately after - should NOT emit due to throttle
-		vi.advanceTimersByTime(500) // Advance only 500ms
+		// Second message within throttle window (800 ms since last emit) — should NOT emit
+		vi.advanceTimersByTime(500)
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 2",
 		})
+		await flushSave() // flush save → throttled
 
 		const secondEmitCount = emitSpy.mock.calls.filter(
 			(call) => call[0] === ShoferEventName.TaskTokenUsageUpdated,
@@ -184,14 +200,15 @@ describe.skip("Task token usage throttling", () => {
 		// Should still be the same count (throttled)
 		expect(secondEmitCount).toBe(firstEmitCount)
 
-		// Third message after 2+ seconds - should emit
-		vi.advanceTimersByTime(1600) // Total time: 2100ms
+		// Third message after throttle window expires (~2400 ms since first emit) — should emit
+		vi.advanceTimersByTime(1600)
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 3",
 		})
+		await flushSave() // flush save → emit fires (past 2-second throttle)
 
 		const thirdEmitCount = emitSpy.mock.calls.filter(
 			(call) => call[0] === ShoferEventName.TaskTokenUsageUpdated,
@@ -217,6 +234,7 @@ describe.skip("Task token usage throttling", () => {
 			say: "text",
 			text: "Test message",
 		})
+		await flushSave()
 
 		// Should emit with toolUsage as third parameter
 		expect(emitSpy).toHaveBeenCalledWith(
@@ -291,18 +309,19 @@ describe.skip("Task token usage throttling", () => {
 			}
 		})
 
-		// Add initial message
+		// Add initial message and flush so snapshot is set
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 1",
 		})
+		await flushSave() // flush save → emit fires → tokenUsageSnapshot set
 
-		// Get the initial snapshot
+		// Get the initial snapshot (set by the first emission)
 		const initialSnapshot = (task as any).tokenUsageSnapshot
 
-		// Add another message within throttle window
+		// Add another message within throttle window (800 ms since last emit)
 		vi.advanceTimersByTime(500)
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
@@ -310,18 +329,20 @@ describe.skip("Task token usage throttling", () => {
 			say: "text",
 			text: "Message 2",
 		})
+		await flushSave() // flush save → throttled → snapshot unchanged
 
 		// Snapshot should still be the same (throttled)
 		expect((task as any).tokenUsageSnapshot).toBe(initialSnapshot)
 
-		// Add message after throttle window
-		vi.advanceTimersByTime(1600) // Total: 2100ms
+		// Add message after throttle window (~2400 ms since first emit)
+		vi.advanceTimersByTime(1600)
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 3",
 		})
+		await flushSave() // flush save → emit fires → snapshot updated
 
 		// Snapshot should be updated now (new object reference)
 		expect((task as any).tokenUsageSnapshot).not.toBe(initialSnapshot)
@@ -357,19 +378,20 @@ describe.skip("Task token usage throttling", () => {
 
 		const emitSpy = vi.spyOn(task, "emit")
 
-		// Add first message
+		// Add first message and flush so the first emission is recorded
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 1",
 		})
+		await flushSave() // flush save → emit fires
 
 		const firstEmitCount = emitSpy.mock.calls.filter(
 			(call) => call[0] === ShoferEventName.TaskTokenUsageUpdated,
 		).length
 
-		// Wait for throttle period and add another message
+		// Wait past throttle period and add another message with the same token usage
 		vi.advanceTimersByTime(2100)
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
@@ -377,6 +399,7 @@ describe.skip("Task token usage throttling", () => {
 			say: "text",
 			text: "Message 2",
 		})
+		await flushSave() // flush save → no emit (token usage unchanged)
 
 		const secondEmitCount = emitSpy.mock.calls.filter(
 			(call) => call[0] === ShoferEventName.TaskTokenUsageUpdated,
@@ -451,20 +474,21 @@ describe.skip("Task token usage throttling", () => {
 	})
 
 	test("should update toolUsageSnapshot when emission occurs", async () => {
-		// Add initial message
+		// Add initial message and flush so the first emission sets the snapshot
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 1",
 		})
+		await flushSave() // flush save → emit fires → toolUsageSnapshot set to {}
 
-		// Initially toolUsageSnapshot should be set to current toolUsage (empty object)
+		// toolUsageSnapshot should now be a deep copy of the empty toolUsage
 		const initialSnapshot = (task as any).toolUsageSnapshot
 		expect(initialSnapshot).toBeDefined()
 		expect(Object.keys(initialSnapshot)).toHaveLength(0)
 
-		// Wait for throttle period
+		// Wait past throttle period
 		vi.advanceTimersByTime(2100)
 
 		// Update tool usage
@@ -473,13 +497,14 @@ describe.skip("Task token usage throttling", () => {
 			write_to_file: { attempts: 2, failures: 1 },
 		}
 
-		// Add another message
+		// Add another message and flush so the second emission updates the snapshot
 		await (task as any).addToShoferMessages({
 			ts: Date.now(),
 			type: "say",
 			say: "text",
 			text: "Message 2",
 		})
+		await flushSave() // flush save → emit fires → toolUsageSnapshot updated
 
 		// Snapshot should be updated to match the new toolUsage
 		const newSnapshot = (task as any).toolUsageSnapshot
