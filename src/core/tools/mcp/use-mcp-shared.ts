@@ -124,10 +124,26 @@ export async function validateMcpToolExists(
 }
 
 /**
+ * Default cap on the byte size of an MCP tool response text returned to
+ * the LLM. Override per-task via the `shoferMcpMaxResponseBytes` setting
+ * surfaced by `Task.getMcpMaxResponseBytes()`. See §4.7 of
+ * `docs/mem-utilization-profiling.md`.
+ */
+export const DEFAULT_MCP_MAX_RESPONSE_BYTES = 1024 * 1024
+
+/**
  * Shared helper — shapes raw MCP tool response content into displayable
  * text and image data URLs. Used by both synchronous and async paths.
+ *
+ * When `maxBytes > 0` and the joined text exceeds the cap, the text is
+ * truncated to roughly that many bytes (counted as UTF-8) and a
+ * `[shofer: MCP response truncated …]` banner is appended so the agent
+ * sees that the cut-off happened. A `maxBytes` of `0` disables truncation.
  */
-export function processMcpToolContent(toolResult: any): { text: string; images: string[] } {
+export function processMcpToolContent(
+	toolResult: any,
+	maxBytes: number = DEFAULT_MCP_MAX_RESPONSE_BYTES,
+): { text: string; images: string[] } {
 	if (!toolResult?.content || toolResult.content.length === 0) {
 		return { text: "", images: [] }
 	}
@@ -157,6 +173,23 @@ export function processMcpToolContent(toolResult: any): { text: string; images: 
 		})
 		.filter(Boolean)
 		.join("\n\n")
+
+	if (maxBytes > 0) {
+		const originalBytes = Buffer.byteLength(textContent, "utf8")
+		if (originalBytes > maxBytes) {
+			// Trim along UTF-8 boundaries: take the first `maxBytes` bytes,
+			// re-decode, and strip any trailing U+FFFD replacement chars that
+			// Node inserts when the byte window splits a multi-byte codepoint.
+			// This avoids emitting broken sequences the LLM has to parse.
+			const buf = Buffer.from(textContent, "utf8")
+			let truncated = buf
+				.subarray(0, maxBytes)
+				.toString("utf8")
+				.replace(/\uFFFD+$/, "")
+			const banner = `\n\n[shofer: MCP response truncated from ${originalBytes} bytes to ${Buffer.byteLength(truncated, "utf8")} bytes — increase \`shoferMcpMaxResponseBytes\` to see more]`
+			return { text: truncated + banner, images }
+		}
+	}
 
 	return { text: textContent, images }
 }
@@ -202,7 +235,10 @@ export async function runMcpToolCall(
 	let images: string[] = []
 
 	if (toolResult) {
-		const { text: outputText, images: extractedImages } = processMcpToolContent(toolResult)
+		const { text: outputText, images: extractedImages } = processMcpToolContent(
+			toolResult,
+			task.getMcpMaxResponseBytes?.(),
+		)
 		images = extractedImages
 
 		if (outputText || images.length > 0) {

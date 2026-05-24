@@ -1570,6 +1570,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
+	 * Maximum byte size of an MCP tool response text forwarded to the LLM.
+	 * Reads the `shoferMcpMaxResponseBytes` setting through ContextProxy;
+	 * falls back to 1 MiB when unset. A value of `0` disables truncation.
+	 * Mirrors the constant `DEFAULT_MCP_MAX_RESPONSE_BYTES` in
+	 * `core/tools/mcp/use-mcp-shared.ts` (kept in sync by tests). Inlined
+	 * here to avoid a value-level circular import with `use-mcp-shared`,
+	 * which already takes `Task` as a type-only import. See §4.7 of
+	 * `docs/mem-utilization-profiling.md`.
+	 */
+	public getMcpMaxResponseBytes(): number {
+		const provider = this.providerRef.deref()
+		const v = provider?.contextProxy?.getValue?.("shoferMcpMaxResponseBytes")
+		return typeof v === "number" && v >= 0 ? v : 1024 * 1024
+	}
+
+	/**
 	 * Externalise any inline text in `message.content` whose UTF-8 byte
 	 * length exceeds the per-task cap. Mutates the message in place so
 	 * persistence and IPC see the ref-token form. Tool-result content can

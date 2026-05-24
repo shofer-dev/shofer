@@ -270,6 +270,16 @@ export const globalSettingsSchema = z.object({
 	 * @default 2048
 	 */
 	shoferBlobCapBytes: z.number().int().min(0).optional(),
+
+	/**
+	 * Maximum number of bytes of an MCP tool response that is forwarded to
+	 * the LLM as text. Larger responses are truncated to this size and a
+	 * truncation banner is appended so the agent knows the cut-off happened.
+	 * Caps the worst-case "MCP server returned 50 MiB of HTML" footgun. Set
+	 * to 0 to disable truncation. See §4.7 of `docs/mem-utilization-profiling.md`.
+	 * @default 1048576 (1 MiB)
+	 */
+	shoferMcpMaxResponseBytes: z.number().int().min(0).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

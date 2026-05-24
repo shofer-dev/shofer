@@ -51,7 +51,7 @@ export class CheckMcpCallStatusTool extends BaseTool<"check_mcp_call_status"> {
 			}
 
 			if (status === "completed" && result) {
-				const shaped = processMcpToolContent(result)
+				const shaped = processMcpToolContent(result, task.getMcpMaxResponseBytes?.())
 				const resultText =
 					(result.isError ? "Error:\n" : "") +
 					(shaped.text || (shaped.images.length > 0 ? `[${shaped.images.length} image(s) received]` : ""))
