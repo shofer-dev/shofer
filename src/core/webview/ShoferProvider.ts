@@ -54,7 +54,7 @@ import { findLast } from "../../shared/array"
 import { supportPrompt } from "../../shared/support-prompt"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { Mode, defaultModeSlug, getModeBySlug } from "../../shared/modes"
-import { experimentDefault } from "../../shared/experiments"
+import { experimentDefault, EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { formatLanguage } from "../../shared/language"
 import { WebviewMessage } from "../../shared/WebviewMessage"
 import { EMBEDDING_MODEL_PROFILES } from "../../shared/embeddingModels"
@@ -232,15 +232,19 @@ export class ShoferProvider
 	private _webviewResetCount = 0
 
 	/** Interval between `ping` messages sent to the webview (ms). */
-	private static readonly HEARTBEAT_INTERVAL_MS = 2_000
+	private static readonly HEARTBEAT_INTERVAL_MS = 5_000
 	/**
 	 * Maximum time the webview may go without responding to a ping before we
 	 * declare it dead and reset it. Must be comfortably larger than
 	 * `HEARTBEAT_INTERVAL_MS` plus expected main-thread stalls (large file
 	 * opens, GC pauses, source-map enhancement, …) so transient hiccups don't
 	 * trip the killer.
+	 *
+	 * Relaxed from 10 s to 30 s (2026-05-24) since this is now gated behind
+	 * an experiment flag (default off). The wider window avoids false-positive
+	 * resets from transient main-thread stalls.
 	 */
-	private static readonly LIVENESS_TIMEOUT_MS = 10_000
+	private static readonly LIVENESS_TIMEOUT_MS = 30_000
 
 	private _settingsGenerationConfigDisposable?: vscode.Disposable
 
@@ -781,11 +785,26 @@ export class ShoferProvider
 	// ── Heartbeat / health-check ─────────────────────────────────────────────
 
 	/**
+	 * Returns `true` when the webview liveness monitor experiment is enabled.
+	 * All heartbeat, crash-guard, and webview-recovery functionality is gated
+	 * behind this flag (default: false — Settings → Experimental).
+	 */
+	private _isWebviewLivenessEnabled(): boolean {
+		const exps = this.contextProxy.getValue("experiments") ?? {}
+		return experiments.isEnabled(exps, EXPERIMENT_IDS.WEBVIEW_LIVENESS_MONITOR)
+	}
+
+	/**
 	 * Called by `webviewMessageHandler` when a `pong` is received from the
 	 * webview. Records the timestamp so the next heartbeat tick can compute
 	 * liveness as `now - _lastPongTs`.
+	 *
+	 * Gated: no-op when the webview liveness monitor experiment is disabled.
 	 */
 	public _recordPong(): void {
+		if (!this._isWebviewLivenessEnabled()) {
+			return
+		}
 		const now = Date.now()
 		this._lastPongTs = now
 
@@ -809,8 +828,13 @@ export class ShoferProvider
 	 * Must NOT be called before the webview has signalled `webviewDidLaunch` —
 	 * otherwise pings sent while the bundle is still loading count against the
 	 * liveness window and trigger an infinite reset loop.
+	 *
+	 * Gated: no-op when the webview liveness monitor experiment is disabled.
 	 */
 	private _startHeartbeat(): void {
+		if (!this._isWebviewLivenessEnabled()) {
+			return
+		}
 		if (this._heartbeatTimer) {
 			return // already running
 		}
@@ -870,8 +894,15 @@ export class ShoferProvider
 	 * React errors, so pongs keep arriving even though the app is broken. We
 	 * therefore trigger an unconditional reset on every fatal-error report to
 	 * ensure the renderer is restored without waiting for the liveness window.
+	 *
+	 * Gated: logs only (no reset) when the webview liveness monitor experiment
+	 * is disabled.
 	 */
 	public async _onFatalError(text: string): Promise<void> {
+		this.log(`[fatal_error] ${text.slice(0, 200)}`)
+		if (!this._isWebviewLivenessEnabled()) {
+			return
+		}
 		this.log(`[fatal_error] Triggering webview reset due to fatal error: ${text.slice(0, 200)}`)
 		await this._resetWebview("fatal_error")
 	}
@@ -896,8 +927,15 @@ export class ShoferProvider
 	 *
 	 * The heartbeat is restarted automatically when the freshly-loaded page
 	 * emits `webviewDidLaunch`.
+	 *
+	 * Gated: no-op (with log) when the webview liveness monitor experiment is
+	 * disabled.
 	 */
 	public async refreshWebview(): Promise<void> {
+		if (!this._isWebviewLivenessEnabled()) {
+			this.log("[webview-lifecycle] refreshWebview: skipped (webview liveness monitor experiment disabled)")
+			return
+		}
 		const view = this.view
 		if (!view || this._disposed) {
 			return
@@ -969,10 +1007,15 @@ export class ShoferProvider
 	 * @param trigger What caused this reset — `"heartbeat_timeout"` (automatic),
 	 * `"fatal_error"` (webview crash report), or `"manual"` (user clicked
 	 * Refresh Webview). Used for diagnostic logging only.
+	 *
+	 * Gated: no-op when the webview liveness monitor experiment is disabled.
 	 */
 	private async _resetWebview(
 		trigger: "heartbeat_timeout" | "fatal_error" | "manual" = "heartbeat_timeout",
 	): Promise<void> {
+		if (!this._isWebviewLivenessEnabled()) {
+			return
+		}
 		const view = this.view
 		if (!view || this._disposed) {
 			return

@@ -1,5 +1,12 @@
 # Webview Refresh & Liveness Monitor
 
+> **⚠️ Experiment flag:** This entire subsystem is gated behind the
+> **Webview Liveness Monitor** toggle in
+> **Settings → Experimental** (default: **off**). When disabled, the
+> heartbeat timer, automatic crash recovery, and the Refresh Webview /
+> Reload Window toolbar buttons are all inactive. Enable the toggle to
+> activate the functionality described in this document.
+
 This document describes the end-to-end design and implementation of the
 **heartbeat liveness monitor** (the reliability mechanism that detects and
 recovers from webview crashes) and the **Refresh Webview** command (the manual
@@ -95,9 +102,9 @@ entire VS Code window (guaranteed to work but disruptive).
 │  │                         → _startHeartbeat()              │
 │  └─────────────────────────────────────────────────────────┘│
 │                                                             │
-│  Heartbeat timer (every 2s):                                │
+│  Heartbeat timer (every 5s):                                │
 │  ┌─ set _pingSentTs → postMessage({type:"ping"})           │
-│  │─ if (Date.now() - _lastPongTs > 10_000ms)               │
+│  │─ if (Date.now() - _lastPongTs > 30_000ms)               │
 │  │    → dump RTT history → _resetWebview("heartbeat_timeout")│
 │  └─────────────────────────────────────────────────────────┘│
 │                                                             │
@@ -282,7 +289,7 @@ private _heartbeatTickCount = 0
 private _webviewResetCount = 0
 
 /** Interval between `ping` messages sent to the webview (ms). */
-private static readonly HEARTBEAT_INTERVAL_MS = 2_000
+private static readonly HEARTBEAT_INTERVAL_MS = 5_000
 
 /**
  * Maximum time the webview may go without responding to a ping before we
@@ -291,7 +298,7 @@ private static readonly HEARTBEAT_INTERVAL_MS = 2_000
  * opens, GC pauses, source-map enhancement, …) so transient hiccups don't
  * trip the killer.
  */
-private static readonly LIVENESS_TIMEOUT_MS = 10_000
+private static readonly LIVENESS_TIMEOUT_MS = 30_000
 ```
 
 ### 5.2 Timestamp-Based Liveness with RTT Tracking
@@ -384,7 +391,7 @@ case "fatal_error": {
 ```
 
 The `fatal_error` message provides the explicit signal to reset immediately,
-bypassing the 10-second liveness window. This is essential because the IIFE's
+bypassing the 30-second liveness window. This is essential because the IIFE's
 pong responder survives React crashes (see §4.2).
 
 ### 6.3 `pong`
@@ -402,7 +409,7 @@ case "pong": {
 
 **File:** [`src/core/webview/ShoferProvider.ts`](src/core/webview/ShoferProvider.ts)
 
-Triggered by the heartbeat timer (silence > 10 s) or by `_onFatalError()`.
+Triggered by the heartbeat timer (silence > 30 s) or by `_onFatalError()`.
 
 ```ts
 private async _resetWebview(
@@ -678,7 +685,7 @@ from **abrupt death** (normal RTT → sudden silence → OOM kill / GPU crash).
 
 | Trigger               | Source                                  |
 | --------------------- | --------------------------------------- |
-| `"heartbeat_timeout"` | Heartbeat timer detected > 10 s silence |
+| `"heartbeat_timeout"` | Heartbeat timer detected > 30 s silence |
 | `"fatal_error"`       | Webview posted a `fatal_error` message  |
 | `"manual"`            | User clicked Refresh Webview            |
 
@@ -791,7 +798,7 @@ Nothing in §1–§14 is invalidated by the OOM diagnosis. Specifically:
   "something is wrong" signal we have: when the host OOMs, the heartbeat
   stops ticking from the host side and the next user interaction will
   surface the symptom through the existing path. It costs ~one
-  `postMessage` per 2 s and gives us free RTT history in the output
+  `postMessage` per 5 s and gives us free RTT history in the output
   channel.
 - The **Refresh Webview** and **Reload Window** buttons (§8, §14) remain
   the only escape hatches the user has from a wedged UI — whether the
@@ -968,8 +975,8 @@ Two small invariants must hold:
    restart needed.
 
 2. **The 5 s / 10 s verification windows must comfortably exceed
-   `HEARTBEAT_INTERVAL_MS` (2 s) plus realistic bundle-load time.** 5 s allows
-   for two missed ping cycles + one successful one; 10 s allows for a full
+   `HEARTBEAT_INTERVAL_MS` (5 s) plus realistic bundle-load time.** 5 s allows
+   for one missed ping cycle + one successful one; 10 s allows for a full
    provider-recreate including IndexedDB rehydration. Both are well under the
    user's patience threshold for a recovery action.
 

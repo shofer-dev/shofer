@@ -12,6 +12,7 @@ import { getCommand } from "../utils/commands"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
+import { EXPERIMENT_IDS, experiments } from "../shared/experiments"
 import { handleNewTask } from "./handleTask"
 import { CodeIndexManager } from "../services/code-index/manager"
 import { GitIndexManager } from "../services/git-index/git-index-manager"
@@ -342,6 +343,12 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 	reloadWindow: async () => {
 		const visibleProvider = getVisibleProviderOrLog(outputChannel)
 		if (!visibleProvider) {
+			return
+		}
+		// Gated: disabled when the webview liveness monitor experiment is off.
+		const exps = visibleProvider.contextProxy.getValue("experiments") ?? {}
+		if (!experiments.isEnabled(exps, EXPERIMENT_IDS.WEBVIEW_LIVENESS_MONITOR)) {
+			outputChannel.appendLine("[reloadWindow] Skipped (webview liveness monitor experiment disabled)")
 			return
 		}
 		// Show a confirmation dialog before nuking the VS Code window.

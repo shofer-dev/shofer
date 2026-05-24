@@ -7,6 +7,7 @@ export const EXPERIMENT_IDS = {
 	CUSTOM_TOOLS: "customTools",
 	SHOW_TOOL_INPUT_OUTPUT: "showToolInputOutput",
 	PROMETHEUS_METRICS: "prometheusMetrics",
+	WEBVIEW_LIVENESS_MONITOR: "webviewLivenessMonitor",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -24,6 +25,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	CUSTOM_TOOLS: { enabled: false },
 	SHOW_TOOL_INPUT_OUTPUT: { enabled: false },
 	PROMETHEUS_METRICS: { enabled: false },
+	WEBVIEW_LIVENESS_MONITOR: { enabled: false },
 }
 
 export const experimentDefault = Object.fromEntries(
