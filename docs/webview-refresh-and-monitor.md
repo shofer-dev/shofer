@@ -6,9 +6,9 @@ recovers from webview crashes) and the **Refresh Webview** command (the manual
 recovery button in Shofer's toolbar overflow menu).
 
 > **⚠️ Known issue (2026-05-24):** The `refreshWebview()` recovery path sometimes
-> fails to revive a stuck webview iframe. See §15 ("Recovery Escalation Ladder")
-> for the `Reload Window` nuclear option, and §16 ("Further Ideas to Explore")
-> for hardening ideas not yet implemented.
+> fails to revive a stuck webview iframe. §14 ("Recovery Escalation Ladder")
+> documents the current user-facing fallback to `Reload Window`; §15 ("Hardening
+> Plan") describes the verified-escalation design that will replace it.
 
 ---
 
@@ -28,7 +28,7 @@ recovery button in Shofer's toolbar overflow menu).
 12. [Key Bugs Fixed](#12-key-bugs-fixed)
 13. [Diagnostic Instrumentation](#13-diagnostic-instrumentation)
 14. [Recovery Escalation Ladder](#14-recovery-escalation-ladder)
-15. [Further Ideas to Explore](#15-further-ideas-to-explore)
+15. [Hardening Plan — Verified Escalation Ladder](#15-hardening-plan--verified-escalation-ladder)
 16. [Related Files](#16-related-files)
 
 ---
@@ -43,11 +43,11 @@ inherent way to detect this — the `postMessage` channel becomes a black hole.
 Shofer defends against this with **three independent layers** that cascade into
 a single recovery action:
 
-| Layer | Location | What It Detects |
-|-------|----------|-----------------|
-| 1 | [`index.tsx`](webview-ui/src/index.tsx) — IIFE before React mounts | Uncaught sync errors, unhandled rejections, and liveness pongs |
-| 2 | [`ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx) | React rendering crashes |
-| 3 | [`ShoferProvider.ts`](src/core/webview/ShoferProvider.ts) — heartbeat timer | Silent process death (OOM, GPU crash), IPC channel drop |
+| Layer | Location                                                                    | What It Detects                                                |
+| ----- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 1     | [`index.tsx`](webview-ui/src/index.tsx) — IIFE before React mounts          | Uncaught sync errors, unhandled rejections, and liveness pongs |
+| 2     | [`ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx)          | React rendering crashes                                        |
+| 3     | [`ShoferProvider.ts`](src/core/webview/ShoferProvider.ts) — heartbeat timer | Silent process death (OOM, GPU crash), IPC channel drop        |
 
 The **Refresh Webview** button provides a manual escape hatch when the webview
 is visibly broken. If that fails, the **Reload Window** button restarts the
@@ -128,10 +128,10 @@ directly, which threw before React could mount.
 
 ```ts
 window.addEventListener("error", (event: ErrorEvent) => {
-    vscode.postMessage({
-        type: "fatal_error",
-        text: `Uncaught Error: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`,
-    })
+	vscode.postMessage({
+		type: "fatal_error",
+		text: `Uncaught Error: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`,
+	})
 })
 ```
 
@@ -142,16 +142,19 @@ third-party scripts).
 
 ```ts
 window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
-    let reason = ""
-    if (event.reason instanceof Error) {
-        reason = `${event.reason.message}\n${event.reason.stack ?? ""}`
-    } else if (typeof event.reason === "string") {
-        reason = event.reason
-    } else {
-        try { reason = JSON.stringify(event.reason) }
-        catch { reason = String(event.reason) }
-    }
-    vscode.postMessage({ type: "fatal_error", text: `Unhandled Promise Rejection: ${reason}` })
+	let reason = ""
+	if (event.reason instanceof Error) {
+		reason = `${event.reason.message}\n${event.reason.stack ?? ""}`
+	} else if (typeof event.reason === "string") {
+		reason = event.reason
+	} else {
+		try {
+			reason = JSON.stringify(event.reason)
+		} catch {
+			reason = String(event.reason)
+		}
+	}
+	vscode.postMessage({ type: "fatal_error", text: `Unhandled Promise Rejection: ${reason}` })
 })
 ```
 
@@ -161,23 +164,23 @@ Catches promise rejections that escape all `.catch()` handlers.
 
 ```ts
 ;(window as any).__shoferHeartbeat = {
-    pingCount: 0,
-    pongCount: 0,
-    lastPingTimestamps: [] as number[],
-    MAX_TIMESTAMPS: 20,
+	pingCount: 0,
+	pongCount: 0,
+	lastPingTimestamps: [] as number[],
+	MAX_TIMESTAMPS: 20,
 }
 window.addEventListener("message", (event: MessageEvent) => {
-    const message = event.data
-    if (message && message.type === "ping") {
-        const hb = (window as any).__shoferHeartbeat
-        hb.pingCount++
-        hb.lastPingTimestamps.push(Date.now())
-        if (hb.lastPingTimestamps.length > hb.MAX_TIMESTAMPS) {
-            hb.lastPingTimestamps.shift()
-        }
-        hb.pongCount++
-        vscode.postMessage({ type: "pong" })
-    }
+	const message = event.data
+	if (message && message.type === "ping") {
+		const hb = (window as any).__shoferHeartbeat
+		hb.pingCount++
+		hb.lastPingTimestamps.push(Date.now())
+		if (hb.lastPingTimestamps.length > hb.MAX_TIMESTAMPS) {
+			hb.lastPingTimestamps.shift()
+		}
+		hb.pongCount++
+		vscode.postMessage({ type: "pong" })
+	}
 })
 ```
 
@@ -200,11 +203,11 @@ A React error boundary that wraps the entire `<App />` component tree:
 
 ```tsx
 createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-        <ErrorBoundary>
-            <App />
-        </ErrorBoundary>
-    </StrictMode>,
+	<StrictMode>
+		<ErrorBoundary>
+			<App />
+		</ErrorBoundary>
+	</StrictMode>,
 )
 ```
 
@@ -293,20 +296,20 @@ A further improvement (commit `6ea920b`) added RTT tracking:
 
 ```ts
 this._heartbeatTimer = setInterval(async () => {
-    try {
-        this._pingSentTs = Date.now()
-        await this.postMessageToWebview({ type: "ping" })
-    } catch {
-        this._stopHeartbeat()
-        return
-    }
+	try {
+		this._pingSentTs = Date.now()
+		await this.postMessageToWebview({ type: "ping" })
+	} catch {
+		this._stopHeartbeat()
+		return
+	}
 
-    this._heartbeatTickCount++
-    const silentFor = Date.now() - this._lastPongTs
-    if (silentFor > ShoferProvider.LIVENESS_TIMEOUT_MS) {
-        this.log(`[heartbeat] No pong received for ${silentFor}ms — resetting webview`)
-        await this._resetWebview("heartbeat_timeout")
-    }
+	this._heartbeatTickCount++
+	const silentFor = Date.now() - this._lastPongTs
+	if (silentFor > ShoferProvider.LIVENESS_TIMEOUT_MS) {
+		this.log(`[heartbeat] No pong received for ${silentFor}ms — resetting webview`)
+		await this._resetWebview("heartbeat_timeout")
+	}
 }, ShoferProvider.HEARTBEAT_INTERVAL_MS)
 ```
 
@@ -328,13 +331,13 @@ public _recordPong(): void {
 
 ### 5.3 Public API
 
-| Method | Caller | Effect |
-|--------|--------|--------|
-| [`_recordPong()`](src/core/webview/ShoferProvider.ts) | `webviewMessageHandler` on `"pong"` | Updates `_lastPongTs` + computes RTT → ring buffer |
-| [`_startHeartbeat()`](src/core/webview/ShoferProvider.ts) | `_onWebviewLaunched()` | Starts the `setInterval` loop. Idempotent. Resets RTT history. |
-| [`_stopHeartbeat()`](src/core/webview/ShoferProvider.ts) | `clearWebviewResources()`, `_resetWebview()`, `refreshWebview()` | Clears the interval, resets timestamps to 0 |
-| [`_onWebviewLaunched()`](src/core/webview/ShoferProvider.ts) | `webviewMessageHandler` on `"webviewDidLaunch"` | Calls `_startHeartbeat()` |
-| [`_onFatalError(text)`](src/core/webview/ShoferProvider.ts) | `webviewMessageHandler` on `"fatal_error"` | Logs + calls `_resetWebview("fatal_error")` |
+| Method                                                       | Caller                                                           | Effect                                                         |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| [`_recordPong()`](src/core/webview/ShoferProvider.ts)        | `webviewMessageHandler` on `"pong"`                              | Updates `_lastPongTs` + computes RTT → ring buffer             |
+| [`_startHeartbeat()`](src/core/webview/ShoferProvider.ts)    | `_onWebviewLaunched()`                                           | Starts the `setInterval` loop. Idempotent. Resets RTT history. |
+| [`_stopHeartbeat()`](src/core/webview/ShoferProvider.ts)     | `clearWebviewResources()`, `_resetWebview()`, `refreshWebview()` | Clears the interval, resets timestamps to 0                    |
+| [`_onWebviewLaunched()`](src/core/webview/ShoferProvider.ts) | `webviewMessageHandler` on `"webviewDidLaunch"`                  | Calls `_startHeartbeat()`                                      |
+| [`_onFatalError(text)`](src/core/webview/ShoferProvider.ts)  | `webviewMessageHandler` on `"fatal_error"`                       | Logs + calls `_resetWebview("fatal_error")`                    |
 
 Methods prefixed with `_` are intended for internal use by the webview message
 handler; they are public only because `ShoferProvider` and `webviewMessageHandler`
@@ -446,18 +449,18 @@ toolbar **overflow (⋯) menu** at position `overflow@3`, followed by
 
 ### 8.2 Registration Chain
 
-| Artifact | Location | Purpose |
-|----------|----------|---------|
-| Command ID — Refresh | [`src/package.json`](src/package.json) | `"shofer.refreshWebview"` |
-| NLS label | [`src/package.nls.json`](src/package.nls.json) | `"Refresh Webview"` |
-| Menu entries | [`src/package.json`](src/package.json) | `overflow@3` in both sidebar & tab panel menus |
-| Type symbol | [`packages/types/src/vscode.ts`](packages/types/src/vscode.ts) | `"refreshWebview"` in `commandIds` |
-| Handler | [`src/activate/registerCommands.ts`](src/activate/registerCommands.ts) | Calls `visibleProvider.refreshWebview()` |
-| Command ID — Reload | [`src/package.json`](src/package.json) | `"shofer.reloadWindow"` |
-| NLS label | [`src/package.nls.json`](src/package.nls.json) | `"Reload Window"` |
-| Menu entries | [`src/package.json`](src/package.json) | `overflow@4` in both sidebar & tab panel menus |
-| Type symbol | [`packages/types/src/vscode.ts`](packages/types/src/vscode.ts) | `"reloadWindow"` in `commandIds` |
-| Handler | [`src/activate/registerCommands.ts`](src/activate/registerCommands.ts) | Shows modal confirmation, then `workbench.action.reloadWindow` |
+| Artifact             | Location                                                               | Purpose                                                        |
+| -------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Command ID — Refresh | [`src/package.json`](src/package.json)                                 | `"shofer.refreshWebview"`                                      |
+| NLS label            | [`src/package.nls.json`](src/package.nls.json)                         | `"Refresh Webview"`                                            |
+| Menu entries         | [`src/package.json`](src/package.json)                                 | `overflow@3` in both sidebar & tab panel menus                 |
+| Type symbol          | [`packages/types/src/vscode.ts`](packages/types/src/vscode.ts)         | `"refreshWebview"` in `commandIds`                             |
+| Handler              | [`src/activate/registerCommands.ts`](src/activate/registerCommands.ts) | Calls `visibleProvider.refreshWebview()`                       |
+| Command ID — Reload  | [`src/package.json`](src/package.json)                                 | `"shofer.reloadWindow"`                                        |
+| NLS label            | [`src/package.nls.json`](src/package.nls.json)                         | `"Reload Window"`                                              |
+| Menu entries         | [`src/package.json`](src/package.json)                                 | `overflow@4` in both sidebar & tab panel menus                 |
+| Type symbol          | [`packages/types/src/vscode.ts`](packages/types/src/vscode.ts)         | `"reloadWindow"` in `commandIds`                               |
+| Handler              | [`src/activate/registerCommands.ts`](src/activate/registerCommands.ts) | Shows modal confirmation, then `workbench.action.reloadWindow` |
 
 ### 8.3 `refreshWebview()` Implementation
 
@@ -508,7 +511,7 @@ public async refreshWebview(): Promise<void> {
    async HTML build starts.
 2. **HMR-aware HTML build:** Uses `getHMRHtmlContent()` in development mode.
 3. **Focus stealing:** `show(true)` / `reveal()` ensures the webview is visible
-   and focused. `reloadWebviewAction` targets the *focused* webview.
+   and focused. `reloadWebviewAction` targets the _focused_ webview.
 4. **`workbench.action.webview.reloadWebviewAction`:** Navigates the browser
    frame at the DOM level, unlike `webview.html` assignment which is an IPC
    message that can be silently dropped when the renderer is stuck.
@@ -519,19 +522,19 @@ public async refreshWebview(): Promise<void> {
 
 ## 9. `refreshWebview()` vs `_resetWebview()`
 
-| Step | `_resetWebview()` (automatic) | `refreshWebview()` (manual) |
-|------|-------------------------------|-----------------------------|
-| Stop heartbeat | ✅ | ✅ |
-| Clear webview resources | ✅ | ✅ |
-| **RTT diagnostic dump before reset** | ✅ | ✅ (via `_webviewResetCount` log) |
-| **`webview.html = ""` explicit clear** | ❌ | ✅ |
-| HTML build | `getHtmlContent()` only | `getHMRHtmlContent()` in dev, `getHtmlContent()` in prod |
-| **Focus panel** | ❌ | ✅ — `show(true)` for sidebar, `reveal()` for tab |
-| Assign new `webview.html` | ✅ | ✅ |
-| Re-wire `onDidReceiveMessage` listener | ✅ | ✅ |
-| **`workbench.action.webview.reloadWebviewAction`** | ❌ | ✅ |
-| 50 ms yield before reload action | ❌ | ✅ |
-| Heartbeat restart | Deferred to `webviewDidLaunch` | Deferred to `webviewDidLaunch` |
+| Step                                               | `_resetWebview()` (automatic)  | `refreshWebview()` (manual)                              |
+| -------------------------------------------------- | ------------------------------ | -------------------------------------------------------- |
+| Stop heartbeat                                     | ✅                             | ✅                                                       |
+| Clear webview resources                            | ✅                             | ✅                                                       |
+| **RTT diagnostic dump before reset**               | ✅                             | ✅ (via `_webviewResetCount` log)                        |
+| **`webview.html = ""` explicit clear**             | ❌                             | ✅                                                       |
+| HTML build                                         | `getHtmlContent()` only        | `getHMRHtmlContent()` in dev, `getHtmlContent()` in prod |
+| **Focus panel**                                    | ❌                             | ✅ — `show(true)` for sidebar, `reveal()` for tab        |
+| Assign new `webview.html`                          | ✅                             | ✅                                                       |
+| Re-wire `onDidReceiveMessage` listener             | ✅                             | ✅                                                       |
+| **`workbench.action.webview.reloadWebviewAction`** | ❌                             | ✅                                                       |
+| 50 ms yield before reload action                   | ❌                             | ✅                                                       |
+| Heartbeat restart                                  | Deferred to `webviewDidLaunch` | Deferred to `webviewDidLaunch`                           |
 
 ---
 
@@ -559,12 +562,12 @@ liveness misses and trigger an infinite reset loop.
 
 The heartbeat stops in the following scenarios:
 
-| Trigger | Method | Notes |
-|---------|--------|-------|
-| Webview resources cleared | [`clearWebviewResources()`](src/core/webview/ShoferProvider.ts) | Called on view replacement, reset, and dispose |
-| Automatic reset | [`_resetWebview()`](src/core/webview/ShoferProvider.ts) → `_stopHeartbeat()` | Not restarted until fresh `webviewDidLaunch` |
-| Manual refresh | [`refreshWebview()`](src/core/webview/ShoferProvider.ts) → `_stopHeartbeat()` | Not restarted until fresh `webviewDidLaunch` |
-| `postMessage` throws | `_startHeartbeat()` catch block | View may be disposed; let dispose clean up |
+| Trigger                   | Method                                                                        | Notes                                          |
+| ------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| Webview resources cleared | [`clearWebviewResources()`](src/core/webview/ShoferProvider.ts)               | Called on view replacement, reset, and dispose |
+| Automatic reset           | [`_resetWebview()`](src/core/webview/ShoferProvider.ts) → `_stopHeartbeat()`  | Not restarted until fresh `webviewDidLaunch`   |
+| Manual refresh            | [`refreshWebview()`](src/core/webview/ShoferProvider.ts) → `_stopHeartbeat()` | Not restarted until fresh `webviewDidLaunch`   |
+| `postMessage` throws      | `_startHeartbeat()` catch block                                               | View may be disposed; let dispose clean up     |
 
 ### 10.3 Restart After Reset
 
@@ -579,17 +582,17 @@ triggers `_onWebviewLaunched()` → `_startHeartbeat()`.
 
 ### 11.1 Host → Webview (`ExtensionMessage`)
 
-| Type | Direction | Purpose | Declared In |
-|------|-----------|---------|-------------|
+| Type     | Direction      | Purpose        | Declared In                                                      |
+| -------- | -------------- | -------------- | ---------------------------------------------------------------- |
 | `"ping"` | Host → Webview | Liveness probe | [`packages/types/src/message.ts`](packages/types/src/message.ts) |
 
 ### 11.2 Webview → Host (`WebviewMessage`)
 
-| Type | Direction | Purpose | Declared In |
-|------|-----------|---------|-------------|
-| `"pong"` | Webview → Host | Liveness acknowledgement | [`packages/types/src/message.ts`](packages/types/src/message.ts) |
-| `"fatal_error"` | Webview → Host | Crash notification (auto-triggers reset) | [`packages/types/src/message.ts`](packages/types/src/message.ts) |
-| `"webviewDidLaunch"` | Webview → Host | Bundle loaded, safe to start heartbeat | [`packages/types/src/message.ts`](packages/types/src/message.ts) |
+| Type                 | Direction      | Purpose                                  | Declared In                                                      |
+| -------------------- | -------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| `"pong"`             | Webview → Host | Liveness acknowledgement                 | [`packages/types/src/message.ts`](packages/types/src/message.ts) |
+| `"fatal_error"`      | Webview → Host | Crash notification (auto-triggers reset) | [`packages/types/src/message.ts`](packages/types/src/message.ts) |
+| `"webviewDidLaunch"` | Webview → Host | Bundle loaded, safe to start heartbeat   | [`packages/types/src/message.ts`](packages/types/src/message.ts) |
 
 ### 11.3 Payloads
 
@@ -640,14 +643,15 @@ existing behavior, only adds logging and counters.
 
 ### 13.1 Host-Side RTT Ring Buffer (`ShoferProvider.ts`)
 
-| Field | Purpose |
-|-------|---------|
-| `_pingSentTs` | Timestamp set immediately before each `postMessage({type:"ping"})` |
-| `_heartbeatRttHistory` | Ring buffer of last 40 round-trip latencies (ms) |
-| `_heartbeatTickCount` | Total ticks in current webview session |
-| `_webviewResetCount` | Total resets in current host session (survives webview restarts) |
+| Field                  | Purpose                                                            |
+| ---------------------- | ------------------------------------------------------------------ |
+| `_pingSentTs`          | Timestamp set immediately before each `postMessage({type:"ping"})` |
+| `_heartbeatRttHistory` | Ring buffer of last 40 round-trip latencies (ms)                   |
+| `_heartbeatTickCount`  | Total ticks in current webview session                             |
+| `_webviewResetCount`   | Total resets in current host session (survives webview restarts)   |
 
 On every reset, the output channel logs:
+
 ```
 [webview-lifecycle] _resetWebview: trigger=heartbeat_timeout resetCount=3
   heartbeatTicks=452 silentFor=11000ms
@@ -661,11 +665,11 @@ from **abrupt death** (normal RTT → sudden silence → OOM kill / GPU crash).
 
 `_resetWebview()` accepts a `trigger` parameter:
 
-| Trigger | Source |
-|---------|--------|
+| Trigger               | Source                                  |
+| --------------------- | --------------------------------------- |
 | `"heartbeat_timeout"` | Heartbeat timer detected > 10 s silence |
-| `"fatal_error"` | Webview posted a `fatal_error` message |
-| `"manual"` | User clicked Refresh Webview |
+| `"fatal_error"`       | Webview posted a `fatal_error` message  |
+| `"manual"`            | User clicked Refresh Webview            |
 
 ### 13.3 Webview-Side Diagnostic Counters (`index.tsx`)
 
@@ -711,199 +715,231 @@ terminated. The user must confirm a modal dialog before this fires.
 ```ts
 // registerCommands.ts
 reloadWindow: async () => {
-    const answer = await vscode.window.showWarningMessage(
-        "Reload the entire VS Code window? All unsaved editor changes will be lost.",
-        { modal: true },
-        "Reload Window",
-    )
-    if (answer === "Reload Window") {
-        await vscode.commands.executeCommand("workbench.action.reloadWindow")
-    }
+	const answer = await vscode.window.showWarningMessage(
+		"Reload the entire VS Code window? All unsaved editor changes will be lost.",
+		{ modal: true },
+		"Reload Window",
+	)
+	if (answer === "Reload Window") {
+		await vscode.commands.executeCommand("workbench.action.reloadWindow")
+	}
 }
 ```
 
 ---
 
-## 15. Further Ideas to Explore
+## 15. Hardening Plan — Verified Escalation Ladder
 
-**The issue is still present.** The `refreshWebview()` recovery path sometimes
-fails to revive a stuck webview iframe. The `Reload Window` nuclear option
-always works but is disruptive. Below are hardening ideas to bridge the gap —
-none are yet implemented.
+**The issue is still present.** `refreshWebview()` sometimes returns "successfully"
+while the iframe stays stuck (blank, frozen, or running stale code). The root
+cause is that today's flow is **fire-and-forget** — we mutate `webview.html`,
+call `reloadWebviewAction`, and have no way to tell whether either actually
+revived the renderer before declaring success. The user is then forced into
+`Reload Window`.
 
-### 15.1 Two-Phase HTML Reload
+The fix is to make recovery **verified** and **escalating**: every attempt is
+followed by waiting on the heartbeat for proof of life, and only when an
+attempt fails to produce a pong do we escalate to the next, more aggressive
+strategy. The heartbeat we already have is the natural verification primitive
+— we just have to wire it into the recovery path.
 
-**Current:** `html = ""` → build real HTML → `html = realHtml`
+The four sub-sections below are listed in implementation order. (1) and (2)
+must land together because (2) depends on (1). (3) and (4) are independent
+follow-ups, each strictly more powerful (and more expensive) than the
+previous step.
 
-**Proposed:** `html = ""` → wait 200ms → `html = "<html><body></body></html>"` (bootstrap) → wait for `webviewDidLaunch` → `html = realHtml`
+### 15.1 Liveness Verification Primitive (`_waitForNextPong`)
 
-By posting a minimal bootstrap page first and waiting for its `webviewDidLaunch`,
-we guarantee the old execution context is fully torn down and a fresh one exists
-before the heavy React bundle loads. This prevents the race where the old
-service worker / blob URL / CSP state hasn't been fully released.
-
-**Risk:** Adds ~500ms to recovery time. `webviewDidLaunch` from the bootstrap
-page must be distinguishable from the real page's `webviewDidLaunch`.
-
-### 15.2 Re-Apply `webview.options` Before HTML Reassignment
-
-**Current:** `refreshWebview()` never touches `webview.options`.
-
-**Proposed:** Before `html = realHtml`, re-apply:
+Add a small helper on `ShoferProvider` that resolves on the next `_recordPong()`
+call or rejects on timeout:
 
 ```ts
-view.webview.options = {
-    enableScripts: true,
-    localResourceRoots: [this.contextProxy.extensionUri, ...workspaceFolders],
+/**
+ * Returns a promise that resolves with the first pong received after the call
+ * site, or rejects with a timeout error after `timeoutMs`. Used by the
+ * recovery escalation ladder to verify whether an attempt actually revived
+ * the renderer.
+ */
+private _waitForNextPong(timeoutMs: number): Promise<void>
+```
+
+Implementation: capture the current `_lastPongTs`, set an interval that polls
+`_lastPongTs` for a forward change every 100 ms, plus a `setTimeout(reject,
+timeoutMs)`. Clean up both timers on whichever fires first. No new IPC type
+needed — this rides on the existing ping/pong loop. It also forces the
+heartbeat to be (re)started by the caller before waiting, because nothing else
+sends pings.
+
+This is the spine of the rest of the plan. Without verification, every other
+"improvement" is still fire-and-forget.
+
+### 15.2 Verified Refresh + Retry With Re-Applied Options
+
+Wrap the existing `refreshWebview()` body in a small ladder that runs the
+current logic, waits for a pong, and on failure retries once with `webview.options`
+re-applied before escalating:
+
+```ts
+public async refreshWebview(): Promise<void> {
+    // Attempt 1: current flow (html clear → focus → html assign → reloadWebviewAction)
+    await this._doRefreshOnce({ reapplyOptions: false })
+    try {
+        await this._waitForNextPong(5_000)
+        return // success
+    } catch {
+        this.log("[webview-lifecycle] refreshWebview: attempt 1 did not produce a pong, retrying with options re-apply")
+    }
+
+    // Attempt 2: same flow, but reset webview.options first.
+    // If the iframe lost its localResourceRoots (e.g. VS Code re-parented it
+    // into a different security origin), the bundle silently fails to load
+    // even when the HTML is correct. Reassigning options is cheap and harmless.
+    await this._doRefreshOnce({ reapplyOptions: true })
+    try {
+        await this._waitForNextPong(5_000)
+        return
+    } catch {
+        this.log("[webview-lifecycle] refreshWebview: attempt 2 did not produce a pong, escalating")
+    }
+
+    // Escalate to the next rung — see §15.3.
+    await this._refreshEscalate()
 }
 ```
 
-If the iframe lost its `localResourceRoots` (e.g., VS Code re-parented the
-iframe into a different security origin), the bundle won't load even if the
-HTML is correct. Re-applying options could fix this silently.
-
-### 15.3 Retry Loop with Increasing Backoff
-
-**Current:** One attempt at `html = ""` → `html = realHtml`.
-
-**Proposed:** Try up to 3 times with 500ms / 1s / 2s gaps between attempts.
-After each attempt, send a verification ping and wait up to 5s for a pong.
-If pong arrives, recovery succeeded. If all 3 attempts fail, escalate to
-Reload Window.
-
-### 15.4 Alternative Ordering: `reloadWebviewAction` FIRST, Then HTML
-
-**Current order:** HTML → `reloadWebviewAction`.
-
-**Proposed:** `reloadWebviewAction` first (tear down the iframe at the browser-frame level), THEN assign new HTML (push into the now-clean frame).
-
-Rationale: If the iframe is stuck because the Chromium renderer process is in a
-bad state, `reloadWebviewAction` kills the old process and creates a fresh one.
-Assigning HTML into a dead process is pointless; reloading the frame into a
-clean process then pushing content is more likely to succeed.
-
-### 15.5 Dispose + Recreate the Webview View
-
-**Current:** We mutate the existing `WebviewView` / `WebviewPanel` in-place.
-
-**Proposed:** Call `view.dispose()`, let VS Code's provider system detect the
-disposed view, and call `resolveWebviewView()` with a fresh instance. This is
-the closest thing to a "soft restart" of the webview host without restarting
-the entire VS Code window.
-
-**Risk:** Timing is tricky — we need to wait for VS Code to recreate the view
-before we can interact with it. The provider system may not trigger a recreate
-reliably.
-
-### 15.6 Force Webview Recreation via Visibility Toggle
-
-**Current:** We focus the panel but don't toggle visibility.
-
-**Proposed:** For sidebar mode: hide the sidebar (`workbench.action.closeSidebar`), wait 500ms, show it again (`workbench.action.focusSidebar`). VS Code may dispose and recreate the webview on re-show, giving us a fresh iframe.
-
-### 15.7 Unload Beacon for Crash Forensics
-
-**Current:** When the webview dies silently (OOM), we get no diagnostic
-information from the dying process.
-
-**Proposed:** Register a `beforeunload` handler in `installWebviewCrashGuard`:
+Where `reapplyOptions: true` runs, before assigning HTML:
 
 ```ts
-window.addEventListener("beforeunload", () => {
-    const hb = (window as any).__shoferHeartbeat
-    // Store last-known state to localStorage so the NEXT webview instance
-    // can report it in its webviewDidLaunch payload.
-    try {
-        localStorage.setItem("__shofer_last_unload", JSON.stringify({
-            pingCount: hb?.pingCount ?? -1,
-            pongCount: hb?.pongCount ?? -1,
-            timestamp: Date.now(),
-            memory: (performance as any).memory?.usedJSHeapSize,
-        }))
-    } catch {}
-})
+view.webview.options = {
+	enableScripts: true,
+	localResourceRoots: [this.contextProxy.extensionUri, ...workspaceFolders],
+}
 ```
 
-The fresh webview reads this in `webviewDidLaunch` and includes it:
-```ts
-vscode.postMessage({
-    type: "webviewDidLaunch",
-    priorUnload: JSON.parse(localStorage.getItem("__shofer_last_unload") || "null"),
-})
-```
+Why two attempts and not three or more: the first attempt is the cheap "renderer
+is just confused, kick it" case; the second attempt addresses the
+"iframe-was-reparented" failure mode that costs nothing extra to try; beyond
+that, more attempts of the same shape are unlikely to behave differently and
+just delay the user. The escalation rung is what addresses harder failures.
 
-This tells us: "the previous webview died after receiving N pings; its JS heap
-was M bytes at unload time."
+### 15.3 Escalation Rung — Dispose + Recreate (Tab Panel) / Visibility Toggle (Sidebar)
 
-### 15.8 Webview-Side Long Task Observer
+When two `_doRefreshOnce` attempts fail to produce a pong, the renderer is
+genuinely dead or unreachable and we need a fresh `Webview` object, not just
+fresh HTML in the existing one.
 
-**Current:** The host only knows about liveness from the heartbeat.
+The implementation differs by view kind because VS Code's APIs differ:
 
-**Proposed:** Use the `PerformanceObserver` API for `longtask` to detect when
-the main thread is blocked:
+- **Tab panel (`WebviewPanel`)** has `view.dispose()`. After disposal, the host
+  recreates the panel from scratch by re-running the tab-panel registration
+  path (the same flow as `shofer.openInNewTab`). This is the closest thing to
+  "Reload Window" we can do without restarting the workbench.
 
-```ts
-try {
-    const observer = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-            if (entry.duration > 200) {  // 200ms+
-                vscode.postMessage({
-                    type: "long_task",
-                    duration: entry.duration,
-                    timestamp: Date.now(),
-                })
-            }
-        }
-    })
-    observer.observe({ type: "longtask", buffered: true })
-} catch {}
-```
+- **Sidebar (`WebviewView`)** has no `dispose()` — VS Code owns the lifecycle.
+  The only way to force `resolveWebviewView` to run again is to make VS Code
+  drop the view, which it does on visibility change **only if**
+  `retainContextWhenHidden` is `false`. Today the sidebar is registered with
+  `retainContextWhenHidden: true` ([extension.ts](../src/extension.ts) line 260),
+  which is exactly the option that prevents the recovery path from working.
+  Two sub-options:
 
-The host can correlate "long task reported at T" with "heartbeat RTT spiked at
-T+1s" to confirm GC stalls as the root cause of webview unresponsiveness.
+    1. **Flip `retainContextWhenHidden` to `false` permanently.** Cost: the React
+       tree re-mounts whenever the user hides the sidebar. Acceptable because
+       authoritative state lives in the host; the webview re-hydrates from
+       `ExtensionState` on `webviewDidLaunch`. Benefit: the user gets a reliable
+       manual recovery for free (close sidebar → open sidebar), and our
+       escalation rung becomes a simple `closeSidebar` → `focusSidebar`
+       sequence that waits on `_waitForNextPong`.
+    2. **Keep `retainContextWhenHidden: true` and have the escalation rung skip
+       straight to the Reload-Window prompt for the sidebar.** Honest, but
+       defeats the purpose of the ladder for the most common UI surface.
 
-### 15.9 `navigator.sendBeacon` for Last-Ditch Diagnostics
+    Option (1) is the recommended path. The re-mount cost is paid only on a
+    visibility transition the user initiated; in steady state nothing changes.
 
-**Current:** If the webview process is OOM-killed, no JavaScript runs.
+After whichever recreation path runs, wait up to **10 seconds** for the next
+pong (longer than the per-attempt budget because a full provider-recreate
+includes bundle download and React mount). On success, return. On failure,
+fall through to §15.4.
 
-**Proposed:** The `beforeunload` handler (see §15.7) could use `sendBeacon` to
-post a final payload to a data URI. VS Code webviews don't have network access,
-so this would need a custom URI scheme or a relay through the extension host.
+### 15.4 Final Rung — Prompt for Reload Window (No Auto-Nuke)
 
-**Risk:** High complexity for marginal gain. The localStorage approach (§15.7)
-covers most cases with much less complexity.
-
-### 15.10 Heartbeat Adaptive Threshold
-
-**Current:** `LIVENESS_TIMEOUT_MS = 10_000` is static.
-
-**Proposed:** Monitor the RTT history and auto-adjust the threshold:
-
-- If RTT is consistently < 10ms: `LIVENESS_TIMEOUT_MS = 5_000` (fast detection)
-- If RTT is consistently 100–500ms (large workspace, slow machine): `LIVENESS_TIMEOUT_MS = 15_000` (avoid false positives)
-- If RTT is trending upward (memory leak): log a warning before the webview dies
+When the recreate rung fails, surface a non-modal notification:
 
 ```ts
-// In _startHeartbeat, compute adaptive threshold from recent RTT
-const avgRtt = rttHistory.length > 0
-    ? rttHistory.reduce((a, b) => a + b, 0) / rttHistory.length
-    : 0
-const adaptiveTimeout = Math.max(5_000, Math.min(15_000, avgRtt * 20))
+const choice = await vscode.window.showWarningMessage(
+	"Shofer's webview could not be revived. Reload the VS Code window?",
+	"Reload Window",
+	"Dismiss",
+)
+if (choice === "Reload Window") {
+	await vscode.commands.executeCommand("workbench.action.reloadWindow")
+}
 ```
+
+This is **deliberately not automatic**. `reloadWindow` discards unsaved editor
+changes and terminates running tasks; auto-firing it from a refresh button
+would be hostile. The user already has a dedicated "Reload Window" entry at
+`overflow@4` for the explicit case; this notification simply offers the
+escalation in-context when the verified ladder has exhausted its options.
+
+### 15.5 Heartbeat Integration
+
+The ladder works because the existing heartbeat is the verification primitive.
+Two small invariants must hold:
+
+1. **`_waitForNextPong` must not run while the heartbeat is stopped.** Each
+   `_doRefreshOnce` ends by assigning new HTML, which causes the freshly-loaded
+   page to send `webviewDidLaunch`, which calls `_startHeartbeat()`. Pings
+   resume automatically, and `_waitForNextPong` sees the next pong. No manual
+   restart needed.
+
+2. **The 5 s / 10 s verification windows must comfortably exceed
+   `HEARTBEAT_INTERVAL_MS` (2 s) plus realistic bundle-load time.** 5 s allows
+   for two missed ping cycles + one successful one; 10 s allows for a full
+   provider-recreate including IndexedDB rehydration. Both are well under the
+   user's patience threshold for a recovery action.
+
+### 15.6 What Was Considered and Rejected
+
+Several earlier proposals were dropped after deeper review:
+
+- **Two-phase HTML reload** (bootstrap page → real page): adds ~500 ms to every
+  recovery and requires distinguishing the bootstrap's `webviewDidLaunch` from
+  the real one via a nonce. The verified retry in §15.2 covers the same failure
+  mode (stale execution context) by simply trying twice and watching for proof
+  of life, with no IPC schema change.
+
+- **`reloadWebviewAction` before HTML assignment** (instead of after): based on
+  a misreading of how `webview.html` is delivered. The HTML is registered with
+  the workbench's webview service; `reloadWebviewAction` reloads the iframe
+  against whatever HTML is _currently_ registered. Reversing the order would
+  reload the iframe against the _old_ HTML and then assign new HTML that the
+  freshly-loaded renderer would never re-fetch. The current order is correct.
+
+- **Unload beacon / `PerformanceObserver` long-task observer / `sendBeacon`**:
+  diagnostic only. They tell us _why_ the webview died but do not help it
+  recover. Worth revisiting as a separate forensics task if the verified
+  ladder still leaves a residual failure rate we can't explain from RTT
+  history alone.
+
+- **Adaptive heartbeat threshold**: tunes detection, not recovery. Orthogonal
+  to this work; can be added independently if false-positive resets become a
+  problem on slow machines.
 
 ---
 
 ## 16. Related Files
 
-| File | Role |
-|------|------|
-| [`webview-ui/src/index.tsx`](webview-ui/src/index.tsx) | `installWebviewCrashGuard()` IIFE: error listeners + pong responder + `__shoferHeartbeat` |
-| [`webview-ui/src/components/ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx) | React error boundary: forwards crashes to host |
-| [`webview-ui/src/utils/vscode.ts`](webview-ui/src/utils/vscode.ts) | Shared `acquireVsCodeApi()` singleton |
-| [`src/core/webview/ShoferProvider.ts`](src/core/webview/ShoferProvider.ts) | Heartbeat timer with RTT, `_resetWebview(trigger)`, `refreshWebview()` |
-| [`src/core/webview/webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts) | Dispatching `pong`, `fatal_error`, `webviewDidLaunch` |
-| [`src/activate/registerCommands.ts`](src/activate/registerCommands.ts) | Command registration for `shofer.refreshWebview` and `shofer.reloadWindow` |
-| [`src/package.json`](src/package.json) | Command declarations, menu entries (`overflow@3` / `overflow@4`) |
-| [`src/package.nls.json`](src/package.nls.json) | NLS labels: "Refresh Webview", "Reload Window" |
-| [`packages/types/src/vscode.ts`](packages/types/src/vscode.ts) | `"refreshWebview"`, `"reloadWindow"` in `commandIds` |
-| [`packages/types/src/message.ts`](packages/types/src/message.ts) | `"ping"`, `"pong"`, `"fatal_error"`, `"webviewDidLaunch"` type declarations |
+| File                                                                                         | Role                                                                                      |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [`webview-ui/src/index.tsx`](webview-ui/src/index.tsx)                                       | `installWebviewCrashGuard()` IIFE: error listeners + pong responder + `__shoferHeartbeat` |
+| [`webview-ui/src/components/ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx) | React error boundary: forwards crashes to host                                            |
+| [`webview-ui/src/utils/vscode.ts`](webview-ui/src/utils/vscode.ts)                           | Shared `acquireVsCodeApi()` singleton                                                     |
+| [`src/core/webview/ShoferProvider.ts`](src/core/webview/ShoferProvider.ts)                   | Heartbeat timer with RTT, `_resetWebview(trigger)`, `refreshWebview()`                    |
+| [`src/core/webview/webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)     | Dispatching `pong`, `fatal_error`, `webviewDidLaunch`                                     |
+| [`src/activate/registerCommands.ts`](src/activate/registerCommands.ts)                       | Command registration for `shofer.refreshWebview` and `shofer.reloadWindow`                |
+| [`src/package.json`](src/package.json)                                                       | Command declarations, menu entries (`overflow@3` / `overflow@4`)                          |
+| [`src/package.nls.json`](src/package.nls.json)                                               | NLS labels: "Refresh Webview", "Reload Window"                                            |
+| [`packages/types/src/vscode.ts`](packages/types/src/vscode.ts)                               | `"refreshWebview"`, `"reloadWindow"` in `commandIds`                                      |
+| [`packages/types/src/message.ts`](packages/types/src/message.ts)                             | `"ping"`, `"pong"`, `"fatal_error"`, `"webviewDidLaunch"` type declarations               |
