@@ -18,6 +18,7 @@ import {
 	MAX_FILE_SIZE_BYTES,
 	MAX_LIST_FILES_LIMIT_CODE_INDEX,
 	BATCH_SEGMENT_THRESHOLD,
+	MAX_BATCH_BYTES,
 	MAX_BATCH_RETRIES,
 	INITIAL_RETRY_DELAY_MS,
 	PARSING_CONCURRENCY,
@@ -123,6 +124,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 		// Shared batch accumulators (protected by mutex)
 		let currentBatchBlocks: CodeBlock[] = []
 		let currentBatchTexts: string[] = []
+		let currentBatchBytes = 0
 		let currentBatchFileInfos: {
 			filePath: string
 			fileHash: string
@@ -199,6 +201,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 								try {
 									currentBatchBlocks.push(block)
 									currentBatchTexts.push(trimmedContent)
+									currentBatchBytes += Buffer.byteLength(trimmedContent, "utf8")
 									addedBlocksFromFile = true
 
 									// Check if batch threshold is met
@@ -207,7 +210,10 @@ export class DirectoryScanner implements IDirectoryScanner {
 										throw new DOMException("Indexing aborted", "AbortError")
 									}
 
-									if (currentBatchBlocks.length >= this.batchSegmentThreshold) {
+									if (
+										currentBatchBlocks.length >= this.batchSegmentThreshold ||
+										currentBatchBytes >= MAX_BATCH_BYTES
+									) {
 										// Wait if we've reached the maximum pending batches
 										while (pendingBatchCount >= MAX_PENDING_BATCHES) {
 											if (signal?.aborted) {
@@ -222,6 +228,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 										const batchFileInfos = [...currentBatchFileInfos]
 										currentBatchBlocks = []
 										currentBatchTexts = []
+										currentBatchBytes = 0
 										currentBatchFileInfos = []
 
 										// Increment pending batch count
@@ -327,6 +334,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 				const batchFileInfos = [...currentBatchFileInfos]
 				currentBatchBlocks = []
 				currentBatchTexts = []
+				currentBatchBytes = 0
 				currentBatchFileInfos = []
 
 				// Increment pending batch count for final batch
@@ -624,6 +632,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 		let currentBatchBlocks: CodeBlock[] = []
 		let currentBatchTexts: string[] = []
+		let currentBatchBytes = 0
 		let currentBatchFileInfos: {
 			filePath: string
 			fileHash: string
@@ -683,11 +692,15 @@ export class DirectoryScanner implements IDirectoryScanner {
 								try {
 									currentBatchBlocks.push(block)
 									currentBatchTexts.push(trimmedContent)
+									currentBatchBytes += Buffer.byteLength(trimmedContent, "utf8")
 									addedBlocksFromFile = true
 
 									if (signal?.aborted) throw new DOMException("Indexing aborted", "AbortError")
 
-									if (currentBatchBlocks.length >= this.batchSegmentThreshold) {
+									if (
+										currentBatchBlocks.length >= this.batchSegmentThreshold ||
+										currentBatchBytes >= MAX_BATCH_BYTES
+									) {
 										while (pendingBatchCount >= MAX_PENDING_BATCHES) {
 											if (signal?.aborted)
 												throw new DOMException("Indexing aborted", "AbortError")
@@ -699,6 +712,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 										const batchFileInfos = [...currentBatchFileInfos]
 										currentBatchBlocks = []
 										currentBatchTexts = []
+										currentBatchBytes = 0
 										currentBatchFileInfos = []
 										pendingBatchCount++
 
@@ -773,6 +787,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 				const batchFileInfos = [...currentBatchFileInfos]
 				currentBatchBlocks = []
 				currentBatchTexts = []
+				currentBatchBytes = 0
 				currentBatchFileInfos = []
 				pendingBatchCount++
 
