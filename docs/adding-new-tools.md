@@ -121,7 +121,7 @@ export class MyTool extends BaseTool<"my_tool"> {
 
 	async execute(params: MyToolParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { param1, param2 } = params
-		const { askApproval, handleError, pushToolResult } = callbacks
+		const { handleError, pushToolResult } = callbacks
 
 		try {
 			if (!param1) {
@@ -132,13 +132,14 @@ export class MyTool extends BaseTool<"my_tool"> {
 			}
 			task.consecutiveMistakeCount = 0
 
-			const completeMessage = JSON.stringify({
+			// Render a chat-row entry so the user sees the tool invocation.
+			// Use the BaseTool helper — it goes through the standard
+			// ask→checkAutoApproval pipeline and produces a visible ChatRow.
+			const didApprove = await this.askToolApproval(callbacks, {
 				tool: "myTool",
 				path: getReadablePath(task.cwd, param1),
 				content: `Doing something with ${param1}`,
-			} satisfies ShoferSayTool)
-
-			const didApprove = await askApproval("tool", completeMessage)
+			})
 			if (!didApprove) return
 
 			pushToolResult(`Success: did something with ${param1}`)
@@ -161,7 +162,8 @@ export const myTool = new MyTool()
 ### partial vs. complete UI messages
 
 `handlePartial()` emits streaming `task.ask("tool", ..., partial=true)` — updates the ChatRow in real time.
-`execute()` must call `askApproval("tool", completeMessage)` to finalise the ChatRow entry.
+
+**Every tool MUST call `this.askToolApproval()` in `execute()`** to render a ChatRow entry in the UI — even tools that do no I/O (like `sleep`). Without this call the tool produces no visible indication, which appears to the user as a **silent hang**. Use the `BaseTool` helper rather than calling `askApproval("tool", …)` directly — it goes through the standard ask→checkAutoApproval pipeline. Prefer it to the raw callback.
 
 ## Step 5: Message Router
 
@@ -274,6 +276,8 @@ Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts
 This section tracks known gaps, undocumented steps, and design warts in the native tool implementation workflow. These are not bugs in this doc — they are places where the codebase plumbing is more complex than the checklist captures, or where a missing step will silently break tool integration.
 
 ### Checklist gaps (items not in the 11-step list but needed in practice)
+
+- **`askToolApproval()` is mandatory — no silent tools**: Every `execute()` method MUST call `this.askToolApproval(callbacks, { tool: "…", content: "…" })` to render a ChatRow entry. Even tools that appear to "do nothing visible" (like `sleep`) must do this — without it the tool invocation produces no indication in the chat UI, which looks like a **silent hang** to the user. The `BaseTool` helper is preferred over the raw `callbacks.askApproval("tool", …)` because it goes through the standard ask→checkAutoApproval pipeline. The `sleep` tool was shipped without this call (see commit `91a070a40`) and required a follow-up fix. A future lint rule should enforce that every `BaseTool` subclass calls `askToolApproval` in its `execute()`.
 
 - **`TOOL_DISPLAY_NAMES`** (in [`tool.ts`](../packages/types/src/tool.ts)): Mentioned in a sentence under Step 3 but not listed as its own checklist row. Every tool needs a human-readable display name here — it drives the tools-UI panel and auto-approval setting labels. Without it the tool is unnamed in the SettingsView.
 
