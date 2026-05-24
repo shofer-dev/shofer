@@ -40,7 +40,6 @@ import ChatRow from "./ChatRow"
 import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
-import { TaskSelector } from "./TaskSelector"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -1995,11 +1994,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							</div>
 						</div>
 					</div>
-					<TaskSelector
-						taskHistory={taskHistory || []}
-						parallelTasks={parallelTasks || []}
-						currentTaskId={currentTaskItem?.id}
-					/>
 				</>
 			)}
 
