@@ -210,6 +210,26 @@ export class ShoferProvider
 	 * tick incremented a miss counter before the in-flight pong could arrive.
 	 */
 	private _lastPongTs = 0
+	/**
+	 * Timestamp (epoch ms) set immediately before each `postMessage({type:"ping"})`.
+	 * Used to compute per-heartbeat round-trip time (RTT) when the corresponding
+	 * pong arrives. Without this we'd only know silence duration, not actual
+	 * webview responsiveness.
+	 */
+	private _pingSentTs = 0
+	/**
+	 * Ring buffer of the last `RTT_HISTORY_SIZE` heartbeat round-trip times
+	 * (ms). Each entry is recorded in `_recordPong()` as `now - _pingSentTs`.
+	 * Dumped to the output channel when a webview reset is triggered so we can
+	 * distinguish gradual slowdown (rising RTT → memory pressure) from abrupt
+	 * death (normal RTT → sudden silence → OOM kill / GPU crash).
+	 */
+	private _heartbeatRttHistory: number[] = []
+	private static readonly RTT_HISTORY_SIZE = 40
+	/** Total heartbeat ticks completed in the current webview session. */
+	private _heartbeatTickCount = 0
+	/** Number of webview resets (automatic + manual) in the current host session. */
+	private _webviewResetCount = 0
 
 	/** Interval between `ping` messages sent to the webview (ms). */
 	private static readonly HEARTBEAT_INTERVAL_MS = 2_000
@@ -765,7 +785,20 @@ export class ShoferProvider
 	 * liveness as `now - _lastPongTs`.
 	 */
 	public _recordPong(): void {
-		this._lastPongTs = Date.now()
+		const now = Date.now()
+		this._lastPongTs = now
+
+		// Compute round-trip time for the in-flight ping and push to ring buffer.
+		// `_pingSentTs` is set immediately before `postMessage({type:"ping"})` in
+		// `_startHeartbeat`. On the first tick (before any ping was sent) this
+		// delta is large; we discard deltas > 2× HEARTBEAT_INTERVAL_MS as noise.
+		const rtt = now - this._pingSentTs
+		if (rtt > 0 && rtt < ShoferProvider.HEARTBEAT_INTERVAL_MS * 3) {
+			if (this._heartbeatRttHistory.length >= ShoferProvider.RTT_HISTORY_SIZE) {
+				this._heartbeatRttHistory.shift()
+			}
+			this._heartbeatRttHistory.push(rtt)
+		}
 	}
 
 	/**
@@ -784,8 +817,11 @@ export class ShoferProvider
 		// Seed `_lastPongTs` with `now` so the first tick has a fresh window —
 		// otherwise `now - 0` would immediately exceed LIVENESS_TIMEOUT_MS.
 		this._lastPongTs = Date.now()
+		this._heartbeatTickCount = 0
+		this._heartbeatRttHistory = []
 		this._heartbeatTimer = setInterval(async () => {
 			try {
+				this._pingSentTs = Date.now()
 				await this.postMessageToWebview({ type: "ping" })
 			} catch {
 				// view may be disposed; stop and let dispose clean up
@@ -793,12 +829,13 @@ export class ShoferProvider
 				return
 			}
 
+			this._heartbeatTickCount++
 			const silentFor = Date.now() - this._lastPongTs
 			if (silentFor > ShoferProvider.LIVENESS_TIMEOUT_MS) {
 				this.log(
 					`[heartbeat] No pong received for ${silentFor}ms (> ${ShoferProvider.LIVENESS_TIMEOUT_MS}ms) — resetting webview`,
 				)
-				await this._resetWebview()
+				await this._resetWebview("heartbeat_timeout")
 			}
 		}, ShoferProvider.HEARTBEAT_INTERVAL_MS)
 	}
@@ -809,6 +846,7 @@ export class ShoferProvider
 			this._heartbeatTimer = null
 		}
 		this._lastPongTs = 0
+		this._pingSentTs = 0
 	}
 
 	/**
@@ -834,7 +872,7 @@ export class ShoferProvider
 	 */
 	public async _onFatalError(text: string): Promise<void> {
 		this.log(`[fatal_error] Triggering webview reset due to fatal error: ${text.slice(0, 200)}`)
-		await this._resetWebview()
+		await this._resetWebview("fatal_error")
 	}
 
 	/**
@@ -863,7 +901,10 @@ export class ShoferProvider
 		if (!view || this._disposed) {
 			return
 		}
-		this.log("[webview-lifecycle] refreshWebview: user-initiated forceful reset")
+		this._webviewResetCount++
+		this.log(
+			`[webview-lifecycle] refreshWebview: user-initiated forceful reset (session reset #${this._webviewResetCount})`,
+		)
 		this._stopHeartbeat()
 		this.clearWebviewResources()
 
@@ -923,14 +964,30 @@ export class ShoferProvider
 
 	/**
 	 * Re-assigns `webview.html` to force a full reload of the renderer.
-	 * Called automatically when the webview misses `PING_MISS_THRESHOLD`
-	 * consecutive pings. Also callable manually (e.g. on `fatal_error`).
+	 *
+	 * @param trigger What caused this reset — `"heartbeat_timeout"` (automatic),
+	 * `"fatal_error"` (webview crash report), or `"manual"` (user clicked
+	 * Refresh Webview). Used for diagnostic logging only.
 	 */
-	private async _resetWebview(): Promise<void> {
+	private async _resetWebview(
+		trigger: "heartbeat_timeout" | "fatal_error" | "manual" = "heartbeat_timeout",
+	): Promise<void> {
 		const view = this.view
 		if (!view || this._disposed) {
 			return
 		}
+
+		// ── Dump heartbeat diagnostics before resetting ──────────────────────
+		this._webviewResetCount++
+		const rttHistory = [...this._heartbeatRttHistory]
+		const rttSummary =
+			rttHistory.length > 0
+				? `min=${Math.min(...rttHistory)}ms avg=${Math.round(rttHistory.reduce((a, b) => a + b, 0) / rttHistory.length)}ms max=${Math.max(...rttHistory)}ms n=${rttHistory.length}`
+				: "no RTT samples"
+		const silentFor = this._lastPongTs > 0 ? Date.now() - this._lastPongTs : -1
+		this.log(
+			`[webview-lifecycle] _resetWebview: trigger=${trigger} resetCount=${this._webviewResetCount} heartbeatTicks=${this._heartbeatTickCount} silentFor=${silentFor}ms rtt=[${rttSummary}]`,
+		)
 
 		this._stopHeartbeat()
 		this.clearWebviewResources()

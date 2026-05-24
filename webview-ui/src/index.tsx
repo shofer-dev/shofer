@@ -50,9 +50,27 @@ import { vscode } from "./utils/vscode"
 
 	// 3. Heartbeat pong responder — echo back to the host so it can detect
 	//    silent process deaths (OOM, GPU crash, etc.)
+	//
+	//    Also maintains a small ring buffer of the last N ping timestamps
+	//    (window.__shoferHeartbeat) so the webview's liveness can be inspected
+	//    at runtime for diagnostics. The host can query this state via
+	//    postMessage when it suspects the webview is lagging.
+	;(window as any).__shoferHeartbeat = {
+		pingCount: 0,
+		pongCount: 0,
+		lastPingTimestamps: [] as number[],
+		MAX_TIMESTAMPS: 20,
+	}
 	window.addEventListener("message", (event: MessageEvent) => {
 		const message = event.data
 		if (message && message.type === "ping") {
+			const hb = (window as any).__shoferHeartbeat
+			hb.pingCount++
+			hb.lastPingTimestamps.push(Date.now())
+			if (hb.lastPingTimestamps.length > hb.MAX_TIMESTAMPS) {
+				hb.lastPingTimestamps.shift()
+			}
+			hb.pongCount++
 			vscode.postMessage({ type: "pong" })
 		}
 	})
