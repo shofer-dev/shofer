@@ -281,12 +281,12 @@ describe("networkProxy", () => {
 			expect(isDebugMode()).toBe(true)
 		})
 
-		// Note: This test is skipped because module state persists across tests.
-		// In a real scenario, isDebugMode() returns false before any initialization.
-		// The actual behavior is verified in integration testing.
-		it.skip("should return false before initialization", () => {
-			// This would require full module isolation which isn't practical here
-			expect(isDebugMode()).toBe(false)
+		// Note: This test uses vi.resetModules() so it gets a fresh module instance
+		// where extensionContext is still null, unaffected by other tests.
+		it("should return false before initialization", async () => {
+			vi.resetModules()
+			const { isDebugMode: freshIsDebugMode } = await import("../networkProxy")
+			expect(freshIsDebugMode()).toBe(false)
 		})
 	})
 
