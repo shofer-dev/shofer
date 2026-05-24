@@ -189,6 +189,20 @@ results.
 Apply **only** the entries whose culprit profiling has confirmed. Each item
 is an independent change with a self-contained mitigation.
 
+> **Implementation status (as of v0.26.4).**
+>
+> | Item                                                    | Status                                                      | Commit                |
+> | ------------------------------------------------------- | ----------------------------------------------------------- | --------------------- |
+> | §4.1 Streaming JSON write for conversation snapshots    | Not started                                                 | —                     |
+> | §4.2 Webview state diffs instead of full snapshots      | Partial — incremental `shoferMessages` append delta shipped | `3a67eb015`           |
+> | §4.3 Inline-content caps and externalisation            | Implemented                                                 | `e6c246eeb` (v0.26.0) |
+> | §4.4 LLM request-body streaming where supported         | Not started                                                 | —                     |
+> | §4.5 Eliminate `+=` accumulation in streaming providers | Implemented                                                 | `bd831cac1` (v0.26.1) |
+> | §4.6 Bounded batches in the code indexer                | Implemented                                                 | `66b529249` (v0.26.4) |
+> | §4.7 Cap MCP tool response sizes                        | Implemented                                                 | `e9f633215` (v0.26.3) |
+> | §4.8 Cap terminal output retained in memory             | Not started                                                 | —                     |
+> | §4.9 Defer `JSON.stringify`-style cost in logs          | Implemented                                                 | `2d2f7e037` (v0.26.2) |
+
 ### 4.1 Streaming JSON write for conversation snapshots
 
 > **Prior art.** H0 in
@@ -215,6 +229,10 @@ Unless Asked** rule in the repo conventions, the migration can be one-shot
 on first load.
 
 ### 4.2 Webview state diffs instead of full snapshots
+
+> **Status — Partial.** The incremental `shoferMessages` append delta
+> protocol shipped in `3a67eb015`. The remaining gap is extending the
+> same delta channel to `apiConversationHistory` and `taskHistory`.
 
 > **Prior art.** H4 in
 > [`performance_optimizations.md`](../../../todos/done/performance_optimizations.md)
@@ -247,6 +265,12 @@ collapses into §4.1's append-only file read.
 
 ### 4.3 Inline-content caps and externalisation
 
+> **Status — Implemented in `e6c246eeb` (shofer v0.26.0).** A configurable
+> `shoferBlobCapBytes` setting (default 64 KiB) gates inline tool-result
+> content; oversized payloads are written to `.shofer/blobs/<sha256>.txt`
+> and replaced inline with a `<shofer-blob …/>` reference token resolved
+> on demand by the UI and the outbound LLM packer.
+
 Inside tool results that get embedded in the conversation history, cap the
 inline portion and externalise the rest:
 
@@ -271,6 +295,11 @@ SDK only accepts a JS object, do the serialisation lazily via a wrapping
 
 ### 4.5 Eliminate `+=` accumulation in streaming providers
 
+> **Status — Implemented in `bd831cac1` (shofer v0.26.1).** All providers
+> in [`src/api/providers/`](../src/api/providers/) now push chunks into an
+> array and emit a single `chunks.join("")` at end-of-stream; no
+> quadratic-growth `accumulated += chunk` paths remain.
+
 Audit every provider in [`src/api/providers/`](../src/api/providers/) for
 `accumulated += chunk` and equivalent patterns; replace with `chunks.push`
 and a single `chunks.join("")` at the end (one allocation, no quadratic
@@ -280,6 +309,14 @@ incremental buffer. Addresses §3.4.
 
 ### 4.6 Bounded batches in the code indexer
 
+> **Status — Implemented in `66b529249` (shofer v0.26.4).** A new
+> `MAX_BATCH_BYTES = 2 MiB` constant in
+> [`services/code-index/constants/index.ts`](../src/services/code-index/constants/index.ts)
+> gates both `DirectoryScanner.scanDirectory` and `scanSpecificFiles`
+> alongside the existing segment-count threshold. Either gate triggers a
+> flush, keeping peak in-flight scanner memory bounded regardless of
+> repository shape (minified bundles, generated code, large docstrings).
+
 Cap the in-flight bytes (not just file count) in the batch loop under
 [`src/services/code-index/processors/`](../src/services/code-index/processors/).
 A simple `currentBatchBytes += fileSize; if (currentBatchBytes > LIMIT)
@@ -287,6 +324,16 @@ flushBatch()` keeps the peak deterministic regardless of repository shape.
 Addresses §3.6.
 
 ### 4.7 Cap MCP tool response sizes
+
+> **Status — Implemented in `e9f633215` (shofer v0.26.3).** New setting
+> `shoferMcpMaxResponseBytes` (default 1 MiB, `0` disables) is read by
+> `Task.getMcpMaxResponseBytes()` and threaded through
+> `processMcpToolContent` and `runMcpToolCall` (in
+> [`src/core/tools/mcp/use-mcp-shared.ts`](../src/core/tools/mcp/use-mcp-shared.ts))
+> plus the three `UseMcpToolTool` / `CheckMcpCallStatusTool` /
+> `WaitForMcpCallTool` call sites. Truncation is UTF-8-boundary-safe
+> (trailing U+FFFD bytes stripped) and appends a banner pointing the
+> agent at the setting.
 
 In the MCP client adapter, truncate responses larger than a configured
 threshold (default e.g. 1 MiB) and surface a warning to the agent. Addresses
@@ -299,6 +346,15 @@ byte cap with overflow spilled to a temp file that the LLM can be pointed
 at via a tool. Addresses §3.9.
 
 ### 4.9 Defer `JSON.stringify`-style cost in logs
+
+> **Status — Implemented in `2d2f7e037` (shofer v0.26.2).** > `createOutputChannelLogger` in
+> [`src/utils/outputChannelLogger.ts`](../src/utils/outputChannelLogger.ts)
+> now caps every non-string log argument at `MAX_LOG_ARG_BYTES = 8 KiB`
+> with a `…[+N more bytes]` suffix. A `stringifyForLog(value, maxBytes?)`
+> helper is exported for template-literal call sites in
+> `presentAssistantMessage.ts` and `api/providers/vscode-lm.ts` that
+> bypass the logger and would otherwise stringify whole tool args /
+> stream chunks.
 
 Any `outputChannel.appendLine(JSON.stringify(largeObject))` in hot paths is
 itself a `large_object` allocation. Audit logger call sites for accidental
