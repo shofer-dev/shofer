@@ -260,7 +260,7 @@ afterAll(() => {
 	vi.restoreAllMocks()
 })
 
-describe.skip("ShoferProvider Task History Synchronization", () => {
+describe("ShoferProvider Task History Synchronization", () => {
 	let provider: ShoferProvider
 	let mockContext: vscode.ExtensionContext
 	let mockOutputChannel: vscode.OutputChannel
@@ -336,10 +336,7 @@ describe.skip("ShoferProvider Task History Synchronization", () => {
 				cspSource: "vscode-webview://test-csp-source",
 			},
 			visible: true,
-			onDidDispose: vi.fn().mockImplementation((callback) => {
-				callback()
-				return { dispose: vi.fn() }
-			}),
+			onDidDispose: vi.fn().mockImplementation((_callback) => ({ dispose: vi.fn() })),
 			onDidChangeVisibility: vi.fn().mockImplementation(() => ({ dispose: vi.fn() })),
 		} as unknown as vscode.WebviewView
 
