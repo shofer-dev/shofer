@@ -249,6 +249,22 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		return this.focusedTaskId
 	}
 
+	/**
+	 * Clear the focused task if it currently matches `targetTaskId`.
+	 *
+	 * Called when a task is removed from the visible UI stack without being
+	 * aborted (parallel-task switch via the pencil/+ button). Without this,
+	 * the popped task keeps satisfying the `getFocusedTaskId() === taskId`
+	 * branch in `Task.addToShoferMessages` and continues streaming
+	 * `shoferMessageAppended` deltas to the webview, which re-mounts
+	 * ChatView for the supposedly-backgrounded task.
+	 */
+	clearFocusIfMatches(targetTaskId: string): void {
+		if (this.focusedTaskId === targetTaskId) {
+			this.focusedTaskId = null
+		}
+	}
+
 	// ────────────────────────────── Execution Control ──────────────────────────────
 
 	async startManagedTask(targetTaskId: string): Promise<void> {

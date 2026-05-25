@@ -684,6 +684,11 @@ export class ShoferProvider
 		const task = this.shoferStack.pop()
 
 		if (task) {
+			// The popped task is no longer the user-visible task. Clear it
+			// from TaskManager's focus so its streaming chunks stop emitting
+			// `shoferMessageAppended` deltas to the webview (see Task.ts
+			// addToShoferMessages dual focused/current check).
+			this.taskManager.clearFocusIfMatches(task.taskId)
 			task.emit(ShoferEventName.TaskUnfocused)
 			this.debug(
 				`[ShoferProvider#popFromStackWithoutAborting] Task ${task.taskId}.${task.instanceId} removed from stack (still running in background)`,
