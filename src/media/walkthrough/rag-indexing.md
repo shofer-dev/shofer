@@ -20,6 +20,8 @@ Both require a reachable **Qdrant v1.14.x** server (local or remote).
 
 ## Setup
 
+<img src="images/RAGView.png" alt="RAG Indexing Settings" width="280" />
+
 1. Open **Settings** → **RAG Indexing**
 2. Configure your Qdrant server URL and API key
 3. Pick an embedding provider (OpenAI, Ollama, etc.)

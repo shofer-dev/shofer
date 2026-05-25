@@ -19,6 +19,8 @@ The agent answers from its accumulated knowledge without the calling task having
 
 ## Setup
 
+<img src="images/AssistantView.png" alt="Assistant Agent Status" width="280" />
+
 1. Open **Settings** → enable the Assistant Agent
 2. Choose a lightweight model (e.g., Gemini Flash, GPT-4o-mini)
 3. The agent starts with an empty context and fills it as tasks ask questions

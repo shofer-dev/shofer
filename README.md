@@ -50,6 +50,8 @@ Shofer supports **true parallel tasks** organized in a tree hierarchy. Start mul
 
 ### Git Worktrees
 
+<img src="src/media/walkthrough/images/worktree1.png" alt="Task Header with Worktree Selector" width="500" />
+
 Run parallel tasks on different branches — all in one VS Code window:
 
 - Worktrees live at `.shofer/worktrees/<name>/` inside your workspace
@@ -60,6 +62,8 @@ Run parallel tasks on different branches — all in one VS Code window:
 [Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/docs/worktrees.md)
 
 ## RAG Indexing
+
+<img src="src/media/walkthrough/images/RAGView.png" alt="RAG Indexing Settings" width="280" />
 
 Build a **semantic search index** of your codebase and git history so the AI can find code and commits by _meaning_ — not just keywords.
 
@@ -73,6 +77,8 @@ Requires a reachable **Qdrant v1.14.x** server (local or remote). Configure in S
 [Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/docs/rag_indexing.md)
 
 ## Assistant Agent
+
+<img src="src/media/walkthrough/images/AssistantView.png" alt="Assistant Agent Status" width="280" />
 
 The **Assistant Agent** is a persistent, read-only AI companion that accumulates codebase knowledge over time — surviving task completion and VS Code restarts.
 

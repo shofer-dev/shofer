@@ -1,13 +1,16 @@
 # Git Worktrees
 
-Shofer supports **git worktrees** natively — run parallel tasks on different branches without opening multiple VS Code windows.
+Shofer supports **git worktrees** natively — run parallel tasks on different branches without opening multiple VS Code windows or having multiple separate tasks stepping on each other.
+
+<img src="images/worktree1.png" alt="Task Header with Worktree Selector" width="500" />
 
 ## How It Works
 
 - Worktrees live at `.shofer/worktrees/<name>/` inside your workspace
 - Each worktree is a full checkout on its own branch
 - Switch between worktrees via the **Worktree Selector** in the Task Header
-- Create, delete, and manage worktrees directly from Shofer's UI
+- Create, delete, and select worktrees directly from Shofer's UI
+- **Merging and rebasing should be done manually** — for safety, Shofer only provides create, delete, and select operations on worktrees
 
 ## Why Worktrees?
 
@@ -29,6 +32,8 @@ Each task in Shofer can be scoped to a specific worktree. This means:
 The **Worktree Indicator** in the Task Header shows which worktree the current task is using.
 
 ## Getting Started
+
+<img src="images/worktree2.png" alt="Worktree Selector Dropdown" width="280" />
 
 1. Click the **Worktree Selector** in the Task Header
 2. Choose an existing worktree or create a new one
