@@ -11,7 +11,7 @@
 - **Auto-approve** tool categories you trust; require approval for the rest
 - Choose from 9 built-in **modes**: Code, Architect, Ask, Debug, Reviewer, Search, Opinion, Browser, and Orchestrator
 - Define **custom modes** with per-category tool access and file-scoped restrictions (`.shofermodes`)
-- Query your codebase with **semantic search** (RAG indexing) and **git commit search**
+- Query your codebase with **semantic search** (RAG indexing) and **git commit search** — requires a reachable **Qdrant v1.14.x** server.
 - Create and install **skills** — reusable, mode-aware instruction packs
 - Connect **MCP servers** for external tools (browser, database, Kubernetes, web search)
 - Use the **Assistant Agent** — a persistent read-only AI companion that accumulates codebase knowledge
