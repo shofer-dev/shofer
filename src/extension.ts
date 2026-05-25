@@ -61,7 +61,8 @@ import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
 import { startMetricsServer, stopMetricsServer } from "./metrics/server"
-import { experiments, EXPERIMENT_IDS, syncExperimentContextKeys } from "./shared/experiments"
+import { experiments, EXPERIMENT_IDS } from "./shared/experiments"
+import { syncExperimentContextKeys } from "./activate/experimentContextKeys"
 import {
 	updateMemoryMetrics,
 	updateEventListenerMetrics,
