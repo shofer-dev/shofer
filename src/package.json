@@ -660,6 +660,30 @@
 						]
 					},
 					{
+						"id": "worktrees",
+						"title": "Next Steps: Git Worktrees",
+						"description": "Run parallel tasks on different branches — all in one VS Code window. Create, switch, and manage worktrees from Shofer's UI.",
+						"media": {
+							"markdown": "media/walkthrough/worktrees.md"
+						}
+					},
+					{
+						"id": "ragIndexing",
+						"title": "Next Steps: Code & Git Log Indexing",
+						"description": "Build a semantic search index of your codebase and git history for lightning-fast AI context gathering.",
+						"media": {
+							"markdown": "media/walkthrough/rag-indexing.md"
+						}
+					},
+					{
+						"id": "assistantAgent",
+						"title": "Next Steps: Assistant Agent",
+						"description": "A persistent, read-only AI companion that accumulates codebase knowledge over time — survives tasks and restarts.",
+						"media": {
+							"markdown": "media/walkthrough/assistant-agent.md"
+						}
+					},
+					{
 						"id": "complete",
 						"title": "You're All Set!",
 						"description": "Congratulations! You're ready to code with Shofer.\n\nHappy coding! 🚀",

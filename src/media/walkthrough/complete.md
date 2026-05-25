@@ -11,8 +11,10 @@ You've completed the Shofer walkthrough. Here's a quick recap of what you learne
 
 ## Next Steps
 
-- Configure **RAG Indexing** for fast code and git logs exploration
-- Set up **MCP servers** for external tools
+- Set up **RAG Indexing** for fast code and git log exploration
+- Enable the **Assistant Agent** to share context across tasks
+- Use **Git Worktrees** to work on multiple branches in parallel
+- Configure **MCP servers** for external tools
 - Create a **custom mode** for your workflow
 - Configure **auto-approval** to speed up trusted operations
 - Read the full **[User Manual](https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md)**
