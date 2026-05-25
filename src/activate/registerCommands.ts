@@ -372,6 +372,32 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 			await vscode.commands.executeCommand("workbench.action.reloadWindow")
 		}
 	},
+	// ─── Walkthrough ──────────────────────────────────────────────────────
+	"walkthrough.openDocumentation": async () => {
+		await vscode.env.openExternal(
+			vscode.Uri.parse("https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md"),
+		)
+	},
+	"walkthrough.joinDiscord": async () => {
+		await vscode.env.openExternal(vscode.Uri.parse("https://discord.gg/x39UEEQ2"))
+	},
+	"walkthrough.openCopilotGuide": async () => {
+		await vscode.env.openExternal(
+			vscode.Uri.parse("https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md"),
+		)
+	},
+	"walkthrough.open": async () => {
+		await vscode.commands.executeCommand(
+			"workbench.action.openWalkthrough",
+			"shofer-dev.shofer#shofer.getStarted",
+			false,
+		)
+	},
+	"walkthrough.openRoocodeGuide": async () => {
+		await vscode.env.openExternal(
+			vscode.Uri.parse("https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md"),
+		)
+	},
 })
 
 export const openShoferInNewTab = async ({ context, outputChannel }: Omit<RegisterCommandOptions, "provider">) => {

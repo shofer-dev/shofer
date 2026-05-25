@@ -364,6 +364,22 @@ export async function activate(context: vscode.ExtensionContext) {
 	registerCodeActions(context)
 	registerTerminalActions(context)
 
+	// Auto-open the "Get Started with Shofer" walkthrough on first install
+	// (when the user has no task history yet). Uses a persisted flag so it
+	// only fires once, not on every restart.
+	const hasSeenWalkthrough = context.globalState.get<boolean>("shofer.hasSeenWalkthrough")
+	if (!hasSeenWalkthrough) {
+		// Defer slightly so the UI has time to settle after activation.
+		setTimeout(() => {
+			vscode.commands.executeCommand(
+				"workbench.action.openWalkthrough",
+				"shofer-dev.shofer#shofer.getStarted",
+				false,
+			)
+		}, 500)
+		await context.globalState.update("shofer.hasSeenWalkthrough", true)
+	}
+
 	// Allows other extensions to activate once Shofer is ready.
 	vscode.commands.executeCommand(`${Package.name}.activationCompleted`)
 

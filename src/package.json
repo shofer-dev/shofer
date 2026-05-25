@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "shofer-dev",
-	"version": "0.26.14",
+	"version": "0.26.15",
 	"icon": "assets/icons/icon.png",
 	"galleryBanner": {
 		"color": "#617A91",
@@ -212,6 +212,32 @@
 				"title": "%command.reloadWindow.title%",
 				"icon": "$(debug-restart)",
 				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.walkthrough.open",
+				"title": "%walkthrough.open.title%",
+				"category": "%configuration.title%",
+				"icon": "$(symbol-event)"
+			},
+			{
+				"command": "shofer.walkthrough.openDocumentation",
+				"title": "%walkthrough.openDocumentation.title%",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.walkthrough.joinDiscord",
+				"title": "%walkthrough.joinDiscord.title%",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.walkthrough.openCopilotGuide",
+				"title": "%walkthrough.openCopilotGuide.title%",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.walkthrough.openRoocodeGuide",
+				"title": "%walkthrough.openRoocodeGuide.title%",
+				"category": "%configuration.title%"
 			}
 		],
 		"menus": {
@@ -255,6 +281,11 @@
 					"command": "shofer.reloadWindow",
 					"group": "overflow@4",
 					"when": "view == shofer.SidebarProvider && shofer:webviewLivenessMonitorEnabled"
+				},
+				{
+					"command": "shofer.walkthrough.open",
+					"group": "overflow@5",
+					"when": "view == shofer.SidebarProvider"
 				}
 			],
 			"editor/context": [
@@ -501,7 +532,125 @@
 					"markdownDescription": "%settings.enableLlmProviderIntegration.description%"
 				}
 			}
-		}
+		},
+		"walkthroughs": [
+			{
+				"id": "shofer.getStarted",
+				"title": "Get Started with Shofer",
+				"description": "Learn how to use Shofer to code faster with AI.",
+				"steps": [
+					{
+						"id": "welcome",
+						"title": "Welcome to Shofer",
+						"description": "Shofer is a state-of-the-art open-source AI coding assistant that helps you write, refactor, and debug code.\n\nLet's get you set up!",
+						"media": {
+							"markdown": "media/walkthrough/welcome.md"
+						}
+					},
+					{
+						"id": "openSidebar",
+						"title": "Open Shofer",
+						"description": "Click the Shofer icon in the Activity Bar or run:\n\n[Open Shofer](command:workbench.view.extension.shofer-ActivityBar)\n\nInstall Shofer and open the sidebar to get started.",
+						"media": {
+							"markdown": "media/walkthrough/open-sidebar.md"
+						},
+						"completionEvents": [
+							"onView:shofer.SidebarProvider"
+						]
+					},
+					{
+						"id": "chooseMode",
+						"title": "Choose a Mode",
+						"description": "Select a mode that fits your task. Learn about each mode's available tool categories.",
+						"media": {
+							"markdown": "media/walkthrough/choose-mode.md"
+						}
+					},
+					{
+						"id": "configureProvider",
+						"title": "Configure an AI Provider",
+						"description": "Choose an AI model and provider for Shofer to use. You can configure this later in the Settings panel.\n\n[Open Settings](command:shofer.settingsButtonClicked)",
+						"media": {
+							"markdown": "media/walkthrough/configure-provider.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.settingsButtonClicked"
+						]
+					},
+					{
+						"id": "startTask",
+						"title": "Start Your First Task",
+						"description": "Type a message to Shofer in the chat to get started on your first task!\n\n[New Task](command:shofer.plusButtonClicked)",
+						"media": {
+							"markdown": "media/walkthrough/start-task.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.plusButtonClicked"
+						]
+					},
+					{
+						"id": "exploreSettings",
+						"title": "Explore Settings",
+						"description": "Configure Shofer to your liking — adjust providers, modes, prompts, and more.\n\n[Open Settings](command:shofer.settingsButtonClicked)",
+						"media": {
+							"markdown": "media/walkthrough/explore-settings.md"
+						}
+					},
+					{
+						"id": "documentation",
+						"title": "Learn More",
+						"description": "Visit the Shofer documentation for in-depth guides and tutorials.\n\n[Open Documentation](command:shofer.walkthrough.openDocumentation)",
+						"media": {
+							"markdown": "media/walkthrough/learn-more.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.walkthrough.openDocumentation"
+						]
+					},
+					{
+						"id": "copilotUsers",
+						"title": "Migrating from GitHub Copilot",
+						"description": "Coming from Copilot? Shofer gives you full model choice, local-first privacy, parallel tasks, and 50+ native tools.\n\n[Read the Copilot Migration Guide](command:shofer.walkthrough.openCopilotGuide)",
+						"media": {
+							"markdown": "media/walkthrough/copilot-users.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.walkthrough.openCopilotGuide"
+						]
+					},
+					{
+						"id": "roocodeUsers",
+						"title": "Migrating from Roo-Code",
+						"description": "Roo-Code is sunsetting — Shofer is the natural migration path with parallel tasks, async MCP, semantic search, and worktree support.\n\n[Read the Roo-Code Migration Guide](command:shofer.walkthrough.openRoocodeGuide)",
+						"media": {
+							"markdown": "media/walkthrough/roocode-users.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.walkthrough.openRoocodeGuide"
+						]
+					},
+					{
+						"id": "community",
+						"title": "Join the Community",
+						"description": "Connect with other Shofer users on Discord and Reddit.\n\n[Join Discord](command:shofer.walkthrough.joinDiscord)",
+						"media": {
+							"markdown": "media/walkthrough/community.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.walkthrough.joinDiscord"
+						]
+					},
+					{
+						"id": "complete",
+						"title": "You're All Set!",
+						"description": "Congratulations! You're ready to code with Shofer.\n\nHappy coding! 🚀",
+						"media": {
+							"markdown": "media/walkthrough/complete.md"
+						}
+					}
+				]
+			}
+		]
 	},
 	"scripts": {
 		"lint": "eslint . --ext=ts --max-warnings=0",
