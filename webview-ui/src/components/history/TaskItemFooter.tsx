@@ -42,19 +42,16 @@ const TaskItemFooter: React.FC<TaskItemFooterProps> = ({
 				)}
 				{/* State icon (from TaskSelector) — icon alone communicates the state/rating */}
 				{taskState.lifecycle !== "idle" && (
-					<>
-						<StandardTooltip content={stateConfig.label}>
-							<span
-								className={cn(
-									"codicon flex-shrink-0 text-xs leading-none",
-									stateConfig.icon,
-									stateConfig.iconColor,
-								)}
-								aria-label={stateConfig.label}
-							/>
-						</StandardTooltip>
-						<span>·</span>
-					</>
+					<StandardTooltip content={stateConfig.label}>
+						<span
+							className={cn(
+								"codicon flex-shrink-0 text-xs leading-none",
+								stateConfig.icon,
+								stateConfig.iconColor,
+							)}
+							aria-label={stateConfig.label}
+						/>
+					</StandardTooltip>
 				)}
 				{/* Insertions/deletions (from TaskSelector) */}
 				{(item.insertions !== undefined || item.deletions !== undefined) && (

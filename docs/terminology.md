@@ -113,7 +113,7 @@ There are two display groups:
 
 | Canonical Name         | Command ID                        | Icon               | Group          | Description                                                                     |
 | ---------------------- | --------------------------------- | ------------------ | -------------- | ------------------------------------------------------------------------------- |
-| **Plus button**        | `shofer.plusButtonClicked`        | `$(edit)`          | `navigation@1` | Opens a new task (moves the current task to background).                        |
+| **Plus button**        | `shofer.plusButtonClicked`        | `$(add)`           | `navigation@1` | Opens a new task (moves the current task to background).                        |
 | **Tasks button**       | `shofer.tasksButtonClicked`       | `$(list-tree)`     | `navigation@2` | Opens the parallel-tasks drawer inside the webview.                             |
 | **Settings button**    | `shofer.settingsButtonClicked`    | `$(settings-gear)` | `navigation@3` | Navigates to SettingsView inside the webview.                                   |
 | **Marketplace button** | `shofer.marketplaceButtonClicked` | `$(extensions)`    | `navigation@5` | Navigates to MarketplaceView (feature-flagged via `shofer:marketplaceEnabled`). |
