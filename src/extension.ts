@@ -61,7 +61,7 @@ import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
 import { startMetricsServer, stopMetricsServer } from "./metrics/server"
-import { experiments, EXPERIMENT_IDS } from "./shared/experiments"
+import { experiments, EXPERIMENT_IDS, syncExperimentContextKeys } from "./shared/experiments"
 import {
 	updateMemoryMetrics,
 	updateEventListenerMetrics,
@@ -156,6 +156,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	// bound this will throw.
 	const _workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 	const _experimentsConfig = contextProxy.getValue("experiments") ?? {}
+	// Drive `when`-clause visibility for experiment-gated UI (Refresh
+	// Webview / Reload Window toolbar buttons today). Re-fired by the
+	// webview message handler on every experiments mutation.
+	syncExperimentContextKeys(_experimentsConfig)
 	if (experiments.isEnabled(_experimentsConfig, EXPERIMENT_IDS.PROMETHEUS_METRICS)) {
 		await startMetricsServer(context.globalStoragePath, _workspace)
 	} else {

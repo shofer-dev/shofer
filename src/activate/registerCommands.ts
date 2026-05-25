@@ -338,6 +338,15 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		if (!visibleProvider) {
 			return
 		}
+		// Gated: disabled when the webview liveness monitor experiment is off.
+		// Defence-in-depth — the toolbar button is also hidden via a `when`
+		// clause keyed on `shofer:webviewLivenessMonitorEnabled`, but the
+		// command id remains invokable from the Command Palette.
+		const exps = visibleProvider.contextProxy.getValue("experiments") ?? {}
+		if (!experiments.isEnabled(exps, EXPERIMENT_IDS.WEBVIEW_LIVENESS_MONITOR)) {
+			outputChannel.appendLine("[refreshWebview] Skipped (webview liveness monitor experiment disabled)")
+			return
+		}
 		await visibleProvider.refreshWebview()
 	},
 	reloadWindow: async () => {

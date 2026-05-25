@@ -1,4 +1,5 @@
 import type { AssertEqual, Equals, Keys, Values, ExperimentId, Experiments } from "@shofer/types"
+import * as vscode from "vscode"
 
 export const EXPERIMENT_IDS = {
 	PREVENT_FOCUS_DISRUPTION: "preventFocusDisruption",
@@ -39,3 +40,17 @@ export const experiments = {
 	get: (id: ExperimentKey): ExperimentConfig | undefined => experimentConfigsMap[id],
 	isEnabled: (experimentsConfig: Experiments, id: ExperimentId) => experimentsConfig[id] ?? experimentDefault[id],
 } as const
+
+/**
+ * Mirror every experiment flag whose value drives `when`-clause visibility
+ * in `package.json` into a VS Code context key. Called once during
+ * `activate()` and again whenever the user toggles an experiment from
+ * the Settings webview (see `webviewMessageHandler.ts` → `"experiments"`
+ * branch) so toolbar buttons appear / disappear live without a reload.
+ *
+ * Naming convention: `shofer:<camelCaseExperimentId>Enabled`.
+ */
+export function syncExperimentContextKeys(experimentsConfig: Experiments): void {
+	const livenessEnabled = experiments.isEnabled(experimentsConfig, EXPERIMENT_IDS.WEBVIEW_LIVENESS_MONITOR)
+	void vscode.commands.executeCommand("setContext", "shofer:webviewLivenessMonitorEnabled", livenessEnabled)
+}
