@@ -1,10 +1,8 @@
-<!-- XXX: Screenshot of the Shofer Settings panel showing the Providers/Modes/Auto-Approval tabs -->
-
-![Settings Panel](images/settings.png)
-
 # Explore Settings
 
 Shofer has dozens of settings to customize your experience. Access them via the ⚙️ gear icon in the Shofer panel, or open VS Code Settings and search for `shofer.`.
+
+<img src="images/settings.png" alt="Settings Panel" width="180" />
 
 ## Key Settings Areas
 

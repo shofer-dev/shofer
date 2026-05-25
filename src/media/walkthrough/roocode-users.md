@@ -1,12 +1,6 @@
-<!-- XXX: Side-by-side comparison graphic showing Roo-Code vs Shofer feature table -->
-
-![Roo-Code vs Shofer](images/roocode.png)
-
 # Migrating from Roo-Code
 
-Shofer is a major architectural improvement over Roo-Code, with parallel tasks, async MCP calling, semantic code search, native worktree support, and dozens more features.
-
-> Roo-Code is sunsetting its VS Code Extension on May 15, 2026. Shofer is the natural migration path.
+Shofer is a major architectural improvement over Roo-Code (Roo-Code fork), with task parallelism, agent-to-agent async collaboration, generalized async MCP calling, lighting-fast semantic code and git log indexing, seemless worktree support, an extensive set of comprehensive build-in tools, the ability to share context across sessions, and dozens more unique features.
 
 ## Key Improvements Over Roo-Code
 
@@ -21,6 +15,6 @@ Shofer is a major architectural improvement over Roo-Code, with parallel tasks, 
 
 ## Quick Start for Roo-Code Users
 
-Run the `/migrate-from-roocode` slash command to automatically rename your legacy files (`.rooignore` → `.shoferignore`, `.roomodes` → `.shofermodes`, etc.).
+Run the `/migrate-from-roocode` slash command to automatically migrate your Roo-Code configuration into Shofer. Notice that conversations are not migrated.
 
 [Read the full Roo-Code → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md)
