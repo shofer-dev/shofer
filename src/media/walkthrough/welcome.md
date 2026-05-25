@@ -13,4 +13,12 @@ Shofer (simplified from the french "chauffeur") is a **state-of-the-art open-sou
 - **Explore Settings** — Customize auto-approval, cost limits, MCP servers, and more
 - **Learn More** — Documentation, user manual, and community
 
+## Optional Next Steps
+
+Once you're comfortable, explore these powerful features:
+
+- **Git Worktrees** — Run parallel tasks on different branches in one window
+- **RAG Indexing** — Semantic code and git log search for lightning-fast context gathering
+- **Assistant Agent** — A persistent AI companion that accumulates codebase knowledge
+
 Let's get started!
