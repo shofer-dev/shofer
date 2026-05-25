@@ -446,12 +446,6 @@ function renderTaskRow({
 						<span className="truncate text-sm leading-tight">{displayName}</span>
 					</div>
 					<span className="truncate text-[11px] leading-tight text-[var(--vscode-descriptionForeground)]">
-						{state.lifecycle !== "idle" && (
-							<>
-								<span>{stateConfig.label}</span>
-								<span className="mx-1">·</span>
-							</>
-						)}
 						{(item.insertions !== undefined || item.deletions !== undefined) && (
 							<>
 								{item.insertions !== undefined && item.insertions > 0 && (

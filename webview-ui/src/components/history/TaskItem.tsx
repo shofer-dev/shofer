@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 import TaskItemFooter from "./TaskItemFooter"
 import { StandardTooltip } from "../ui"
-import { resolveStateVisual } from "@src/components/chat/TaskSelector"
+import { resolveStateVisual, getTaskDisplayName } from "@src/components/chat/TaskSelector"
 
 interface TaskItemProps {
 	item: DisplayHistoryItem
@@ -98,7 +98,7 @@ const TaskItem = ({
 								)}
 								data-testid="task-content">
 								<StandardTooltip content={item.task}>
-									<span>{item.task}</span>
+									<span>{getTaskDisplayName(item)}</span>
 								</StandardTooltip>
 							</div>
 						)}

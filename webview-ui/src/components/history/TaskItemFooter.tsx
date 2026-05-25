@@ -40,7 +40,7 @@ const TaskItemFooter: React.FC<TaskItemFooterProps> = ({
 						<span>·</span>
 					</>
 				)}
-				{/* State icon + label (from TaskSelector) */}
+				{/* State icon (from TaskSelector) — icon alone communicates the state/rating */}
 				{taskState.lifecycle !== "idle" && (
 					<>
 						<StandardTooltip content={stateConfig.label}>
@@ -53,7 +53,6 @@ const TaskItemFooter: React.FC<TaskItemFooterProps> = ({
 								aria-label={stateConfig.label}
 							/>
 						</StandardTooltip>
-						<span>{stateConfig.label}</span>
 						<span>·</span>
 					</>
 				)}
@@ -61,14 +60,10 @@ const TaskItemFooter: React.FC<TaskItemFooterProps> = ({
 				{(item.insertions !== undefined || item.deletions !== undefined) && (
 					<>
 						{item.insertions !== undefined && item.insertions > 0 && (
-							<span className="text-[var(--vscode-charts-green,#16a34a)]">
-								+{item.insertions}
-							</span>
+							<span className="text-[var(--vscode-charts-green,#16a34a)]">+{item.insertions}</span>
 						)}
 						{item.deletions !== undefined && item.deletions > 0 && (
-							<span className="text-[var(--vscode-charts-red,#ef4444)] ml-0.5">
-								-{item.deletions}
-							</span>
+							<span className="text-[var(--vscode-charts-red,#ef4444)] ml-0.5">-{item.deletions}</span>
 						)}
 						<span>·</span>
 					</>
