@@ -1690,20 +1690,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async addToShoferMessages(message: ShoferMessage) {
-		// §4.3: cap inline `text` before any persistence / IPC. Externalised
-		// content lives in the per-task BlobStore and is referenced inline
-		// via a `<shofer-blob .../>` token. Best-effort: a blob-write error
-		// must not block the message from being recorded, so we log and
-		// fall through with the original text.
-		const cap = this.getBlobCapBytes()
-		if (cap > 0 && typeof message.text === "string" && message.text.length > 0) {
-			try {
-				const store = await this.getBlobStore()
-				message.text = await store.externalizeIfOverCap(message.text, cap)
-			} catch (error) {
-				outputError("Failed to externalise large message text:", error)
-			}
-		}
+		// NOTE: §4.3's `ShoferMessage.text` externalisation was removed here.
+		// Indiscriminately replacing `message.text` with a blob ref token
+		// corrupted structured payloads — most ask/say variants (`tool`,
+		// `command`, `use_mcp_server`, `api_req_started`, `completion_result`,
+		// …) carry stringified JSON that ChatRow parses; the only variants
+		// safely renderable through MarkdownBlock's lazy resolver are
+		// `say === "text"` (assistant prose) and `say === "reasoning"`
+		// (thinking). The latter additionally streams chunk-by-chunk via
+		// `updateShoferMessage`, which never re-runs this externalisation
+		// path, producing an inconsistent mix of inline-text and blob-ref
+		// chunks. Net memory/IPC win on the webview channel was marginal
+		// versus the bug surface, so the externalisation now lives only on
+		// the LLM-bound `apiConversationHistory` path (see `addToApiConversationHistory`
+		// and `flushPendingToolResultsToHistory`).
 		this.shoferMessages.push(message)
 		// §4.1: O(1) JSONL append — must happen BEFORE the debounced metadata
 		// refresh so a crash between the in-memory push and the next compaction
