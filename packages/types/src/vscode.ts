@@ -66,6 +66,12 @@ export const commandIds = [
 	"refreshWebview",
 	"reloadWindow",
 
+	// Walkthrough
+	"walkthrough.open",
+	"walkthrough.openDocumentation",
+	"walkthrough.joinDiscord",
+	"walkthrough.openCopilotGuide",
+	"walkthrough.openRoocodeGuide",
 
 	// Diagnostics
 	"heapSnapshot",

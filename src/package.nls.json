@@ -63,5 +63,14 @@
 	"walkthrough.community.title": "Join the Community",
 	"walkthrough.community.description": "Connect with other Shofer users on Discord and Reddit.",
 	"walkthrough.marketplace.title": "Explore the Marketplace",
-	"walkthrough.marketplace.description": "Browse and install MCP servers and custom modes from the Shofer Marketplace."
+	"walkthrough.marketplace.description": "Browse and install MCP servers and custom modes from the Shofer Marketplace.",
+	"walkthrough.copilotUsers.title": "Migrating from GitHub Copilot",
+	"walkthrough.copilotUsers.description": "Coming from Copilot? Shofer gives you full model choice, local-first privacy, parallel tasks, and 50+ native tools.",
+	"walkthrough.roocodeUsers.title": "Migrating from Roo-Code",
+	"walkthrough.roocodeUsers.description": "Roo-Code is sunsetting — Shofer is the natural migration path with parallel tasks, async MCP, semantic search, and worktree support.",
+	"walkthrough.open.title": "Open Walkthrough",
+	"walkthrough.openDocumentation.title": "Open Shofer Documentation",
+	"walkthrough.joinDiscord.title": "Join Shofer Discord",
+	"walkthrough.openCopilotGuide.title": "Open Copilot Migration Guide",
+	"walkthrough.openRoocodeGuide.title": "Open Roo-Code Migration Guide"
 }
