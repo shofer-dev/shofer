@@ -49,7 +49,7 @@ import { MessageEnhancer } from "./messageEnhancer"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { GitIndexManager } from "../../services/git-index/git-index-manager"
 import { checkExistKey } from "../../shared/checkExistApiConfig"
-import { experimentDefault } from "../../shared/experiments"
+import { experimentDefault, syncExperimentContextKeys } from "../../shared/experiments"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { openFile } from "../../integrations/misc/open-file"
 import { openImage, saveImage } from "../../integrations/misc/image-handler"
@@ -888,6 +888,10 @@ export const webviewMessageHandler = async (
 							...(getGlobalState("experiments") ?? experimentDefault),
 							...(value as Record<ExperimentId, boolean>),
 						}
+						// Re-fire setContext so toolbar buttons gated by an
+						// experiment flag (e.g. Refresh Webview / Reload Window)
+						// appear or disappear without requiring a window reload.
+						syncExperimentContextKeys(newValue as Record<ExperimentId, boolean>)
 					} else if (key === "customSupportPrompts") {
 						if (!value) {
 							continue
