@@ -1,5 +1,3 @@
-import * as vscode from "vscode"
-
 import {
 	type GroupEntry,
 	type ModeConfig,
@@ -205,21 +203,6 @@ export const defaultPrompts: Readonly<CustomModePrompts> = Object.freeze(
 		]),
 	),
 )
-
-// Helper function to get all modes with their prompt overrides from extension state
-export async function getAllModesWithPrompts(context: vscode.ExtensionContext): Promise<ModeConfig[]> {
-	const customModes = (await context.globalState.get<ModeConfig[]>("customModes")) || []
-	const customModePrompts = (await context.globalState.get<CustomModePrompts>("customModePrompts")) || {}
-
-	const allModes = getAllModes(customModes)
-	return allModes.map((mode) => ({
-		...mode,
-		roleDefinition: customModePrompts[mode.slug]?.roleDefinition ?? mode.roleDefinition,
-		whenToUse: customModePrompts[mode.slug]?.whenToUse ?? mode.whenToUse,
-		customInstructions: customModePrompts[mode.slug]?.customInstructions ?? mode.customInstructions,
-		// description is not overridable via customModePrompts, so we keep the original
-	}))
-}
 
 // Helper function to get complete mode details with all overrides
 export async function getFullModeDetails(
