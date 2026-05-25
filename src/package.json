@@ -589,11 +589,30 @@
 						]
 					},
 					{
+						"id": "switchTasks",
+						"title": "Switch Between Tasks",
+						"description": "Shofer supports parallel tasks — switch between multiple AI conversations at once via the TaskSelector.\n\n[Open Tasks](command:shofer.tasksButtonClicked)",
+						"media": {
+							"markdown": "media/walkthrough/switch-tasks.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.tasksButtonClicked"
+						]
+					},
+					{
 						"id": "exploreSettings",
 						"title": "Explore Settings",
 						"description": "Configure Shofer to your liking — adjust providers, modes, prompts, and more.\n\n[Open Settings](command:shofer.settingsButtonClicked)",
 						"media": {
 							"markdown": "media/walkthrough/explore-settings.md"
+						}
+					},
+					{
+						"id": "specialFiles",
+						"title": "Special Files",
+						"description": "Learn about .shoferignore, AGENTS.md, .shofermodes, and the .shofer/ directory that control Shofer's behavior.",
+						"media": {
+							"markdown": "media/walkthrough/special-files.md"
 						}
 					},
 					{
@@ -608,17 +627,6 @@
 						]
 					},
 					{
-						"id": "copilotUsers",
-						"title": "Migrating from GitHub Copilot",
-						"description": "Coming from Copilot? Shofer gives you full model choice, local-first privacy, parallel tasks, and 50+ native tools.\n\n[Read the Copilot Migration Guide](command:shofer.walkthrough.openCopilotGuide)",
-						"media": {
-							"markdown": "media/walkthrough/copilot-users.md"
-						},
-						"completionEvents": [
-							"onCommand:shofer.walkthrough.openCopilotGuide"
-						]
-					},
-					{
 						"id": "roocodeUsers",
 						"title": "Migrating from Roo-Code",
 						"description": "Roo-Code is sunsetting — Shofer is the natural migration path with parallel tasks, async MCP, semantic search, and worktree support.\n\n[Read the Roo-Code Migration Guide](command:shofer.walkthrough.openRoocodeGuide)",
@@ -627,6 +635,17 @@
 						},
 						"completionEvents": [
 							"onCommand:shofer.walkthrough.openRoocodeGuide"
+						]
+					},
+					{
+						"id": "copilotUsers",
+						"title": "Migrating from GitHub Copilot",
+						"description": "Coming from Copilot? Shofer gives you full model choice, local-first privacy, parallel tasks, and 50+ native tools.\n\n[Read the Copilot Migration Guide](command:shofer.walkthrough.openCopilotGuide)",
+						"media": {
+							"markdown": "media/walkthrough/copilot-users.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.walkthrough.openCopilotGuide"
 						]
 					},
 					{

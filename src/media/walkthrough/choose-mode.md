@@ -1,10 +1,10 @@
-<!-- XXX: Screenshot of the Mode Selector dropdown in the chat input bar, showing all built-in modes (Code, Architect, Ask, Debug, Orchestrator) -->
-
-![Mode Selector](images/modes.png)
-
 # Choose a Mode
 
-Shofer ships with **5 built-in modes** that control what tools the AI can use. Switch modes anytime via the dropdown in the chat input bar.
+Shofer ships with **5 built-in modes** that control what toolsthe AI can use. Switch modes anytime via the dropdown in the chat input bar. This feature is powerful because it not only lets you control access to tools, but also which models each mode can use. For example a lower-cost model is probably more appropriate for searching a vast codebase.
+
+In practice, however, Shofer will automatically switch to the best mode for the task, so you can leave it to default.
+
+<img src="images/modes.png" alt="Mode Selector" width="280" />
 
 ## Built-in Modes
 

@@ -1,17 +1,19 @@
-<!-- XXX: Side-by-side comparison graphic showing Copilot vs Shofer feature table -->
-
-![Copilot vs Shofer](images/copilot.png)
-
 # Migrating from GitHub Copilot
 
-If you're coming from GitHub Copilot, Shofer offers everything Copilot does and much more — with full privacy and model choice.
+If you're coming from GitHub Copilot, Shofer offers everything Copilot does and much more — with full privacy and model autonomy.
 
 ## Key Differences
 
-- **You own the models** — use Anthropic, OpenAI, Google, or local models via Ollama
-- **Your code stays local** — Shofer never sends data to Microsoft
-- **True multi-tasking** — run multiple AI conversations in parallel
-- **50+ native tools** — far beyond Copilot's limited tool set
+- **You own the models** — use Anthropic, OpenRouter, Deepseek, or local models via Ollama
+- **You own the infrastructure** — everything runs locally, including semantic indexing
+- **Your code stays local** — or to the provider of your choice, no vendor lock-in
+- **Higher degree of customization** — adjust every aspect exactly to your needs
+- **Open-source and community-driven** — contribute and shape the future of Shofer
+- **Cost control** — set per-task cost limits and monitor usage
+- **Share context across sessions** — using Shofer's Assistant Agent feature
+- **Git log indexing** — for better understanding of code history and rationale
+- **Fine-grained tool access control** — via customizable modes and auto-approval settings
+- **Leverage git worktrees** — to keep parallel tasks separate across multiple branches and PRs
 
 ## Quick Start for Copilot Users
 

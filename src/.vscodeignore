@@ -34,6 +34,7 @@
 
 # Include walkthrough media
 !media/walkthrough/**
+!media/walkthrough/images/**
 
 # Include .env file for telemetry
 !.env
