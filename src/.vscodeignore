@@ -32,5 +32,8 @@
 !assets/icons/**
 !assets/images/**
 
+# Include walkthrough media
+!media/walkthrough/**
+
 # Include .env file for telemetry
 !.env
