@@ -1211,7 +1211,81 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
 	}
 
+	/**
+	 * XXX TODO REMOVE — temporary diagnostic for the duplicate-user-message bug.
+	 * Remove this helper, `_diagnoseDuplicateUserAppend`, and the call site
+	 * at the top of `addToApiConversationHistory` once the underlying writer-side
+	 * race is identified and fixed.
+	 *
+	 * Fingerprint of a user message's content for duplicate-append detection.
+	 * Strips the `Current Time` line out of any text block so that two iterations
+	 * that re-issue the same `currentUserContent` with regenerated env_details
+	 * still fingerprint identically. Returns `undefined` for non-user messages
+	 * (we only diagnose duplicate user appends — assistants legitimately repeat
+	 * structurally similar tool_use blocks across turns).
+	 */
+	private _userMessageFingerprint(message: Anthropic.MessageParam): string | undefined {
+		if (message.role !== "user") return undefined
+		const stripTime = (s: string): string => s.replace(/^# Current Time\n.*$/m, "# Current Time\n<elided>")
+		const content = message.content
+		if (typeof content === "string") return `S:${stripTime(content)}`
+		if (!Array.isArray(content)) return undefined
+		const parts: string[] = []
+		for (const block of content) {
+			if (block.type === "text") {
+				parts.push(`T:${stripTime(block.text)}`)
+			} else if (block.type === "tool_result") {
+				const c = block.content
+				const body = typeof c === "string" ? c : JSON.stringify(c)
+				parts.push(`R:${block.tool_use_id}:${block.is_error ? "E" : "K"}:${body}`)
+			} else {
+				parts.push(`X:${block.type}:${JSON.stringify(block)}`)
+			}
+		}
+		return parts.join("\n--\n")
+	}
+
+	/**
+	 * XXX TODO REMOVE — temporary diagnostic for the duplicate-user-message bug.
+	 * Remove together with `_userMessageFingerprint` and the call site at the
+	 * top of `addToApiConversationHistory` once the writer-side race is fixed.
+	 *
+	 * Detect (and loudly log) two adjacent byte-identical user-message appends
+	 * to `apiConversationHistory`. The pre-existing defensive dedup passes
+	 * (`_cleanupOrphanedToolUses`, llm-provider `reorderToolMessages`) mask
+	 * the symptom on the wire, but the underlying writer-side race is still
+	 * unfixed: this log captures the call stack and surrounding state the next
+	 * time it fires so we can identify the offending caller path. Cheap (one
+	 * string compare + an `Error()` for the stack) and gated on a real duplicate.
+	 */
+	private _diagnoseDuplicateUserAppend(message: Anthropic.MessageParam): void {
+		const fp = this._userMessageFingerprint(message)
+		if (!fp) return
+		const tail = this.apiConversationHistory[this.apiConversationHistory.length - 1]
+		if (!tail) return
+		const tailFp = this._userMessageFingerprint(tail)
+		if (!tailFp || tailFp !== fp) return
+		const stack = new Error("DUPLICATE_USER_APPEND").stack ?? "<no stack>"
+		outputWarn(
+			`[Task#${this.taskId}.${this.instanceId}] DUPLICATE_USER_APPEND detected: ` +
+				`previous tail user message has matching fingerprint (env_details Current Time elided). ` +
+				`apiConversationHistory.length=${this.apiConversationHistory.length}, ` +
+				`tailTs=${(tail as any).ts}, fingerprintBytes=${fp.length}\n` +
+				`fingerprintHead=${fp.slice(0, 400)}\n` +
+				`stack:\n${stack}`,
+		)
+	}
+
 	private async addToApiConversationHistory(message: Anthropic.MessageParam, reasoning?: string) {
+		// XXX TODO REMOVE — temporary diagnostic for the duplicate-user-message bug.
+		// Diagnostic: detect duplicate-user-message-append (two byte-identical
+		// user messages mod env_details `Current Time`). The defensive
+		// `_cleanupOrphanedToolUses` + provider-side `reorderToolMessages`
+		// dedup masks the symptom; this log captures the offending call path
+		// the next time the underlying race fires so we can fix the source.
+		// Remove this call together with `_diagnoseDuplicateUserAppend` and
+		// `_userMessageFingerprint` once the root cause is fixed.
+		this._diagnoseDuplicateUserAppend(message)
 		// §4.3: externalise any oversized inline text BEFORE the message is
 		// snapshotted into `apiConversationHistory` and persisted to disk.
 		// Mutates `message.content` in place; refs are resolved back to
