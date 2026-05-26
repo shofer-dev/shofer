@@ -10,6 +10,6 @@ Shofer works with virtually any AI model. Choose from Anthropic, OpenAI, Google 
 4. Enter your API key (stored securely in your OS credential store)
 5. Select a model from the dropdown
 
-<img src="images/provider.png" alt="Provider Settings" width="280" />
+<img src="images/ProvidersView.png" alt="Provider Settings" width="280" />
 
 You can create multiple profiles and switch between them anytime via the **API Config Selector** in the chat input bar.

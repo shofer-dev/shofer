@@ -2,7 +2,7 @@
 
 Shofer has dozens of settings to customize your experience. Access them via the ⚙️ gear icon in the Shofer panel, or open VS Code Settings and search for `shofer.`.
 
-<img src="images/settings.png" alt="Settings Panel" width="180" />
+<img src="images/SettingsView.png" alt="Settings Panel" width="180" />
 
 ## Key Settings Areas
 
