@@ -14,6 +14,8 @@ Try the built-in `/init` slash command to analyze your codebase and create an `A
 
 ## What You'll See
 
+<img src="src/media/walkthrough/images/WelcomeView.png" alt="Shofer Welcome Screen" width="500" />
+
 | UI Element              | Purpose                                                           |
 | ----------------------- | ----------------------------------------------------------------- |
 | **Chat View**           | Interact with the AI — type messages, see results                 |
@@ -131,17 +133,15 @@ Key recommendations: start with auto-approval toggles **OFF** and enable increme
 
 - **[Discord](https://discord.gg/x39UEEQ2)** — Chat with the team, get help, share feedback
 - **[Reddit](https://reddit.com/r/Shofer_dev)** — Community discussions and tips
-- **[GitHub Discussions](https://github.com/shofer-dev/shofer/discussions)** — Feature requests and ideas
 - **[GitHub Issues](https://github.com/shofer-dev/shofer/issues)** — Bug reports and tracking
 
 Shofer is open source (Apache 2.0). Contributions are welcome — read [`CONTRIBUTING.md`](CONTRIBUTING.md) and check the [roadmap](https://github.com/orgs/shofer/projects/1).
 
 ## Resources
 
-- **[User Manual](src/USER_MANUAL.md):** The complete guide to every feature, setting, and concept in Shofer.
+- **[User Manual](USER_MANUAL.md):** The complete guide to every feature, setting, and concept in Shofer.
 - **[Developer Documentation](https://shofer.dev/docs):** Official docs for installing, configuring, and mastering Shofer.
-- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues):** Report bugs and track development.
-- **[Feature Requests](https://github.com/shofer-dev/shofer/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop):** Have an idea? Share it with the developers.
+- **[GitHub Issues and Feature Requests](https://github.com/shofer-dev/shofer/issues):** Report bugs, feature requests, and track development.
 
 ---
 
