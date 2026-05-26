@@ -1,6 +1,44 @@
 # Shofer Changelog
 
-## 0.22.17 — 2026-05-20 (Current)
+## 0.26.19 — 2026-05-26 (Current)
+
+### Features
+
+- **In-app walkthrough**: Added an 11-step interactive walkthrough covering core workflows (chat, modes, tools, worktrees, RAG indexing, assistant agent). Auto-opens for new users and accessible via an overflow button in the chat toolbar.
+- **Webview crash recovery**: Implemented ping/pong heartbeat with RTT diagnostics, `fatal_error` reporting, auto-reset on fatal errors, and a Reload Window escalation path. Recovery infrastructure is gated behind an experiment flag.
+- **Prometheus metrics infrastructure**: Added extensible metrics monitoring (gated behind `prometheusMetrics` experiment flag) with code-index and task-lifecycle gauges, served on static port 30099. Includes comprehensive design documentation.
+- **Migration slash commands**: Added built-in `/migrate-from-roocode`, `/migrate-from-copilot`, and `/migrate-from-claude` slash commands with MCP format conversion utilities to streamline onboarding from other tools.
+- **Manual pricing override**: Added `customPricing` setting in Provider Advanced Settings, allowing users to override per-model pricing when the provider doesn't report costs.
+- **Worktree path isolation**: Mutating native tools (`write_to_file`, `apply_diff`, `sed`, `insert_edit`, `file`) are now prevented from writing outside the active worktree path, enforcing the embedded worktree sandbox.
+- **`.shoferignore` integration for Assistant Agent**: The assistant agent now respects `.shoferignore` patterns across its file watcher, directory tree reporting, and change notifications.
+- **Task card UI polish**: Task cards in TaskSelector and HistoryView now show a state-colored accent border and footer metadata (mode, token usage). Redundant state/rating text has been removed; completion status icons improved.
+- **TaskSelector moved to App level**: The TaskSelector drawer now persists across tab switches (Settings → Chat), no longer disappearing when navigating away.
+- **`apply_diff`/`sed` prompt tightening**: Block-level apply stats (matched/inserted/deleted counts) are now surfaced in tool results, and prompts have been tightened to reduce LLM errors.
+- **Performance optimizations — memory & I/O**: Per-task message logs moved to JSONL with incremental append deltas (breaking persistence change); inline content capped with blob externalisation; eliminated `+=` string accumulation in streaming providers; bounded code-indexer batches by bytes; capped MCP tool response sizes and output-channel log arguments.
+- **Performance optimizations — save frequency**: Streaming saves are now debounced (H0); token-usage writes use an incremental cache (H2.bis); merged slash commands are memoized (H8); background-task webview state pushes are gated on `isFocusedTask()` (H9).
+- **Code-indexer resilience**: Added exponential backoff retry for both Ollama/Qdrant connectivity and embedder validation, with UI status updates during retries.
+- **Code-indexer diagnostic logging**: Added detailed diagnostic logging for Ollama embedding payloads and Qdrant upsert payloads to aid debugging.
+- **User manual overhaul**: Consolidated fragmented docs into a single comprehensive `USER_MANUAL.md`; added Copilot and Claude Code configuration references; expanded Roo Code migration guide.
+
+### Bug Fixes
+
+- **History view task state**: Task state in HistoryView now correctly resolves using the `parallelTasks` runtime overlay instead of stale persisted state.
+- **`grep_search` fixes**: Now searches across git submodule boundaries; `fileTypes` and `excludePattern` made properly optional; accepts `pattern` as a fallback for `query`; dropped `strict:true` from schema.
+- **`sed` literal fallback**: When a regex pattern produces zero matches or compile errors, `sed` now automatically retries as a literal string, preventing unnecessary failures.
+- **`find_files` worktree exclusion**: `find_files` now excludes `.shofer/worktrees/` from results to avoid noise from embedded worktrees.
+- **WelcomeView blank screen fix**: Moved `syncExperimentContextKeys` and `getFullModeDetails` out of `src/shared/` (which is imported by the webview bundle). A `vscode` import had leaked into the webview bundle via `shared/modes.ts`, causing the React tree to fail silently at startup.
+- **Scroll stability during streaming**: Fixed scroll-to-bottom re-focus when user scrolls up during streaming; guarded `handleRowHeightChange` against user scroll-up intent; added strict no-auto-scroll in `USER_BROWSING_HISTORY` mode.
+- **Pencil button bounce fix**: The edit-message pencil button no longer bounces back to a streaming task when clicked.
+- **Sleep tool rendering**: The `sleep` tool now renders a proper chat-row entry so the user sees the pause; `"sleep"` added to the `ShoferSayTool.tool` union type.
+- **Orphaned `tool_results` cleanup**: Orphaned tool_results (with no matching tool_use) are now dropped during `apiConversationHistory` cleanup, preventing API errors.
+- **Parent delegation metadata repair**: Fixed `removeShoferFromStack` to correctly preserve parent delegation metadata, preventing orphaned parent tasks.
+- **Double-logging eliminated**: `ShoferProvider.log`/`.debug` no longer double-logs to the output channel.
+- **Dead code removal**: Removed `TaskResourceLimits` (`maxConcurrentActive`, `maxConcurrentStreaming`, `backgroundTimeout`) — all unused.
+- **Checkpoint cleanup guard**: Shadow repo cleanup on task delete now guards against missing directories, preventing errors.
+- **Assistant agent context-first rules**: Added context-first knowledge rules to the assistant agent system prompt, improving answer relevance.
+- **Test suite health**: Resolved 31 pre-existing test failures across 10 files; unskipped and rewrote stale `Task.spec.ts` tests; fixed all 9 remaining webview-ui test failures; added missing `prometheusMetrics` experiment fixture.
+
+## 0.22.17 — 2026-05-20
 
 ### Features
 
