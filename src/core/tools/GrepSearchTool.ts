@@ -187,7 +187,11 @@ function buildRipgrepArgs(params: {
 		shoferIgnoreFile,
 	} = params
 
-	const args: string[] = ["--json", "--no-messages"]
+	// --no-require-git prevents ripgrep from treating submodule .git files
+	// (gitdir: ../../.git/modules/...) as nested repository boundaries.
+	// Without this flag, ripgrep silently skips submodule directories, causing
+	// searches from the workspace root to return no results for submodule paths.
+	const args: string[] = ["--json", "--no-messages", "--no-require-git"]
 
 	if (isRegex) {
 		args.push("-e", query)
