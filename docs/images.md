@@ -216,6 +216,93 @@ Shofer also supports **image generation** via a separate `generate_image` tool. 
 
 Image generation uses provider-specific endpoints (not the chat completions API) and returns images that are displayed in the chat using the [`ImageViewer`](../webview-ui/src/components/common/ImageViewer.tsx) component, which supports zoom, copy, save, and Mermaid-style action buttons.
 
+## `view_image` Tool (Model-Initiated Image Reading)
+
+While the sections above describe the **user → model** image flow (user pastes/drops/picks an image), the [`view_image`](../../src/core/tools/ViewImageTool.ts) native tool handles the **model → disk** direction: the AI reads an image file from the workspace to include it in its own content for visual analysis.
+
+### What It Does
+
+The model calls `view_image` with a `filePath` relative to the workspace. Shofer reads the file from disk, base64-encodes it, and returns it as an [`Anthropic.ImageBlockParam`](https://docs.anthropic.com/en/docs/build-with-claude/vision#image-source) content block. The model (Claude, GPT, Gemini) then visually inspects the image in the next API request.
+
+**Shofer itself performs no image parsing, decoding, resizing, or pixel inspection.** The tool is a thin read-and-re-encode pass-through — the downstream LLM does all visual analysis.
+
+### Supported Formats
+
+| Format | MIME Type    | Returned As                     |
+| ------ | ------------ | ------------------------------- |
+| PNG    | `image/png`  | Anthropic `ImageBlockParam`     |
+| JPEG   | `image/jpeg` | Anthropic `ImageBlockParam`     |
+| GIF    | `image/gif`  | Anthropic `ImageBlockParam`     |
+| WebP   | `image/webp` | Anthropic `ImageBlockParam`     |
+| SVG    | —            | Text-only `data:` URI (no MIME) |
+| BMP    | —            | Text-only `data:` URI (no MIME) |
+
+SVG and BMP lack standard Anthropic image MIME types, so the tool falls back to a text result containing a `data:image/svg+xml;base64,…` or `data:image/bmp;base64,…` URI string. The model receives the raw bytes but cannot visually inspect them as inline image blocks.
+
+### Execution Flow
+
+```
+Model calls view_image(filePath)
+        │
+        ▼
+ViewImageTool.execute(params, task, callbacks)
+  - Guard: filePath missing → sayAndCreateMissingParamError
+  - Guard: unsupported extension → error string
+  - path.resolve(task.cwd, filePath)
+  - isPathOutsideWorkspace check
+        │
+        ▼
+askApproval("tool", completeMessage)
+  - Gated by alwaysAllowReadOnly auto-approval toggle
+  - Renders file path in chat as a tool row
+        │
+        ▼
+fs.readFile(absolutePath) → Buffer
+imageBuffer.toString("base64")
+getImageMimeType(ext)
+        │
+        ▼
+┌─ MIME type known (png/jpg/gif/webp):
+│  pushToolResult([textBlock, imageBlock])
+│  ImageBlockParam { type: "image", source: { type: "base64", media_type, data } }
+│
+└─ MIME type unknown (svg/bmp):
+   pushToolResult("Image file: <path>\nBase64 data: data:image/<ext>;base64,<data>")
+        │
+        ▼
+Image block enters apiConversationHistory
+        │
+        ▼
+Next API request: provider transform converts Anthropic image block
+to provider-specific format (same transformations as user images, §Provider-Specific Transformations)
+        │
+        ▼
+Upstream AI provider visually analyzes the image
+```
+
+### Streaming (`handlePartial`)
+
+During streaming, the tool uses [`hasPathStabilized(filePath)`](../../src/core/tools/BaseTool.ts) to gate against mid-stream path truncation. Once the path is stable, it posts a partial `"tool"` ask so the user sees a "Viewing image…" placeholder in the chat before the file is read.
+
+### Tool Group & Auto-Approval
+
+`view_image` belongs to [`TOOL_GROUPS.read`](../../packages/types/src/tool.ts) and is gated by the **alwaysAllowReadOnly** auto-approval toggle. It is unconditionally read-only — it never modifies files, runs commands, or accesses the network.
+
+### Assistant Agent Variant
+
+The assistant agent has a separate implementation in [`tool-executor.ts`](../../src/services/assistant-agent/tool-executor.ts) that returns **metadata only** (file path and size). It explicitly notes that the assistant agent cannot render images inline and suggests using context clues instead. This is because the assistant agent's cost-optimized model context does not surface multimodal content blocks.
+
+### Relationship to User Image Input
+
+| Aspect            | User Image Input (Paste/Drop/Pick) | `view_image` Tool              |
+| ----------------- | ---------------------------------- | ------------------------------ |
+| **Direction**     | User → Model                       | Model → Disk → Model           |
+| **Trigger**       | User action in chat textarea       | Model emits a tool call        |
+| **Source**        | Clipboard / file manager / picker  | Any file in the workspace      |
+| **Approval**      | None (user initiated it)           | `alwaysAllowReadOnly` toggle   |
+| **Output format** | Anthropic `ImageBlockParam`        | Same (or text `data:` URI)     |
+| **Formats**       | PNG, JPEG, WebP                    | PNG, JPEG, GIF, WebP, SVG, BMP |
+
 ## Related Files
 
 | File                                                                                                                 | Purpose                                                  |
@@ -224,10 +311,13 @@ Image generation uses provider-specific endpoints (not the chat completions API)
 | [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx)                                               | Image thumbnail display with delete                      |
 | [`ImageViewer.tsx`](../webview-ui/src/components/common/ImageViewer.tsx)                                             | Full-size image viewer (generated images)                |
 | [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                                     | Image state management, `MAX_IMAGES_PER_MESSAGE`         |
+| [`ViewImageTool.ts`](../../src/core/tools/ViewImageTool.ts)                                                          | `view_image` native tool: model reads image files        |
+| [`view_image.ts`](../../src/core/prompts/tools/native-tools/view_image.ts)                                           | JSON Schema for `view_image` tool                        |
 | [`resolveImageMentions.ts`](../../src/core/mentions/resolveImageMentions.ts)                                         | Image mention resolution                                 |
 | [`image-cleaning.ts`](../../src/api/transform/image-cleaning.ts)                                                     | Removal/conversion of image blocks for non-vision models |
 | [`openai-format.ts`](../../src/api/transform/openai-format.ts)                                                       | Image block → OpenAI `image_url` conversion              |
 | [`responses-api-input.ts`](../../src/api/transform/responses-api-input.ts)                                           | Image block → Responses API `input_image` conversion     |
+| [`tool-executor.ts`](../../src/services/assistant-agent/tool-executor.ts)                                            | Assistant agent's metadata-only `_viewImage` variant     |
 | [`ChatView.preserve-images.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatView.preserve-images.spec.tsx) | Test suite for image preservation behavior               |
 | [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)                         | Test suite for textarea image behavior                   |
 
