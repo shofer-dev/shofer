@@ -1,10 +1,11 @@
-import { memo } from "react"
+import { memo, useMemo } from "react"
 import { ArrowRight, Folder } from "lucide-react"
 import type { DisplayHistoryItem } from "./types"
 
 import { vscode } from "@/utils/vscode"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useExtensionState } from "@src/context/ExtensionStateContext"
 
 import TaskItemFooter from "./TaskItemFooter"
 import { StandardTooltip } from "../ui"
@@ -42,7 +43,14 @@ const TaskItem = ({
 	}
 
 	const isCompact = variant === "compact"
-	const taskState = item.taskState ?? { lifecycle: "idle" as const }
+	// Resolve runtime state overlay from parallelTasks so that stopped/idle/paused
+	// tasks show their correct state even when the persisted taskState hasn't been
+	// flushed yet (persistState is async fire-and-forget). Mirrors TaskSelector's
+	// runtime?.state ?? item.taskState ?? IDLE_TASK_STATE fallback chain.
+	const { parallelTasks } = useExtensionState()
+	const runtimeStateMap = useMemo(() => new Map(parallelTasks.map((t) => [t.id, t])), [parallelTasks])
+	const runtime = runtimeStateMap.get(item.id)
+	const taskState = runtime?.state ?? item.taskState ?? { lifecycle: "idle" as const }
 	const { borderColor } = resolveStateVisual(taskState)
 
 	return (

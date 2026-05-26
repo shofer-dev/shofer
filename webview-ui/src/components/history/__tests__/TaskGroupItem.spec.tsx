@@ -4,6 +4,12 @@ import TaskGroupItem from "../TaskGroupItem"
 import type { TaskGroup, DisplayHistoryItem, SubtaskTreeNode } from "../types"
 
 vi.mock("@src/utils/vscode")
+vi.mock("@src/context/ExtensionStateContext", () => ({
+	useExtensionState: () => ({
+		parallelTasks: [],
+		taskHistory: [],
+	}),
+}))
 vi.mock("@src/i18n/TranslationContext", () => ({
 	useAppTranslation: () => ({
 		t: (key: string, options?: Record<string, unknown>) => {

@@ -15,6 +15,13 @@ vi.mock("@/utils/format", () => ({
 	formatLargeNumber: vi.fn((num: number) => num.toString()),
 }))
 
+vi.mock("@src/context/ExtensionStateContext", () => ({
+	useExtensionState: () => ({
+		parallelTasks: [],
+		taskHistory: [],
+	}),
+}))
+
 const mockTask = {
 	id: "1",
 	number: 1,
