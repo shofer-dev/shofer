@@ -32,9 +32,8 @@ This document catalogues every **user-facing feature** and **opinionated change*
 18. [Code Indexer & Semantic Search](#18-code-indexer--semantic-search)
 19. [Cost Calculation & Limits](#19-cost-calculation--limits)
 20. [Cloud removal and marketplace/telemetry feature flags](#20-cloud-removal-and-marketplacetelemetry-feature-flags)
-21. [Provider Improvements](#21-provider-improvements)
-22. [UI/UX Opinionated Changes](#22-uiux-opinionated-changes)
-23. [Known Gaps & Areas for Improvement](#23-known-gaps--areas-for-improvement)
+21. [UI/UX Opinionated Changes](#21-uiux-opinionated-changes)
+22. [Assistant Agent](#22-assistant-agent)
 
 ---
 
@@ -60,7 +59,7 @@ Previously, the codebase supported only one task at a time — starting a new ta
 - The [`TaskManager`](../src/services/task-manager/TaskManager.ts) orchestrates lifecycle: create, pause, resume, abort, rehydrate.
 - Task state is persisted to disk so tasks survive extension reloads and VS Code restarts.
 
-> 📸 TODO: screenshot of TaskSelector showing multiple tasks with different state badges (running, paused, waiting, completed)
+<!-- 📸 TODO: screenshot of TaskSelector showing multiple tasks with different state badges (running, paused, waiting, completed) -->
 
 ---
 
@@ -93,7 +92,7 @@ Parent task delegates to 3 background children:
 Parent calls wait_for_task([A, B, C], wait="all") — resumes when all complete.
 ```
 
-> 📸 TODO: screenshot of chat showing `wait_for_task` row with status badges for multiple background children
+<!-- 📸 TODO: screenshot of chat showing `wait_for_task` row with status badges for multiple background children -->
 
 ---
 
@@ -115,7 +114,7 @@ Previously, `ask_followup_question` from a background child was escalated to the
 | **Dedicated `alwaysAllowSubtasks` toggle**                                  | `cancel_tasks` and `answer_subtask_question` share the `alwaysAllowSubtasks` auto-approval toggle alongside `new_task` and `attempt_completion`.                          |
 | **Waiting lifecycle**                                                       | Tasks blocked inside `wait_for_task` transition to a distinct `waiting` state — visible in the TaskSelector, separate from both `idle` and `running`.                     |
 
-> 📸 TODO: screenshot of `check_task_status` row showing pending question from a background child
+<!-- 📸 TODO: screenshot of `check_task_status` row showing pending question from a background child -->
 
 ---
 
@@ -137,7 +136,7 @@ Previously, all MCP tool calls were synchronous and blocking. The agent had to w
 | **Waiting lifecycle for MCP wait**                                         | When the task calls `wait_for_mcp_call`, it transitions to the `waiting` state — visible in the TaskSelector alongside `wait_for_task`.                   |
 | **Telemetry for async MCP**                                                | Async MCP usage is tracked separately from synchronous MCP calls, with dedicated telemetry events for call initiation, completion, and errors.            |
 
-> 📸 TODO: screenshot of ChatRow showing async MCP badge and completion state
+<!-- 📸 TODO: screenshot of ChatRow showing async MCP badge and completion state -->
 
 ---
 
@@ -154,7 +153,7 @@ The TaskSelector (visible when no task is active) was redesigned to handle multi
 | **Pin**                    | Tasks can be pinned to stay at the top of the list regardless of creation time. Useful for keeping reference tasks accessible.                      |
 | **State badges**           | Each task entry shows its state: _running_ (spinner), _paused_, _completed_ (checkmark), _error_ (warning). See [`task_states.md`](task_states.md). |
 
-> 📸 TODO: screenshot of TaskSelector showing parent-child tree, pinned tasks at top, and state badges
+<!-- 📸 TODO: screenshot of TaskSelector showing parent-child tree, pinned tasks at top, and state badges -->
 
 ---
 
@@ -174,7 +173,7 @@ See [`message_queue.md`](message_queue.md) for the full design document.
 | **Queue isolation**       | Queued messages are scoped to their task. Switching tasks or starting a new task never leaks stale messages.                         |
 | **Collapsible UI**        | The Queued Messages section and File Changes panel are collapsible, keeping the chat interface clean.                                |
 
-> 📸 TODO: screenshot of chat showing queued messages indicator and Send Now button
+<!-- 📸 TODO: screenshot of chat showing queued messages indicator and Send Now button -->
 
 ---
 
@@ -191,7 +190,7 @@ See [`task-export.md`](task-export.md) for the full format reference.
 | **Markdown** (`.md`) | Human-readable conversation transcript with tool calls, tool results, and reasoning blocks.                                                              |
 | **JSON** (`.json`)   | Structured machine-readable trace of the full message exchange — tool calls, results, reasoning, metadata. Suitable for programmatic analysis or replay. |
 
-> 📸 TODO: screenshot of export dropdown showing both Markdown and JSON options
+<!-- 📸 TODO: screenshot of export dropdown showing both Markdown and JSON options -->
 
 ---
 
@@ -201,7 +200,7 @@ Roo's Drag & Drop system was hard to use on the Desktop (Alt key didn't work for
 
 See [`drag_n_drop.md`](drag_n_drop.md) for the full design.
 
-> 📸 TODO: screenshot of drag-and-drop in action — file tags above the chat input
+<!-- 📸 TODO: screenshot of drag-and-drop in action — file tags above the chat input -->
 
 ---
 
@@ -232,7 +231,7 @@ Twenty native tools are listed below — see [`native_tools.md`](native_tools.md
 | [`skills`](../src/core/tools/SkillsTool.ts)                             | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
 | **[`give_feedback`](../src/core/tools/GiveFeedbackTool.ts)**            | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
 
-> 📸 TODO: screenshot of `lsp_search` results in chat
+<!-- 📸 TODO: screenshot of `lsp_search` results in chat -->
 
 ---
 
@@ -250,7 +249,7 @@ Removed the git-dependent shadow-repository backend in favor of a **working-dire
 | **Two-action workflow**         | **Accept** promotes content to persisted baseline. **Revert** restores the original content.                                                                                                               |
 | **Comprehensive tool tracking** | Every disk-modifying tool is tracked: `write_to_file`, `apply_diff`, `insert_edit`, `sed`, `file` (rm/mv), `rename_symbol`. The tracker captures original content before mutation and final content after. |
 
-> 📸 TODO: screenshot of File Changes panel showing tracked files with Accept/Revert buttons
+<!-- 📸 TODO: screenshot of File Changes panel showing tracked files with Accept/Revert buttons -->
 
 ---
 
@@ -268,7 +267,7 @@ See [`auto_approval.md`](auto_approval.md) and [`tool-categories.md`](tool-categ
 | **Unified 9 categories**              | Every tool — native, MCP, or registered by another extension — falls into exactly one category. Mode-based filtering and auto-approval both use the same groups. See [`tool-categories.md`](tool-categories.md). |
 | **Scoped auto-approve trigger badge** | The auto-approve badge in the chat header is scoped to the current mode, showing only relevant toggles.                                                                                                          |
 
-> 📸 TODO: screenshot of auto-approval toolbar in chat header showing category toggles
+<!-- 📸 TODO: screenshot of auto-approval toolbar in chat header showing category toggles -->
 
 ---
 
@@ -286,7 +285,7 @@ See [`skills.md`](skills.md) and [`command-skill-buttons.md`](command-skill-butt
 | **Loaded skills tracking**    | Skills are tracked as "loaded" in the IPC layer. The SkillsButton shows which skills are currently active.                                |
 | **Persistence & rehydration** | Loaded skills are persisted in the task history. When a task is restored, skills are re-loaded automatically.                             |
 
-> 📸 TODO: screenshot of Skills popover showing loaded skills with descriptions and open-file buttons
+<!-- 📸 TODO: screenshot of Skills popover showing loaded skills with descriptions and open-file buttons -->
 
 ---
 
@@ -303,7 +302,7 @@ The mode system was extended with scoped tool groups, per-task mode binding, and
 | **Sticky mode across focus switches**                                   | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                      |
 | **[`switch_mode`](../src/core/tools/SwitchModeTool.ts) scoped to task** | Mode switching via `switch_mode` is now isolated to the calling task — it never leaks across concurrent tasks. Each task's mode is independently scoped and persisted.                                               |
 
-> 📸 TODO: screenshot of mode selector dropdown showing scoped group configuration
+<!-- 📸 TODO: screenshot of mode selector dropdown showing scoped group configuration -->
 
 ---
 
@@ -323,7 +322,7 @@ See [`tool-registration-interface.md`](tool-registration-interface.md) for the p
 
 This enables companion extensions to seamlessly contribute tools to Shofer's tool palette without Shofer needing to know about them at compile time.
 
-> 📸 TODO: screenshot of an external LM tool call rendered as an MCP-style chat row
+<!-- 📸 TODO: screenshot of an external LM tool call rendered as an MCP-style chat row -->
 
 ---
 
@@ -340,7 +339,7 @@ See [`worktrees.md`](worktrees.md) for the full architecture.
 | **Embedded worktree model**   | Worktrees are managed within the same Shofer session.                                                                                                 |
 | **Worktree status indicator** | A chip in the chat input bar shows the current worktree branch name and git status (dirty/clean/ahead/behind). Clicking it opens worktree management. |
 
-> 📸 TODO: screenshot of worktree status indicator chip in the chat input bar
+<!-- 📸 TODO: screenshot of worktree status indicator chip in the chat input bar -->
 
 ---
 
@@ -397,7 +396,7 @@ The indexer processes workspace files through tree-sitter parsing and embedding,
 | **Cumulative diagnostics**                             | Settings panel surfaces cumulative file/commit counts and last-indexed diagnostics, giving users visibility into indexer state.                                                                                                                            |
 | **Branch-aware git indexing**                          | `git_search` can be scoped to a specific branch via the `codebaseIndexGitBranch` setting; the watcher reports the live branch for the working tree.                                                                                                        |
 
-> 📸 TODO: screenshot of RAG Indexer settings panel showing file/commit counts and diagnostics
+<!-- 📸 TODO: screenshot of RAG Indexer settings panel showing file/commit counts and diagnostics -->
 
 ---
 
@@ -416,7 +415,7 @@ See [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for the f
 | **Configurable cost limit**  | Users can set a USD spend cap per root task. When reached, the task is automatically paused or aborted.                                |
 | **Post-stream gate**         | The cost limit check fires after every stream completion, even when providers only report `totalCost` without individual token counts. |
 
-> 📸 TODO: screenshot of task header showing aggregated cost with subtask breakdown
+<!-- 📸 TODO: screenshot of task header showing aggregated cost with subtask breakdown -->
 
 ---
 
@@ -426,27 +425,7 @@ Given that Shofer runs entirely locally with no server-side dependencies, other 
 
 ---
 
-## 21. Provider Improvements
-
-### VS Code Language Model Provider
-
-| Feature                         | Description                                                                                                                                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Thinking/reasoning blocks**   | Streaming reasoning/thinking content is now surfaced in the chat UI as collapsible thinking blocks. Models using the VS Code LM API (including GitHub Copilot models) can show their reasoning process. |
-| **MaxTokens from model config** | The provider now passes `maxTokens` from the model configuration to the LLM, respecting model-specific output limits.                                                                                   |
-| **TaskId as conversationId**    | Each task's ID is now optionally passed as a `conversationId` in model options for better conversation tracking and continuity.                                                                         |
-
-### Tool Preparing Progress
-
-A new progress indicator appears in chat while the LLM streams tool call arguments. Previously, there was no visual indicator and the chat appeared idle. Users now see that a tool invocation is in progress before it executes. This addition significantly improves the perceived responsiveness and transparency of tool calls.
-
-See [`tool-preparing-progress.md`](tool-preparing-progress.md) for the full design.
-
-> 📸 TODO: screenshot of tool_preparing spinner row during a tool call argument stream
-
----
-
-## 22. UI/UX Opinionated Changes
+## 21. UI/UX Opinionated Changes
 
 These are deliberate design decisions that changed the default behavior or appearance of the application.
 
@@ -462,67 +441,28 @@ These are deliberate design decisions that changed the default behavior or appea
 
 ---
 
-## 23. Known Gaps & Areas for Improvement
+## 22. Assistant Agent
 
-This section catalogues issues and omissions discovered during a path/entity verification audit of this document (May 2026). Future editors should address these.
+The **Assistant Agent** is a persistent, long-lived, read-only LLM companion that accumulates codebase knowledge across tasks — surviving task completion and VS Code restarts. It runs on a **separate, cost-optimized model with a large context window**, and is exposed to tasks via the [`ask_assistant_agent`](../src/core/tools/AskAssistantAgentTool.ts) native tool.
 
-### Factual Inaccuracies Corrected
+Previously, every task had to load its own context from scratch. There was no mechanism for sharing codebase knowledge between tasks, and repetitive file reads burned tokens.
 
-| Line(s)  | Issue                                                                                                     | Status   |
-| -------- | --------------------------------------------------------------------------------------------------------- | -------- |
-| 52–54    | Tool paths pointed to `src/core/task/tools/XTool.ts` — directory never existed                            | ✅ Fixed |
-| 54       | `TaskManager` path: `src/core/task/` → `src/services/task-manager/`                                       | ✅ Fixed |
-| 181      | `skills` tool linked to `packages/types/src/tool.ts` instead of implementation file                       | ✅ Fixed |
-| 18,25,29 | Three ToC anchors mismatched section headings                                                             | ✅ Fixed |
-| 46       | Task states listed as 4 values; actual `TaskLifecycle` has 7 (`idle`, `waiting_input`, `waiting` missing) | ✅ Fixed |
-| 160      | Claimed "Twelve native tools" but table listed 17; codebase has 50+                                       | ✅ Fixed |
-| 359      | Typo: "passisng" → "passing"                                                                              | ✅ Fixed |
-| 363      | Typo: "the cha appeared idle" → "the chat appeared idle"                                                  | ✅ Fixed |
+### What Was Built
 
-### Content Gaps (not yet addressed)
+| Feature                            | Description                                                                                                                                                                                                                                        |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Persistent conversation**        | The agent's full conversation survives task termination and VS Code restarts. Uses a versioned JSON snapshot (`globalStorage`) with SHA-256 file-context validation.                                                                               |
+| **Separate, cheap model**          | User selects a low-cost, large-context model (e.g., Gemini Flash, GPT-4o-mini, Claude Haiku) via a linked API Configuration profile.                                                                                                               |
+| **Read-only tool set**             | The assistant agent is **strictly read-only** — [`tool-executor.ts`](../src/services/assistant-agent/tool-executor.ts) restricts it to `TOOL_GROUPS.read` only (file reading, search, LSP lookups). No write, execute, MCP, or task-control tools. |
+| **KV-cache-preserving context**    | Context is append-only; files modified by tasks are NOT evicted. Instead a "recently modified" notification is attached to the next question, keeping the LLM provider's attention cache warm.                                                     |
+| **Question queue + timeout**       | Questions are serialized via a bounded FIFO queue. The hard `timeoutMs` covers queue wait + LLM processing. Soft `softTimeoutSec` / `softResultLength` hints guide the agent's response.                                                           |
+| **Context window truncation**      | No summarization — oldest messages are dropped when the budget is exceeded. Oldest file contexts (by `lastReferencedAt`) are evicted first, then oldest conversation turns.                                                                        |
+| **Directory tree injection**       | A `find .`-style workspace directory tree (capped at ~10% of context window) is injected into the system prompt, giving immediate project structure awareness.                                                                                     |
+| **File watcher + tool hooks**      | Detects external file changes (VSCode `FileSystemWatcher`) and task-initiated edits (tool execution hooks). Stale files are lazily re-read on next reference.                                                                                      |
+| **Toolbar badge + dedicated chat** | Status badge in the chat-input toolbar shows agent state, context fill %, and cost. Popover provides Start/Stop/Clear Context actions. A dedicated read-only chat panel streams live Q&A.                                                          |
+| **Subtask question routing**       | Questions from `ask_assistant_agent` in background subtasks route to the calling task synchronously — the task blocks until the answer or timeout.                                                                                                 |
 
-| Gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Severity | Suggested Action                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------- |
-| §9 now covers 20 of 50+ native tools (added `rag_search`, `git_search`, `read_command_output`). Still missing: `view_image`, `find_files`, `ask_assistant_agent`, `call_mcp_tool_async`, `cancel_tasks`, `answer_subtask_question`, `read_project_structure`, `create_directory`, `sleep`, `update_todo_list`, `get_changed_files`, `get_errors`, `get_project_setup_info`, `switch_mode`, `ask_followup_question`, `access_mcp_resource`, `generate_image`, `run_slash_command`. Many of these are covered in dedicated sections (§3, §4, §18). | Medium   | Continue expanding §9 subcategories or link to `native_tools.md` comprehensively |
-| §20 (Cloud removal) is 3 sentences with no feature-level detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Medium   | Expand to list what was decoupled, removed, and what replaced each cloud feature |
-| No section on **Assistant Agent** (`ask_assistant_agent` tool + `AssistantAgentManager` service)                                                                                                                                                                                                                                                                                                                                                                                                                                                 | High     | Add a new section or subsection under §9 or §21                                  |
-| ~~No section on **Async MCP**~~ → ✅ Added §4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —        | —                                                                                |
-| No section on **Checkpoint system overhaul** (shadow-git → `GIT_DIR` isolation, `RepoPerTaskCheckpointService`)                                                                                                                                                                                                                                                                                                                                                                                                                                  | Medium   | Add as its own section or expand §17                                             |
-| ~~No section on **RAG / Code Index**~~ → ✅ Added §18                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | —        | —                                                                                |
-| §15 (Worktree) doesn't mention worktree handler naming convention or `.worktreeinclude`                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Low      | Expand with handler API details                                                  |
-| ~~No section on `git_search`~~ → ✅ Added to §9 and §18                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | —        | —                                                                                |
-| ~~No section on `read_command_output`~~ → ✅ Added to §9                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | —        | —                                                                                |
-| No section on `edit` / `edit_file` tool aliases and their relationship to `apply_diff`                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Low      | Add to §9 or §10                                                                 |
-
-### Structural Improvements
-
-- The Document Index (§Document Index) is alphabetically ordered but doesn't follow the same order as the ToC. Consider reordering to match.
-- Section 20 is the only section without a `### What Was Built` subsection, making it visually inconsistent.
-- Screenshots are all marked `📸 TODO`. A future pass should capture and embed them.
-- The `Table of Contents` numbering uses `1.`, `2.`, … while the section headings use `## 1.`, `## 2.`, … — some renderers interpret the heading `## 1.` as a list item rather than a heading anchor.
-
-| Document                                                           | Topic                                            |
-| ------------------------------------------------------------------ | ------------------------------------------------ |
-| [`auto_approval.md`](auto_approval.md)                             | Auto-approval decision flow and category toggles |
-| [`cancellation.md`](cancellation.md)                               | End-to-end Stop propagation                      |
-| [`command-skill-buttons.md`](command-skill-buttons.md)             | Commands & Skills quick-access buttons design    |
-| [`configuration.md`](configuration.md)                             | VS Code settings reference                       |
-| [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) | Per-task cost tracking and USD cap               |
-| [`drag_n_drop.md`](drag_n_drop.md)                                 | Drag-and-drop context files                      |
-| [`file-change-tracking.md`](file-change-tracking.md)               | File changes panel and tracking specification    |
-| [`message_queue.md`](message_queue.md)                             | Message queue, Send Now, and per-task drafts     |
-| [`native_tools.md`](native_tools.md)                               | Complete native tools reference                  |
-| [`grep_search-tool.md`](grep_search-tool.md)                       | Unified grep_search tool specification           |
-| [`shofer_special_files.md`](shofer_special_files.md)               | Special files and directories Shofer recognizes  |
-| [`skills.md`](skills.md)                                           | Skills system architecture                       |
-| [`submodule-support.md`](submodule-support.md)                     | Nested git / submodule checkpoint support        |
-| [`task_states.md`](task_states.md)                                 | Task state model and visual indicators           |
-| [`task-export.md`](task-export.md)                                 | Markdown and JSON export formats                 |
-| [`tool-categories.md`](tool-categories.md)                         | 9 unified tool categories                        |
-| [`tool-preparing-progress.md`](tool-preparing-progress.md)         | Tool call argument streaming indicator           |
-| [`tool-registration-interface.md`](tool-registration-interface.md) | External LM tool provider API                    |
-| [`tool_access.md`](tool_access.md)                                 | Mode-level tool access control                   |
-| [`worktrees.md`](worktrees.md)                                     | Worktree architecture                            |
+<!-- 📸 TODO: screenshot of Assistant Agent toolbar badge and popover showing state, context fill, and cost -->
 
 ---
 
