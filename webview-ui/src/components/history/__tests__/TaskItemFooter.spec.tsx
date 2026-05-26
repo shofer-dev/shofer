@@ -2,6 +2,12 @@ import { render, screen } from "@/utils/test-utils"
 
 import TaskItemFooter from "../TaskItemFooter"
 
+vi.mock("@src/context/ExtensionStateContext", () => ({
+	useExtensionState: () => ({
+		parallelTasks: [],
+		taskHistory: [],
+	}),
+}))
 vi.mock("@src/i18n/TranslationContext", () => ({
 	useAppTranslation: () => ({
 		t: (key: string) => key,
