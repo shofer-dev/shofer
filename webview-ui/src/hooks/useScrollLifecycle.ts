@@ -331,6 +331,7 @@ export function useScrollLifecycle({
 
 	const handleRowHeightChange = useCallback(
 		(isTaller: boolean) => {
+			// Strict: while in USER_BROWSING_HISTORY, never auto-scroll
 			if (
 				scrollPhaseRef.current === "USER_BROWSING_HISTORY" ||
 				scrollPhaseRef.current === "HYDRATING_PINNED_TO_BOTTOM"
@@ -338,7 +339,8 @@ export function useScrollLifecycle({
 				return
 			}
 
-			const shouldForcePinForAnchoredStreaming = scrollPhaseRef.current === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current
+			const shouldForcePinForAnchoredStreaming =
+				scrollPhaseRef.current === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current
 			if (isAtBottomRef.current || shouldForcePinForAnchoredStreaming) {
 				if (isTaller) {
 					scrollToBottomSmooth()
@@ -384,21 +386,18 @@ export function useScrollLifecycle({
 
 			const currentPhase = scrollPhaseRef.current
 
-			if (!isAtBottom && isHydratingRef.current && currentPhase !== "USER_BROWSING_HISTORY") {
+			// Strict: while in USER_BROWSING_HISTORY, never auto-scroll or re-anchor
+			if (currentPhase === "USER_BROWSING_HISTORY") {
+				setShowScrollToBottom(true)
+				return
+			}
+
+			if (!isAtBottom && isHydratingRef.current) {
 				setShowScrollToBottom(false)
 				return
 			}
 
 			if (isAtBottom) {
-				if (currentPhase === "USER_BROWSING_HISTORY" && (isHydratingRef.current || userDisengagedRef.current)) {
-					// During hydration or the disengage immune window, an
-					// atBottomStateChange(true) signal is most likely from a
-					// programmatic scroll that completed after the user scrolled
-					// up. Do not override the user's browse intent.
-					setShowScrollToBottom(true)
-					return
-				}
-
 				enterAnchoredFollowing("atBottomStateChange")
 				return
 			}
@@ -414,7 +413,7 @@ export function useScrollLifecycle({
 				return
 			}
 
-			setShowScrollToBottom(currentPhase === "USER_BROWSING_HISTORY")
+			setShowScrollToBottom(false)
 		},
 		[enterAnchoredFollowing, enterUserBrowsingHistory, isStreaming, scrollToBottomAuto],
 	)
