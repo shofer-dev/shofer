@@ -6,8 +6,7 @@ Shofer aspires to be a community-driven project. Feel free to connect with other
 
 - **[Discord](https://discord.gg/x39UEEQ2)** — Chat with the team, get help, share feedback
 - **[Reddit](https://reddit.com/r/Shofer_dev)** — Community discussions and tips
-- **[GitHub Discussions](https://github.com/shofer-dev/shofer/discussions)** — Feature requests and ideas
-- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues)** — Bug reports and tracking
+- **[GitHub Issues and Feature Requests](https://github.com/shofer-dev/shofer/issues)** — Bug reports, feature requests, and tracking
 
 ## Contribute
 
