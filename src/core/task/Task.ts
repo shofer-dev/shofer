@@ -6685,14 +6685,71 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			resultOrphansDropped += cleaned.length - filteredCleaned.length
 		}
 
-		if (orphansFixed > 0 || resultOrphansDropped > 0) {
-			this.apiConversationHistory = filteredCleaned as ApiMessage[]
+		// ── Dedup pass: duplicate tool_result for the same tool_use_id ──
+		// Two adjacent user messages can each carry a tool_result for the
+		// SAME tool_use_id (observed in production: a write-side race in the
+		// flush / addToApiConversationHistory paths persisted two byte-identical
+		// user messages — same tool_result + identical environment_details —
+		// for one assistant tool_use turn). The OpenAI / DeepSeek contract is
+		// "exactly one tool message per tool_call"; a second response with the
+		// same id triggers HTTP 400 "Messages with role 'tool' must be a
+		// response to a preceding message with 'tool_calls'" upstream.
+		//
+		// validateAndFixToolResultIds already dedupes WITHIN a single user
+		// message (GitHub #10465). This pass extends that guarantee ACROSS
+		// the user-message run between two assistant turns: within each such
+		// run, every tool_use_id may answer at most once. First occurrence
+		// wins; later duplicates are dropped. A user message that becomes
+		// empty after dropping is removed entirely.
+		let duplicatesDropped = 0
+		const seenInRun = new Set<string>()
+		for (let i = 0; i < filteredCleaned.length; i++) {
+			const msg = filteredCleaned[i]
+			if (msg.role === "assistant") {
+				seenInRun.clear()
+				continue
+			}
+			if (msg.role !== "user" || !Array.isArray(msg.content)) {
+				continue
+			}
+			const content = msg.content as Anthropic.Messages.ContentBlockParam[]
+			const pruned = content.filter((b) => {
+				if (b.type !== "tool_result") {
+					return true
+				}
+				const tr = b as Anthropic.ToolResultBlockParam
+				if (seenInRun.has(tr.tool_use_id)) {
+					duplicatesDropped++
+					this.diagLog(
+						`[Task] Dropping duplicate tool_result with id="${tr.tool_use_id}" ` +
+							`at history index ${i} — already answered earlier in the same user-message run.`,
+					)
+					return false
+				}
+				seenInRun.add(tr.tool_use_id)
+				return true
+			})
+			if (pruned.length < content.length) {
+				if (pruned.length > 0) {
+					filteredCleaned[i] = { ...msg, content: pruned }
+				} else {
+					;(filteredCleaned as any)[i] = null
+				}
+			}
+		}
+		const dedupedCleaned = filteredCleaned.filter((m) => m !== null) as typeof filteredCleaned
+
+		if (orphansFixed > 0 || resultOrphansDropped > 0 || duplicatesDropped > 0) {
+			this.apiConversationHistory = dedupedCleaned as ApiMessage[]
 			const parts: string[] = []
 			if (orphansFixed > 0) {
 				parts.push(`injected ${orphansFixed} placeholder tool_result(s)`)
 			}
 			if (resultOrphansDropped > 0) {
 				parts.push(`dropped ${resultOrphansDropped} orphaned tool_result(s)`)
+			}
+			if (duplicatesDropped > 0) {
+				parts.push(`dropped ${duplicatesDropped} duplicate tool_result(s)`)
 			}
 			this.diagLog(`[Task] Conversation history cleanup: ${parts.join(", ")}.`)
 		}
