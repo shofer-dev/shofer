@@ -347,9 +347,13 @@ through real money with no upper bound.
           `maxUsd` with the user-supplied value and persists it to
           history. Non-numeric input falls back to "continue without
           limit" so we never silently ignore the user.
-    - `abort` — `root.abortTask(false)` (clean abort, persists state).
-    - `kill` — `root.abortTask(true)` (abandoned, no further user
-      interaction). Intended for headless / CLI / evals.
+    - `abort` — `root.abortTask(false)` (clean abort: graceful stream
+      teardown, error diagnostics persisted, user input salvaged).
+    - `kill` — `root.abortTask(true)` (abandoned: skips stream teardown,
+      drops error reporting and in-flight input; suppresses unhandled
+      rejections to avoid host-process crashes). Intended for headless /
+      CLI / evals. See [Design → Where the check fires](#where-the-check-fires)
+      for a detailed breakdown of the four behavioral differences.
 4. Subtasks: when a `new_task` would push the root's aggregated cost
    over the limit, the spawn is refused with a tool error.
 5. Telemetry: emits `BUDGET_EXCEEDED` with
@@ -445,6 +449,45 @@ or after stream drain. Behaves identically:
       `await this.abortTask(false)` and root if different.
     - `kill` → cancel in-flight request,
       `await this.abortTask(true)` and root if different.
+
+Both `abort` and `kill` call the same `abortTask()` method, differing
+only in the `isAbandoned` boolean parameter. `kill` sets
+`this.abandoned = true` inside `abortTask()`, which has four practical
+effects beyond changing the `TaskAborted` reason from `"user"` to
+`"abandoned"`:
+
+1. **Skips graceful HTTP stream abort** — under `abort` (`isAbandoned=false`),
+   the streaming loop calls `abortStream("user_cancelled")` to cleanly
+   tear down the HTTP connection before proceeding. Under `kill`
+   (`isAbandoned=true`), this call is skipped entirely (Task.ts line
+   4415). If the provider's stream is hanging (e.g. OpenRouter), the
+   dangling stream is orphaned with no graceful-shutdown handshake.
+
+2. **Drops in-flight error diagnostics** — under `abort`, any error
+   caught during the streaming loop is persisted via
+   `snapshotApiReqError()` and `api_req_failed` is emitted to the chat
+   UI so the user can see what happened. Under `kill`, all error
+   reporting is suppressed (Task.ts line 4632).
+
+3. **Silently discards in-flight user input** — under `abort`, if a
+   typed message arrives mid-abort but after the ask cleared,
+   `handleWebviewAskResponse` prepends it back to the message queue
+   (Task.ts line 2320). Under `kill`, the message is silently dropped.
+
+4. **Suppresses unhandled rejections** — three catch blocks in
+   `startTask()` and the resume/cancellation race handler (Task.ts
+   lines 2849, 2857, 3191) use `this.abandoned` as a guard to
+   swallow errors that would otherwise become unhandled promise
+   rejections and crash the VS Code extension host process. Under
+   `abort`, errors may still re-throw in narrow timing windows
+   (before `this.abort` is set). Under `kill`, the `abandoned=true`
+   flag guarantees all three catch blocks swallow.
+
+In summary: `kill` tears down the task tree identically to `abort`
+(disposal, background children, MCP calls, cost flush) but omits every
+user-facing and stream-facing graceful step. It is designed for
+automated / eval / headless scenarios where there is no user to show
+errors to and hanging streams should be left to time out on their own.
 
 A third chokepoint guards `new_task` in
 [`NewTaskTool.ts`](../src/core/tools/NewTaskTool.ts): before
@@ -581,7 +624,9 @@ follow-ups:
 - [ ] "Soft" warning at 80% of the cap before the hard action at 100%.
 - [ ] Integration tests for each of `pause` / `abort` / `kill`
       end-to-end (the heavy `Task.spec.ts` harness was left
-      untouched; current tests cover the pure pieces).
+      untouched; current tests cover the pure pieces). Behavioral
+      differences between `abort` and `kill` are documented in
+      [Design → Where the check fires](#where-the-check-fires).
 - [ ] Re-entrancy guard around concurrent parallel subtasks racing
       `checkCostLimit` (today the cache + per-request index
       eliminates intra-task races, but cross-subtask parallel
