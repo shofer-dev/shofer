@@ -2,7 +2,7 @@
 
 If you're using GitHub Copilot and wondering what Shofer brings to the table, this document is for you.
 
-Shofer is a **locally-run, fully configurable AI coding agent** that operates as a VS Code extension — on your machine, under your control. It gives you capabilities far beyond what Copilot's chat and inline completions offer, without sending your code to Microsoft or GitHub.
+Shofer is a **locally-run, fully configurable AI coding agent** that operates as a VS Code extension — on your machine, under your control. It gives you capabilities on par, and in some cases better, than what Copilot offers, without sending your code to Microsoft or GitHub.
 
 > **Quick Start**: Run the `/migrate-from-copilot` slash command to automatically migrate your existing GitHub Copilot configuration files (`.github/copilot-instructions.md`, agents, skills, instructions) to Shofer equivalents. See [`copilot.md`](copilot.md) for the full Copilot file reference.
 
