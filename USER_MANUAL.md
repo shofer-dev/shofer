@@ -20,6 +20,9 @@ Welcome to Shofer. This manual covers the concepts and configuration you need to
 12. [Special Files](#12-special-files)
 13. [Privacy & Telemetry](#13-privacy--telemetry)
 14. [Migrating from Roo-Code](#14-migrating-from-roo-code)
+15. [Assistant Agent](#15-assistant-agent)
+16. [Migrating from GitHub Copilot](#16-migrating-from-github-copilot)
+17. [Community](#17-community)
 
 ---
 
@@ -27,7 +30,7 @@ Welcome to Shofer. This manual covers the concepts and configuration you need to
 
 ### Modes
 
-Shofer ships with five built-in modes that control what tools the AI can use:
+Shofer ships with five built-in modes that control what tools and models the AI can use:
 
 | Mode             | Icon | Best For                                                         |
 | ---------------- | ---- | ---------------------------------------------------------------- |
@@ -54,6 +57,18 @@ Every task has a lifecycle state shown as a colored dot in the Task Selector:
 ### API Provider Profiles
 
 An API Provider Profile bundles your API key, model selection, and endpoint URL into a named configuration. Switch between profiles via the API Config Selector dropdown. Each task remembers its profile — switching tasks restores that task's profile.
+
+### What You'll See
+
+| UI Element              | Purpose                                                           |
+| ----------------------- | ----------------------------------------------------------------- |
+| **Chat View**           | Interact with the AI — type messages, see results                 |
+| **Task Selector**       | Switch between multiple parallel tasks in a tree hierarchy        |
+| **Mode Selector**       | Choose Code, Architect, Ask, Debug, Orchestrator, or custom modes |
+| **API Config Selector** | Pick which AI provider and model to use per task                  |
+| **Worktree Selector**   | Create and select git worktrees for isolated parallel work        |
+| **File Changes Panel**  | Review, accept, revert, or diff every file Shofer modifies        |
+| **Context Window Bar**  | Monitor token usage and cost for the current task                 |
 
 ---
 
@@ -313,6 +328,8 @@ By default, only tracked git files are present in a new worktree. Create a `.wor
 
 Manage worktrees from Settings → Worktrees (view, delete, force-delete with uncommitted changes). Multi-root workspaces are not supported.
 
+**Important:** Merging and rebasing should be done manually. For safety, Shofer only provides create, delete, and select operations on worktrees — it does not merge, rebase, or push.
+
 ---
 
 ## 10. Per-Task Cost Limit
@@ -404,3 +421,68 @@ Key differences for Roo-Code users:
 | **Default mode**    | Architect                            | Code                                |
 
 Shofer also adds: background sub-tasks, per-task cost limits, semantic code search (RAG), git commit history search, an assistant agent for persistent codebase knowledge, task export (Markdown & JSON), drag-and-drop file context, and per-task input drafts.
+
+---
+
+## 15. Assistant Agent
+
+The **Assistant Agent** is a persistent, read-only AI companion that accumulates codebase knowledge over time — surviving task completion and VS Code restarts.
+
+### What It Does
+
+- Runs on a **low-cost model with a large context window** (you choose the model)
+- Conversation history persists across tasks and VS Code restarts
+- Learns organically — each question asked by a task adds context
+- **Strictly read-only** — can only read files, search code, and look up symbols. Cannot write, execute, or use MCP tools
+
+### How Tasks Use It
+
+Any task can call the `ask_assistant_agent` tool to ask the Assistant Agent a question. The agent answers from its accumulated knowledge, saving the calling task from re-loading files into its own context window.
+
+### Setup
+
+1. Open **Settings** → enable the Assistant Agent
+2. Link an **API Configuration profile** with a lightweight model (e.g., Gemini Flash, GPT-4o-mini, Claude Haiku)
+3. The agent starts with an empty context and fills it as tasks ask questions
+
+The **Assistant Agent Status** badge in the Shofer sidebar shows whether the agent is active and processing.
+
+### Key Benefits
+
+- **Context reuse** — knowledge persists across tasks, no redundant file loading
+- **Cost efficient** — uses a cheap model; each answer costs a fraction of a cent
+- **KV-cache friendly** — append-only context window keeps the provider's attention cache warm
+- **File-aware** — notified of file changes to keep its knowledge fresh
+
+[Read the full Assistant Agent documentation](https://github.com/shofer-dev/shofer/blob/master/docs/assistant_agent.md)
+
+---
+
+## 16. Migrating from GitHub Copilot
+
+Key differences for Copilot users:
+
+- **You own the models** — use Anthropic, OpenRouter, DeepSeek, or local models via Ollama
+- **You own the infrastructure** — everything runs locally, including semantic indexing
+- **Your code stays local** — or to the provider of your choice, no vendor lock-in
+- **Higher degree of customization** — adjust every aspect exactly to your needs
+- **Open-source and community-driven** — contribute and shape the future of Shofer
+- **Cost control** — set per-task cost limits and monitor usage
+- **Parallel tasks** — run multiple conversations simultaneously
+- **Fine-grained tool access control** — via customizable modes and auto-approval settings
+- **Git worktrees** — keep parallel tasks separate across multiple branches
+
+Run `/migrate-from-copilot` to automatically migrate your Copilot configuration (`.github/copilot-instructions.md`, agents, skills, instructions) to Shofer equivalents.
+
+[Read the full Copilot → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md)
+
+---
+
+## 17. Community
+
+- **[Discord](https://discord.gg/x39UEEQ2)** — Chat with the team, get help, share feedback
+- **[Reddit](https://reddit.com/r/Shofer_dev)** — Community discussions and tips
+- **[GitHub Discussions](https://github.com/shofer-dev/shofer/discussions)** — Feature requests and ideas
+- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues)** — Bug reports and tracking
+
+Shofer is open source (Apache 2.0). Contributions are welcome — read [`CONTRIBUTING.md`](https://github.com/shofer-dev/shofer/blob/main/CONTRIBUTING.md) and check the [roadmap](https://github.com/orgs/shofer/projects/1).

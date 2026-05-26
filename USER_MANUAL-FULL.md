@@ -39,6 +39,8 @@ Welcome to Shofer. This manual covers every feature, setting, and concept you'll
 31. [Special Files](#31-special-files)
 32. [Privacy & Telemetry](#32-privacy--telemetry)
 33. [Migrating from Roo-Code to Shofer](#33-migrating-from-roo-code-to-shofer)
+34. [Migrating from GitHub Copilot](#34-migrating-from-github-copilot)
+35. [Community](#35-community)
 
 ---
 
@@ -50,7 +52,7 @@ This section explains the names and purposes of every part of Shofer's interface
 
 When you open Shofer and start a new task, the main chat screen fills the sidebar or editor tab.
 
-<!-- XXX: Full screenshot of the chat screen with the header, message list, and input bar visible. Annotate each labeled element with a numbered callout matching the sections below. -->
+<img src="images/chat.png" alt="Shofer Chat Interface" width="500" />
 
 #### 1.1 Task Header (Top Bar)
 
@@ -63,7 +65,7 @@ The **Task Header** sits above your conversation. It shows:
 | **Context Window Bar**       | A horizontal progress bar that fills up as your conversation approaches the model's token limit.                                                              |
 | **Todo List**                | The current task's checklist of steps (if one was created). Check off items as they're completed.                                                             |
 
-<!-- XXX: Close-up of the Task Header, highlighting: the Task Selector dropdown with colored dots, the context window bar, and a sample todo list. -->
+<img src="images/task-hierarchy.png" alt="Task Selector with Colored State Dots" width="280" />
 
 #### 1.2 Chat Input Bar (Bottom)
 
@@ -81,7 +83,7 @@ The **Chat Input Bar** is where you type messages. From left to right:
 | **Text Input Field**               | —                         | Type your request here. Supports `@file/path` mentions and image attachments.     |
 | **Send / Stop Button**             | Arrow / Square            | Send your message, or stop Shofer while it's working.                             |
 
-<!-- XXX: Close-up of the Chat Input Bar with all controls annotated. Show the Mode Selector expanded to reveal all 9 built-in modes. -->
+<img src="images/modes.png" alt="Mode Selector in Chat Input Bar" width="280" />
 
 #### 1.3 Message History
 
@@ -114,7 +116,7 @@ The **Mode** determines what Shofer is allowed to do and how it behaves. You sel
 
 You can add any number of custom modes via [`.shofermodes` files](#31-special-files). Common examples include a read-only **Reviewer**, a fast **Search** agent, an **Opinion** advisor, or a **Browser** mode for web interaction.
 
-<!-- XXX: Screenshot of the Mode Selector dropdown showing all modes with their icons. -->
+<img src="images/modes.png" alt="Mode Selector Dropdown" width="280" />
 
 ### Task States
 
@@ -129,7 +131,7 @@ Every task has a **lifecycle state** shown as a colored dot next to the task nam
 | ✅ Green  | **Completed** | The task finished successfully.                                      |
 | ⚠️ Red    | **Error**     | The task stopped due to an error.                                    |
 
-<!-- XXX: Screenshot of the Task Selector dropdown showing multiple tasks with different colored dots, annotated with the state name next to each dot. -->
+<img src="images/task-hierarchy.png" alt="Task Selector with State Indicators" width="280" />
 
 ### Cost Limits
 
@@ -145,7 +147,7 @@ If you type a message while Shofer is still processing, your message goes into a
 
 You can also click **Send Now** to cancel Shofer's current work and jump to your queued message immediately.
 
-<!-- XXX: Screenshot showing the QueuedMessages section with two messages waiting, and the "Send Now" button visible. -->
+<img src="images/parallelism.png" alt="Parallel Tasks with Queued Messages" width="500" />
 
 ### Files Changed Panel
 
@@ -183,7 +185,7 @@ An **API Provider Profile** bundles your API key, model selection, and endpoint 
 | **Lock API Config**    | Prevents Shofer from switching profiles on its own (feature flag).                                                            |
 | **Prompt Enhancement** | The ✨ button next to the chat input sends your draft through a quick LLM pass to improve clarity before Shofer processes it. |
 
-<!-- XXX: Screenshot of the API Config Selector dropdown showing multiple saved profiles, with one marked as active. -->
+<img src="images/provider.png" alt="API Config Selector with Provider Profiles" width="280" />
 
 ### Quick Reference
 
@@ -220,7 +222,7 @@ Shofer stores settings in two places:
 
 These appear in the VS Code Settings editor under the **Shofer** category. You can browse them by typing `shofer.` in the Settings search bar.
 
-<!-- XXX: Screenshot — VS Code Settings UI with "shofer." typed in the search bar, showing a dropdown/list of Shofer settings. Call out the "Shofer" section header in the left sidebar tree. -->
+<img src="images/settings.png" alt="Shofer Settings in VS Code Settings UI" width="180" />
 
 The most commonly used settings with UI controls:
 
@@ -810,7 +812,7 @@ Certain shell patterns are **never** auto-approved, even with `allowedCommands =
 
 Beyond per-tool approval, Shofer also tracks cumulative cost and API request count. When either exceeds a configured threshold, the user is prompted for approval regardless of toggle state. Configure these in **Settings → Limits**.
 
-<!-- XXX: Screenshot — The Settings panel showing the Limits section with "Maximum Consecutive Auto-Approved Requests" set to 20 and "Maximum Consecutive Auto-Approved Cost (USD)" set to 5.00. Below it, a BudgetLimitDialog triggered mid-task showing "Request limit reached: 20 requests. Continue?" with Yes/No buttons. -->
+<img src="images/cost-limits.png" alt="Cost Limits Configuration" width="280" />
 
 ### Security Best Practices
 
@@ -1301,7 +1303,7 @@ MCP servers are configured in JSON files. There are two scopes:
 
 Project config takes priority when the same server name appears in both.
 
-<!-- XXX: Screenshot showing the Settings UI with an MCP Servers section open, a couple of servers configured, and the connection status indicators (green checkmark / red X) visible. -->
+<img src="images/mcp-settings.png" alt="MCP Servers Configuration in Settings" width="280" />
 
 ### Server Configuration
 
@@ -3256,7 +3258,7 @@ Open **Settings** → **Worktrees** tab to see all worktrees. From there you can
 
 - View details: path, branch, commit hash, locked status.
 - **Delete** a worktree (removes the directory and optionally the branch). Use **Force Delete** if the worktree has uncommitted changes.
-      <!-- XXX: Screenshot — WorktreesView showing a table of worktrees with Delete buttons and a confirmation dialog. -->
+  <!-- XXX: Screenshot — WorktreesView showing a table of worktrees with Delete buttons and a confirmation dialog. -->
 
 The list refreshes every 3 seconds so you always see the latest state.
 
@@ -3269,16 +3271,18 @@ The WorktreeIndicator chip shows:
 - **Uncommitted changes** count
 - **Last commit** info (hash, subject, author, relative time)
 - **Merge readiness** — whether merging the current branch into the base would cause conflicts
-      <!-- XXX: Screenshot — WorktreeIndicator popover fully expanded showing the Status section with ahead/behind arrows, "3 files changed (+42, -7)", "Last commit: a1b2c3d Fix login bug (2 hours ago) by Jane", and "Merge into main: no conflicts". -->
+  <!-- XXX: Screenshot — WorktreeIndicator popover fully expanded showing the Status section with ahead/behind arrows, "3 files changed (+42, -7)", "Last commit: a1b2c3d Fix login bug (2 hours ago) by Jane", and "Merge into main: no conflicts". -->
 
 ### Caveats
 
-| Situation             | What Happens                                                                                                                            |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Multi-root workspaces | Worktrees are **not supported**. Open the repo as a single-folder workspace first.                                                      |
-| Subfolder workspaces  | Worktrees are disabled unless the subfolder is itself an embedded worktree (i.e., opened from `.shofer/worktrees/`).                    |
-| Submodules            | `git worktree add` does **not** run `git submodule update --init`. Submodule directories appear empty — initialize them manually.       |
-| Untracked files       | Only files listed in `.worktreeinclude` are copied. Other untracked files (outside `.gitignore`) are not available in the new worktree. |
+| Situation              | What Happens                                                                                                                                                               |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Multi-root workspaces  | Worktrees are **not supported**. Open the repo as a single-folder workspace first.                                                                                         |
+| Subfolder workspaces   | Worktrees are disabled unless the subfolder is itself an embedded worktree (i.e., opened from `.shofer/worktrees/`).                                                       |
+| Submodules             | `git worktree add` does **not** run `git submodule update --init`. Submodule directories appear empty — initialize them manually.                                          |
+| Untracked files        | Only files listed in `.worktreeinclude` are copied. Other untracked files (outside `.gitignore`) are not available in the new worktree.                                    |
+| **Merging / Rebasing** | Shofer only provides create, delete, and select operations on worktrees. Merging and rebasing should be done manually for safety — Shofer does not merge, rebase, or push. |
+| Untracked files        | Only files listed in `.worktreeinclude` are copied. Other untracked files (outside `.gitignore`) are not available in the new worktree.                                    |
 
 ---
 
@@ -3914,4 +3918,41 @@ Shofer supports tools from companion VS Code extensions (like `arkware-vscode-to
 - [Section 7: Native Tools Reference](#7-native-tools-reference) — all 50+ tools with parameters
 - [Section 2: Settings](#2-settings) — VS Code settings
 - [Section 27: Skills](#27-skills) — creating and using skills
+- [Section 27: Skills](#27-skills) — creating and using skills
 - [Section 20: Queued Messages](#20-queued-messages-send-now-and-per-task-drafts) — queue, Send Now, and drafts in detail
+
+---
+
+## 34. Migrating from GitHub Copilot
+
+If you're coming from GitHub Copilot, Shofer offers everything Copilot does and much more — with full privacy and model autonomy.
+
+### Key Differences
+
+- **You own the models** — use Anthropic, OpenRouter, DeepSeek, or local models via Ollama
+- **You own the infrastructure** — everything runs locally, including semantic indexing
+- **Your code stays local** — or to the provider of your choice, no vendor lock-in
+- **Higher degree of customization** — adjust every aspect exactly to your needs
+- **Open-source and community-driven** — contribute and shape the future of Shofer
+- **Cost control** — set per-task cost limits and monitor usage
+- **Share context across sessions** — using Shofer's Assistant Agent feature
+- **Git log indexing** — for better understanding of code history and rationale
+- **Fine-grained tool access control** — via customizable modes and auto-approval settings
+- **Leverage git worktrees** — to keep parallel tasks separate across multiple branches and PRs
+
+### Quick Start for Copilot Users
+
+Run the `/migrate-from-copilot` slash command to automatically migrate your existing Copilot configuration (`.github/copilot-instructions.md`, agents, skills, instructions) to Shofer equivalents.
+
+[Read the full Copilot → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md)
+
+---
+
+## 35. Community
+
+- **[Discord](https://discord.gg/x39UEEQ2)** — Chat with the team, get help, share feedback
+- **[Reddit](https://reddit.com/r/Shofer_dev)** — Community discussions and tips
+- **[GitHub Discussions](https://github.com/shofer-dev/shofer/discussions)** — Feature requests and ideas
+- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues)** — Bug reports and tracking
+
+Shofer is open source (Apache 2.0). Contributions are welcome — read [`CONTRIBUTING.md`](https://github.com/shofer-dev/shofer/blob/main/CONTRIBUTING.md) and check the [roadmap](https://github.com/orgs/shofer/projects/1).- [Section 20: Queued Messages](#20-queued-messages-send-now-and-per-task-drafts) — queue, Send Now, and drafts in detail
