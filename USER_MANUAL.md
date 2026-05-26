@@ -16,13 +16,10 @@ Welcome to Shofer. This manual covers the concepts and configuration you need to
 8. [Skills](#8-skills)
 9. [Git Worktrees](#9-git-worktrees)
 10. [Per-Task Cost Limit](#10-per-task-cost-limit)
-11. [Context Management & Condensation](#11-context-management--condensation)
+11. [Slash Commands](#11-slash-commands)
 12. [Special Files](#12-special-files)
-13. [Privacy & Telemetry](#13-privacy--telemetry)
-14. [Migrating from Roo-Code](#14-migrating-from-roo-code)
-15. [Assistant Agent](#15-assistant-agent)
-16. [Migrating from GitHub Copilot](#16-migrating-from-github-copilot)
-17. [Community](#17-community)
+13. [Assistant Agent](#13-assistant-agent)
+14. [Community](#14-community)
 
 ---
 
@@ -54,33 +51,70 @@ Shofer ships with five built-in modes that control what tools and models the AI 
 | **Debug**          | 🪲   | Troubleshooting errors and diagnosing root causes.               |
 | **Orchestrator**   | 🪃   | Coordinating complex multi-step work by delegating to sub-tasks. |
 
+<img src="src/media/walkthrough/images/ModeSelector.png" alt="Mode Selector Dropdown" width="280" />
+
 You can add any number of custom modes via [`.shofermodes`](#3-custom-modes). Common examples include a read-only **Reviewer**, a fast **Search** agent, or a **Browser** mode for web interaction.
 
 ### API Provider Profiles
 
-<img src="src/media/walkthrough/images/provider.png" alt="API Provider Settings" width="280" />
-
 An API Provider Profile bundles your API key, model selection, and endpoint URL into a named configuration. Switch between profiles via the API Config Selector dropdown. Each task remembers its profile — switching tasks restores that task's profile.
+
+<img src="src/media/walkthrough/images/ProvidersView.png" alt="Provider Profiles List" width="280" />
+
+### Switching Tasks
+
+<img src="src/media/walkthrough/images/tasks.png" alt="Task Selector" width="280" />
+
+Shofer supports **true parallel tasks** organized in a tree hierarchy. Use the **Task Selector** dropdown in the Task Header to switch between them:
+
+- **Colored dots** show each task's state: Idle (gray), Running (green), Waiting for Input (yellow), Waiting on Subtask (blue), Paused (orange), Completed (green ✓), Error (red)
+- Completed tasks carry a self-assessed rating: Poor, Well, or Excellent
+- **Pin** important tasks to keep them at the top, **Archive** completed ones, **Rename** or **Delete** as needed
+- Parent-child hierarchy — subtasks indent under their parent in the list
+
+### Task Screen
+
+Once a task is running, the chat view shows:
+
+<img src="src/media/walkthrough/images/TaskView.png" alt="Shofer Task Screen" width="500" />
+
+| Element                | What It Shows                                                    |
+| ---------------------- | ---------------------------------------------------------------- |
+| **Task Header**        | Task title, state dot, context window bar, todo list progress    |
+| **Context Window Bar** | Horizontal bar filling up as tokens accumulate; hover for counts |
+| **API Cost**           | Running total in USD, with inline pencil to edit the cost limit  |
+| **File Changes Panel** | Collapsible list of every file modified, with Accept / Revert    |
+| **Message Queue**      | Messages you typed while Shofer was busy, with Send Now button   |
 
 ---
 
 ## 2. Settings
 
-### VS Code Settings UI
+<img src="src/media/walkthrough/images/SettingsView.png" alt="Full Settings Sidebar" width="180" />
 
-Most settings appear under `shofer.*` in the VS Code Settings editor (⌘, / `Ctrl+,`). Browse by typing `shofer.` in the search bar.
+Shofer's settings are organized by tab in the Settings panel (⚙️ gear icon):
 
-### JSON-Only Settings
-
-These settings must be added to `settings.json` directly:
-
-| Setting                          | Purpose                                  | Default           |
-| -------------------------------- | ---------------------------------------- | ----------------- |
-| `shofer.defaultCostLimit`        | Per-task USD budget cap                  | `null` (disabled) |
-| `shofer.disabledTools`           | Globally disable specific tools          | `[]`              |
-| `shofer.useAgentRules`           | Load `AGENTS.md` rule files from project | `true`            |
-| `shofer.commandExecutionTimeout` | Max seconds for command execution        | `0` (no timeout)  |
-| `shofer.commandTimeoutAllowlist` | Commands exempt from timeout             | `[]`              |
+| Tab                 | What You Configure                                         |
+| ------------------- | ---------------------------------------------------------- |
+| **Providers**       | API profiles, models, endpoints, pricing overrides         |
+| **Auto-Approve**    | Toggle which tool categories run without asking permission |
+| **Tools**           | Global tool disable list and tool group assignments        |
+| **Slash Commands**  | Configure built-in and custom slash commands               |
+| **Skills**          | Browse, load, and manage skill packs                       |
+| **Checkpoints**     | Git-based workspace snapshots for diff and revert          |
+| **Notifications**   | Telemetry, error reporting, and notification preferences   |
+| **Assistant Agent** | Configure the persistent read-only AI companion            |
+| **Context**         | Adjust condensation thresholds and context window limits   |
+| **Terminal**        | Configure command execution timeouts and allowlists        |
+| **RAG Indexer**     | Semantic code and git log search index configuration       |
+| **Modes**           | Create and edit built-in and custom modes                  |
+| **MCP Servers**     | Connect external tools (browser, databases, Kubernetes)    |
+| **Worktrees**       | Manage git worktrees (create, delete, view status)         |
+| **Prompts**         | Customize per-mode system prompts and instructions         |
+| **UI**              | Chat view and sidebar display preferences                  |
+| **Experimental**    | Feature flags and opt-in experimental capabilities         |
+| **Language**        | Change the display language                                |
+| **About**           | Export, import, or reset all Shofer settings               |
 
 ### Settings Backup & Reset
 
@@ -134,6 +168,8 @@ A mode must have at least `groups` or `tools_allowed`. Project-level modes overr
 ## 4. Auto-Approval
 
 Auto-approval controls when Shofer acts without asking permission. Configure it via the **AutoApproveDropdown** (shield icon) in the chat input bar.
+
+<img src="src/media/walkthrough/images/AutoApproval.png" alt="Auto-Approval Toggle Menu" width="280" />
 
 ### Toggles
 
@@ -248,6 +284,19 @@ Shofer scans workspace files, builds embeddings, and stores them in Qdrant. The 
 
 `rag_search` complements `lsp_search` (symbol search) and `grep_search` (text search) — the agent picks the right tool automatically. Git commit history can also be indexed via the same infrastructure (Settings → RAG / Code Index → Git History).
 
+### Git Commit History Search (`git_search`)
+
+Shofer can also index your **git commit history** for semantic search. When enabled (Settings → RAG Indexer → Git History), `git_search` lets the agent search commit messages by meaning — discovering who changed what, when, and why without exact keyword matching.
+
+| Aspect                 | Code Index (`rag_search`)                  | Git Index (`git_search`)                        |
+| ---------------------- | ------------------------------------------ | ----------------------------------------------- |
+| **What it searches**   | Source code (functions, classes, comments) | Commit messages (subject + body)                |
+| **Qdrant collection**  | `ws-<hash>`                                | `git-<hash>`                                    |
+| **Embedding provider** | Shared (same as code index)                | Shared                                          |
+| **Result fields**      | File snippets with scores                  | Commit hash, author, date, subject, body, score |
+
+Enable it by toggling **Git History** in the RAG Indexer popover or Settings → RAG Indexer. Configure max history days, max commits, and poll interval. Once indexed, the agent automatically uses `git_search` alongside `rag_search` when historical context would help.
+
 ---
 
 ## 8. Skills
@@ -293,6 +342,8 @@ Skills are discovered automatically. Use the 🎓 button in the chat input bar t
 
 Shofer manages git worktrees for parallel tasks, letting multiple tasks run on different branches simultaneously in the same VS Code window. Worktrees live under `.shofer/worktrees/`.
 
+<img src="src/media/walkthrough/images/WorktreeSelector.png" alt="Worktree Selector Dropdown" width="280" />
+
 ### Creating a Worktree
 
 1. Click the branch chip in the chat input bar.
@@ -306,7 +357,10 @@ By default, only tracked git files are present in a new worktree. Create a `.wor
 
 Manage worktrees from Settings → Worktrees (view, delete, force-delete with uncommitted changes). Multi-root workspaces are not supported.
 
-**Important:** Merging and rebasing should be done manually. For safety, Shofer only provides create, delete, and select operations on worktrees — it does not merge, rebase, or push.
+**Limitations:**
+
+- Git submodules are not initialized automatically. You must run `git submodule update --init` in the worktree manually.
+- Merging and rebasing should be done manually. For safety, Shofer only provides create, delete, and select operations on worktrees — it does not merge, rebase, or push.
 
 ---
 
@@ -314,40 +368,44 @@ Manage worktrees from Settings → Worktrees (view, delete, force-delete with un
 
 Set a USD budget cap on any task. When reached, Shofer pauses, aborts, or kills the task.
 
-### Configuration
+Edit a running task's cap by clicking the wallet icon next to the cost display in the Task Header. Actions: `pause` (ask you what to do), `abort` (clean stop), `kill` (immediate stop).
 
-Set a global default in `settings.json`:
+<img src="src/media/walkthrough/images/cost_limit.png" alt="Cost Limit Editor" width="280" />
 
-```json
-{
-	"shofer.defaultCostLimit": {
-		"maxUsd": 1.0,
-		"action": "pause"
-	}
-}
-```
-
-Edit a running task's cap by clicking the pencil icon next to the cost display in the Task Header. Actions: `pause` (ask you what to do), `abort` (clean stop), `kill` (immediate stop).
-
-The displayed cost includes all descendant sub-tasks. Cost tracking requires the Shofer LLM Model Provider extension (`shofer.enableLlmProviderIntegration`).
+The displayed cost includes all descendant sub-tasks.
 
 ---
 
-## 11. Context Management & Condensation
+## 11. Slash Commands
 
-When a conversation approaches the model's context window limit, Shofer automatically **condenses** older messages into a summary, freeing space for new work. The context window bar in the Task Header shows current usage.
+Slash commands are quick actions you can trigger by typing `/` in the chat input bar. Shofer ships with built-in commands and supports custom commands defined in your project.
 
-Adjust the auto-condensation threshold:
+### Built-in Commands
 
-```json
-{
-	"shofer.autoCondenseContextPercent": 85
-}
+| Command                 | Purpose                                              |
+| ----------------------- | ---------------------------------------------------- |
+| `/init`                 | Analyze your codebase and create an `AGENTS.md` file |
+| `/migrate-from-roocode` | Migrate settings and modes from Roo-Code             |
+| `/migrate-from-copilot` | Migrate settings from GitHub Copilot                 |
+| `/loaded`               | List skills currently loaded into the task context   |
+| `/search`               | Search for skills by keyword                         |
+
+### Custom Commands
+
+Define your own slash commands as `.md` files under `.shofer/commands/` (project) or `~/.shofer/commands/` (global). Each file name becomes the command name.
+
+```markdown
+---
+description: Summarize the current project structure
+modeSlugs:
+    - code
+    - architect
+---
+
+Read the project structure and provide a concise summary of the architecture, key directories, and entry points.
 ```
 
-Condensation preserves file structure signatures, active workflows, and a conversation summary. If condensation fails, Shofer falls back to truncating the oldest messages.
-
----
+Commands accept arguments — everything after `/command-name ` is passed to the command template as `$ARGUMENTS`. Use the Settings → **Slash Commands** tab to browse and manage all registered commands.
 
 ## 12. Special Files
 
@@ -374,35 +432,7 @@ Same syntax as `.gitignore`. Files matching the patterns are invisible to Shofer
 
 ---
 
-## 13. Privacy & Telemetry
-
-Shofer collects anonymous product signals only (mode usage, tool names, token counts, sanitized errors). **We never collect your code, prompts, or personally identifiable information.**
-
-Choose whether to share data on first launch, or toggle in Settings → Notifications at any time. Shofer also respects VS Code's global `telemetry.telemetryLevel` — if set to anything other than `"all"`, Shofer telemetry is fully disabled regardless of the Shofer-specific toggle.
-
----
-
-## 14. Migrating from Roo-Code
-
-Key differences for Roo-Code users:
-
-| Area                | Roo-Code                             | Shofer                              |
-| ------------------- | ------------------------------------ | ----------------------------------- |
-| **Tasks**           | One at a time                        | Multiple concurrent tasks           |
-| **Sub-tasks**       | Blocks parent until done             | Background tasks run independently  |
-| **Auto-approval**   | "BRRR" (YOLO)                        | Per-category toggles                |
-| **Message queuing** | Lost while busy                      | Queue with Send Now                 |
-| **Checkpoints**     | Disabled with nested repos           | Works via GIT_DIR isolation         |
-| **Worktrees**       | Separate VS Code window per worktree | Embedded in one window              |
-| **Skills**          | Manual, forgets on switch            | Persisted per-task, auto-rehydrated |
-| **File changes**    | Git shadow-repo dependency           | Working-directory snapshots         |
-| **Default mode**    | Architect                            | Code                                |
-
-Shofer also adds: background sub-tasks, per-task cost limits, semantic code search (RAG), git commit history search, an assistant agent for persistent codebase knowledge, task export (Markdown & JSON), drag-and-drop file context, and per-task input drafts.
-
----
-
-## 15. Assistant Agent
+## 13. Assistant Agent
 
 The **Assistant Agent** is a persistent, read-only AI companion that accumulates codebase knowledge over time — surviving task completion and VS Code restarts.
 
@@ -436,31 +466,10 @@ The **Assistant Agent Status** badge in the Shofer sidebar shows whether the age
 
 ---
 
-## 16. Migrating from GitHub Copilot
-
-Key differences for Copilot users:
-
-- **You own the models** — use Anthropic, OpenRouter, DeepSeek, or local models via Ollama
-- **You own the infrastructure** — everything runs locally, including semantic indexing
-- **Your code stays local** — or to the provider of your choice, no vendor lock-in
-- **Higher degree of customization** — adjust every aspect exactly to your needs
-- **Open-source and community-driven** — contribute and shape the future of Shofer
-- **Cost control** — set per-task cost limits and monitor usage
-- **Parallel tasks** — run multiple conversations simultaneously
-- **Fine-grained tool access control** — via customizable modes and auto-approval settings
-- **Git worktrees** — keep parallel tasks separate across multiple branches
-
-Run `/migrate-from-copilot` to automatically migrate your Copilot configuration (`.github/copilot-instructions.md`, agents, skills, instructions) to Shofer equivalents.
-
-[Read the full Copilot → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md)
-
----
-
-## 17. Community
+## 14. Community
 
 - **[Discord](https://discord.gg/x39UEEQ2)** — Chat with the team, get help, share feedback
 - **[Reddit](https://reddit.com/r/Shofer_dev)** — Community discussions and tips
-- **[GitHub Discussions](https://github.com/shofer-dev/shofer/discussions)** — Feature requests and ideas
-- **[GitHub Issues](https://github.com/shofer-dev/shofer/issues)** — Bug reports and tracking
+- **[GitHub Issues and Feature Requests](https://github.com/shofer-dev/shofer/issues)** — Bug reports, feature requests, and tracking
 
 Shofer is open source (Apache 2.0). Contributions are welcome — read [`CONTRIBUTING.md`](https://github.com/shofer-dev/shofer/blob/main/CONTRIBUTING.md) and check the [roadmap](https://github.com/orgs/shofer/projects/1).
