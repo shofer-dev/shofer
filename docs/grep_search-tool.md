@@ -14,13 +14,14 @@ The tool previously used VS Code's [`workspace.findTextInFiles`](https://code.vi
 
 ### Trade-offs
 
-| Aspect               | `findTextInFiles`                     | ripgrep                                  |
-| -------------------- | ------------------------------------- | ---------------------------------------- |
-| Completeness         | Depends on VS Code index (incomplete) | Filesystem-level (complete)              |
-| Regex syntax         | JavaScript regex                      | Rust regex (subtle differences)          |
-| `.gitignore` respect | Yes (default)                         | Yes (default)                            |
-| `.shoferignore`      | N/A                                   | Post-filter via `ShoferIgnoreController` |
-| Performance          | Fast (indexed)                        | Fast (native binary)                     |
+| Aspect               | `findTextInFiles`                     | ripgrep                                              |
+| -------------------- | ------------------------------------- | ---------------------------------------------------- |
+| Completeness         | Depends on VS Code index (incomplete) | Filesystem-level (complete)                          |
+| Regex syntax         | JavaScript regex                      | Rust regex (subtle differences)                      |
+| `.gitignore` respect | Yes (default)                         | Yes (default)                                        |
+| `.shoferignore`      | N/A                                   | Native `--ignore-file` flag + post-filter safety net |
+| Performance          | Fast (indexed)                        | Fast (native binary)                                 |
+| Submodule support    | Yes (VS Code handles boundaries)      | Yes (`--no-require-git` flag)                        |
 
 **Known difference:** When `isRegex: true`, the pattern is interpreted as a **Rust regex** (ripgrep's native syntax), not JavaScript regex. For most common patterns (literals, character classes, quantifiers, alternation) the syntax is identical. Edge cases like lookahead/lookbehind may differ.
 
@@ -28,24 +29,26 @@ The tool previously used VS Code's [`workspace.findTextInFiles`](https://code.vi
 
 The OpenAI function-calling schema uses `additionalProperties: false`. **Strict mode is intentionally disabled** (mirroring `read_command_output`) so that optional parameters can be omitted by the model entirely; under `strict: true` OpenAI requires every property to appear in `required`, which forces verbose tool calls and produces "Missing required parameter" errors when a model omits one. The parser also accepts `regex` as an alias for `isRegex` for models that confabulate the parameter name (handled inside `NativeToolCallParser`, not exposed in the schema).
 
-| Parameter        | Type              | Required | Default | Description                                                                         |
-| ---------------- | ----------------- | :------: | :-----: | ----------------------------------------------------------------------------------- |
-| `path`           | `string`          |    ✅    |    —    | Directory to search recursively, relative to workspace root                         |
-| `query`          | `string`          |    ✅    |    —    | The search pattern (regex or literal text)                                          |
-| `fileTypes`      | `string \| null`  |    —     | `null`  | Glob pattern to filter files (e.g., `*.ts`, `**/*.go`). `null` = all files.         |
-| `excludePattern` | `string \| null`  |    —     | `null`  | Glob pattern to exclude files (e.g., `**/node_modules/**`). `null` = no exclusions. |
-| `isRegex`        | `boolean \| null` |    —     | `true`  | Whether `query` is a regular expression. When `false`, query is matched literally.  |
-| `caseSensitive`  | `boolean \| null` |    —     | `false` | Case-sensitive matching.                                                            |
-| `wholeWord`      | `boolean \| null` |    —     | `false` | Match whole words only (uses ripgrep `-w` flag). Works with both literal and regex queries.       |
-| `maxResults`     | `number \| null`  |    —     |  `100`  | Maximum total results across all files.                                             |
-| `contextBefore`  | `number \| null`  |    —     |   `1`   | Lines of context to show before each match.                                         |
-| `contextAfter`   | `number \| null`  |    —     |   `1`   | Lines of context to show after each match.                                          |
+| Parameter        | Type              | Required | Default | Description                                                                                 |
+| ---------------- | ----------------- | :------: | :-----: | ------------------------------------------------------------------------------------------- |
+| `path`           | `string`          |    ✅    |    —    | Directory to search recursively, relative to workspace root                                 |
+| `query`          | `string`          |    ✅    |    —    | The search pattern (regex or literal text)                                                  |
+| `fileTypes`      | `string \| null`  |    —     | `null`  | Glob pattern to filter files (e.g., `*.ts`, `**/*.go`). `null` = all files.                 |
+| `excludePattern` | `string \| null`  |    —     | `null`  | Glob pattern to exclude files (e.g., `**/node_modules/**`). `null` = no exclusions.         |
+| `isRegex`        | `boolean \| null` |    —     | `true`  | Whether `query` is a regular expression. When `false`, query is matched literally.          |
+| `caseSensitive`  | `boolean \| null` |    —     | `false` | Case-sensitive matching.                                                                    |
+| `wholeWord`      | `boolean \| null` |    —     | `false` | Match whole words only (uses ripgrep `-w` flag). Works with both literal and regex queries. |
+| `maxResults`     | `number \| null`  |    —     |  `100`  | Maximum total results across all files.                                                     |
+| `contextBefore`  | `number \| null`  |    —     |   `1`   | Lines of context to show before each match.                                                 |
+| `contextAfter`   | `number \| null`  |    —     |   `1`   | Lines of context to show after each match.                                                  |
 
 ## Ripgrep CLI Mapping
 
 ```typescript
-// Core args for every invocation
-const args = ["--json", "--no-messages"]
+// Core args for every invocation.
+// --no-require-git prevents ripgrep from treating submodule .git files
+// (gitdir: ../../.git/modules/...) as nested repository boundaries.
+const args = ["--json", "--no-messages", "--no-require-git"]
 
 // Pattern matching
 if (isRegex) {
