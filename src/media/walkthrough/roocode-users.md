@@ -7,11 +7,12 @@ Shofer is a major architectural improvement over Roo-Code (Roo-Code fork), with 
 - **Parallel tasks** — run multiple conversations simultaneously (Roo-Code: one at a time)
 - **Background subtasks** — fan out work without blocking the parent
 - **Async MCP tool calling** — true parallel MCP calls
-- **RAG code indexing** — semantic search across your codebase
+- **RAG code indexing** — git submodule support; lighting-fast; git log coverage
 - **Git history search** — find commits by meaning, not keywords
 - **Native worktree support** — no separate VS Code windows needed
 - **Message queuing** — type ahead while the LLM works
-- **Task export** — Markdown and JSON formats
+- **Task export** — detailed JSON export format with "wire" data payloads
+- **Task changelist** — the changelist doesn't depend on git anymore
 
 ## Quick Start for Roo-Code Users
 
