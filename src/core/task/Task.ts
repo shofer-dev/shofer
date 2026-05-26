@@ -6500,11 +6500,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
-	 * Clean up orphaned tool_use blocks in the API conversation history.
+	 * Clean up orphaned tool_use and tool_result blocks in the API
+	 * conversation history.
 	 *
-	 * Scans the ENTIRE conversation history (not just the last message) for any
-	 * assistant message whose tool_use blocks lack matching tool_result blocks in
-	 * the immediately following messages. This prevents API errors caused by:
+	 * **Forward pass** (tool_use → tool_result): scans for assistant messages
+	 * whose tool_use blocks lack matching tool_result blocks and injects
+	 * placeholder results. Prevents:
 	 *
 	 * 1. Aborts mid-tool-execution: the assistant was saved to history before
 	 *    tools ran; on restart a new text-only assistant turn pushes the orphaned
@@ -6512,10 +6513,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * 2. Context condensation: tool_use/tool_result pairs may be restructured.
 	 * 3. History replay bugs: duplicate tool_call_ids can appear across turns.
 	 *
-	 * When orphaned tool_uses are found, synthetic tool_results with placeholder
-	 * content ("Tool execution was interrupted before completion.") are injected
-	 * as a user message immediately after the offending assistant turn. This
-	 * rebuilds the history array in-place.
+	 * **Backward pass** (tool_result → tool_use): scans user messages for
+	 * tool_result blocks whose matching assistant tool_use is missing (e.g. the
+	 * tool was interrupted, a plain-text assistant filler separated the pair, or
+	 * the matching assistant scrolled out of the message window in very long
+	 * conversations). Drops orphaned tool_results to keep the conversation
+	 * valid for strict providers (DeepSeek, etc.) that reject:
+	 *
+	 *   "Messages with role 'tool' must be a response to a preceding message
+	 *    with 'tool_calls'" (HTTP 400)
+	 *
+	 * Operating on the Anthropic-format apiConversationHistory makes this
+	 * provider-agnostic — it protects both the direct API path (Anthropic,
+	 * OpenAI, Gemini) and the vscode-lm path (any VS Code LM provider).
 	 */
 	private _cleanupOrphanedToolUses(): void {
 		if (this.apiConversationHistory.length === 0) {
@@ -6531,6 +6541,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const cleaned: typeof history = []
 		let orphansFixed = 0
 
+		// ── Forward pass: tool_use → tool_result ─────────────────────
 		for (let i = 0; i < history.length; i++) {
 			const msg = history[i]
 			cleaned.push(msg)
@@ -6599,9 +6610,91 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 		}
 
-		if (orphansFixed > 0) {
-			this.apiConversationHistory = cleaned as ApiMessage[]
-			this.diagLog(`[Task] Fixed ${orphansFixed} orphaned tool_use(s) across conversation history.`)
+		// ── Backward pass: tool_result → tool_use ────────────────────
+		// Walk every user message in cleaned[] and verify that each
+		// tool_result block has a preceding assistant turn with a matching
+		// tool_use.  Without this, an interrupted tool call whose matching
+		// assistant has scrolled out of the message window leaves behind a
+		// `role:"tool"` message with no anchor — a guaranteed HTTP 400 from
+		// strict providers.
+		//
+		// We only scan backwards from the current user message, because
+		// a tool_result inside a user turn can only answer tool_uses that
+		// appeared BEFORE that user turn (the API forbids forward references).
+		let resultOrphansDropped = 0
+		for (let i = 0; i < cleaned.length; i++) {
+			const msg = cleaned[i]
+			if (msg.role !== "user" || !Array.isArray(msg.content)) {
+				continue
+			}
+
+			const content = msg.content as Anthropic.Messages.ContentBlockParam[]
+			const toolResultBlocks = content.filter(
+				(b): b is Anthropic.ToolResultBlockParam => b.type === "tool_result",
+			)
+			if (toolResultBlocks.length === 0) {
+				continue
+			}
+
+			// Collect every tool_use ID declared by preceding assistant turns.
+			const declaredToolUses = new Set<string>()
+			for (let j = i - 1; j >= 0; j--) {
+				const prev = cleaned[j]
+				if (prev.role !== "assistant" || !Array.isArray(prev.content)) {
+					continue
+				}
+				for (const block of prev.content as Anthropic.Messages.ContentBlockParam[]) {
+					if (block.type === "tool_use") {
+						declaredToolUses.add(block.id)
+					}
+				}
+			}
+
+			// Drop tool_results whose tool_use_id was never declared.
+			const pruned = content.filter((b) => {
+				if (b.type !== "tool_result") {
+					return true // keep non-tool_result blocks (text, images, etc.)
+				}
+				const tr = b as Anthropic.ToolResultBlockParam
+				if (declaredToolUses.has(tr.tool_use_id)) {
+					return true
+				}
+				resultOrphansDropped++
+				this.diagLog(
+					`[Task] Dropping orphaned tool_result with id="${tr.tool_use_id}" ` +
+						`at history index ${i} — no matching assistant tool_use found.`,
+				)
+				return false
+			})
+
+			if (pruned.length < content.length) {
+				// Some blocks were dropped.  Replace the message if it still
+				// has content, or remove it entirely.
+				if (pruned.length > 0) {
+					cleaned[i] = { ...msg, content: pruned }
+				} else {
+					// Mark for removal (set to null, filter after loop).
+					;(cleaned as any)[i] = null
+				}
+			}
+		}
+
+		// Remove nulled-out messages from the backward pass.
+		const filteredCleaned = cleaned.filter((m) => m !== null) as typeof cleaned
+		if (filteredCleaned.length < cleaned.length) {
+			resultOrphansDropped += cleaned.length - filteredCleaned.length
+		}
+
+		if (orphansFixed > 0 || resultOrphansDropped > 0) {
+			this.apiConversationHistory = filteredCleaned as ApiMessage[]
+			const parts: string[] = []
+			if (orphansFixed > 0) {
+				parts.push(`injected ${orphansFixed} placeholder tool_result(s)`)
+			}
+			if (resultOrphansDropped > 0) {
+				parts.push(`dropped ${resultOrphansDropped} orphaned tool_result(s)`)
+			}
+			this.diagLog(`[Task] Conversation history cleanup: ${parts.join(", ")}.`)
 		}
 	}
 }
