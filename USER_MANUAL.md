@@ -28,37 +28,9 @@ Welcome to Shofer. This manual covers the concepts and configuration you need to
 
 ## 1. Getting Started
 
-### Modes
+## Home Screen
 
-Shofer ships with five built-in modes that control what tools and models the AI can use:
-
-| Mode             | Icon | Best For                                                         |
-| ---------------- | ---- | ---------------------------------------------------------------- |
-| **Code**         | 💻   | Writing, modifying, and refactoring code.                        |
-| **Architect**    | 🏗️   | Planning and designing before writing code.                      |
-| **Ask**          | ❓   | Getting explanations, answers, or recommendations.               |
-| **Debug**        | 🪲   | Troubleshooting errors and diagnosing root causes.               |
-| **Orchestrator** | 🪃   | Coordinating complex multi-step work by delegating to sub-tasks. |
-
-You can add any number of custom modes via [`.shofermodes`](#3-custom-modes). Common examples include a read-only **Reviewer**, a fast **Search** agent, an **Opinion** advisor, or a **Browser** mode for web interaction.
-
-### Task States
-
-Every task has a lifecycle state shown as a colored dot in the Task Selector:
-
-- **Gray** — Idle (not active)
-- **Green** — Running (actively processing)
-- **Yellow** — Waiting for your input
-- **Blue** — Waiting for a sub-task to complete
-- **Orange** — Paused
-- **Green ✓** — Completed
-- **Red** — Error
-
-### API Provider Profiles
-
-An API Provider Profile bundles your API key, model selection, and endpoint URL into a named configuration. Switch between profiles via the API Config Selector dropdown. Each task remembers its profile — switching tasks restores that task's profile.
-
-### What You'll See
+<img src="src/media/walkthrough/images/WelcomeView.png" alt="Shofer Welcome Screen" width="500" />
 
 | UI Element              | Purpose                                                           |
 | ----------------------- | ----------------------------------------------------------------- |
@@ -69,6 +41,26 @@ An API Provider Profile bundles your API key, model selection, and endpoint URL 
 | **Worktree Selector**   | Create and select git worktrees for isolated parallel work        |
 | **File Changes Panel**  | Review, accept, revert, or diff every file Shofer modifies        |
 | **Context Window Bar**  | Monitor token usage and cost for the current task                 |
+
+### Modes
+
+Shofer ships with five built-in modes that control what tools and models the AI can use:
+
+| Mode               | Icon | Best For                                                         |
+| ------------------ | ---- | ---------------------------------------------------------------- |
+| **Code** (default) | 💻   | Writing, modifying, and refactoring code.                        |
+| **Architect**      | 🏗️   | Planning and designing before writing code.                      |
+| **Ask**            | ❓   | Getting explanations, answers, or recommendations.               |
+| **Debug**          | 🪲   | Troubleshooting errors and diagnosing root causes.               |
+| **Orchestrator**   | 🪃   | Coordinating complex multi-step work by delegating to sub-tasks. |
+
+You can add any number of custom modes via [`.shofermodes`](#3-custom-modes). Common examples include a read-only **Reviewer**, a fast **Search** agent, or a **Browser** mode for web interaction.
+
+### API Provider Profiles
+
+<img src="src/media/walkthrough/images/provider.png" alt="API Provider Settings" width="280" />
+
+An API Provider Profile bundles your API key, model selection, and endpoint URL into a named configuration. Switch between profiles via the API Config Selector dropdown. Each task remembers its profile — switching tasks restores that task's profile.
 
 ---
 
@@ -133,20 +125,6 @@ customModes:
       - read
       - - write
         - fileRegex: "\\.(md|mdx)$"
-```
-
-**Grant everything except one dangerous tool:**
-
-```yaml
-- slug: safe-code
-  name: 💻 Safe Code
-  roleDefinition: You are a software engineer.
-  groups:
-      - read
-      - write
-      - execute
-  tools_denied:
-      - execute_command
 ```
 
 A mode must have at least `groups` or `tools_allowed`. Project-level modes override global modes with the same slug.
