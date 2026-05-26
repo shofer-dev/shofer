@@ -39,6 +39,7 @@ describe("HistoryView", () => {
 		vi.clearAllMocks()
 		;(useExtensionState as ReturnType<typeof vi.fn>).mockReturnValue({
 			taskHistory: mockTaskHistory,
+			parallelTasks: [],
 			cwd: "/test/workspace",
 		})
 	})
