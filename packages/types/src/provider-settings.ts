@@ -34,15 +34,7 @@ export const DEFAULT_CONSECUTIVE_MISTAKE_LIMIT = 3
  * Dynamic provider requires external API calls in order to get the model list.
  */
 
-export const dynamicProviders = [
-	"openrouter",
-	"vercel-ai-gateway",
-	"litellm",
-	"requesty",
-	"shofer",
-	"unbound",
-	"poe",
-] as const
+export const dynamicProviders = ["openrouter", "vercel-ai-gateway", "litellm", "requesty", "unbound", "poe"] as const
 
 export type DynamicProvider = (typeof dynamicProviders)[number]
 
@@ -123,7 +115,6 @@ export const providerNames = [
 	"openai-codex",
 	"openai-native",
 	"qwen-code",
-	"shofer",
 	"sambanova",
 	"vertex",
 	"xai",
@@ -438,7 +429,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	zaiSchema.merge(z.object({ apiProvider: z.literal("zai") })),
 	fireworksSchema.merge(z.object({ apiProvider: z.literal("fireworks") })),
 	qwenCodeSchema.merge(z.object({ apiProvider: z.literal("qwen-code") })),
-	rooSchema.merge(z.object({ apiProvider: z.literal("shofer") })),
+
 	vercelAiGatewaySchema.merge(z.object({ apiProvider: z.literal("vercel-ai-gateway") })),
 	defaultSchema,
 ])
@@ -570,7 +561,7 @@ export const getApiProtocol = (provider: ProviderName | undefined, modelId?: str
 	// Vercel AI Gateway uses anthropic protocol for anthropic models.
 	if (
 		provider &&
-		["vercel-ai-gateway", "shofer"].includes(provider) &&
+		["vercel-ai-gateway"].includes(provider) &&
 		modelId &&
 		modelId.toLowerCase().startsWith("anthropic/")
 	) {

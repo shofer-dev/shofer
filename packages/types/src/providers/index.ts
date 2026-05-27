@@ -40,7 +40,6 @@ import { openRouterDefaultModelId } from "./openrouter.js"
 import { poeDefaultModelId } from "./poe.js"
 import { qwenCodeDefaultModelId } from "./qwen-code.js"
 import { requestyDefaultModelId } from "./requesty.js"
-import { shoferDefaultModelId } from "./shofer.js"
 import { sambaNovaDefaultModelId } from "./sambanova.js"
 import { unboundDefaultModelId } from "./unbound.js"
 import { vertexDefaultModelId } from "./vertex.js"
@@ -105,8 +104,7 @@ export function getProviderDefaultModelId(
 			return sambaNovaDefaultModelId
 		case "fireworks":
 			return fireworksDefaultModelId
-		case "shofer":
-			return shoferDefaultModelId
+
 		case "qwen-code":
 			return qwenCodeDefaultModelId
 		case "poe":
