@@ -1,6 +1,6 @@
 # Shofer
 
-> State-of-the-art open-source AI coding.
+> Shofer (from the French _chauffeur_ — driver) is a state-of-the-art open-source AI coding assistant.
 
 ---
 
