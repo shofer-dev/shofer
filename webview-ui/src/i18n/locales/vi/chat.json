@@ -100,7 +100,6 @@
 	"about": "Shofer là một đội ngũ phát triển AI đầy đủ trong trình chỉnh sửa của bạn.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Danh sách nhiệm vụ của bạn trong không gian làm việc này đang trống.",
@@ -334,13 +333,6 @@
 	"announcement": {
 		"title": "Shofer {{version}} Đã phát hành",
 		"support": "Hãy ủng hộ Shofer bằng cách gắn sao cho chúng tôi trên <githubLink>GitHub</githubLink>.",
-		"stealthModel": {
-			"feature": "<bold>Mô hình stealth MIỄN PHÍ có thời hạn</bold> - Code Supernova: Hiện đã được nâng cấp với <bold>cửa sổ ngữ cảnh 1M token</bold>! Một mô hình lập trình agentic đa năng hỗ trợ đầu vào hình ảnh, có sẵn qua Shofer Cloud.",
-			"note": "(Lưu ý: các prompt và completion được ghi lại bởi người tạo mô hình và được sử dụng để cải thiện mô hình)",
-			"connectButton": "Kết nối với Shofer Cloud",
-			"selectModel": "Chọn <code>shofer/code-supernova</code> từ nhà cung cấp Shofer Cloud trong Cài đặt để bắt đầu.",
-			"goToSettingsButton": "Đi tới Cài đặt"
-		},
 		"release": {
 			"heading": "Tính năng mới:",
 			"gpt54": "Nhà cung cấp Poe: Đã thêm Poe làm nhà cung cấp AI để bạn có thể truy cập trực tiếp các model Poe trong Shofer.",
@@ -348,12 +340,6 @@
 			"geminiPro": "Hỗ trợ Gemini 3.1 Pro: Đã thêm hỗ trợ model Gemini 3.1 Pro và đặt làm model Gemini mặc định để cải thiện hiệu suất.",
 			"cliNdjson": "Giao thức NDJSON CLI: Giao thức NDJSON stdin mới, lệnh con list, và lệnh run được module hóa cho quy trình CLI linh hoạt hơn.",
 			"cliRelease": "CLI v0.1.0: CLI Shofer đạt bản phát hành chính thức đầu tiên với giao diện lệnh ổn định."
-		},
-		"cloudAgents": {
-			"heading": "Mới trên Cloud:",
-			"specialized": "Giới thiệu <bold>Explainer</bold>, <bold>Planner</bold> và <bold>Coder</bold> - ba agent đám mây chuyên biệt để nâng cao quy trình làm việc của bạn.",
-			"description": "Các agent làm việc cùng nhau trên đám mây và có thể được kích hoạt từ web hoặc qua Slack.",
-			"tryButton": "Dùng thử Agents trên Cloud"
 		}
 	},
 	"costs": {

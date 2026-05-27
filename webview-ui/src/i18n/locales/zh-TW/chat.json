@@ -127,7 +127,6 @@
 	"about": "Shofer 是編輯器中的完整 AI 開發團隊。",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "想要做什麼呢？",
@@ -355,13 +354,6 @@
 	"announcement": {
 		"title": "Shofer {{version}} 已發布",
 		"support": "請在 <githubLink>GitHub</githubLink> 上給 Shofer 星星支持我們。",
-		"stealthModel": {
-			"feature": "<bold>限時免費隱形模型</bold> - Code Supernova：現已升級為 <bold>1M Token 上下文視窗</bold>！一個支援影像輸入的多功能代理程式設計模型，透過 Shofer Cloud 提供。",
-			"note": "（注意：提示詞和回應會被模型建立者記錄並用於改進模型）",
-			"connectButton": "連線到 Shofer Cloud",
-			"selectModel": "在設定中從 Shofer Cloud 供應商選擇 <code>shofer/code-supernova</code> 開始使用。",
-			"goToSettingsButton": "前往設定"
-		},
 		"release": {
 			"heading": "新增功能：",
 			"gpt54": "Poe 供應商：已將 Poe 新增為 AI 供應商，讓你可以在 Shofer 中直接存取 Poe 模型。",
@@ -369,12 +361,6 @@
 			"geminiPro": "Gemini 3.1 Pro 支援：新增 Gemini 3.1 Pro 模型支援，並設為預設 Gemini 模型以提升效能。",
 			"cliNdjson": "CLI NDJSON 協定：新增 NDJSON stdin 協定、list 子指令，以及模組化的 run 指令，提供更彈性的 CLI 工作流程。",
 			"cliRelease": "CLI v0.1.0：Shofer CLI 以穩定的指令介面達成首個正式版本。"
-		},
-		"cloudAgents": {
-			"heading": "雲端的新功能：",
-			"specialized": "推出 <bold>Explainer</bold>、<bold>Planner</bold> 和 <bold>Coder</bold>，三個專業雲端代理用來強化工作流程。",
-			"description": "代理在雲端協同工作，可從網頁或透過 Slack 觸發。",
-			"tryButton": "試用雲端代理"
 		}
 	},
 	"reasoning": {

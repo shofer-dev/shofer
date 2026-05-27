@@ -100,7 +100,6 @@
 	"about": "Shofer est une équipe complète de développeurs IA dans votre éditeur.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Votre liste de tâches dans cet espace de travail est vide.",
@@ -333,13 +332,6 @@
 	"announcement": {
 		"title": "Shofer {{version}} est sortie",
 		"support": "Soutiens Shofer en nous donnant une étoile sur <githubLink>GitHub</githubLink>.",
-		"stealthModel": {
-			"feature": "<bold>Modèle stealth GRATUIT pour une durée limitée</bold> - Code Supernova : Maintenant amélioré avec une <bold>fenêtre de contexte de 1M tokens</bold> ! Un modèle de codage agentique polyvalent qui prend en charge les entrées d'images, accessible via Shofer Cloud.",
-			"note": "(Note : les prompts et complétions sont enregistrés par le créateur du modèle et utilisés pour l'améliorer)",
-			"connectButton": "Se connecter à Shofer Cloud",
-			"selectModel": "Sélectionnez <code>shofer/code-supernova</code> du fournisseur Shofer Cloud dans Paramètres pour commencer.",
-			"goToSettingsButton": "Aller aux Paramètres"
-		},
 		"release": {
 			"heading": "Quoi de neuf :",
 			"gpt54": "Fournisseur Poe : Poe a été ajouté comme fournisseur d’IA pour que tu puisses accéder directement aux modèles Poe dans Shofer.",
@@ -347,12 +339,6 @@
 			"geminiPro": "Support de Gemini 3.1 Pro : Le modèle Gemini 3.1 Pro a été ajouté et défini comme modèle Gemini par défaut pour de meilleures performances.",
 			"cliNdjson": "Protocole NDJSON du CLI : Nouveau protocole NDJSON via stdin, sous-commandes de liste et commande d'exécution modularisée pour des workflows CLI plus flexibles.",
 			"cliRelease": "CLI v0.1.0 : Le CLI de Shofer atteint sa première version officielle avec une interface de commandes stable."
-		},
-		"cloudAgents": {
-			"heading": "Nouveautés dans le Cloud :",
-			"specialized": "Présentation d'<bold>Explainer</bold>, <bold>Planner</bold> et <bold>Coder</bold> - trois agents cloud spécialisés pour améliorer tes workflows.",
-			"description": "Les agents travaillent ensemble dans le cloud et peuvent être déclenchés depuis le web ou via Slack.",
-			"tryButton": "Essayer les Agents Cloud"
 		}
 	},
 	"costs": {

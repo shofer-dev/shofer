@@ -100,7 +100,6 @@
 	"about": "Shofer, düzenleyicinizdeki bütün bir yapay zeka geliştirme ekibidir.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Bu çalışma alanındaki görev listeniz boş.",
@@ -334,13 +333,6 @@
 	"announcement": {
 		"title": "Shofer {{version}} Yayınlandı",
 		"support": "<githubLink>GitHub</githubLink>'da yıldız vererek Shofer'u destekle.",
-		"stealthModel": {
-			"feature": "<bold>Sınırlı süre ÜCRETSİZ gizli model</bold> - Code Supernova: Artık <bold>1M token bağlam penceresi</bold> ile yükseltildi! Görüntü girişlerini destekleyen çok amaçlı acentik kodlama modeli, Shofer Cloud üzerinden kullanılabilir.",
-			"note": "(Not: istemler ve tamamlamalar model yaratıcısı tarafından kaydedilir ve modeli geliştirmek için kullanılır)",
-			"connectButton": "Shofer Cloud'a bağlan",
-			"selectModel": "Başlamak için Ayarlar'da Shofer Cloud sağlayıcısından <code>shofer/code-supernova</code>'yı seçin.",
-			"goToSettingsButton": "Ayarlar'a Git"
-		},
 		"release": {
 			"heading": "Yenilikler:",
 			"gpt54": "Poe Sağlayıcısı: Poe, Shofer içinde Poe modellerine doğrudan erişebilmen için bir AI sağlayıcısı olarak eklendi.",
@@ -348,12 +340,6 @@
 			"geminiPro": "Gemini 3.1 Pro Desteği: Gemini 3.1 Pro model desteği eklendi ve daha iyi performans için varsayılan Gemini modeli olarak ayarlandı.",
 			"cliNdjson": "CLI NDJSON Protokolü: Yeni NDJSON stdin protokolü, list alt komutları ve daha esnek CLI iş akışları için modüler run komutu.",
 			"cliRelease": "CLI v0.1.0: Shofer CLI, kararlı bir komut arayüzüyle ilk resmi sürümüne ulaştı."
-		},
-		"cloudAgents": {
-			"heading": "Cloud'daki yenilikler:",
-			"specialized": "<bold>Explainer</bold>, <bold>Planner</bold> ve <bold>Coder</bold> tanıtımı - iş akışlarını geliştirmek için üç özel bulut ajanı.",
-			"description": "Ajanlar bulutta birlikte çalışır ve web'den veya Slack üzerinden tetiklenebilir.",
-			"tryButton": "Bulut Ajanlarını Dene"
 		}
 	},
 	"costs": {
