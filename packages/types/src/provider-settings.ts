@@ -639,7 +639,6 @@ export const MODELS_BY_PROVIDER: Record<
 		models: Object.keys(openAiNativeModels),
 	},
 	"qwen-code": { id: "qwen-code", label: "Qwen Code", models: Object.keys(qwenCodeModels) },
-	shofer: { id: "shofer", label: "Shofer Router", models: [] },
 	sambanova: {
 		id: "sambanova",
 		label: "SambaNova",
