@@ -1,6 +1,6 @@
 {
 	"name": "@shofer/web-shofer-code",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"type": "module",
 	"scripts": {
 		"lint": "eslint src --ext=ts,tsx --max-warnings=0",
