@@ -34,6 +34,7 @@ This document catalogues every **user-facing feature** and **opinionated change*
 20. [Cloud removal and marketplace/telemetry feature flags](#20-cloud-removal-and-marketplacetelemetry-feature-flags)
 21. [UI/UX Opinionated Changes](#21-uiux-opinionated-changes)
 22. [Assistant Agent](#22-assistant-agent)
+23. [LSP-Powered Symbol Refactoring](#23-lsp-powered-symbol-refactoring)
 
 ---
 
@@ -463,6 +464,21 @@ Previously, every task had to load its own context from scratch. There was no me
 | **Subtask question routing**       | Questions from `ask_assistant_agent` in background subtasks route to the calling task synchronously — the task blocks until the answer or timeout.                                                                                                 |
 
 <!-- 📸 TODO: screenshot of Assistant Agent toolbar badge and popover showing state, context fill, and cost -->
+
+---
+
+## 23. LSP-Powered Symbol Refactoring
+
+Shofer gives the agent direct access to the Language Server Protocol for automated, project-wide refactoring — a capability absent in Roo-Code.
+
+Previously, Roo-Code relied on the user manually executing standard IDE-level renames or structural refactors inside the editor. The agent had no way to invoke the LSP to perform symbol-level refactoring.
+
+### What Was Built
+
+| Feature                                                           | Description                                                                                                                                                 |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`rename_symbol`](../src/core/tools/RenameSymbolTool.ts)**      | Rename a symbol and all its references across the entire dependency graph via LSP. The agent can systematically refactor without manual editor interaction. |
+| **[`list_code_usages`](../src/core/tools/ListCodeUsagesTool.ts)** | Find all references/usages of a symbol at a specific position via LSP, enabling the agent to understand impact before refactoring.                          |
 
 ---
 
