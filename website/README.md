@@ -67,7 +67,7 @@ website/
 ├── tailwind.config.mjs           # Theme, colors, animations, plugins
 ├── README.md                     # This file
 ├── public/
-│   └── favicon.svg               # Gradient "S" favicon
+│   └── favicon.svg               # Extension icon (sourced from ../src/assets/icons/icon.svg)
 ├── src/
 │   ├── layouts/
 │   │   └── Layout.astro          # Base HTML shell (head, meta, dark mode script)
@@ -134,6 +134,16 @@ Migration comparison tables use `overflow-x-auto` for horizontal scroll on viewp
 - Node.js ≥ 18
 - npm (configured to use the local Nexus proxy via the workspace `.npmrc`)
 
+### Logo / Favicon
+
+The favicon is sourced from the Shofer extension icon at [`../src/assets/icons/icon.svg`](../src/assets/icons/icon.svg). If you update the extension icon, copy it into the website:
+
+```bash
+cp ../src/assets/icons/icon.svg public/favicon.svg
+```
+
+Then rebuild (see below).
+
 ### Install
 
 ```bash
@@ -141,13 +151,13 @@ cd extensions/shofer/website
 npm install
 ```
 
-### Development
+### Development (hot-reload)
 
 ```bash
 npm run dev
 ```
 
-Starts the Astro dev server at `http://localhost:4321` with HMR.
+Starts the Astro dev server at **`http://localhost:4321`** with HMR. Edits to `src/` are reflected instantly.
 
 ### Production Build
 
@@ -155,25 +165,55 @@ Starts the Astro dev server at `http://localhost:4321` with HMR.
 npm run build
 ```
 
-Outputs static files to `dist/`:
+Outputs fully static files to `dist/`:
 
 ```
 dist/
 ├── index.html          (~55 KB — single-page app with all sections)
-├── favicon.svg
+├── favicon.svg         (extension icon)
 └── _astro/
     └── index.*.css     (~24 KB — compiled Tailwind with used classes only)
 ```
 
-The build is fully static — no JavaScript bundles, no runtime framework. Can be served from any CDN or static host.
+The build is fully static — no JavaScript bundles, no runtime framework.
 
-### Preview
+### Local Preview of Production Build
 
 ```bash
 npm run preview
 ```
 
-Serves the production build locally for verification.
+Serves the `dist/` directory at **`http://localhost:4321`** (or the next available port if 4321 is in use). Use this to verify the production build before deploying.
+
+## Deployment
+
+The website is a set of static files. Deploy by copying the **entire contents** of `dist/` to the remote web root.
+
+### What to copy
+
+| Source                    | Destination (remote web root) | Notes                               |
+| ------------------------- | ----------------------------- | ----------------------------------- |
+| `dist/index.html`         | `index.html`                  | Main landing page                   |
+| `dist/favicon.svg`        | `favicon.svg`                 | Browser tab icon                    |
+| `dist/_astro/index.*.css` | `_astro/index.*.css`          | Compiled Tailwind (hashed filename) |
+
+### Example (rsync)
+
+```bash
+rsync -av --delete dist/ user@shofer.dev:/var/www/shofer.dev/
+```
+
+Or for a simple S3/CloudFront setup, sync the `dist/` directory to the bucket:
+
+```bash
+aws s3 sync dist/ s3://shofer-website/ --delete
+```
+
+### Notes
+
+- The `dist/` directory is gitignored. Always run `npm run build` before deploying.
+- The CSS filename includes a content hash (e.g., `index.a1b2c3d4.css`). Old CSS files left on the remote are harmless but wasting space — use `--delete` with rsync or `aws s3 sync` to clean them up.
+- No server-side processing, no database, no environment variables needed. Any static file host works (Nginx, Apache, S3, Cloudflare Pages, Netlify, etc.).
 
 ## Content Sources
 
