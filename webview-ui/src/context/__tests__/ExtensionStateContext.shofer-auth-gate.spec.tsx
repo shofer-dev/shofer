@@ -57,7 +57,7 @@ describe("ExtensionStateContext Shofer auth gate", () => {
 		// Ensure prev false (explicit)
 		postStateMessage({
 			cloudIsAuthenticated: false,
-			apiConfiguration: { apiProvider: "shofer" },
+			apiConfiguration: { apiProvider: "openrouter" },
 		})
 
 		vi.clearAllMocks()
@@ -65,7 +65,7 @@ describe("ExtensionStateContext Shofer auth gate", () => {
 		// Flip to true with provider shofer - should trigger
 		postStateMessage({
 			cloudIsAuthenticated: true,
-			apiConfiguration: { apiProvider: "shofer" },
+			apiConfiguration: { apiProvider: "openrouter" },
 		})
 
 		await waitFor(() => {

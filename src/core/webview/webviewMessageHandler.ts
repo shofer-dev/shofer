@@ -1288,7 +1288,7 @@ export const webviewMessageHandler = async (
 			provider.postMessageToWebview({
 				type: "singleRouterModelFetchResponse",
 				success: true,
-				values: { provider: "shofer", models: {} },
+				values: {},
 			})
 			break
 		}

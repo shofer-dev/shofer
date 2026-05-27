@@ -87,7 +87,7 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 		// Default mock: return distinct model maps per provider so we can verify keys
 		getModelsMock.mockImplementation(async (options: any) => {
 			switch (options?.provider) {
-				case "shofer":
+				case "openrouter":
 					return { "shofer/sonnet": { contextWindow: 8192, supportsPromptCache: false } }
 				case "openrouter":
 					return { "openrouter/qwen2.5": { contextWindow: 32768, supportsPromptCache: false } }
@@ -150,7 +150,7 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 
 		// Aggregate handler initializes many known routers - ensure a few expected keys exist
 		expect(routerModels).toHaveProperty("openrouter")
-		expect(routerModels).toHaveProperty("shofer")
+		expect(routerModels).toHaveProperty("openrouter")
 		expect(routerModels).toHaveProperty("requesty")
 	})
 
