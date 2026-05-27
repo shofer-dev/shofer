@@ -439,21 +439,8 @@ const ApiOptions = ({
 			label,
 		}))
 
-		// Pin "shofer" to the top if not on welcome screen
-		if (!fromWelcomeView) {
-			// shofer provider removed
-
-			if (shoferIndex > 0) {
-				// shofer provider pin removed
-
-				options.unshift(rooOption)
-			}
-		} else {
-			// Filter out shofer from the welcome view
-			const filteredOptions = options
-			options.length = 0
-			options.push(...filteredOptions)
-
+		// Pin OpenRouter to the top on welcome screen
+		if (fromWelcomeView) {
 			const openRouterIndex = options.findIndex((opt) => opt.value === "openrouter")
 			if (openRouterIndex > 0) {
 				const [openRouterOption] = options.splice(openRouterIndex, 1)
