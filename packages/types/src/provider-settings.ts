@@ -538,7 +538,6 @@ export const modelIdKeysByProvider: Record<TypicalProvider, ModelIdKey> = {
 	sambanova: "apiModelId",
 	zai: "apiModelId",
 	fireworks: "apiModelId",
-	shofer: "apiModelId",
 	"vercel-ai-gateway": "vercelAiGatewayModelId",
 }
 
