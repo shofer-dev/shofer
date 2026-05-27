@@ -100,7 +100,6 @@
 	"about": "Shofer — это целая команда разработчиков ИИ в вашем редакторе.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Ваш список задач в этом рабочем пространстве пуст.",
@@ -307,13 +306,6 @@
 	"announcement": {
 		"title": "Выпущен Shofer {{version}}",
 		"support": "Поддержите Shofer, поставив нам звезду на <githubLink>GitHub</githubLink>.",
-		"stealthModel": {
-			"feature": "<bold>Бесплатная скрытая модель на ограниченное время</bold> - Code Supernova: Теперь обновлена до <bold>контекстного окна 1M токенов</bold>! Универсальная модель агентного программирования, поддерживающая ввод изображений, доступная через Shofer Cloud.",
-			"note": "(Примечание: промпты и дополнения записываются создателем модели и используются для её улучшения)",
-			"connectButton": "Подключиться к Shofer Cloud",
-			"selectModel": "Выберите <code>shofer/code-supernova</code> от провайдера Shofer Cloud в Настройках для начала работы.",
-			"goToSettingsButton": "Перейти к Настройкам"
-		},
 		"release": {
 			"heading": "Что нового:",
 			"gpt54": "Провайдер Poe: мы добавили Poe как AI-провайдера, чтобы ты мог напрямую получать доступ к моделям Poe в Shofer.",
@@ -321,12 +313,6 @@
 			"geminiPro": "Поддержка Gemini 3.1 Pro: Добавлена поддержка модели Gemini 3.1 Pro и установлена как модель Gemini по умолчанию для лучшей производительности.",
 			"cliNdjson": "Протокол NDJSON в CLI: Новый протокол NDJSON через stdin, подкоманды list и модульная команда run для более гибких CLI-процессов.",
 			"cliRelease": "CLI v0.1.0: CLI Shofer достиг своего первого официального релиза со стабильным интерфейсом командной строки."
-		},
-		"cloudAgents": {
-			"heading": "Новое в облаке:",
-			"specialized": "Представляем <bold>Explainer</bold>, <bold>Planner</bold> и <bold>Coder</bold> - трёх специализированных облачных агентов для улучшения ваших рабочих процессов.",
-			"description": "Агенты работают вместе в облаке и могут быть запущены из веб-интерфейса или через Slack.",
-			"tryButton": "Попробовать облачных агентов"
 		}
 	},
 	"reasoning": {

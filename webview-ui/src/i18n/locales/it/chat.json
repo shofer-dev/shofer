@@ -100,7 +100,6 @@
 	"about": "Shofer è un intero team di sviluppo AI nel tuo editor.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "La tua lista di attività in questo spazio di lavoro è vuota.",
@@ -333,13 +332,6 @@
 	"announcement": {
 		"title": "Rilasciato Shofer {{version}}",
 		"support": "Sostieni Shofer lasciandoci una stella su <githubLink>GitHub</githubLink>.",
-		"stealthModel": {
-			"feature": "<bold>Modello stealth GRATUITO per tempo limitato</bold> - Code Supernova: Ora potenziato con una <bold>finestra di contesto da 1M token</bold>! Un modello di codificazione agentiva versatile che supporta input di immagini, accessibile tramite Shofer Cloud.",
-			"note": "(Nota: i prompt e le completazioni vengono registrati dal creatore del modello e utilizzati per migliorarlo)",
-			"connectButton": "Connetti a Shofer Cloud",
-			"selectModel": "Seleziona <code>shofer/code-supernova</code> dal provider Shofer Cloud nelle Impostazioni per iniziare.",
-			"goToSettingsButton": "Vai alle Impostazioni"
-		},
 		"release": {
 			"heading": "Novità:",
 			"gpt54": "Provider Poe: abbiamo aggiunto Poe come provider AI così puoi accedere direttamente ai modelli Poe in Shofer.",
@@ -347,12 +339,6 @@
 			"geminiPro": "Supporto Gemini 3.1 Pro: Aggiunto il supporto per il modello Gemini 3.1 Pro e impostato come modello Gemini predefinito per prestazioni migliori.",
 			"cliNdjson": "Protocollo NDJSON del CLI: Nuovo protocollo NDJSON via stdin, sottocomandi di elenco e comando di esecuzione modularizzato per flussi di lavoro CLI più flessibili.",
 			"cliRelease": "CLI v0.1.0: Il CLI di Shofer raggiunge la sua prima release ufficiale con un'interfaccia di comandi stabile."
-		},
-		"cloudAgents": {
-			"heading": "Novità nel Cloud:",
-			"specialized": "Presentazione di <bold>Explainer</bold>, <bold>Planner</bold> e <bold>Coder</bold> - tre agenti cloud specializzati per migliorare i tuoi flussi di lavoro.",
-			"description": "Gli agenti lavorano insieme nel cloud e possono essere attivati dal web o tramite Slack.",
-			"tryButton": "Prova gli Agenti Cloud"
 		}
 	},
 	"costs": {

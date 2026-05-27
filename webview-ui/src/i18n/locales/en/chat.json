@@ -140,7 +140,6 @@
 	"about": "State-of-the-art open-source AI coding.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "What would you like to do?",
@@ -385,23 +384,10 @@
 	"announcement": {
 		"title": "Shofer {{version}} Released",
 		"support": "Please support Shofer by starring us on <githubLink>GitHub</githubLink>.",
-		"stealthModel": {
-			"feature": "<bold>Limited-time FREE stealth model</bold> - Code Supernova: Now upgraded with a <bold>1M token context window</bold>! A versatile agentic coding model that supports image inputs, accessible through Shofer Cloud.",
-			"note": "(Note: prompts and completions are logged by the model creator and used to improve the model)",
-			"connectButton": "Connect to Shofer Cloud",
-			"selectModel": "Select <code>shofer/code-supernova</code> from the Shofer Cloud provider in Settings to get started.",
-			"goToSettingsButton": "Go to Settings"
-		},
 		"release": {
 			"heading": "What's New:",
 			"gpt54": "Poe Provider: Added Poe as an AI provider so you can access Poe models directly in Shofer.",
 			"slashSkills": "xAI and MiniMax Improvements: Migrated the xAI provider to the Responses API, added Grok-4.20 defaults, and fixed MiniMax model listings and context window handling for a more reliable setup."
-		},
-		"cloudAgents": {
-			"heading": "New in the Cloud:",
-			"specialized": "Introducing <bold>Explainer</bold>, <bold>Planner</bold>, and <bold>Coder</bold> - three specialized cloud agents to enhance your workflows.",
-			"description": "The agents work together in the cloud and can be triggered from the web or through Slack.",
-			"tryButton": "Try Cloud Agents"
 		}
 	},
 	"reasoning": {

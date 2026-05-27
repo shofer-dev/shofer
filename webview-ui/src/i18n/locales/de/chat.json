@@ -100,7 +100,6 @@
 	"about": "Shofer ist ein ganzes KI-Entwicklerteam in deinem Editor.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Deine Aufgabenliste in diesem Arbeitsbereich ist leer.",
@@ -333,13 +332,6 @@
 	"announcement": {
 		"title": "Shofer {{version}} veröffentlicht",
 		"support": "Bitte unterstütze Shofer, indem du uns auf <githubLink>GitHub</githubLink> einen Stern gibst.",
-		"stealthModel": {
-			"feature": "<bold>Zeitlich begrenztes KOSTENLOSES Stealth-Modell</bold> - Code Supernova: Jetzt mit einem <bold>1M Token Kontextfenster</bold> erweitert! Ein vielseitiges agentisches Coding-Modell, das Bildeingaben unterstützt und über Shofer Cloud zugänglich ist.",
-			"note": "(Hinweis: Prompts und Vervollständigungen werden vom Modellersteller protokolliert und zur Verbesserung des Modells verwendet)",
-			"connectButton": "Mit Shofer Cloud verbinden",
-			"selectModel": "Wähle <code>shofer/code-supernova</code> vom Shofer Cloud-Provider in den Einstellungen aus, um zu beginnen.",
-			"goToSettingsButton": "Zu den Einstellungen"
-		},
 		"release": {
 			"heading": "Was ist neu:",
 			"gpt54": "Poe-Anbieter: Poe als KI-Anbieter hinzugefügt, damit du direkt in Shofer auf Poe-Modelle zugreifen kannst.",
@@ -347,12 +339,6 @@
 			"geminiPro": "Gemini 3.1 Pro Unterstützung: Gemini 3.1 Pro wurde als Modell hinzugefügt und als Standard-Gemini-Modell für bessere Leistung festgelegt.",
 			"cliNdjson": "CLI NDJSON-Protokoll: Neues NDJSON-stdin-Protokoll, List-Unterbefehle und modularisierter Run-Befehl für flexiblere CLI-Workflows.",
 			"cliRelease": "CLI v0.1.0: Das Shofer CLI erreicht seine erste offizielle Veröffentlichung mit einer stabilen Befehlsoberfläche."
-		},
-		"cloudAgents": {
-			"heading": "Neu in der Cloud:",
-			"specialized": "Wir stellen <bold>Explainer</bold>, <bold>Planner</bold> und <bold>Coder</bold> vor - drei spezialisierte Cloud-Agenten zur Verbesserung deiner Workflows.",
-			"description": "Die Agenten arbeiten zusammen in der Cloud und können vom Web oder über Slack ausgelöst werden.",
-			"tryButton": "Probiere Cloud-Agenten aus"
 		}
 	},
 	"costs": {

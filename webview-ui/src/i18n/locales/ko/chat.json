@@ -100,7 +100,6 @@
 	"about": "Shofer는 편집기 안에 있는 전체 AI 개발팀입니다.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "이 작업 공간의 작업 목록이 비어 있습니다.",
@@ -333,13 +332,6 @@
 	"announcement": {
 		"title": "Shofer {{version}} 출시",
 		"support": "<githubLink>GitHub</githubLink>에서 별표를 눌러 Shofer를 응원해 주세요.",
-		"stealthModel": {
-			"feature": "<bold>기간 한정 무료 스텔스 모델</bold> - Code Supernova: 이제 <bold>1M 토큰 컨텍스트 윈도우</bold>로 업그레이드되었습니다! 이미지 입력을 지원하는 다목적 에이전틱 코딩 모델, Shofer Cloud를 통해 이용 가능.",
-			"note": "(참고: 프롬프트와 완성은 모델 제작자에 의해 기록되고 모델 개선에 사용됩니다)",
-			"connectButton": "Shofer Cloud에 연결",
-			"selectModel": "설정에서 Shofer Cloud 제공업체의 <code>shofer/code-supernova</code>를 선택하여 시작하세요.",
-			"goToSettingsButton": "설정으로 이동"
-		},
 		"release": {
 			"heading": "새로운 기능:",
 			"gpt54": "Poe 제공업체: Poe를 AI 제공업체로 추가해 Shofer에서 Poe 모델에 직접 접근할 수 있게 했어요.",
@@ -347,12 +339,6 @@
 			"geminiPro": "Gemini 3.1 Pro 지원: Gemini 3.1 Pro 모델 지원이 추가되었으며, 향상된 성능을 위해 기본 Gemini 모델로 설정되었습니다.",
 			"cliNdjson": "CLI NDJSON 프로토콜: 새로운 NDJSON stdin 프로토콜, list 하위 명령어, 더 유연한 CLI 워크플로를 위한 모듈화된 run 명령어.",
 			"cliRelease": "CLI v0.1.0: Shofer CLI가 안정적인 명령어 인터페이스로 첫 공식 릴리스에 도달했습니다."
-		},
-		"cloudAgents": {
-			"heading": "클라우드의 새로운 기능:",
-			"specialized": "<bold>Explainer</bold>, <bold>Planner</bold>, <bold>Coder</bold> 세 가지 전문 클라우드 에이전트를 소개합니다. 워크플로우를 향상시킵니다.",
-			"description": "에이전트는 클라우드에서 함께 작동하며 웹 또는 Slack을 통해 트리거할 수 있습니다.",
-			"tryButton": "클라우드 에이전트 사용해보기"
 		}
 	},
 	"costs": {

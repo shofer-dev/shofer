@@ -130,7 +130,6 @@
 	"about": "Shofer adalah seluruh tim pengembang AI di editor Anda.",
 	"docs": {
 		"readme": "README — official docs",
-		"roocode": "Coming from Roo-Code?",
 		"copilot": "Coming from Copilot?"
 	},
 	"onboarding": "Daftar tugas Anda di ruang kerja ini kosong.",
@@ -362,13 +361,6 @@
 	"announcement": {
 		"title": "Shofer {{version}} Dirilis",
 		"support": "Dukung Shofer dengan memberi kami bintang di <githubLink>GitHub</githubLink>.",
-		"stealthModel": {
-			"feature": "<bold>Model stealth GRATIS waktu terbatas</bold> - Code Supernova: Sekarang diupgrade dengan <bold>jendela konteks 1M token</bold>! Model coding agentik serbaguna yang mendukung input gambar, tersedia melalui Shofer Cloud.",
-			"note": "(Catatan: prompt dan completion dicatat oleh pembuat model dan digunakan untuk meningkatkan model)",
-			"connectButton": "Hubungkan ke Shofer Cloud",
-			"selectModel": "Pilih <code>shofer/code-supernova</code> dari penyedia Shofer Cloud di Pengaturan untuk memulai.",
-			"goToSettingsButton": "Pergi ke Pengaturan"
-		},
 		"release": {
 			"heading": "Yang Baru:",
 			"gpt54": "Provider Poe: Poe ditambahkan sebagai provider AI agar kamu bisa langsung mengakses model Poe di Shofer.",
@@ -376,12 +368,6 @@
 			"geminiPro": "Dukungan Gemini 3.1 Pro: Dukungan model Gemini 3.1 Pro telah ditambahkan dan ditetapkan sebagai model Gemini default untuk performa yang lebih baik.",
 			"cliNdjson": "Protokol NDJSON CLI: Protokol NDJSON stdin baru, subperintah list, dan perintah run yang dimodularisasi untuk alur kerja CLI yang lebih fleksibel.",
 			"cliRelease": "CLI v0.1.0: CLI Shofer mencapai rilis resmi pertamanya dengan antarmuka perintah yang stabil."
-		},
-		"cloudAgents": {
-			"heading": "Baru di Cloud:",
-			"specialized": "Memperkenalkan <bold>Explainer</bold>, <bold>Planner</bold>, dan <bold>Coder</bold> - tiga agen cloud khusus untuk meningkatkan alur kerja Anda.",
-			"description": "Agen bekerja bersama di cloud dan dapat dipicu dari web atau melalui Slack.",
-			"tryButton": "Coba Agen Cloud"
 		}
 	},
 	"reasoning": {
