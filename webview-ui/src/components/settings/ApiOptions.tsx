@@ -29,7 +29,7 @@ import {
 	internationalZAiDefaultModelId,
 	mainlandZAiDefaultModelId,
 	fireworksDefaultModelId,
-		vercelAiGatewayDefaultModelId,
+	vercelAiGatewayDefaultModelId,
 	minimaxDefaultModelId,
 	unboundDefaultModelId,
 } from "@shofer/types"
@@ -133,7 +133,7 @@ const ApiOptions = ({
 	setErrorMessage,
 }: ApiOptionsProps) => {
 	const { t } = useAppTranslation()
-	const { organizationAllowList, cloudIsAuthenticated, openAiCodexIsAuthenticated } = useExtensionState()
+	const { organizationAllowList, openAiCodexIsAuthenticated } = useExtensionState()
 
 	const [customHeaders, setCustomHeaders] = useState<[string, string][]>(() => {
 		const headers = apiConfiguration?.openAiHeaders || {}
@@ -703,7 +703,7 @@ const ApiOptions = ({
 						/>
 					)}
 
-										{/* Generic model picker for providers with static models */}
+					{/* Generic model picker for providers with static models */}
 					{activeSelectedProvider && shouldUseGenericModelPicker(activeSelectedProvider) && (
 						<>
 							<ModelPicker
