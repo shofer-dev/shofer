@@ -25,11 +25,7 @@ type ModelMigrations = {
 	[K in ProviderName]?: Record<string, string>
 }
 
-const MODEL_MIGRATIONS: ModelMigrations = {
-	shofer: {
-		"shofer/code-supernova": "shofer/code-supernova-1-million",
-	},
-} as const satisfies ModelMigrations
+const MODEL_MIGRATIONS: ModelMigrations = {} as const satisfies ModelMigrations
 
 export interface SyncCloudProfilesResult {
 	hasChanges: boolean
