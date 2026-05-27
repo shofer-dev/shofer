@@ -379,7 +379,9 @@ See [`submodule-support.md`](submodule-support.md) for the full design.
 
 Shofer includes a RAG-powered code indexing pipeline that enables semantic code search and powers several tools with codebase-aware context.
 
-The indexer processes workspace files through tree-sitter parsing and embedding, storing vectors in a Qdrant instance. The pipeline was substantially hardened in the Shofer fork to handle edge cases, submodules, and git-ignored files correctly.
+The indexer processes workspace files through tree-sitter parsing and embedding, storing vectors in a Qdrant instance. On large workspaces, startup reconciliation and re-indexing are **near-instant** — only files that actually changed are re-processed, using a layered strategy: `stat()`-only mtime+size comparison skips unchanged files without even reading them, git-aware narrowing diffs from the last indexed commit, and per-segment hashing ensures that within a changed file only the modified code blocks are re-embedded.
+
+The pipeline was substantially hardened in the Shofer fork to handle edge cases, submodules, and git-ignored files correctly.
 
 > See [`rag_indexing.md`](rag_indexing.md) and [`git_search-tool.md`](git_search-tool.md) for the full design.
 
