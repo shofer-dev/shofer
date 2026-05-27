@@ -1,199 +1,74 @@
 # Shofer for GitHub Copilot Users
 
-If you're using GitHub Copilot and wondering what Shofer brings to the table, this document is for you.
+If you are using GitHub Copilot and wondering what Shofer brings to the table, this breakdown outlines the core architectural and functional differences between the two environments.
 
-Shofer is a **locally-run, fully configurable AI coding agent** that operates as a VS Code extension — on your machine, under your control. It gives you capabilities on par, and in some cases better, than what Copilot offers, without sending your code to Microsoft or GitHub.
+Shofer is a **locally-run, fully configurable AI coding agent** that operates as a VS Code extension — running entirely on your machine, under your own control. It offers an alternative paradigm to traditional assistants by exposing granular pipeline customizability and offline autonomy without sending your workspace context to third-party infrastructure.
 
-> **Quick Start**: Run the `/migrate-from-copilot` slash command to automatically migrate your existing GitHub Copilot configuration files (`.github/copilot-instructions.md`, agents, skills, instructions) to Shofer equivalents. See [`copilot.md`](copilot.md) for the full Copilot file reference.
+> **Current as of May 27, 2026**: The AI tools landscape shifts rapidly. This guide reflects the native feature sets, capabilities, and ecosystems of both tools as of today.
 
-> **Philosophy**: Shofer is your AI pair programmer that you own. You choose the models, you control the data, you define the workflows.
-
----
-
-## Privacy & Control: The Fundamental Difference
-
-| Concern                  | GitHub Copilot                                           | Shofer                                                                                        |
-| ------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **Where your code goes** | Sent to Microsoft/GitHub cloud for processing            | Stays on your machine — the extension processes everything locally                            |
-| **What model runs**      | Copilot's proprietary models (you can't choose)          | **Any** LLM provider: Anthropic, OpenAI, Ollama (local), OpenRouter, Google, xAI — you decide |
-| **Data retention**       | Microsoft's privacy policy governs retention             | Zero retention by Shofer — the extension stores nothing externally                            |
-| **Network dependency**   | Requires internet; data leaves your network              | Fully functional offline with local models (Ollama, LM Studio)                                |
-| **Auditability**         | Closed-source agent logic                                | 100% open source — every prompt, every tool, every decision is inspectable                    |
-| **Rate limits**          | Subject to Copilot's tiered rate limits                  | Only your provider's limits apply (none for local models)                                     |
-| **Subscription**         | $10–$39/month for individuals, $19–$39/seat for business | Free and open source — you only pay your LLM provider                                         |
-
-> **Note on external providers**: If you choose to use a cloud LLM provider (Anthropic, OpenAI, etc.), your prompts and code context are sent to that provider per their terms. Shofer itself never sees your data. Using a local model (Ollama, LM Studio) keeps **everything** on your machine.
+> **Quick Migration**: You can run the `/migrate-from-copilot` slash command inside Shofer to automatically parse and port your existing GitHub Copilot configuration files (such as `.github/copilot-instructions.md`, custom agents, and custom rules) into Shofer-compatible configurations.
 
 ---
 
-## Feature Comparison: What Copilot Can't Do
+## Privacy & Architectural Topology
 
-### Multi-Task Architecture
+The choice between Copilot and Shofer represents a fundamental trade-off between cloud-managed convenience and local-first autonomy.
 
-Copilot gives you one conversation at a time. Shofer gives you an entire development team.
+| Aspect                         | GitHub Copilot                                                                                                                                                                             | Shofer                                                                                                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Data Processing Location**   | Code snippets, prompts, and context metadata are routed through Microsoft and GitHub cloud proxy infrastructure for remote inference.                                                      | Executes entirely on your local hardware. No remote server is involved in processing your workspace unless explicitly configured.                                                                                             |
+| **Model Ecosystem**            | Features a curated, cloud-managed **Multi-Model Picker**, allowing you to natively swap between cloud-hosted models like Claude 3.7 Sonnet, OpenAI o1/o3-mini, GPT-4o, and Gemini 2.5 Pro. | Offers an agnostic **Bring-Your-Own-Model** pipeline. You can target local execution engines (Ollama, LM Studio) or hook directly into specialized cloud endpoints (OpenRouter, Anthropic API, OpenAI API, xAI, AWS Bedrock). |
+| **Data Retention & Telemetry** | Data retention, usage tracking, and prompt logging are governed by GitHub/Microsoft enterprise telemetry and privacy agreements.                                                           | Provides zero data persistence, external tracking, or behavioral logging by default.                                                                                                                                          |
+| **Network Autonomy**           | Requires an active internet connection and a constant telemetry handshake with GitHub servers to validate licensing and pipe responses.                                                    | Fully operational in 100% air-gapped, offline environments when paired with local models running on your machine.                                                                                                             |
+| **Codebase Inspection**        | Built on closed-source, proprietary background runtime binaries embedded within the IDE extension.                                                                                         | 100% open-source software. Developers can inspect every single tool hook, system prompt prefix, and workspace lifecycle event.                                                                                                |
+| **Rate Limits & Governance**   | Bound to GitHub's infrastructure throttling parameters, fair-use policies, and cloud availability.                                                                                         | Throttling is entirely eliminated; output speed and limits are dictated strictly by your hardware compute capacity or your personal direct API keys.                                                                          |
+| **Subscription Model**         | SaaS tiered pricing model requiring flat-rate individual or enterprise seat subscriptions ($10–$39/month).                                                                                 | Distributed as MIT Free Open Source Software (FOSS). You incur zero platform fees, paying only for the raw tokens you consume via external cloud APIs if you choose to use them.                                              |
 
-| Capability                        | Copilot         | Shofer                                                                           |
-| --------------------------------- | --------------- | -------------------------------------------------------------------------------- |
-| Single chat conversation          | ✅ Copilot Chat | ✅                                                                               |
-| Multiple concurrent conversations | ❌              | ✅ Switch between independent tasks freely                                       |
-| Background/async tasks            | ❌              | ✅ Fan out work with `is_background: true` — parent continues while children run |
-| Task orchestration                | ❌              | ✅ `wait_for_task`, `check_task_status`, `cancel_tasks` — full lifecycle control |
-| Subtask question routing          | ❌              | ✅ Background children ask the parent, not the user                              |
-
-### Tools & Capabilities
-
-Copilot's agent can use a limited set of tools. Shofer exposes 50+ native tools with deep system integration.
-
-| Capability               | Copilot    | Shofer                                                                               |
-| ------------------------ | ---------- | ------------------------------------------------------------------------------------ |
-| Read/write files         | ✅ Basic   | ✅ Full toolkit: `write_to_file`, `apply_diff`, `insert_edit`, `sed`, `file` (rm/mv) |
-| Symbol rename via LSP    | ❌         | ✅ `rename_symbol` — rename across entire codebase                                   |
-| Semantic code search     | ❌         | ✅ `rag_search` — find code by meaning, not just keywords                            |
-| Git history search       | ❌         | ✅ `git_search` — semantic search over commit history                                |
-| Execute shell commands   | ✅ Limited | ✅ Full terminal with timeout, working directory, output capture                     |
-| Web browsing             | ❌         | ✅ Browser automation — navigate, click, type, extract data                          |
-| MCP server integration   | ❌         | ✅ Connect to any MCP server; async parallel MCP calls                               |
-| Image generation         | ❌         | ✅ Generate images from prompts                                                      |
-| Web page fetching        | ❌         | ✅ `fetch_web_page` — extract text content from URLs                                 |
-| Command output retrieval | ❌         | ✅ `read_command_output` — paginate and search truncated output                      |
-
-### Codebase Understanding
-
-| Capability                  | Copilot | Shofer                                                                    |
-| --------------------------- | ------- | ------------------------------------------------------------------------- |
-| Code indexing (RAG)         | ❌      | ✅ Full codebase indexing with tree-sitter parsing + embeddings           |
-| `.gitignore`-aware scanning | ❌      | ✅ `GitIgnoreFilter` oracle — honors nested `.gitignore`, global excludes |
-| Submodule support           | ❌      | ✅ Indexes and searches inside git submodules                             |
-| Per-provider embedding      | ❌      | ✅ Embed with Ollama (local), Bedrock, or cloud providers                 |
-
-### Workflow & Automation
-
-| Capability                | Copilot                | Shofer                                                                     |
-| ------------------------- | ---------------------- | -------------------------------------------------------------------------- |
-| Custom slash commands     | ❌                     | ✅ Define reusable `/commands` with parameter interpolation                |
-| Skills system             | ❌                     | ✅ Reusable prompt + tool packages (Agent Skills spec)                     |
-| Custom modes              | ❌ (Agent vs Ask only) | ✅ 5 built-in modes (Code, Architect, Debug, Ask, Reviewer) + custom modes |
-| Mode-specific tool access | ❌                     | ✅ Per-mode `allowed`/`denied` tool lists                                  |
-| Task export               | ❌                     | ✅ Export to Markdown or structured JSON                                   |
-| Message queuing           | ❌                     | ✅ Type ahead while the LLM works; messages queue and deliver when ready   |
-| Per-task drafts           | ❌                     | ✅ Unsent input preserved per task                                         |
-| File changes panel        | ❌                     | ✅ See every file the AI touched; Accept or Revert with one click          |
-
-### Git & Worktrees
-
-| Capability                | Copilot | Shofer                                                              |
-| ------------------------- | ------- | ------------------------------------------------------------------- |
-| Native worktree support   | ❌      | ✅ Create, switch, and manage git worktrees without leaving VS Code |
-| Worktree status indicator | ❌      | ✅ Live branch + dirty/ahead/behind status chip in chat bar         |
-
-### Auto-Approval & Safety
-
-| Capability                 | Copilot | Shofer                                                         |
-| -------------------------- | ------- | -------------------------------------------------------------- |
-| Fine-grained auto-approval | ❌      | ✅ 9 tool categories with per-category toggles                 |
-| Command allowlisting       | ❌      | ✅ Define exactly which commands can run without approval      |
-| Cost limits                | ❌      | ✅ Set USD spend caps per task — auto-pause/abort when reached |
-| Per-task mode locking      | ❌      | ✅ Each task keeps its mode; switching tasks doesn't leak      |
+> **Data Flow Note:** When Shofer is configured to point to an external cloud provider (like Anthropic or OpenAI), your prompt payloads flow directly to that provider's official API endpoint. Shofer acts as a local client and never intercepts, aggregates, or proxies your code. When pointed to Ollama or LM Studio, **100% of the payload remains strictly on-device.**
 
 ---
 
-## Architecture: Copilot vs Shofer
+## Core Capabilities: What Shofer Offers Beyond Copilot
 
-```
-GitHub Copilot                          Shofer
-──────────────────────────              ──────────────────────────
-                                        ┌─────────────────────────┐
-┌──────────────────────┐                │  ┌───────────────────┐  │
-│   VS Code Extension  │                │  │   VS Code Ext.    │  │
-│         │            │                │  │        │          │  │
-│         ▼            │                │  │        ▼          │  │
-│  GitHub Copilot API  │──Cloud────────▶│  │  Local Task Loop  │  │
-│  (Microsoft Cloud)   │                │  │        │          │  │
-│         │            │                │  │        ▼          │  │
-│         ▼            │                │  │  LLM Provider API │──│──▶ Your chosen model
-│   Proprietary Model  │                │  │  (Anthropic,      │  │    (local or cloud)
-│   (GPT-based)        │                │  │   Ollama, etc.)   │  │
-└──────────────────────┘                │  └───────────────────┘  │
-                                        │                         │
-                                        │  ┌───────────────────┐  │
-                                        │  │   Task Manager    │  │
-                                        │  │  (Multi-task)     │  │
-                                        │  └───────────────────┘  │
-                                        │                         │
-                                        │  ┌───────────────────┐  │
-                                        │  │  Code Indexer     │  │
-                                        │  │  (Qdrant + T-S)   │  │
-                                        │  └───────────────────┘  │
-                                        │                         │
-                                        │  ┌───────────────────┐  │
-                                        │  │  MCP Client       │  │
-                                        │  │  (Tool Servers)   │  │
-                                        │  └───────────────────┘  │
-                                        └─────────────────────────┘
-```
+### 1. Improved parallelism and asynchronous processing
+
+Unlike traditional workflow engines that require developers to manually hardcode an immutable orchestration graph using complex frameworks, Shofer embeds agent management directly into the LLM's toolkit.
+
+| Capability                             | GitHub Copilot                                                                                                                                                                                                                                                                                               | Shofer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Agent-to-Agent (A2A) Orchestration** | ❌ Operates on a monolithic, single-agent interface designed entirely around human-to-AI interaction. While it splits tasks under the hood using internal abstractions (like routing queries to `@workspace`), it provides no mechanism for dynamic sub-agent management or developer-controlled delegation. | ✅ Equips the root agent with specific runtime tools to programmatically spawn, monitor, and converse with child agents. The main agent can spin up specialized background workers to deep-dive into complex modifications while keeping the main conversation thread non-blocked. Child agents can recursively spawn their own sub-agents, monitor their lifecycle via `check_task_status`, or route clarifying questions directly back to their parent agent using internal messaging protocols rather than interrupting the human developer. |
+| **Asynchronous MCP Execution**         | ❌ Natively supports the Model Context Protocol (MCP), but uses a synchronous request-response execution loop. When a tool is triggered, the entire generation loop blocks while waiting for the server payload to return.                                                                                   | ✅ Features fire-and-forget asynchronous tool calling (`call_mcp_tool_async`). The agent can dispatch multiple long-running MCP tool calls in parallel and continue executing other tasks or tracking parallel routines while awaiting data payloads.                                                                                                                                                                                                                                                                                           |
+
+### 2. Deep System & Tool Integration
+
+| Capability                                        | GitHub Copilot                                                                                                                                                                                                  | Shofer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Git History Semantic RAG**                      | ❌ Can run shell tools like `git log` on demand, but does not maintain a dedicated semantic index over commit history.                                                                                          | ✅ Indexes the entire git log — commit messages, historical diffs, and developer commit history — into a RAG-accessible embedding database. The `git_search` tool enables semantic queries over the repository's temporal history, so the agent can discover _why_ and _when_ a change was made by searching for concepts, not just keywords.                                                                                                                                                                                                                                            |
+| **Cross-Session Context Reuse (Assistant Agent)** | ❌ Treats every new chat window as a contextual blank slate. Each task must independently load and pay tokens for the relevant codebase context from scratch, with no ability to reuse context across sessions. | ✅ Runs a persistent, shared background session (the **Assistant Agent**) that accumulates codebase knowledge over time. As tasks query it, its context window fills with relevant files and answers. Other tasks can then ask it questions via `ask_assistant_agent` and receive answers from its pre-warmed context — avoiding redundant file reads and token expenditure across sessions. This is a **cost-reduction mechanism**: you maintain one long-lived context window that many cheap queries can reuse, rather than every task paying to load the same context independently. |
+
+### 3. Workflow Customization & Governance
+
+| Feature                                     | GitHub Copilot                                                                                                                                                                                                                         | Shofer                                                                                                                                                                                                                                                                            |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MCP Tool Categorization & Auto-Approval** | ❌ No abstract taxonomy. Governs auto-approval strictly at the individual tool identifier, regex string match, or parent MCP server level. It has no built-in risk-level buckets to handle tools universally across different servers. | ✅ Fixed 7-Category Matrix. Utilizes defined risk categories (read, write, execute, etc.). MCP developers can natively flag tool-to-category mappings in their manifests, or users can override them via local configurations to toggle auto-approvals globally per risk profile. |
+| **Financial and Token Budgets**             | ❌ No per session cost tracking or limits.                                                                                                                                                                                             | ✅ Integrates strict programmatic cost caps. Developers can assign hard USD limits per task or per session, automatically halting autonomous agent execution loops the moment a spend threshold is crossed to guarantee protection against runaway recursive loops.               |
 
 ---
 
-## Use Cases: When Shofer Excels
+## Choosing the Right Tool for Your Workflow
 
-### "I work with sensitive/proprietary code"
+### When Shofer is Best Utilized
 
-Shofer + Ollama = 100% air-gapped AI coding. Nothing leaves your machine. Copilot sends your code to Microsoft's cloud on every request.
+| Scenario                                        | Description                                                                                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Strict Compliance & Air-Gapped Environments** | Essential for enterprise networks or proprietary defense projects where source code cannot pass through outbound internet gateways.                                      |
+| **Spend Tracking and Limit Enforcement**        | Allows you to track cost on a per session/task level and impose limits.                                                                                                  |
+| **Developer Friendly and Transparent**          | Perfect for engineers who want a deep level of control and understanding of the system: raw JSON export, detailed logging, customizable to every detail.                 |
+| **Customizable and Extensible Platform**        | Open-source architecture that experiments and adopts new ideas faster than proprietary platforms — giving teams the power to innovate and customize every single detail. |
 
-### "I need to parallelize complex work"
+### When GitHub Copilot is Best Utilized
 
-Spawn 3 background tasks — one researches APIs, one writes tests, one refactors — and collect results when they're all done. Copilot can only do one thing at a time.
-
-### "I need custom tool integrations"
-
-Connect Shofer to your internal MCP servers — databases, APIs, monitoring, Kubernetes. Copilot has a fixed, non-extensible tool set.
-
-### "I want to use the best model for each task"
-
-Use Claude Opus for architecture, GPT-5 for code generation, and a local model for quick edits — all in the same session. Copilot gives you one model.
-
-### "I need reproducible AI workflows"
-
-Export tasks as JSON, version-control the traces, replay them in CI. Copilot offers no export or replay capability.
-
-### "I work in air-gapped environments"
-
-Shofer is the only fully-functional AI coding agent that works with zero internet connectivity (using Ollama or LM Studio local models).
-
----
-
-## What Copilot Does Better (Today)
-
-To be fair, Copilot has strengths Shofer doesn't replicate:
-
-| Copilot Advantage                                   | Shofer Status                                                |
-| --------------------------------------------------- | ------------------------------------------------------------ |
-| **Inline code completions** (tab-to-accept)         | ❌ Not implemented — Shofer is conversation/agent-focused    |
-| **Next-edit suggestions** (ghost text)              | ❌ Not implemented                                           |
-| **Code review on PRs**                              | ❌ No PR integration                                         |
-| **Agent mode in terminal**                          | ❌ Terminal is a tool, not an agent host                     |
-| **Seamless VS Code integration** (no configuration) | ⚠️ Requires LLM provider setup                               |
-| **Copilot Free tier**                               | ⚠️ Free, but you need your own LLM provider (or local model) |
-
-> Shofer is an **agent platform**, not an autocomplete engine. It complements Copilot rather than replacing it — many users run both side by side.
-
----
-
-## Getting Started for Copilot Users
-
-1. **Install Shofer** from the VS Code marketplace
-2. **Choose a model** — point it at Ollama (local), Anthropic, OpenAI, or any supported provider
-3. **Open the chat** — `Cmd+Shift+P` → `Shofer: New Task` (or use the sidebar icon)
-4. **Pick a mode** — Code mode is the default (like Copilot's Agent); switch to Architect for planning, Debug for troubleshooting
-5. **Start coding** — Shofer has access to your entire workspace, git history, and code index
-
-> **Pro tip**: Set up Shofer with a local Ollama model for sensitive work, and a cloud provider for heavy lifting. You can switch between them per task.
-
----
-
-## See Also
-
-- [`shofer_for_roocode_users.md`](shofer_for_roocode_users.md) — comprehensive feature catalogue for Roo-Code migrants
-- [`CHANGELOG.md`](../CHANGELOG.md) — complete release history
-- [`configuration.md`](configuration.md) — VS Code settings reference
-- [`native_tools.md`](native_tools.md) — complete 50+ native tools reference
+| Scenario                                     | Description                                                                                                                                                                                                      |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Zero-Configuration Premium Cloud Compute** | Best if you want direct, out-of-the-box access to foundational models (like Claude 3.7 Sonnet or OpenAI o1) without managing separate billing pipelines, model proxy setups, or running heavy local hardware.    |
+| **Native Cloud Ecosystem Integration**       | Seamlessly syncs with GitHub.com features, including automated PR code reviews, server-side repository indexes, and organization-wide security configurations managed through a single enterprise control plane. |
