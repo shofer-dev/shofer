@@ -1,6 +1,6 @@
 # Adding a New LLM/Model Provider
 
-This document describes the full set of changes needed to add a new upstream LLM provider to Shofer. Use the existing DeepSeek provider as a reference implementation throughout.
+This document describes the **complete** set of changes needed to add a new upstream LLM provider to Shofer. Use the existing DeepSeek provider as the reference implementation throughout.
 
 ---
 
@@ -9,18 +9,27 @@ This document describes the full set of changes needed to add a new upstream LLM
 ```
 User → Settings UI (webview) → ProviderSettings (Zod schema)
      → buildApiHandler() dispatch → Handler class (src/api/providers/)
-     → llm-router (Go proxy) → upstream API
+     → upstream API                     (most common — direct HTTPS)
+     → llm-router (Go proxy) → upstream (proxy-based providers only)
 ```
 
 Providers that talk directly to the upstream API (no proxy) skip the llm-router layer. Providers that go through llm-router require additional model registration in the Go backend.
 
 ---
 
-## Layer 1: Model Definitions (`packages/types/src/providers/`)
+## How to Use This Guide
 
-### 1.1 Create the models file
+Each step below is **mandatory** unless marked "(if applicable)." Steps are numbered 1–34. The DeepSeek provider at [`src/api/providers/deepseek.ts`](../src/api/providers/deepseek.ts) is the canonical reference implementation.
 
-Create `packages/types/src/providers/<name>.ts` with:
+---
+
+## Layer 1: Model Definitions
+
+> Files: `packages/types/src/providers/`
+
+### 1. Create the models file
+
+Create `packages/types/src/providers/<name>.ts`:
 
 ```typescript
 // packages/types/src/providers/deepseek.ts (reference)
@@ -47,54 +56,58 @@ export const deepSeekModels = {
 export const DEEP_SEEK_DEFAULT_TEMPERATURE = 0.3
 ```
 
-**Required fields per model:**
-- `maxTokens` — max output tokens
-- `contextWindow` — total context window size
-- `supportsPromptCache` — whether the provider supports Anthropic-style prompt caching
-- `inputPrice`, `outputPrice` — per-million-token pricing in USD (set to 0 if free)
-- `description` — user-facing description for the model selector
+**Required fields per model:** `maxTokens`, `contextWindow`, `supportsPromptCache`, `inputPrice`, `outputPrice`, `description`
 
 **Optional fields:** `supportsReasoning`, `supportsImages`, `cacheReadsPrice`, `cacheWritesPrice`, `maxImageCount`, `inputAudio`, `inputVideo`, `reasoningEffort`
 
-### 1.2 Re-export from the barrel file
+### 2. Re-export from the barrel file
 
-Add to [`packages/types/src/providers/index.ts`](extensions/shofer/packages/types/src/providers/index.ts):
+In [`packages/types/src/providers/index.ts`](../packages/types/src/providers/index.ts):
 
 ```typescript
 export * from "./<name>.js"
 import { <name>DefaultModelId } from "./<name>.js"
 
-// In the getDefaultModelIdValue switch:
+// Add to the getProviderDefaultModelId() switch:
 case "<name>":
     return <name>DefaultModelId
 ```
 
+**Note:** The function is `getProviderDefaultModelId()` — **not** `getDefaultModelIdValue`.
+
 ---
 
-## Layer 2: Provider Schema & Registration (`packages/types/src/provider-settings.ts`)
+## Layer 2: Provider Schema & Registration
 
-### 2.1 Add the provider to the name list
+> File: [`packages/types/src/provider-settings.ts`](../packages/types/src/provider-settings.ts)
 
-Add `"<name>"` to the `providerNames` array (~line 99):
+### 3. Add the provider to the name list
 
-```typescript
-export const providerNames = [
-	// ...
-	"<name>",
-] as const
-```
+Add `"<name>"` to the `providerNames` array (~line 99).
 
-### 2.2 Import the models
+### 4. Import the models
 
-Add the models import at the top:
+Add at the top (~line 6–23):
 
 ```typescript
 import { <name>Models } from "./providers/index.js"
 ```
 
-### 2.3 Create the Zod schema
+### 5. Check provider category arrays
 
-Add a Zod schema for this provider's settings:
+Determine the provider's category and add to the appropriate array (~line 37–93) if applicable:
+
+| Array               | When to add                                          | Example providers                      |
+| ------------------- | ---------------------------------------------------- | -------------------------------------- |
+| `dynamicProviders`  | Provider needs dynamic model list fetched from API   | openrouter, vercel-ai-gateway, litellm |
+| `localProviders`    | Provider runs models locally                         | ollama, lmstudio                       |
+| `internalProviders` | Provider is a VS Code built-in (not user-configured) | vscode-lm                              |
+| `customProviders`   | Major cloud provider with custom UI                  | openai                                 |
+| `fauxProviders`     | Test/mock provider                                   | fake-ai                                |
+
+**Most new providers do NOT belong in any of these arrays** — they are "typical" providers and don't need a category entry.
+
+### 6. Create the Zod schema
 
 ```typescript
 const <name>Schema = baseProviderSettingsSchema.extend({
@@ -104,37 +117,56 @@ const <name>Schema = baseProviderSettingsSchema.extend({
 ```
 
 **Patterns:**
-- Providers with API keys: extend `apiModelIdProviderModelSchema`
-- Providers with base URLs + keys: extend `baseProviderSettingsSchema` with `{name}BaseUrl` and `{name}ApiKey`
-- Proxy-based providers (OpenRouter, LiteLLM, etc.): extend with `openAiBaseUrl`, `openAiApiKey`
 
-### 2.4 Add to the Zod discriminated union
+- Simple API key provider: extend `apiModelIdProviderModelSchema`
+- API key + base URL: extend `baseProviderSettingsSchema` with `{name}BaseUrl` and `{name}ApiKey`
+- Proxy-based (OpenRouter, LiteLLM, etc.): extend with `openAiBaseUrl`, `openAiApiKey`
 
-Add to `providerSettingsSchemaDiscriminated` (~line 404):
+### 7. Add to the `modelIdKeys` array (if applicable)
+
+If your provider uses a model ID key **other** than `"apiModelId"` (most don't), add the key to `modelIdKeys` (~line 487).
+
+### 8. Add to the Zod discriminated union
+
+Add to `providerSettingsSchemaDiscriminated` (~line 404–435):
 
 ```typescript
 <name>Schema.merge(z.object({ apiProvider: z.literal("<name>") })),
 ```
 
-### 2.5 Add to the structured schema spread
+### 9. Add to the structured schema spread
 
-Add to the `providerSettingsSchema` spread (~line 437):
+Add to the `providerSettingsSchema` spread (~line 437–469):
 
 ```typescript
 ...<name>Schema.shape,
 ```
 
-### 2.6 Add model selection field mapping
+### 10. Add to `modelIdKeysByProvider`
 
-Add to the `modelIdKeysByProvider` map (~line 516):
+Add to the `modelIdKeysByProvider` map (~line 516–542):
 
 ```typescript
 <name>: "apiModelId",
 ```
 
-### 2.7 Add model info entry
+### 11. Add to Anthropic-style providers (if applicable)
 
-Add to the provider info record (~line 578):
+If your provider uses the **Anthropic** protocol (not OpenAI-style HTTP), add to `ANTHROPIC_STYLE_PROVIDERS` (~line 549):
+
+```typescript
+export const ANTHROPIC_STYLE_PROVIDERS: ProviderName[] = ["anthropic", "bedrock", "minimax"]
+```
+
+Most providers use OpenAI-compatible APIs and should **not** be added here.
+
+### 12. Add to `getApiProtocol()` (if applicable)
+
+If your provider needs special protocol detection (e.g., vertex+claude, vercel-ai-gateway), add a case to `getApiProtocol()` (~line 551–571). Most providers **do not** need this.
+
+### 13. Add model info entry
+
+Add to the `MODELS_BY_PROVIDER` record (~line 577–662):
 
 ```typescript
 <name>: {
@@ -146,24 +178,26 @@ Add to the provider info record (~line 578):
 
 ---
 
-## Layer 3: API Handler (`src/api/providers/`)
+## Layer 3: API Handler
 
-### 3.1 Create the handler class
+> Files: `src/api/providers/`, `src/api/index.ts`
+
+### 14. Create the handler class
 
 Create `src/api/providers/<name>.ts`. Choose the appropriate base class:
 
-| If your provider... | Extend |
-|---|---|
-| Uses OpenAI-compatible API | `OpenAiHandler` |
-| Uses Anthropic-compatible API | `AnthropicHandler` |
-| Uses OpenAI Responses API | `OpenAiCodexHandler` |
-| Is completely custom | `BaseProvider` |
+| If your provider...           | Extend                         |
+| ----------------------------- | ------------------------------ |
+| Uses OpenAI-compatible API    | `OpenAiHandler`                |
+| Uses Anthropic-compatible API | `AnthropicHandler`             |
+| Uses OpenAI Responses API     | `OpenAiCodexHandler`           |
+| Generic OpenAI-compatible     | `BaseOpenAiCompatibleProvider` |
+| Is completely custom          | `BaseProvider`                 |
 
 **Example — OpenAI-compatible (DeepSeek):**
 
 ```typescript
 import { <Name>Models, <name>DefaultModelId, <NAME>_DEFAULT_TEMPERATURE } from "@shofer/types"
-import { ApiStream } from "../transform/stream"
 import { OpenAiHandler } from "./openai"
 
 export class <Name>Handler extends OpenAiHandler {
@@ -180,49 +214,72 @@ export class <Name>Handler extends OpenAiHandler {
 
     override getModel() {
         const id = this.options.apiModelId ?? <name>DefaultModelId
-        const info = <Name>Models[id as keyof typeof <Name>Models] || <Name>Models[<name>DefaultModelId]
-        // ...
-        return { id, info, ...params }
+        const info = <Name>Models[id as keyof typeof <Name>Models]
+            || <Name>Models[<name>DefaultModelId]
+        return { id, info, ...getModelParams(this.options, id, info, <NAME>_DEFAULT_TEMPERATURE) }
     }
 
     override async *createMessage(systemPrompt, messages, metadata) {
-        // Override if custom request/response handling is needed
+        // Override if custom request/response handling is needed.
+        // See DeepSeek for reasoning_content, tool-call, and usage-metrics handling.
     }
 }
 ```
 
-### 3.2 Register in the providers barrel
+### 15. Add telemetry to error paths
 
-Add to [`src/api/providers/index.ts`](extensions/shofer/src/api/providers/index.ts):
+In any catch blocks, call `TelemetryService`:
+
+```typescript
+import { TelemetryService } from "@shofer/telemetry"
+
+// In catch blocks:
+TelemetryService.instance.captureException(apiError)
+```
+
+This is standard practice across all existing providers (see Anthropic, Bedrock, Gemini, Mistral, etc.).
+
+### 16. Register in the providers barrel
+
+In [`src/api/providers/index.ts`](../src/api/providers/index.ts):
 
 ```typescript
 export { <Name>Handler } from "./<name>"
 ```
 
-### 3.3 Add to the dispatch switch
+### 17. Add to the dispatch switch
 
-In [`src/api/index.ts`](extensions/shofer/src/api/index.ts):
+In [`src/api/index.ts`](../src/api/index.ts):
 
-1. Import the handler:
 ```typescript
 import { <Name>Handler } from "./providers"
-```
 
-2. Add case to `buildApiHandler()`:
-```typescript
+// In buildApiHandler() switch:
 case "<name>":
     return new <Name>Handler(options)
 ```
 
+### 18. Add model fetcher (dynamic/local providers only)
+
+If the provider is in `dynamicProviders` or `localProviders`:
+
+1. Create `src/api/providers/fetchers/<name>.ts`
+2. Add a case to `fetchModelsFromProvider()` in [`src/api/providers/fetchers/modelCache.ts`](../src/api/providers/fetchers/modelCache.ts) (~line 60–101)
+3. For public providers (no API key needed), add to `initializeModelCacheRefresh()` (~line 231–234)
+
+**Most new providers skip this step** — it's only for providers that need their model list fetched from a remote endpoint.
+
 ---
 
-## Layer 4: Webview UI (`webview-ui/src/components/settings/`)
+## Layer 4: Webview UI
 
-### 4.1 Create the provider settings form
+> Files: `webview-ui/src/components/settings/`
+
+### 19. Create the provider settings form
 
 Create `webview-ui/src/components/settings/providers/<Name>.tsx`:
 
-```typescript
+```tsx
 import { useCallback } from "react"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import type { ProviderSettings } from "@shofer/types"
@@ -257,7 +314,9 @@ export const <Name> = ({ apiConfiguration, setApiConfigurationField }: <Name>Pro
                 onInput={handleInputChange("<name>ApiKey")}
                 placeholder={t("settings:placeholders.apiKey")}
                 className="w-full">
-                <label className="block font-medium mb-1">{t("settings:providers.<name>ApiKey")}</label>
+                <label className="block font-medium mb-1">
+                    {t("settings:providers.<name>ApiKey")}
+                </label>
             </VSCodeTextField>
             <div className="text-sm text-vscode-descriptionForeground -mt-2">
                 {t("settings:providers.apiKeyStorageNotice")}
@@ -272,25 +331,43 @@ export const <Name> = ({ apiConfiguration, setApiConfigurationField }: <Name>Pro
 }
 ```
 
-### 4.2 Export from providers barrel
+### 20. Export from providers barrel
 
-Add to [`webview-ui/src/components/settings/providers/index.ts`](extensions/shofer/webview-ui/src/components/settings/providers/index.ts):
+In [`webview-ui/src/components/settings/providers/index.ts`](../webview-ui/src/components/settings/providers/index.ts):
 
 ```typescript
 export { <Name> } from "./<Name>"
 ```
 
-### 4.3 Wire into ApiOptions
+### 21. Import default model ID
 
-In [`webview-ui/src/components/settings/ApiOptions.tsx`](extensions/shofer/webview-ui/src/components/settings/ApiOptions.tsx):
+In [`webview-ui/src/components/settings/ApiOptions.tsx`](../webview-ui/src/components/settings/ApiOptions.tsx) (~line 10–35):
 
-1. Import the component and default model ID
-2. Add to `defaultModels` map:
+```typescript
+import { <name>DefaultModelId } from "@shofer/types"
+```
+
+### 22. Import the provider component
+
+In `ApiOptions.tsx` (~line 70–97):
+
+```typescript
+import { <Name> } from "./providers"
+```
+
+### 23. Add to `PROVIDER_MODEL_CONFIG`
+
+In `ApiOptions.tsx` (~line 329–369):
+
 ```typescript
 <name>: { field: "apiModelId", default: <name>DefaultModelId },
 ```
-3. Add conditional rendering:
-```typescript
+
+### 24. Add conditional rendering block
+
+In `ApiOptions.tsx` (~line 488–704):
+
+```tsx
 {selectedProvider === "<name>" && (
     <<Name>
         apiConfiguration={apiConfiguration}
@@ -300,69 +377,170 @@ In [`webview-ui/src/components/settings/ApiOptions.tsx`](extensions/shofer/webvi
 )}
 ```
 
-### 4.4 Add to provider constants
+### 25. Add to provider model config (generic ModelPicker)
 
-In [`webview-ui/src/components/settings/constants.ts`](extensions/shofer/webview-ui/src/components/settings/constants.ts):
+In [`webview-ui/src/components/settings/utils/providerModelConfig.ts`](../webview-ui/src/components/settings/utils/providerModelConfig.ts):
 
-1. Import models:
+1. Add to `PROVIDER_SERVICE_CONFIG` (~line 28–50) — maps provider to its service type
+2. Add to `PROVIDER_DEFAULT_MODEL_IDS` (~line 52–68) — the default model ID per provider
+
+**Skip if** your provider is in `PROVIDERS_WITH_CUSTOM_MODEL_UI` (which means it has its own custom model selector instead of using the generic `ModelPicker`).
+
+### 26. Check custom model UI list
+
+In `providerModelConfig.ts` (~line 118–129): if your provider needs a custom model selection UI (like openrouter, requesty, openai-codex, etc.), add it to `PROVIDERS_WITH_CUSTOM_MODEL_UI`. Otherwise, keep it out — it will use the generic `ModelPicker`.
+
+### 27. Check model change side effects
+
+In `providerModelConfig.ts` (~line 142–158): if your provider needs special side effects when the model changes (e.g., Bedrock clearing a custom ARN), add logic to `handleModelChangeSideEffects`. Most providers **do not** need this.
+
+### 28. Add to provider constants
+
+In [`webview-ui/src/components/settings/constants.ts`](../webview-ui/src/components/settings/constants.ts):
+
+1. Import models (~line 3–20):
+
 ```typescript
 import { <name>Models } from "@shofer/types"
 ```
-2. Add to `MODELS_BY_PROVIDER`:
+
+2. Add to `MODELS_BY_PROVIDER` (~line 22–39):
+
 ```typescript
 <name>: <name>Models,
 ```
 
-### 4.5 Add to provider dropdown list
+### 29. Add to provider dropdown list
 
-In [`webview-ui/src/components/settings/constants.ts`](extensions/shofer/webview-ui/src/components/settings/constants.ts) provider list (~line 50):
+In `constants.ts` `PROVIDERS` array (~line 41–68):
 
 ```typescript
 { value: "<name>", label: "Provider Display Name", proxy: false },
 ```
 
-Set `proxy: true` if the provider is a routing proxy (like OpenRouter, LiteLLM).
+Set `proxy: true` only if the provider is a routing proxy (like OpenRouter, LiteLLM).
+
+### 30. Add model fetch debounce (dynamic/local providers only)
+
+In `ApiOptions.tsx` (~line 222–261): the `useDebounce` block dispatches messages for dynamic/local providers. Only add a case if your provider is in `dynamicProviders` or `localProviders`. Skip for typical providers.
 
 ---
 
 ## Layer 5: i18n Strings
 
-### 5.1 Add to English locale
+> Files: `webview-ui/src/i18n/locales/*/settings.json` (18 locale files)
 
-In [`webview-ui/src/i18n/locales/en/settings.json`](extensions/shofer/webview-ui/src/i18n/locales/en/settings.json), add to the `providers` block:
+### 31. Add to English locale
+
+In [`webview-ui/src/i18n/locales/en/settings.json`](../webview-ui/src/i18n/locales/en/settings.json), add to the `providers` block:
 
 ```json
 "<name>ApiKey": "Provider Name API Key",
 "get<Name>ApiKey": "Get Provider Name API Key"
 ```
 
-### 5.2 Add to all other locales
+If your provider has a base URL field, also add a label for it (e.g., `"<name>BaseUrl": "Provider Name Base URL"`).
 
-Copy the new keys to all locale files under `webview-ui/src/i18n/locales/*/settings.json`. Translate the values appropriately.
+At minimum, every provider needs:
+
+- `{name}ApiKey` — label for the API key field
+- `get{Name}ApiKey` — label for the "Get API Key" button
+
+The `apiKeyStorageNotice` key is shared across all providers — no new key needed.
+
+### 32. Add to all other locales
+
+Copy the new keys to all locale files under `webview-ui/src/i18n/locales/*/settings.json`. Translate the values appropriately. There are currently 18 locale files.
 
 ---
 
 ## Layer 6: llm-router (Go Backend)
 
-If the provider goes through llm-router (the backend proxy), additional steps are needed in the Go codebase under [`llm-router/`](llm-router/). See [`llm-router/docs/INTERFACE.md`](llm-router/docs/INTERFACE.md) for the protocol.
+> Files: `llm-router/`
+
+### 33. Register model in llm-router (if proxied)
+
+If the provider goes through llm-router (the backend proxy), additional steps are needed in the Go codebase under [`llm-router/`](../llm-router/). See [`llm-router/docs/INTERFACE.md`](../llm-router/docs/INTERFACE.md) for the protocol.
 
 **For providers that talk directly to the upstream API (most common case), skip this layer entirely.**
 
 ---
 
-## Checklist
+## Layer 7: Tests
 
-- [ ] Models file in `packages/types/src/providers/<name>.ts`
-- [ ] Export from `packages/types/src/providers/index.ts` + `getDefaultModelIdValue` case
-- [ ] Add to `providerNames` array (~line 99)
-- [ ] Create Zod schema in `provider-settings.ts`
-- [ ] Add to `providerSettingsSchemaDiscriminated` (~line 404), `providerSettingsSchema` spread (~line 437), `modelIdKeysByProvider` (~line 516), and provider info record (~line 578)
-- [ ] Create handler class in `src/api/providers/<name>.ts`
-- [ ] Export handler from `src/api/providers/index.ts`
-- [ ] Import and add case to `buildApiHandler()` in `src/api/index.ts`
-- [ ] Create provider form component in `webview-ui/src/components/settings/providers/<Name>.tsx`
-- [ ] Export from providers barrel and wire into `ApiOptions.tsx`
-- [ ] Add to `MODELS_BY_PROVIDER` and provider dropdown in `webview-ui/.../constants.ts`
-- [ ] Add i18n keys to all 18 locale `settings.json` files
-- [ ] (If proxied) Register in llm-router Go backend
-- [ ] Run `pnpm check-types` and `pnpm test` to verify
+### 34. Create handler unit test
+
+Create `src/api/providers/__tests__/<name>.spec.ts`. Mock `@shofer/telemetry`:
+
+```typescript
+vi.mock("@shofer/telemetry", () => ({
+	TelemetryService: { instance: { captureException: vi.fn() } },
+}))
+```
+
+Follow the pattern of existing handler tests (see `deepseek.spec.ts`, `moonshot.spec.ts`, etc.).
+
+---
+
+## Complete Checklist
+
+Mark each item off as you go:
+
+### Layer 1 — Model Definitions
+
+- [ ]   1. Create `packages/types/src/providers/<name>.ts`
+- [ ]   2. Export from `packages/types/src/providers/index.ts` + add `getProviderDefaultModelId()` case
+
+### Layer 2 — Provider Schema
+
+- [ ]   3. Add to `providerNames` array
+- [ ]   4. Import models at top of `provider-settings.ts`
+- [ ]   5. Check/add to category arrays (`dynamicProviders`, `localProviders`, etc.)
+- [ ]   6. Create Zod schema
+- [ ]   7. Add to `modelIdKeys` (if using non-standard model ID key)
+- [ ]   8. Add to `providerSettingsSchemaDiscriminated`
+- [ ]   9. Add to `providerSettingsSchema` spread
+- [ ]   10. Add to `modelIdKeysByProvider`
+- [ ]   11. Add to `ANTHROPIC_STYLE_PROVIDERS` (if Anthropic protocol)
+- [ ]   12. Add to `getApiProtocol()` (if special protocol detection needed)
+- [ ]   13. Add to `MODELS_BY_PROVIDER` info record
+
+### Layer 3 — API Handler
+
+- [ ]   14. Create `src/api/providers/<name>.ts`
+- [ ]   15. Add `TelemetryService.instance.captureException()` in error paths
+- [ ]   16. Export from `src/api/providers/index.ts`
+- [ ]   17. Import + add case to `buildApiHandler()` in `src/api/index.ts`
+- [ ]   18. Add model fetcher (dynamic/local providers only)
+
+### Layer 4 — Webview UI
+
+- [ ]   19. Create `webview-ui/.../providers/<Name>.tsx`
+- [ ]   20. Export from `webview-ui/.../providers/index.ts`
+- [ ]   21. Import `defaultModelId` in `ApiOptions.tsx`
+- [ ]   22. Import component in `ApiOptions.tsx`
+- [ ]   23. Add to `PROVIDER_MODEL_CONFIG` in `ApiOptions.tsx`
+- [ ]   24. Add conditional render block in `ApiOptions.tsx`
+- [ ]   25. Add to `PROVIDER_SERVICE_CONFIG` + `PROVIDER_DEFAULT_MODEL_IDS` in `providerModelConfig.ts`
+- [ ]   26. Check `PROVIDERS_WITH_CUSTOM_MODEL_UI` in `providerModelConfig.ts`
+- [ ]   27. Check `handleModelChangeSideEffects` in `providerModelConfig.ts`
+- [ ]   28. Import models + add to `MODELS_BY_PROVIDER` in `constants.ts`
+- [ ]   29. Add to `PROVIDERS` dropdown in `constants.ts`
+- [ ]   30. Add model fetch debounce (dynamic/local providers only)
+
+### Layer 5 — i18n
+
+- [ ]   31. Add keys to English locale `settings.json`
+- [ ]   32. Add keys to all 17 other locale files
+
+### Layer 6 — Go Backend
+
+- [ ]   33. Register in llm-router (if proxied)
+
+### Layer 7 — Tests
+
+- [ ]   34. Create `src/api/providers/__tests__/<name>.spec.ts`
+
+### Verification
+
+- [ ] Run `pnpm check-types` and `pnpm test` from `src/` directory
