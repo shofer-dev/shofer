@@ -4,6 +4,8 @@
 
 Shofer's code indexing is a **semantic code search** system (RAG — Retrieval-Augmented Generation) that uses **vector embeddings** stored in a **Qdrant** collection to let the AI agent search codebases by meaning rather than just keywords. It lives under `src/services/code-index/` and is exposed to the AI as the `rag_search` native tool. A lighter companion tool `lsp_search` uses VS Code's built-in Language Server Protocol workspace symbol provider and requires no external infrastructure.
 
+Indexing is **incremental** — startup reconciliation uses a three-layer strategy to only re-index what changed: `stat()`-only mtime+size fast-path skips unchanged files without reading them, git-aware narrowing diffs from the last indexed commit, and per-segment hashing re-embeds only the modified code blocks within changed files. On a large repo with no changes, startup reconciliation completes with zero `readFile` calls.
+
 ---
 
 ## Architecture
