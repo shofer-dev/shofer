@@ -306,8 +306,8 @@ export default function Privacy() {
 					<h2 className="mt-12 text-2xl font-bold">8. Contact Us</h2>
 					<p>
 						Questions or concerns? Email{" "}
-						<a href="mailto:privacy@shofer.dev" className="text-primary hover:underline">
-							privacy@shofer.dev
+						<a href="mailto:alsterg@gmail.com" className="text-primary hover:underline">
+							alsterg@gmail.com
 						</a>
 						.
 					</p>

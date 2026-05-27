@@ -6,7 +6,7 @@ We actively patch only the most recent minor release of Shofer Code. Older vers
 
 ## Reporting a Vulnerability
 
-Email security@shofer.dev with:
+Email alsterg@gmail.com with:
 
 - A short summary of the issue
 - Steps to reproduce or a proof of concept
