@@ -47,5 +47,5 @@ export const copilotMigration = {
 	description:
 		"Shofer offers everything Copilot does and much more — with full privacy, model autonomy, and granular control over every aspect of your AI coding experience.",
 	command: "/migrate-from-copilot",
-	docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#11-slash-commands",
+	docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md",
 }

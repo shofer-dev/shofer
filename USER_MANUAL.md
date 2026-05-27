@@ -1,6 +1,6 @@
 # Shofer User Manual
 
-Welcome to Shofer. This manual covers the concepts and configuration you need to use Shofer effectively.
+Welcome to Shofer (from the French _chauffeur_ — driver). This manual covers the concepts and configuration you need to use Shofer effectively.
 
 ---
 
