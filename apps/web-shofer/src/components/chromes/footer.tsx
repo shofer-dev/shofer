@@ -232,7 +232,7 @@ export function Footer() {
 								<ul className="mt-6 space-y-4">
 									<li>
 										<a
-											href="mailto:support@shofer.dev"
+											href="mailto:alsterg@gmail.com"
 											className="text-sm leading-6 text-muted-foreground transition-colors hover:text-foreground">
 											Contact
 										</a>

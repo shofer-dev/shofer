@@ -209,8 +209,8 @@ export default function CookiePolicy() {
 					<h2 className="mt-12 text-2xl font-bold">Contact us</h2>
 					<p>
 						If you have questions about our use of cookies, please contact us at{" "}
-						<a href="mailto:privacy@shofer.dev" className="text-primary hover:underline">
-							privacy@shofer.dev
+						<a href="mailto:alsterg@gmail.com" className="text-primary hover:underline">
+							alsterg@gmail.com
 						</a>
 						.
 					</p>

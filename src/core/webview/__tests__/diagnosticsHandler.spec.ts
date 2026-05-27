@@ -79,7 +79,7 @@ describe("generateErrorDiagnostics", () => {
 		const [writtenPath, writtenContent] = vi.mocked(fs.writeFile).mock.calls[0]
 		expect(String(writtenPath)).toContain("shofer-diagnostics-test-tas")
 		expect(String(writtenContent)).toContain(
-			"// Please share this file with Shofer Support (support@shofer.dev) to diagnose the issue faster",
+			"// Please share this file with Shofer Support (alsterg@gmail.com) to diagnose the issue faster",
 		)
 		expect(String(writtenContent)).toContain('"error":')
 		expect(String(writtenContent)).toContain('"history":')

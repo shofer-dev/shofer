@@ -96,7 +96,7 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						<MessageCircle className="size-4 text-vscode-descriptionForeground shrink-0" />
 						<span>
 							{t("settings:about.contact.label")}{" "}
-							<VSCodeLink href="mailto:support@shofer.dev">support@shofer.dev</VSCodeLink>
+							<VSCodeLink href="mailto:alsterg@gmail.com">alsterg@gmail.com</VSCodeLink>
 						</span>
 					</div>
 					<div className="flex items-start gap-2">
