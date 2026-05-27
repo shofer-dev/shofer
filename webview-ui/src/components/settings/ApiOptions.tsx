@@ -242,7 +242,7 @@ const ApiOptions = ({
 				vscode.postMessage({ type: "requestLmStudioModels" })
 			} else if (selectedProvider === "vscode-lm") {
 				vscode.postMessage({ type: "requestVsCodeLmModels" })
-			} else if (selectedProvider === "litellm" || selectedProvider === "shofer" || selectedProvider === "poe") {
+			} else if (selectedProvider === "litellm" || selectedProvider === "poe") {
 				vscode.postMessage({ type: "requestRouterModels" })
 			}
 		},
@@ -444,14 +444,16 @@ const ApiOptions = ({
 
 		// Pin "shofer" to the top if not on welcome screen
 		if (!fromWelcomeView) {
-			const shoferIndex = options.findIndex((opt) => opt.value === "shofer")
+			// shofer provider removed
+
 			if (shoferIndex > 0) {
-				const [rooOption] = options.splice(shoferIndex, 1)
+				// shofer provider pin removed
+
 				options.unshift(rooOption)
 			}
 		} else {
 			// Filter out shofer from the welcome view
-			const filteredOptions = options.filter((opt) => opt.value !== "shofer")
+			const filteredOptions = options
 			options.length = 0
 			options.push(...filteredOptions)
 
@@ -717,19 +719,7 @@ const ApiOptions = ({
 						/>
 					)}
 
-					{selectedProvider === "shofer" && (
-						<Shofer
-							apiConfiguration={apiConfiguration}
-							setApiConfigurationField={setApiConfigurationField}
-							routerModels={routerModels}
-							cloudIsAuthenticated={cloudIsAuthenticated}
-							organizationAllowList={organizationAllowList}
-							modelValidationError={modelValidationError}
-							simplifySettings={fromWelcomeView}
-						/>
-					)}
-
-					{/* Generic model picker for providers with static models */}
+										{/* Generic model picker for providers with static models */}
 					{activeSelectedProvider && shouldUseGenericModelPicker(activeSelectedProvider) && (
 						<>
 							<ModelPicker

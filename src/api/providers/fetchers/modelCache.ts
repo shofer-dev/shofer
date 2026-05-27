@@ -86,10 +86,7 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 		case "vercel-ai-gateway":
 			models = await getVercelAiGatewayModels()
 			break
-		case "shofer":
-			// Shofer models no longer available
-			models = {}
-			break
+
 		case "poe":
 			models = await getPoeModels(options.apiKey, options.baseUrl)
 			break

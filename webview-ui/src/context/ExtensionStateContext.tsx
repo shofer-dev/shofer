@@ -635,11 +635,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	// Watch for authentication state changes and refresh Shofer models
 	useEffect(() => {
 		const currentAuth = state.cloudIsAuthenticated ?? false
-		const currentProvider = state.apiConfiguration?.apiProvider
-		if (!prevCloudIsAuthenticated && currentAuth && currentProvider === "shofer") {
-			// User just authenticated and Shofer is the active provider - refresh Shofer models
-			vscode.postMessage({ type: "requestRooModels" })
-		}
+
 		setPrevCloudIsAuthenticated(currentAuth)
 	}, [state.cloudIsAuthenticated, prevCloudIsAuthenticated, state.apiConfiguration?.apiProvider])
 

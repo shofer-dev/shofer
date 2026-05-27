@@ -232,15 +232,15 @@ describe("ProviderSettingsManager", () => {
 						default: {
 							config: {},
 							id: "default",
-							apiProvider: "shofer",
+							apiProvider: "openrouter",
 							apiModelId: "shofer/code-supernova", // Old model ID
 						},
 						test: {
-							apiProvider: "shofer",
+							apiProvider: "openrouter",
 							apiModelId: "shofer/code-supernova", // Old model ID
 						},
 						existing: {
-							apiProvider: "shofer",
+							apiProvider: "openrouter",
 							apiModelId: "shofer/code-supernova-1-million", // Already migrated
 						},
 						otherProvider: {
@@ -284,7 +284,7 @@ describe("ProviderSettingsManager", () => {
 					currentApiConfigName: "default",
 					apiConfigs: {
 						default: {
-							apiProvider: "shofer",
+							apiProvider: "openrouter",
 							apiModelId: "shofer/code-supernova",
 							id: "default",
 						},
@@ -314,7 +314,7 @@ describe("ProviderSettingsManager", () => {
 					currentApiConfigName: "default",
 					apiConfigs: {
 						default: {
-							apiProvider: "shofer",
+							apiProvider: "openrouter",
 							apiModelId: "shofer/code-supernova", // Old model again
 							id: "default",
 						},

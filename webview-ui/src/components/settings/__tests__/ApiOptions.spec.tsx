@@ -586,11 +586,11 @@ describe("ApiOptions", () => {
 			const providerOptions = options.filter((opt) => opt.value !== "")
 
 			// Find the shofer option
-			const rooOption = providerOptions.find((opt) => opt.value === "shofer")
+			const rooOption = providerOptions.find((opt) => opt.value === "openrouter")
 
 			// If shofer is available, verify it's pinned to the top
 			if (rooOption) {
-				expect(providerOptions[0].value).toBe("shofer")
+				expect(providerOptions[0].value).toBe("openrouter")
 			}
 
 			useExtensionStateMock.mockRestore()
@@ -617,7 +617,7 @@ describe("ApiOptions", () => {
 			const providerOptions = options.filter((opt) => opt.value !== "")
 
 			// Check that shofer is NOT in the list when on welcome screen
-			const rooOption = providerOptions.find((opt) => opt.value === "shofer")
+			const rooOption = providerOptions.find((opt) => opt.value === "openrouter")
 			expect(rooOption).toBeUndefined()
 
 			useExtensionStateMock.mockRestore()

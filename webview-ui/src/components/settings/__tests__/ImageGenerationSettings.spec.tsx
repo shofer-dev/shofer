@@ -92,7 +92,7 @@ describe("ImageGenerationSettings", () => {
 
 		it("should not render API key field when provider is shofer", () => {
 			const { queryByPlaceholderText } = render(
-				<ImageGenerationSettings {...defaultProps} enabled={true} imageGenerationProvider="shofer" />,
+				<ImageGenerationSettings {...defaultProps} enabled={true} imageGenerationProvider="openrouter" />,
 			)
 
 			expect(

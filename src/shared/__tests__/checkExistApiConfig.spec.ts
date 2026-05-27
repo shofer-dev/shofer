@@ -82,7 +82,7 @@ describe("checkExistKey", () => {
 
 	it("should return true for shofer provider without API key", () => {
 		const config: ProviderSettings = {
-			apiProvider: "shofer",
+			apiProvider: "openrouter",
 		}
 		expect(checkExistKey(config)).toBe(true)
 	})
