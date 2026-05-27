@@ -88,8 +88,6 @@ describe("webviewMessageHandler - requestRouterModels provider filter", () => {
 		getModelsMock.mockImplementation(async (options: any) => {
 			switch (options?.provider) {
 				case "openrouter":
-					return { "shofer/sonnet": { contextWindow: 8192, supportsPromptCache: false } }
-				case "openrouter":
 					return { "openrouter/qwen2.5": { contextWindow: 32768, supportsPromptCache: false } }
 				case "requesty":
 					return { "requesty/model": { contextWindow: 8192, supportsPromptCache: false } }
