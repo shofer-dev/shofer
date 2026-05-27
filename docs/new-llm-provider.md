@@ -48,7 +48,6 @@ export const DEEP_SEEK_DEFAULT_TEMPERATURE = 0.3
 ```
 
 **Required fields per model:**
-
 - `maxTokens` — max output tokens
 - `contextWindow` — total context window size
 - `supportsPromptCache` — whether the provider supports Anthropic-style prompt caching
@@ -76,7 +75,7 @@ case "<name>":
 
 ### 2.1 Add the provider to the name list
 
-Add `"<name>"` to the `providerNames` array (~line 100):
+Add `"<name>"` to the `providerNames` array (~line 99):
 
 ```typescript
 export const providerNames = [
@@ -98,29 +97,28 @@ import { <name>Models } from "./providers/index.js"
 Add a Zod schema for this provider's settings:
 
 ```typescript
-const <name>Schema = apiModelIdProviderModelSchema.extend({
+const <name>Schema = baseProviderSettingsSchema.extend({
     <name>BaseUrl: z.string().optional(),
     <name>ApiKey: z.string().optional(),
 })
 ```
 
 **Patterns:**
-
 - Providers with API keys: extend `apiModelIdProviderModelSchema`
-- Providers with base URLs + keys: extend the schema with `{name}BaseUrl` and `{name}ApiKey`
-- Proxy-based providers (OpenRouter, LiteLLM, etc.): extend a base schema with `openAiBaseUrl`, `openAiApiKey`
+- Providers with base URLs + keys: extend `baseProviderSettingsSchema` with `{name}BaseUrl` and `{name}ApiKey`
+- Proxy-based providers (OpenRouter, LiteLLM, etc.): extend with `openAiBaseUrl`, `openAiApiKey`
 
 ### 2.4 Add to the Zod discriminated union
 
-Add to the `apiProviderSchema` array (~line 440):
+Add to `providerSettingsSchemaDiscriminated` (~line 404):
 
 ```typescript
 <name>Schema.merge(z.object({ apiProvider: z.literal("<name>") })),
 ```
 
-### 2.5 Add to ApiHandlerOptions spread
+### 2.5 Add to the structured schema spread
 
-Add to the type spread (~line 450):
+Add to the `providerSettingsSchema` spread (~line 437):
 
 ```typescript
 ...<name>Schema.shape,
@@ -128,7 +126,7 @@ Add to the type spread (~line 450):
 
 ### 2.6 Add model selection field mapping
 
-Add to the `providerModelIdFields` map (~line 530):
+Add to the `modelIdKeysByProvider` map (~line 516):
 
 ```typescript
 <name>: "apiModelId",
@@ -136,7 +134,7 @@ Add to the `providerModelIdFields` map (~line 530):
 
 ### 2.7 Add model info entry
 
-Add to the `providerModelsMap` object (~line 590):
+Add to the provider info record (~line 578):
 
 ```typescript
 <name>: {
@@ -154,12 +152,12 @@ Add to the `providerModelsMap` object (~line 590):
 
 Create `src/api/providers/<name>.ts`. Choose the appropriate base class:
 
-| If your provider...           | Extend               |
-| ----------------------------- | -------------------- |
-| Uses OpenAI-compatible API    | `OpenAiHandler`      |
-| Uses Anthropic-compatible API | `AnthropicHandler`   |
-| Uses OpenAI Responses API     | `OpenAiCodexHandler` |
-| Is completely custom          | `BaseProvider`       |
+| If your provider... | Extend |
+|---|---|
+| Uses OpenAI-compatible API | `OpenAiHandler` |
+| Uses Anthropic-compatible API | `AnthropicHandler` |
+| Uses OpenAI Responses API | `OpenAiCodexHandler` |
+| Is completely custom | `BaseProvider` |
 
 **Example — OpenAI-compatible (DeepSeek):**
 
@@ -206,13 +204,11 @@ export { <Name>Handler } from "./<name>"
 In [`src/api/index.ts`](extensions/shofer/src/api/index.ts):
 
 1. Import the handler:
-
 ```typescript
 import { <Name>Handler } from "./providers"
 ```
 
 2. Add case to `buildApiHandler()`:
-
 ```typescript
 case "<name>":
     return new <Name>Handler(options)
@@ -233,6 +229,12 @@ import type { ProviderSettings } from "@shofer/types"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { VSCodeButtonLink } from "@src/components/common/VSCodeButtonLink"
 import { inputEventTransform } from "../transforms"
+
+type <Name>Props = {
+    apiConfiguration: ProviderSettings
+    setApiConfigurationField: (field: keyof ProviderSettings, value: ProviderSettings[keyof ProviderSettings]) => void
+    simplifySettings?: boolean
+}
 
 export const <Name> = ({ apiConfiguration, setApiConfigurationField }: <Name>Props) => {
     const { t } = useAppTranslation()
@@ -284,13 +286,10 @@ In [`webview-ui/src/components/settings/ApiOptions.tsx`](extensions/shofer/webvi
 
 1. Import the component and default model ID
 2. Add to `defaultModels` map:
-
 ```typescript
 <name>: { field: "apiModelId", default: <name>DefaultModelId },
 ```
-
 3. Add conditional rendering:
-
 ```typescript
 {selectedProvider === "<name>" && (
     <<Name>
@@ -306,13 +305,10 @@ In [`webview-ui/src/components/settings/ApiOptions.tsx`](extensions/shofer/webvi
 In [`webview-ui/src/components/settings/constants.ts`](extensions/shofer/webview-ui/src/components/settings/constants.ts):
 
 1. Import models:
-
 ```typescript
 import { <name>Models } from "@shofer/types"
 ```
-
 2. Add to `MODELS_BY_PROVIDER`:
-
 ```typescript
 <name>: <name>Models,
 ```
@@ -358,9 +354,9 @@ If the provider goes through llm-router (the backend proxy), additional steps ar
 
 - [ ] Models file in `packages/types/src/providers/<name>.ts`
 - [ ] Export from `packages/types/src/providers/index.ts` + `getDefaultModelIdValue` case
-- [ ] Add to `providerNames` array in `packages/types/src/provider-settings.ts`
-- [ ] Create Zod schema in `packages/types/src/provider-settings.ts`
-- [ ] Add to discriminated union, type spread, model fields map, and model info map
+- [ ] Add to `providerNames` array (~line 99)
+- [ ] Create Zod schema in `provider-settings.ts`
+- [ ] Add to `providerSettingsSchemaDiscriminated` (~line 404), `providerSettingsSchema` spread (~line 437), `modelIdKeysByProvider` (~line 516), and provider info record (~line 578)
 - [ ] Create handler class in `src/api/providers/<name>.ts`
 - [ ] Export handler from `src/api/providers/index.ts`
 - [ ] Import and add case to `buildApiHandler()` in `src/api/index.ts`
