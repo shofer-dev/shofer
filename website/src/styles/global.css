@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	html {
+		scroll-behavior: smooth;
+		scroll-padding-top: 5rem;
+	}
+	body {
+		@apply bg-white text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100;
+	}
+}
+
+@layer utilities {
+	.text-gradient {
+		@apply bg-gradient-to-r from-shofer-600 via-accent-purple to-shofer-400 bg-clip-text text-transparent;
+	}
+	.text-gradient-warm {
+		@apply bg-gradient-to-r from-accent-amber via-accent-rose to-accent-purple bg-clip-text text-transparent;
+	}
+	.card-glow {
+		@apply transition-shadow duration-300;
+	}
+	.card-glow:hover {
+		box-shadow: 0 0 30px rgba(16, 136, 233, 0.15);
+	}
+}

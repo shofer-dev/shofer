@@ -1,0 +1,69 @@
+---
+import { communityLinks } from "../data/community";
+
+const iconPaths: Record<string, string> = {
+  MessageCircle: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>',
+  MessageSquare: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
+  Bug: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3m3-12h8m-8 4h6"></path></svg>',
+  Github: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>',
+};
+---
+
+<section id="community" class="py-24 sm:py-32 bg-gray-50 dark:bg-gray-900/50">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <span class="text-sm font-semibold text-accent-emerald dark:text-accent-emerald uppercase tracking-wider">Community</span>
+      <h2 class="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+        Built in the open, for everyone
+      </h2>
+      <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+        Shofer is community-driven and open source (Apache 2.0). Join us — contribute code, share ideas, or just say hi.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {communityLinks.map((link) => (
+        <a
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="card-glow group flex flex-col items-center text-center bg-white dark:bg-gray-900 rounded-2xl p-6 sm:p-8 border border-gray-100 dark:border-gray-800 hover:border-shofer-200 dark:hover:border-shofer-800 transition-all duration-300"
+        >
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-shofer-50 to-emerald-50 dark:from-shofer-950 dark:to-emerald-950 flex items-center justify-center text-shofer-600 dark:text-shofer-400 mb-4 group-hover:scale-110 transition-transform duration-300">
+            {iconPaths[link.icon] ? <Fragment set:html={iconPaths[link.icon]} /> : <span class="text-xl">{link.icon}</span>}
+          </div>
+          <h3 class="font-bold text-gray-900 dark:text-white mb-1.5">{link.label}</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{link.description}</p>
+          <span class="mt-4 text-xs text-gray-400 dark:text-gray-500 group-hover:text-shofer-600 dark:group-hover:text-shofer-400 transition-colors">
+            {link.href.replace("https://", "").split("/")[0]} ↗
+          </span>
+        </a>
+      ))}
+    </div>
+
+    <div class="mt-12 sm:mt-16 text-center bg-white dark:bg-gray-900 rounded-2xl p-6 sm:p-10 border border-gray-100 dark:border-gray-800 max-w-3xl mx-auto">
+      <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">Ready to try Shofer?</h3>
+      <p class="text-gray-500 dark:text-gray-400 mb-6 max-w-lg mx-auto">
+        Install the VS Code extension and start coding with the full power of AI — on your terms, with your models, under your control.
+      </p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a
+          href="https://github.com/shofer-dev/shofer"
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-shofer-600 hover:bg-shofer-700 transition-colors shadow-lg shadow-shofer-600/20"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+          View on GitHub
+        </a>
+        <a
+          href="https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md"
+          class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-shofer-300 dark:hover:border-shofer-700 transition-colors shadow-sm"
+        >
+          Read the User Manual
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

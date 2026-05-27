@@ -1,0 +1,72 @@
+---
+import { navigation, siteConfig } from "../data/navigation";
+---
+
+<header class="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800" id="header">
+  <nav class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+    <a href="/" class="flex items-center gap-2 font-extrabold text-xl text-gray-900 dark:text-white hover:opacity-80 transition-opacity">
+      <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-shofer-500 to-accent-purple text-white text-sm font-black">S</span>
+      {siteConfig.name}
+    </a>
+
+    <div class="hidden lg:flex items-center gap-1">
+      {navigation.map((item) => (
+        <a
+          href={item.href}
+          class="px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-shofer-600 dark:hover:text-shofer-400 rounded-lg hover:bg-shofer-50 dark:hover:bg-shofer-950 transition-colors"
+          {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >
+          {item.label}
+          {item.external && <span class="inline-block ml-1 opacity-50">↗</span>}
+        </a>
+      ))}
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button
+        id="theme-toggle"
+        class="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        aria-label="Toggle dark mode"
+      >
+        <span class="block dark:hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </span>
+        <span class="hidden dark:block">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        </span>
+      </button>
+
+      <button id="mobile-menu-btn" class="lg:hidden p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Menu">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+    </div>
+  </nav>
+
+  <div id="mobile-menu" class="hidden lg:hidden border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-4 py-3 space-y-1">
+    {navigation.map((item) => (
+      <a
+        href={item.href}
+        class="block px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-shofer-600 dark:hover:text-shofer-400 rounded-lg hover:bg-shofer-50 dark:hover:bg-shofer-950 transition-colors"
+        {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
+        {item.label}
+        {item.external && <span class="inline-block ml-1 opacity-50">↗</span>}
+      </a>
+    ))}
+  </div>
+</header>
+
+<script is:inline>
+  const btn = document.getElementById("theme-toggle");
+  const menuBtn = document.getElementById("mobile-menu-btn");
+  const menu = document.getElementById("mobile-menu");
+
+  btn?.addEventListener("click", () => {
+    const isDark = document.documentElement.classList.toggle("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  });
+
+  menuBtn?.addEventListener("click", () => {
+    menu?.classList.toggle("hidden");
+  });
+</script>

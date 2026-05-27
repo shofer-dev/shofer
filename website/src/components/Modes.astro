@@ -1,0 +1,46 @@
+---
+import { modes } from "../data/modes";
+---
+
+<section id="modes" class="py-24 sm:py-32 bg-gray-50 dark:bg-gray-900/50">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <span class="text-sm font-semibold text-accent-purple dark:text-accent-purple uppercase tracking-wider">Modes</span>
+      <h2 class="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+        5 built-in modes. Infinite customizations.
+      </h2>
+      <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+        Each mode has scoped tool access. Create your own via <code class="px-1.5 py-0.5 rounded text-sm bg-gray-200 dark:bg-gray-800 font-mono">.shofermodes</code> files — project-level or global.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {modes.map((mode, i) => (
+        <div
+          class="card-glow group relative bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800 hover:border-shofer-200 dark:hover:border-shofer-800 transition-all duration-300 text-center"
+          style={`animation-delay: ${i * 80}ms`}
+        >
+          <div class="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">{mode.icon}</div>
+          <h3 class="font-bold text-gray-900 dark:text-white mb-1.5">{mode.name}</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-3">{mode.description}</p>
+          <div class="pt-3 border-t border-gray-100 dark:border-gray-800">
+            <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 break-all">{mode.groups}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div class="mt-12 text-center">
+      <p class="text-sm text-gray-400 dark:text-gray-500 mb-4">
+        Common custom modes include Reviewer, Search, Opinion, and Browser.
+      </p>
+      <a
+        href="https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#3-custom-modes"
+        class="inline-flex items-center gap-1.5 text-sm font-medium text-shofer-600 dark:text-shofer-400 hover:text-shofer-700 dark:hover:text-shofer-300 transition-colors"
+      >
+        Learn how to create custom modes
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </a>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,45 @@
+---
+import { siteConfig } from "../data/navigation";
+---
+
+<footer class="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-16">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-10">
+      <div class="md:col-span-2">
+        <a href="/" class="inline-flex items-center gap-2 font-extrabold text-xl text-gray-900 dark:text-white mb-4">
+          <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-shofer-500 to-accent-purple text-white text-sm font-black">S</span>
+          {siteConfig.name}
+        </a>
+        <p class="text-gray-500 dark:text-gray-400 text-sm max-w-sm leading-relaxed">
+          {siteConfig.description}
+        </p>
+        <p class="text-gray-400 dark:text-gray-500 text-xs mt-4">
+          Open source under Apache 2.0 © 2026 Shofer, Inc.
+        </p>
+      </div>
+      <div>
+        <h4 class="font-semibold text-sm text-gray-900 dark:text-white mb-4">Resources</h4>
+        <ul class="space-y-3">
+          <li><a href="https://github.com/shofer-dev/shofer/blob/master/docs/" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Documentation</a></li>
+          <li><a href="https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">User Manual</a></li>
+          <li><a href="https://github.com/shofer-dev/shofer/blob/master/CONTRIBUTING.md" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Contributing</a></li>
+          <li><a href="https://github.com/shofer-dev/shofer/blob/master/CHANGELOG.md" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Changelog</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="font-semibold text-sm text-gray-900 dark:text-white mb-4">Community</h4>
+        <ul class="space-y-3">
+          <li><a href={siteConfig.links.discord} target="_blank" rel="noopener" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Discord ↗</a></li>
+          <li><a href={siteConfig.links.reddit} target="_blank" rel="noopener" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Reddit ↗</a></li>
+          <li><a href={siteConfig.links.github} target="_blank" rel="noopener" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">GitHub ↗</a></li>
+          <li><a href="https://github.com/shofer-dev/shofer/issues" target="_blank" rel="noopener" class="text-sm text-gray-500 dark:text-gray-400 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Issues ↗</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800">
+      <p class="text-xs text-gray-400 dark:text-gray-500 text-center">
+        Shofer is not affiliated with GitHub, Microsoft, Roo-Code, or any of the referenced third-party tools. All product names, logos, and brands are property of their respective owners.
+      </p>
+    </div>
+  </div>
+</footer>
