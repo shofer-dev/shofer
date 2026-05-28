@@ -38,7 +38,7 @@ interface GitIndexingStatus {
  */
 export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ className }) => {
 	const { t } = useAppTranslation()
-	const { cwd } = useExtensionState()
+	const { cwd, codebaseIndexConfig } = useExtensionState()
 
 	const [indexingStatus, setIndexingStatus] = useState<IndexingStatus>({
 		systemStatus: "Standby",
@@ -93,6 +93,11 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 
 	/** Derive a combined status for the dot color and tooltip. */
 	const combinedStatus = useMemo(() => {
+		// When the feature is disabled, always show the idle/standby colour.
+		if (!codebaseIndexConfig?.codebaseIndexEnabled) {
+			return { state: "Idle" as const, colorClass: "bg-vscode-descriptionForeground/60" }
+		}
+
 		const codeState = indexingStatus.systemStatus
 		const gitState = gitIndexingStatus.systemStatus
 
@@ -107,7 +112,7 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 			return { state: "Stopping" as const, colorClass: "bg-amber-500 animate-pulse" }
 		}
 		return { state: "Idle" as const, colorClass: "bg-green-500" }
-	}, [indexingStatus.systemStatus, gitIndexingStatus.systemStatus])
+	}, [indexingStatus.systemStatus, gitIndexingStatus.systemStatus, codebaseIndexConfig?.codebaseIndexEnabled])
 
 	const tooltipText = useMemo(() => {
 		const parts: string[] = []
