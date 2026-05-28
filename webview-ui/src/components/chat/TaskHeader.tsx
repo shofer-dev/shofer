@@ -1,15 +1,11 @@
-import { memo, useEffect, useRef, useState, useMemo, useCallback } from "react"
+import { memo, useRef, useState, useMemo, useCallback } from "react"
 import { useTranslation } from "react-i18next"
-// useCloudUpsell removed
-// CloudUpsellDialog removed
-import DismissibleUpsell from "@src/components/common/DismissibleUpsell"
 import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
 import type { ShoferMessage } from "@shofer/types"
 
 import { getModelMaxOutputTokens } from "@shofer/shared/api"
-import { findLastIndex } from "@shofer/shared/array"
 
 import { formatLargeNumber } from "@src/utils/format"
 import { cn } from "@src/lib/utils"
@@ -68,38 +64,9 @@ const TaskHeader = ({
 	onUpdateCostLimit,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
-	const { apiConfiguration, currentTaskItem, shoferMessages, parallelTasks } = useExtensionState()
+	const { apiConfiguration, currentTaskItem, parallelTasks } = useExtensionState()
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
-	const [showLongRunningTaskMessage, setShowLongRunningTaskMessage] = useState(false)
-	const _isOpen = false
-	const openUpsell = () => {}
-	const _closeUpsell = () => {}
-	const _handleConnect = () => {}
-
-	// Check if the task is complete by looking at the last relevant message (skipping resume messages)
-	const isTaskComplete =
-		shoferMessages && shoferMessages.length > 0
-			? (() => {
-					const lastRelevantIndex = findLastIndex(
-						shoferMessages,
-						(m) => !(m.ask === "resume_task" || m.ask === "resume_completed_task"),
-					)
-					return lastRelevantIndex !== -1
-						? shoferMessages[lastRelevantIndex]?.ask === "completion_result"
-						: false
-				})()
-			: false
-
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			if (currentTaskItem && !isTaskComplete) {
-				setShowLongRunningTaskMessage(true)
-			}
-		}, 120_000) // Show upsell after 2 minutes
-
-		return () => clearTimeout(timer)
-	}, [currentTaskItem, isTaskComplete])
 
 	const textContainerRef = useRef<HTMLDivElement>(null)
 	const textRef = useRef<HTMLDivElement>(null)
@@ -193,15 +160,6 @@ const TaskHeader = ({
 					</Button>
 				)}
 			</div>
-			{showLongRunningTaskMessage && !isTaskComplete && (
-				<DismissibleUpsell
-					upsellId="longRunningTask"
-					onClick={() => openUpsell()}
-					dismissOnClick={false}
-					variant="banner">
-					{t("cloud:upsell.longRunningTask")}
-				</DismissibleUpsell>
-			)}
 			<div
 				className={cn(
 					"px-3 pt-2.5 pb-2 flex flex-col gap-1.5 relative z-1 cursor-pointer",
@@ -532,7 +490,6 @@ const TaskHeader = ({
 				{/* Todo list - always shown at bottom when todos exist */}
 				{hasTodos && <TodoListDisplay todos={todos ?? (task as any)?.tool?.todos ?? []} />}
 			</div>
-			{/* CloudUpsellDialog removed */}
 		</div>
 	)
 }

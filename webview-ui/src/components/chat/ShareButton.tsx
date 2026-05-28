@@ -9,8 +9,6 @@ type ShareVisibility = "organization" | "public"
 import { vscode } from "@/utils/vscode"
 import { telemetryClient } from "@/utils/TelemetryClient"
 import { useExtensionState } from "@/context/ExtensionStateContext"
-// useCloudUpsell removed
-// CloudUpsellDialog removed
 import {
 	Popover,
 	PopoverContent,
@@ -215,7 +213,6 @@ export const ShareButton = ({ item, disabled = false }: ShareButtonProps) => {
 			)}
 
 			{/* Connect to Cloud Modal */}
-			{/* CloudUpsellDialog removed */}
 		</>
 	)
 }

@@ -31,7 +31,6 @@ import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"
 import ShoferHero from "@src/components/welcome/ShoferHero"
 import ShoferTips from "@src/components/welcome/ShoferTips"
 import { StandardTooltip, Button } from "@src/components/ui"
-// CloudUpsellDialog removed
 
 import VersionIndicator from "../common/VersionIndicator"
 import HistoryPreview from "../history/HistoryPreview"
@@ -2223,7 +2222,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			)}
 
 			<div id="shofer-portal" />
-			{/* CloudUpsellDialog removed */}
 			{/* Task notifications for background tasks */}
 			<TaskNotificationContainer
 				notifications={taskNotifications || []}
