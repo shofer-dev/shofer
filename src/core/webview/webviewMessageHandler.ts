@@ -2675,9 +2675,13 @@ export const webviewMessageHandler = async (
 			const settings = message.codeIndexSettings
 
 			try {
-				// Check if embedder provider has changed
+				// Check if embedder provider has changed. Only compare when the
+				// incoming payload includes the provider field — with the refactored
+				// secrets-only save path the field is absent (undefined), which must
+				// not be treated as a change from the persisted value.
 				const currentConfig = getGlobalState("codebaseIndexConfig") || {}
 				const embedderProviderChanged =
+					settings.codebaseIndexEmbedderProvider !== undefined &&
 					currentConfig.codebaseIndexEmbedderProvider !== settings.codebaseIndexEmbedderProvider
 
 				// Save global state settings atomically
@@ -2784,22 +2788,49 @@ export const webviewMessageHandler = async (
 					// Wait a bit more to ensure everything is ready
 					await new Promise((resolve) => setTimeout(resolve, 200))
 
-					// Auto-start indexing if now enabled and configured
-					if (currentCodeIndexManager.isFeatureEnabled && currentCodeIndexManager.isFeatureConfigured) {
-						if (!currentCodeIndexManager.isInitialized) {
-							try {
-								await currentCodeIndexManager.initialize(provider.contextProxy)
-								provider.debug?.(`Code index manager initialized after settings save`)
-							} catch (error) {
-								provider.log(
-									`Code index initialization failed: ${error instanceof Error ? error.message : String(error)}`,
-								)
-								// Send error status to webview
-								await provider.postMessageToWebview({
-									type: "indexingStatusUpdate",
-									values: currentCodeIndexManager.getCurrentStatus(),
-								})
-							}
+					// Auto-start indexing after settings save.
+					//
+					// Important: isFeatureEnabled / isFeatureConfigured read from
+					// _configManager, which is only populated inside initialize(). A
+					// freshly-created manager therefore always returns false for both,
+					// making a guard like `if (isEnabled && isConfigured)` a
+					// chicken-and-egg deadlock. Instead, we call initialize()
+					// unconditionally when not yet initialized — initialize() will
+					// load the config itself and decide whether to start indexing.
+					// For an already-initialized manager (e.g. after handleSettingsChange
+					// recreated services and left the orchestrator in Standby), we
+					// check the live flags and kick startIndexing() directly.
+					if (!currentCodeIndexManager.isInitialized) {
+						try {
+							await currentCodeIndexManager.initialize(provider.contextProxy)
+							provider.debug?.(`Code index manager initialized after settings save`)
+						} catch (error) {
+							provider.log(
+								`Code index initialization failed: ${error instanceof Error ? error.message : String(error)}`,
+							)
+							await provider.postMessageToWebview({
+								type: "indexingStatusUpdate",
+								values: currentCodeIndexManager.getCurrentStatus(),
+							})
+						}
+					} else if (
+						currentCodeIndexManager.isFeatureEnabled &&
+						currentCodeIndexManager.isFeatureConfigured &&
+						currentCodeIndexManager.state !== "Indexing"
+					) {
+						// Manager was already initialized (e.g. handleSettingsChange
+						// recreated services) but indexing hasn't started. Kick it off.
+						try {
+							await currentCodeIndexManager.startIndexing()
+							provider.debug?.(`Code index started after settings save`)
+						} catch (error) {
+							provider.log(
+								`Code index start failed after settings save: ${error instanceof Error ? error.message : String(error)}`,
+							)
+							await provider.postMessageToWebview({
+								type: "indexingStatusUpdate",
+								values: currentCodeIndexManager.getCurrentStatus(),
+							})
 						}
 					}
 				} else {
@@ -2868,7 +2899,22 @@ export const webviewMessageHandler = async (
 					const codeManager = provider.getCurrentWorkspaceCodeIndexManager()
 					if (codeManager) {
 						try {
-							await codeManager.handleSettingsChange()
+							if (!codeManager.isInitialized) {
+								// Manager never initialized — run full initialization which
+								// will load config and start indexing if enabled/configured.
+								await codeManager.initialize(provider.contextProxy)
+							} else {
+								await codeManager.handleSettingsChange()
+								// If toggled ON and not yet indexing, kick it off.
+								if (
+									patch.codebaseIndexEnabled &&
+									codeManager.isFeatureEnabled &&
+									codeManager.isFeatureConfigured &&
+									codeManager.state !== "Indexing"
+								) {
+									await codeManager.startIndexing()
+								}
+							}
 							await provider.postMessageToWebview({
 								type: "indexingStatusUpdate",
 								values: codeManager.getCurrentStatus(),
@@ -2918,11 +2964,15 @@ export const webviewMessageHandler = async (
 		case "requestIndexingStatus": {
 			const manager = provider.getCurrentWorkspaceCodeIndexManager()
 			if (!manager) {
-				// No workspace open - send error status
+				// No manager instance for this workspace — the feature is
+				// effectively disabled (either no workspace open or the toggle
+				// was off at activation). Surface as "Disabled" so the badge
+				// can render the idle/grey state without inferring it from a
+				// separate config lookup.
 				provider.postMessageToWebview({
 					type: "indexingStatusUpdate",
 					values: {
-						systemStatus: "Error",
+						systemStatus: "Disabled",
 						message: t("embeddings:orchestrator.indexingRequiresWorkspace"),
 						processedItems: 0,
 						totalItems: 0,
