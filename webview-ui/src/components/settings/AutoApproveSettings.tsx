@@ -94,7 +94,6 @@ export const AutoApproveSettings = ({
 			const newCommands = [...currentCommands, commandInput]
 			setCachedStateField("allowedCommands", newCommands)
 			setCommandInput("")
-			vscode.postMessage({ type: "updateSettings", updatedSettings: { allowedCommands: newCommands } })
 		}
 	}
 
@@ -105,7 +104,6 @@ export const AutoApproveSettings = ({
 			const newCommands = [...currentCommands, deniedCommandInput]
 			setCachedStateField("deniedCommands", newCommands)
 			setDeniedCommandInput("")
-			vscode.postMessage({ type: "updateSettings", updatedSettings: { deniedCommands: newCommands } })
 		}
 	}
 
