@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-We actively patch only the most recent minor release of Shofer Code. Older versions receive fixes at our discretion.
+We actively patch only the most recent minor release of Shofer Code.
 
 ## Reporting a Vulnerability
 

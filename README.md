@@ -1,6 +1,6 @@
 # Shofer
 
-> Shofer (from the French _chauffeur_ — driver) is a state-of-the-art open-source AI coding assistant.
+> Shofer (from the French _chauffeur_ — driver) is a state-of-the-art open-source AI coding assistant, derived from Roo-Code.
 
 ---
 

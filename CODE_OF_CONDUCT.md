@@ -80,7 +80,7 @@ members of the project's leadership.
 
 ## Attribution
 
-This Code of Conduct is adapted from [Shofer's version][cline_coc] of the [Contributor Covenant][homepage], version 1.4,
+This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 1.4,
 available at https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
 
 [cline_coc]: https://github.com/shofer/shofer/blob/main/CODE_OF_CONDUCT.md
