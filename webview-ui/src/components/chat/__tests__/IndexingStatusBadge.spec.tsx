@@ -63,7 +63,6 @@ const defaultExtensionState = {
 	taskHistory: [],
 	shouldShowAnnouncement: false,
 	language: "en",
-	codebaseIndexConfig: { codebaseIndexEnabled: true },
 }
 
 vi.mock("@/context/ExtensionStateContext", () => ({
@@ -290,14 +289,29 @@ describe("IndexingStatusBadge", () => {
 		}
 	})
 
-	it("shows idle/standby colour when indexing is disabled", () => {
-		vi.mocked(useExtensionState).mockReturnValue({
-			...defaultExtensionState,
-			codebaseIndexConfig: { codebaseIndexEnabled: false },
-		} as any)
+	it("shows idle/standby colour when backend reports Disabled status", async () => {
 		renderComponent()
-		// The status dot should carry the standby/idle (grey) class, not red or green.
-		const dot = screen.getByRole("button").querySelector("span")
-		expect(dot).toHaveClass("bg-vscode-descriptionForeground/60")
+
+		// Simulate backend reporting that the indexing feature is disabled.
+		const event = new MessageEvent("message", {
+			data: {
+				type: "indexingStatusUpdate",
+				values: {
+					systemStatus: "Disabled",
+					processedItems: 0,
+					totalItems: 0,
+					currentItemUnit: "items",
+				},
+			},
+		})
+
+		act(() => {
+			window.dispatchEvent(event)
+		})
+
+		await waitFor(() => {
+			const dot = screen.getByRole("button").querySelector("span")
+			expect(dot).toHaveClass("bg-vscode-descriptionForeground/60")
+		})
 	})
 })

@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-export type IndexingState = "Standby" | "Indexing" | "Indexed" | "Error" | "Stopping"
+export type IndexingState = "Standby" | "Indexing" | "Indexed" | "Error" | "Stopping" | "Disabled"
 
 export class CodeIndexStateManager {
 	private _systemStatus: IndexingState = "Standby"

@@ -389,6 +389,10 @@ export class CodeIndexManager {
 		const status = this._stateManager.getCurrentStatus()
 		return {
 			...status,
+			// Surface the feature-toggle as a first-class status so the UI can
+			// render "disabled" without a separate config lookup. The underlying
+			// state-machine value is preserved when enabled.
+			systemStatus: this.isFeatureEnabled ? status.systemStatus : ("Disabled" as const),
 			workspacePath: this.workspacePath,
 			workspaceEnabled: this.isWorkspaceEnabled,
 			autoEnableDefault: this.autoEnableDefault,

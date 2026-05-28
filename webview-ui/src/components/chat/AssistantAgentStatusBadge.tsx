@@ -16,7 +16,7 @@ import { PopoverTrigger, StandardTooltip, Button } from "@src/components/ui"
 import { AssistantAgentPopover, type AssistantAgentStatusData } from "./AssistantAgentPopover"
 
 export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ className }) => {
-	const { cwd, assistantAgentEnabled } = useExtensionState()
+	const { cwd } = useExtensionState()
 
 	const [status, setStatus] = useState<AssistantAgentStatusData>({
 		state: "Standby",
@@ -47,7 +47,6 @@ export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ cl
 	}, [status.contextUsage])
 
 	const tooltipText = useMemo(() => {
-		if (!assistantAgentEnabled) return "Assistant Agent: Disabled"
 		const lines: string[] = [`Assistant Agent: ${status.state}`]
 		if (status.stateMessage) lines.push(status.stateMessage)
 		if (fillPct !== undefined) lines.push(`Context: ${fillPct}% full`)
@@ -56,11 +55,9 @@ export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ cl
 		}
 		if (status.pendingQuestionCount) lines.push(`Queue: ${status.pendingQuestionCount} pending`)
 		return lines.join("\n")
-	}, [status, fillPct, assistantAgentEnabled])
+	}, [status, fillPct])
 
 	const statusColorClass = useMemo(() => {
-		// When the feature is disabled, always show the idle/standby colour.
-		if (!assistantAgentEnabled) return "bg-vscode-descriptionForeground/60"
 		const stateColors: Record<string, string> = {
 			Standby: "bg-vscode-descriptionForeground/60",
 			Initializing: "bg-yellow-500 animate-pulse",
@@ -70,7 +67,7 @@ export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ cl
 			Stopping: "bg-amber-500 animate-pulse",
 		}
 		return stateColors[status.state] || stateColors.Standby
-	}, [status.state, assistantAgentEnabled])
+	}, [status.state])
 
 	return (
 		<AssistantAgentPopover status={status}>

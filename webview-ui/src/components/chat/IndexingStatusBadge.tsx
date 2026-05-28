@@ -38,7 +38,7 @@ interface GitIndexingStatus {
  */
 export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ className }) => {
 	const { t } = useAppTranslation()
-	const { cwd, codebaseIndexConfig } = useExtensionState()
+	const { cwd } = useExtensionState()
 
 	const [indexingStatus, setIndexingStatus] = useState<IndexingStatus>({
 		systemStatus: "Standby",
@@ -93,15 +93,13 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 
 	/** Derive a combined status for the dot color and tooltip. */
 	const combinedStatus = useMemo(() => {
-		// When the feature is disabled, always show the idle/standby colour.
-		if (!codebaseIndexConfig?.codebaseIndexEnabled) {
-			return { state: "Idle" as const, colorClass: "bg-vscode-descriptionForeground/60" }
-		}
-
 		const codeState = indexingStatus.systemStatus
 		const gitState = gitIndexingStatus.systemStatus
 
-		// Priority: Error > Indexing/Stopping > Standby/Indexed
+		// Priority: Error > Indexing/Stopping > Disabled (only when nothing
+		// else is active) > Standby/Indexed.
+		// Standby means "enabled with no work pending" → green.
+		// Disabled means "feature toggle is off" → grey idle.
 		if (codeState === "Error" || gitState === "Error") {
 			return { state: "Error" as const, colorClass: "bg-red-500" }
 		}
@@ -111,8 +109,11 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 		if (codeState === "Stopping" || gitState === "Stopping") {
 			return { state: "Stopping" as const, colorClass: "bg-amber-500 animate-pulse" }
 		}
+		if (codeState === "Disabled") {
+			return { state: "Disabled" as const, colorClass: "bg-vscode-descriptionForeground/60" }
+		}
 		return { state: "Idle" as const, colorClass: "bg-green-500" }
-	}, [indexingStatus.systemStatus, gitIndexingStatus.systemStatus, codebaseIndexConfig?.codebaseIndexEnabled])
+	}, [indexingStatus.systemStatus, gitIndexingStatus.systemStatus])
 
 	const tooltipText = useMemo(() => {
 		const parts: string[] = []
@@ -134,6 +135,9 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 			case "Error":
 				parts.push(t("chat:indexingStatus.codeError"))
 				break
+			case "Disabled":
+				parts.push(t("chat:indexingStatus.codeDisabled"))
+				break
 			default:
 				parts.push(t("chat:indexingStatus.codeStatus"))
 		}
@@ -154,6 +158,9 @@ export const IndexingStatusBadge: React.FC<IndexingStatusBadgeProps> = ({ classN
 				break
 			case "Error":
 				parts.push(t("chat:indexingStatus.gitError"))
+				break
+			case "Disabled":
+				parts.push(t("chat:indexingStatus.gitDisabled"))
 				break
 			default:
 				parts.push(t("chat:indexingStatus.gitStatus"))
