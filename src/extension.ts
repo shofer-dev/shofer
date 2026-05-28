@@ -373,7 +373,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		setTimeout(() => {
 			vscode.commands.executeCommand(
 				"workbench.action.openWalkthrough",
-				"shofer-dev.shofer#shofer.getStarted",
+				"shoferdev.shofer#shofer.getStarted",
 				false,
 			)
 		}, 500)
