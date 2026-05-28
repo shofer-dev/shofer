@@ -109,7 +109,7 @@ All interfaces are defined under `src/services/code-index/interfaces/`:
 	end_line: number
 	content: string
 	fileHash: string
-	segmentHash: string // SHA-256(path + line range + content length + content preview); drives per-segment dedup and Qdrant point IDs (uuidv5)
+	segmentHash: string // SHA-256(path + identifier + content length + content preview); drives per-segment dedup and Qdrant point IDs (uuidv5)
 }
 ```
 

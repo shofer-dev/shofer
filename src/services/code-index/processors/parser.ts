@@ -206,7 +206,7 @@ export class CodeParser implements ICodeParser {
 					const content = currentNode.text
 					const contentPreview = content.slice(0, 100)
 					const segmentHash = createHash("sha256")
-						.update(`${filePath}-${start_line}-${end_line}-${content.length}-${contentPreview}`)
+						.update(`${filePath}-${identifier ?? "anon"}-${content.length}-${contentPreview}`)
 						.digest("hex")
 
 					if (!seenSegmentHashes.has(segmentHash)) {
@@ -254,7 +254,7 @@ export class CodeParser implements ICodeParser {
 				const endLine = baseStartLine + endLineIndex
 				const contentPreview = chunkContent.slice(0, 100)
 				const segmentHash = createHash("sha256")
-					.update(`${filePath}-${startLine}-${endLine}-${chunkContent.length}-${contentPreview}`)
+					.update(`${filePath}-anon-${chunkContent.length}-${contentPreview}`)
 					.digest("hex")
 
 				if (!seenSegmentHashes.has(segmentHash)) {
@@ -279,9 +279,7 @@ export class CodeParser implements ICodeParser {
 		const createSegmentBlock = (segment: string, originalLineNumber: number, startCharIndex: number) => {
 			const segmentPreview = segment.slice(0, 100)
 			const segmentHash = createHash("sha256")
-				.update(
-					`${filePath}-${originalLineNumber}-${originalLineNumber}-${startCharIndex}-${segment.length}-${segmentPreview}`,
-				)
+				.update(`${filePath}-anon-${startCharIndex}-${segment.length}-${segmentPreview}`)
 				.digest("hex")
 
 			if (!seenSegmentHashes.has(segmentHash)) {
@@ -445,7 +443,7 @@ export class CodeParser implements ICodeParser {
 		const endLine = startLine + lines.length - 1
 		const contentPreview = content.slice(0, 100)
 		const segmentHash = createHash("sha256")
-			.update(`${filePath}-${startLine}-${endLine}-${content.length}-${contentPreview}`)
+			.update(`${filePath}-${identifier ?? "anon"}-${content.length}-${contentPreview}`)
 			.digest("hex")
 
 		if (!seenSegmentHashes.has(segmentHash)) {
