@@ -1,6 +1,7 @@
 import React from "react"
 import { render, screen, fireEvent, waitFor, act } from "@/utils/test-utils"
 
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
 
 import { IndexingStatusBadge } from "../IndexingStatusBadge"
@@ -56,14 +57,17 @@ vi.mock("@src/utils/vscode", () => ({
 }))
 
 // Mock the ExtensionStateContext
+const defaultExtensionState = {
+	version: "1.0.0",
+	shoferMessages: [],
+	taskHistory: [],
+	shouldShowAnnouncement: false,
+	language: "en",
+	codebaseIndexConfig: { codebaseIndexEnabled: true },
+}
+
 vi.mock("@/context/ExtensionStateContext", () => ({
-	useExtensionState: () => ({
-		version: "1.0.0",
-		shoferMessages: [],
-		taskHistory: [],
-		shouldShowAnnouncement: false,
-		language: "en",
-	}),
+	useExtensionState: vi.fn(),
 	ExtensionStateContextProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
@@ -118,6 +122,7 @@ describe("IndexingStatusBadge", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		vi.mocked(useExtensionState).mockReturnValue(defaultExtensionState as any)
 	})
 
 	it("renders the status dot", () => {
@@ -283,5 +288,16 @@ describe("IndexingStatusBadge", () => {
 				expect(button).toHaveAttribute("aria-label", `Code indexing ${testCase.expected}%\nGit index ready`)
 			})
 		}
+	})
+
+	it("shows idle/standby colour when indexing is disabled", () => {
+		vi.mocked(useExtensionState).mockReturnValue({
+			...defaultExtensionState,
+			codebaseIndexConfig: { codebaseIndexEnabled: false },
+		} as any)
+		renderComponent()
+		// The status dot should carry the standby/idle (grey) class, not red or green.
+		const dot = screen.getByRole("button").querySelector("span")
+		expect(dot).toHaveClass("bg-vscode-descriptionForeground/60")
 	})
 })
