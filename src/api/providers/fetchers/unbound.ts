@@ -5,6 +5,19 @@ import type { ModelInfo } from "@shofer/types"
 import { parseApiPrice } from "../../../shared/cost"
 import { outputError } from "../../../utils/outputChannelLogger"
 
+interface RawUnboundModel {
+	id: string
+	max_output_tokens?: number
+	context_window?: number
+	supports_caching?: boolean
+	supports_vision?: boolean
+	input_price?: string | number
+	output_price?: string | number
+	description?: string
+	caching_price?: string | number
+	cached_price?: string | number
+}
+
 export async function getUnboundModels(apiKey?: string | null): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}
 
@@ -16,8 +29,8 @@ export async function getUnboundModels(apiKey?: string | null): Promise<Record<s
 		}
 
 		const response = await axios.get("https://api.getunbound.ai/models", { headers })
-		const rawData = response.data?.data ?? response.data
-		const rawModels: unknown[] = Array.isArray(rawData) ? rawData : []
+		const rawData: unknown = response.data?.data ?? response.data
+		const rawModels: RawUnboundModel[] = Array.isArray(rawData) ? (rawData as RawUnboundModel[]) : []
 
 		for (const rawModel of rawModels) {
 			const modelInfo: ModelInfo = {
