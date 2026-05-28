@@ -1,9 +1,7 @@
-- Update: CODE_OF_CONDUCT.md, CONTRIBUTING.md, PRIVACY.md, SECURITY.md
-
-- public web site
-- publish in marketplace
-
 - replace images in /home/alsterg/Projects/arkware.ai/extensions/shofer/apps/web-shofer/public
+
+- Verify RAG fix
+- remove excessive logging
 
 === P1
 
@@ -27,11 +25,15 @@
 
 === P2
 
+- test: /rebase-worktree /merge-worktree
+
+- test: /migrate-from-copilot /migrate-from-roocode
+
 - pick a new logo
 
 - DEV set limit on the number of parallel tasks
 
-- Move these out of settings.json:
+- "Global Settings (JSON-only, no settings UI)" expose these settings on the Settings UI. Move these out of settings.json:
   | Setting | Purpose | Default |
   | -------------------------------- | ---------------------------------------- | ----------------- |
   | `shofer.defaultCostLimit` | Per-task USD budget cap | `null` (disabled) |
@@ -40,20 +42,6 @@
   | `shofer.commandExecutionTimeout` | Max seconds for command execution | `0` (no timeout) |
   | `shofer.commandTimeoutAllowlist` | Commands exempt from timeout | `[]` |
 
-=== Test
-
-- /rebase-worktree
-- /merge-worktree
-
-- /migrate-from-copilot
-- /migrate-from-roocode
-
-=== P2
-
-- ISSUE: on rehydration of subtasks, the last state of it is not preserved (instead Idle is used)
-- ISSUE: scrolling is bouncing in ChatView when you move away from the bottom while text is being streamed
-- ISSUE: TaskNotification is shown even if already in the target Task
 - DEV Simplify the Settings overlay (use VScode's own settings.json)
-    - "Global Settings (JSON-only, no settings UI)" expose these settings on the Settings UI
 - DEV memories (copilot_memory, copilot_resolveMemoryFileUri) (filter by age)
 - preemptive summarization (in the background)
