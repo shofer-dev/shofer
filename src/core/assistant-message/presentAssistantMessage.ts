@@ -1031,20 +1031,27 @@ export async function presentAssistantMessage(shofer: Task) {
 					// CRITICAL: Prevent duplicate attempt_completion execution when LLM generates
 					// multiple attempt_completion calls in a single response (common after delegation).
 					// Only execute the FIRST attempt_completion and skip subsequent ones.
-					if (shofer.didExecuteAttemptCompletion) {
-						outputLog(
-							`[presentAssistantMessage] Skipping duplicate attempt_completion (tool_use_id: ${toolCallId})`,
-						)
-						pushToolResult(
-							formatResponse.toolError(
-								"Skipped duplicate attempt_completion. Only one attempt_completion is allowed per response.",
-							),
-						)
-						break
-					}
+					//
+					// NOTE: Only check/set the flag for complete (non-partial) blocks. During streaming,
+					// the same tool block is delivered as multiple partial chunks before the final complete
+					// block. Setting the flag on a partial chunk would cause the complete block to be
+					// incorrectly rejected as a "duplicate" on the next presentAssistantMessage call.
+					if (!block.partial) {
+						if (shofer.didExecuteAttemptCompletion) {
+							outputLog(
+								`[presentAssistantMessage] Skipping duplicate attempt_completion (tool_use_id: ${toolCallId})`,
+							)
+							pushToolResult(
+								formatResponse.toolError(
+									"Skipped duplicate attempt_completion. Only one attempt_completion is allowed per response.",
+								),
+							)
+							break
+						}
 
-					// Mark that we're executing attempt_completion to prevent duplicates
-					shofer.didExecuteAttemptCompletion = true
+						// Mark that we're executing attempt_completion to prevent duplicates
+						shofer.didExecuteAttemptCompletion = true
+					}
 
 					const completionCallbacks: AttemptCompletionCallbacks = {
 						askApproval,
