@@ -2,11 +2,11 @@
 	"name": "shofer",
 	"displayName": "Shofer",
 	"description": "%extension.description%",
-	"publisher": "shofer-dev",
-	"version": "1.0.2",
-	"icon": "assets/icons/icon.png",
+	"publisher": "Shoferdev",
+	"version": "1.0.3",
+	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
-		"color": "#617A91",
+		"color": "#1e293b",
 		"theme": "dark"
 	},
 	"engines": {
@@ -21,6 +21,14 @@
 		"url": "https://github.com/shofer-dev/shofer"
 	},
 	"homepage": "https://shofer.dev",
+	"bugs": {
+		"url": "https://github.com/shofer-dev/shofer/issues"
+	},
+	"pricing": "Free",
+	"license": "Apache-2.0",
+	"sponsor": {
+		"url": "https://github.com/sponsors/alsterg"
+	},
 	"categories": [
 		"AI",
 		"Chat",
@@ -41,9 +49,7 @@
 		"chatgpt",
 		"sonnet",
 		"ai",
-		"llama",
-		"shofer",
-		"shofer"
+		"llama"
 	],
 	"activationEvents": [
 		"onLanguage",

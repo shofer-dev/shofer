@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "Shofer",
-	"extension.description": "State-of-the-art open-source AI coding.",
+	"extension.description": "State-of-the-art open-source AI coding assistant \u2014 runs locally, supports any model, with 50+ tools and parallel tasks.",
 	"views.contextMenu.label": "Shofer",
 	"views.terminalMenu.label": "Shofer",
 	"views.activitybar.title": "Shofer",
