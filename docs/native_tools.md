@@ -131,18 +131,32 @@ Inserts text at a specific position in a file using VS Code's WorkspaceEdit API.
 
 Performs regex find-and-replace on a workspace file, similar to `sed 's/pattern/replacement/g'`. Uses JavaScript RegExp syntax. Supports capture group backreferences ($1, $2, etc.).
 
-> **⚠️ Common pitfall:** The `.` character in regex matches ANY character (not
-> just a literal dot/period). To match a literal dot, use `\.` or `[.]`. If
-> the regex produces zero matches, the tool automatically falls back to a
-> literal search — but if it finds unexpected matches (e.g., `.` matching `/`),
-> the literal fallback is not triggered because matches were found.
+> **⚠️ Common pitfalls (regex metacharacters):**
+>
+> **`|` (pipe) — the alternation trap:** In regex, `|` is the OR operator.
+> A pattern like `| A | B |` is parsed as `(empty) OR " A " OR " B " OR (empty)`.
+> The empty alternatives match **every single character boundary** in the file —
+> injecting the replacement between every character (5,000+ replacements instead of 1).
+> To match a literal pipe, use `\|` or `[|]`. **Always escape pipes in markdown
+> table content or any text containing `|`.**
+>
+> **`.` (dot) — the wildcard trap:** The `.` character matches ANY character
+> (letter, slash, punctuation, etc.), not just a literal dot/period. To match
+> a literal dot, use `\.` or `[.]`.
+>
+> **Other metacharacters requiring escaping for literal matching:** > `* + ? ( ) [ ] { } ^ $ \`
+>
+> **Automatic fallback:** If the regex produces zero matches and the pattern
+> contains metacharacters, the tool automatically retries with all metacharacters
+> escaped as a literal string. This does NOT protect against the `|` trap because
+> `|` produces catastrophic matches, not zero matches — always escape your pipes.
 
-| Param         | Type            | Required | Description                                |
-| ------------- | --------------- | :------: | ------------------------------------------ |
-| `path`        | string          |    ✅    | File path relative to workspace            |
-| `pattern`     | string          |    ✅    | Regex pattern (JavaScript RegExp syntax)   |
-| `replacement` | string          |    ✅    | Replacement string (supports $1, $2, etc.) |
-| `global`      | boolean \| null |    ✅    | Replace all occurrences (default: true)    |
+| Param         | Type            | Required | Description                                                                         |
+| ------------- | --------------- | :------: | ----------------------------------------------------------------------------------- |
+| `path`        | string          |    ✅    | File path relative to workspace                                                     |
+| `pattern`     | string          |    ✅    | Regex pattern (JavaScript RegExp syntax). Escape metacharacters like \| . \* + etc. |
+| `replacement` | string          |    ✅    | Replacement string (supports $1, $2, etc.)                                          |
+| `global`      | boolean \| null |    ✅    | Replace all occurrences (default: true)                                             |
 
 ### `create_new_workspace`
 
