@@ -11,8 +11,8 @@ describe("BatchListFilesPermission", () => {
 			path: "apps/cli",
 		},
 		{
-			key: "apps/web-shofer-code",
-			path: "apps/web-shofer-code",
+			key: "packages/types",
+			path: "packages/types",
 		},
 		{
 			key: "packages/core",
@@ -32,7 +32,7 @@ describe("BatchListFilesPermission", () => {
 		)
 
 		expect(screen.getByText("apps/cli")).toBeInTheDocument()
-		expect(screen.getByText("apps/web-shofer-code")).toBeInTheDocument()
+		expect(screen.getByText("packages/types")).toBeInTheDocument()
 		expect(screen.getByText("packages/core")).toBeInTheDocument()
 	})
 
