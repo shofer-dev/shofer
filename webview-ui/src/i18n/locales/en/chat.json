@@ -441,12 +441,14 @@
 		"codeError": "Code: Error",
 		"codeStatus": "Code: Status",
 		"codeStopping": "Code: Stopping...",
+		"codeDisabled": "Code: Disabled",
 		"gitReady": "Git: Ready",
 		"gitIndexing": "Git: Indexing",
 		"gitIndexed": "Git: Indexed",
 		"gitError": "Git: Error",
 		"gitStatus": "Git: Status",
-		"gitStopping": "Git: Stopping..."
+		"gitStopping": "Git: Stopping...",
+		"gitDisabled": "Git: Disabled"
 	},
 	"versionIndicator": {
 		"ariaLabel": "Version {{version}} - Click to view release notes"
