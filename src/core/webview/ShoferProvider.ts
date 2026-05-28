@@ -2298,28 +2298,35 @@ export class ShoferProvider
 		providerSettings: ProviderSettings,
 		options: { forceRebuild?: boolean } = {},
 	): void {
-		const task = this.getCurrentTask()
-		if (!task) return
-
 		const { forceRebuild = false } = options
-
-		// Determine if we need to rebuild using the previous configuration snapshot
-		const prevConfig = task.apiConfiguration
-		const prevProvider = prevConfig?.apiProvider
-		const prevModelId = prevConfig ? getModelId(prevConfig) : undefined
 		const newProvider = providerSettings.apiProvider
 		const newModelId = getModelId(providerSettings)
 
-		const needsRebuild = forceRebuild || prevProvider !== newProvider || prevModelId !== newModelId
+		// Collect all live task instances: the full foreground stack plus any background tasks.
+		const allTasks: Task[] = [
+			...this.shoferStack,
+			...this.taskManager
+				.getActiveManagedTasks()
+				.map((m) => this.taskManager.getManagedTaskInstance(m.id))
+				.filter((t): t is Task => t !== undefined),
+		]
 
-		if (needsRebuild) {
-			// Use updateApiConfiguration which handles both API handler rebuild and parser sync.
-			// Note: updateApiConfiguration is declared async but has no actual async operations,
-			// so we can safely call it without awaiting.
-			task.updateApiConfiguration(providerSettings)
-		} else {
-			// No rebuild needed, just sync apiConfiguration
-			;(task as any).apiConfiguration = providerSettings
+		for (const task of allTasks) {
+			const prevConfig = task.apiConfiguration
+			const prevProvider = prevConfig?.apiProvider
+			const prevModelId = prevConfig ? getModelId(prevConfig) : undefined
+
+			const needsRebuild = forceRebuild || prevProvider !== newProvider || prevModelId !== newModelId
+
+			if (needsRebuild) {
+				// Use updateApiConfiguration which handles both API handler rebuild and parser sync.
+				// Note: updateApiConfiguration is declared async but has no actual async operations,
+				// so we can safely call it without awaiting.
+				task.updateApiConfiguration(providerSettings)
+			} else {
+				// No rebuild needed, just sync apiConfiguration
+				;(task as any).apiConfiguration = providerSettings
+			}
 		}
 	}
 
