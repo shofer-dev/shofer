@@ -88,7 +88,7 @@ import McpView from "../mcp/McpView"
 import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
-import { RagIndexerSettings } from "./RagIndexerSettings"
+import { RagIndexerSettings, type RagIndexerSettingsRef } from "./RagIndexerSettings"
 
 export const settingsTabsContainer = "flex flex-1 overflow-hidden [&.narrow_.tab-label]:hidden"
 export const settingsTabList =
@@ -156,6 +156,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	// the per-mode text buffers it holds internally (see ModesView.commitBuffers
 	// for why those buffers are not folded into SettingsView's cachedState).
 	const modesViewRef = useRef<ModesViewRef>(null)
+	const ragIndexerRef = useRef<RagIndexerSettingsRef>(null)
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
 
@@ -468,6 +469,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// per mode + global customInstructions) — these are held inside ModesView per the
 			// AGENTS.md "Settings View Pattern" and only persisted on Save.
 			modesViewRef.current?.commitBuffers()
+
+			// Flush code-index secret fields (API keys) that are managed
+			// inside CodeIndexConfigForm via its own atomic-save path.
+			ragIndexerRef.current?.saveCodeIndexSecrets()
 
 			setChangeDetected(false)
 		}
@@ -937,6 +942,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 						{/* Codebase Index Section */}
 						{renderTab === "codebaseIndex" && (
 							<RagIndexerSettings
+								ref={ragIndexerRef}
 								codebaseIndexConfig={codebaseIndexConfig}
 								setCachedStateField={setCachedStateField as any}
 							/>
