@@ -389,7 +389,7 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 	"walkthrough.open": async () => {
 		await vscode.commands.executeCommand(
 			"workbench.action.openWalkthrough",
-			"shofer-dev.shofer#shofer.getStarted",
+			"shoferdev.shofer#shofer.getStarted",
 			false,
 		)
 	},
