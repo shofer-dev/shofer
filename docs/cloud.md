@@ -10,7 +10,7 @@
 | [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type only                                |
 | [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class (no Shofer-specific handler) |
 | [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`      |
-| [`apps/web-shofer/`](apps/web-shofer/)                                                             | Next.js marketing/product pages (accurate)                       |
+| [`website/`](website/)                                                                             | Astro marketing/product pages (accurate)                         |
 
 This document provides a comprehensive overview of all cloud-related features in the Shofer extension, covering the cloud service architecture, authentication, settings synchronization, telemetry, task sharing, bridge connectivity, the Shofer Router provider, cloud profile management, image generation, MDM enforcement, and the web UI components.
 
@@ -74,7 +74,7 @@ The cloud-related code that actually exists lives in:
 | [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type                                        |
 | [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class                                 |
 | [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Marketplace mode/MCP fetching from cloud                            |
-| [`apps/web-shofer/`](apps/web-shofer/)                                                             | Next.js web app (marketing + product pages)                         |
+| [`website/`](website/)                                                                             | Astro web app (marketing + product pages)                           |
 
 ---
 
@@ -510,7 +510,7 @@ The marketplace loads remote configurations from Shofer Cloud via [`RemoteConfig
 
 ## Web App Pages (shofer.dev)
 
-The Next.js app at [`apps/web-shofer/`](apps/web-shofer/) hosts marketing and product pages:
+The Astro app at [`website/`](website/) hosts marketing and product pages:
 
 | Route         | Description                                                   |
 | ------------- | ------------------------------------------------------------- |
