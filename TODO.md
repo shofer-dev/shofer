@@ -1,13 +1,6 @@
-- replace images in /home/alsterg/Projects/arkware.ai/extensions/shofer/apps/web-shofer/public
-
-- Verify RAG fix
 - remove excessive logging
 
-=== P1
-
-- TEST RAG indexer for code changes
-
-- TEST without llm-provider
+- TEST RAG indexer for code changes & fix
 
 - FIX pasting images
 
