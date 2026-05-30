@@ -75,6 +75,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PathTooltip } from "../ui/PathTooltip"
+import { StandardTooltip } from "../ui/standard-tooltip"
 import { OpenMarkdownPreviewButton } from "./OpenMarkdownPreviewButton"
 
 /**
@@ -1474,16 +1475,21 @@ export const ChatRowContent = ({
 									{icon}
 									{title}
 									{hasMetadata && (
-										<span
-											className="codicon codicon-info"
-											title={metadataTooltip}
-											style={{
-												fontSize: 13,
-												color: "var(--vscode-descriptionForeground)",
-												cursor: "help",
-												flexShrink: 0,
-											}}
-										/>
+										<StandardTooltip
+											content={<span style={{ whiteSpace: "pre-wrap" }}>{metadataTooltip}</span>}
+											side="top"
+											align="start"
+											maxWidth={320}>
+											<span
+												className="codicon codicon-info"
+												style={{
+													fontSize: 13,
+													color: "var(--vscode-descriptionForeground)",
+													cursor: "help",
+													flexShrink: 0,
+												}}
+											/>
+										</StandardTooltip>
 									)}
 								</div>
 								<div
