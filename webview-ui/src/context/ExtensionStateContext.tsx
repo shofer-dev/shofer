@@ -217,10 +217,6 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Partial
 	) {
 		rest.shoferMessages = prevState.shoferMessages
 		rest.shoferMessagesSeq = prevState.shoferMessagesSeq
-		// Also protect the H2 windowing metadata from stale pushes.
-		rest.hasMoreMessages = prevState.hasMoreMessages
-		rest.oldestLoadedTs = prevState.oldestLoadedTs
-		rest.tokenUsage = prevState.tokenUsage
 	}
 
 	// Note that we completely replace the previous apiConfiguration and customSupportPrompts objects
@@ -317,8 +313,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		parallelTasks: [],
 		focusedTaskId: null,
 		taskNotifications: [],
-		// H2: Windowed message loading — no more messages until host says otherwise.
-		hasMoreMessages: false,
 	})
 
 	const [didHydrateState, setDidHydrateState] = useState(false)
@@ -484,41 +478,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 							return { ...prevState, shoferMessages: newShoferMessages }
 						}
 						return { ...prevState, shoferMessages: [...prevState.shoferMessages, shoferMessage] }
-					})
-					break
-				}
-				// H2: Windowed message loading — host pushes a page of older messages.
-				case "olderMessagesLoaded": {
-					const olderMessages = message.olderMessages
-					if (!olderMessages || olderMessages.length === 0) {
-						// No more messages — update hasMore* flags only.
-						setState((prevState) => ({
-							...prevState,
-							hasMoreMessages: message.olderHasMore ?? false,
-						}))
-						break
-					}
-					setState((prevState) => {
-						// Dedupe by ts: messages that are already in the frontend
-						// (from a race between two load requests) should not be
-						// duplicated.
-						const existingTs = new Set(prevState.shoferMessages.map((m) => m.ts))
-						const deduped = olderMessages.filter((m) => !existingTs.has(m.ts))
-						if (deduped.length === 0) {
-							return {
-								...prevState,
-								hasMoreMessages: message.olderHasMore ?? false,
-								oldestLoadedTs: message.olderOldestTs,
-								lastPrependedCount: 0,
-							}
-						}
-						return {
-							...prevState,
-							shoferMessages: [...deduped, ...prevState.shoferMessages],
-							hasMoreMessages: message.olderHasMore ?? false,
-							oldestLoadedTs: message.olderOldestTs,
-							lastPrependedCount: deduped.length,
-						}
 					})
 					break
 				}

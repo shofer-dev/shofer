@@ -1,23 +1,44 @@
 # ChatView — Windowed Message Loading (H2)
 
-> **Status:** ✅ Implemented (2026-05-30, commits `14de80284` + `94afc1d24`, v1.0.16)
+> **Status:** ❌ Reverted (2026-05-30)
 >
-> Design document for loading only a window of the most recent messages into the
-> webview instead of the complete task history, with a "load older" sentinel to
-> page backwards on demand.
+> This implementation was reverted because it introduced unacceptable complexity
+> for the IPC protocol, webview state management, scroll anchoring, and token-
+> totals plumbing. The incremental message consolidation (H10) already bounds
+> the per-chunk recompute cost; H2's cold-switch IPC savings did not justify
+> the ongoing maintenance burden.
+>
+> **Implementation commits (reverted):**
+>
+> | Commit                                                                | Description                                                                       |
+> | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+> | [`14de80284`](https://github.com/arkware/arkware.ai/commit/14de80284) | H2: Windowed Message Loading for ChatView (9 files, +180/-17)                     |
+> | [`94afc1d24`](https://github.com/arkware/arkware.ai/commit/94afc1d24) | chore: bump version to 1.0.16 for H2 windowed message loading                     |
+> | [`fbb8ff8a3`](https://github.com/arkware/arkware.ai/commit/fbb8ff8a3) | docs(H2): move design doc to docs/ with implementation details                    |
+> | [`a6bf5413a`](https://github.com/arkware/arkware.ai/commit/a6bf5413a) | fix(chat): prevent Virtuoso snap-back when scrolling (firstItemIndex conditional) |
+>
+> **Associated version bumps (also reverted):**
+>
+> | Commit                                                                | Description                                                   |
+> | --------------------------------------------------------------------- | ------------------------------------------------------------- |
+> | [`899fbdbfe`](https://github.com/arkware/arkware.ai/commit/899fbdbfe) | ChatRow metadata tooltip + brace fix + test file (superseded) |
+>
+> Original design document follows for historical reference.
+>
+> ---
 >
 > This is **Approach B** from the investigation into "as a single Task becomes
 > longer, it becomes slower and slower." It corresponds to **H2** in
 > [`performance_optimizations.md`](./performance_optimizations.md)
-> (status there: **✅ Implemented**).
+> (status there: **❌ Reverted**).
 >
 > **Relationship to Approach A (H10, done).** The lower-risk webview-only fix —
 > incremental message consolidation — already landed (see
 > [`../todos/done/chatview-incremental-message-processing.md`](../todos/done/chatview-incremental-message-processing.md)
 > and H10 in the perf doc). It removes the O(n²) per-chunk recompute regardless
-> of `n`. H2 is complementary: it bounds the **cold task-switch** cost — the IPC
-> structured clone and initial render of a very large history — by never
-> materializing the whole array in the webview.
+> of `n`. H2 was intended to be complementary: bounding the **cold task-switch**
+> cost — the IPC structured clone and initial render of a very large history —
+> by never materializing the whole array in the webview.
 
 ## Problem
 
