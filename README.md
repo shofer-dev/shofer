@@ -1,8 +1,33 @@
 # Shofer
 
-> Shofer (derived from Roo-Code) is an open-source, complete replacement for GitHub Copilot — built for full control over your data, your models, and how your tools work.
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=Shoferdev.shofer"><img src="https://raster.shields.io/badge/VS_Code_Marketplace-007ACC?style=flat&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace" height="20"></a>
+  <a href="https://x.com/shofer"><img src="https://raster.shields.io/badge/@shofer-000000?style=flat&logo=x&logoColor=white" alt="X (Twitter)" height="20"></a>
+  <a href="https://discord.gg/x39UEEQ2"><img src="https://raster.shields.io/badge/Join%20Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Discord" height="20"></a>
+  <a href="https://reddit.com/r/Shofer_dev"><img src="https://raster.shields.io/badge/Join%20r%2FShofer__dev-D84315?style=flat&logo=reddit&logoColor=white" alt="Reddit" height="20"></a>
+</p>
 
----
+<p align="center">
+  <strong>Shofer is the open-source agentic coding platform.</strong><br>
+  Take full control of your data, your models, and how your tools work — with parallel tasks, custom modes, and deep codebase intelligence.
+</p>
+
+<p align="center">
+  <img width="100%" alt="Shofer running inside VS Code" src="src/media/walkthrough/images/WelcomeView.png">
+</p>
+
+<p align="center">
+  <a href="https://shofer.dev">Website</a> ·
+  <a href="https://shofer.dev/docs">Docs</a> ·
+  <a href="https://marketplace.visualstudio.com/items?itemName=Shoferdev.shofer">Install</a> ·
+  <a href="https://github.com/shofer-dev/shofer">GitHub</a> ·
+  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md">Roo-Code Migration</a> ·
+  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md">Copilot Migration</a>
+</p>
+
+<p align="center">
+  50+ tools. Custom modes. Parallel tasks. Semantic code search. Open source under <a href="https://github.com/shofer-dev/shofer/blob/master/LICENSE">Apache 2.0</a>.
+</p>
 
 ## Quick Start
 
