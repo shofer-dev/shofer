@@ -1,4 +1,11 @@
-- "Shofer said" twice
+- Improve README and video
+- Announce
+
+===
+
+- Unexpected API Response: The language model did not provide any assistant messages. This may indicate an issue with the API or the model's output.
+
+- "Shofer said" twice 0dedca490e6b0c1cca6dabe3eb5de0ff564e34ce
 
 - remove excessive logging
 
