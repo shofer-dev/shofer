@@ -1,6 +1,58 @@
 # Shofer Changelog
 
-## 0.26.19 — 2026-05-26 (Current)
+## 1.0.18 — 2026-05-30 (Current)
+
+### Features
+
+- **LLM provider response metadata**: The extension now parses `response_metadata` markers injected by `shofer-router`, surfacing token counts and per-request cost in a tooltip on the task header. The metadata icon uses `StandardTooltip` for consistent styling.
+- **Side-channel communication with shofer-router**: Documented and renamed side-channel commands from `shofer.llm.*` to `shofer.router.*` for clarity. The extension processes response metadata markers from the router's streaming output.
+
+### Bug Fixes
+
+- **Chat scroll stability**: Prevented `Virtuoso` snap-back when scrolling up with windowed message loading. Task header now pins to the last message, eliminating title flash on scroll-up.
+- **Provider settings propagation**: Provider settings changes now propagate to all active tasks, not just the currently focused one.
+- **Code-indexer segment deduplication**: Removed line numbers from `segmentHash` computation for position-independent deduplication. Previously, identical code moved to a different line would be treated as a new segment.
+- **RAG indexer settings routing**: Code-index settings now route through `SettingsView`'s unified Save flow, and auto-start on save works for providers without secrets.
+- **`attempt_completion` during streaming**: Fixed a bug where `attempt_completion` could be silently skipped during active streaming, causing tasks to hang.
+- **UI status badges**: Show idle/standby colour on status badges when a feature is disabled rather than a misleading active color.
+- **TS strict build fixes**: Added missing `RawUnboundModel` interface; guarded against non-iterable Unbound API responses.
+- **Publisher ID**: Fixed VS Code Marketplace publisher ID to `shoferdev` (no dash).
+
+### Changed
+
+- **Shofer Router removed from API provider list**: The Shofer Router is no longer exposed as a selectable API provider.
+- **Cloud upsell banners removed**: Removed cloud upsell banners and related webview infrastructure.
+- **Website**: Removed legacy Next.js marketing website (`web-shofer`); brand references updated from `@shofer.dev` emails to `alsterg@gmail.com`.
+- **Telemetry i18n**: Removed telemetry-related internationalization keys from settings footer.
+- **Docs cleanup**: Removed Roo-Code docs links; renamed Documentation → Developer docs.
+
+---
+
+## 1.0.1 — 2026-05-28
+
+### Features
+
+- **Static landing page**: Added an Astro + Tailwind CSS static landing page at `website/` with hero section, branding content, favicon, and VS Code Marketplace metadata.
+- **New Shofer logo**: New SVG logo with adjusted viewport offset and 128×128 icon for marketplace.
+- **Code-indexer "Disabled" state**: Added a first-class `Disabled` state to the code-index state machine, with distinct UI colour and no background polling.
+- **Incremental webview message consolidation**: Switched from full-list rebuilds to incremental delta appends when pushing messages to the webview, fixing an O(n²) slowdown on long tasks.
+- **New LLM provider registration guide**: Added a 34-step checklist document (`new-llm-provider.md`) for adding new API providers.
+
+### Bug Fixes
+
+- **Shofer provider removal**: Removed all traces of the former Shofer API provider from type unions, schemas, components, provider pickers, model ID maps, and tests.
+- **Settings handler fix**: Removed an immediate `postMessage` bypass in settings handlers that could cause stale state in the webview.
+- **Duplicate user-message diagnostic**: Added diagnostic logging to detect duplicate user-message appends.
+
+### Documentation
+
+- Updated tagline to position Shofer as a GitHub Copilot replacement.
+- Added LSP-powered symbol refactoring section to Roo Code comparison doc.
+- Reformatted Copilot comparison bullet points into tables.
+- Highlighted incremental indexing speed with mtime + segment hash in RAG docs.
+- Cleaned up project documentation and policies.
+
+## 0.26.19 — 2026-05-26
 
 ### Features
 
