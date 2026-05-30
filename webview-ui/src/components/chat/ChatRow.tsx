@@ -315,12 +315,18 @@ export const ChatRowContent = ({
 		if (message.text !== null && message.text !== undefined && message.say === "api_req_started") {
 			const info = safeJsonParse<ShoferApiReqInfo>(message.text)
 			const metadata =
-				info?.actualModel || info?.ttfbMs !== undefined || info?.attempts !== undefined
+				info?.actualModel ||
+				info?.ttfbMs !== undefined ||
+				info?.attempts !== undefined ||
+				info?.promptTokens !== undefined
 					? {
 							actualModel: info.actualModel,
 							ttfbMs: info.ttfbMs,
 							ttlbMs: info.ttlbMs,
 							attempts: info.attempts,
+							promptTokens: info.promptTokens,
+							completionTokens: info.completionTokens,
+							costUsd: info.costUsd,
 							responseError: info.responseError,
 						}
 					: undefined
@@ -1422,11 +1428,20 @@ export const ChatRowContent = ({
 						apiReqCancelReason === undefined && apiRequestFailedMessage === undefined && cost === undefined
 
 					// Build a concise tooltip from the metadata fields.
+					const fmtTokens = (n?: number) => (n !== undefined ? `${(n / 1000).toFixed(1)}k` : "")
+					const fmtCost = (c?: number) => (c !== undefined ? `$${c.toFixed(4)}` : "")
 					const metadataTooltip = hasMetadata
 						? [
 								apiReqMetadata.actualModel ? `model: ${apiReqMetadata.actualModel}` : "",
 								apiReqMetadata.ttfbMs !== undefined ? `${apiReqMetadata.ttfbMs}ms →` : "",
 								apiReqMetadata.ttlbMs !== undefined ? `${apiReqMetadata.ttlbMs}ms total` : "",
+								fmtTokens(apiReqMetadata.promptTokens)
+									? `${fmtTokens(apiReqMetadata.promptTokens)} in`
+									: "",
+								fmtTokens(apiReqMetadata.completionTokens)
+									? `${fmtTokens(apiReqMetadata.completionTokens)} out`
+									: "",
+								fmtCost(apiReqMetadata.costUsd),
 								apiReqMetadata.attempts !== undefined && apiReqMetadata.attempts > 1
 									? `(${apiReqMetadata.attempts} attempts)`
 									: "",
