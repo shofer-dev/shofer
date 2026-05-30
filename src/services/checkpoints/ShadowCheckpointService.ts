@@ -85,8 +85,6 @@ function createSanitizedGit(baseDir: string): SimpleGit {
 	// This replaces the inherited environment with our sanitized version
 	git.env(sanitizedEnv)
 
-	outputLog(`[createSanitizedGit] Created git instance for baseDir: ${baseDir}`)
-
 	return git
 }
 
@@ -178,7 +176,6 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		await fs.mkdir(this.checkpointsDir, { recursive: true })
 		const git = createSanitizedGit(this.checkpointsDir)
 		const gitVersion = await git.version()
-		this.log(`[${this.constructor.name}#create] git = ${gitVersion}`)
 
 		let created = false
 		const startTime = Date.now()
@@ -190,7 +187,6 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		const worktreeTarget = this.scopedWorktreeDir ?? this.workspaceDir
 
 		if (await fileExistsAtPath(this.dotGitDir)) {
-			this.log(`[${this.constructor.name}#initShadowGit] shadow git repo already exists at ${this.dotGitDir}`)
 			const worktree = await this.getShadowGitConfigWorktree(git)
 
 			if (!worktree) {

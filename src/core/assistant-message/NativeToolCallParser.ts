@@ -1025,8 +1025,9 @@ export class NativeToolCallParser {
 					!customToolRegistry.has(resolvedName) &&
 					!isPrivateLmTool(resolvedName)
 				) {
-					outputWarn(`Unknown parameter '${key}' for tool '${resolvedName}'`)
-					outputWarn(`Valid param names:`, toolParamNames)
+					outputWarn(
+						`Unknown parameter '${key}' for tool '${resolvedName}' (check the tool schema for valid params)`,
+					)
 					continue
 				}
 

@@ -50,8 +50,6 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 		}
 	}
 
-	outputLog("[Task#getCheckpointService] initializing checkpoints service")
-
 	try {
 		const workspaceDir = task.workspacePath || getWorkspacePath()
 		const taskCwd = task.cwd
@@ -167,7 +165,6 @@ async function checkGitInstallation(
 
 		// Git is installed, proceed with initialization
 		service.on("initialize", () => {
-			log("[Task#getCheckpointService] service initialized")
 			task.checkpointServiceInitializing = false
 		})
 
@@ -201,8 +198,6 @@ async function checkGitInstallation(
 				task.enableCheckpoints = false
 			}
 		})
-
-		log("[Task#getCheckpointService] initializing shadow git")
 
 		try {
 			await service.initShadowGit()
