@@ -2,11 +2,7 @@
 
 > **Status:** ❌ Reverted (2026-05-30)
 >
-> This implementation was reverted because it introduced unacceptable complexity
-> for the IPC protocol, webview state management, scroll anchoring, and token-
-> totals plumbing. The incremental message consolidation (H10) already bounds
-> the per-chunk recompute cost; H2's cold-switch IPC savings did not justify
-> the ongoing maintenance burden.
+> This implementation was reverted due to issues, but worth revisiting later.
 >
 > **Implementation commits (reverted):**
 >
