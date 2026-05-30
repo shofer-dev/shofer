@@ -57,11 +57,6 @@ export interface ChatViewRef {
 
 export const MAX_IMAGES_PER_MESSAGE = 20 // This is the Anthropic limit.
 
-/** H2: Default window size for message loading — must match DEFAULT_WINDOW_LIMIT in task-persistence. */
-const H2_WINDOW_LIMIT = 100
-/** H2: Base for Virtuoso's firstItemIndex prepend pattern (large positive, decremented). */
-const H2_PREPEND_BASE = 1_000_000
-
 const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
 
 const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewProps> = (
@@ -93,22 +88,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		taskNotifications,
 		pendingWorktreeDir,
 		setPendingWorktreeDir,
-		hasMoreMessages,
-		oldestLoadedTs,
-		lastPrependedCount,
-		tokenUsage,
 	} = useExtensionState()
-
-	// H2: Guard against duplicate in-flight page requests.
-	const loadingOlderRef = useRef(false)
-
-	// H2: Scroll anchor tracking for prepend-on-load.
-	// When older messages are prepended to the array, Virtuoso's `firstItemIndex`
-	// decrement pattern preserves scroll position. We track the cumulative count
-	// of prepended older messages and subtract it from a large positive base
-	// (`H2_PREPEND_BASE - prependedCount`) per Virtuoso's documented prepend API.
-	const prependCountRef = useRef(0)
-	const [prependedCount, setPrependedCount] = useState(0)
 
 	// Show a WarningRow when the user sends a message with a retired provider.
 	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
@@ -128,11 +108,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// Leaving this less safe version here since if the first message is not a
 	// task, then the extension is in a bad state and needs to be debugged (see
 	// Shofer.abort).
-	// H2: When older messages are prepended, `messages` changes → this re‑computes
-	// momentarily with the older task-header value, flashing the TaskHeader title.
-	// Pin the task to the LAST element so the title is always derived from the
-	// most-recent message regardless of prepends.
-	const task = useMemo(() => messages.at(-1), [messages])
+	const task = useMemo(() => messages.at(0), [messages])
 
 	const latestTodos = useMemo(() => {
 		// First check if we have initial todos from the state (for new subtasks)
@@ -166,24 +142,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [messages])
 
 	const modifiedMessages = processedMessages.modifiedMessages
-	// H2: Override incremental-processor token totals with the host's
-	// authoritative values computed from the FULL array. The incremental
-	// processor only sees the windowed slice; the host (which holds
-	// all messages) provides the correct totals.
-	const apiMetrics = useMemo(() => {
-		const base = processedMessages.apiMetrics
-		if (tokenUsage) {
-			return {
-				...base,
-				totalTokensIn: tokenUsage.totalTokensIn,
-				totalTokensOut: tokenUsage.totalTokensOut,
-				totalCacheWrites: tokenUsage.totalCacheWrites,
-				totalCacheReads: tokenUsage.totalCacheReads,
-				totalCost: tokenUsage.totalCost,
-			}
-		}
-		return base
-	}, [processedMessages.apiMetrics, tokenUsage])
+	const apiMetrics = processedMessages.apiMetrics
 
 	const [inputValue, setInputValue] = useState("")
 	const inputValueRef = useRef(inputValue)
@@ -643,36 +602,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 		userRespondedRef.current = false
 	}, [task?.ts])
-
-	// H2: Reset prependedCount and loading flag on task switch.
-	useEffect(() => {
-		prependCountRef.current = 0
-		setPrependedCount(0)
-		loadingOlderRef.current = false
-	}, [task?.ts])
-
-	// H2: Track prepended older-message count for firstItemIndex.
-	// Instead of inferring from message-length delta (racy with streaming),
-	// we detect the prepend by watching oldestLoadedTs: when it decreases,
-	// the reducer has just prepended a new page. We advance the anchor by the
-	// EXACT number of messages the reducer prepended (`lastPrependedCount`,
-	// after de-duplication) rather than the nominal window size, so the anchor
-	// stays correct on partial final pages and fully-deduped races.
-	const prevOldestLoadedTsRef = useRef<number | undefined>(oldestLoadedTs)
-	useEffect(() => {
-		const prev = prevOldestLoadedTsRef.current
-		const next = oldestLoadedTs
-		if (prev !== undefined && next !== undefined && next < prev) {
-			// oldestLoadedTs decreased → older page was loaded.
-			prependCountRef.current += lastPrependedCount ?? 0
-			setPrependedCount(prependCountRef.current)
-		}
-		if (next !== prev) {
-			// Regardless, release the loading guard.
-			loadingOlderRef.current = false
-		}
-		prevOldestLoadedTsRef.current = next
-	}, [oldestLoadedTs, lastPrependedCount])
 
 	// Request aggregated costs when task changes and has childIds
 	useEffect(() => {
@@ -2086,37 +2015,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							increaseViewportBy={{ top: 3_000, bottom: 1000 }}
 							data={groupedMessages}
 							initialTopMostItemIndex={groupedMessages.length}
-							firstItemIndex={prependedCount > 0 ? H2_PREPEND_BASE - prependedCount : undefined}
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
 							atBottomThreshold={1}
-							startReached={() => {
-								// H2: Load older messages when the user scrolls to the top
-								// and more messages exist on the host.
-								if (loadingOlderRef.current || !hasMoreMessages) return
-								const beforeTs = oldestLoadedTs ?? messages[0]?.ts
-								if (!beforeTs) return
-								loadingOlderRef.current = true
-								vscode.postMessage({
-									type: "loadOlderMessages",
-									beforeTs,
-									limit: H2_WINDOW_LIMIT,
-								})
-							}}
-							components={{
-								Header: hasMoreMessages
-									? () => (
-											<div className="flex items-center justify-center py-3">
-												<span className="text-xs text-vscode-descriptionForeground cursor-pointer hover:text-vscode-foreground transition-colors">
-													{loadingOlderRef.current
-														? "Loading older messages…"
-														: "Load older messages…"}
-												</span>
-											</div>
-										)
-									: undefined,
-							}}
 						/>
 						<SessionSearch
 							messages={messages}

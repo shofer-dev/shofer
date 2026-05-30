@@ -120,6 +120,3 @@ export async function saveTaskMessages({
 	const content = serialized ?? serializeJsonLines(messages)
 	await writeJsonLines(filePath, content)
 }
-
-/** Default window size for the initial webview push (H2). */
-export const DEFAULT_WINDOW_LIMIT = 100
