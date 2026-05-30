@@ -217,7 +217,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				const pricing = await vscode.commands.executeCommand<
 					| { inputPrice: number; outputPrice: number; cacheReadsPrice?: number; cacheWritesPrice?: number }
 					| undefined
-				>("shofer.llm.getModelPricing", candidate)
+				>("shofer.router.getModelPricing", candidate)
 				if (pricing && (pricing.inputPrice > 0 || pricing.outputPrice > 0)) {
 					this.shoferPricing = pricing
 					return
@@ -252,7 +252,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			try {
 				const caps = await vscode.commands.executeCommand<
 					{ imageInput: boolean; toolCalling: boolean; promptCache: boolean } | undefined
-				>("shofer.llm.getModelCapabilities", candidate)
+				>("shofer.router.getModelCapabilities", candidate)
 				if (caps) {
 					this.shoferCapabilities = caps
 					return
@@ -290,7 +290,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		if (!this.conversationId) return undefined
 		try {
 			const cost = await vscode.commands.executeCommand<number | undefined>(
-				"shofer.llm.getRequestCost",
+				"shofer.router.getRequestCost",
 				this.conversationId,
 			)
 			if (typeof cost === "number" && Number.isFinite(cost) && cost >= 0) {
@@ -1060,7 +1060,7 @@ async function enrichVsCodeLmModel(model: vscode.LanguageModelChat): Promise<VsC
 		if (!shoferCapabilities) {
 			try {
 				shoferCapabilities = await vscode.commands.executeCommand<shoferLmCapabilities | undefined>(
-					"shofer.llm.getModelCapabilities",
+					"shofer.router.getModelCapabilities",
 					candidate,
 				)
 			} catch {
@@ -1070,7 +1070,7 @@ async function enrichVsCodeLmModel(model: vscode.LanguageModelChat): Promise<VsC
 		if (!shoferPricing) {
 			try {
 				shoferPricing = await vscode.commands.executeCommand<shoferLmPricing | undefined>(
-					"shofer.llm.getModelPricing",
+					"shofer.router.getModelPricing",
 					candidate,
 				)
 			} catch {

@@ -19,7 +19,7 @@ primary mechanism for out-of-band metadata exchange.
 
 **Shofer usage** (in [`vscode-lm.ts`](src/api/providers/vscode-lm.ts)):
 
-- Called at line 220: `vscode.commands.executeCommand("shofer.llm.getModelPricing", candidate)`
+- Called at line 220: `vscode.commands.executeCommand("shofer.router.getModelPricing", candidate)`
 - Populates `VsCodeLmHandler.shoferPricing` field
 - Cached per-session; warned once if command missing
 
@@ -32,7 +32,7 @@ primary mechanism for out-of-band metadata exchange.
 
 **Shofer usage** (in [`vscode-lm.ts`](src/api/providers/vscode-lm.ts)):
 
-- Called at line 255: `vscode.commands.executeCommand("shofer.llm.getModelCapabilities", candidate)`
+- Called at line 255: `vscode.commands.executeCommand("shofer.router.getModelCapabilities", candidate)`
 - Populates `VsCodeLmHandler.shoferCapabilities` field
 
 ### `shofer.router.getRequestCost`
@@ -44,7 +44,7 @@ primary mechanism for out-of-band metadata exchange.
 
 **Shofer usage** (in [`vscode-lm.ts`](src/api/providers/vscode-lm.ts)):
 
-- Called at line 293: `vscode.commands.executeCommand("shofer.llm.getRequestCost", this.conversationId)`
+- Called at line 293: `vscode.commands.executeCommand("shofer.router.getRequestCost", this.conversationId)`
 - Called once at conversation/task completion
 
 **Shofer Router source**: Commands registered in [`main.ts`](../../../extensions/shofer-router/src/main.ts) around line 635.
