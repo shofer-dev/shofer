@@ -1,6 +1,6 @@
 # Shofer Landing Website
 
-Static landing page for [Shofer](https://shofer.dev) — a state-of-the-art open-source AI coding assistant that runs as a VS Code extension. The site is a single-page marketing website designed to drive users to documentation, GitHub, and the extension itself.
+Static landing page for [Shofer](https://shofer.dev) — an open-source, complete replacement for GitHub Copilot that runs as a VS Code extension. The site is a single-page marketing website designed to drive users to documentation, GitHub, and the extension itself.
 
 ## Tech Stack
 

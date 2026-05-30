@@ -1,8 +1,8 @@
 export const siteConfig = {
 	name: "Shofer",
-	tagline: "State-of-the-art open-source AI coding assistant",
+	tagline: "Open-source, complete replacement for GitHub Copilot",
 	description:
-		"Shofer is a locally-run, state-of-the-art, fully configurable AI coding agent that operates as a VS Code extension — running entirely on your machine, under your control.",
+		"Shofer is an open-source, complete replacement for GitHub Copilot — a fully configurable AI coding agent that runs as a VS Code extension, entirely on your machine, under your control.",
 	url: "https://shofer.dev",
 	ogImage: "/og-image.png",
 	links: {

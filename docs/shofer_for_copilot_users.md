@@ -2,7 +2,7 @@
 
 If you are using GitHub Copilot and wondering what Shofer brings to the table, this breakdown outlines the core architectural and functional differences between the two environments.
 
-Shofer is a **locally-run, state-of-the-art, fully configurable AI coding agent** that operates as a VS Code extension — running entirely on your machine, under your own control. It offers an alternative paradigm to traditional assistants by exposing granular pipeline customizability and offline autonomy without sending your workspace context to third-party infrastructure.
+Shofer is an **open-source, complete replacement for GitHub Copilot** — a fully configurable AI coding agent that operates as a VS Code extension, running entirely on your machine, under your own control. It offers an alternative paradigm to traditional assistants by exposing granular pipeline customizability and offline autonomy without sending your workspace context to third-party infrastructure.
 
 > **Current as of May 27, 2026**: The AI tools landscape shifts rapidly. This guide reflects the native feature sets, capabilities, and ecosystems of both tools as of today.
 
