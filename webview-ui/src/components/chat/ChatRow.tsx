@@ -311,13 +311,23 @@ export const ChatRowContent = ({
 		vscode.postMessage({ type: "selectImages", context: "edit", messageTs: message.ts })
 	}, [message.ts])
 
-	const [cost, apiReqCancelReason, apiReqStreamingFailedMessage] = useMemo(() => {
+	const [cost, apiReqCancelReason, apiReqStreamingFailedMessage, apiReqMetadata] = useMemo(() => {
 		if (message.text !== null && message.text !== undefined && message.say === "api_req_started") {
 			const info = safeJsonParse<ShoferApiReqInfo>(message.text)
-			return [info?.cost, info?.cancelReason, info?.streamingFailedMessage]
+			const metadata =
+				info?.actualModel || info?.ttfbMs !== undefined || info?.attempts !== undefined
+					? {
+							actualModel: info.actualModel,
+							ttfbMs: info.ttfbMs,
+							ttlbMs: info.ttlbMs,
+							attempts: info.attempts,
+							responseError: info.responseError,
+						}
+					: undefined
+			return [info?.cost, info?.cancelReason, info?.streamingFailedMessage, metadata]
 		}
 
-		return [undefined, undefined, undefined]
+		return [undefined, undefined, undefined, undefined]
 	}, [message.text, message.say])
 
 	// When resuming task, last won't be api_req_failed but a resume_task
@@ -1392,10 +1402,14 @@ export const ChatRowContent = ({
 						</div>
 					)
 				}
-				case "api_req_started":
-					// On success (cost present, no cancel reason), hide the row entirely
-					// to avoid cluttering the chat — same as tool_preparing dismissal.
+				case "api_req_started": {
+					// On success (cost present, no cancel reason), hide the row
+					// entirely UNLESS response metadata is available — in that
+					// case show a dim, minimal info-icon row so the user can
+					// inspect per-request diagnostics without clutter.
+					const hasMetadata = apiReqMetadata !== undefined
 					if (
+						!hasMetadata &&
 						cost !== null &&
 						cost !== undefined &&
 						(apiReqCancelReason === null || apiReqCancelReason === undefined)
@@ -1407,12 +1421,31 @@ export const ChatRowContent = ({
 					const isApiRequestInProgress =
 						apiReqCancelReason === undefined && apiRequestFailedMessage === undefined && cost === undefined
 
+					// Build a concise tooltip from the metadata fields.
+					const metadataTooltip = hasMetadata
+						? [
+								apiReqMetadata.actualModel ? `model: ${apiReqMetadata.actualModel}` : "",
+								apiReqMetadata.ttfbMs !== undefined ? `${apiReqMetadata.ttfbMs}ms →` : "",
+								apiReqMetadata.ttlbMs !== undefined ? `${apiReqMetadata.ttlbMs}ms total` : "",
+								apiReqMetadata.attempts !== undefined && apiReqMetadata.attempts > 1
+									? `(${apiReqMetadata.attempts} attempts)`
+									: "",
+								apiReqMetadata.responseError ? `⚠ ${apiReqMetadata.responseError}` : "",
+							]
+								.filter(Boolean)
+								.join(" · ")
+						: undefined
+
+					const opacityClass = isApiRequestInProgress
+						? "opacity-100"
+						: hasMetadata && cost !== null && cost !== undefined
+							? "opacity-30 hover:opacity-100"
+							: "opacity-40 hover:opacity-100"
+
 					return (
 						<>
 							<div
-								className={`group text-sm transition-opacity ${
-									isApiRequestInProgress ? "opacity-100" : "opacity-40 hover:opacity-100"
-								}`}
+								className={`group text-sm transition-opacity ${opacityClass}`}
 								style={{
 									...headerStyle,
 									marginBottom:
@@ -1422,9 +1455,21 @@ export const ChatRowContent = ({
 											: 0,
 									justifyContent: "space-between",
 								}}>
-								<div style={{ display: "flex", alignItems: "center", gap: "10px", flexGrow: 1 }}>
+								<div style={{ display: "flex", alignItems: "center", gap: "6px", flexGrow: 1 }}>
 									{icon}
 									{title}
+									{hasMetadata && (
+										<span
+											className="codicon codicon-info"
+											title={metadataTooltip}
+											style={{
+												fontSize: 13,
+												color: "var(--vscode-descriptionForeground)",
+												cursor: "help",
+												flexShrink: 0,
+											}}
+										/>
+									)}
 								</div>
 								<div
 									className="text-xs text-vscode-dropdown-foreground border-vscode-dropdown-border/50 border px-1.5 py-0.5 rounded-lg"
@@ -1447,6 +1492,7 @@ export const ChatRowContent = ({
 							)}
 						</>
 					)
+				}
 				case "api_req_retry_delayed":
 					let body = t(`chat:apiRequest.failed`)
 					let retryInfo, rawError, code, docsURL

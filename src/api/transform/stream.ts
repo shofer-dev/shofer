@@ -12,6 +12,7 @@ export type ApiStreamChunk =
 	| ApiStreamToolCallEndChunk
 	| ApiStreamToolCallPartialChunk
 	| ApiStreamToolPreparingChunk
+	| ApiStreamResponseMetadataChunk
 	| ApiStreamError
 
 export interface ApiStreamError {
@@ -118,6 +119,33 @@ export interface ApiStreamToolPreparingChunk {
 	type: "tool_preparing"
 	toolName: string
 	byteCount: number
+}
+
+/** Response metadata from the Shofer LLM provider (shofer-router).
+ *  Emitted once at stream end via the \\x00response_metadata\\x00 marker.
+ *  Carries per-request diagnostics: actual model served, latency, token
+ *  counts, cost, and failover info. */
+export interface ApiStreamResponseMetadataChunk {
+	type: "response_metadata"
+	/** The composite model ID requested by Shofer. */
+	model?: string
+	/** The underlying model that actually served the request (may differ
+	 *  from model when failover / multi-provider routing is active). */
+	actualModel?: string
+	/** Time to first byte in milliseconds. */
+	ttfbMs?: number
+	/** Total time in milliseconds. */
+	ttlbMs?: number
+	/** Prompt tokens consumed (may be 0 for error responses). */
+	promptTokens?: number
+	/** Completion tokens generated (may be 0 for error responses). */
+	completionTokens?: number
+	/** USD cost for this request (approximate, pre-discount). */
+	costUsd?: number
+	/** Number of provider attempts (1 = first try succeeded). */
+	attempts?: number
+	/** Error message when the request failed. Undefined on success. */
+	error?: string
 }
 
 export interface GroundingSource {
