@@ -3987,8 +3987,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					`[Task] mention-loaded skills set on task. loadedSkills now:`,
 					Array.from(this.loadedSkills.entries()),
 				)
-			} else {
-				outputLog(`[Task] mentionLoadedSkills was undefined/empty — no skills from mention flow`)
 			}
 
 			// Switch mode if specified in a slash command's frontmatter

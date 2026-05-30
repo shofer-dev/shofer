@@ -183,7 +183,6 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			}
 			// Create a new client instance
 			this.client = await this.createClient(this.options.vsCodeLmModelSelector || {})
-			outputLog("Shofer <Language Model API>: Client initialized successfully")
 			// Best-effort prefetch of pricing and capabilities for the selected
 			// model. Failures are non-fatal: non-shofer setups simply leave
 			// these unset (consumers fall back to conservative defaults).
@@ -702,13 +701,6 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 								`[WARN] Shofer <Language Model API>: Invalid tool input received: ${chunk.input}`,
 							)
 						}
-
-						// Log tool call for debugging
-						outputLog("Shofer <Language Model API>: Processing tool call:", {
-							name: chunk.name,
-							callId: chunk.callId,
-							inputSize: JSON.stringify(chunk.input).length,
-						})
 
 						// Yield native tool_call chunk when tools are provided
 						if (metadata?.tools?.length) {
