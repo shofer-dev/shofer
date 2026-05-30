@@ -11,7 +11,7 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
 
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage, TokenUsage } from "@shofer/types"
 import { combineApiRequests } from "@shofer/shared/combineApiRequests"
 import { combineCommandSequences } from "@shofer/shared/combineCommandSequences"
 import { getApiMetrics } from "@shofer/shared/getApiMetrics"
