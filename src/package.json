@@ -548,7 +548,7 @@
 					{
 						"id": "welcome",
 						"title": "Welcome to Shofer",
-						"description": "Shofer is a state-of-the-art open-source AI coding assistant that helps you write, refactor, and debug code.\n\nLet's get you set up!",
+						"description": "Shofer is an open-source, complete replacement for GitHub Copilot that helps you write, refactor, and debug code.\n\nLet's get you set up!",
 						"media": {
 							"markdown": "media/walkthrough/welcome.md"
 						}

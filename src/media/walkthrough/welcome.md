@@ -2,7 +2,7 @@
 
 # Welcome to Shofer
 
-Shofer (simplified from the french "chauffeur") is a **state-of-the-art open-source AI coding assistant** that runs inside VS Code. It can generate, refactor, and debug code across your entire codebase — powered by the AI models of your choice.
+Shofer is an open-source, complete replacement for GitHub Copilot that runs inside VS Code. It can generate, refactor, and debug code across your entire codebase — powered by the AI models of your choice.
 
 ## What You'll Learn
 

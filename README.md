@@ -1,6 +1,6 @@
 # Shofer
 
-> Shofer (from the French _chauffeur_ — driver) is a state-of-the-art open-source AI coding assistant, derived from Roo-Code.
+> Shofer (derived from Roo-Code) is an open-source, complete replacement for GitHub Copilot — built for full control over your data, your models, and how your tools work.
 
 ---
 

@@ -137,7 +137,7 @@
 		"placeholder": "Edit your message..."
 	},
 	"scrollToBottom": "Scroll to bottom of chat",
-	"about": "State-of-the-art open-source AI coding.",
+	"about": "Open-source, complete replacement for GitHub Copilot.",
 	"docs": {
 		"readme": "README — official docs",
 		"copilot": "Coming from Copilot?"
