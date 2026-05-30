@@ -108,14 +108,12 @@ export const toolParamNames = [
 	"destination",
 	// give_feedback parameter
 	"feedback",
-	// sed tool parameters
-	"pattern",
+	// sed tool parameters (pattern already listed above for find_files)
 	"replacement",
 	"global",
 	"maxResults", // result cap for grep_search / git_search / rag_search (see helpers/searchCap.ts)
-	// attempt_completion rating + feedback
+	// attempt_completion rating (feedback already listed above for give_feedback)
 	"rating",
-	"feedback",
 	// grep_search parameters
 	"fileTypes",
 	"excludePattern",
@@ -124,6 +122,33 @@ export const toolParamNames = [
 	"wholeWord",
 	"contextBefore",
 	"contextAfter",
+	// insert_edit, rename_symbol parameters
+	"column",
+	"newName",
+	// fetch_web_page parameter
+	"urls",
+	// call_mcp_tool_async parameters
+	"call_id",
+	"call_ids",
+	"source",
+	// check_task_status parameter
+	"include_activity",
+	// ask_assistant_agent parameters
+	"contextFiles",
+	"timeoutMs",
+	"softTimeoutSec",
+	"softResultLength",
+	// create_new_workspace parameters
+	"name",
+	"folders",
+	"openInNewWindow",
+	// read_project_structure parameters
+	"maxDepth",
+	"includeHidden",
+	// get_errors parameter
+	"filePaths",
+	// answer_subtask_question parameter
+	"answer",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
