@@ -2,7 +2,6 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=Shoferdev.shofer"><img src="https://raster.shields.io/badge/VS_Code_Marketplace-007ACC?style=flat&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace" height="20"></a>
-  <a href="https://x.com/shofer"><img src="https://raster.shields.io/badge/@shofer-000000?style=flat&logo=x&logoColor=white" alt="X (Twitter)" height="20"></a>
   <a href="https://discord.gg/x39UEEQ2"><img src="https://raster.shields.io/badge/Join%20Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Discord" height="20"></a>
   <a href="https://reddit.com/r/Shofer_dev"><img src="https://raster.shields.io/badge/Join%20r%2FShofer__dev-D84315?style=flat&logo=reddit&logoColor=white" alt="Reddit" height="20"></a>
 </p>
