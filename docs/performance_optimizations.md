@@ -76,8 +76,8 @@
 >
 > **Conclusion on H5.\* (parse path):** on Node 22 with realistic
 > `ui_messages.json` / `api_conversation_history.json` sizes, neither a
-> native NAPI parser (H5.b) nor a worker_threads off-load (H5.c) beats
-> V8's `JSON.parse`. Future work in this area should target the _save_
+> native NAPI parser (H5.b) nor a worker*threads off-load (H5.c) beats
+> V8's `JSON.parse`. Future work in this area should target the \_save*
 > path (H5.c-bis: stringify-in-worker under H6) or message volume itself
 > (H2 windowed loading), not the parse step.
 >
@@ -91,6 +91,15 @@
 > state push.
 >
 > **H2 (windowed message loading), H5.c (worker_threads), H7** remain open.
+>
+> **H10 landed 2026-05-30:** Webview-side message consolidation
+> (`combineApiRequests(combineCommandSequences(…))` + `getApiMetrics`) is now
+> incremental. A new
+> [`incrementalMessageProcessing.ts`](extensions/shofer/webview-ui/src/components/chat/incrementalMessageProcessing.ts)
+> module caches the consolidated prefix at a provably-safe split boundary and
+> re-consolidates only the changed tail per streamed chunk, eliminating the
+> O(n²) per-task webview slowdown. See the H10 section below for the safe-split
+> reach analysis and the open-group orphan bug fixed during implementation.
 >
 > ### Status Table
 >
@@ -110,6 +119,7 @@
 > | **H2**       | Windowed message loading                                    | Load last K messages with Virtuoso scroll-to-load sentinel                                                                                                                                                                                                                                      | 🔴 High    | ❌ Open                  | —              |
 > | **H7**       | Paginate history index                                      | Split `_index.json` into pages at 1,000+ tasks                                                                                                                                                                                                                                                  | 🟢 Low     | ❌ Open                  | —              |
 > | **H9**       | Gate state pushes for background tasks                      | Add `isFocusedTask()` check to `addToShoferMessages` + stream start/end state pushes                                                                                                                                                                                                            | 🟢 Low     | ❌ Open                  | —              |
+> | **H10**      | Incremental webview message consolidation                   | Cache consolidated prefix at a safe split boundary; re-consolidate only the changed tail per streamed chunk — removes the webview-side O(n²) per-task slowdown                                                                                                                                  | 🟢 Low–Med | ✅ Done                  | 2026-05-30     |
 
 ## Root Causes Identified
 
@@ -556,6 +566,89 @@ optimizations could include:
 
 - Longer debounce interval for background tasks (1–2 s) vs focused (250 ms)
 - `fsync`-less writes for background tasks (accept crash-loss window)
+
+---
+
+## 🟢 H10: Incremental Webview Message Consolidation
+
+**Status:** ✅ Done (2026-05-30).
+
+**Target files:**
+
+- [`incrementalMessageProcessing.ts`](extensions/shofer/webview-ui/src/components/chat/incrementalMessageProcessing.ts) — new module
+- [`incrementalMessageProcessing.spec.ts`](extensions/shofer/webview-ui/src/components/chat/__tests__/incrementalMessageProcessing.spec.ts) — randomized equivalence tests
+- [`ChatView.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatView.tsx) — `modifiedMessages` / `apiMetrics` memos (consumer)
+
+### Problem
+
+H0/H4/H2.bis removed the steady-state cost on the **host** side. The residual
+"a single long task gets progressively slower" symptom is **webview** CPU. On
+every streamed chunk `ChatView` re-derives:
+
+```ts
+const modifiedMessages = combineApiRequests(combineCommandSequences(messages.slice(1)))
+const apiMetrics = getApiMetrics(modifiedMessages)
+```
+
+Both walk the **entire** message array. Across a turn of `m` chunks on a task of
+`n` messages this is O(n) per chunk × `m` chunks = **O(n²)** per task, and the
+dominant constant is repeated `JSON.parse` of every `api_req_started.text` inside
+`combineApiRequests` + `getApiMetrics`. The list itself is already virtualized
+(Virtuoso), so rendering is _not_ the bottleneck — the derived-state passes are.
+
+### Design
+
+Cache the consolidated output of a reference-stable **prefix** at a provably-safe
+split boundary `B`, and re-consolidate only the bounded **tail** `[B, n)` on each
+chunk → O(tail) per chunk, byte-identical output to the full pass.
+
+A split at `B` is safe iff `consolidate(msgs) === consolidate(msgs[0:B]) ++
+consolidate(msgs[B:])`. This holds iff no consolidation _head_ before `B` absorbs
+or resolves anything at index `≥ B`. `computeReach` assigns each head its last
+affected index (`reach[i]`):
+
+- `command` / `use_mcp_server` asks → last `command_output` / `mcp_server_response`
+  before the next same-kind ask.
+- `api_req_started` → matching `api_req_finished` (LIFO).
+- **Open** (unclosed) heads → `OPEN_REACH = Infinity`.
+
+`findSafeSplitIndex` returns the largest `B` with `max(reach[0..B-1]) < B`,
+seeded from the current cached `splitIndex` (or `0`). Reference-identity of the
+prefix (`a[i] === b[i]`) detects task switch / edit / delete / checkpoint restore
+and triggers a full recompute + re-establishment of `B`.
+
+### Open-group correctness bug (fixed during implementation)
+
+The first cut used `n` as the sentinel for open heads and advanced `B` _past_
+blockers. That collided with the legitimate `B = n` boundary: an **open** command
+(no following `command` ask — e.g. the last command in the array, which always
+stays open and keeps receiving `command_output`) got frozen into the prefix, and
+its later outputs landed in the suffix as **orphans** the suffix could not absorb
+→ dropped output. Two-part fix:
+
+1. Use a true `OPEN_REACH = Infinity` sentinel so an open head can never be
+   confused with `B = n`.
+2. Rewrite `findSafeSplitIndex` as a single O(n) forward pass that maintains
+   `runningMax = max(reach[0..B-1])` and **stops at the first open head**, leaving
+   it (and everything after) in the re-consolidated suffix. This also removed an
+   O(n²) inner-loop recompute and an empty-range `-Infinity` bug that had
+   permanently pinned `splitIndex` to `0` after any edit (silently disabling the
+   cache).
+
+### Verification
+
+Randomized equivalence tests (seeded mulberry32, structurally deterministic)
+stream message sequences chunk-by-chunk and assert the incremental output is
+byte-identical to the full-pass pipeline (modulo float-addition order for
+`totalCost`, folded via `foldMetrics`), including the open-group-across-boundary
+edge case. 18/18 passing, stable across repeated runs.
+
+### Relationship to H2
+
+H10 removes the quadratic **regardless of `n`** and is webview-only (Low–Med
+risk). H2 (windowed loading) is the complementary, higher-risk follow-up that
+additionally bounds the cold-load render of very large histories. Land H10 first;
+H2 only becomes worthwhile once the steady-state quadratic is gone.
 
 ---
 

@@ -15,9 +15,6 @@ import { isRetiredProvider } from "@shofer/types"
 
 import { findLast } from "@shofer/shared/array"
 import { SuggestionItem } from "@shofer/types"
-import { combineApiRequests } from "@shofer/shared/combineApiRequests"
-import { combineCommandSequences } from "@shofer/shared/combineCommandSequences"
-import { getApiMetrics } from "@shofer/shared/getApiMetrics"
 import { getAllModes } from "@shofer/shared/modes"
 import { ProfileValidator } from "@shofer/shared/ProfileValidator"
 import { getLatestTodo } from "@shofer/shared/todo"
@@ -46,6 +43,7 @@ import FileChangesPanel from "./FileChangesPanel"
 import SessionSearch from "./SessionSearch"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
+import { createIncrementalMessageProcessor } from "./incrementalMessageProcessing"
 
 export interface ChatViewProps {
 	isHidden: boolean
@@ -128,10 +126,23 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		return getLatestTodo(messages)
 	}, [messages, currentTaskTodos])
 
-	const modifiedMessages = useMemo(() => combineApiRequests(combineCommandSequences(messages.slice(1))), [messages])
+	// Incremental message processing — replaces the O(n²) full-array
+	// consolidateApiRequests(consolidateCommands(...)) + getApiMetrics()
+	// with O(tail) per chunk.
+	const processorRef = useRef(createIncrementalMessageProcessor())
 
-	// Has to be after api_req_finished are all reduced into api_req_started messages.
-	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
+	// Reset the processor on task switch.
+	const taskTs = task?.ts
+	useEffect(() => {
+		processorRef.current.reset()
+	}, [taskTs])
+
+	const processedMessages = useMemo(() => {
+		return processorRef.current.process(messages)
+	}, [messages])
+
+	const modifiedMessages = processedMessages.modifiedMessages
+	const apiMetrics = processedMessages.apiMetrics
 
 	const [inputValue, setInputValue] = useState("")
 	const inputValueRef = useRef(inputValue)
@@ -591,8 +602,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		}
 		userRespondedRef.current = false
 	}, [task?.ts])
-
-	const taskTs = task?.ts
 
 	// Request aggregated costs when task changes and has childIds
 	useEffect(() => {
