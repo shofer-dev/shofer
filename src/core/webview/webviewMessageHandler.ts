@@ -641,6 +641,15 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
+		// H2: Windowed message loading — webview requests older messages.
+		case "loadOlderMessages": {
+			const beforeTs = message.beforeTs
+			const limit = message.limit ?? 100
+			if (typeof beforeTs === "number" && beforeTs > 0) {
+				await provider.loadOlderMessages(beforeTs, limit)
+			}
+			break
+		}
 		case "webviewDidLaunch":
 			provider.log("[webview-lifecycle] webviewDidLaunch received — webview initialized or re-initialized")
 			// Now that the renderer's JS has executed and its message listener
