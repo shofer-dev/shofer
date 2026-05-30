@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://shofer.dev">Website</a> ·
-  <a href="https://shofer.dev/docs">Docs</a> ·
+  <a href="https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md">Docs</a> ·
   <a href="https://marketplace.visualstudio.com/items?itemName=Shoferdev.shofer">Install</a> ·
   <a href="https://github.com/shofer-dev/shofer">GitHub</a> ·
   <a href="https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md">Roo-Code Migration</a> ·
