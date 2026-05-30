@@ -286,7 +286,7 @@ export function isToolAllowedForMode(
 
 		// For the write group, check file regex if specified
 		if (groupName === "write" && options.fileRegex) {
-			const filePath = toolParams?.path || toolParams?.file_path
+			const filePath = toolParams?.path || toolParams?.filePath || toolParams?.file_path
 			// Check if this is an actual edit operation (not just path-only for streaming)
 			const isEditOperation = EDIT_OPERATION_PARAMS.some((param) => toolParams?.[param])
 

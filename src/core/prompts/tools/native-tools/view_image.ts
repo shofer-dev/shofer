@@ -3,10 +3,10 @@ import type OpenAI from "openai"
 const VIEW_IMAGE_DESCRIPTION = `Request to view an image file. This tool reads an image file and returns it for visual analysis. Supports common image formats (PNG, JPG, JPEG, GIF, BMP, SVG, WEBP).
 
 Parameters:
-- filePath: (required) Path to the image file, relative to the workspace
+- path: (required) Path to the image file (also accepts filePath as alias), relative to the workspace
 
 Example: View an image
-{ "filePath": "assets/screenshot.png" }`
+{ "path": "assets/screenshot.png" }`
 
 const FILE_PATH_PARAMETER_DESCRIPTION = `Path to the image file, relative to the workspace`
 
@@ -19,12 +19,16 @@ export default {
 		parameters: {
 			type: "object",
 			properties: {
-				filePath: {
+				path: {
 					type: "string",
 					description: FILE_PATH_PARAMETER_DESCRIPTION,
 				},
+				filePath: {
+					type: "string",
+					description: "Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION,
+				},
 			},
-			required: ["filePath"],
+			required: ["path"],
 			additionalProperties: false,
 		},
 	},

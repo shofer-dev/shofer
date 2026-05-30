@@ -431,9 +431,10 @@ export class NativeToolCallParser {
 					}
 				}
 				// New format: { path: "...", mode: "..." }
-				if (!nativeArgs && partialArgs.path !== undefined) {
+				// Accept filePath as alias for path (models sometimes hallucinate filePath for read_file)
+				if (!nativeArgs && (partialArgs.path !== undefined || partialArgs.filePath !== undefined)) {
 					nativeArgs = {
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 						mode: partialArgs.mode,
 						offset: this.coerceOptionalNumber(partialArgs.offset),
 						limit: this.coerceOptionalNumber(partialArgs.limit),
@@ -476,9 +477,9 @@ export class NativeToolCallParser {
 				break
 
 			case "write_to_file":
-				if (partialArgs.path || partialArgs.content) {
+				if (partialArgs.path || partialArgs.filePath || partialArgs.content) {
 					nativeArgs = {
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 						content: partialArgs.content,
 					}
 				}
@@ -504,9 +505,13 @@ export class NativeToolCallParser {
 				break
 
 			case "apply_diff":
-				if (partialArgs.path !== undefined || partialArgs.diff !== undefined) {
+				if (
+					partialArgs.path !== undefined ||
+					partialArgs.filePath !== undefined ||
+					partialArgs.diff !== undefined
+				) {
 					nativeArgs = {
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 						diff: partialArgs.diff,
 					}
 				}
@@ -718,9 +723,9 @@ export class NativeToolCallParser {
 				break
 
 			case "list_files":
-				if (partialArgs.path !== undefined) {
+				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 						recursive: this.coerceOptionalBoolean(partialArgs.recursive),
 					}
 				}
@@ -780,17 +785,21 @@ export class NativeToolCallParser {
 				break
 
 			case "create_directory":
-				if (partialArgs.path !== undefined) {
+				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 					}
 				}
 				break
 
 			case "create_new_workspace":
-				if (partialArgs.path !== undefined || partialArgs.name !== undefined) {
+				if (
+					partialArgs.path !== undefined ||
+					partialArgs.filePath !== undefined ||
+					partialArgs.name !== undefined
+				) {
 					nativeArgs = {
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 						name: partialArgs.name,
 						folders: partialArgs.folders,
 						openInNewWindow: this.coerceOptionalBoolean(partialArgs.openInNewWindow),
@@ -799,10 +808,14 @@ export class NativeToolCallParser {
 				break
 
 			case "file":
-				if (partialArgs.subcommand !== undefined || partialArgs.path !== undefined) {
+				if (
+					partialArgs.subcommand !== undefined ||
+					partialArgs.path !== undefined ||
+					partialArgs.filePath !== undefined
+				) {
 					nativeArgs = {
 						subcommand: partialArgs.subcommand,
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 						destination: partialArgs.destination,
 						recursive: this.coerceOptionalBoolean(partialArgs.recursive),
 					}
@@ -844,8 +857,13 @@ export class NativeToolCallParser {
 				break
 
 			case "insert_edit":
-				if (partialArgs.filePath !== undefined || partialArgs.line !== undefined) {
+				if (
+					partialArgs.path !== undefined ||
+					partialArgs.filePath !== undefined ||
+					partialArgs.line !== undefined
+				) {
 					nativeArgs = {
+						path: partialArgs.path ?? partialArgs.filePath,
 						filePath: partialArgs.filePath,
 						line: this.coerceOptionalNumber(partialArgs.line)!,
 						column: this.coerceOptionalNumber(partialArgs.column),
@@ -855,8 +873,9 @@ export class NativeToolCallParser {
 				break
 
 			case "list_code_usages":
-				if (partialArgs.filePath !== undefined) {
+				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
+						path: partialArgs.path ?? partialArgs.filePath,
 						filePath: partialArgs.filePath,
 						line: this.coerceOptionalNumber(partialArgs.line)!,
 						column: this.coerceOptionalNumber(partialArgs.column)!,
@@ -872,8 +891,9 @@ export class NativeToolCallParser {
 				break
 
 			case "rename_symbol":
-				if (partialArgs.filePath !== undefined) {
+				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
+						path: partialArgs.path ?? partialArgs.filePath,
 						filePath: partialArgs.filePath,
 						line: this.coerceOptionalNumber(partialArgs.line)!,
 						column: this.coerceOptionalNumber(partialArgs.column)!,
@@ -883,8 +903,9 @@ export class NativeToolCallParser {
 				break
 
 			case "view_image":
-				if (partialArgs.filePath !== undefined) {
+				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
+						path: partialArgs.path ?? partialArgs.filePath,
 						filePath: partialArgs.filePath,
 					}
 				}
@@ -900,9 +921,9 @@ export class NativeToolCallParser {
 				break
 
 			case "sed":
-				if (partialArgs.path !== undefined) {
+				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
-						path: partialArgs.path,
+						path: partialArgs.path ?? partialArgs.filePath,
 						pattern: partialArgs.pattern,
 						replacement: partialArgs.replacement,
 						global: this.coerceOptionalBoolean(partialArgs.global),
@@ -1052,9 +1073,10 @@ export class NativeToolCallParser {
 						}
 					}
 					// New format: { path: "...", mode: "..." }
-					if (!nativeArgs && args.path !== undefined) {
+					// Accept filePath as alias for path (models sometimes hallucinate filePath for read_file)
+					if (!nativeArgs && (args.path !== undefined || args.filePath !== undefined)) {
 						nativeArgs = {
-							path: args.path,
+							path: args.path ?? args.filePath,
 							mode: args.mode,
 							offset: this.coerceOptionalNumber(args.offset),
 							limit: this.coerceOptionalNumber(args.limit),
@@ -1095,9 +1117,9 @@ export class NativeToolCallParser {
 					break
 
 				case "apply_diff":
-					if (args.path !== undefined && args.diff !== undefined) {
+					if ((args.path !== undefined || args.filePath !== undefined) && args.diff !== undefined) {
 						nativeArgs = {
-							path: args.path,
+							path: args.path ?? args.filePath,
 							diff: args.diff,
 						} as NativeArgsFor<TName>
 					}
@@ -1247,9 +1269,9 @@ export class NativeToolCallParser {
 					break
 
 				case "write_to_file":
-					if (args.path !== undefined && args.content !== undefined) {
+					if ((args.path !== undefined || args.filePath !== undefined) && args.content !== undefined) {
 						nativeArgs = {
-							path: args.path,
+							path: args.path ?? args.filePath,
 							content: args.content,
 						} as NativeArgsFor<TName>
 					}
@@ -1341,9 +1363,9 @@ export class NativeToolCallParser {
 					break
 
 				case "list_files":
-					if (args.path !== undefined) {
+					if (args.path !== undefined || args.filePath !== undefined) {
 						nativeArgs = {
-							path: args.path,
+							path: args.path ?? args.filePath,
 							recursive: this.coerceOptionalBoolean(args.recursive),
 						} as NativeArgsFor<TName>
 					}
@@ -1403,17 +1425,17 @@ export class NativeToolCallParser {
 					break
 
 				case "create_directory":
-					if (args.path !== undefined) {
+					if (args.path !== undefined || args.filePath !== undefined) {
 						nativeArgs = {
-							path: args.path,
+							path: args.path ?? args.filePath,
 						} as NativeArgsFor<TName>
 					}
 					break
 
 				case "create_new_workspace":
-					if (args.path !== undefined && args.name !== undefined) {
+					if ((args.path !== undefined || args.filePath !== undefined) && args.name !== undefined) {
 						nativeArgs = {
-							path: args.path,
+							path: args.path ?? args.filePath,
 							name: args.name,
 							folders: args.folders,
 							openInNewWindow: this.coerceOptionalBoolean(args.openInNewWindow),
@@ -1422,10 +1444,10 @@ export class NativeToolCallParser {
 					break
 
 				case "file":
-					if (args.subcommand !== undefined && args.path !== undefined) {
+					if (args.subcommand !== undefined && (args.path !== undefined || args.filePath !== undefined)) {
 						nativeArgs = {
 							subcommand: args.subcommand,
-							path: args.path,
+							path: args.path ?? args.filePath,
 							destination: args.destination,
 							recursive: this.coerceOptionalBoolean(args.recursive),
 						} as NativeArgsFor<TName>
@@ -1467,8 +1489,13 @@ export class NativeToolCallParser {
 					break
 
 				case "insert_edit":
-					if (args.filePath !== undefined && args.line !== undefined && args.text !== undefined) {
+					if (
+						(args.path !== undefined || args.filePath !== undefined) &&
+						args.line !== undefined &&
+						args.text !== undefined
+					) {
 						nativeArgs = {
+							path: args.path ?? args.filePath,
 							filePath: args.filePath,
 							line: this.coerceOptionalNumber(args.line)!,
 							column: this.coerceOptionalNumber(args.column),
@@ -1478,8 +1505,13 @@ export class NativeToolCallParser {
 					break
 
 				case "list_code_usages":
-					if (args.filePath !== undefined && args.line !== undefined && args.column !== undefined) {
+					if (
+						(args.path !== undefined || args.filePath !== undefined) &&
+						args.line !== undefined &&
+						args.column !== undefined
+					) {
 						nativeArgs = {
+							path: args.path ?? args.filePath,
 							filePath: args.filePath,
 							line: this.coerceOptionalNumber(args.line)!,
 							column: this.coerceOptionalNumber(args.column)!,
@@ -1496,12 +1528,13 @@ export class NativeToolCallParser {
 
 				case "rename_symbol":
 					if (
-						args.filePath !== undefined &&
+						(args.path !== undefined || args.filePath !== undefined) &&
 						args.line !== undefined &&
 						args.column !== undefined &&
 						args.newName !== undefined
 					) {
 						nativeArgs = {
+							path: args.path ?? args.filePath,
 							filePath: args.filePath,
 							line: this.coerceOptionalNumber(args.line)!,
 							column: this.coerceOptionalNumber(args.column)!,
@@ -1511,8 +1544,9 @@ export class NativeToolCallParser {
 					break
 
 				case "view_image":
-					if (args.filePath !== undefined) {
+					if (args.path !== undefined || args.filePath !== undefined) {
 						nativeArgs = {
+							path: args.path ?? args.filePath,
 							filePath: args.filePath,
 						} as NativeArgsFor<TName>
 					}
@@ -1536,9 +1570,13 @@ export class NativeToolCallParser {
 					break
 
 				case "sed":
-					if (args.path !== undefined && args.pattern !== undefined && args.replacement !== undefined) {
+					if (
+						(args.path !== undefined || args.filePath !== undefined) &&
+						args.pattern !== undefined &&
+						args.replacement !== undefined
+					) {
 						nativeArgs = {
-							path: args.path,
+							path: args.path ?? args.filePath,
 							pattern: args.pattern,
 							replacement: args.replacement,
 							global: this.coerceOptionalBoolean(args.global),

@@ -22,7 +22,8 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { outputWarn } from "../../utils/outputChannelLogger"
 
 interface RenameSymbolParams {
-	filePath: string
+	path: string
+	filePath?: string
 	line: number
 	column: number
 	newName: string
@@ -32,7 +33,8 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 	readonly name = "rename_symbol" as const
 
 	async execute(params: RenameSymbolParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { filePath, line, column, newName } = params
+		const filePath = params.path ?? params.filePath ?? ""
+		const { line, column, newName } = params
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
@@ -40,7 +42,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 				task.consecutiveMistakeCount++
 				task.recordToolError("rename_symbol")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("rename_symbol", "filePath"))
+				pushToolResult(await task.sayAndCreateMissingParamError("rename_symbol", "path"))
 				return
 			}
 			if (line == null) {

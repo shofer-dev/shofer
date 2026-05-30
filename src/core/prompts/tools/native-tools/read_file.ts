@@ -113,6 +113,10 @@ export function createReadFileTool(options: ReadFileToolOptions = {}): OpenAI.Ch
 			type: "string",
 			description: "Path to the file to read, relative to the workspace",
 		},
+		filePath: {
+			type: "string",
+			description: "Alias for 'path'. Path to the file to read, relative to the workspace",
+		},
 		mode: {
 			type: "string",
 			enum: ["slice", "indentation"],

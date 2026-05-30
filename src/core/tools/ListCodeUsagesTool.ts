@@ -13,7 +13,8 @@ import { getReadablePath } from "../../utils/path"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
 interface ListCodeUsagesParams {
-	filePath: string
+	path: string
+	filePath?: string
 	line: number
 	column: number
 }
@@ -31,7 +32,8 @@ export class ListCodeUsagesTool extends BaseTool<"list_code_usages"> {
 	readonly name = "list_code_usages" as const
 
 	async execute(params: ListCodeUsagesParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { filePath, line, column } = params
+		const filePath = params.path ?? params.filePath ?? ""
+		const { line, column } = params
 		const { handleError, pushToolResult } = callbacks
 
 		try {
@@ -39,7 +41,7 @@ export class ListCodeUsagesTool extends BaseTool<"list_code_usages"> {
 				task.consecutiveMistakeCount++
 				task.recordToolError("list_code_usages")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("list_code_usages", "filePath"))
+				pushToolResult(await task.sayAndCreateMissingParamError("list_code_usages", "path"))
 				return
 			}
 			if (line == null) {

@@ -27,7 +27,8 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 
 interface InsertEditParams {
-	filePath: string
+	path: string
+	filePath?: string
 	line: number
 	column?: number | null
 	text: string
@@ -37,7 +38,8 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 	readonly name = "insert_edit" as const
 
 	async execute(params: InsertEditParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { filePath, line, column, text } = params
+		const { path: filePathRaw, filePath: filePathAlias, line, column, text } = params
+		const filePath = filePathRaw ?? filePathAlias ?? ""
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
@@ -45,7 +47,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				task.consecutiveMistakeCount++
 				task.recordToolError("insert_edit")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("insert_edit", "filePath"))
+				pushToolResult(await task.sayAndCreateMissingParamError("insert_edit", "path"))
 				return
 			}
 			if (line == null) {
