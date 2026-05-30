@@ -745,8 +745,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 					// any non-text, non-tool-call chunk as thinking content.
 					const value = (chunk as { value?: unknown }).value
 					if (typeof value === "string" && value.trim()) {
-						// Detect structured tool_preparing marker emitted by llm-provider.
-						// Format: \x00tool_preparing\x00<toolName>\x00<byteCount>\x00
+						// Detect structured markers emitted by llm-provider.
 						// Null-byte delimiter prevents false positives from real thinking text.
 						// eslint-disable-next-line no-control-regex
 						const preparingMatch = value.match(/^\x00tool_preparing\x00([^\x00]+)\x00(\d+)\x00$/)
@@ -756,6 +755,17 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 								toolName: preparingMatch[1],
 								byteCount: parseInt(preparingMatch[2], 10),
 							}
+							// eslint-disable-next-line no-control-regex
+						} else if (/^\x00response_metadata\x00/.test(value)) {
+							// Response metadata marker from llm-provider.
+							// Format: \x00response_metadata\x00<json>\x00
+							// Contains: model, actualModel, ttfbMs, ttlbMs,
+							// promptTokens, completionTokens, costUsd, attempts.
+							// Emitted once at stream end; silently consumed by the
+							// caller which can inspect it via the metadata field.
+							// eslint-disable-next-line no-control-regex
+							const jsonStr = value.replace(/^\x00response_metadata\x00/, "").replace(/\x00$/, "")
+							// The metadata is consumed internally — not yielded as a user-visible chunk
 						} else {
 							yield {
 								type: "reasoning",
