@@ -1,3 +1,5 @@
+- "Shofer said" twice
+
 - remove excessive logging
 
 - TEST RAG indexer for code changes & fix

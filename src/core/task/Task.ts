@@ -2675,6 +2675,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			throw new Error(`[Shofer#say] task ${this.taskId}.${this.instanceId} aborted`)
 		}
 
+		// LLM hint: debug log for duplicate "Shofer said" investigation.
+		// Remove after investigation.
+		if (type === "text") {
+			const lastMsg = this.shoferMessages.at(-1)
+			const prevPartial = lastMsg?.partial && lastMsg?.type === "say" && lastMsg?.say === type
+			const stack = new Error().stack
+			const callStack = stack ? stack.split("\n").slice(1, 6).join("\n") : "(no stack)"
+			outputLog(
+				`[DUPE-INVESTIGATE] Task#say("text") | partial=${partial} | ` +
+					`textLen=${text?.length ?? 0} | ` +
+					`prevPartial=${String(prevPartial)} | ` +
+					`msgCount=${this.shoferMessages.length} | ` +
+					`taskId=${this.taskId}\n${callStack}`,
+			)
+		}
+
 		if (partial !== undefined) {
 			const lastMessage = this.shoferMessages.at(-1)
 
