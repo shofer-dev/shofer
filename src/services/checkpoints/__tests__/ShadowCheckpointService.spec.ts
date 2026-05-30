@@ -726,31 +726,6 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				expect(commit1?.commit).not.toBe(commit2?.commit)
 			})
 
-			it("logs correct message for allowEmpty option", async () => {
-				const logMessages: string[] = []
-				const testService = await klass.create({
-					taskId: "log-test",
-					shadowDir: path.join(tmpDir, `log-test-${Date.now()}`),
-					workspaceDir: service.workspaceDir,
-					log: (message: string) => logMessages.push(message),
-				})
-				await testService.initShadowGit()
-
-				await testService.saveCheckpoint("Test logging with allowEmpty", { allowEmpty: true })
-
-				const saveCheckpointLogs = logMessages.filter(
-					(msg) => msg.includes("starting checkpoint save") && msg.includes("allowEmpty: true"),
-				)
-				expect(saveCheckpointLogs).toHaveLength(1)
-
-				await testService.saveCheckpoint("Test logging without allowEmpty")
-
-				const defaultLogs = logMessages.filter(
-					(msg) => msg.includes("starting checkpoint save") && msg.includes("allowEmpty: false"),
-				)
-				expect(defaultLogs).toHaveLength(1)
-			})
-
 			it("maintains checkpoint history with empty commits", async () => {
 				// Create a regular checkpoint
 				await fs.writeFile(testFile, "Regular change")

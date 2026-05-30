@@ -344,10 +344,6 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		options?: { allowEmpty?: boolean; suppressMessage?: boolean },
 	): Promise<CheckpointResult | undefined> {
 		try {
-			this.log(
-				`[${this.constructor.name}#saveCheckpoint] starting checkpoint save (allowEmpty: ${options?.allowEmpty ?? false})`,
-			)
-
 			if (!this.git) {
 				throw new Error("Shadow git repo not initialized")
 			}

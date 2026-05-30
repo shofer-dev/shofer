@@ -834,9 +834,6 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				// could produce a negative delta; clamp to zero rather than
 				// emit a nonsensical refund.
 				perRequestCostUsd = delta >= 0 ? delta : 0
-				getOutputChannel()?.appendLine(
-					`[vscode-lm] cost ledger: before=${before}, after=${conversationCostUsdAfter}, perRequest=${perRequestCostUsd}, conversationId=${this.conversationId}`,
-				)
 			}
 
 			// Report final usage after stream completion
