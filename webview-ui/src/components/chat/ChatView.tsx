@@ -2082,7 +2082,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							increaseViewportBy={{ top: 3_000, bottom: 1000 }}
 							data={groupedMessages}
 							initialTopMostItemIndex={groupedMessages.length}
-							firstItemIndex={H2_PREPEND_BASE - prependedCount}
+							firstItemIndex={prependedCount > 0 ? H2_PREPEND_BASE - prependedCount : undefined}
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
