@@ -19,7 +19,8 @@ import type { ToolUse, ToolResponse } from "../../shared/tools"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
 interface ViewImageParams {
-	filePath: string
+	path: string
+	filePath?: string
 }
 
 const SUPPORTED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp"]
@@ -48,7 +49,7 @@ export class ViewImageTool extends BaseTool<"view_image"> {
 	readonly name = "view_image" as const
 
 	async execute(params: ViewImageParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { filePath } = params
+		const filePath = params.path ?? params.filePath ?? ""
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
@@ -56,7 +57,7 @@ export class ViewImageTool extends BaseTool<"view_image"> {
 				task.consecutiveMistakeCount++
 				task.recordToolError("view_image")
 				task.didToolFailInCurrentTurn = true
-				pushToolResult(await task.sayAndCreateMissingParamError("view_image", "filePath"))
+				pushToolResult(await task.sayAndCreateMissingParamError("view_image", "path"))
 				return
 			}
 

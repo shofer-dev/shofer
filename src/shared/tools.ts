@@ -38,6 +38,7 @@ export interface TextContent {
 export const toolParamNames = [
 	"command",
 	"path",
+	"filePath", // Accepted as alias for path in tools where the model may use either name
 	"content",
 	"regex",
 	"file_pattern",
@@ -197,11 +198,11 @@ export type NativeToolArgs = {
 	get_errors: { filePaths?: string[] | null }
 	get_project_setup_info: Record<string, never>
 	// get_search_results removed — merged into grep_search
-	insert_edit: { filePath: string; line: number; column?: number | null; text: string }
-	list_code_usages: { filePath: string; line: number; column: number }
+	insert_edit: { path: string; filePath?: string; line: number; column?: number | null; text: string }
+	list_code_usages: { path: string; filePath?: string; line: number; column: number }
 	read_project_structure: { maxDepth?: number | null; includeHidden?: boolean | null }
-	rename_symbol: { filePath: string; line: number; column: number; newName: string }
-	view_image: { filePath: string }
+	rename_symbol: { path: string; filePath?: string; line: number; column: number; newName: string }
+	view_image: { path: string; filePath?: string }
 	lsp_search: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }

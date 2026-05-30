@@ -57,6 +57,7 @@ Read a file's contents with two modes: slice (offset/limit) and indentation (sem
 | Param                          | Type                                 | Required | Description                                                        |
 | ------------------------------ | ------------------------------------ | :------: | ------------------------------------------------------------------ |
 | `path`                         | string                               |    ✅    | File path relative to workspace                                    |
+| `filePath`                     | string \| null                       |    –     | Alias for `path` (model hallucination resilience)                  |
 | `mode`                         | `"slice"` \| `"indentation"` \| null |    –     | Reading mode: `"slice"` (default) or `"indentation"`               |
 | `offset`                       | number \| null                       |    –     | 1-based line to start reading from (slice mode, default: 1)        |
 | `limit`                        | number \| null                       |    –     | Maximum lines to return (default: 2000)                            |
@@ -120,12 +121,13 @@ Both endpoints of an `mv` are recorded in `FileContextTracker` as `shofer_edited
 
 Inserts text at a specific position in a file using VS Code's WorkspaceEdit API.
 
-| Param      | Type   | Required | Description                     |
-| ---------- | ------ | :------: | ------------------------------- |
-| `filePath` | string |    ✅    | File path relative to workspace |
-| `line`     | number |    ✅    | 1-based line number             |
-| `column`   | number |    ✅    | 1-based column number           |
-| `text`     | string |    ✅    | Text to insert                  |
+| Param      | Type   | Required | Description                                       |
+| ---------- | ------ | :------: | ------------------------------------------------- |
+| `path`     | string |    ✅    | File path relative to workspace                   |
+| `filePath` | string |    –     | Alias for `path` (model hallucination resilience) |
+| `line`     | number |    ✅    | 1-based line number                               |
+| `column`   | number |    ✅    | 1-based column number                             |
+| `text`     | string |    ✅    | Text to insert                                    |
 
 ### `sed`
 
@@ -213,11 +215,12 @@ Find files matching a glob pattern using VS Code's `workspace.findFiles`. Patter
 
 Finds all references of a symbol using VS Code's LSP reference provider.
 
-| Param      | Type   | Required | Description                |
-| ---------- | ------ | :------: | -------------------------- |
-| `filePath` | string |    ✅    | File containing the symbol |
-| `line`     | number |    ✅    | 1-based line number        |
-| `column`   | number |    ✅    | 1-based column number      |
+| Param      | Type   | Required | Description                                       |
+| ---------- | ------ | :------: | ------------------------------------------------- |
+| `path`     | string |    ✅    | File containing the symbol                        |
+| `filePath` | string |    –     | Alias for `path` (model hallucination resilience) |
+| `line`     | number |    ✅    | 1-based line number                               |
+| `column`   | number |    ✅    | 1-based column number                             |
 
 ### `lsp_search`
 
@@ -311,20 +314,22 @@ Returns an ASCII tree of the directory structure, skipping noise directories (no
 
 Renames a symbol and all references across the codebase using VS Code's LSP rename provider.
 
-| Param      | Type   | Required | Description                |
-| ---------- | ------ | :------: | -------------------------- |
-| `filePath` | string |    ✅    | File containing the symbol |
-| `line`     | number |    ✅    | 1-based line number        |
-| `column`   | number |    ✅    | 1-based column number      |
-| `newName`  | string |    ✅    | New name for the symbol    |
+| Param      | Type   | Required | Description                                       |
+| ---------- | ------ | :------: | ------------------------------------------------- |
+| `path`     | string |    ✅    | File containing the symbol                        |
+| `filePath` | string |    –     | Alias for `path` (model hallucination resilience) |
+| `line`     | number |    ✅    | 1-based line number                               |
+| `column`   | number |    ✅    | 1-based column number                             |
+| `newName`  | string |    ✅    | New name for the symbol                           |
 
 ### `view_image`
 
 Reads an image file and returns base64-encoded data for visual analysis.
 
-| Param      | Type   | Required | Description        |
-| ---------- | ------ | :------: | ------------------ |
-| `filePath` | string |    ✅    | Path to image file |
+| Param      | Type   | Required | Description                                       |
+| ---------- | ------ | :------: | ------------------------------------------------- |
+| `path`     | string |    ✅    | Path to image file                                |
+| `filePath` | string |    –     | Alias for `path` (model hallucination resilience) |
 
 Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 

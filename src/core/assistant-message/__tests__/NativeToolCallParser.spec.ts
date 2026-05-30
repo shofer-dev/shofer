@@ -28,6 +28,51 @@ describe("NativeToolCallParser", () => {
 				}
 			})
 
+			it("should parse read_file with filePath alias (model hallucination resilience)", () => {
+				const toolCall = {
+					id: "toolu_filepath_alias",
+					name: "read_file" as const,
+					arguments: JSON.stringify({
+						filePath: "src/filepath-alias.ts",
+						offset: 144,
+						limit: 50,
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					expect(result.nativeArgs).toBeDefined()
+					const nativeArgs = result.nativeArgs as { path: string; offset?: number; limit?: number }
+					expect(nativeArgs.path).toBe("src/filepath-alias.ts")
+					expect(nativeArgs.offset).toBe(144)
+					expect(nativeArgs.limit).toBe(50)
+				}
+			})
+
+			it("should prefer path over filePath when both are present", () => {
+				const toolCall = {
+					id: "toolu_both",
+					name: "read_file" as const,
+					arguments: JSON.stringify({
+						filePath: "src/wrong.ts",
+						path: "src/right.ts",
+						offset: 1,
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as { path: string }
+					expect(nativeArgs.path).toBe("src/right.ts")
+				}
+			})
+
 			it("should parse slice-mode params", () => {
 				const toolCall = {
 					id: "toolu_123",

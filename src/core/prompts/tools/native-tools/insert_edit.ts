@@ -3,16 +3,16 @@ import type OpenAI from "openai"
 const INSERT_EDIT_DESCRIPTION = `Request to insert text at a specific position in a file. This tool inserts text at the specified line and column position.
 
 Parameters:
-- filePath: (required) Path to the file, relative to the workspace
+- path: (required) Path to the file (also accepts filePath as alias), relative to the workspace
 - line: (required) 1-based line number to insert at
 - column: (optional) 1-based column number to insert at. Defaults to 1 (start of line).
 - text: (required) Text to insert
 
 Example: Insert at beginning of line 10
-{ "filePath": "src/app.ts", "line": 10, "text": "// New comment\n" }
+{ "path": "src/app.ts", "line": 10, "text": "// New comment\\n" }
 
 Example: Insert at specific position
-{ "filePath": "src/app.ts", "line": 10, "column": 5, "text": "newCode" }`
+{ "path": "src/app.ts", "line": 10, "column": 5, "text": "newCode" }`
 
 const FILE_PATH_PARAMETER_DESCRIPTION = `Path to the file, relative to the workspace`
 
@@ -31,9 +31,13 @@ export default {
 		parameters: {
 			type: "object",
 			properties: {
-				filePath: {
+				path: {
 					type: "string",
 					description: FILE_PATH_PARAMETER_DESCRIPTION,
+				},
+				filePath: {
+					type: "string",
+					description: "Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION,
 				},
 				line: {
 					type: "number",
@@ -48,7 +52,7 @@ export default {
 					description: TEXT_PARAMETER_DESCRIPTION,
 				},
 			},
-			required: ["filePath", "line", "text"],
+			required: ["path", "line", "text"],
 			additionalProperties: false,
 		},
 	},
