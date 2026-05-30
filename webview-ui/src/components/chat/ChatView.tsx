@@ -128,7 +128,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// Leaving this less safe version here since if the first message is not a
 	// task, then the extension is in a bad state and needs to be debugged (see
 	// Shofer.abort).
-	const task = useMemo(() => messages.at(0), [messages])
+	// H2: When older messages are prepended, `messages` changes → this re‑computes
+	// momentarily with the older task-header value, flashing the TaskHeader title.
+	// Pin the task to the LAST element so the title is always derived from the
+	// most-recent message regardless of prepends.
+	const task = useMemo(() => messages.at(-1), [messages])
 
 	const latestTodos = useMemo(() => {
 		// First check if we have initial todos from the state (for new subtasks)
