@@ -71,7 +71,7 @@ function baseState(overrides: Partial<ExtensionState> = {}): ExtensionState {
 		cloudOrganizations: [],
 		sharingEnabled: false,
 		publicSharingEnabled: false,
-		organizationAllowList: { allowedOrganizations: [] },
+		organizationAllowList: { allowAll: true, providers: {} },
 		organizationSettingsVersion: -1,
 		autoCondenseContext: true,
 		autoCondenseContextPercent: 100,
@@ -196,7 +196,7 @@ describe("mergeExtensionState — H2 windowing metadata seq guard", () => {
 			shoferMessages: [msg(100), msg(101)],
 			hasMoreMessages: true,
 			oldestLoadedTs: 100,
-			tokenUsage: { totalTokensIn: 100, totalTokensOut: 50, totalCost: 0.01 },
+			tokenUsage: { totalTokensIn: 100, totalTokensOut: 50, totalCost: 0.01, contextTokens: 0 },
 			shoferMessagesSeq: 5,
 		})
 
@@ -215,7 +215,7 @@ describe("mergeExtensionState — H2 windowing metadata seq guard", () => {
 		expect(merged.shoferMessagesSeq).toBe(5)
 		expect(merged.hasMoreMessages).toBe(true)
 		expect(merged.oldestLoadedTs).toBe(100)
-		expect(merged.tokenUsage).toEqual({ totalTokensIn: 100, totalTokensOut: 50, totalCost: 0.01 })
+		expect(merged.tokenUsage).toEqual({ totalTokensIn: 100, totalTokensOut: 50, totalCost: 0.01, contextTokens: 0 })
 	})
 
 	it("accepts H2 metadata from a state push with higher seq", () => {
@@ -235,6 +235,7 @@ describe("mergeExtensionState — H2 windowing metadata seq guard", () => {
 				totalTokensIn: 1000,
 				totalTokensOut: 500,
 				totalCost: 0.05,
+				contextTokens: 0,
 			},
 		})
 
@@ -244,6 +245,7 @@ describe("mergeExtensionState — H2 windowing metadata seq guard", () => {
 			totalTokensIn: 1000,
 			totalTokensOut: 500,
 			totalCost: 0.05,
+			contextTokens: 0,
 		})
 		expect(merged.shoferMessagesSeq).toBe(2)
 	})
@@ -262,6 +264,7 @@ describe("mergeExtensionState — H2 windowing metadata seq guard", () => {
 				totalTokensIn: 500,
 				totalTokensOut: 200,
 				totalCost: 0.02,
+				contextTokens: 0,
 			},
 			// no shoferMessagesSeq in the push either
 		})
@@ -273,6 +276,7 @@ describe("mergeExtensionState — H2 windowing metadata seq guard", () => {
 			totalTokensIn: 500,
 			totalTokensOut: 200,
 			totalCost: 0.02,
+			contextTokens: 0,
 		})
 	})
 })

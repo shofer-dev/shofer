@@ -18,8 +18,6 @@
 
 === P2
 
-- test: /rebase-worktree /merge-worktree
-
 - test: /migrate-from-copilot /migrate-from-roocode
 
 - pick a new logo
@@ -36,5 +34,7 @@
   | `shofer.commandTimeoutAllowlist` | Commands exempt from timeout | `[]` |
 
 - DEV Simplify the Settings overlay (use VScode's own settings.json)
+
 - DEV memories (copilot_memory, copilot_resolveMemoryFileUri) (filter by age)
+
 - preemptive summarization (in the background)

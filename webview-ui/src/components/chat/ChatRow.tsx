@@ -319,15 +319,15 @@ export const ChatRowContent = ({
 				info?.actualModel ||
 				info?.ttfbMs !== undefined ||
 				info?.attempts !== undefined ||
-				info?.promptTokens !== undefined
+				info?.tokensIn !== undefined
 					? {
 							actualModel: info.actualModel,
 							ttfbMs: info.ttfbMs,
 							ttlbMs: info.ttlbMs,
 							attempts: info.attempts,
-							promptTokens: info.promptTokens,
-							completionTokens: info.completionTokens,
-							costUsd: info.costUsd,
+							promptTokens: info.tokensIn,
+							completionTokens: info.tokensOut,
+							costUsd: info.cost,
 							responseError: info.responseError,
 						}
 					: undefined
