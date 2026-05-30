@@ -35,6 +35,7 @@ type ShareVisibility = "organization" | "public"
 import type { GitCommit } from "./git.js"
 import type { McpServer } from "./mcp.js"
 import type { ModelRecord, RouterModels } from "./model.js"
+import type { TokenUsage } from "./message.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
 import type { SkillMetadata } from "./skills.js"
 import type { WorktreeIncludeStatus, WorktreeStatus } from "./worktree.js"
@@ -136,6 +137,8 @@ export interface ExtensionMessage {
 		| "changedFiles/update"
 		// Webview health messages
 		| "ping"
+		// Windowed message loading (H2)
+		| "olderMessagesLoaded"
 	text?: string
 	/** For fileContent: { path, content, error? } */
 	fileContent?: { path: string; content: string | null; error?: string }
@@ -298,6 +301,10 @@ export interface ExtensionMessage {
 	path?: string
 	// worktreeStatus
 	worktreeStatus?: WorktreeStatus
+	// H2: olderMessagesLoaded payload
+	olderMessages?: ShoferMessage[]
+	olderHasMore?: boolean
+	olderOldestTs?: number
 }
 
 export interface OpenAiCodexRateLimitsMessage {
@@ -467,6 +474,32 @@ export type ExtensionState = Pick<
 	 * (captured during async getStateToPostToWebview) from overwriting newer messages.
 	 */
 	shoferMessagesSeq?: number
+
+	/**
+	 * H2: When true, there are more messages on the host that haven't been sent to the webview.
+	 * The webview should render a "Load older messages…" sentinel at the top of the list.
+	 */
+	hasMoreMessages?: boolean
+
+	/**
+	 * H2: The ts of the oldest message currently loaded in the webview window.
+	 * Used as the `beforeTs` parameter when requesting the previous page of messages.
+	 */
+	oldestLoadedTs?: number
+
+	/**
+	 * H2: Number of messages actually prepended by the most recent `olderMessagesLoaded`
+	 * page (after de-duplication). The webview uses this exact count — not the nominal
+	 * window size — to decrement Virtuoso's `firstItemIndex`, so the scroll anchor stays
+	 * correct on partial final pages and fully-deduped races.
+	 */
+	lastPrependedCount?: number
+
+	/**
+	 * H2: Authoritative token usage computed by the host from the full shoferMessages array.
+	 * The webview no longer sums over the (now-partial) window; it reads this host-computed total.
+	 */
+	tokenUsage?: TokenUsage
 }
 
 export interface Command {
@@ -733,6 +766,8 @@ export interface WebviewMessage {
 		| "webviewLog"
 		// Metrics push from webview → extension host registry (Phase 4)
 		| "pushMetrics"
+		// Windowed message loading (H2)
+		| "loadOlderMessages"
 	text?: string
 	taskId?: string
 	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */
@@ -860,6 +895,9 @@ export interface WebviewMessage {
 	worktreeCreateNewBranch?: boolean
 	worktreeForce?: boolean
 	worktreeIncludeContent?: string
+	// H2: loadOlderMessages — request the page of messages older than beforeTs
+	beforeTs?: number
+	limit?: number
 }
 
 export interface RequestOpenAiCodexRateLimitsMessage {

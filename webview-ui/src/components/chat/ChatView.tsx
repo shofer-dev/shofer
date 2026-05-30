@@ -58,7 +58,7 @@ export interface ChatViewRef {
 export const MAX_IMAGES_PER_MESSAGE = 20 // This is the Anthropic limit.
 
 /** H2: Default window size for message loading — must match DEFAULT_WINDOW_LIMIT in task-persistence. */
-const _H2_WINDOW_LIMIT = 100
+const H2_WINDOW_LIMIT = 100
 /** H2: Base for Virtuoso's firstItemIndex prepend pattern (large positive, decremented). */
 const H2_PREPEND_BASE = 1_000_000
 
@@ -95,6 +95,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setPendingWorktreeDir,
 		hasMoreMessages,
 		oldestLoadedTs,
+		lastPrependedCount,
 		tokenUsage,
 	} = useExtensionState()
 
@@ -104,7 +105,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// H2: Scroll anchor tracking for prepend-on-load.
 	// When older messages are prepended to the array, Virtuoso's `firstItemIndex`
 	// decrement pattern preserves scroll position. We track the cumulative count
-	// of prepended older messages and pass it as a negative firstItemIndex.
+	// of prepended older messages and subtract it from a large positive base
+	// (`H2_PREPEND_BASE - prependedCount`) per Virtuoso's documented prepend API.
 	const prependCountRef = useRef(0)
 	const [prependedCount, setPrependedCount] = useState(0)
 
@@ -648,15 +650,17 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// H2: Track prepended older-message count for firstItemIndex.
 	// Instead of inferring from message-length delta (racy with streaming),
 	// we detect the prepend by watching oldestLoadedTs: when it decreases,
-	// the reducer has just prepended a new page.
+	// the reducer has just prepended a new page. We advance the anchor by the
+	// EXACT number of messages the reducer prepended (`lastPrependedCount`,
+	// after de-duplication) rather than the nominal window size, so the anchor
+	// stays correct on partial final pages and fully-deduped races.
 	const prevOldestLoadedTsRef = useRef<number | undefined>(oldestLoadedTs)
 	useEffect(() => {
 		const prev = prevOldestLoadedTsRef.current
 		const next = oldestLoadedTs
 		if (prev !== undefined && next !== undefined && next < prev) {
 			// oldestLoadedTs decreased → older page was loaded.
-			// Approximate the count: messages.length grew by the page size.
-			prependCountRef.current += H2_WINDOW_LIMIT
+			prependCountRef.current += lastPrependedCount ?? 0
 			setPrependedCount(prependCountRef.current)
 		}
 		if (next !== prev) {
@@ -664,7 +668,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			loadingOlderRef.current = false
 		}
 		prevOldestLoadedTsRef.current = next
-	}, [oldestLoadedTs])
+	}, [oldestLoadedTs, lastPrependedCount])
 
 	// Request aggregated costs when task changes and has childIds
 	useEffect(() => {

@@ -98,7 +98,7 @@ import { Task } from "../task/Task"
 
 import { webviewMessageHandler } from "./webviewMessageHandler"
 import type { ShoferMessage, TodoItem } from "@shofer/types"
-import { TaskHistoryStore } from "../task-persistence"
+import { TaskHistoryStore, DEFAULT_WINDOW_LIMIT } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
@@ -3168,8 +3168,37 @@ export class ShoferProvider
 							`Caller: ${new Error().stack?.split("\n").slice(2, 6).join(" | ")}`,
 					)
 				}
+				// H2: For history-preloaded tasks, push only a windowed slice
+				// to bound the IPC payload. The host retains the full array;
+				// the webview receives hasMoreMessages + oldestLoadedTs so
+				// it can page backwards on demand.
+				if (msgs.length > 0 && currentTask?.isHistoryPreloaded) {
+					const start = Math.max(0, msgs.length - DEFAULT_WINDOW_LIMIT)
+					return msgs.slice(start)
+				}
 				return msgs
 			})(),
+			// H2: Windowed-message-loading metadata.
+			// Computed from the same window above (via DEFAULT_WINDOW_LIMIT)
+			// to guarantee consistency between hasMoreMessages, oldestLoadedTs,
+			// and the pushed shoferMessages slice.
+			hasMoreMessages: (() => {
+				const msgs = currentTask?.shoferMessages
+				if (!msgs || msgs.length === 0 || !currentTask?.isHistoryPreloaded) return false
+				return msgs.length > DEFAULT_WINDOW_LIMIT
+			})(),
+			oldestLoadedTs: (() => {
+				const msgs = currentTask?.shoferMessages
+				if (!msgs || msgs.length === 0 || !currentTask?.isHistoryPreloaded) return undefined
+				const start = Math.max(0, msgs.length - DEFAULT_WINDOW_LIMIT)
+				return start > 0 ? msgs[start]?.ts : undefined
+			})(),
+			// H2: Authoritative token usage from the host's full array.
+			// The cached `tokenUsage` getter memoizes by last-message ts and
+			// falls back to a full-array walk (`getTokenUsage()`) on a cache
+			// miss — correct even on cold-switch, without recomputing O(n)
+			// on every non-message state push.
+			tokenUsage: currentTask ? currentTask.tokenUsage : undefined,
 			currentTaskTodos: currentTask?.todoList || [],
 			messageQueue: currentTask?.messageQueueService?.messages ?? [],
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),
@@ -4322,6 +4351,50 @@ export class ShoferProvider
 
 	public get cwd() {
 		return this.currentWorkspacePath || getWorkspacePath()
+	}
+
+	// ── H2: Windowed message loading ────────────────────────────────────────
+
+	/**
+	 * Load a page of older messages from the current task's full in-memory
+	 * array and push them to the webview as an `olderMessagesLoaded` delta.
+	 *
+	 * The webview calls this when the user scrolls to the top sentinel or
+	 * Virtuoso's `startReached` fires.
+	 */
+	public async loadOlderMessages(beforeTs: number, limit: number = DEFAULT_WINDOW_LIMIT): Promise<void> {
+		const currentTask = this.getCurrentTask()
+		if (!currentTask) return
+
+		const all = currentTask.shoferMessages
+		if (all.length === 0) return
+
+		// Find the boundary: first message with ts >= beforeTs
+		let boundary = all.findIndex((m) => m.ts >= beforeTs)
+		if (boundary === -1) {
+			boundary = all.length
+		}
+
+		const start = Math.max(0, boundary - limit)
+		const olderMessages = all.slice(start, boundary)
+
+		if (olderMessages.length === 0) {
+			// No more older messages — tell the webview.
+			await this.postMessageToWebview({
+				type: "olderMessagesLoaded",
+				olderMessages: [],
+				olderHasMore: false,
+				olderOldestTs: undefined,
+			})
+			return
+		}
+
+		await this.postMessageToWebview({
+			type: "olderMessagesLoaded",
+			olderMessages,
+			olderHasMore: start > 0,
+			olderOldestTs: olderMessages[0].ts,
+		})
 	}
 
 	/**
