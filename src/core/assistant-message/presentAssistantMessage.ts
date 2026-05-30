@@ -349,17 +349,6 @@ export async function presentAssistantMessage(shofer: Task) {
 				content = content.replace(/\s?<\/thinking>/g, "")
 			}
 
-			// LLM hint: debug log to investigate duplicate "Shofer said" messages.
-			// Remove after investigation.
-			const stack = new Error().stack
-			const callStack = stack ? stack.split("\n").slice(1, 6).join("\n") : "(no stack)"
-			outputLog(
-				`[DUPE-INVESTIGATE] say("text") | partial=${block.partial} | ` +
-					`contentLen=${content?.length ?? 0} | ` +
-					`contentIdx=${shofer.currentStreamingContentIndex} | ` +
-					`taskId=${shofer.taskId}\n${callStack}`,
-			)
-
 			await shofer.say("text", content, undefined, block.partial)
 			break
 		}

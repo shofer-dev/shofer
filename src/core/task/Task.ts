@@ -2675,22 +2675,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			throw new Error(`[Shofer#say] task ${this.taskId}.${this.instanceId} aborted`)
 		}
 
-		// LLM hint: debug log for duplicate "Shofer said" investigation.
-		// Remove after investigation.
-		if (type === "text") {
-			const lastMsg = this.shoferMessages.at(-1)
-			const prevPartial = lastMsg?.partial && lastMsg?.type === "say" && lastMsg?.say === type
-			const stack = new Error().stack
-			const callStack = stack ? stack.split("\n").slice(1, 6).join("\n") : "(no stack)"
-			outputLog(
-				`[DUPE-INVESTIGATE] Task#say("text") | partial=${partial} | ` +
-					`textLen=${text?.length ?? 0} | ` +
-					`prevPartial=${String(prevPartial)} | ` +
-					`msgCount=${this.shoferMessages.length} | ` +
-					`taskId=${this.taskId}\n${callStack}`,
-			)
-		}
-
 		if (partial !== undefined) {
 			const lastMessage = this.shoferMessages.at(-1)
 
@@ -2725,7 +2709,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					})
 				}
 			} else {
-				// New now have a complete version of a previously partial message.
 				// This is the complete version of a previously partial
 				// message, so replace the partial with the complete version.
 				if (isUpdatingPreviousPartial) {
@@ -2746,7 +2729,30 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// More performant than an entire `postStateToWebview`.
 					this.updateShoferMessage(lastMessage)
 				} else {
-					// This is a new and complete message, so add it like normal.
+					// It's possible the streaming partial (partial=true) was
+					// delivered via a previous `say` call but a tool-result or
+					// other message was inserted between the partial and this
+					// finalisation call, defeating `isUpdatingPreviousPartial`.
+					// Walk backwards past intervening non-say messages.
+					let prevSayIdx = this.shoferMessages.length - 1
+					while (prevSayIdx >= 0) {
+						const m = this.shoferMessages[prevSayIdx]
+						if (m.type === "say" && m.say === type) {
+							break
+						}
+						prevSayIdx--
+					}
+					if (prevSayIdx >= 0 && this.shoferMessages[prevSayIdx].text === text) {
+						const prevSay = this.shoferMessages[prevSayIdx]
+						prevSay.partial = false
+						prevSay.progressStatus = progressStatus
+						if (images) {
+							prevSay.images = images
+						}
+						this.updateShoferMessage(prevSay)
+						return
+					}
+					// Fall through: genuinely new message.
 					const sayTs = Date.now()
 
 					if (!options.isNonInteractive) {
@@ -2759,8 +2765,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						say: type,
 						text,
 						images,
-						contextCondense,
-						contextTruncation,
 					})
 				}
 			}
