@@ -1170,6 +1170,17 @@ export interface ShoferApiReqInfo {
 	error?: ApiReqError
 	/** Serialised wire-level request metadata captured before the call. */
 	wireRequest?: string
+	/** The underlying model that actually served the request (may differ from
+	 *  'model' when failover or multi-provider routing is active). */
+	actualModel?: string
+	/** Time to first byte in milliseconds. */
+	ttfbMs?: number
+	/** Total time in milliseconds. */
+	ttlbMs?: number
+	/** Number of provider attempts (1 = first try succeeded). */
+	attempts?: number
+	/** Error message from the LLM provider when the request failed. */
+	responseError?: string
 }
 
 export type ShoferApiReqCancelReason = "streaming_failed" | "user_cancelled"

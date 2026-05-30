@@ -761,11 +761,27 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 							// Format: \x00response_metadata\x00<json>\x00
 							// Contains: model, actualModel, ttfbMs, ttlbMs,
 							// promptTokens, completionTokens, costUsd, attempts.
-							// Emitted once at stream end; silently consumed by the
-							// caller which can inspect it via the metadata field.
+							// Emitted once at stream end; yielded as a chunk
+							// so Task.ts can surface it in the UI.
 							// eslint-disable-next-line no-control-regex
 							const jsonStr = value.replace(/^\x00response_metadata\x00/, "").replace(/\x00$/, "")
-							// The metadata is consumed internally — not yielded as a user-visible chunk
+							try {
+								const meta = JSON.parse(jsonStr)
+								yield {
+									type: "response_metadata",
+									model: meta.model,
+									actualModel: meta.actualModel,
+									ttfbMs: meta.ttfbMs,
+									ttlbMs: meta.ttlbMs,
+									promptTokens: meta.promptTokens,
+									completionTokens: meta.completionTokens,
+									costUsd: meta.costUsd,
+									attempts: meta.attempts,
+									error: meta.error,
+								}
+							} catch {
+								// Malformed metadata — silently ignore.
+							}
 						} else {
 							yield {
 								type: "reasoning",

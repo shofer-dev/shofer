@@ -4066,6 +4066,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				let inputTokens = 0
 				let outputTokens = 0
 				let totalCost: number | undefined
+				/** Response metadata from the LLM provider (shofer-router), populated
+				 *  by the response_metadata marker emitted at stream end.  Merged
+				 *  into api_req_started via updateApiReqMsg for gentle UI exposure. */
+				let responseMetadata:
+					| {
+							actualModel?: string
+							ttfbMs?: number
+							ttlbMs?: number
+							attempts?: number
+							responseError?: string
+					  }
+					| undefined
 
 				// We can't use `api_req_finished` anymore since it's a unique case
 				// where it could come after a streaming message (i.e. in the middle
@@ -4074,7 +4086,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// anyways, so it remains solely for legacy purposes to keep track
 				// of prices in tasks from history (it's worth removing a few months
 				// from now).
-				const updateApiReqMsg = (cancelReason?: ShoferApiReqCancelReason, streamingFailedMessage?: string) => {
+				const updateApiReqMsg = (
+					cancelReason?: ShoferApiReqCancelReason,
+					streamingFailedMessage?: string,
+					metaOverrides?: typeof responseMetadata,
+				) => {
 					if (lastApiReqIndex < 0 || !this.shoferMessages[lastApiReqIndex]) {
 						return
 					}
@@ -4115,6 +4131,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						cost: totalCost ?? costResult.totalCost,
 						cancelReason,
 						streamingFailedMessage,
+						...(metaOverrides ?? {}),
 					} satisfies ShoferApiReqInfo)
 				}
 
@@ -4300,6 +4317,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									undefined,
 									true, // partial
 								)
+								break
+							}
+							case "response_metadata": {
+								// Per-request diagnostics from shofer-router (actual model
+								// served, latency, failover count, error message on failure).
+								// Stored locally and merged into api_req_started by
+								// updateApiReqMsg so the UI can show a gentle info icon.
+								responseMetadata = {
+									actualModel: chunk.actualModel,
+									ttfbMs: chunk.ttfbMs,
+									ttlbMs: chunk.ttlbMs,
+									attempts: chunk.attempts,
+									responseError: chunk.error,
+								}
+								// Merge now so the webview sees it immediately.
+								updateApiReqMsg(undefined, undefined, responseMetadata)
 								break
 							}
 							case "tool_call_partial": {
