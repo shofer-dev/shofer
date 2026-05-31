@@ -600,6 +600,13 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		// long responses. Only used for final token counting and Xiaomi logging.
 		const accumulatedChunks: string[] = []
 
+		// Provider-reported token counts from the response_metadata marker
+		// emitted by shofer-router at stream end.  These are authoritative
+		// (real upstream token counts) and replace the coarse char/4
+		// heuristic that internalCountTokens falls back to.
+		let metadataPromptTokens: number | undefined
+		let metadataCompletionTokens: number | undefined
+
 		try {
 			// Create the response stream with required options
 			// systemPrompt is passed in modelOptions for llm-provider to extract and forward
@@ -759,6 +766,16 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 							const jsonStr = value.replace(/^\x00response_metadata\x00/, "").replace(/\x00$/, "")
 							try {
 								const meta = JSON.parse(jsonStr)
+								// Capture provider-reported token counts from
+								// shofer-router so the final usage chunk
+								// carries authoritative numbers instead of
+								// the coarse char/4 heuristic.
+								if (typeof meta.promptTokens === "number" && meta.promptTokens > 0) {
+									metadataPromptTokens = meta.promptTokens
+								}
+								if (typeof meta.completionTokens === "number" && meta.completionTokens > 0) {
+									metadataCompletionTokens = meta.completionTokens
+								}
 								yield {
 									type: "response_metadata",
 									model: meta.model,
@@ -828,11 +845,22 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				perRequestCostUsd = delta >= 0 ? delta : 0
 			}
 
+			// Use provider-reported output tokens when available (from
+			// the response_metadata marker). Falls back to the char/4
+			// heuristic via internalCountTokens when the metadata chunk
+			// was missing or carried zero values.
+			const effectiveOutputTokens =
+				metadataCompletionTokens !== undefined && metadataCompletionTokens > 0
+					? metadataCompletionTokens
+					: totalOutputTokens
+			const effectiveInputTokens =
+				metadataPromptTokens !== undefined && metadataPromptTokens > 0 ? metadataPromptTokens : totalInputTokens
+
 			// Report final usage after stream completion
 			yield {
 				type: "usage",
-				inputTokens: totalInputTokens,
-				outputTokens: totalOutputTokens,
+				inputTokens: effectiveInputTokens,
+				outputTokens: effectiveOutputTokens,
 				...(perRequestCostUsd !== undefined ? { totalCost: perRequestCostUsd } : {}),
 			}
 		} catch (error: unknown) {
