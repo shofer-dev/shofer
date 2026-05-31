@@ -447,7 +447,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		// sending webviewDidLaunch. This prevents a race condition where the
 		// webviewDidLaunch handler's first-time init sync reads default state
 		// (apiProvider: "anthropic") instead of the CLI-provided settings.
-		setRuntimeConfigValues("shofer", this.initialSettings as Record<string, unknown>)
+		setRuntimeConfigValues("openrouter", this.initialSettings as Record<string, unknown>)
 		this.sendToExtension({ type: "updateSettings", updatedSettings: this.initialSettings })
 
 		// Now trigger extension initialization. The context proxy should already
