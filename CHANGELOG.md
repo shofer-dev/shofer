@@ -1,6 +1,28 @@
 # Shofer Changelog
 
-## 1.0.18 — 2026-05-30 (Current)
+## 1.0.19 — 2026-05-31 (Current)
+
+### Features
+
+- **RAG indexer auto-recovery**: Both code-index and git-index orchestrators now automatically recover from error states with exponential backoff (30 s → 60 s → … → 4 h, capped at 10 attempts). When Ollama or Qdrant become available after being down, indexing resumes without manual intervention. User-initiated stop or start actions cancel the recovery timer.
+
+### Bug Fixes
+
+- **`path`/`filePath` parameter standardization**: All file-path tools now accept both `path` (canonical) and `filePath` (alias) with the parser resolving `args.path ?? args.filePath`. This fixes `[WARN] Unknown parameter 'filePath'` errors when models hallucinated `filePath` instead of `path` on [`insert_edit`](src/core/task/tools/InsertEditTool.ts), [`view_image`](src/core/task/tools/ViewImageTool.ts), [`list_code_usages`](src/core/task/tools/ListCodeUsagesTool.ts), and [`rename_symbol`](src/core/task/tools/RenameSymbolTool.ts). Schema definitions and `validateToolUse` were updated accordingly.
+- **Duplicate "Shofer said" messages during streaming**: Fixed a visual duplicate when a `say('text')` message was delivered via both the streaming (`partial=true`) and finalization (`partial=false`) paths with an intervening tool result. The finalization path now walks back past intervening non-say messages to find and update the original partial message instead of creating a new one.
+- **17 missing tool parameter names**: Added `column`, `newName`, `urls`, `call_id`, `call_ids`, `source`, `include_activity`, `contextFiles`, `timeoutMs`, `softTimeoutSec`, `softResultLength`, `name`, `folders`, `openInNewWindow`, `maxDepth`, `includeHidden`, `filePaths`, and `answer` to [`toolParamNames`](src/core/task/Task.ts). Previously the native-tool-call parser silently dropped these valid arguments.
+- **Git-index error state visibility**: [`GitIndexManager`](src/services/index/git/GitIndexManager.ts) now correctly transitions to `Error` state when embedder validation fails, matching the code-index behavior. Previously the git-index status badge showed a misleading green "Idle" dot when Ollama/Qdrant were unavailable.
+- **Provider-reported token counts for VS Code LM**: The [`VsCodeLmHandler`](src/api/providers/vscode-lm.ts) now uses authoritative `promptTokens`/`completionTokens` from `response_metadata` markers (injected by `shofer-router`) instead of the local char/4 heuristic, fixing near-zero output token counts in the API request metadata tooltip.
+- **Debug log hygiene**: Removed noisy per-iteration logs from the task loop, cost ledger, checkpoint service, and client initialization paths that contributed excessive noise to the output channel.
+
+### Documentation
+
+- **Webview architecture**: Added [`docs/webview.md`](docs/webview.md) covering the host-webview connection lifecycle, message bridge details, crash detection infrastructure, experiment gating rationale, and the extension-host recovery problem.
+- **Built-in modes reference**: Added [`docs/built-in-modes.md`](docs/built-in-modes.md) as the Source-of-Truth for the five built-in modes (code, architect, ask, debug, orchestrator), covering tool group membership, mode assembly logic, runtime resolution, and custom mode override precedence.
+
+---
+
+## 1.0.18 — 2026-05-30
 
 ### Features
 
