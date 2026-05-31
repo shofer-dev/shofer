@@ -2,17 +2,7 @@ import { Command } from "commander"
 
 import { DEFAULT_FLAGS } from "@/types/constants.js"
 import { VERSION } from "@/lib/utils/version.js"
-import {
-	run,
-	login,
-	logout,
-	status,
-	listCommands,
-	listModes,
-	listModels,
-	listSessions,
-	upgrade,
-} from "@/commands/index.js"
+import { run, listCommands, listModes, listModels, listSessions, upgrade } from "@/commands/index.js"
 
 const program = new Command()
 
@@ -79,7 +69,7 @@ const applyListOptions = (command: Command) =>
 	command
 		.option("-w, --workspace <path>", "Workspace directory path (defaults to current working directory)")
 		.option("-e, --extension <path>", "Path to the extension bundle directory")
-		.option("-k, --api-key <key>", "Shofer API key (falls back to saved login/session token)")
+		.option("-k, --api-key <key>", "API key for the LLM provider")
 		.option("--format <format>", 'Output format: "json" (default) or "text"', "json")
 		.option("-d, --debug", "Enable debug output", false)
 
@@ -134,35 +124,6 @@ program
 	.description("Upgrade Shofer CLI to the latest version")
 	.action(async () => {
 		await runUpgradeAction(() => upgrade())
-	})
-
-const authCommand = program.command("auth").description("Manage authentication for Shofer Cloud")
-
-authCommand
-	.command("login")
-	.description("Authenticate with Shofer Cloud")
-	.option("-v, --verbose", "Enable verbose output", false)
-	.action(async (options: { verbose: boolean }) => {
-		const result = await login({ verbose: options.verbose })
-		process.exit(result.success ? 0 : 1)
-	})
-
-authCommand
-	.command("logout")
-	.description("Log out from Shofer Cloud")
-	.option("-v, --verbose", "Enable verbose output", false)
-	.action(async (options: { verbose: boolean }) => {
-		const result = await logout({ verbose: options.verbose })
-		process.exit(result.success ? 0 : 1)
-	})
-
-authCommand
-	.command("status")
-	.description("Show authentication status")
-	.option("-v, --verbose", "Enable verbose output", false)
-	.action(async (options: { verbose: boolean }) => {
-		const result = await status({ verbose: options.verbose })
-		process.exit(result.authenticated ? 0 : 1)
 	})
 
 program.parse()

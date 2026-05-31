@@ -8,7 +8,6 @@ const envVarMap: Record<SupportedProvider, string> = {
 	gemini: "GOOGLE_API_KEY",
 	openrouter: "OPENROUTER_API_KEY",
 	"vercel-ai-gateway": "VERCEL_AI_GATEWAY_API_KEY",
-	shofer: "SHOFER_API_KEY",
 }
 
 export function getEnvVarName(provider: SupportedProvider): string {
@@ -47,10 +46,6 @@ export function getProviderSettings(
 		case "vercel-ai-gateway":
 			if (apiKey) config.vercelAiGatewayApiKey = apiKey
 			if (model) config.vercelAiGatewayModelId = model
-			break
-		case "shofer":
-			if (apiKey) config.rooApiKey = apiKey
-			if (model) config.apiModelId = model
 			break
 		default:
 			if (apiKey) config.apiKey = apiKey
