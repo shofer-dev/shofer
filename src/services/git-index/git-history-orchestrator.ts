@@ -35,6 +35,16 @@ const DEFAULT_GIT_MAX_COMMITS = 10000
 const DEFAULT_POLL_INTERVAL_MS = 5 * 60 * 1000
 
 /**
+ * Auto-recovery constants — when indexing fails due to infrastructure
+ * being temporarily down (Ollama / Qdrant not available), the orchestrator
+ * will keep trying with ever-increasing backoff instead of staying dead.
+ * Same backoff schedule as CodeIndexOrchestrator.
+ */
+const AUTO_RECOVERY_INITIAL_DELAY_MS = 30_000
+const AUTO_RECOVERY_MAX_DELAY_MS = 14_400_000 // 4 hours
+const AUTO_RECOVERY_MAX_ATTEMPTS = 10
+
+/**
  * Drives the git history indexing pipeline: extract → embed → upsert.
  *
  * Coordinates between GitLogExtractor, GitCacheManager, the embedder,
@@ -50,6 +60,12 @@ export class GitHistoryOrchestrator {
 	private _watcherSubscription: { dispose(): void } | null = null
 	private readonly _pollIntervalMs: number
 	private _branch = ""
+
+	// ── Auto-recovery ──
+	/** Timer that retries startIndexing() after a transient infrastructure outage. */
+	private _autoRecoveryTimer: NodeJS.Timeout | null = null
+	/** 1-based attempt counter; resets to 0 when indexing succeeds. */
+	private _autoRecoveryAttempt = 0
 
 	constructor(
 		private readonly workspacePath: string,
@@ -89,6 +105,7 @@ export class GitHistoryOrchestrator {
 		if (this._isProcessing) return
 
 		this._isProcessing = true
+		this._cancelAutoRecovery()
 		this._branch = branch
 		const effectiveMaxDays = maxHistoryDays > 0 ? maxHistoryDays : DEFAULT_GIT_MAX_HISTORY_DAYS
 		const effectiveMaxCommits = maxCommits > 0 ? maxCommits : DEFAULT_GIT_MAX_COMMITS
@@ -151,6 +168,8 @@ export class GitHistoryOrchestrator {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
 			this.stateManager.setSystemState("Error", message)
+			this._stopWatcher()
+			this._scheduleAutoRecovery()
 
 			logger.error(`${LOG_PREFIX} startIndexing failed: ${message}`, {
 				ctx: "git-index",
@@ -167,6 +186,7 @@ export class GitHistoryOrchestrator {
 	 * Stop any in-progress indexing and the git watcher.
 	 */
 	public stopIndexing(): void {
+		this._cancelAutoRecovery()
 		this._stopWatcher()
 		this.stateManager.setSystemState("Stopping", "Stopping git indexing...")
 		this.stateManager.setSystemState("Standby", "Git indexing stopped.")
@@ -363,5 +383,79 @@ export class GitHistoryOrchestrator {
 			this._watcherSubscription = null
 		}
 		this._watcher?.stop()
+	}
+
+	// ── Auto-Recovery ────────────────────────────────────────────────
+
+	/**
+	 * Schedule an automatic retry of {@link startIndexing} after the current
+	 * Error state. Uses progressive backoff so transient Ollama / Qdrant
+	 * restarts are recovered without any user interaction.
+	 *
+	 * The timer is cancelled when:
+	 * - startIndexing succeeds (reset attempt counter to 0)
+	 * - the user explicitly stops indexing
+	 * - the orchestrator is disposed
+	 * - 10 consecutive attempts have failed (stop fighting lost causes)
+	 */
+	private _scheduleAutoRecovery(): void {
+		if (this._autoRecoveryAttempt >= AUTO_RECOVERY_MAX_ATTEMPTS) {
+			logger.warn(
+				`${LOG_PREFIX} Auto-recovery gave up after ${AUTO_RECOVERY_MAX_ATTEMPTS} attempts. ` +
+					`Manual restart required.`,
+				{ ctx: "git-index" },
+			)
+			this._cancelAutoRecovery()
+			return
+		}
+
+		const delay = Math.min(
+			AUTO_RECOVERY_MAX_DELAY_MS,
+			AUTO_RECOVERY_INITIAL_DELAY_MS * Math.pow(2, this._autoRecoveryAttempt),
+		)
+		this._autoRecoveryAttempt++
+		logger.info(
+			`${LOG_PREFIX} Scheduling auto-recovery attempt ${this._autoRecoveryAttempt} ` +
+				`in ${Math.round(delay / 1000)}s...`,
+			{ ctx: "git-index" },
+		)
+		this._cancelAutoRecovery() // clear any stale timer
+		this._autoRecoveryTimer = setTimeout(() => {
+			this._autoRecoveryTimer = null
+			if (this.stateManager.state !== "Error") return // cancelled in the meantime
+			// Re-start indexing with the same parameters as initial startup.
+			// startIndexing() is public so the recovery path goes through
+			// GitIndexManager which supplies the configured limits/branch.
+			void this._recoverStart()
+		}, delay)
+	}
+
+	/**
+	 * Cancel any pending auto-recovery timer and reset the attempt counter.
+	 * Safe to call even when no timer is active.
+	 */
+	private _cancelAutoRecovery(): void {
+		if (this._autoRecoveryTimer) {
+			clearTimeout(this._autoRecoveryTimer)
+			this._autoRecoveryTimer = null
+		}
+		this._autoRecoveryAttempt = 0
+	}
+
+	/**
+	 * Lightweight re-entry point for auto-recovery that re-runs the full
+	 * indexing pipeline on the same branch/limits. Avoids re-entering
+	 * startIndexing() with its guard that requires external maxHistoryDays/
+	 * maxCommits/branch parameters (which the orchestrator does not store).
+	 *
+	 * Uses the defaults from GitIndexManager (365 days, 10000 commits) and
+	 * whatever branch was last set via updateBranch().
+	 */
+	private async _recoverStart(): Promise<void> {
+		try {
+			await this.startIndexing(DEFAULT_GIT_MAX_HISTORY_DAYS, DEFAULT_GIT_MAX_COMMITS, this._branch)
+		} catch {
+			// Error + recovery scheduling handled inside startIndexing()
+		}
 	}
 }

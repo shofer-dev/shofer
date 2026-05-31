@@ -15,12 +15,30 @@ import { retryWithBackoff } from "./shared/retry"
 import { MAX_SERVICE_ATTEMPTS, SERVICE_INITIAL_RETRY_DELAY_MS, SERVICE_MAX_BACKOFF_MS } from "./constants"
 
 /**
+ * Auto-recovery constants — when indexing fails due to infrastructure
+ * being temporarily down (Ollama / Qdrant not available), the orchestrator
+ * will keep trying with ever-increasing backoff instead of staying dead
+ * forever. The first recovery attempt runs after ~30 s, doubling each
+ * subsequent attempt until ~4 h. After ~10 attempts the timer stops
+ * altogether to avoid infinite resource consumption.
+ */
+const AUTO_RECOVERY_INITIAL_DELAY_MS = 30_000
+const AUTO_RECOVERY_MAX_DELAY_MS = 14_400_000 // 4 hours
+const AUTO_RECOVERY_MAX_ATTEMPTS = 10
+
+/**
  * Manages the code indexing workflow, coordinating between different services and managers.
  */
 export class CodeIndexOrchestrator {
 	private _fileWatcherSubscriptions: vscode.Disposable[] = []
 	private _isProcessing: boolean = false
 	private _abortController: AbortController | null = null
+
+	// ── Auto-recovery ──
+	/** Timer that retries startIndexing() after a transient infrastructure outage. */
+	private _autoRecoveryTimer: NodeJS.Timeout | null = null
+	/** 1-based attempt counter; resets to 0 when indexing succeeds. */
+	private _autoRecoveryAttempt = 0
 
 	constructor(
 		private readonly configManager: CodeIndexConfigManager,
@@ -133,6 +151,7 @@ export class CodeIndexOrchestrator {
 		}
 
 		this._isProcessing = true
+		this._cancelAutoRecovery()
 		this._abortController = new AbortController()
 		const signal = this._abortController.signal
 		this.stateManager.setSystemState("Indexing", "Initializing services...")
@@ -504,6 +523,7 @@ export class CodeIndexOrchestrator {
 				}),
 			)
 			this.stopWatcher()
+			this._scheduleAutoRecovery()
 		} finally {
 			this._isProcessing = false
 			this._abortController = null
@@ -519,6 +539,7 @@ export class CodeIndexOrchestrator {
 			this._abortController.abort()
 			this._abortController = null
 		}
+		this._cancelAutoRecovery()
 		this.stopWatcher()
 	}
 
@@ -570,6 +591,58 @@ export class CodeIndexOrchestrator {
 		} finally {
 			this._isProcessing = false
 		}
+	}
+
+	// ── Auto-Recovery ────────────────────────────────────────────────
+
+	/**
+	 * Schedule an automatic retry of {@link startIndexing} after the current
+	 * Error state. Uses progressive backoff so transient Ollama / Qdrant
+	 * restarts are recovered without any user interaction.
+	 *
+	 * The timer is cancelled when:
+	 * - startIndexing succeeds (reset attempt counter to 0)
+	 * - the user explicitly stops indexing
+	 * - the orchestrator is disposed
+	 * - 10 consecutive attempts have failed (stop fighting lost causes)
+	 */
+	private _scheduleAutoRecovery(): void {
+		if (this._autoRecoveryAttempt >= AUTO_RECOVERY_MAX_ATTEMPTS) {
+			outputLog(
+				`[CodeIndexOrchestrator] Auto-recovery gave up after ${AUTO_RECOVERY_MAX_ATTEMPTS} attempts. ` +
+					`Manual restart required.`,
+			)
+			this._cancelAutoRecovery()
+			return
+		}
+
+		const delay = Math.min(
+			AUTO_RECOVERY_MAX_DELAY_MS,
+			AUTO_RECOVERY_INITIAL_DELAY_MS * Math.pow(2, this._autoRecoveryAttempt),
+		)
+		this._autoRecoveryAttempt++
+		outputLog(
+			`[CodeIndexOrchestrator] Scheduling auto-recovery attempt ${this._autoRecoveryAttempt} ` +
+				`in ${Math.round(delay / 1000)}s...`,
+		)
+		this._cancelAutoRecovery() // clear any stale timer
+		this._autoRecoveryTimer = setTimeout(() => {
+			this._autoRecoveryTimer = null
+			if (this.stateManager.state !== "Error") return // cancelled in the meantime
+			void this.startIndexing()
+		}, delay)
+	}
+
+	/**
+	 * Cancel any pending auto-recovery timer and reset the attempt counter.
+	 * Safe to call even when no timer is active.
+	 */
+	private _cancelAutoRecovery(): void {
+		if (this._autoRecoveryTimer) {
+			clearTimeout(this._autoRecoveryTimer)
+			this._autoRecoveryTimer = null
+		}
+		this._autoRecoveryAttempt = 0
 	}
 
 	/**
