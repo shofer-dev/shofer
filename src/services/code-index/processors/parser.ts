@@ -171,7 +171,14 @@ export class CodeParser implements ICodeParser {
 		const results: CodeBlock[] = []
 
 		// Process captures if not empty
-		const queue: Node[] = Array.from(captures).map((capture) => capture.node)
+		// Filter out @name.definition.xxx captures — they are only metadata
+		// (used to extract the identifier string from the parent node at
+		// childForFieldName("name") below) and embedding bare identifiers
+		// like "setupQuietMode" as standalone code blocks pollutes the
+		// vector index and wastes embedding API calls.
+		const queue: Node[] = captures
+			.filter((capture) => !capture.name.startsWith("name."))
+			.map((capture) => capture.node)
 
 		while (queue.length > 0) {
 			const currentNode = queue.shift()!

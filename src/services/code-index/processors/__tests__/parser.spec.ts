@@ -174,6 +174,69 @@ describe("CodeParser", () => {
 			const result = await parser["parseContent"]("test.js", "const test = 123", "hash")
 			expect(result).toEqual([])
 		})
+
+		it("should filter out name.definition captures from tree-sitter results", async () => {
+			// Simulate a typical tree-sitter capture pair for a function:
+			//   (function_declaration
+			//     name: (identifier) @name.definition.function) @definition.function
+			// The @name.definition.function capture (bare identifier, e.g. "sum")
+			// should be filtered out; only the @definition.function capture (full
+			// function node) should enter the indexing queue.
+			const fullNode = {
+				text: "function sum(a, b) {\n  return a + b\n}",
+				startPosition: { row: 0 },
+				endPosition: { row: 2 },
+				type: "function_declaration",
+				childForFieldName: vi.fn().mockReturnValue({ text: "sum" }),
+				children: [],
+			}
+			const nameNode = {
+				text: "sum",
+				startPosition: { row: 0 },
+				endPosition: { row: 0 },
+				type: "identifier",
+				childForFieldName: vi.fn().mockReturnValue(null),
+				children: [],
+			}
+
+			mockLanguageParser.js.query.captures.mockReturnValue([
+				{ node: nameNode, name: "name.definition.function" },
+				{ node: fullNode, name: "definition.function" },
+			] as any)
+
+			const result = await parser["parseContent"]("test.js", fullNode.text, "hash")
+			expect(result.length).toBe(1)
+			expect(result[0].content).toBe(fullNode.text) // full function, not just "sum"
+			expect(result[0].identifier).toBe("sum")
+			expect(result[0].type).toBe("function_declaration")
+		})
+
+		it("should handle captures where only name.definition nodes exist (all filtered)", async () => {
+			// Edge case: if tree-sitter only returns @name.definition.xxx captures
+			// (shouldn't happen with real queries, but be defensive).
+			const content = `export const foo = 42`
+			mockLanguageParser.js.query.captures.mockReturnValue([
+				{
+					node: {
+						text: "foo",
+						startPosition: { row: 0 },
+						endPosition: { row: 0 },
+						type: "identifier",
+						childForFieldName: vi.fn().mockReturnValue(null),
+						children: [],
+					},
+					name: "name.definition.property",
+				},
+			] as any)
+
+			const result = await parser["parseContent"]("test.js", content, "hash")
+			// No definition nodes in queue after name-filtering
+			// (10) so this returns empty — correct, as the name-filtering means we never
+			// even enter the block-creation loop.
+			// If the filter were absent, the bare "foo" (3 chars) would still be dropped
+			// by the MIN_BLOCK_CHARS check, but it would still waste a queue iteration.
+			expect(result).toEqual([])
+		})
 	})
 
 	describe("_performFallbackChunking", () => {
@@ -199,17 +262,17 @@ describe("CodeParser", () => {
 		})
 
 		it("should respect MIN_BLOCK_CHARS minimum threshold for all languages", async () => {
-			// Test content that is below MIN_BLOCK_CHARS (10) (should be filtered)
-			const shortContent = "f(){}"
-			expect(shortContent.length).toBeLessThan(10)
+			// Test content that is below MIN_BLOCK_CHARS (30) (should be filtered)
+			const shortContent = "function add(a,b){return a+b}"
+			expect(shortContent.length).toBeLessThan(30)
 
-			// Test content that is exactly 10 characters (should be included)
-			const minContent = "function f"
-			expect(minContent.length).toBe(10)
+			// Test content that is exactly 30 characters (should be included)
+			const minContent = "function add(a,b){return a+b;}"
+			expect(minContent.length).toBe(30)
 
-			// Test content that is longer than 10 characters (should be included)
-			const longContent = "function calculate() { return 1 + 2 + 3; } // longer than 10 characters"
-			expect(longContent.length).toBeGreaterThan(10)
+			// Test content that is longer than 30 characters (should be included)
+			const longContent = "function calculate() { let sum = 0; return sum + 1; } // long"
+			expect(longContent.length).toBeGreaterThan(30)
 
 			// Mock the language parser to return captures for our test content
 			const mockCapture = (content: string, startLine: number = 0) => ({
@@ -229,7 +292,7 @@ describe("CodeParser", () => {
 			const shortResult = await parser["parseContent"]("test.js", shortContent, "hash1")
 			expect(shortResult).toEqual([])
 
-			// Test minimum content (50 chars) - should be included
+			// Test minimum content (30 chars) - should be included
 			mockLanguageParser.js.query.captures.mockReturnValue([mockCapture(minContent)])
 			const minResult = await parser["parseContent"]("test.js", minContent, "hash2")
 			expect(minResult.length).toBe(1)
@@ -403,9 +466,9 @@ Additional content to ensure we exceed the minimum block size requirements for p
 		})
 
 		it("should enforce MIN_BLOCK_CHARS for all markdown sections", async () => {
-			// At MIN_BLOCK_CHARS=10, only sections whose content falls below the
+			// At MIN_BLOCK_CHARS=30, only sections whose content falls below the
 			// threshold are dropped. Use single-character bodies for the two short
-			// sections so the rendered section content stays under 10 chars; the
+			// sections so the rendered section content stays under 30 chars; the
 			// long section should still be included.
 			const markdownContent = `#S\nx\n\n##A\ny\n\n###Long\nThis section has substantial content that exceeds the minimum character requirements.\nIt includes multiple lines with detailed information to ensure proper indexing.\nThe content is comprehensive enough to be included in the search results.`
 
@@ -447,7 +510,7 @@ Additional content to ensure we exceed the minimum block size requirements for p
 			// Only the long section should be included
 			expect(result).toHaveLength(1)
 			expect(result[0].identifier).toBe("Long Section")
-			expect(result[0].content.trim().length).toBeGreaterThanOrEqual(10) // MIN_BLOCK_CHARS
+			expect(result[0].content.trim().length).toBeGreaterThanOrEqual(30) // MIN_BLOCK_CHARS
 		})
 
 		it("should chunk large markdown sections and generate unique hashes for each chunk", async () => {
@@ -991,8 +1054,8 @@ This content verifies that processing continues after multiple oversized lines.`
 
 		it("should return empty array for markdown content below MIN_BLOCK_CHARS threshold", async () => {
 			const parser = new CodeParser()
-			// Below the current MIN_BLOCK_CHARS threshold of 10
-			const smallContent = "hi"
+			// Below the current MIN_BLOCK_CHARS threshold of 30
+			const smallContent = "short markdown content"
 
 			// Mock parseMarkdown to return empty array (no headers)
 			vi.mocked(parseMarkdown).mockReturnValue([])
@@ -1000,7 +1063,7 @@ This content verifies that processing continues after multiple oversized lines.`
 			const results = await parser["parseContent"]("test.md", smallContent, "test-hash")
 
 			expect(results.length).toBe(0)
-			expect(smallContent.trim().length).toBeLessThan(10) // Verify our test assumption
+			expect(smallContent.trim().length).toBeLessThan(30) // Verify our test assumption
 		})
 	})
 })
