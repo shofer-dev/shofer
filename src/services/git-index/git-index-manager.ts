@@ -528,7 +528,9 @@ export class GitIndexManager {
 		// Validate the embedder
 		const validation = await this._serviceFactory.validateEmbedder(embedder)
 		if (!validation.valid) {
-			throw new Error(`Embedder validation failed: ${validation.error}`)
+			const errorMessage = validation.error || "Embedder configuration validation failed"
+			this._stateManager.setSystemState("Error", errorMessage)
+			throw new Error(errorMessage)
 		}
 
 		// Compute vector size using the same logic as CodeIndexServiceFactory.createVectorStore()
