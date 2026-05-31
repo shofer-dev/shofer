@@ -3,6 +3,7 @@ import { useEvent } from "react-use"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import { type ExtensionMessage, TelemetryEventName, MARKETPLACE_ENABLED } from "@shofer/types"
+import { getAllModes } from "@shofer/shared/modes"
 
 import TranslationProvider from "./i18n/TranslationContext"
 import { MarketplaceViewStateManager } from "./components/marketplace/MarketplaceViewStateManager"
@@ -68,7 +69,25 @@ const App = () => {
 		taskHistory,
 		parallelTasks,
 		currentTaskItem,
+		customModes,
 	} = useExtensionState()
+
+	// Merge built-in and custom modes into a flat slug→name lookup for
+	// the TaskSelector subtitle. Rebuild whenever customModes change.
+	const allModes = useMemo(() => getAllModes(customModes).map((m) => ({ slug: m.slug, name: m.name })), [customModes])
+
+	// Worktree list — populated by worktreeList window messages from the
+	// extension host (same mechanism WorktreeIndicator uses).
+	const [worktrees, setWorktrees] = useState<Array<{ path: string; branch: string }>>([])
+	useEffect(() => {
+		const onMessage = (e: MessageEvent) => {
+			if (e.data?.type === "worktreeList") {
+				setWorktrees(e.data.worktrees || [])
+			}
+		}
+		window.addEventListener("message", onMessage)
+		return () => window.removeEventListener("message", onMessage)
+	}, [])
 
 	// Create a persistent state manager (only when marketplace is enabled)
 	const marketplaceStateManager = useMemo(() => (MARKETPLACE_ENABLED ? new MarketplaceViewStateManager() : null), [])
@@ -262,6 +281,8 @@ const App = () => {
 				taskHistory={taskHistory || []}
 				parallelTasks={parallelTasks || []}
 				currentTaskId={currentTaskItem?.id}
+				modes={allModes}
+				worktrees={worktrees}
 			/>
 			{deleteMessageDialogState.hasCheckpoint ? (
 				<MemoizedCheckpointRestoreDialog
