@@ -142,6 +142,49 @@ export function useScrollLifecycle({
 		setScrollPhase(nextPhase)
 	}, [])
 
+	// -----------------------------------------------------------------------
+	// Scroll commands
+	// -----------------------------------------------------------------------
+	// Must be declared before the phase-transition callbacks that depend on them.
+
+	const scrollToBottomSmooth = useMemo(
+		() =>
+			debounce(
+				() => {
+					// Guard: if the user disengaged while this call was
+					// queued (trailing edge), do not pull them back to
+					// the bottom.  The leading-edge call fires
+					// synchronously from handleRowHeightChange, which
+					// already checks isAtBottomRef and the force-pin
+					// condition; the trailing-edge call runs after the
+					// debounce window and may have been overtaken by a
+					// user scroll-up.
+					if (scrollPhaseRef.current !== "ANCHORED_FOLLOWING") {
+						return
+					}
+					virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })
+				},
+				10,
+				{ immediate: true },
+			),
+		[virtuosoRef],
+	)
+
+	const scrollToBottomAuto = useCallback(() => {
+		virtuosoRef.current?.scrollToIndex({
+			index: "LAST",
+			align: "end",
+			behavior: "auto",
+		})
+	}, [virtuosoRef])
+
+	const cancelReanchorFrame = useCallback(() => {
+		if (reanchorAnimationFrameRef.current !== null) {
+			cancelAnimationFrame(reanchorAnimationFrameRef.current)
+			reanchorAnimationFrameRef.current = null
+		}
+	}, [])
+
 	const enterAnchoredFollowing = useCallback(
 		(reason?: string) => {
 			transitionScrollPhase("ANCHORED_FOLLOWING", reason)
@@ -156,6 +199,12 @@ export function useScrollLifecycle({
 		(_source: ScrollFollowDisengageSource) => {
 			transitionScrollPhase("USER_BROWSING_HISTORY", _source)
 			setShowScrollToBottom(true)
+			// Cancel any pending debounced scroll-to-bottom calls
+			// (trailing-edge) that were scheduled before the user
+			// disengaged. Without this, a trailing scrollToBottomSmooth
+			// fires ~10 ms after the user scrolls up, pulling them right
+			// back to the bottom.
+			scrollToBottomSmooth.clear()
 			// Open a brief immune window so any in-flight programmatic
 			// scroll-to-bottom that completes after this point cannot
 			// pull the user back to ANCHORED_FOLLOWING.
@@ -178,39 +227,8 @@ export function useScrollLifecycle({
 				userIntentScrollUpTimeoutRef.current = null
 			}, 200)
 		},
-		[transitionScrollPhase],
+		[scrollToBottomSmooth, transitionScrollPhase],
 	)
-
-	const cancelReanchorFrame = useCallback(() => {
-		if (reanchorAnimationFrameRef.current !== null) {
-			cancelAnimationFrame(reanchorAnimationFrameRef.current)
-			reanchorAnimationFrameRef.current = null
-		}
-	}, [])
-
-	// -----------------------------------------------------------------------
-	// Scroll commands
-	// -----------------------------------------------------------------------
-
-	const scrollToBottomSmooth = useMemo(
-		() =>
-			debounce(
-				() => {
-					virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })
-				},
-				10,
-				{ immediate: true },
-			),
-		[virtuosoRef],
-	)
-
-	const scrollToBottomAuto = useCallback(() => {
-		virtuosoRef.current?.scrollToIndex({
-			index: "LAST",
-			align: "end",
-			behavior: "auto",
-		})
-	}, [virtuosoRef])
 
 	const clearHydrationWindow = useCallback(() => {
 		isHydratingRef.current = false
