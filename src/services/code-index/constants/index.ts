@@ -2,12 +2,11 @@ import { CODEBASE_INDEX_DEFAULTS } from "@shofer/types"
 
 /**Parser */
 export const MAX_BLOCK_CHARS = 1000
-// Lowered from 50 so that small but meaningful files (short docs, single-
-// function snippets, freshly created scratch files) still produce at least
-// one chunk and become searchable. Anything below ~10 chars is almost
-// always noise (an empty file, a trailing newline, a placeholder) and
-// safe to drop on the floor.
-export const MIN_BLOCK_CHARS = 10
+// Raised from 10 to 30 so that bare identifiers and trivial one-liners
+// (e.g. `console.log = () => {}` at 22 chars, `process.emitWarning = () => {}`
+// at 30 chars) no longer produce standalone vector points. These fragments
+// pollute the index with low-signal entries and inflate embedding costs.
+export const MIN_BLOCK_CHARS = 30
 export const MIN_CHUNK_REMAINDER_CHARS = 200 // Minimum characters for the *next* chunk after a split
 export const MAX_CHARS_TOLERANCE_FACTOR = 1.15 // 15% tolerance for max chars
 
