@@ -118,6 +118,8 @@ export interface ExtensionMessage {
 		| "parallelTasksUpdated"
 		| "taskNotification"
 		| "taskNotificationCleared"
+		// Workflow response types
+		| "workflowsList"
 		// Worktree response types
 		| "worktreeList"
 		| "worktreeResult"
@@ -227,6 +229,11 @@ export interface ExtensionMessage {
 		ownCost: number
 		childrenCost: number
 	}
+	// Workflow response properties
+	workflows?: Array<{
+		name: string
+		params: Array<{ name: string; type: string }>
+	}>
 	// Parallel task response properties
 	parallelTasks?: Array<{
 		id: string
@@ -413,6 +420,11 @@ export type ExtensionState = Pick<
 
 	renderContext: "sidebar" | "editor"
 
+	// Workflow management
+	workflows?: Array<{
+		name: string
+		params: Array<{ name: string; type: string }>
+	}>
 	// Parallel task management
 	parallelTasks?: Array<{
 		id: string
@@ -729,6 +741,9 @@ export interface WebviewMessage {
 		| "approveBackgroundTask"
 		| "requestParallelTasks"
 		| "updateCostLimit"
+		// Workflow messages
+		| "listWorkflows"
+		| "createWorkflow"
 		// Diagnostic logging from webview → extension OutputChannel
 		| "webviewLog"
 		// Metrics push from webview → extension host registry (Phase 4)

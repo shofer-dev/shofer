@@ -296,8 +296,25 @@ export interface TaskSelectorProps {
 /**
  * Returns the display name for a history item, preferring the user-set name
  * then falling back to the first 60 chars of the task text (same as HistoryView).
+ *
+ * For WorkflowTasks, uses the flow name from the mode field or the persisted
+ * workflow metadata.
  */
 export function getTaskDisplayName(item: HistoryItem): string {
+	// WorkflowTask: show flow name
+	if (item.isWorkflow) {
+		// The mode field holds the flow name (e.g., "implement-feature")
+		if (item.mode) {
+			return `Workflow: ${item.mode}`
+		}
+		// Fallback: try to extract from slangSource
+		if (item.slangSource) {
+			const match = /flow\s+"([^"]+)"/.exec(item.slangSource)
+			if (match) return `Workflow: ${match[1]}`
+		}
+		return `Workflow ${item.number}`
+	}
+
 	if (item.name) return item.name
 	if (item.task) {
 		const trimmed = item.task.trim()
@@ -427,17 +444,29 @@ function renderTaskRow({
 				</span>
 			)}
 
-			{/* Leading status icon — single uniform mechanism for every state. */}
-			<StandardTooltip content={stateConfig.label}>
-				<span
-					className={cn(
-						"codicon flex-shrink-0 text-base leading-none",
-						stateConfig.icon,
-						stateConfig.iconColor,
-					)}
-					aria-label={stateConfig.label}
-				/>
-			</StandardTooltip>
+			{/* Leading status icon — workflow badge for WorkflowTasks, state icon otherwise. */}
+			{item.isWorkflow ? (
+				<StandardTooltip content={`Workflow: ${item.mode || item.number}`}>
+					<span
+						className={cn(
+							"codicon codicon-organization flex-shrink-0 text-base leading-none",
+							stateConfig.iconColor,
+						)}
+						aria-label="Workflow"
+					/>
+				</StandardTooltip>
+			) : (
+				<StandardTooltip content={stateConfig.label}>
+					<span
+						className={cn(
+							"codicon flex-shrink-0 text-base leading-none",
+							stateConfig.icon,
+							stateConfig.iconColor,
+						)}
+						aria-label={stateConfig.label}
+					/>
+				</StandardTooltip>
+			)}
 
 			{/* Title + subtitle column */}
 			{isEditing ? (

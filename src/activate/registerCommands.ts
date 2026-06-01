@@ -88,30 +88,87 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		// Pop current task WITHOUT aborting - it continues in background
+		// Show dropdown: New Task or New Workflow
+		const items: vscode.QuickPickItem[] = [
+			{ label: `$(add) ${t("plus:newTask.label")}`, description: t("plus:newTask.description") },
+			{ label: `$(workflow) ${t("plus:newWorkflow.label")}`, description: t("plus:newWorkflow.description") },
+		]
+
+		const pick = await vscode.window.showQuickPick(items, {
+			placeHolder: t("plus:chooseWhatToCreate"),
+		})
+
+		if (!pick) return
+
+		if (pick.label.includes(t("plus:newWorkflow.label"))) {
+			// Discover available workflows
+			const { discoverWorkflows } = await import("../core/workflow/index")
+			const workflows = await discoverWorkflows(visibleProvider.cwd)
+
+			if (workflows.size === 0) {
+				vscode.window.showInformationMessage(t("plus:noWorkflowsFound"))
+				return
+			}
+
+			const flowItems: (vscode.QuickPickItem & { flowName: string })[] = Array.from(workflows.entries()).map(
+				([name]) => ({
+					label: `$(workflow) ${name}`,
+					description: t("plus:slangWorkflow"),
+					flowName: name,
+				}),
+			)
+
+			const flowPick = await vscode.window.showQuickPick(flowItems, {
+				placeHolder: t("plus:selectWorkflow"),
+			})
+
+			if (!flowPick) return
+
+			// Pop current task WITHOUT aborting
+			const poppedTask = visibleProvider.popFromStackWithoutAborting()
+			if (poppedTask) {
+				visibleProvider.taskManager.registerBackgroundTask(poppedTask)
+				visibleProvider.log(
+					`[plusButtonClicked] Task ${poppedTask.taskId} moved to background (workflow launch)`,
+				)
+			}
+
+			// Notify webview to reset to a fresh surface
+			await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+			await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+			await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
+
+			// Create the workflow task directly
+			const slangSource = workflows.get(flowPick.flowName)
+			if (slangSource) {
+				try {
+					const { createWorkflowTask } = await import("../core/workflow/index")
+					const task = await createWorkflowTask(visibleProvider, slangSource)
+					await visibleProvider.addShoferToStack(task)
+					await visibleProvider.postStateToWebview()
+					task.start()
+				} catch (error) {
+					visibleProvider.log(`Error creating workflow: ${error}`)
+					vscode.window.showErrorMessage(`Failed to create workflow: ${error}`)
+				}
+			}
+			return
+		}
+
+		// Default: New Task (existing behavior)
 		const poppedTask = visibleProvider.popFromStackWithoutAborting()
 		if (poppedTask) {
-			// Register as background task so it shows correct state indicators
 			visibleProvider.taskManager.registerBackgroundTask(poppedTask)
 			visibleProvider.log(
 				`[plusButtonClicked] Task ${poppedTask.taskId} moved to background (parallel execution)`,
 			)
 		}
 
-		// Sticky-mode: a fresh "new task" surface starts in the upstream
-		// default mode (`defaultModeSlug`, currently "code"), regardless
-		// of which mode the previously focused task was using. The popped
-		// task keeps its own mode persisted on its `_taskMode` and in the
-		// history item, so it's restored on refocus.
 		await visibleProvider.handleUserModeSwitch(defaultModeSlug)
 
 		await visibleProvider.refreshWorkspace()
 		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
-		// Notify the UI to reset the chat input and save the outgoing task's
-		// draft, so text typed in the previous task stays with that task.
 		await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-		// Send focusInput action immediately after chatButtonClicked
-		// This ensures the focus happens after the view has switched
 		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
 	},
 	popoutButtonClicked: () => {

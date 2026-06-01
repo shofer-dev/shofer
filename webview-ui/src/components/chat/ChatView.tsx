@@ -1935,6 +1935,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			)}
 			{task ? (
 				<>
+					{/* For WorkflowTasks, simplify the header (no TodoList, ContextWindow, cost breakdown) */}
 					<TaskHeader
 						task={task}
 						tokensIn={apiMetrics.totalTokensIn}
@@ -1955,31 +1956,37 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							)
 						}
 						costLimit={currentTaskItem?.costLimit}
-						onUpdateCostLimit={(newLimit) => {
-							if (currentTaskItem?.id) {
-								vscode.postMessage({
-									type: "updateCostLimit",
-									taskId: currentTaskItem.id,
-									costLimit: newLimit,
-								})
-							}
-						}}
+						onUpdateCostLimit={
+							currentTaskItem?.isWorkflow
+								? undefined
+								: (newLimit) => {
+										if (currentTaskItem?.id) {
+											vscode.postMessage({
+												type: "updateCostLimit",
+												taskId: currentTaskItem.id,
+												costLimit: newLimit,
+											})
+										}
+									}
+						}
 						parentTaskId={currentTaskItem?.parentTaskId}
 						costBreakdown={
-							currentTaskItem?.id && aggregatedCostsMap.has(currentTaskItem.id)
-								? getCostBreakdownIfNeeded(aggregatedCostsMap.get(currentTaskItem.id)!, {
-										own: t("common:costs.own"),
-										subtasks: t("common:costs.subtasks"),
-									})
-								: undefined
+							currentTaskItem?.isWorkflow
+								? undefined
+								: currentTaskItem?.id && aggregatedCostsMap.has(currentTaskItem.id)
+									? getCostBreakdownIfNeeded(aggregatedCostsMap.get(currentTaskItem.id)!, {
+											own: t("common:costs.own"),
+											subtasks: t("common:costs.subtasks"),
+										})
+									: undefined
 						}
-						contextTokens={apiMetrics.contextTokens}
+						contextTokens={currentTaskItem?.isWorkflow ? 0 : apiMetrics.contextTokens}
 						buttonsDisabled={sendingDisabled}
-						handleCondenseContext={handleCondenseContext}
-						todos={latestTodos}
+						handleCondenseContext={currentTaskItem?.isWorkflow ? undefined : handleCondenseContext}
+						todos={currentTaskItem?.isWorkflow ? undefined : latestTodos}
 					/>
 
-					{checkpointWarning && (
+					{!currentTaskItem?.isWorkflow && checkpointWarning && (
 						<div className="px-3">
 							<CheckpointWarning warning={checkpointWarning} />
 						</div>
@@ -2045,7 +2052,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							</StandardTooltip>
 						)}
 					</div>
-					<FileChangesPanel taskId={currentTaskItem?.id} />
+					{/* Hide FileChangesPanel for WorkflowTasks — no file edits in the workflow root. */}
+					{!currentTaskItem?.isWorkflow && <FileChangesPanel taskId={currentTaskItem?.id} />}
 					{areButtonsVisible && (
 						<div
 							className={`flex h-9 items-center mb-1 px-[15px] ${
