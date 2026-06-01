@@ -4,6 +4,18 @@
 	"tasks": {
 		"bundle": {
 			"dependsOn": ["^build", "@shofer/vscode-webview#build"],
+			"inputs": [
+				"extension.ts",
+				"esbuild.mjs",
+				"workers/**",
+				"../packages/core/src/**",
+				"../packages/ipc/src/**",
+				"../packages/evals/src/**",
+				"../packages/telemetry/src/**",
+				"../packages/vscode-shim/src/**",
+				"../packages/types/src/**",
+				"../packages/**/package.json"
+			],
 			"outputs": ["dist/**"]
 		},
 		"vsix": {
