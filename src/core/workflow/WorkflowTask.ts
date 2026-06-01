@@ -153,7 +153,7 @@ export class WorkflowTask extends Task {
 		if (this.slangLoopStarted) return
 		this.slangLoopStarted = true
 		try {
-			this.emit(ShoferEventName.TaskStarted, this.taskId)
+			this.emit(ShoferEventName.TaskStarted)
 			this.taskStartedEmitted = true
 			await this.slangLoop()
 		} catch (error) {
@@ -203,7 +203,8 @@ export class WorkflowTask extends Task {
 
 		if (this.flowState.round >= budgetRounds) {
 			this.flowState.status = "budget_exceeded"
-			await this.abortBackgroundChildren()
+			// Use parent's public abortBackgroundChildren
+			await super.abortBackgroundChildren()
 			await this.emitTaskCompleted("poor")
 		}
 	}
@@ -379,7 +380,8 @@ export class WorkflowTask extends Task {
 				this.backgroundChildren.set(task.taskId, {
 					taskId: task.taskId,
 					status: "running",
-					startTime: Date.now(),
+					createdAt: Date.now(),
+					parentTaskId: this.taskId,
 				})
 				agentState.taskId = task.taskId
 			}
@@ -514,9 +516,9 @@ export class WorkflowTask extends Task {
 			const reason = op.reason || `Agent '${agentName}' needs your input.`
 			await this.ask("followup", reason)
 
-			const response = this.askResponseText || ""
-			this.askResponse = undefined
-			this.askResponseText = undefined
+			const response = (this as any).askResponseText || ""
+			;(this as any).askResponse = undefined
+			;(this as any).askResponseText = undefined
 
 			this.flowState.mailbox.push({
 				from: "Human",
@@ -584,7 +586,7 @@ export class WorkflowTask extends Task {
 		}
 	}
 
-	private async abortBackgroundChildren(): Promise<void> {
+	private async abortAllChildren(): Promise<void> {
 		for (const [taskId, handle] of this.backgroundChildren) {
 			handle.status = "cancelled"
 			const provider = this.providerRef.deref()
