@@ -1982,7 +1982,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						}
 						contextTokens={currentTaskItem?.isWorkflow ? 0 : apiMetrics.contextTokens}
 						buttonsDisabled={sendingDisabled}
-						handleCondenseContext={currentTaskItem?.isWorkflow ? undefined : handleCondenseContext}
+						handleCondenseContext={currentTaskItem?.isWorkflow ? () => {} : handleCondenseContext}
 						todos={currentTaskItem?.isWorkflow ? undefined : latestTodos}
 					/>
 
