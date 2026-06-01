@@ -453,7 +453,13 @@ export function useScrollLifecycle({
 		},
 		[enterUserBrowsingHistory, scrollContainerRef],
 	)
-	useEvent("wheel", handleWheel, window, { passive: true })
+	// Capture phase: must fire BEFORE the wheel event reaches Virtuoso's
+	// internal scrollable element.  Without this, Virtuoso processes the
+	// scroll first → atBottomStateChange(false) fires while
+	// scrollPhaseRef is still ANCHORED_FOLLOWING + isStreaming →
+	// scrollToBottomAuto() snaps the user back to the bottom before
+	// handleWheel ever gets a chance to set userIntentScrollUpRef.
+	useEvent("wheel", handleWheel, window, { passive: true, capture: true })
 
 	// -----------------------------------------------------------------------
 	// User intent: pointer drag
