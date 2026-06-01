@@ -4178,6 +4178,70 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		// ── Workflow messages ──
+
+		case "listWorkflows": {
+			try {
+				const { discoverWorkflows, parseSlang } = await import("../workflow/index")
+				const workflows = await discoverWorkflows(provider.cwd)
+				// Parse each workflow to extract metadata
+				const parsedWorkflows = Array.from(workflows.entries()).map(([name, source]) => {
+					try {
+						const { ast } = parseSlang(source)
+						const flow = ast.flows[0]
+						const params = flow?.params?.map((p: any) => ({ name: p.name, type: p.paramType })) || []
+						return { name, params }
+					} catch {
+						return { name, params: [] as { name: string; type: string }[] }
+					}
+				})
+				await provider.postMessageToWebview({
+					type: "workflowsList",
+					workflows: parsedWorkflows,
+				})
+			} catch (error) {
+				provider.log(`Error listing workflows: ${error}`)
+			}
+			break
+		}
+
+		case "createWorkflow": {
+			try {
+				const flowName = (message as any).flowName as string
+				const flowParams = (message as any).flowParams as Record<string, string> | undefined
+				if (!flowName) {
+					provider.log("createWorkflow: missing flowName")
+					break
+				}
+
+				const { createWorkflowTask } = await import("../workflow/index")
+				const { discoverWorkflows } = await import("../workflow/index")
+				const workflows = await discoverWorkflows(provider.cwd)
+				const slangSource = workflows.get(flowName)
+				if (!slangSource) {
+					provider.log(`createWorkflow: flow '${flowName}' not found`)
+					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
+					break
+				}
+
+				const task = await createWorkflowTask(provider, slangSource, flowParams)
+
+				// Register with TaskManager and show in TaskSelector
+				await provider.addShoferToStack(task)
+
+				// Notify UI and start the slang loop
+				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
+				await provider.postStateToWebview()
+
+				// Start the workflow loop
+				task.start()
+			} catch (error) {
+				provider.log(`Error creating workflow: ${error}`)
+				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
+			}
+			break
+		}
+
 		case "requestParallelTasks": {
 			try {
 				const managedTasks = provider.getManagedTasks()

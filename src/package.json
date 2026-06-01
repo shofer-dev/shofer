@@ -733,6 +733,7 @@
 		"@mistralai/mistralai": "^1.9.18",
 		"@modelcontextprotocol/sdk": "1.14.0",
 		"@qdrant/js-client-rest": "^1.14.0",
+		"@riktar/slang": "github:riktar/slang",
 		"@shofer/core": "workspace:^",
 		"@shofer/ipc": "workspace:^",
 		"@shofer/telemetry": "workspace:^",

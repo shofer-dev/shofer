@@ -129,6 +129,13 @@ export const historyItemSchema = z.object({
 	// File change stats — total lines added/removed across all files in this task.
 	insertions: z.number().optional(),
 	deletions: z.number().optional(),
+	// Workflow support — set when this HistoryItem represents a WorkflowTask.
+	/** Whether this task is a WorkflowTask (has a slang-driven loop). */
+	isWorkflow: z.boolean().optional(),
+	/** The .slang source content for WorkflowTasks. */
+	slangSource: z.string().optional(),
+	/** Serialized FlowState JSON blob for WorkflowTask checkpoint/resume. */
+	flowState: z.record(z.unknown()).optional(),
 })
 
 export type HistoryItem = z.infer<typeof historyItemSchema>
