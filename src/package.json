@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "1.0.37",
+	"version": "1.0.38",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -86,6 +86,11 @@
 				"command": "shofer.plusButtonClicked",
 				"title": "%command.newTask.title%",
 				"icon": "$(add)"
+			},
+			{
+				"command": "shofer.newWorkflowButtonClicked",
+				"title": "%command.newWorkflow.title%",
+				"icon": "$(rocket)"
 			},
 			{
 				"command": "shofer.tasksButtonClicked",
@@ -249,7 +254,7 @@
 		"menus": {
 			"view/title": [
 				{
-					"command": "shofer.plusButtonClicked",
+					"submenu": "shofer.newSubmenu",
 					"group": "navigation@1",
 					"when": "view == shofer.SidebarProvider"
 				},
@@ -340,9 +345,19 @@
 					"group": "1_actions@3"
 				}
 			],
-			"editor/title": [
+			"shofer.newSubmenu": [
 				{
 					"command": "shofer.plusButtonClicked",
+					"group": "1_create@1"
+				},
+				{
+					"command": "shofer.newWorkflowButtonClicked",
+					"group": "1_create@2"
+				}
+			],
+			"editor/title": [
+				{
+					"submenu": "shofer.newSubmenu",
 					"group": "navigation@1",
 					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
 				},
@@ -408,6 +423,11 @@
 			{
 				"id": "shofer.terminalMenu",
 				"label": "%views.terminalMenu.label%"
+			},
+			{
+				"id": "shofer.newSubmenu",
+				"label": "%views.newSubmenu.label%",
+				"icon": "$(add)"
 			}
 		],
 		"configuration": {

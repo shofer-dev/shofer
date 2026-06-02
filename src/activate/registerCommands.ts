@@ -88,74 +88,8 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		// Show dropdown: New Task or New Workflow
-		const items: vscode.QuickPickItem[] = [
-			{ label: `$(add) ${t("plus:newTask.label")}`, description: t("plus:newTask.description") },
-			{ label: `$(workflow) ${t("plus:newWorkflow.label")}`, description: t("plus:newWorkflow.description") },
-		]
-
-		const pick = await vscode.window.showQuickPick(items, {
-			placeHolder: t("plus:chooseWhatToCreate"),
-		})
-
-		if (!pick) return
-
-		if (pick.label.includes(t("plus:newWorkflow.label"))) {
-			// Discover available workflows
-			const { discoverWorkflows } = await import("../core/workflow/index")
-			const workflows = await discoverWorkflows(visibleProvider.cwd)
-
-			if (workflows.size === 0) {
-				vscode.window.showInformationMessage(t("plus:noWorkflowsFound"))
-				return
-			}
-
-			const flowItems: (vscode.QuickPickItem & { flowName: string })[] = Array.from(workflows.entries()).map(
-				([name]) => ({
-					label: `$(workflow) ${name}`,
-					description: t("plus:slangWorkflow"),
-					flowName: name,
-				}),
-			)
-
-			const flowPick = await vscode.window.showQuickPick(flowItems, {
-				placeHolder: t("plus:selectWorkflow"),
-			})
-
-			if (!flowPick) return
-
-			// Pop current task WITHOUT aborting
-			const poppedTask = visibleProvider.popFromStackWithoutAborting()
-			if (poppedTask) {
-				visibleProvider.taskManager.registerBackgroundTask(poppedTask)
-				visibleProvider.log(
-					`[plusButtonClicked] Task ${poppedTask.taskId} moved to background (workflow launch)`,
-				)
-			}
-
-			// Notify webview to reset to a fresh surface
-			await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
-			await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-			await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
-
-			// Create the workflow task directly
-			const slangSource = workflows.get(flowPick.flowName)
-			if (slangSource) {
-				try {
-					const { createWorkflowTask } = await import("../core/workflow/index")
-					const task = await createWorkflowTask(visibleProvider, slangSource)
-					await visibleProvider.addShoferToStack(task)
-					await visibleProvider.postStateToWebview()
-					task.start()
-				} catch (error) {
-					visibleProvider.log(`Error creating workflow: ${error}`)
-					vscode.window.showErrorMessage(`Failed to create workflow: ${error}`)
-				}
-			}
-			return
-		}
-
-		// Default: New Task (existing behavior)
+		// New Task: pop the current task to the background (parallel execution)
+		// without aborting it, then reset the webview to a fresh chat surface.
 		const poppedTask = visibleProvider.popFromStackWithoutAborting()
 		if (poppedTask) {
 			visibleProvider.taskManager.registerBackgroundTask(poppedTask)
@@ -170,6 +104,67 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 		await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
+	},
+	newWorkflowButtonClicked: async () => {
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+
+		if (!visibleProvider) {
+			return
+		}
+
+		TelemetryService.instance.captureTitleButtonClicked("newWorkflow")
+
+		// Discover available workflows from project + global .shofer/workflows/.
+		const { discoverWorkflows } = await import("../core/workflow/index")
+		const workflows = await discoverWorkflows(visibleProvider.cwd)
+
+		if (workflows.size === 0) {
+			vscode.window.showInformationMessage(t("plus:noWorkflowsFound"))
+			return
+		}
+
+		const flowItems: (vscode.QuickPickItem & { flowName: string })[] = Array.from(workflows.entries()).map(
+			([name]) => ({
+				label: `$(rocket) ${name}`,
+				description: t("plus:slangWorkflow"),
+				flowName: name,
+			}),
+		)
+
+		const flowPick = await vscode.window.showQuickPick(flowItems, {
+			placeHolder: t("plus:selectWorkflow"),
+		})
+
+		if (!flowPick) return
+
+		// Pop the current task to the background WITHOUT aborting it.
+		const poppedTask = visibleProvider.popFromStackWithoutAborting()
+		if (poppedTask) {
+			visibleProvider.taskManager.registerBackgroundTask(poppedTask)
+			visibleProvider.log(
+				`[newWorkflowButtonClicked] Task ${poppedTask.taskId} moved to background (workflow launch)`,
+			)
+		}
+
+		// Notify webview to reset to a fresh surface.
+		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+		await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
+
+		// Create and start the workflow task directly.
+		const slangSource = workflows.get(flowPick.flowName)
+		if (slangSource) {
+			try {
+				const { createWorkflowTask } = await import("../core/workflow/index")
+				const task = await createWorkflowTask(visibleProvider, slangSource)
+				await visibleProvider.addShoferToStack(task)
+				await visibleProvider.postStateToWebview()
+				task.start()
+			} catch (error) {
+				visibleProvider.log(`Error creating workflow: ${error}`)
+				vscode.window.showErrorMessage(`Failed to create workflow: ${error}`)
+			}
+		}
 	},
 	popoutButtonClicked: () => {
 		TelemetryService.instance.captureTitleButtonClicked("popout")
