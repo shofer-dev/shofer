@@ -1,26 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ArrowLeft, ListChecks, Plus, Rocket, X } from "lucide-react"
+import { ListChecks, Rocket, X } from "lucide-react"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Tab, TabContent, TabHeader } from "../common/Tab"
 
 /**
- * LauncherView — the full-panel "what do you want to start?" surface shown when
- * the user clicks the "+" title-bar button.
+ * LauncherView — the full-panel "pick what to start" surface shown when the
+ * user picks an item from the native "+" title-bar dropdown (New Task / New
+ * Workflow). It deliberately replaces the chat surface while active.
  *
- * It is a two-stage card launcher, deliberately self-contained so it can fully
- * replace the chat surface while active:
+ * The dropdown chooses the stage up-front, so the launcher opens directly at:
  *
- *   stage "root"     → two cards: New Task / New Workflow
  *   stage "task"     → one card per available mode (clicking starts a fresh
  *                      task in that mode via the `launchTask` host message)
  *   stage "workflow" → one card per discovered .slang workflow (clicking
  *                      starts it via the existing `createWorkflow` host message)
  *
  * Per-flow input fields are intentionally deferred; selecting a workflow starts
- * it immediately. Once a leaf card is clicked the launcher closes (the host
- * switches the webview back to the chat surface, where live status renders).
+ * it immediately. Once a card is clicked the launcher closes (the host switches
+ * the webview back to the chat surface, where live status renders).
  */
 
 /** A discovered .slang workflow as reported by the host `workflowsList` message. */
@@ -39,11 +38,17 @@ interface LauncherMode {
 interface LauncherViewProps {
 	/** Available modes (built-in + custom) to offer in the New Task stage. */
 	modes: LauncherMode[]
+	/**
+	 * Which stage to open at. Chosen by the native New Task / New Workflow
+	 * title-bar dropdown — "task" shows the mode cards, "workflow" shows the
+	 * discovered .slang workflow cards.
+	 */
+	initialStage: Stage
 	/** Called to dismiss the launcher and return to the chat surface. */
 	onClose: () => void
 }
 
-type Stage = "root" | "task" | "workflow"
+type Stage = "task" | "workflow"
 
 /** A single clickable launcher card with an icon, title and optional subtitle. */
 const LauncherCard = ({
@@ -71,9 +76,8 @@ const LauncherCard = ({
 	</button>
 )
 
-export const LauncherView = ({ modes, onClose }: LauncherViewProps) => {
+export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps) => {
 	const { t } = useAppTranslation()
-	const [stage, setStage] = useState<Stage>("root")
 	const [workflows, setWorkflows] = useState<LauncherWorkflow[]>([])
 	const [workflowsLoaded, setWorkflowsLoaded] = useState(false)
 
@@ -108,31 +112,18 @@ export const LauncherView = ({ modes, onClose }: LauncherViewProps) => {
 	)
 
 	const title = useMemo(() => {
-		switch (stage) {
+		switch (initialStage) {
 			case "task":
 				return t("launcher:newTask.title")
 			case "workflow":
 				return t("launcher:newWorkflow.title")
-			default:
-				return t("launcher:root.title")
 		}
-	}, [stage, t])
+	}, [initialStage, t])
 
 	return (
 		<Tab>
 			<TabHeader className="flex items-center justify-between">
-				<div className="flex items-center gap-2">
-					{stage !== "root" ? (
-						<button
-							type="button"
-							onClick={() => setStage("root")}
-							className="flex items-center text-vscode-foreground/80 hover:text-vscode-foreground focus:outline-none"
-							aria-label={t("launcher:back")}>
-							<ArrowLeft className="size-4" />
-						</button>
-					) : null}
-					<h3 className="m-0 text-base font-medium">{title}</h3>
-				</div>
+				<h3 className="m-0 text-base font-medium">{title}</h3>
 				<button
 					type="button"
 					onClick={onClose}
@@ -143,24 +134,7 @@ export const LauncherView = ({ modes, onClose }: LauncherViewProps) => {
 			</TabHeader>
 
 			<TabContent className="flex flex-col gap-3">
-				{stage === "root" ? (
-					<>
-						<LauncherCard
-							icon={<Plus className="size-5" />}
-							title={t("launcher:root.newTask")}
-							subtitle={t("launcher:root.newTaskDescription")}
-							onClick={() => setStage("task")}
-						/>
-						<LauncherCard
-							icon={<Rocket className="size-5" />}
-							title={t("launcher:root.newWorkflow")}
-							subtitle={t("launcher:root.newWorkflowDescription")}
-							onClick={() => setStage("workflow")}
-						/>
-					</>
-				) : null}
-
-				{stage === "task" ? (
+				{initialStage === "task" ? (
 					modes.length === 0 ? (
 						<p className="text-sm text-vscode-descriptionForeground">{t("launcher:newTask.empty")}</p>
 					) : (
@@ -176,7 +150,7 @@ export const LauncherView = ({ modes, onClose }: LauncherViewProps) => {
 					)
 				) : null}
 
-				{stage === "workflow" ? (
+				{initialStage === "workflow" ? (
 					!workflowsLoaded ? (
 						<p className="text-sm text-vscode-descriptionForeground">{t("launcher:newWorkflow.loading")}</p>
 					) : workflows.length === 0 ? (

@@ -87,13 +87,36 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		// The "+" now opens the in-webview launcher (New Task / New Workflow
-		// cards) instead of immediately creating a task. The current task is
-		// left untouched on the stack — it is only popped to the background
-		// once the user actually picks a mode (launchTask) or a workflow
-		// (createWorkflow). This keeps the active task running while the user
-		// browses the launcher and lets them cancel out without side effects.
-		await visibleProvider.postMessageToWebview({ type: "action", action: "launcherButtonClicked" })
+		// "New Task" entry of the native title-bar dropdown. Opens the
+		// in-webview launcher directly at the mode-picker stage. The current
+		// task is left untouched on the stack — it is only popped to the
+		// background once the user actually picks a mode (launchTask). This
+		// keeps the active task running while the user browses, and lets them
+		// cancel out without side effects.
+		await visibleProvider.postMessageToWebview({
+			type: "action",
+			action: "launcherButtonClicked",
+			values: { launcherStage: "task" },
+		})
+	},
+	newWorkflowButtonClicked: async () => {
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+
+		if (!visibleProvider) {
+			return
+		}
+
+		TelemetryService.instance.captureTitleButtonClicked("plus")
+
+		// "New Workflow" entry of the native title-bar dropdown. Opens the
+		// launcher directly at the workflow-picker stage; the current task is
+		// only popped to the background once a workflow is actually launched
+		// (createWorkflow).
+		await visibleProvider.postMessageToWebview({
+			type: "action",
+			action: "launcherButtonClicked",
+			values: { launcherStage: "workflow" },
+		})
 	},
 	popoutButtonClicked: () => {
 		TelemetryService.instance.captureTitleButtonClicked("popout")
