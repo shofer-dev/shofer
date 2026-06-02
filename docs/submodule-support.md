@@ -1,11 +1,17 @@
 # Submodule & Nested Git Repository Support
 
-## Symptom
+## Symptom (Historical — Fixed)
+
+Before the `GIT_DIR` isolation fix, Shofer would refuse to initialize checkpoints in
+workspaces with nested git repositories, showing:
 
 ```
 Checkpoints are disabled because a nested git repository was detected at: shofer.dev.
 To use checkpoints, please remove or relocate this nested git repository.
 ```
+
+This error is no longer raised. The `GIT_DIR` fix (described below) lets checkpoints
+operate correctly in the presence of nested git repositories.
 
 ## How Checkpoints Work
 
@@ -70,8 +76,10 @@ This makes `extensions/shofer` a **git submodule** of the parent repository.
 The actual git data lives at `.git/modules/Shofer/`.
 
 Since the submodule's `.git` is a **file** (not a directory), the `**/.git/HEAD` search
-wouldn't normally find it. However, the actual git data at `.git/modules/Shofer/HEAD`
-may be matched depending on path structure.
+would **not** find it. The pattern requires a literal `.git/HEAD` segment, so
+`.git/modules/shofer/HEAD` does not match — the directory before `HEAD` is `shofer`,
+not `.git`. In any case, the `GIT_DIR` fix makes detection unnecessary for correctness;
+the scan is purely diagnostic.
 
 ## Investigation (2026-05-08)
 
@@ -148,10 +156,23 @@ directory) rather than the workspace — keeping `git clean -f -d` safe.
 
 ### Changes
 
-| File                                                                                                       | Change                                                                                                                  |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts)                     | Set `GIT_DIR` in `createSanitizedGit`; replace throw with log in `initShadowGit`; remove unused `vscode`/`i18n` imports |
-| [`ShadowCheckpointService.spec.ts`](../src/services/checkpoints/__tests__/ShadowCheckpointService.spec.ts) | Test "throws error" → "succeeds" (nested git no longer blocks init)                                                     |
+| File                                                                                                       | Change                                                                           |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts)                     | Set `GIT_DIR` in `createSanitizedGit`; replace throw with log in `initShadowGit` |
+| [`ShadowCheckpointService.spec.ts`](../src/services/checkpoints/__tests__/ShadowCheckpointService.spec.ts) | Test "throws error" → "succeeds" (nested git no longer blocks init)              |
+
+## Known Limitations
+
+### Submodule HEAD Pointer Not Restored
+
+Checkpoint restore (`git reset --hard <hash>`) returns workspace files to their prior
+state but does **not** restore which commit a submodule was pointing to. Git submodule
+HEAD references live in the workspace's own git metadata (`.git/modules/<name>/HEAD`),
+which is outside the shadow git's working tree and is never staged or committed.
+
+If the agent ran `git checkout` in a submodule and a checkpoint restore is triggered,
+the submodule's checked-out revision will **not** roll back. Only source files on disk
+within the submodule directory are restored.
 
 ## Impact on File Changes Panel
 
@@ -188,57 +209,18 @@ bearing on the file-changes panel — it always used the working-directory backe
 - [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts) — per-task file snapshots and `base/`/`final/` copy management
 - [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/shofer`)
 
-## Gaps, Issues & Improvement Areas
+## Open Issues
 
-### 1. Detection gap analysis is ambiguous (lines 70–74)
+### 1. `GIT_CEILING_DIRECTORIES` stripping rationale not documented
 
-The doc states `**/.git/HEAD` ripgrep _may_ match `.git/modules/Shofer/HEAD`
-"depending on path structure." In reality, the pattern `**/.git/HEAD` requires a
-literal `.git/HEAD` suffix — `.git/modules/shofer/HEAD` does **not** match
-because the directory component before `HEAD` is `shofer`, not `.git`. The
-detection method (`getNestedGitRepository`) would never flag our own
-`extensions/shofer/` submodule. This is a documentation gap, not a bug — the
-`GIT_DIR` fix makes detection unnecessary for correctness. The
-`getNestedGitRepository` log output is purely diagnostic.
+`createSanitizedGit` strips `GIT_CEILING_DIRECTORIES` (alongside `GIT_DIR`,
+`GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
+`GIT_ALTERNATE_OBJECT_DIRECTORIES`, and `GIT_TEMPLATE_DIR`). Why stripping
+`GIT_CEILING_DIRECTORIES` matters is not discussed in this doc or in
+[`checkpoints.md`](checkpoints.md).
 
-### 2. `GIT_CEILING_DIRECTORIES` stripping not covered
+### 2. Spec describe block name mismatch
 
-The `createSanitizedGit` function strips `GIT_CEILING_DIRECTORIES` (alongside
-`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
-`GIT_ALTERNATE_OBJECT_DIRECTORIES`, and `GIT_TEMPLATE_DIR`) from the inherited
-environment. The doc's Approaches section does not discuss
-`GIT_CEILING_DIRECTORIES` as a potential issue or why stripping it is important.
-
-### 3. `RepoPerTaskCheckpointService` not mentioned
-
-The checkpoints directory contains two classes: `ShadowCheckpointService` (base)
-and [`RepoPerTaskCheckpointService`](../src/services/checkpoints/RepoPerTaskCheckpointService.ts)
-(subclass). The spec file tests `RepoPerTaskCheckpointService` directly, not
-the base class. Both should be referenced.
-
-### 4. "remove unused `vscode`/`i18n` imports" claim stale
-
-The Changes table (line 153) lists "remove unused `vscode`/`i18n` imports" as
-one of the changes to `ShadowCheckpointService.ts`. The current source imports
-neither `vscode` nor `i18n` — these may have been removed in an earlier
-iteration and the claim is now a no-op.
-
-### 5. `stageAll` resilience detail not discussed
-
-The `stageAll` method calls `git.add([".", "--ignore-errors"])` — the
-`--ignore-errors` flag is critical for resilience when excluded files or
-permission issues would otherwise abort staging. This design choice is not
-mentioned.
-
-### 6. `getExcludePatterns` not discussed
-
-The exclude file is built by [`getExcludePatterns`](../src/services/checkpoints/excludes.ts),
-which merges hardcoded patterns with workspace `.gitignore` rules. This function
-is an important part of the checkpoint isolation story but is not covered.
-
-### 7. Spec test method name mismatch
-
-The spec file's test suite is labeled `#hasNestedGitRepositories` but the
-actual detection method on `ShadowCheckpointService` is
-`getNestedGitRepository`. The method name changed at some point but the describe
-block was not renamed.
+The spec file's describe block is labeled `#hasNestedGitRepositories` but the
+actual method on `ShadowCheckpointService` is `getNestedGitRepository`. The
+method was renamed but the describe block was not updated.
