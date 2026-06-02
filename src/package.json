@@ -308,7 +308,7 @@
 				{
 					"command": "shofer.slangVisualization.show",
 					"group": "2_shofer@1",
-					"when": "resourceLangId == slang"
+					"when": "resourceExtname == .slang"
 				}
 			],
 			"explorer/context": [
