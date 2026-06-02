@@ -29,7 +29,7 @@ import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
-import { fileExistsAtPath } from "../../utils/fs"
+import { getBinPath } from "../../services/ripgrep"
 import type { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import type { ToolUse } from "../../shared/tools"
 
@@ -76,43 +76,6 @@ const MAX_LINE_LENGTH = 500
 // Rough multiplier for limiting ripgrep output lines. Each match produces at most
 // (beforeContext + 1 + afterContext) lines, and we add a safety margin.
 const LINES_PER_RESULT_ESTIMATE = 5
-
-const isWindows = process.platform.startsWith("win")
-const binName = isWindows ? "rg.exe" : "rg"
-
-/**
- * Locate the ripgrep binary within the VS Code installation,
- * falling back to a system-wide ripgrep found in PATH.
- * Mirrors the logic in `src/services/ripgrep/index.ts`.
- */
-async function getRipgrepBinPath(vscodeAppRoot: string): Promise<string | undefined> {
-	const checkPath = async (pkgFolder: string) => {
-		const fullPath = path.join(vscodeAppRoot, pkgFolder, binName)
-		return (await fileExistsAtPath(fullPath)) ? fullPath : undefined
-	}
-
-	return (
-		(await checkPath("node_modules/@vscode/ripgrep/bin/")) ||
-		(await checkPath("node_modules/vscode-ripgrep/bin")) ||
-		(await checkPath("node_modules.asar.unpacked/vscode-ripgrep/bin/")) ||
-		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/")) ||
-		getSystemRipgrepPath()
-	)
-}
-
-/**
- * Locate ripgrep via the system PATH using `which` (Unix) or `where` (Windows).
- * Returns undefined if ripgrep is not installed system-wide.
- */
-function getSystemRipgrepPath(): string | undefined {
-	try {
-		const cmd = isWindows ? "where" : "which"
-		const result = childProcess.execFileSync(cmd, [binName], { encoding: "utf8" }).trim().split("\n")[0].trim()
-		return result || undefined
-	} catch {
-		return undefined
-	}
-}
 
 /**
  * Execute ripgrep and return its stdout.
@@ -360,10 +323,14 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 			const ignoreController: ShoferIgnoreController | undefined = task.shoferIgnoreController
 
 			const vscodeAppRoot = vscode.env.appRoot
-			const rgPath = await getRipgrepBinPath(vscodeAppRoot)
+			const rgPath = await getBinPath(vscodeAppRoot)
 
 			if (!rgPath) {
-				pushToolResult("Search failed: Could not find ripgrep binary")
+				pushToolResult(
+					"Search failed: ripgrep binary not found. " +
+						"Install ripgrep and ensure it is on your PATH: https://github.com/BurntSushi/ripgrep#installation " +
+						"(e.g. `apt install ripgrep`, `brew install ripgrep`, or `cargo install ripgrep`).",
+				)
 				return
 			}
 
