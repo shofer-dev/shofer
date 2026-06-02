@@ -95,6 +95,7 @@ import { ContextProxy } from "../config/ContextProxy"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { CustomModesManager } from "../config/CustomModesManager"
 import { Task } from "../task/Task"
+import type { WorkflowTask } from "../workflow/WorkflowTask"
 
 import { webviewMessageHandler } from "./webviewMessageHandler"
 import type { ShoferMessage, TodoItem } from "@shofer/types"
@@ -1534,6 +1535,21 @@ export class ShoferProvider
 			}
 		}
 
+		// Workflow tasks are driven by a slang loop, not an LLM loop. Reconstruct
+		// the WorkflowTask subclass (recompiling the agent programs from the
+		// persisted slang source and rehydrating FlowState) rather than a plain
+		// Task. This is gated on the persisted `isWorkflow` flag so ordinary task
+		// restoration is completely unaffected. We branch here — before the mode
+		// / provider-profile restoration below — because a workflow's `mode` is a
+		// synthetic flow name that does not exist in customModes and would
+		// otherwise trip the "mode no longer exists" fallback.
+		if (historyItem.isWorkflow && historyItem.slangSource) {
+			const workflowTask = await this._restoreWorkflowTask(historyItem, isRehydratingCurrentTask, options)
+			if (workflowTask) return workflowTask
+			// Fall through to plain-Task restoration on reconstruction failure
+			// (already logged) so the task history entry is at least viewable.
+		}
+
 		// If the history item has a saved mode, restore it and its associated API configuration.
 		if (historyItem.mode) {
 			// Validate that the mode still exists
@@ -1778,6 +1794,75 @@ export class ShoferProvider
 		}
 
 		return task
+	}
+
+	/**
+	 * Reconstruct and publish a {@link WorkflowTask} from a persisted workflow
+	 * HistoryItem, mirroring the stack/publish handling of plain-task
+	 * restoration. Returns the live WorkflowTask, or `undefined` if
+	 * reconstruction failed (the caller then falls back to plain-Task
+	 * restoration so the history entry remains viewable).
+	 *
+	 * The slang loop is only (re)started when the persisted flow status is
+	 * non-terminal; terminal flows (converged / deadlock / budget_exceeded /
+	 * error) are restored read-only.
+	 */
+	private async _restoreWorkflowTask(
+		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
+		isRehydratingCurrentTask: boolean | undefined,
+		options?: { startTask?: boolean; keepCurrentTask?: boolean },
+	): Promise<WorkflowTask | undefined> {
+		const { createWorkflowTaskFromHistory, TERMINAL_FLOW_STATUSES } = await import("../workflow/WorkflowTask")
+
+		let workflowTask: WorkflowTask
+		try {
+			workflowTask = await createWorkflowTaskFromHistory(this, historyItem)
+		} catch (error) {
+			this.log(
+				`[createTaskWithHistoryItem] Failed to reconstruct workflow task ${historyItem.id}: ` +
+					`${error instanceof Error ? error.message : String(error)}. Falling back to plain task.`,
+			)
+			return undefined
+		}
+
+		if (isRehydratingCurrentTask) {
+			const stackIndex = this.shoferStack.length - 1
+			const oldTask = this.shoferStack[stackIndex]
+			try {
+				await oldTask.abortTask(true)
+			} catch (e) {
+				this.log(
+					`[createTaskWithHistoryItem] abortTask() failed for old task ${oldTask.taskId}.${oldTask.instanceId}: ${e instanceof Error ? e.message : String(e)}`,
+				)
+			}
+			const cleanupFunctions = this.taskEventListeners.get(oldTask)
+			if (cleanupFunctions) {
+				cleanupFunctions.forEach((cleanup) => cleanup())
+				this.taskEventListeners.delete(oldTask)
+			}
+			this.shoferStack[stackIndex] = workflowTask
+			workflowTask.emit(ShoferEventName.TaskFocused)
+			this.taskManager.updateTaskInstance(workflowTask.taskId, workflowTask)
+			await this.performPreparationTasks(workflowTask)
+		} else {
+			await this.addShoferToStack(workflowTask)
+		}
+
+		const shouldStart = options?.startTask ?? true
+		if (shouldStart && !TERMINAL_FLOW_STATUSES.has(workflowTask.flowState.status)) {
+			// Escalation waits are persisted as "escalated"; on resume the human is
+			// re-engaging, so return the flow to "running" and re-drive the loop.
+			if (workflowTask.flowState.status === "escalated") {
+				workflowTask.flowState.status = "running"
+			}
+			void workflowTask.start()
+		}
+
+		this.debug(
+			`[createTaskWithHistoryItem] workflow task ${workflowTask.taskId}.${workflowTask.instanceId} ` +
+				`restored (status=${workflowTask.flowState.status})`,
+		)
+		return workflowTask
 	}
 
 	public async postMessageToWebview(message: ExtensionMessage) {
