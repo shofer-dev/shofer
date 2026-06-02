@@ -4239,6 +4239,8 @@ export const webviewMessageHandler = async (
 					break
 				}
 
+				provider.log(`[createWorkflow] Launching workflow '${flowName}'`)
+
 				const { createWorkflowTask } = await import("../workflow/index")
 				const { discoverWorkflows } = await import("../workflow/index")
 				const workflows = await discoverWorkflows(provider.cwd)
@@ -4250,6 +4252,7 @@ export const webviewMessageHandler = async (
 				}
 
 				const task = await createWorkflowTask(provider, slangSource, flowParams)
+				provider.log(`[createWorkflow] Created WorkflowTask ${task.taskId} for flow '${flowName}'`)
 
 				// Pop the current task to the background (parallel execution)
 				// without aborting it, so the launched workflow becomes the
@@ -4263,12 +4266,21 @@ export const webviewMessageHandler = async (
 				// Register with TaskManager and show in TaskSelector
 				await provider.addShoferToStack(task)
 
+				// Seed the workflow extension into persisted history BEFORE the
+				// first state broadcast so `currentTaskItem.isWorkflow` is set on
+				// the initial frame and the webview routes to WorkflowView
+				// immediately (otherwise it briefly renders ChatView until the
+				// first in-loop checkpoint lands).
+				await task.seedHistory()
+				provider.log(`[createWorkflow] Seeded history for ${task.taskId} (isWorkflow=true)`)
+
 				// Notify UI and start the slang loop
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
 				await provider.postStateToWebview()
 
 				// Start the workflow loop
 				task.start()
+				provider.log(`[createWorkflow] Started slang loop for ${task.taskId}`)
 			} catch (error) {
 				provider.log(`Error creating workflow: ${error}`)
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)

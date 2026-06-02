@@ -147,6 +147,7 @@
 	"selectApiConfig": "Select API configuration",
 	"workflow": "Workflow",
 	"workflowReadonly": "Workflow name (read-only)",
+	"workflowStarting": "Starting workflow…",
 	"lockApiConfigAcrossModes": "Lock API configuration across all modes in this workspace",
 	"unlockApiConfigAcrossModes": "API configuration is locked across all modes in this workspace (click to unlock)",
 	"enhancePrompt": "Enhance prompt with additional context",
