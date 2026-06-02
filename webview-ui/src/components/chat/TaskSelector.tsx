@@ -4,6 +4,7 @@ import type { TFunction } from "i18next"
 import {
 	GitBranch,
 	Plus,
+	Rocket,
 	Trash2,
 	Pencil,
 	Check,
@@ -291,6 +292,8 @@ export interface TaskSelectorProps {
 	modes: Array<{ slug: string; name: string }>
 	/** All worktrees for resolving cwd path → branch name. */
 	worktrees: Array<{ path: string; branch: string }>
+	/** Discovered .slang workflows available to launch from the drawer. */
+	workflows: Array<{ name: string; params: Array<{ name: string; type: string }> }>
 }
 
 /**
@@ -624,7 +627,7 @@ function renderTaskRow({
 export const TASK_SIDEBAR_TOGGLE_EVENT = "shofer.taskSidebarToggle"
 
 export const TaskSelector = memo(
-	({ taskHistory, parallelTasks, currentTaskId, modes, worktrees }: TaskSelectorProps) => {
+	({ taskHistory, parallelTasks, currentTaskId, modes, worktrees, workflows }: TaskSelectorProps) => {
 		const { t } = useTranslation()
 		const [isOpen, setIsOpen] = useState(false)
 		const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
@@ -656,6 +659,13 @@ export const TaskSelector = memo(
 
 		const handleCreateTask = useCallback(() => {
 			vscode.postMessage({ type: "createParallelTask" })
+			setIsOpen(false)
+		}, [])
+
+		// Launch a discovered .slang workflow as a new WorkflowTask. The host
+		// resolves the flow source by name and starts the slang interpreter loop.
+		const handleLaunchWorkflow = useCallback((flowName: string) => {
+			vscode.postMessage({ type: "createWorkflow", flowName })
 			setIsOpen(false)
 		}, [])
 
@@ -821,6 +831,14 @@ export const TaskSelector = memo(
 			return () => window.removeEventListener(TASK_SIDEBAR_TOGGLE_EVENT, onToggle)
 		}, [])
 
+		// Refresh the discovered-workflow list whenever the drawer opens so newly
+		// authored .slang files appear without a reload.
+		useEffect(() => {
+			if (isOpen) {
+				vscode.postMessage({ type: "listWorkflows" })
+			}
+		}, [isOpen])
+
 		// Close the drawer on Escape, matching standard panel UX.
 		useEffect(() => {
 			if (!isOpen) return
@@ -904,6 +922,34 @@ export const TaskSelector = memo(
 							<span>{t("chat:taskSelector.newTask", "New Task")}</span>
 						</button>
 					</div>
+
+					{/* Workflows section — discovered .slang flows, click to launch. */}
+					{workflows.length > 0 && (
+						<div className="flex-shrink-0 border-b border-[var(--vscode-sideBar-border,var(--vscode-editorWidget-border,#454545))] pb-2">
+							<div
+								className={cn(
+									"px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide",
+									"text-[var(--vscode-sideBarSectionHeader-foreground,var(--vscode-descriptionForeground))]",
+								)}>
+								{t("chat:taskSelector.workflows", "Workflows")}
+							</div>
+							{workflows.map((wf) => (
+								<StandardTooltip
+									key={wf.name}
+									content={t("chat:taskSelector.launchWorkflow", "Launch workflow")}>
+									<button
+										onClick={() => handleLaunchWorkflow(wf.name)}
+										className={cn(
+											"flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left",
+											"hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] transition-colors",
+										)}>
+										<Rocket className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
+										<span className="truncate">{wf.name}</span>
+									</button>
+								</StandardTooltip>
+							))}
+						</div>
+					)}
 
 					{/* Scrollable list area */}
 					<div className="flex-1 overflow-y-auto">

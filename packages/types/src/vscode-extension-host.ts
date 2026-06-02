@@ -866,6 +866,9 @@ export interface WebviewMessage {
 	taskConfiguration?: ShoferSettings
 	// Parallel task properties
 	taskName?: string
+	// Workflow properties — launching a discovered .slang flow as a WorkflowTask.
+	flowName?: string
+	flowParams?: Record<string, string>
 	// Worktree properties
 	worktreePath?: string
 	/** Embedded worktree directory for new tasks scoped to a git worktree subdirectory. */
