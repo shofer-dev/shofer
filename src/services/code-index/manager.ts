@@ -198,7 +198,8 @@ export class CodeIndexManager {
 
 		// 5. CacheManager Initialization
 		if (!this._cacheManager) {
-			this._cacheManager = new CacheManager(this.context, this.workspacePath)
+			const indexKeyPath = await this._resolveIndexKeyPath()
+			this._cacheManager = new CacheManager(this.context, this.workspacePath, indexKeyPath)
 			await this._cacheManager.initialize()
 			// Surface diagnostics in the popover: every time the cache is
 			// touched, refresh the cumulative file-count and the most-recent
@@ -426,11 +427,13 @@ export class CodeIndexManager {
 
 		// (Re)Initialize service factory — pass a status-update callback so
 		// validateEmbedder can surface Ollama/embedder retry progress to the UI.
+		const indexKeyPath = await this._resolveIndexKeyPath()
 		this._serviceFactory = new CodeIndexServiceFactory({
 			configManager: this._configManager!,
 			workspacePath: this.workspacePath,
 			cacheManager: this._cacheManager!,
 			notifyRetryStatus: (msg: string) => this._stateManager.setSystemState("Indexing", msg),
+			indexKeyPath,
 		})
 
 		const workspacePath = this.workspacePath
@@ -545,8 +548,9 @@ export class CodeIndexManager {
 			if (requiresRestart && isFeatureEnabled && isFeatureConfigured) {
 				try {
 					// Ensure cacheManager is initialized before recreating services
+					const indexKeyPath = await this._resolveIndexKeyPath()
 					if (!this._cacheManager) {
-						this._cacheManager = new CacheManager(this.context, this.workspacePath)
+						this._cacheManager = new CacheManager(this.context, this.workspacePath, indexKeyPath)
 						await this._cacheManager.initialize()
 					}
 
@@ -566,6 +570,18 @@ export class CodeIndexManager {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Resolve the stable index key path for this workspace. If the workspace
+	 * is a git worktree, returns the main repo path so that linked worktrees
+	 * share the same Qdrant collection and local cache file. Otherwise returns
+	 * the workspace path unchanged.
+	 */
+	private async _resolveIndexKeyPath(): Promise<string> {
+		// Lazy import to avoid a circular dependency at the module level.
+		const { GitSource } = await import("./git/git-source")
+		return GitSource.resolveWorktreeMainRepoPath(this.workspacePath)
 	}
 
 	/**
