@@ -164,7 +164,11 @@ export async function regexGrepSearch(
 	const rgPath = await getBinPath(vscodeAppRoot)
 
 	if (!rgPath) {
-		throw new Error("Could not find ripgrep binary")
+		throw new Error(
+			"Could not find ripgrep binary. " +
+				"Please install ripgrep: https://github.com/BurntSushi/ripgrep#installation " +
+				"(e.g. `apt install ripgrep`, `brew install ripgrep`, or `cargo install ripgrep`).",
+		)
 	}
 
 	const args = ["--json", "-e", regex]

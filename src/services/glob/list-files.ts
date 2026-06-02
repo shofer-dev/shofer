@@ -189,7 +189,11 @@ async function getRipgrepPath(): Promise<string> {
 	const rgPath = await getBinPath(vscodeAppRoot)
 
 	if (!rgPath) {
-		throw new Error("Could not find ripgrep binary")
+		throw new Error(
+			"Could not find ripgrep binary. " +
+				"Please install ripgrep: https://github.com/BurntSushi/ripgrep#installation " +
+				"(e.g. `apt install ripgrep`, `brew install ripgrep`, or `cargo install ripgrep`).",
+		)
 	}
 
 	return rgPath
