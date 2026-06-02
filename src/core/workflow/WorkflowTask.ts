@@ -21,16 +21,21 @@ import { Task, type TaskOptions } from "../task/Task"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
-import {
-	type AgentState,
-	type FlowState,
-	type MailboxEntry,
-	deserializeFlowState,
-	serializeFlowState,
-} from "./slang-types"
+import { type AgentState, type FlowState, type MailboxEntry, serializeFlowState } from "./slang-types"
 import { parseSlang, validateSlangAST } from "./slang-parser"
-import type { FlowDecl as UpstreamFlowDecl, AgentDecl as UpstreamAgentDecl, Operation, Expr } from "./slang-ast"
-import { exprAsString, exprAsNumber } from "./slang-ast"
+import type {
+	FlowDecl as UpstreamFlowDecl,
+	AgentDecl as UpstreamAgentDecl,
+	Operation,
+	Expr,
+	StakeOp,
+	AwaitOp,
+	EscalateOp,
+	CommitOp,
+	LetOp,
+	SetOp,
+} from "./slang-ast"
+import { exprAsNumber } from "./slang-ast"
 
 // ─── Adapter: upstream AST → WorkflowTask needs ───
 
@@ -58,25 +63,123 @@ function getBudget(flow: UpstreamFlowDecl): { bTokens?: number; bRounds?: number
 	return out
 }
 
-/** Serialize an expression for comparison in conditions. */
-function exprToString(expr: Expr): string {
-	switch (expr.type) {
-		case "Ident":
-			return expr.name
-		case "StringLit":
-			return expr.value
-		case "AgentRef":
-			return `@${expr.name}`
-		case "DotAccess":
-			return `${exprToString(expr.object)}.${expr.property}`
-		case "BoolLit":
-			return String(expr.value)
-		case "NumberLit":
-			return String(expr.value)
-		case "BinaryExpr":
-			return `${exprToString(expr.left)} ${expr.op} ${exprToString(expr.right)}`
-		default:
-			return ""
+// ── Compiled instruction model ──
+//
+// Each agent's structured operation tree is compiled once into a flat
+// instruction list with explicit jump targets. The agent's program counter
+// (`AgentState.opIndex`) indexes into this list. Lowering structured control
+// flow (when / repeat) to conditional/unconditional jumps keeps the program
+// counter a single integer, which makes both interpretation and checkpoint
+// persistence trivial.
+
+type Instr =
+	| { kind: "stake"; op: StakeOp }
+	| { kind: "await"; op: AwaitOp }
+	| { kind: "escalate"; op: EscalateOp }
+	| { kind: "commit"; op: CommitOp }
+	| { kind: "let"; op: LetOp }
+	| { kind: "set"; op: SetOp }
+	| { kind: "jump"; target: number }
+	| { kind: "branch"; cond: Expr; jumpWhen: boolean; target: number }
+
+/**
+ * Compile an agent's operation tree into a flat instruction list.
+ *
+ * Lowering rules:
+ *   when C { B } [otherwise { E }]:
+ *     branch(C, jumpWhen=false) -> elseLabel   (skip body when C is false)
+ *     B...
+ *     jump endLabel
+ *     elseLabel: E...
+ *     endLabel:
+ *   repeat until C { B }:
+ *     loopStart: branch(C, jumpWhen=true) -> endLabel   (exit when C is true)
+ *     B...
+ *     jump loopStart
+ *     endLabel:
+ */
+function compileAgentProgram(agent: UpstreamAgentDecl): Instr[] {
+	const instrs: Instr[] = []
+
+	const emitOps = (ops: Operation[]): void => {
+		for (const op of ops) emitOp(op)
+	}
+
+	const emitOp = (op: Operation): void => {
+		switch (op.type) {
+			case "StakeOp":
+				instrs.push({ kind: "stake", op })
+				break
+			case "AwaitOp":
+				instrs.push({ kind: "await", op })
+				break
+			case "EscalateOp":
+				instrs.push({ kind: "escalate", op })
+				break
+			case "CommitOp":
+				instrs.push({ kind: "commit", op })
+				break
+			case "LetOp":
+				instrs.push({ kind: "let", op })
+				break
+			case "SetOp":
+				instrs.push({ kind: "set", op })
+				break
+			case "WhenBlock": {
+				const branch = { kind: "branch", cond: op.condition, jumpWhen: false, target: -1 } as Extract<
+					Instr,
+					{ kind: "branch" }
+				>
+				instrs.push(branch)
+				emitOps(op.body)
+				if (op.elseBlock) {
+					const jumpEnd = { kind: "jump", target: -1 } as Extract<Instr, { kind: "jump" }>
+					instrs.push(jumpEnd)
+					branch.target = instrs.length
+					emitOps(op.elseBlock.body)
+					jumpEnd.target = instrs.length
+				} else {
+					branch.target = instrs.length
+				}
+				break
+			}
+			case "RepeatBlock": {
+				const loopStart = instrs.length
+				const branch = { kind: "branch", cond: op.condition, jumpWhen: true, target: -1 } as Extract<
+					Instr,
+					{ kind: "branch" }
+				>
+				instrs.push(branch)
+				emitOps(op.body)
+				instrs.push({ kind: "jump", target: loopStart })
+				branch.target = instrs.length
+				break
+			}
+		}
+	}
+
+	emitOps(agent.operations)
+	return instrs
+}
+
+/**
+ * Best-effort extraction of a JSON value from an agent's completion result.
+ * Tries a direct parse first, then falls back to the last brace-delimited
+ * block embedded in surrounding prose. Returns `undefined` when no JSON is found.
+ */
+function tryParseJson(text: string): unknown {
+	try {
+		return JSON.parse(text)
+	} catch {
+		const match = text.match(/\{[\s\S]*\}/)
+		if (match) {
+			try {
+				return JSON.parse(match[0])
+			} catch {
+				/* fall through */
+			}
+		}
+		return undefined
 	}
 }
 
@@ -89,15 +192,24 @@ export interface WorkflowTaskOptions extends TaskOptions {
 	flowParams?: Record<string, unknown>
 }
 
-interface RoundContext {
-	readyAgents: string[]
-	dispatchMessages: Map<string, string>
-}
+/** Result of advancing an agent's program counter over non-blocking instructions. */
+type AdvanceResult =
+	| { type: "stake"; op: StakeOp }
+	| { type: "escalate"; op: EscalateOp }
+	| { type: "await" }
+	| { type: "committed" }
+	| { type: "end" }
 
 // ── Constants ──
 
 const DEFAULT_BUDGET_TOKENS = 300000
 const DEFAULT_BUDGET_ROUNDS = 30
+/** Max wall-clock time to wait for a round's spawned agent tasks to complete. */
+const AGENT_RESULT_TIMEOUT_MS = 300_000
+/** Poll interval while waiting for agent tasks to reach a terminal lifecycle. */
+const POLL_INTERVAL_MS = 500
+/** Guard against compiler/eval bugs producing an infinite control-flow loop. */
+const MAX_CONTROL_FLOW_STEPS = 10_000
 
 // ── WorkflowTask ──
 
@@ -107,12 +219,24 @@ export class WorkflowTask extends Task {
 	flowState: FlowState
 	private slangLoopStarted = false
 
+	/**
+	 * Compiled, flat instruction list per agent. Rebuilt from the AST in the
+	 * constructor and never serialized — the program counter persisted in
+	 * `AgentState.opIndex` indexes into this list, so it must be deterministic
+	 * w.r.t. the (immutable) slang source.
+	 */
+	private readonly programs = new Map<string, Instr[]>()
+
 	constructor(options: WorkflowTaskOptions) {
 		const flowName = options.flowDecl.name
 		super({ ...options, startTask: false, initialMode: flowName })
 
 		this.slangSource = options.slangSource
 		this.flowDecl = options.flowDecl
+
+		for (const agentDecl of getAgentDecls(this.flowDecl)) {
+			this.programs.set(agentDecl.name, compileAgentProgram(agentDecl))
+		}
 
 		if (options.flowState) {
 			this.flowState = options.flowState
@@ -149,7 +273,7 @@ export class WorkflowTask extends Task {
 		}
 	}
 
-	async start(): Promise<void> {
+	override async start(): Promise<void> {
 		if (this.slangLoopStarted) return
 		this.slangLoopStarted = true
 		try {
@@ -171,29 +295,72 @@ export class WorkflowTask extends Task {
 		const budgetRounds = budget.bRounds || DEFAULT_BUDGET_ROUNDS
 		const budgetTokens = budget.bTokens || DEFAULT_BUDGET_TOKENS
 
-		while (this.flowState.round < budgetRounds && !this.abort) {
+		while (
+			this.flowState.round < budgetRounds &&
+			this.flowState.tokensUsed < budgetTokens &&
+			!this.abort &&
+			this.flowState.status === "running"
+		) {
 			this.flowState.round++
 
-			const ctx = this.buildRoundContext()
-			if (ctx.readyAgents.length === 0) {
-				if (this.checkConverge() || this.allAgentsCommitted()) {
-					await this.handleConverge()
-					return
+			// 1. Advance every non-running / non-terminal agent over its
+			//    non-blocking instructions until it either blocks (stake / await
+			//    / escalate) or commits.
+			const stakes: string[] = []
+			const escalations: string[] = []
+			for (const [name, state] of this.flowState.agents) {
+				if (state.status === "running" || state.status === "committed" || state.status === "error") continue
+				const result = this.advanceAgent(state)
+				switch (result.type) {
+					case "stake":
+						stakes.push(name)
+						break
+					case "escalate":
+						escalations.push(name)
+						break
+					case "await":
+						state.status = "blocked"
+						break
+					case "committed":
+						// status already set inside advanceAgent
+						break
+					case "end":
+						// Program exhausted with no explicit commit — treat as done
+						// (advanceAgent may have set "error" via its step-limit guard).
+						if ((state.status as string) !== "error") state.status = "committed"
+						break
 				}
+			}
+
+			// 2. Converged?
+			if (this.checkConverge()) {
+				await this.handleConverge()
+				return
+			}
+
+			// 3. No agent can make progress and none committed → deadlock.
+			if (stakes.length === 0 && escalations.length === 0) {
 				this.flowState.status = "deadlock"
 				outputError(`[WorkflowTask#${this.taskId}] Deadlock at round ${this.flowState.round}`)
+				await this.persistCheckpoint()
 				await this.emitTaskCompleted("poor")
 				return
 			}
 
-			this.resolveMailboxes()
-			const escalated = await this.checkEscalate(ctx)
-			if (escalated) continue
+			// 4. Handle escalations synchronously (blocks on human input), then
+			//    restart the round so freshly-delivered mail is consumed.
+			if (escalations.length > 0) {
+				for (const name of escalations) await this.handleEscalation(name)
+				await this.persistCheckpoint()
+				continue
+			}
 
-			await this.dispatchAgents(ctx)
-			await this.waitForAgentResults(ctx.readyAgents)
-			this.resolveMailboxes()
+			// 5. Dispatch all staking agents in parallel, wait, collect results.
+			await this.dispatchStakes(stakes)
+			await this.waitForStakes(stakes)
+			await this.collectStakeResults(stakes)
 
+			// 6. Re-check convergence and checkpoint.
 			if (this.checkConverge()) {
 				await this.handleConverge()
 				return
@@ -201,130 +368,214 @@ export class WorkflowTask extends Task {
 			await this.persistCheckpoint()
 		}
 
-		if (this.flowState.round >= budgetRounds) {
+		// Loop exited without convergence: budget exhausted (or aborted).
+		if (!this.abort && this.flowState.status === "running") {
 			this.flowState.status = "budget_exceeded"
-			// Use parent's public abortBackgroundChildren
+			outputLog(`[WorkflowTask#${this.taskId}] Budget exhausted after ${this.flowState.round} rounds`)
 			await super.abortBackgroundChildren()
+			await this.persistCheckpoint()
 			await this.emitTaskCompleted("poor")
 		}
 	}
 
-	// ── Round Context ──
+	// ── Interpreter ──
 
-	private buildRoundContext(): RoundContext {
-		const ctx: RoundContext = { readyAgents: [], dispatchMessages: new Map() }
-		for (const agentDecl of getAgentDecls(this.flowDecl)) {
-			const agentState = this.flowState.agents.get(agentDecl.name)
-			if (!agentState) continue
-			if (agentState.status === "committed" || agentState.status === "error") continue
+	/**
+	 * Advance an agent's program counter, executing all non-blocking
+	 * instructions (let / set / jump / branch / satisfied commit) until it
+	 * reaches a blocking instruction (stake / escalate / unsatisfied await),
+	 * commits, or runs off the end of its program.
+	 */
+	private advanceAgent(state: AgentState): AdvanceResult {
+		const program = this.programs.get(state.name)
+		if (!program) return { type: "end" }
 
-			const op = agentDecl.operations[agentState.opIndex]
-			if (!op) continue
+		let guard = 0
+		while (state.opIndex < program.length) {
+			if (++guard > MAX_CONTROL_FLOW_STEPS) {
+				outputError(`[WorkflowTask#${this.taskId}] Agent '${state.name}' exceeded control-flow step limit`)
+				state.status = "error"
+				return { type: "end" }
+			}
 
-			if (this.isAgentReady(agentState, op)) {
-				ctx.readyAgents.push(agentDecl.name)
-				ctx.dispatchMessages.set(agentDecl.name, this.buildDispatchPrompt(agentDecl, agentState, op))
+			const instr = program[state.opIndex]!
+			switch (instr.kind) {
+				case "let":
+				case "set":
+					state.bindings.set(instr.op.name, this.evalExpr(instr.op.value, state))
+					state.opIndex++
+					break
+				case "jump":
+					state.opIndex = instr.target
+					break
+				case "branch": {
+					const truthy = this.toBool(this.evalExpr(instr.cond, state))
+					state.opIndex = truthy === instr.jumpWhen ? instr.target : state.opIndex + 1
+					break
+				}
+				case "commit":
+					if (instr.op.condition && !this.toBool(this.evalExpr(instr.op.condition, state))) {
+						state.opIndex++
+						break
+					}
+					state.status = "committed"
+					if (instr.op.value) state.output = this.evalExpr(instr.op.value, state)
+					return { type: "committed" }
+				case "stake":
+					return { type: "stake", op: instr.op }
+				case "escalate":
+					if (instr.op.condition && !this.toBool(this.evalExpr(instr.op.condition, state))) {
+						state.opIndex++
+						break
+					}
+					return { type: "escalate", op: instr.op }
+				case "await": {
+					const sources = instr.op.sources.map((s) => s.ref)
+					const mail = this.consumeMail(state.name, sources)
+					if (mail) {
+						state.bindings.set(instr.op.binding, mail.value)
+						state.waitingFor = undefined
+						state.opIndex++
+						break
+					}
+					state.waitingFor = sources.join(",")
+					return { type: "await" }
+				}
 			}
 		}
-		return ctx
+		return { type: "end" }
 	}
 
-	private isAgentReady(agentState: AgentState, op: Operation): boolean {
-		switch (op.type) {
-			case "StakeOp":
-			case "LetOp":
-			case "SetOp":
-			case "CommitOp":
-				return agentState.status !== "running"
-			case "AwaitOp":
-				return this.hasMailFor(agentState.name, op.sources[0]?.ref || "any")
-			case "EscalateOp":
-				return this.flowState.status !== "escalated"
-			case "RepeatBlock":
-			case "WhenBlock":
-				return true
+	/** Remove and return the first mailbox entry addressed to `recipient` from one of `sources`. */
+	private consumeMail(recipient: string, sources: string[]): MailboxEntry | undefined {
+		const wildcard = sources.includes("any") || sources.includes("*")
+		const idx = this.flowState.mailbox.findIndex(
+			(e) => e.to === recipient && (wildcard || sources.includes(e.from)),
+		)
+		if (idx === -1) return undefined
+		const [entry] = this.flowState.mailbox.splice(idx, 1)
+		return entry
+	}
+
+	/** Evaluate a slang expression against an agent's local bindings + flow globals. */
+	private evalExpr(expr: Expr, state: AgentState): unknown {
+		switch (expr.type) {
+			case "StringLit":
+			case "NumberLit":
+			case "BoolLit":
+				return expr.value
+			case "Ident":
+				if (state.bindings.has(expr.name)) return state.bindings.get(expr.name)
+				if (expr.name in this.flowState.params) return this.flowState.params[expr.name]
+				switch (expr.name) {
+					case "all_committed":
+						return this.allAgentsCommitted()
+					case "committed_count":
+						return this.committedCount()
+					case "round":
+						return this.flowState.round
+					default:
+						return undefined
+				}
+			case "AgentRef":
+				return this.flowState.agents.get(expr.name)
+			case "ListLit":
+				return expr.elements.map((e) => this.evalExpr(e, state))
+			case "DotAccess": {
+				if (expr.object.type === "AgentRef") {
+					const target = this.flowState.agents.get(expr.object.name)
+					if (!target) return undefined
+					switch (expr.property) {
+						case "committed":
+							return target.status === "committed"
+						case "status":
+							return target.status
+						case "output":
+							return target.output
+						default:
+							return undefined
+					}
+				}
+				const base = this.evalExpr(expr.object, state)
+				if (base && typeof base === "object") {
+					return (base as Record<string, unknown>)[expr.property]
+				}
+				return undefined
+			}
+			case "BinaryExpr": {
+				if (expr.op === "&&")
+					return this.toBool(this.evalExpr(expr.left, state)) && this.toBool(this.evalExpr(expr.right, state))
+				if (expr.op === "||")
+					return this.toBool(this.evalExpr(expr.left, state)) || this.toBool(this.evalExpr(expr.right, state))
+				const l = this.evalExpr(expr.left, state)
+				const r = this.evalExpr(expr.right, state)
+				switch (expr.op) {
+					case "==":
+						return l === r
+					case "!=":
+						return l !== r
+					case ">":
+						return Number(l) > Number(r)
+					case ">=":
+						return Number(l) >= Number(r)
+					case "<":
+						return Number(l) < Number(r)
+					case "<=":
+						return Number(l) <= Number(r)
+					case "contains":
+						if (typeof l === "string") return l.includes(String(r))
+						if (Array.isArray(l)) return l.includes(r)
+						return false
+					default:
+						return false
+				}
+			}
 			default:
-				return false
+				return undefined
 		}
 	}
 
-	private hasMailFor(recipient: string, source: string): boolean {
-		return this.flowState.mailbox.some(
-			(e) => e.to === recipient && (source === "any" || source === "*" || e.from === source),
-		)
+	/** JS-style truthiness over evaluated expression values. */
+	private toBool(value: unknown): boolean {
+		return Boolean(value)
+	}
+
+	/** A throwaway agent state for evaluating flow-global converge/budget expressions. */
+	private globalEvalState(): AgentState {
+		return { name: "", taskId: "", status: "idle", opIndex: 0, bindings: new Map() }
 	}
 
 	// ── Dispatch ──
 
-	private buildDispatchPrompt(agentDecl: UpstreamAgentDecl, agentState: AgentState, op: Operation): string {
-		switch (op.type) {
-			case "StakeOp": {
-				let prompt = `Execute: ${op.call.name}`
-				if (op.call.args.length > 0) {
-					const args: Record<string, unknown> = {}
-					for (const arg of op.call.args) {
-						const key = arg.name || String(Object.keys(args).length)
-						args[key] = this.resolveExprValue(arg.value, agentState)
-					}
-					prompt += `\n\nArguments:\n${JSON.stringify(args, null, 2)}`
-				}
-				if (agentState.bindings.size > 0) {
-					prompt += `\n\nCurrent context:\n${JSON.stringify(Object.fromEntries(agentState.bindings), null, 2)}`
-				}
-				if (op.output) {
-					prompt += `\n\nYour response MUST include a JSON object with:\n`
-					for (const f of op.output.fields) {
-						prompt += `  - ${f.name} (${f.fieldType})\n`
-					}
-					prompt += `\nInclude this JSON in your attempt_completion result.`
-				}
-				const peers = this.getPeerResources(agentDecl.name)
-				if (peers.length > 0) {
-					prompt += `\n\nPEER RESOURCES:\n`
-					for (const p of peers) prompt += `- ${p.name} (task ID: ${p.taskId}) — ${p.role}\n`
-				}
-				return prompt
+	/** Build the prompt sent to an agent task for a stake operation. */
+	private buildStakePrompt(agentName: string, state: AgentState, op: StakeOp): string {
+		let prompt = `Execute: ${op.call.name}`
+		if (op.call.args.length > 0) {
+			const args: Record<string, unknown> = {}
+			let positional = 0
+			for (const arg of op.call.args) {
+				const key = arg.name ?? `arg${positional++}`
+				args[key] = this.evalExpr(arg.value, state)
 			}
-			case "AwaitOp": {
-				const sources = op.sources.map((s) => s.ref).join(",")
-				const mail = this.flowState.mailbox.find(
-					(e) =>
-						e.to === agentDecl.name &&
-						(sources.includes(e.from) || sources.includes("any") || sources.includes("*")),
-				)
-				if (mail) {
-					this.flowState.mailbox = this.flowState.mailbox.filter((e) => e !== mail)
-					agentState.bindings.set(op.binding, mail.value)
-					return `Received from @${mail.from}: ${JSON.stringify(mail.value)}`
-				}
-				return `Waiting for input from @${sources}...`
-			}
-			case "CommitOp":
-				return "Your work is complete. Call attempt_completion."
-			default:
-				return "Continue execution."
+			prompt += `\n\nArguments:\n${JSON.stringify(args, null, 2)}`
 		}
+		if (state.bindings.size > 0) {
+			prompt += `\n\nCurrent context:\n${JSON.stringify(Object.fromEntries(state.bindings), null, 2)}`
+		}
+		if (op.output) {
+			prompt += `\n\nYour response MUST include a JSON object with these fields:\n`
+			for (const f of op.output.fields) prompt += `  - ${f.name} (${f.fieldType})\n`
+			prompt += `\nInclude this JSON object in your attempt_completion result.`
+		}
+		const peers = this.getPeerResources(agentName)
+		if (peers.length > 0) {
+			prompt += `\n\nPEER RESOURCES (use send_message_to_task to query):\n`
+			for (const p of peers) prompt += `- ${p.name} (task ID: ${p.taskId}) — ${p.role}\n`
+		}
+		return prompt
 	}
 
-	private resolveExprValue(expr: Expr, agentState: AgentState): unknown {
-		switch (expr.type) {
-			case "StringLit":
-				return expr.value
-			case "NumberLit":
-				return expr.value
-			case "BoolLit":
-				return expr.value
-			case "Ident":
-				if (agentState.bindings.has(expr.name)) return agentState.bindings.get(expr.name)
-				if (expr.name in this.flowState.params) return this.flowState.params[expr.name]
-				return expr.name
-			case "AgentRef":
-				return `@${expr.name}`
-			default:
-				return JSON.stringify(expr)
-		}
-	}
-
+	/** Peer agent tasks an agent may query directly (search/browser helpers). */
 	private getPeerResources(agentName: string): Array<{ name: string; taskId: string; role: string }> {
 		const resources: Array<{ name: string; taskId: string; role: string }> = []
 		for (const [name, agentState] of this.flowState.agents) {
@@ -340,21 +591,19 @@ export class WorkflowTask extends Task {
 		return resources
 	}
 
-	// ── Dispatch Agents ──
+	/** Dispatch (spawn or resume) every staking agent for this round. */
+	private async dispatchStakes(names: string[]): Promise<void> {
+		for (const name of names) {
+			const state = this.flowState.agents.get(name)
+			const program = this.programs.get(name)
+			if (!state || !program) continue
+			const instr = program[state.opIndex]
+			if (!instr || instr.kind !== "stake") continue
 
-	private async dispatchAgents(ctx: RoundContext): Promise<void> {
-		for (const agentName of ctx.readyAgents) {
-			const agentState = this.flowState.agents.get(agentName)
-			if (!agentState) continue
-			const prompt = ctx.dispatchMessages.get(agentName)
-			if (!prompt) continue
-
-			if (!agentState.taskId) {
-				await this.spawnAgentTask(agentName, prompt)
-			} else {
-				await this.resumeAgentTask(agentName, prompt)
-			}
-			agentState.status = "running"
+			const prompt = this.buildStakePrompt(name, state, instr.op)
+			if (!state.taskId) await this.spawnAgentTask(name, prompt)
+			else await this.resumeAgentTask(name, prompt)
+			state.status = "running"
 		}
 	}
 
@@ -375,6 +624,8 @@ export class WorkflowTask extends Task {
 				isBackground: true,
 				initialMode: mode,
 				initialState: { lifecycle: "idle" },
+				openInStack: false,
+				keepCurrentTask: true,
 			})
 			if (task) {
 				this.backgroundChildren.set(task.taskId, {
@@ -399,140 +650,137 @@ export class WorkflowTask extends Task {
 		if (!provider) return
 
 		try {
-			const agentTask = (provider as any).getManagedTaskInstance?.(agentState.taskId)
-			if (agentTask) {
-				agentTask.messageQueueService.addMessage(prompt)
-			} else {
+			let agentTask = provider.taskManager.getManagedTaskInstance(agentState.taskId)
+			if (!agentTask) {
 				const { historyItem } = await provider.getTaskWithId(agentState.taskId)
-				await provider.createTaskWithHistoryItem(historyItem)
-				const rehydrated = (provider as any).getManagedTaskInstance?.(agentState.taskId)
-				if (rehydrated) rehydrated.messageQueueService.addMessage(prompt)
+				await provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
+				agentTask = provider.taskManager.getManagedTaskInstance(agentState.taskId)
 			}
+			agentTask?.messageQueueService.addMessage(prompt)
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] Failed to resume agent '${agentName}':`, error)
+			agentState.status = "error"
 		}
 	}
 
-	// ── Wait ──
+	// ── Wait & collect ──
 
-	private async waitForAgentResults(agentNames: string[]): Promise<void> {
+	/** Poll spawned agent tasks until they all reach a terminal lifecycle or timeout. */
+	private async waitForStakes(names: string[]): Promise<void> {
 		const provider = this.providerRef.deref()
 		if (!provider) return
 
-		const taskIds = agentNames.map((n) => this.flowState.agents.get(n)?.taskId).filter(Boolean) as string[]
+		const taskIds = names.map((n) => this.flowState.agents.get(n)?.taskId).filter(Boolean) as string[]
 		if (taskIds.length === 0) return
 
 		const startTime = Date.now()
-		const timeoutMs = 300_000
-		while (Date.now() - startTime < timeoutMs && !this.abort) {
+		while (Date.now() - startTime < AGENT_RESULT_TIMEOUT_MS && !this.abort) {
 			let allDone = true
 			for (const taskId of taskIds) {
 				const handle = this.backgroundChildren.get(taskId)
-				if (!handle) continue
 				try {
 					const { historyItem } = await provider.getTaskWithId(taskId)
 					const lc = historyItem.taskState?.lifecycle
-					if (lc === "completed") handle.status = "completed"
-					else if (lc === "error") handle.status = "error"
-					else allDone = false
+					if (lc === "completed") {
+						if (handle) handle.status = "completed"
+					} else if (lc === "error") {
+						if (handle) handle.status = "error"
+					} else {
+						allDone = false
+					}
 				} catch {
 					allDone = false
 				}
 			}
 			if (allDone) break
-			await new Promise((r) => setTimeout(r, 500))
+			await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
 		}
+	}
 
-		for (const name of agentNames) {
-			const agentState = this.flowState.agents.get(name)
-			const agentDecl = getAgentDecls(this.flowDecl).find((a) => a.name === name)
-			if (!agentState || !agentDecl) continue
-			const op = agentDecl.operations[agentState.opIndex]
-			if (!op || op.type !== "StakeOp") continue
+	/**
+	 * Read each staking agent's completion result, bind/route its output, then
+	 * advance its program counter past the stake.
+	 */
+	private async collectStakeResults(names: string[]): Promise<void> {
+		const provider = this.providerRef.deref()
+		if (!provider) return
+
+		for (const name of names) {
+			const state = this.flowState.agents.get(name)
+			const program = this.programs.get(name)
+			if (!state || !program) continue
+			const instr = program[state.opIndex]
+			if (!instr || instr.kind !== "stake") continue
 
 			try {
-				const { historyItem } = await provider.getTaskWithId(agentState.taskId)
+				const { historyItem } = await provider.getTaskWithId(state.taskId)
+				this.flowState.tokensUsed += (historyItem.tokensIn || 0) + (historyItem.tokensOut || 0)
+
 				let result: unknown = historyItem.completionResultSummary
 				if (typeof result === "string") {
-					try {
-						result = JSON.parse(result)
-					} catch {
-						/* as-is */
-					}
+					const parsed = tryParseJson(result)
+					if (parsed !== undefined) result = parsed
 				}
-				agentState.output = result
-				agentState.status = "idle"
-
-				if (op.recipients.length > 0) {
-					const target = op.recipients[0]!.ref
-					this.flowState.mailbox.push({
-						from: name,
-						to: target,
-						value: result,
-						timestamp: Date.now(),
-						funcName: op.call.name,
-					})
-					const targetAgent = this.flowState.agents.get(target)
-					if (targetAgent?.waitingFor === name) targetAgent.waitingFor = undefined
-				}
-				agentState.opIndex++
+				state.output = result
+				if (instr.op.binding) state.bindings.set(instr.op.binding, result)
+				this.routeOutput(name, instr.op, result)
+				state.opIndex++
+				state.status = "idle"
 			} catch (error) {
 				outputError(`[WorkflowTask#${this.taskId}] Failed to read result for '${name}':`, error)
-				agentState.status = "error"
+				state.status = "error"
 			}
 		}
 	}
 
-	// ── Mailbox ──
-
-	private resolveMailboxes(): void {
-		for (const [name, agentState] of this.flowState.agents) {
-			if (agentState.status === "blocked") {
-				const agentDecl = getAgentDecls(this.flowDecl).find((a) => a.name === name)
-				if (!agentDecl) continue
-				const op = agentDecl.operations[agentState.opIndex]
-				if (op?.type === "AwaitOp") {
-					const sources = op.sources.map((s) => s.ref)
-					if (sources.some((s) => this.hasMailFor(name, s))) {
-						agentState.status = "idle"
-						agentState.waitingFor = undefined
-					}
+	/** Deliver a stake's output to all of its recipients (@Agent / @all / @out). */
+	private routeOutput(from: string, op: StakeOp, value: unknown): void {
+		for (const recipient of op.recipients) {
+			const ref = recipient.ref
+			if (ref === "out") {
+				this.flowState.mailbox.push({ from, to: "out", value, timestamp: Date.now(), funcName: op.call.name })
+			} else if (ref === "all") {
+				for (const [otherName] of this.flowState.agents) {
+					if (otherName === from) continue
+					this.flowState.mailbox.push({
+						from,
+						to: otherName,
+						value,
+						timestamp: Date.now(),
+						funcName: op.call.name,
+					})
 				}
+			} else {
+				this.flowState.mailbox.push({ from, to: ref, value, timestamp: Date.now(), funcName: op.call.name })
 			}
 		}
 	}
 
 	// ── Escalate ──
 
-	private async checkEscalate(ctx: RoundContext): Promise<boolean> {
-		for (const agentName of ctx.readyAgents) {
-			const agentDecl = getAgentDecls(this.flowDecl).find((a) => a.name === agentName)
-			const agentState = this.flowState.agents.get(agentName)
-			if (!agentDecl || !agentState) continue
-			const op = agentDecl.operations[agentState.opIndex]
-			if (!op || op.type !== "EscalateOp") continue
+	/** Block for human input on an agent's escalate operation, then deliver the reply. */
+	private async handleEscalation(agentName: string): Promise<void> {
+		const state = this.flowState.agents.get(agentName)
+		const program = this.programs.get(agentName)
+		if (!state || !program) return
+		const instr = program[state.opIndex]
+		if (!instr || instr.kind !== "escalate") return
 
-			this.flowState.status = "escalated"
-			const reason = op.reason || `Agent '${agentName}' needs your input.`
-			await this.ask("followup", reason)
+		this.flowState.status = "escalated"
+		const reason = instr.op.reason || `Agent '${agentName}' needs your input.`
+		const { text } = await this.ask("followup", reason)
+		const response = text ?? ""
 
-			const response = (this as any).askResponseText || ""
-			;(this as any).askResponse = undefined
-			;(this as any).askResponseText = undefined
-
-			this.flowState.mailbox.push({
-				from: "Human",
-				to: agentName,
-				value: response,
-				timestamp: Date.now(),
-				funcName: "escalate",
-			})
-			agentState.opIndex++
-			agentState.status = "idle"
-			this.flowState.status = "running"
-			return true
-		}
-		return false
+		this.flowState.mailbox.push({
+			from: instr.op.target || "Human",
+			to: agentName,
+			value: response,
+			timestamp: Date.now(),
+			funcName: "escalate",
+		})
+		state.opIndex++
+		state.status = "idle"
+		this.flowState.status = "running"
 	}
 
 	// ── Converge ──
@@ -540,12 +788,7 @@ export class WorkflowTask extends Task {
 	private checkConverge(): boolean {
 		const convergeExpr = getConvergeExpr(this.flowDecl)
 		if (!convergeExpr) return this.allAgentsCommitted()
-
-		if (convergeExpr.type === "DotAccess" && convergeExpr.object.type === "AgentRef") {
-			const agentName = convergeExpr.object.name
-			return this.flowState.agents.get(agentName)?.status === "committed"
-		}
-		return this.allAgentsCommitted()
+		return this.toBool(this.evalExpr(convergeExpr, this.globalEvalState()))
 	}
 
 	private allAgentsCommitted(): boolean {
@@ -555,8 +798,17 @@ export class WorkflowTask extends Task {
 		return true
 	}
 
+	private committedCount(): number {
+		let count = 0
+		for (const [, s] of this.flowState.agents) {
+			if (s.status === "committed") count++
+		}
+		return count
+	}
+
 	private async handleConverge(): Promise<void> {
 		this.flowState.status = "converged"
+		await this.persistCheckpoint()
 		await this.emitTaskCompleted("well")
 	}
 
@@ -584,21 +836,6 @@ export class WorkflowTask extends Task {
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] Failed to emit completion:`, error)
 		}
-	}
-
-	private async abortAllChildren(): Promise<void> {
-		for (const [taskId, handle] of this.backgroundChildren) {
-			handle.status = "cancelled"
-			const provider = this.providerRef.deref()
-			if (provider) {
-				try {
-					await provider.cancelTask()
-				} catch {
-					/* best effort */
-				}
-			}
-		}
-		this.backgroundChildren.clear()
 	}
 }
 
