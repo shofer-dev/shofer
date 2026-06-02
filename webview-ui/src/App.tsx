@@ -17,6 +17,7 @@ import { TaskSelector } from "./components/chat/TaskSelector"
 import HistoryView from "./components/history/HistoryView"
 import SettingsView, { SettingsViewRef } from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeViewProvider"
+import { LauncherView } from "./components/launcher/LauncherView"
 import { MarketplaceView } from "./components/marketplace/MarketplaceView"
 import { CheckpointRestoreDialog } from "./components/chat/CheckpointRestoreDialog"
 import { DeleteMessageDialog, EditMessageDialog } from "./components/chat/MessageModificationConfirmationDialog"
@@ -25,7 +26,7 @@ import { useAddNonInteractiveClickListener } from "./components/ui/hooks/useNonI
 import { TooltipProvider } from "./components/ui/tooltip"
 import { STANDARD_TOOLTIP_DELAY } from "./components/ui/standard-tooltip"
 
-type Tab = "settings" | "history" | "chat" | "marketplace"
+type Tab = "settings" | "history" | "chat" | "marketplace" | "launcher"
 
 interface DeleteMessageDialogState {
 	isOpen: boolean
@@ -49,6 +50,7 @@ const tabsByMessageAction: Partial<Record<NonNullable<ExtensionMessage["action"]
 	chatButtonClicked: "chat",
 	settingsButtonClicked: "settings",
 	historyButtonClicked: "history",
+	launcherButtonClicked: "launcher",
 	...(MARKETPLACE_ENABLED ? { marketplaceButtonClicked: "marketplace" as const } : {}),
 }
 
@@ -75,6 +77,18 @@ const App = () => {
 	// Merge built-in and custom modes into a flat slug→name lookup for
 	// the TaskSelector subtitle. Rebuild whenever customModes change.
 	const allModes = useMemo(() => getAllModes(customModes).map((m) => ({ slug: m.slug, name: m.name })), [customModes])
+
+	// Richer mode metadata for the launcher "New Task" stage — each card shows
+	// the mode name plus a short description so the user can pick intentionally.
+	const launcherModes = useMemo(
+		() =>
+			getAllModes(customModes).map((m) => ({
+				slug: m.slug,
+				name: m.name,
+				description: m.description || m.whenToUse,
+			})),
+		[customModes],
+	)
 
 	// Worktree list — populated by worktreeList window messages from the
 	// extension host (same mechanism WorktreeIndicator uses).
@@ -257,6 +271,7 @@ const App = () => {
 	) : (
 		<>
 			{tab === "history" && <HistoryView onDone={() => switchTab("chat")} />}
+			{tab === "launcher" && <LauncherView modes={launcherModes} onClose={() => switchTab("chat")} />}
 			{tab === "settings" && (
 				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 			)}

@@ -156,6 +156,7 @@ export interface ExtensionMessage {
 		| "historyButtonClicked"
 		| "marketplaceButtonClicked"
 		| "tasksButtonClicked"
+		| "launcherButtonClicked"
 		| "didBecomeVisible"
 		| "focusInput"
 		| "switchTab"
@@ -744,6 +745,8 @@ export interface WebviewMessage {
 		// Workflow messages
 		| "listWorkflows"
 		| "createWorkflow"
+		// Launcher: start a fresh task in the chosen mode (replaces the old plus → new chat)
+		| "launchTask"
 		// Diagnostic logging from webview → extension OutputChannel
 		| "webviewLog"
 		// Metrics push from webview → extension host registry (Phase 4)
