@@ -150,6 +150,10 @@ const App = () => {
 
 	const [currentSection, setCurrentSection] = useState<string | undefined>(undefined)
 	const [currentMarketplaceTab, setCurrentMarketplaceTab] = useState<string | undefined>(undefined)
+	// Which stage the launcher opens at, set by the native New Task / New
+	// Workflow title-bar dropdown items ("task" → mode cards, "workflow" →
+	// workflow cards).
+	const [launcherStage, setLauncherStage] = useState<"task" | "workflow">("task")
 
 	const onMessage = useCallback(
 		(e: MessageEvent) => {
@@ -183,6 +187,10 @@ const App = () => {
 						switchTab(newTab)
 						setCurrentSection(section)
 						setCurrentMarketplaceTab(marketplaceTab)
+						if (message.action === "launcherButtonClicked") {
+							const stage = message.values?.launcherStage as "task" | "workflow" | undefined
+							setLauncherStage(stage === "workflow" ? "workflow" : "task")
+						}
 					}
 				}
 			}
@@ -271,7 +279,9 @@ const App = () => {
 	) : (
 		<>
 			{tab === "history" && <HistoryView onDone={() => switchTab("chat")} />}
-			{tab === "launcher" && <LauncherView modes={launcherModes} onClose={() => switchTab("chat")} />}
+			{tab === "launcher" && (
+				<LauncherView modes={launcherModes} initialStage={launcherStage} onClose={() => switchTab("chat")} />
+			)}
 			{tab === "settings" && (
 				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 			)}

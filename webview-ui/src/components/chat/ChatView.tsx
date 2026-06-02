@@ -2217,6 +2217,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				canStop={canStop}
 				onStop={handleStopTask}
 				onEnqueueMessage={handleEnqueueCurrentMessage}
+				isWorkflow={!!currentTaskItem?.isWorkflow}
+				workflowName={currentTaskItem?.isWorkflow ? currentTaskItem?.mode : undefined}
 				onContextFilesDropped={(files: DroppedContextFile[]) =>
 					setDroppedContextFiles((prev) => {
 						const seen = new Set(prev.map((f) => f.path))
