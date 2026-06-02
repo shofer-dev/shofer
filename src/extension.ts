@@ -311,6 +311,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	registerCommands({ context, outputChannel, provider })
 
+	// Auto-open slang visualization when opening a .slang file
+	context.subscriptions.push(
+		vscode.window.onDidChangeActiveTextEditor((editor) => {
+			if (editor && editor.document.fileName.endsWith(".slang")) {
+				showSlangVisualizationForFile(context.extensionUri, editor.document.uri)
+			}
+		}),
+	)
+	// Also handle files already open at activation time
+	const activeEditor = vscode.window.activeTextEditor
+	if (activeEditor && activeEditor.document.fileName.endsWith(".slang")) {
+		showSlangVisualizationForFile(context.extensionUri, activeEditor.document.uri)
+	}
+
 	/**
 	 * We use the text document content provider API to show the left side for diff
 	 * view by creating a virtual document for the original content. This makes it
