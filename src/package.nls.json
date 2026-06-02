@@ -7,6 +7,7 @@
 	"views.sidebar.name": "Shofer",
 	"views.dropZone.name": "Drop Files for Context",
 	"command.newTask.title": "New Task",
+	"command.slangVisualization.show.title": "Show Slang Visualization",
 	"command.tasks.title": "Tasks",
 	"command.history.title": "Task History",
 	"command.marketplace.title": "Marketplace",
