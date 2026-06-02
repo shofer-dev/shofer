@@ -66,6 +66,10 @@ export class QdrantVectorStore implements IVectorStore {
 		apiKey?: string,
 		collectionPrefix = "ws-",
 		payloadSchema: QdrantPayloadSchema = DEFAULT_CODE_INDEX_PAYLOAD_SCHEMA,
+		/** Path used for the Qdrant collection name hash. Defaults to workspacePath.
+		 *  Set to the main repo path for worktrees so linked worktrees share the
+		 *  same Qdrant collection. */
+		indexKeyPath?: string,
 	) {
 		// Parse the URL to determine the appropriate QdrantClient configuration
 		const parsedUrl = this.parseQdrantUrl(url)
@@ -119,8 +123,10 @@ export class QdrantVectorStore implements IVectorStore {
 			})
 		}
 
-		// Generate collection name from workspace path
-		const hash = createHash("sha256").update(workspacePath).digest("hex")
+		// Generate collection name from the index key path (main repo path for
+		// worktrees, so linked worktrees share the same Qdrant collection).
+		const keyPath = indexKeyPath ?? workspacePath
+		const hash = createHash("sha256").update(keyPath).digest("hex")
 		this.vectorSize = vectorSize
 		this.collectionName = `${collectionPrefix}${hash.substring(0, 16)}`
 		this.payloadSchema = payloadSchema
@@ -675,16 +681,13 @@ export class QdrantVectorStore implements IVectorStore {
 				ids: [metadataId],
 			})
 
-			// If marker exists, use it to determine completion status
+			// The metadata marker is always written by markIndexingIncomplete()
+			// and markIndexingComplete(), so it always exists for any collection
+			// this version of Shofer has ever touched.
 			if (metadataPoints.length > 0) {
 				return metadataPoints[0].payload?.indexing_complete === true
 			}
 
-			// Backward compatibility: No marker exists (old index or pre-marker version)
-			// Fall back to old logic - assume complete if collection has points
-			outputLog(
-				"[QdrantVectorStore] No indexing metadata marker found. Using backward compatibility mode (checking points_count > 0).",
-			)
 			return pointsCount > 0
 		} catch (error) {
 			outputWarn("[QdrantVectorStore] Failed to check if collection has data:", error)
