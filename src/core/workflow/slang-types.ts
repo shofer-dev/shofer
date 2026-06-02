@@ -35,6 +35,8 @@ export interface AgentState {
 	sendingTo?: string
 	// Which agent (by name) this agent is waiting for
 	waitingFor?: string
+	/** Number of consecutive output-validation failures for the current stake. */
+	retryCount: number
 }
 
 export type AgentStatus = "idle" | "running" | "committed" | "blocked" | "error"
@@ -96,6 +98,7 @@ export function deserializeFlowState(data: Record<string, unknown>): FlowState {
 				output: agent.output,
 				sendingTo: agent.sendingTo as string | undefined,
 				waitingFor: agent.waitingFor as string | undefined,
+				retryCount: (agent.retryCount as number) || 0,
 			})
 		}
 	}
