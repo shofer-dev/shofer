@@ -81,7 +81,8 @@ export function truncateLine(line: string, maxLength: number = MAX_LINE_LENGTH):
 	return line.length > maxLength ? line.substring(0, maxLength) + " [truncated...]" : line
 }
 /**
- * Get the path to the ripgrep binary within the VSCode installation
+ * Get the path to the ripgrep binary within the VSCode installation,
+ * falling back to a system-wide ripgrep found in PATH.
  */
 export async function getBinPath(vscodeAppRoot: string): Promise<string | undefined> {
 	const checkPath = async (pkgFolder: string) => {
@@ -93,8 +94,23 @@ export async function getBinPath(vscodeAppRoot: string): Promise<string | undefi
 		(await checkPath("node_modules/@vscode/ripgrep/bin/")) ||
 		(await checkPath("node_modules/vscode-ripgrep/bin")) ||
 		(await checkPath("node_modules.asar.unpacked/vscode-ripgrep/bin/")) ||
-		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/"))
+		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/")) ||
+		getSystemRipgrepPath()
 	)
+}
+
+/**
+ * Locate ripgrep via the system PATH using `which` (Unix) or `where` (Windows).
+ * Returns undefined if ripgrep is not installed system-wide.
+ */
+function getSystemRipgrepPath(): string | undefined {
+	try {
+		const cmd = isWindows ? "where" : "which"
+		const result = childProcess.execFileSync(cmd, [binName], { encoding: "utf8" }).trim().split("\n")[0].trim()
+		return result || undefined
+	} catch {
+		return undefined
+	}
 }
 
 async function execRipgrep(bin: string, args: string[]): Promise<string> {
