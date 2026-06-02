@@ -444,6 +444,102 @@ export class DirectoryScanner implements IDirectoryScanner {
 	): Promise<void> {
 		if (batchBlocks.length === 0) return
 
+		// ── Per-segment dedup (same approach as FileWatcher._executeBatchUpsertOperations) ──
+		// Build a map of filePath → Set of previously-indexed segmentHashes from the cache.
+		// Blocks whose segmentHash already exists in Qdrant (same file, same block) are
+		// skipped — no embedding call, no upsert. Only new/changed blocks are embedded.
+		const prevHashesByFile = new Map<string, Set<string>>()
+		for (const info of batchFileInfos) {
+			if (info.isNew) continue // new files have no previous segments
+			const cached = this.cacheManager.getEntry(info.filePath)
+			if (cached?.segmentHashes) {
+				prevHashesByFile.set(info.filePath, new Set(cached.segmentHashes))
+			}
+		}
+
+		let reusedCount = 0
+		const newBlocks: CodeBlock[] = []
+		const newTexts: string[] = []
+		const staleSegmentIds: string[] = []
+
+		for (let i = 0; i < batchBlocks.length; i++) {
+			const block = batchBlocks[i]
+			const prevSet = prevHashesByFile.get(block.file_path)
+			if (prevSet?.has(block.segmentHash)) {
+				reusedCount++
+				// Remove from prevSet so we know it's not stale
+				prevSet.delete(block.segmentHash)
+			} else {
+				newBlocks.push(block)
+				newTexts.push(batchTexts[i])
+			}
+		}
+
+		// Stale segments: were in the cache for this file but not present in the
+		// current parse — they were removed from the source file. Delete them from
+		// Qdrant by their deterministic point ID.
+		for (const [filePath, prevSet] of prevHashesByFile) {
+			for (const hash of prevSet) {
+				staleSegmentIds.push(uuidv5(hash, QDRANT_CODE_BLOCK_NAMESPACE))
+			}
+		}
+
+		if (staleSegmentIds.length > 0) {
+			try {
+				await this.qdrantClient.deletePointsByIds(staleSegmentIds)
+			} catch (deleteError: any) {
+				const errorMessage = deleteError instanceof Error ? deleteError.message : String(deleteError)
+				outputError(
+					`[DirectoryScanner] Failed to delete stale segment points in workspace ${scanWorkspace}:`,
+					deleteError,
+				)
+				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
+					error: sanitizeErrorMessage(errorMessage),
+					stack: deleteError instanceof Error ? sanitizeErrorMessage(deleteError.stack || "") : undefined,
+					location: "processBatch:deletePointsByIds",
+				})
+				// Re-throw so the batch retry loop can try again
+				throw new Error(
+					`Failed to delete ${staleSegmentIds.length} stale segments. Workspace: ${scanWorkspace}. ${errorMessage}`,
+					{ cause: deleteError },
+				)
+			}
+		}
+
+		// If every block in the batch turned out to be a reuse, skip the embedder
+		// call entirely — just update cache entries with the new file hashes.
+		if (newBlocks.length === 0 && reusedCount > 0) {
+			TelemetryService.instance.captureEvent(
+				"CODE_INDEX_SEGMENT_DEDUP" as TelemetryEventName,
+				{
+					fileCount: batchFileInfos.length,
+					totalBlocks: batchBlocks.length,
+					reused: reusedCount,
+					embedded: 0,
+					deleted: staleSegmentIds.length,
+				} as any,
+			)
+			const blocksByFile = new Map<string, string[]>()
+			for (const block of batchBlocks) {
+				const existing = blocksByFile.get(block.file_path)
+				if (existing) {
+					existing.push(block.segmentHash)
+				} else {
+					blocksByFile.set(block.file_path, [block.segmentHash])
+				}
+			}
+			for (const fileInfo of batchFileInfos) {
+				this.cacheManager.updateEntry(fileInfo.filePath, {
+					hash: fileInfo.fileHash,
+					mtimeMs: fileInfo.mtimeMs,
+					size: fileInfo.size,
+					segmentHashes: blocksByFile.get(fileInfo.filePath) ?? [],
+				})
+			}
+			onBlocksIndexed?.(reusedCount)
+			return
+		}
+
 		let attempts = 0
 		let success = false
 		let lastError: Error | null = null
@@ -454,56 +550,12 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 			attempts++
 			try {
-				// --- Deletion Step ---
-				const uniqueFilePaths = [
-					...new Set(
-						batchFileInfos
-							.filter((info) => !info.isNew) // Only modified files (not new)
-							.map((info) => info.filePath),
-					),
-				]
-				if (uniqueFilePaths.length > 0) {
-					try {
-						await this.qdrantClient.deletePointsByMultipleFilePaths(uniqueFilePaths)
-					} catch (deleteError: any) {
-						const errorStatus =
-							deleteError?.status || deleteError?.response?.status || deleteError?.statusCode
-						const errorMessage = deleteError instanceof Error ? deleteError.message : String(deleteError)
+				// Create embeddings for new/changed blocks only
+				const { embeddings } = await this.embedder.createEmbeddings(newTexts, undefined, signal)
 
-						outputError(
-							`[DirectoryScanner] Failed to delete points for ${uniqueFilePaths.length} files before upsert in workspace ${scanWorkspace}:`,
-							deleteError,
-						)
-
-						TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
-							error: sanitizeErrorMessage(errorMessage),
-							stack:
-								deleteError instanceof Error
-									? sanitizeErrorMessage(deleteError.stack || "")
-									: undefined,
-							location: "processBatch:deletePointsByMultipleFilePaths",
-							fileCount: uniqueFilePaths.length,
-							errorStatus: errorStatus,
-						})
-
-						// Re-throw with workspace context
-						throw new Error(
-							`Failed to delete points for ${uniqueFilePaths.length} files. Workspace: ${scanWorkspace}. ${errorMessage}`,
-							{ cause: deleteError },
-						)
-					}
-				}
-				// --- End Deletion Step ---
-
-				// Create embeddings for batch — thread the abort signal so the
-				// orchestrator's "Stop Indexing" can cancel in-flight Ollama calls.
-				const { embeddings } = await this.embedder.createEmbeddings(batchTexts, undefined, signal)
-
-				// Prepare points for Qdrant
-				const points = batchBlocks.map((block, index) => {
+				// Prepare points for Qdrant (new blocks only)
+				const points = newBlocks.map((block, index) => {
 					const normalizedAbsolutePath = generateNormalizedAbsolutePath(block.file_path, scanWorkspace)
-
-					// Use segmentHash for unique ID generation to handle multiple segments from same line
 					const pointId = uuidv5(block.segmentHash, QDRANT_CODE_BLOCK_NAMESPACE)
 
 					return {
@@ -521,11 +573,22 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 				// Upsert points to Qdrant
 				await this.qdrantClient.upsertPoints(points)
-				onBlocksIndexed?.(batchBlocks.length)
+				onBlocksIndexed?.(newBlocks.length + reusedCount)
 
-				// Update cache entries for successfully processed files in this batch.
-				// Group batch blocks by file_path so we can persist per-file segmentHashes
-				// for the file-watcher's per-segment dedup.
+				// Fire a single aggregated telemetry event per batch
+				TelemetryService.instance.captureEvent(
+					"CODE_INDEX_SEGMENT_DEDUP" as TelemetryEventName,
+					{
+						fileCount: batchFileInfos.length,
+						totalBlocks: batchBlocks.length,
+						reused: reusedCount,
+						embedded: newBlocks.length,
+						deleted: staleSegmentIds.length,
+					} as any,
+				)
+
+				// Update cache entries for all files in this batch (including
+				// reused blocks so their segmentHashes are preserved).
 				const blocksByFile = new Map<string, string[]>()
 				for (const block of batchBlocks) {
 					const existing = blocksByFile.get(block.file_path)
