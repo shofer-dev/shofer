@@ -1,21 +1,28 @@
-- Improve README and video
-- Announce
+- Is worktree inherrited? Auto-approvals?
 
-===
+- Implement new abstraction: workflow
 
-- Unexpected API Response: The language model did not provide any assistant messages. This may indicate an issue with the API or the model's output.
+- Revisit build-in modes
 
-- "Shofer said" twice 0dedca490e6b0c1cca6dabe3eb5de0ff564e34ce
+- Improve README, walkthrough, and video  (update changelog)
 
-- remove excessive logging
+- Announce https://gemini.google.com/app/bc25f481142e4161
+https://www.reddit.com/r/opensource/comments/1rqryee/slang_a_declarative_language_for_multiagent/#:~:text=The%20syntax%20is%20simple%20enough,%2C%20OpenRouter%2C%20MCP%20Sampling).
 
-- TEST RAG indexer for code changes & fix
+- make the dir name same as worktree & branch:
+alsterg@laptop:~/Projects/arkware.ai/.shofer/worktrees/arkware.ai-kom7c$ git branch
++ master
++ worktree/task_messaging
++ worktree/test
+  worktree/w3
+* worktree/workflow_design
 
-- FIX pasting images
-
-- DEV project documentation standarization/structure
 
 - DEV default system prompt update to let the model know all these (native tools, capabilities, conventions)
+    - project documentation standarization/structure
+    - Do not double answer: both with a regular message and with attempt_completion. The latter is the way you should provide your final answer/conclusion.
+    - submodule structure
+    - set title
     - environment_details
     - use tools instead of executing cli commands
     - git structure (submodules etc)
@@ -25,13 +32,23 @@
     - when you assign a subtask a task, you should not do it yourself, but wait for it to complete, or terminate first and then do it.
       only spawn subtasks if you have other work to do in parallel, that can be parallelized.
 
+=== P1
+
+- new logo
+
+- move all shofer special files under .shofer e.g. .shoferignore
+
+- TEST RAG indexer for code changes
+
+- FIX pasting images
+
 === P2
+
+- worktree tool?
 
 - test: /migrate-from-copilot /migrate-from-roocode
 
-- pick a new logo
-
-- DEV set limit on the number of parallel tasks
+- DEV set limit on the number of parallel tasks by limitting who can use new_task (limit on depth of task tree, and number of active tasks per parent task)
 
 - "Global Settings (JSON-only, no settings UI)" expose these settings on the Settings UI. Move these out of settings.json:
   | Setting | Purpose | Default |
