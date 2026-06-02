@@ -21,7 +21,14 @@ import { Task, type TaskOptions } from "../task/Task"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { outputError, outputLog } from "../../utils/outputChannelLogger"
 
-import { type AgentState, type FlowState, type MailboxEntry, serializeFlowState } from "./slang-types"
+import {
+	type AgentState,
+	type FlowState,
+	type FlowStatus,
+	type MailboxEntry,
+	deserializeFlowState,
+	serializeFlowState,
+} from "./slang-types"
 import { parseSlang, validateSlangAST } from "./slang-parser"
 import type {
 	FlowDecl as UpstreamFlowDecl,
@@ -863,6 +870,54 @@ export async function createWorkflowTask(
 
 	return new WorkflowTask({ provider, apiConfiguration, slangSource, flowDecl, flowParams })
 }
+
+/**
+ * Reconstruct a WorkflowTask from a persisted workflow HistoryItem.
+ *
+ * Unlike {@link createWorkflowTask} (which starts a fresh flow), this recompiles
+ * the agent programs from the persisted slang source and rehydrates the saved
+ * {@link FlowState} (program counters, bindings, mailbox, round/token counters)
+ * so the slang loop can resume exactly where it left off. The original `taskId`
+ * is preserved by threading the `historyItem` through to the `Task` superclass.
+ */
+export async function createWorkflowTaskFromHistory(
+	provider: ShoferProvider,
+	historyItem: HistoryItem,
+): Promise<WorkflowTask> {
+	if (!historyItem.slangSource) {
+		throw new Error(`HistoryItem ${historyItem.id} is flagged as a workflow but has no slangSource`)
+	}
+
+	const { ast, errors } = parseSlang(historyItem.slangSource)
+	if (errors.length > 0) throw new Error(`Slang parse errors:\n${errors.join("\n")}`)
+	if (ast.flows.length === 0) throw new Error("No flows found in persisted .slang source")
+
+	const flowDecl = ast.flows[0]
+	const flowState = historyItem.flowState
+		? deserializeFlowState(historyItem.flowState as Record<string, unknown>)
+		: undefined
+
+	const state = await provider.getState()
+	const apiConfiguration = state?.apiConfiguration
+	if (!apiConfiguration) throw new Error("No API configuration available")
+
+	return new WorkflowTask({
+		provider,
+		apiConfiguration,
+		slangSource: historyItem.slangSource,
+		flowDecl,
+		flowState,
+		historyItem,
+	})
+}
+
+/** Flow statuses from which the slang loop should NOT be resumed. */
+export const TERMINAL_FLOW_STATUSES: ReadonlySet<FlowStatus> = new Set<FlowStatus>([
+	"converged",
+	"budget_exceeded",
+	"deadlock",
+	"error",
+])
 
 // ── .slang File Discovery ──
 
