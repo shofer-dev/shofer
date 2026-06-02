@@ -72,6 +72,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	parallelTasks: ManagedTask[]
 	focusedTaskId: string | null
 	taskNotifications: TaskNotification[]
+	// Workflow management — discovered .slang flows available to launch.
+	workflows: Array<{ name: string; params: Array<{ name: string; type: string }> }>
 	setHasOpenedModeSelector: (value: boolean) => void // Setter for the new property
 	alwaysAllowFollowupQuestions: boolean // New property for follow-up questions auto-approve
 	setAlwaysAllowFollowupQuestions: (value: boolean) => void // Setter for the new property
@@ -313,6 +315,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		parallelTasks: [],
 		focusedTaskId: null,
 		taskNotifications: [],
+		// Workflow management
+		workflows: [],
 	})
 
 	const [didHydrateState, setDidHydrateState] = useState(false)
@@ -602,6 +606,15 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					}))
 					break
 				}
+				case "workflowsList": {
+					if (message.workflows) {
+						setState((prevState) => ({
+							...prevState,
+							workflows: message.workflows!,
+						}))
+					}
+					break
+				}
 			}
 		},
 		[setListApiConfigMeta, state.apiConfiguration?.apiProvider],
@@ -772,6 +785,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		parallelTasks: state.parallelTasks ?? [],
 		focusedTaskId: state.focusedTaskId ?? null,
 		taskNotifications: (state.taskNotifications ?? []) as TaskNotification[],
+		// Workflow management
+		workflows: state.workflows ?? [],
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>

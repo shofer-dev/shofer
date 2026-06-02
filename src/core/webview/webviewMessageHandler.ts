@@ -4207,8 +4207,8 @@ export const webviewMessageHandler = async (
 
 		case "createWorkflow": {
 			try {
-				const flowName = (message as any).flowName as string
-				const flowParams = (message as any).flowParams as Record<string, string> | undefined
+				const flowName = message.flowName
+				const flowParams = message.flowParams
 				if (!flowName) {
 					provider.log("createWorkflow: missing flowName")
 					break
