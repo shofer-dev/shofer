@@ -2,6 +2,19 @@
 
 Design for the **Workflow** abstraction in Shofer: a container for coordinated Tasks executed by a formal, non-LLM-driven executor following a `.slang` specification.
 
+> **Implementation Status**: ✅ Slang parser (vendored from @riktar/slang, MIT) — [`src/core/workflow/slang-lexer.ts`](../../extensions/shofer/src/core/workflow/slang-lexer.ts), [`slang-parser-upstream.ts`](../../extensions/shofer/src/core/workflow/slang-parser-upstream.ts), [`slang-resolver.ts`](../../extensions/shofer/src/core/workflow/slang-resolver.ts)  
+> ✅ WorkflowTask class — [`src/core/workflow/WorkflowTask.ts`](../../extensions/shofer/src/core/workflow/WorkflowTask.ts)  
+> ✅ .slang file discovery (`discoverWorkflows()`)  
+> ✅ `+` button dropdown (QuickPick: New Task / New Workflow → workflow picker) — [`registerCommands.ts`](../../extensions/shofer/src/activate/registerCommands.ts#L82)  
+> ✅ `escalate @Human` support  
+> ✅ Agent-to-task dispatch (spawn + resume via message queue)  
+> ✅ Stake routing + mailbox routing  
+> ✅ FlowState persistence via HistoryItem (`isWorkflow`, `slangSource`, `flowState` fields)  
+> ✅ i18n (`plus.json` locale)  
+> ✅ Example workflow — [`.shofer/workflows/implement-feature.slang`](../../.shofer/workflows/implement-feature.slang)  
+> 🔜 **Deferred**: Welcome View Redesign (Section §"Welcome View Redesign" below)  
+> 🔜 **Deferred**: TaskSelector/HistoryView WorkflowTask-aware adaptations
+
 ## Table of Contents
 
 1. [Motivation](#motivation)
@@ -13,7 +26,8 @@ Design for the **Workflow** abstraction in Shofer: a container for coordinated T
 7. [Agent-to-Task Dispatch](#agent-to-task-dispatch)
 8. [User Interaction](#user-interaction)
 9. [Open Design Questions](#open-design-questions)
-10. [Related Documents](#related-documents)
+10. [Implementation Status](#implementation-status)
+11. [Related Documents](#related-documents)
 
 ---
 
