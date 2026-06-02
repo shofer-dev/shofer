@@ -70,7 +70,6 @@ const App = () => {
 		parallelTasks,
 		currentTaskItem,
 		customModes,
-		workflows,
 	} = useExtensionState()
 
 	// Merge built-in and custom modes into a flat slug→name lookup for
@@ -284,7 +283,6 @@ const App = () => {
 				currentTaskId={currentTaskItem?.id}
 				modes={allModes}
 				worktrees={worktrees}
-				workflows={workflows || []}
 			/>
 			{deleteMessageDialogState.hasCheckpoint ? (
 				<MemoizedCheckpointRestoreDialog
