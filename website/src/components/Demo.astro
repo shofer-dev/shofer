@@ -1,0 +1,70 @@
+<section id="demo" class="py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-12">
+      <span class="text-sm font-semibold text-accent-purple dark:text-accent-purple uppercase tracking-wider">Demo</span>
+      <h2 class="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+        See Shofer in action
+      </h2>
+      <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+        A quick walkthrough of Shofer's parallel tasks, custom modes, and tool orchestration in a real VS Code workspace.
+      </p>
+    </div>
+
+    <div
+      id="demo-video-container"
+      class="relative mx-auto max-w-4xl rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-2xl shadow-gray-900/10 dark:shadow-black/30 bg-gray-100 dark:bg-gray-900 cursor-pointer group"
+    >
+      <video
+        id="demo-video"
+        controls
+        preload="metadata"
+        poster="/demo-poster.jpg"
+        class="w-full h-auto block"
+      >
+        <source src="/demo.webm" type="video/webm" />
+        Your browser does not support the video tag.
+      </video>
+
+      <!-- Play button overlay -->
+      <div
+        id="demo-play-overlay"
+        class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors"
+      >
+        <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-shofer-600/90 flex items-center justify-center shadow-2xl group-hover:bg-shofer-600 group-hover:scale-105 transition-all duration-200">
+          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="ml-1.5">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script is:inline>
+  (() => {
+    const container = document.getElementById("demo-video-container");
+    const video = document.getElementById("demo-video");
+    const overlay = document.getElementById("demo-play-overlay");
+
+    if (!container || !video || !overlay) return;
+
+    function play() {
+      overlay.classList.add("hidden");
+      video.play().catch(() => {});
+    }
+
+    container.addEventListener("click", () => {
+      play();
+    });
+
+    video.addEventListener("play", () => {
+      overlay.classList.add("hidden");
+    });
+
+    video.addEventListener("pause", () => {
+      if (video.currentTime === 0 || video.ended) {
+        overlay.classList.remove("hidden");
+      }
+    });
+  })();
+</script>
