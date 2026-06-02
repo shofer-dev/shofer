@@ -81,7 +81,8 @@ const isWindows = process.platform.startsWith("win")
 const binName = isWindows ? "rg.exe" : "rg"
 
 /**
- * Locate the ripgrep binary within the VS Code installation.
+ * Locate the ripgrep binary within the VS Code installation,
+ * falling back to a system-wide ripgrep found in PATH.
  * Mirrors the logic in `src/services/ripgrep/index.ts`.
  */
 async function getRipgrepBinPath(vscodeAppRoot: string): Promise<string | undefined> {
@@ -94,8 +95,23 @@ async function getRipgrepBinPath(vscodeAppRoot: string): Promise<string | undefi
 		(await checkPath("node_modules/@vscode/ripgrep/bin/")) ||
 		(await checkPath("node_modules/vscode-ripgrep/bin")) ||
 		(await checkPath("node_modules.asar.unpacked/vscode-ripgrep/bin/")) ||
-		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/"))
+		(await checkPath("node_modules.asar.unpacked/@vscode/ripgrep/bin/")) ||
+		getSystemRipgrepPath()
 	)
+}
+
+/**
+ * Locate ripgrep via the system PATH using `which` (Unix) or `where` (Windows).
+ * Returns undefined if ripgrep is not installed system-wide.
+ */
+function getSystemRipgrepPath(): string | undefined {
+	try {
+		const cmd = isWindows ? "where" : "which"
+		const result = childProcess.execFileSync(cmd, [binName], { encoding: "utf8" }).trim().split("\n")[0].trim()
+		return result || undefined
+	} catch {
+		return undefined
+	}
 }
 
 /**
