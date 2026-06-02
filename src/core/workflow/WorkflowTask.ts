@@ -579,7 +579,7 @@ export class WorkflowTask extends Task {
 
 	/** A throwaway agent state for evaluating flow-global converge/budget expressions. */
 	private globalEvalState(): AgentState {
-		return { name: "", taskId: "", status: "idle", opIndex: 0, bindings: new Map() }
+		return { name: "", taskId: "", status: "idle", opIndex: 0, bindings: new Map(), retryCount: 0 }
 	}
 
 	// ── Dispatch ──
