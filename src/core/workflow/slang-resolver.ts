@@ -151,7 +151,7 @@ export function analyzeFlow(flow: FlowDecl): FlowDiagnostic[] {
 	if (!hasBudget) {
 		diagnostics.push({
 			level: "warning",
-			message: "Flow has no budget statement — default limits apply (10 rounds)",
+			message: "Flow has no budget statement — default limits apply (30 rounds, 300k tokens)",
 		})
 	}
 
@@ -181,7 +181,9 @@ export function analyzeFlow(flow: FlowDecl): FlowDiagnostic[] {
 				}
 			} else if (op.type === "AwaitOp") {
 				for (const s of op.sources) {
-					if (s.ref !== "*" && s.ref !== "any" && !agentNames.has(s.ref)) {
+					// "*"/"any" are wildcards; "human" is the escalation pseudo-agent
+					// (the reply to an `escalate @Human` arrives as mail from @Human).
+					if (s.ref !== "*" && s.ref !== "any" && s.ref.toLowerCase() !== "human" && !agentNames.has(s.ref)) {
 						diagnostics.push({
 							level: "error",
 							message: `Agent "${agent.name}" awaits from unknown agent "@${s.ref}"`,
@@ -201,36 +203,49 @@ export function analyzeFlow(flow: FlowDecl): FlowDiagnostic[] {
 		}
 	}
 
-	// Orphan detection
+	// Orphan detection — recurse into when/repeat blocks so awaits and stakes
+	// nested in control flow are counted (a top-level-only scan would flag an
+	// agent that is only awaited from inside a loop as a false-positive orphan).
 	const awaitedAgents = new Set<string>()
-	for (const agent of agentNodes) {
-		for (const op of agent.operations) {
-			if (op.type === "AwaitOp") {
-				for (const s of op.sources) {
-					if (s.ref !== "*" && s.ref !== "any") awaitedAgents.add(s.ref)
-				}
+	const collectAwaits = (op: Operation): void => {
+		if (op.type === "AwaitOp") {
+			for (const s of op.sources) {
+				if (s.ref !== "*" && s.ref !== "any") awaitedAgents.add(s.ref)
 			}
+		} else if (op.type === "WhenBlock") {
+			for (const inner of op.body) collectAwaits(inner)
+			if (op.elseBlock) for (const inner of op.elseBlock.body) collectAwaits(inner)
+		} else if (op.type === "RepeatBlock") {
+			for (const inner of op.body) collectAwaits(inner)
 		}
 	}
 	for (const agent of agentNodes) {
+		for (const op of agent.operations) collectAwaits(op)
+	}
+
+	for (const agent of agentNodes) {
 		let stakesToAgents = false
-		for (const op of agent.operations) {
+		let stakesToOut = false
+		const collectStakes = (op: Operation): void => {
 			if (op.type === "StakeOp") {
 				for (const r of op.recipients) {
-					if (r.ref !== "out" && r.ref !== "all") stakesToAgents = true
+					if (r.ref === "out") stakesToOut = true
+					else if (r.ref !== "all") stakesToAgents = true
 				}
+			} else if (op.type === "WhenBlock") {
+				for (const inner of op.body) collectStakes(inner)
+				if (op.elseBlock) for (const inner of op.elseBlock.body) collectStakes(inner)
+			} else if (op.type === "RepeatBlock") {
+				for (const inner of op.body) collectStakes(inner)
 			}
 		}
-		if (stakesToAgents && !awaitedAgents.has(agent.name)) {
-			const stakesToOut = agent.operations.some(
-				(op) => op.type === "StakeOp" && op.recipients.some((r) => r.ref === "out"),
-			)
-			if (!stakesToOut) {
-				diagnostics.push({
-					level: "warning",
-					message: `Agent "${agent.name}" produces output but no agent awaits from it`,
-				})
-			}
+		for (const op of agent.operations) collectStakes(op)
+
+		if (stakesToAgents && !awaitedAgents.has(agent.name) && !stakesToOut) {
+			diagnostics.push({
+				level: "warning",
+				message: `Agent "${agent.name}" produces output but no agent awaits from it`,
+			})
 		}
 	}
 
