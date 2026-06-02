@@ -48,11 +48,9 @@ import {
 } from "@/lib/schemas"
 import { cn } from "@/lib/utils"
 
-import { loadRooLastModelSelection, saveRooLastModelSelection } from "@/lib/shofer-last-model-selection"
 import { normalizeCreateRunForSubmit } from "@/lib/normalize-create-run"
 
 import { useOpenRouterModels } from "@/hooks/use-open-router-models"
-import { useShoferCloudModels } from "@/hooks/use-shofer-cloud-models"
 
 import {
 	Button,
@@ -61,7 +59,6 @@ import {
 	FormItem,
 	FormLabel,
 	FormMessage,
-	Input,
 	Textarea,
 	Tabs,
 	TabsList,
@@ -108,7 +105,7 @@ export function NewRun() {
 	const modelSelectionsByProviderRef = useRef<Record<string, ModelSelection[]>>({})
 	const modelValueByProviderRef = useRef<Record<string, string>>({})
 
-	const [provider, setModelSource] = useState<"shofer" | "openrouter" | "other">("other")
+	const [provider, setModelSource] = useState<"openrouter" | "other">("other")
 	const [executionMethod, setExecutionMethod] = useState<ExecutionMethod>("vscode")
 	const [commandExecutionTimeout, setCommandExecutionTimeout] = useState(20)
 	const [terminalShellIntegrationTimeout, setTerminalShellIntegrationTimeout] = useState(30) // seconds
@@ -123,11 +120,10 @@ export function NewRun() {
 	])
 
 	const openRouter = useOpenRouterModels()
-	const rooCodeCloud = useShoferCloudModels()
-	const models = provider === "openrouter" ? openRouter.data : rooCodeCloud.data
-	const searchValue = provider === "openrouter" ? openRouter.searchValue : rooCodeCloud.searchValue
-	const setSearchValue = provider === "openrouter" ? openRouter.setSearchValue : rooCodeCloud.setSearchValue
-	const onFilter = provider === "openrouter" ? openRouter.onFilter : rooCodeCloud.onFilter
+	const models = openRouter.data
+	const searchValue = openRouter.searchValue
+	const setSearchValue = openRouter.setSearchValue
+	const onFilter = openRouter.onFilter
 
 	const exercises = useQuery({ queryKey: ["getExercises"], queryFn: () => getExercises() })
 
@@ -159,27 +155,6 @@ export function NewRun() {
 	} = form
 
 	const [suite, settings] = watch(["suite", "settings", "concurrency"])
-
-	const selectedModelIds = useMemo(
-		() => modelSelections.map((s) => s.model).filter((m) => m.length > 0),
-		[modelSelections],
-	)
-
-	const applyModelIds = useCallback(
-		(modelIds: string[]) => {
-			const unique = Array.from(new Set(modelIds.map((m) => m.trim()).filter((m) => m.length > 0)))
-
-			if (unique.length === 0) {
-				setModelSelections([{ id: crypto.randomUUID(), model: "", popoverOpen: false }])
-				setValue("model", "")
-				return
-			}
-
-			setModelSelections(unique.map((model) => ({ id: crypto.randomUUID(), model, popoverOpen: false })))
-			setValue("model", unique[0] ?? "")
-		},
-		[setValue],
-	)
 
 	// Ensure the `exercises` field is registered so RHF always includes it in submit values.
 	useEffect(() => {
@@ -273,23 +248,6 @@ export function NewRun() {
 		setValue("model", nextModelValue)
 		setPrevProvider(provider)
 	}, [provider, prevProvider, modelSelections, setValue, getValues, importedSettings, configSelections])
-
-	// When switching to Shofer provider, restore last-used selection if current selection is empty
-	useEffect(() => {
-		if (provider !== "shofer") return
-		if (selectedModelIds.length > 0) return
-
-		const last = loadRooLastModelSelection()
-		if (last.length > 0) {
-			applyModelIds(last)
-		}
-	}, [applyModelIds, provider, selectedModelIds.length])
-
-	// Persist last-used Shofer provider model selection
-	useEffect(() => {
-		if (provider !== "shofer") return
-		saveRooLastModelSelection(selectedModelIds)
-	}, [provider, selectedModelIds])
 
 	// Extract unique languages from exercises
 	const languages = useMemo(() => {
@@ -416,12 +374,6 @@ export function NewRun() {
 			try {
 				const baseValues = normalizeCreateRunForSubmit(values, selectedExercises, suite)
 
-				// Validate jobToken for Shofer Cloud provider
-				if (provider === "shofer" && !baseValues.jobToken?.trim()) {
-					toast.error("Shofer Cloud Token is required")
-					return
-				}
-
 				const selectionsToLaunch: { model: string; configName?: string }[] = []
 
 				if (provider === "other") {
@@ -462,15 +414,6 @@ export function NewRun() {
 							...(runValues.settings || {}),
 							apiProvider: "openrouter",
 							openRouterModelId: selection.model,
-							commandExecutionTimeout,
-							terminalShellIntegrationTimeout: terminalShellIntegrationTimeout * 1000,
-						}
-					} else if (provider === "shofer") {
-						runValues.model = selection.model
-						runValues.settings = {
-							...(runValues.settings || {}),
-							apiProvider: "shofer",
-							apiModelId: selection.model,
 							commandExecutionTimeout,
 							terminalShellIntegrationTimeout: terminalShellIntegrationTimeout * 1000,
 						}
@@ -568,12 +511,9 @@ export function NewRun() {
 							<FormItem>
 								<Tabs
 									value={provider}
-									onValueChange={(value) =>
-										setModelSource(value as "shofer" | "openrouter" | "other")
-									}>
+									onValueChange={(value) => setModelSource(value as "openrouter" | "other")}>
 									<TabsList className="mb-2">
 										<TabsTrigger value="other">Import</TabsTrigger>
-										<TabsTrigger value="shofer">Shofer Cloud</TabsTrigger>
 										<TabsTrigger value="openrouter">OpenRouter</TabsTrigger>
 									</TabsList>
 								</Tabs>
@@ -775,39 +715,6 @@ export function NewRun() {
 							</FormItem>
 						)}
 					/>
-
-					{provider === "shofer" && (
-						<FormField
-							control={form.control}
-							name="jobToken"
-							render={({ field }) => (
-								<FormItem>
-									<div className="flex items-center gap-1">
-										<FormLabel>Shofer Cloud Token</FormLabel>
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<Info className="size-4 text-muted-foreground cursor-help" />
-											</TooltipTrigger>
-											<TooltipContent side="right" className="max-w-xs">
-												<p>
-													If you have access to the Shofer Cloud repository and the decryption
-													key for the .env.* files, generate a token with:
-												</p>
-												<code className="text-xs block mt-1">
-													pnpm --filter @shofer-cloud/auth production:create-auth-token
-													[email] [org] [ttl]
-												</code>
-											</TooltipContent>
-										</Tooltip>
-									</div>
-									<FormControl>
-										<Input type="password" placeholder="Required" {...field} />
-									</FormControl>
-									<FormMessage />
-								</FormItem>
-							)}
-						/>
-					)}
 
 					<FormField
 						control={form.control}
