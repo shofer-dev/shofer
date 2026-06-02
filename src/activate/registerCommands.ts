@@ -18,9 +18,8 @@ import { CodeIndexManager } from "../services/code-index/manager"
 import { GitIndexManager } from "../services/git-index/git-index-manager"
 import { AssistantAgentManager } from "../services/assistant-agent/manager"
 import { showAssistantAgentChatPanel } from "../core/webview/AssistantAgentChatProvider"
+import { showSlangVisualization } from "../core/webview/SlangVisualizationProvider"
 import { importSettingsWithFeedback } from "../core/config/importExport"
-import { defaultModeSlug } from "../shared/modes"
-import { t } from "../i18n"
 
 /**
  * Helper to get the visible ShoferProvider instance or log if not found.
@@ -88,83 +87,13 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		// New Task: pop the current task to the background (parallel execution)
-		// without aborting it, then reset the webview to a fresh chat surface.
-		const poppedTask = visibleProvider.popFromStackWithoutAborting()
-		if (poppedTask) {
-			visibleProvider.taskManager.registerBackgroundTask(poppedTask)
-			visibleProvider.log(
-				`[plusButtonClicked] Task ${poppedTask.taskId} moved to background (parallel execution)`,
-			)
-		}
-
-		await visibleProvider.handleUserModeSwitch(defaultModeSlug)
-
-		await visibleProvider.refreshWorkspace()
-		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
-		await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
-	},
-	newWorkflowButtonClicked: async () => {
-		const visibleProvider = getVisibleProviderOrLog(outputChannel)
-
-		if (!visibleProvider) {
-			return
-		}
-
-		TelemetryService.instance.captureTitleButtonClicked("newWorkflow")
-
-		// Discover available workflows from project + global .shofer/workflows/.
-		const { discoverWorkflows } = await import("../core/workflow/index")
-		const workflows = await discoverWorkflows(visibleProvider.cwd)
-
-		if (workflows.size === 0) {
-			vscode.window.showInformationMessage(t("plus:noWorkflowsFound"))
-			return
-		}
-
-		const flowItems: (vscode.QuickPickItem & { flowName: string })[] = Array.from(workflows.entries()).map(
-			([name]) => ({
-				label: `$(rocket) ${name}`,
-				description: t("plus:slangWorkflow"),
-				flowName: name,
-			}),
-		)
-
-		const flowPick = await vscode.window.showQuickPick(flowItems, {
-			placeHolder: t("plus:selectWorkflow"),
-		})
-
-		if (!flowPick) return
-
-		// Pop the current task to the background WITHOUT aborting it.
-		const poppedTask = visibleProvider.popFromStackWithoutAborting()
-		if (poppedTask) {
-			visibleProvider.taskManager.registerBackgroundTask(poppedTask)
-			visibleProvider.log(
-				`[newWorkflowButtonClicked] Task ${poppedTask.taskId} moved to background (workflow launch)`,
-			)
-		}
-
-		// Notify webview to reset to a fresh surface.
-		await visibleProvider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
-		await visibleProvider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-		await visibleProvider.postMessageToWebview({ type: "action", action: "focusInput" })
-
-		// Create and start the workflow task directly.
-		const slangSource = workflows.get(flowPick.flowName)
-		if (slangSource) {
-			try {
-				const { createWorkflowTask } = await import("../core/workflow/index")
-				const task = await createWorkflowTask(visibleProvider, slangSource)
-				await visibleProvider.addShoferToStack(task)
-				await visibleProvider.postStateToWebview()
-				task.start()
-			} catch (error) {
-				visibleProvider.log(`Error creating workflow: ${error}`)
-				vscode.window.showErrorMessage(`Failed to create workflow: ${error}`)
-			}
-		}
+		// The "+" now opens the in-webview launcher (New Task / New Workflow
+		// cards) instead of immediately creating a task. The current task is
+		// left untouched on the stack — it is only popped to the background
+		// once the user actually picks a mode (launchTask) or a workflow
+		// (createWorkflow). This keeps the active task running while the user
+		// browses the launcher and lets them cancel out without side effects.
+		await visibleProvider.postMessageToWebview({ type: "action", action: "launcherButtonClicked" })
 	},
 	popoutButtonClicked: () => {
 		TelemetryService.instance.captureTitleButtonClicked("popout")
@@ -384,6 +313,11 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		await manager.clearIndexData()
 		vscode.window.showInformationMessage("Git history index cleared.")
 	},
+	// ─── Slang Visualization ────────────────────────────────────────────
+	"slangVisualization.show": () => {
+		showSlangVisualization(context.extensionUri)
+	},
+
 	// ─── Webview ──────────────────────────────────────────────────────────
 	refreshWebview: async () => {
 		const visibleProvider = getVisibleProviderOrLog(outputChannel)

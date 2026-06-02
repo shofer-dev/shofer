@@ -1,0 +1,20 @@
+{
+	"root": {
+		"title": "What would you like to start?",
+		"newTask": "New Task",
+		"newTaskDescription": "Start a fresh task and pick the mode it runs in.",
+		"newWorkflow": "New Workflow",
+		"newWorkflowDescription": "Launch a discovered .slang workflow."
+	},
+	"newTask": {
+		"title": "Choose a mode",
+		"empty": "No modes available."
+	},
+	"newWorkflow": {
+		"title": "Choose a workflow",
+		"loading": "Discovering workflows…",
+		"empty": "No workflows found. Add a .slang flow under .shofer/workflows/."
+	},
+	"back": "Back",
+	"close": "Close"
+}

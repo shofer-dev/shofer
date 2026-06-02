@@ -4180,6 +4180,31 @@ export const webviewMessageHandler = async (
 
 		// ── Workflow messages ──
 
+		case "launchTask": {
+			// Launcher "New Task" path: pop the current task to the background
+			// (parallel execution, without aborting it), switch to the chosen
+			// mode, and reset the webview to a fresh chat surface. The user then
+			// types their request as usual.
+			try {
+				const mode = (message.mode as Mode) || defaultModeSlug
+
+				const poppedTask = provider.popFromStackWithoutAborting()
+				if (poppedTask) {
+					provider.taskManager.registerBackgroundTask(poppedTask)
+					provider.log(`[launchTask] Task ${poppedTask.taskId} moved to background (parallel execution)`)
+				}
+
+				await provider.handleUserModeSwitch(mode)
+				await provider.refreshWorkspace()
+				await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+				await provider.postMessageToWebview({ type: "action", action: "focusInput" })
+			} catch (error) {
+				provider.log(`Error launching task: ${error}`)
+			}
+			break
+		}
+
 		case "listWorkflows": {
 			try {
 				const { discoverWorkflows, parseSlang } = await import("../workflow/index")
@@ -4225,6 +4250,15 @@ export const webviewMessageHandler = async (
 				}
 
 				const task = await createWorkflowTask(provider, slangSource, flowParams)
+
+				// Pop the current task to the background (parallel execution)
+				// without aborting it, so the launched workflow becomes the
+				// focused task while any prior task keeps running.
+				const poppedTask = provider.popFromStackWithoutAborting()
+				if (poppedTask) {
+					provider.taskManager.registerBackgroundTask(poppedTask)
+					provider.log(`[createWorkflow] Task ${poppedTask.taskId} moved to background (workflow launch)`)
+				}
 
 				// Register with TaskManager and show in TaskSelector
 				await provider.addShoferToStack(task)

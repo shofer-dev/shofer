@@ -1,5 +1,0 @@
-{
-	"selectWorkflow": "Select a workflow to launch",
-	"slangWorkflow": "Slang workflow",
-	"noWorkflowsFound": "No .slang workflow files found. Add them to .shofer/workflows/ in your workspace or ~/.shofer/workflows/ globally."
-}
