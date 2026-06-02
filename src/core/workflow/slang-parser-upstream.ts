@@ -361,7 +361,11 @@ class Parser {
 			srcRefToken.type === TokenType.AgentRef ? this.advance().value : this.expect(TokenType.Ident).value
 		sources.push({ ref: srcRef })
 		while (this.match(TokenType.Comma)) {
-			sources.push({ ref: this.expect(TokenType.Ident).value })
+			// Accept both Ident and AgentRef for sources (Shofer extension)
+			const nextSrcRefToken = this.peek()
+			const nextSrcRef =
+				nextSrcRefToken.type === TokenType.AgentRef ? this.advance().value : this.expect(TokenType.Ident).value
+			sources.push({ ref: nextSrcRef })
 		}
 
 		// Optional trailing options (currently unused but part of the grammar)

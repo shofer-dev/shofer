@@ -1890,6 +1890,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
+	 * Extra fields that subclasses contribute to every persisted
+	 * `HistoryItem`. The base task adds nothing; `WorkflowTask` overrides this
+	 * to inject `isWorkflow`/`slangSource`/`flowState` so the persisted item is
+	 * recognisable as a workflow from the first write onward.
+	 */
+	protected getHistoryExtension(): Partial<HistoryItem> {
+		return {}
+	}
+
+	/**
 	 * Metadata-only refresh used by the debounced path.
 	 *
 	 * Walks `shoferMessages` for token-usage and history-item derivation,
@@ -1941,7 +1951,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// - Final state is emitted when updates stop (trailing: true)
 			this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 
-			await this.providerRef.deref()?.updateTaskHistory(historyItem)
+			// Subclasses (e.g. WorkflowTask) may contribute extra persisted
+			// fields. Merging here guarantees the extension is present on EVERY
+			// history write, so the webview sees it from the very first
+			// postStateToWebview rather than only after the first checkpoint.
+			await this.providerRef.deref()?.updateTaskHistory({ ...historyItem, ...this.getHistoryExtension() })
 
 			return true
 		} catch (error) {

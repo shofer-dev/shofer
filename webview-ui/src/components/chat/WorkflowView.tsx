@@ -7,7 +7,6 @@ import { LRUCache } from "lru-cache"
 
 import { useDebounceEffect } from "@src/utils/useDebounceEffect"
 import { appendImages } from "@src/utils/imageUtils"
-import { getCostBreakdownIfNeeded } from "@src/utils/costFormatting"
 import { batchConsecutive } from "@src/utils/batchConsecutive"
 
 import type { ShoferAsk, ShoferSayTool, ShoferMessage, ExtensionMessage, AudioType } from "@shofer/types"
@@ -17,7 +16,6 @@ import { findLast } from "@shofer/shared/array"
 import { SuggestionItem } from "@shofer/types"
 import { getAllModes } from "@shofer/shared/modes"
 import { ProfileValidator } from "@shofer/shared/ProfileValidator"
-import { getLatestTodo } from "@shofer/shared/todo"
 import { escapeSpaces } from "@src/utils/path-mentions"
 
 import { vscode } from "@src/utils/vscode"
@@ -25,41 +23,45 @@ import { type DroppedContextFile, extractUriPayload, parseDroppedUris } from "@s
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { useSelectedModel } from "@src/components/ui/hooks/useSelectedModel"
-import ShoferHero from "@src/components/welcome/ShoferHero"
-import ShoferTips from "@src/components/welcome/ShoferTips"
 import { StandardTooltip, Button } from "@src/components/ui"
 
-import VersionIndicator from "../common/VersionIndicator"
-import HistoryPreview from "../history/HistoryPreview"
 import Announcement from "./Announcement"
+import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ChatRow from "./ChatRow"
 import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
 import ProfileViolationWarning from "./ProfileViolationWarning"
-import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
-import FileChangesPanel from "./FileChangesPanel"
 import SessionSearch from "./SessionSearch"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
 import { createIncrementalMessageProcessor } from "./incrementalMessageProcessing"
 
-export interface ChatViewProps {
+export interface WorkflowViewProps {
 	isHidden: boolean
 	showAnnouncement: boolean
 	hideAnnouncement: () => void
 }
 
-export interface ChatViewRef {
+export interface WorkflowViewRef {
 	acceptInput: () => void
 }
 
-export const MAX_IMAGES_PER_MESSAGE = 20 // This is the Anthropic limit.
-
 const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
 
-const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewProps> = (
+/**
+ * WorkflowView renders the dedicated surface for a WorkflowTask (a root task
+ * whose lifecycle is driven by the slang loop). It reuses ChatView's full
+ * say/ask interactive message machinery — workflows post status updates and
+ * can ask the user questions — but presents a workflow-specific header and
+ * footer (no TodoList/ContextWindow/cost-limit editing, no FileChangesPanel).
+ *
+ * WorkflowView is kept permanently mounted alongside ChatView and toggled via
+ * `isHidden` so webview-local state (scroll position, drafts, expanded rows)
+ * is preserved across task switches, mirroring ChatView's treatment.
+ */
+const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, WorkflowViewProps> = (
 	{ isHidden, showAnnouncement, hideAnnouncement },
 	ref,
 ) => {
@@ -73,8 +75,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const {
 		shoferMessages: messages,
 		currentTaskItem,
-		currentTaskTodos,
-		taskHistory,
 		apiConfiguration,
 		organizationAllowList,
 		mode,
@@ -109,22 +109,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// task, then the extension is in a bad state and needs to be debugged (see
 	// Shofer.abort).
 	const task = useMemo(() => messages.at(0), [messages])
-
-	const latestTodos = useMemo(() => {
-		// First check if we have initial todos from the state (for new subtasks)
-		if (currentTaskTodos && currentTaskTodos.length > 0) {
-			// Check if there are any todo updates in messages
-			const messageBasedTodos = getLatestTodo(messages)
-			// If there are message-based todos, they take precedence (user has updated them)
-			if (messageBasedTodos && messageBasedTodos.length > 0) {
-				return messageBasedTodos
-			}
-			// Otherwise use the initial todos from state
-			return currentTaskTodos
-		}
-		// Fall back to extracting from messages
-		return getLatestTodo(messages)
-	}, [messages, currentTaskTodos])
 
 	// Incremental message processing — replaces the O(n²) full-array
 	// consolidateApiRequests(consolidateCommands(...)) + getApiMetrics()
@@ -169,10 +153,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const lastTtsRef = useRef<string>("")
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
-	const [checkpointWarning, setCheckpointWarning] = useState<
-		{ type: "WAIT_TIMEOUT" | "INIT_TIMEOUT"; timeout: number } | undefined
-	>(undefined)
-	const [isCondensing, setIsCondensing] = useState<boolean>(false)
 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
 		new LRUCache({
@@ -298,9 +278,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const playSound = useCallback(
 		(audioType: AudioType) => {
-			// When this view is hidden (e.g. a WorkflowTask is focused and
-			// WorkflowView is visible instead), defer audio to the visible view so
-			// the permanently-mounted hidden instance does not double-play sounds.
+			// When this view is hidden, ChatView (or the visible WorkflowView for
+			// another task) owns audio feedback. Staying silent here prevents the
+			// permanently-mounted hidden instance from double-playing sounds.
 			if (isHidden || !soundEnabled) {
 				return
 			}
@@ -359,6 +339,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "ask":
 					// Reset user response flag when a new ask arrives to allow auto-approval
 					userRespondedRef.current = false
+					// eslint-disable-next-line no-case-declarations
 					const isPartial = lastMessage.partial === true
 					// When the backend has already auto-approved (or auto-denied) this
 					// ask, no user input is required. Suppress the action buttons and
@@ -417,6 +398,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setSendingDisabled(isPartial)
 							setShoferAsk("tool")
 							setEnableButtons(!isPartial)
+							// eslint-disable-next-line no-case-declarations
 							const tool = JSON.parse(lastMessage.text || "{}") as ShoferSayTool
 							switch (tool.tool) {
 								case "editedExistingFile":
@@ -504,6 +486,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							// A subtask is considered completed if:
 							// - It has a parentTaskId AND
 							// - Its messages contain a completion_result (either ask or say)
+							// eslint-disable-next-line no-case-declarations
 							const isCompletedSubtask =
 								currentTaskItem?.parentTaskId &&
 								messages.some(
@@ -604,8 +587,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setExpandedRows({})
 		everVisibleMessagesTsRef.current.clear()
 		setCurrentFollowUpTs(null)
-		setIsCondensing(false)
-
 		if (autoApproveTimeoutRef.current) {
 			clearTimeout(autoApproveTimeoutRef.current)
 			autoApproveTimeoutRef.current = null
@@ -1072,6 +1053,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "resume_task":
 					// For completed subtasks (tasks with a parentTaskId and a completion_result),
 					// start a new task instead of resuming since the subtask is done
+					// eslint-disable-next-line no-case-declarations
 					const isCompletedSubtaskForClick =
 						currentTaskItem?.parentTaskId &&
 						messagesRef.current.some(
@@ -1220,29 +1202,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							break
 					}
 					break
-				case "condenseTaskContextStarted":
-					// Handle both manual and automatic condensation start
-					// We don't check the task ID because:
-					// 1. There can only be one active task at a time
-					// 2. Task switching resets isCondensing to false (see useEffect with task?.ts dependency)
-					// 3. For new tasks, currentTaskItem may not be populated yet due to async state updates
-					if (message.text) {
-						setIsCondensing(true)
-						// Note: sendingDisabled is only set for manual condensation via handleCondenseContext
-						// Automatic condensation doesn't disable sending since the task is already running
-					}
-					break
-				case "condenseTaskContextResponse":
-					// Same reasoning as above - we trust this is for the current task
-					if (message.text) {
-						if (isCondensing && sendingDisabled) {
-							setSendingDisabled(false)
-						}
-						setIsCondensing(false)
-					}
-					break
 				case "checkpointInitWarning":
-					setCheckpointWarning(message.checkpointWarning)
 					break
 				case "interactionRequired":
 					playSound("notification")
@@ -1280,7 +1240,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			// not using its value but its reference.
 		},
 		[
-			isCondensing,
 			isHidden,
 			sendingDisabled,
 			enableButtons,
@@ -1289,7 +1248,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			handleSetChatBoxMessage,
 			handlePrimaryButtonClick,
 			handleSecondaryButtonClick,
-			setCheckpointWarning,
 			playSound,
 		],
 	)
@@ -1366,7 +1324,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					return false
 				case "api_req_retry_delayed":
 				case "api_req_rate_limit_wait":
+					// eslint-disable-next-line no-case-declarations
 					const last1 = modifiedMessages.at(-1)
+					// eslint-disable-next-line no-case-declarations
 					const last2 = modifiedMessages.at(-2)
 					if (last1?.ask === "resume_task" && last2 === message) {
 						return true
@@ -1589,16 +1549,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		const listFilesBatched = batchConsecutive(readFileBatched, isListFilesAsk, synthesizeListFilesBatch)
 		const result = batchConsecutive(listFilesBatched, isEditFileAsk, synthesizeEditFileBatch)
 
-		if (isCondensing) {
-			result.push({
-				type: "say",
-				say: "condense_context",
-				ts: Date.now(),
-				partial: true,
-			} as ShoferMessage)
-		}
 		return result
-	}, [isCondensing, visibleMessages])
+	}, [visibleMessages])
 
 	// Scroll lifecycle is managed by a dedicated hook to keep ChatView focused
 	// on message handling and UI orchestration.
@@ -1662,13 +1614,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		},
 		[handleSetExpandedRow],
 	)
-
-	// Effect to clear checkpoint warning when messages appear or task changes
-	useEffect(() => {
-		if (isHidden || !task) {
-			setCheckpointWarning(undefined)
-		}
-	}, [modifiedMessages.length, isStreaming, isHidden, task])
 
 	const placeholderText = task ? t("chat:typeMessage") : t("chat:typeTask")
 
@@ -1886,20 +1831,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		},
 	}))
 
-	const handleCondenseContext = (taskId: string) => {
-		if (isCondensing || sendingDisabled) {
-			return
-		}
-		setIsCondensing(true)
-		setSendingDisabled(true)
-		vscode.postMessage({ type: "condenseTaskContextRequest", text: taskId })
-	}
-
 	const areButtonsVisible = showScrollToBottom || primaryButtonText || secondaryButtonText
 
 	return (
 		<div
-			data-testid="chat-view"
+			data-testid="workflow-view"
 			className={isHidden ? "hidden" : "fixed top-0 left-0 right-0 bottom-0 flex flex-col overflow-hidden"}
 			onDragOver={handleWebviewDragOver}
 			onDragLeave={handleWebviewDragLeave}
@@ -1945,6 +1881,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			)}
 			{task ? (
 				<>
+					{/* WorkflowTask header: simplified — no TodoList, ContextWindow, cost
+					    breakdown, cost-limit editing, or condense. */}
 					<TaskHeader
 						task={task}
 						tokensIn={apiMetrics.totalTokensIn}
@@ -1965,52 +1903,24 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							)
 						}
 						costLimit={currentTaskItem?.costLimit}
-						onUpdateCostLimit={(newLimit) => {
-							if (currentTaskItem?.id) {
-								vscode.postMessage({
-									type: "updateCostLimit",
-									taskId: currentTaskItem.id,
-									costLimit: newLimit,
-								})
-							}
-						}}
+						onUpdateCostLimit={undefined}
 						parentTaskId={currentTaskItem?.parentTaskId}
-						costBreakdown={
-							currentTaskItem?.id && aggregatedCostsMap.has(currentTaskItem.id)
-								? getCostBreakdownIfNeeded(aggregatedCostsMap.get(currentTaskItem.id)!, {
-										own: t("common:costs.own"),
-										subtasks: t("common:costs.subtasks"),
-									})
-								: undefined
-						}
-						contextTokens={apiMetrics.contextTokens}
+						costBreakdown={undefined}
+						contextTokens={0}
 						buttonsDisabled={sendingDisabled}
-						handleCondenseContext={handleCondenseContext}
-						todos={latestTodos}
+						handleCondenseContext={() => {}}
+						todos={undefined}
 					/>
-
-					{checkpointWarning && (
-						<div className="px-3">
-							<CheckpointWarning warning={checkpointWarning} />
-						</div>
-					)}
 				</>
 			) : (
 				<>
-					<div className="flex flex-col h-full justify-center p-6 min-h-0 overflow-y-auto gap-4 relative">
-						<div className="flex flex-col items-start gap-2 justify-center h-full min-[400px]:px-6">
-							<VersionIndicator
-								onClick={() => setShowAnnouncementModal(true)}
-								className="absolute top-2 right-3 z-10"
-							/>
-							<div className="flex flex-col gap-4 w-full">
-								<ShoferHero />
-								{/* Show ShoferTips when authenticated or when user is new */}
-								{taskHistory.length < 6 && <ShoferTips />}
-								{/* Everyone should see their task history if any */}
-								{taskHistory.length > 0 && <HistoryPreview />}
-							</div>
-						</div>
+					{/* A WorkflowView is only shown when a WorkflowTask is the focused
+					    task, so this branch is a defensive fallback only — the slang
+					    loop seeds a header message on start, so the stream is normally
+					    non-empty by the time this renders. */}
+					<div className="flex flex-col h-full justify-center items-center p-6 min-h-0 gap-2">
+						<span className="codicon codicon-loading codicon-modifier-spin text-2xl" />
+						<p className="text-sm text-vscode-descriptionForeground m-0">{t("chat:workflowStarting")}</p>
 					</div>
 				</>
 			)}
@@ -2055,7 +1965,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							</StandardTooltip>
 						)}
 					</div>
-					<FileChangesPanel taskId={currentTaskItem?.id} />
 					{areButtonsVisible && (
 						<div
 							className={`flex h-9 items-center mb-1 px-[15px] ${
@@ -2219,6 +2128,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				canStop={canStop}
 				onStop={handleStopTask}
 				onEnqueueMessage={handleEnqueueCurrentMessage}
+				isWorkflow={true}
+				workflowName={currentTaskItem?.mode}
+				workflowAwaitingInput={!!shoferAsk && !sendingDisabled}
 				onContextFilesDropped={(files: DroppedContextFile[]) =>
 					setDroppedContextFiles((prev) => {
 						const seen = new Set(prev.map((f) => f.path))
@@ -2251,6 +2163,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	)
 }
 
-const ChatView = forwardRef(ChatViewComponent)
+const WorkflowView = forwardRef(WorkflowViewComponent)
 
-export default ChatView
+export default WorkflowView

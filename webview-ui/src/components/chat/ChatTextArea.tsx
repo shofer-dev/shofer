@@ -88,6 +88,12 @@ interface ChatTextAreaProps {
 	isWorkflow?: boolean
 	/** The workflow (flow) name to display read-only when `isWorkflow`. */
 	workflowName?: string
+	/**
+	 * When `isWorkflow`, the free-text input is hidden by default and only
+	 * revealed while the workflow is awaiting a typed answer (i.e. there is
+	 * an interactive question pending). Ignored when not `isWorkflow`.
+	 */
+	workflowAwaitingInput?: boolean
 }
 
 export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
@@ -115,6 +121,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			onContextFilesDropped,
 			isWorkflow = false,
 			workflowName,
+			workflowAwaitingInput = false,
 		},
 		ref,
 	) => {
@@ -1025,8 +1032,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					"flex flex-col gap-1 bg-editor-background outline-none border border-none box-border",
 					isEditMode ? "p-2 w-full" : "relative px-1.5 pb-1 w-[calc(100%-16px)] ml-auto mr-auto",
 				)}>
-				{/* Workflows have no free-text input — hide the entire textarea region. */}
-				{!isWorkflow && (
+				{/* Workflows hide the free-text input by default and only reveal it
+				    while the workflow is asking a question (workflowAwaitingInput). */}
+				{(!isWorkflow || workflowAwaitingInput) && (
 					<div className={cn(!isEditMode && "relative")}>
 						<div
 							className={cn(
@@ -1374,7 +1382,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					</div>
 				)}
 
-				{selectedImages.length > 0 && !isWorkflow && (
+				{selectedImages.length > 0 && (!isWorkflow || workflowAwaitingInput) && (
 					<Thumbnails
 						images={selectedImages}
 						setImages={setSelectedImages}

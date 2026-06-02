@@ -2704,7 +2704,12 @@ export class ShoferProvider
 				`[getTaskWithId] api_conversation_history.jsonl corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
-		if (apiConversationHistory.length === 0) {
+		// An empty API history is only anomalous for LLM-backed tasks. A workflow
+		// orchestrator (`isWorkflow`) drives no LLM of its own — its observable
+		// history lives entirely in `ui_messages.jsonl` as the say/ask stream — so
+		// an empty `api_conversation_history.jsonl` is expected, not a fault. Only
+		// warn for tasks that should have API turns.
+		if (apiConversationHistory.length === 0 && !historyItem.isWorkflow) {
 			outputWarn(`[getTaskWithId] api_conversation_history.jsonl missing or empty for task ${id}`)
 		}
 

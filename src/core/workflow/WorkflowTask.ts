@@ -302,7 +302,7 @@ export class WorkflowTask extends Task {
 		}
 	}
 
-	getWorkflowHistoryExtension(): Partial<HistoryItem> {
+	override getHistoryExtension(): Partial<HistoryItem> {
 		return {
 			isWorkflow: true,
 			slangSource: this.slangSource,
@@ -316,11 +316,42 @@ export class WorkflowTask extends Task {
 		try {
 			this.emit(ShoferEventName.TaskStarted)
 			this.taskStartedEmitted = true
+
+			// Seed the chat stream with a header message so `messages.at(0)` is
+			// defined — WorkflowView keys its TaskHeader / Virtuoso off this first
+			// message and otherwise renders the empty-stream spinner fallback.
+			const agentNames = [...this.flowState.agents.keys()]
+			outputLog(
+				`[WorkflowTask#${this.taskId}] Starting workflow '${this.flowState.flowName}' with ${agentNames.length} agent(s): ${agentNames.join(", ")}`,
+			)
+			await this.say(
+				"text",
+				`**Workflow: ${this.flowState.flowName}**\n\nOrchestrating ${agentNames.length} agent(s): ${agentNames.map((n) => `\`${n}\``).join(", ")}`,
+			)
+
 			await this.slangLoop()
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] slangLoop failed:`, error)
+			await this.sayProgress(`❌ Workflow failed: ${error instanceof Error ? error.message : String(error)}`)
 			this.flowState.status = "error"
 			await this.emitTaskCompleted("poor")
+		}
+	}
+
+	/**
+	 * Emit a single workflow progress line to BOTH the output channel (for
+	 * troubleshooting) and the chat stream (so the user sees live status). The
+	 * slang loop drives no LLM, so these `say("text", …)` calls are the only
+	 * thing populating WorkflowView — without them the view shows an empty
+	 * stream and a spinner.
+	 */
+	private async sayProgress(message: string): Promise<void> {
+		outputLog(`[WorkflowTask#${this.taskId}] ${message}`)
+		if (this.abort) return
+		try {
+			await this.say("text", message)
+		} catch (error) {
+			outputError(`[WorkflowTask#${this.taskId}] Failed to emit progress say:`, error)
 		}
 	}
 
@@ -379,6 +410,9 @@ export class WorkflowTask extends Task {
 			if (stakes.length === 0 && escalations.length === 0) {
 				this.flowState.status = "deadlock"
 				outputError(`[WorkflowTask#${this.taskId}] Deadlock at round ${this.flowState.round}`)
+				await this.sayProgress(
+					`⛔ Deadlock at round ${this.flowState.round}: no agent can make progress and none have committed.`,
+				)
 				await this.persistCheckpoint()
 				await this.emitTaskCompleted("poor")
 				return
@@ -393,9 +427,15 @@ export class WorkflowTask extends Task {
 			}
 
 			// 5. Dispatch all staking agents in parallel, wait, collect results.
+			await this.sayProgress(
+				`🔄 Round ${this.flowState.round}: dispatching ${stakes.length} agent(s) — ${stakes.map((n) => `\`${n}\``).join(", ")}`,
+			)
 			await this.dispatchStakes(stakes)
 			await this.waitForStakes(stakes)
 			await this.collectStakeResults(stakes)
+			await this.sayProgress(
+				`✓ Round ${this.flowState.round} complete (${this.committedCount()}/${this.flowState.agents.size} agents committed).`,
+			)
 
 			// 6. Re-check convergence and checkpoint.
 			if (this.checkConverge()) {
@@ -409,6 +449,9 @@ export class WorkflowTask extends Task {
 		if (!this.abort && this.flowState.status === "running") {
 			this.flowState.status = "budget_exceeded"
 			outputLog(`[WorkflowTask#${this.taskId}] Budget exhausted after ${this.flowState.round} rounds`)
+			await this.sayProgress(
+				`⚠️ Budget exhausted after ${this.flowState.round} round(s) (${this.flowState.tokensUsed} tokens used). Stopping.`,
+			)
 			await super.abortBackgroundChildren()
 			await this.persistCheckpoint()
 			await this.emitTaskCompleted("poor")
@@ -681,6 +724,9 @@ export class WorkflowTask extends Task {
 					parentTaskId: this.taskId,
 				})
 				agentState.taskId = task.taskId
+				outputLog(
+					`[WorkflowTask#${this.taskId}] Spawned agent '${agentName}' (mode='${mode}') as task ${task.taskId}`,
+				)
 			}
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] Failed to spawn agent '${agentName}':`, error)
@@ -764,9 +810,13 @@ export class WorkflowTask extends Task {
 
 				let result: unknown = historyItem.completionResultSummary
 				let validationError: string | null = null
+				const outputSchema = instr.op.output
 
-				// Step 1: Parse JSON from completion result
-				if (typeof result === "string") {
+				// Step 1: Parse JSON from completion result — only when the stake
+				// declares an `output:` contract. A schema-less stake (e.g. a plain
+				// greeter) returns free-form prose; forcing it through JSON.parse
+				// would spuriously fail and trigger pointless re-prompt retries.
+				if (outputSchema && typeof result === "string") {
 					const parsed = tryParseJson(result)
 					if (parsed === undefined) {
 						validationError = `Invalid JSON in attempt_completion result: could not extract a JSON object.`
@@ -776,7 +826,6 @@ export class WorkflowTask extends Task {
 				}
 
 				// Step 2: Validate fields against output schema
-				const outputSchema = instr.op.output
 				if (!validationError && outputSchema) {
 					if (typeof result !== "object" || result === null || Array.isArray(result)) {
 						validationError = `Result must be a JSON object, got ${typeof result}. Expected fields: ${outputSchema.fields.map((f) => `${f.name} (${f.fieldType})`).join(", ")}`
@@ -809,11 +858,17 @@ export class WorkflowTask extends Task {
 					continue
 				}
 
-				// Step 4: Success — reset retry count, store output, route to mailbox
+				// Step 4: Success — reset retry count, store output, route to mailbox,
+				// then advance the program counter past the stake so the agent can
+				// reach its subsequent instructions (e.g. `commit`). Without this the
+				// agent re-evaluates the same stake every round, never commits, and the
+				// flow can never converge — eventually burning the round budget or
+				// (if its child task errors) tripping the deadlock guard.
 				state.retryCount = 0
 				state.output = result
 				if (instr.op.binding) state.bindings.set(instr.op.binding, result)
 				this.routeOutput(name, instr.op, result)
+				state.opIndex++
 				state.status = "idle"
 			} catch (error) {
 				outputError(`[WorkflowTask#${this.taskId}] Failed to read result for '${name}':`, error)
@@ -857,9 +912,10 @@ export class WorkflowTask extends Task {
 
 		this.flowState.status = "escalated"
 		const reason = instr.op.reason || `Agent '${agentName}' needs your input.`
+		outputLog(`[WorkflowTask#${this.taskId}] Escalation from '${agentName}', awaiting human input: ${reason}`)
 		const { text } = await this.ask("followup", reason)
 		const response = text ?? ""
-
+		outputLog(`[WorkflowTask#${this.taskId}] Escalation from '${agentName}' answered (${response.length} chars)`)
 		this.flowState.mailbox.push({
 			from: instr.op.target || "Human",
 			to: agentName,
@@ -897,17 +953,31 @@ export class WorkflowTask extends Task {
 
 	private async handleConverge(): Promise<void> {
 		this.flowState.status = "converged"
+		await this.sayProgress(
+			`✅ Workflow **${this.flowState.flowName}** converged after ${this.flowState.round} round(s).`,
+		)
 		await this.persistCheckpoint()
 		await this.emitTaskCompleted("well")
 	}
 
 	// ── Persistence ──
 
+	/**
+	 * Persist the workflow extension once, eagerly, before the slang loop
+	 * starts. Called by the create/restore flows so the first
+	 * `postStateToWebview` already carries `isWorkflow`/`slangSource`/`flowState`
+	 * and the webview routes to `WorkflowView` on the very first frame (no
+	 * `ChatView` flash while waiting for the first in-loop checkpoint).
+	 */
+	async seedHistory(): Promise<void> {
+		await this.persistCheckpoint()
+	}
+
 	private async persistCheckpoint(): Promise<void> {
 		try {
 			const provider = this.providerRef.deref()
 			if (!provider) return
-			await provider.updateTaskHistory({ id: this.taskId, ...this.getWorkflowHistoryExtension() } as any)
+			await provider.updateTaskHistory({ id: this.taskId, ...this.getHistoryExtension() } as any)
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] Failed to persist checkpoint:`, error)
 		}

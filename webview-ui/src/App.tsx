@@ -13,6 +13,7 @@ import { telemetryClient } from "./utils/TelemetryClient"
 import { initializeSourceMaps, exposeSourceMapsForDebugging } from "./utils/sourceMapInitializer"
 import { ExtensionStateContextProvider, useExtensionState } from "./context/ExtensionStateContext"
 import ChatView, { ChatViewRef } from "./components/chat/ChatView"
+import WorkflowView, { WorkflowViewRef } from "./components/chat/WorkflowView"
 import { TaskSelector } from "./components/chat/TaskSelector"
 import HistoryView from "./components/history/HistoryView"
 import SettingsView, { SettingsViewRef } from "./components/settings/SettingsView"
@@ -125,6 +126,7 @@ const App = () => {
 
 	const settingsRef = useRef<SettingsViewRef>(null)
 	const chatViewRef = useRef<ChatViewRef>(null)
+	const workflowViewRef = useRef<WorkflowViewRef>(null)
 
 	const switchTab = useCallback(
 		(newTab: Tab) => {
@@ -213,11 +215,23 @@ const App = () => {
 				})
 			}
 
+			// When the host launches a new task or workflow it sends invoke:"newChat"
+			// to reset ChatView/WorkflowView state. App-level routing must also switch
+			// to the "chat" tab so the correct view becomes visible (e.g. after clicking
+			// a workflow from LauncherView which leaves the tab on "launcher").
+			if (message.type === "invoke" && message.invoke === "newChat") {
+				switchTab("chat")
+			}
+
 			if (message.type === "acceptInput") {
-				chatViewRef.current?.acceptInput()
+				if (currentTaskItem?.isWorkflow) {
+					workflowViewRef.current?.acceptInput()
+				} else {
+					chatViewRef.current?.acceptInput()
+				}
 			}
 		},
-		[switchTab],
+		[switchTab, currentTaskItem?.isWorkflow],
 	)
 
 	useEvent("message", onMessage)
@@ -294,7 +308,17 @@ const App = () => {
 			)}
 			<ChatView
 				ref={chatViewRef}
-				isHidden={tab !== "chat"}
+				isHidden={tab !== "chat" || !!currentTaskItem?.isWorkflow}
+				showAnnouncement={showAnnouncement}
+				hideAnnouncement={() => setShowAnnouncement(false)}
+			/>
+			{/* WorkflowView mirrors ChatView for WorkflowTasks. Both stay mounted
+			 * and are toggled via isHidden so webview-local state survives task
+			 * switches; visibility is mutually exclusive based on whether the
+			 * focused task is a workflow. */}
+			<WorkflowView
+				ref={workflowViewRef}
+				isHidden={tab !== "chat" || !currentTaskItem?.isWorkflow}
 				showAnnouncement={showAnnouncement}
 				hideAnnouncement={() => setShowAnnouncement(false)}
 			/>
@@ -368,6 +392,13 @@ const App = () => {
 					}}
 				/>
 			)}
+			{/* Single shared portal target for popovers/dropdowns (AutoApproveDropdown,
+			 * WorktreeIndicator, AssistantAgentStatusBadge, …). Lives at the App root —
+			 * always visible — so popovers never mount into a `display:none` view.
+			 * ChatView and WorkflowView must NOT render their own `#shofer-portal`:
+			 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,
+			 * which is why workflow-mode dropdowns rendered behind/under the view. */}
+			<div id="shofer-portal" />
 		</>
 	)
 }
