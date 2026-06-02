@@ -238,6 +238,8 @@ type AdvanceResult =
 
 const DEFAULT_BUDGET_TOKENS = 300000
 const DEFAULT_BUDGET_ROUNDS = 30
+/** Maximum consecutive output-validation failures before marking the agent as error. */
+const MAX_RETRIES = 3
 /** Max wall-clock time to wait for a round's spawned agent tasks to complete. */
 const AGENT_RESULT_TIMEOUT_MS = 300_000
 /** Poll interval while waiting for agent tasks to reach a terminal lifecycle. */
@@ -284,6 +286,7 @@ export class WorkflowTask extends Task {
 					status: "idle",
 					opIndex: 0,
 					bindings: new Map(),
+					retryCount: 0,
 				})
 			}
 			this.flowState = {
@@ -597,9 +600,9 @@ export class WorkflowTask extends Task {
 			prompt += `\n\nCurrent context:\n${JSON.stringify(Object.fromEntries(state.bindings), null, 2)}`
 		}
 		if (op.output) {
-			prompt += `\n\nYour response MUST include a JSON object with these fields:\n`
-			for (const f of op.output.fields) prompt += `  - ${f.name} (${f.fieldType})\n`
-			prompt += `\nInclude this JSON object in your attempt_completion result.`
+			prompt += `\n\nOUTPUT CONTRACT:\nYour attempt_completion result MUST be ONLY a valid JSON object (no markdown, no extra text) with exactly these fields:\n`
+			for (const f of op.output.fields) prompt += `  - ${f.name}: ${f.fieldType}\n`
+			prompt += `\nExample: {"${op.output.fields.map((f) => f.name).join('": ..., "')}": ...}\n\nThe result will be validated against this schema. Missing fields or non-JSON will cause a retry (max ${MAX_RETRIES} retries before the agent is marked as error).`
 		}
 		const peers = this.getPeerResources(agentName)
 		if (peers.length > 0) {
@@ -760,14 +763,57 @@ export class WorkflowTask extends Task {
 				this.flowState.tokensUsed += (historyItem.tokensIn || 0) + (historyItem.tokensOut || 0)
 
 				let result: unknown = historyItem.completionResultSummary
+				let validationError: string | null = null
+
+				// Step 1: Parse JSON from completion result
 				if (typeof result === "string") {
 					const parsed = tryParseJson(result)
-					if (parsed !== undefined) result = parsed
+					if (parsed === undefined) {
+						validationError = `Invalid JSON in attempt_completion result: could not extract a JSON object.`
+					} else {
+						result = parsed
+					}
 				}
+
+				// Step 2: Validate fields against output schema
+				const outputSchema = instr.op.output
+				if (!validationError && outputSchema) {
+					if (typeof result !== "object" || result === null || Array.isArray(result)) {
+						validationError = `Result must be a JSON object, got ${typeof result}. Expected fields: ${outputSchema.fields.map((f) => `${f.name} (${f.fieldType})`).join(", ")}`
+					} else {
+						const obj = result as Record<string, unknown>
+						const missing = outputSchema.fields.filter((f) => !(f.name in obj))
+						if (missing.length > 0) {
+							validationError = `Missing required fields: ${missing.map((f) => `${f.name} (${f.fieldType})`).join(", ")}. Expected: ${outputSchema.fields.map((f) => `${f.name} (${f.fieldType})`).join(", ")}`
+						}
+					}
+				}
+
+				// Step 3: Re-prompt on validation failure
+				if (validationError) {
+					state.retryCount++
+					if (state.retryCount > MAX_RETRIES) {
+						outputError(
+							`[WorkflowTask#${this.taskId}] Agent '${name}' exceeded max retries (${MAX_RETRIES}) for output validation:\n${validationError}`,
+						)
+						state.status = "error"
+					} else {
+						outputLog(
+							`[WorkflowTask#${this.taskId}] Agent '${name}' output validation failed (retry ${state.retryCount}/${MAX_RETRIES}): ${validationError}`,
+						)
+						state.status = "idle"
+						// Re-prompt the agent with the validation error — do NOT advance opIndex
+						const retryPrompt = `\n\nYour previous response was invalid:\n${validationError}\n\nPlease retry the operation by placing ONLY a valid JSON object in your attempt_completion result (no other text, no markdown fences).`
+						await this.resumeAgentTask(name, retryPrompt)
+					}
+					continue
+				}
+
+				// Step 4: Success — reset retry count, store output, route to mailbox
+				state.retryCount = 0
 				state.output = result
 				if (instr.op.binding) state.bindings.set(instr.op.binding, result)
 				this.routeOutput(name, instr.op, result)
-				state.opIndex++
 				state.status = "idle"
 			} catch (error) {
 				outputError(`[WorkflowTask#${this.taskId}] Failed to read result for '${name}':`, error)
