@@ -1,14 +1,42 @@
 /**
  * Unit tests for the Slang parser.
  *
- * Vitest globals (describe/it/expect) are available globally per
- * the Test Layout Rule in AGENTS.md.
+ * These assert against the canonical upstream AST produced by `parseSlang`
+ * (a `Program` of `FlowDecl`s whose `body` holds `AgentDecl`s and
+ * converge/budget statements, with each agent's `operations` being the
+ * discriminated `Operation` union). See slang-ast.ts.
  *
- * Naming convention: *.test.ts (Node env) per AGENTS.md.
+ * Vitest globals (describe/it/expect) are available globally per the Test
+ * Layout Rule in AGENTS.md. Naming convention: *.test.ts (Node env).
  */
 
 import { parseSlang, validateSlangAST } from "../slang-parser"
-import type { SlangAST } from "../slang-types"
+import type { AgentDecl, BudgetStmt, ConvergeStmt, FlowDecl } from "../slang-ast"
+
+// ── Test helpers ──
+
+/** Extract the agent declarations from a flow body. */
+function agentsOf(flow: FlowDecl): AgentDecl[] {
+	return flow.body.filter((n): n is AgentDecl => n.type === "AgentDecl")
+}
+
+/** Extract budget values (rounds / tokens) from a flow body. */
+function budgetOf(flow: FlowDecl): { rounds?: number; tokens?: number } {
+	const stmt = flow.body.find((n): n is BudgetStmt => n.type === "BudgetStmt")
+	const out: { rounds?: number; tokens?: number } = {}
+	if (!stmt) return out
+	for (const item of stmt.items) {
+		const value = item.value.type === "NumberLit" ? item.value.value : undefined
+		if (item.kind === "rounds") out.rounds = value
+		else if (item.kind === "tokens") out.tokens = value
+	}
+	return out
+}
+
+/** Extract the converge condition statement from a flow body. */
+function convergeOf(flow: FlowDecl): ConvergeStmt | undefined {
+	return flow.body.find((n): n is ConvergeStmt => n.type === "ConvergeStmt")
+}
 
 // ── Minimal valid slang ──
 
@@ -31,7 +59,7 @@ flow "test-flow" (input: "string") {
 }
 `
 
-// ── Multi-agent slang ──
+// ── Multi-agent slang (genuinely deadlock-free: helpers stake back) ──
 
 const MULTI_AGENT_SLANG = `
 flow "multi-agent" () {
@@ -54,7 +82,9 @@ flow "multi-agent" () {
     mode: "search"
     role: "Explorer"
 
-    await task <- @any
+    await task <- @Architect
+
+    stake report() -> @Architect
 
     commit
   }
@@ -65,10 +95,13 @@ flow "multi-agent" () {
 
     await design <- @Architect
 
+    stake submit() -> @Architect
+
     commit
   }
 
   converge when: @Architect.committed
+  budget: rounds(20), tokens(100000)
 }
 `
 
@@ -93,73 +126,78 @@ describe("parseSlang", () => {
 		const { ast, errors } = parseSlang(MINIMAL_SLANG)
 		expect(errors).toHaveLength(0)
 		expect(ast.flows).toHaveLength(1)
-		const flow = ast.flows[0]
+
+		const flow = ast.flows[0]!
 		expect(flow.name).toBe("test-flow")
 		expect(flow.params).toHaveLength(1)
-		expect(flow.params[0].name).toBe("input")
-		expect(flow.params[0].type).toBe("string")
-		expect(flow.agents).toHaveLength(1)
-		expect(flow.agents[0].name).toBe("TestAgent")
-		expect(flow.agents[0].mode).toBe("code")
-		expect(flow.agents[0].role).toBe("Test role")
-		// Verify constraints
-		expect(flow.constraints.convergeWhen).toBe("@TestAgent.committed")
-		expect(flow.constraints.budgetRounds).toBe(10)
-		expect(flow.constraints.budgetTokens).toBe(50000)
+		expect(flow.params![0]!.name).toBe("input")
+		expect(flow.params![0]!.paramType).toBe("string")
+
+		const agents = agentsOf(flow)
+		expect(agents).toHaveLength(1)
+		expect(agents[0]!.name).toBe("TestAgent")
+		expect((agents[0]!.meta as { mode?: string }).mode).toBe("code")
+		expect(agents[0]!.meta.role).toBe("Test role")
+
+		// Constraints
+		const converge = convergeOf(flow)
+		expect(converge).toBeDefined()
+		expect(converge!.condition.type).toBe("DotAccess")
+		expect(budgetOf(flow).rounds).toBe(10)
+		expect(budgetOf(flow).tokens).toBe(50000)
 	})
 
 	it("parses agent operations correctly", () => {
 		const { ast, errors } = parseSlang(MINIMAL_SLANG)
 		expect(errors).toHaveLength(0)
-		const agent = ast.flows[0].agents[0]
-		const ops = agent.ops
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
 
 		// First op: stake do_work -> @out with output schema
-		expect(ops[0].kind).toBe("stake")
-		const stakeOp = ops[0]
-		if (stakeOp.kind === "stake") {
-			expect(stakeOp.funcName).toBe("do_work")
-			expect(stakeOp.target).toBe("out")
-			expect(stakeOp.output).toEqual({ result: "string", approved: "boolean" })
-			expect(stakeOp.args).toHaveProperty("task")
-			expect(stakeOp.args).toHaveProperty("feature")
+		expect(ops[0]!.type).toBe("StakeOp")
+		const stakeOp = ops[0]!
+		if (stakeOp.type === "StakeOp") {
+			expect(stakeOp.call.name).toBe("do_work")
+			expect(stakeOp.recipients.map((r) => r.ref)).toEqual(["out"])
+			expect(stakeOp.output?.fields.map((f) => f.name)).toEqual(["result", "approved"])
+			expect(stakeOp.output?.fields.map((f) => f.fieldType)).toEqual(["string", "boolean"])
+			expect(stakeOp.call.args.map((a) => a.name)).toEqual(["task", "feature"])
 		}
 
 		// Second op: await
-		expect(ops[1].kind).toBe("await")
-		if (ops[1].kind === "await") {
-			expect(ops[1].binding).toBe("response")
-			expect(ops[1].source).toBe("out")
+		expect(ops[1]!.type).toBe("AwaitOp")
+		if (ops[1]!.type === "AwaitOp") {
+			expect(ops[1]!.binding).toBe("response")
+			expect(ops[1]!.sources.map((s) => s.ref)).toEqual(["out"])
 		}
 
 		// Third op: commit
-		expect(ops[2].kind).toBe("commit")
+		expect(ops[2]!.type).toBe("CommitOp")
 	})
 
 	it("parses multi-agent workflow without errors", () => {
 		const { ast, errors } = parseSlang(MULTI_AGENT_SLANG)
 		expect(errors).toHaveLength(0)
 		expect(ast.flows).toHaveLength(1)
-		expect(ast.flows[0].agents).toHaveLength(3)
 
-		const names = ast.flows[0].agents.map((a) => a.name)
-		expect(names).toEqual(["Architect", "Codebase", "Developer"])
+		const agents = agentsOf(ast.flows[0]!)
+		expect(agents).toHaveLength(3)
+		expect(agents.map((a) => a.name)).toEqual(["Architect", "Codebase", "Developer"])
 	})
 
 	it("parses escalate @Human", () => {
 		const { ast, errors } = parseSlang(ESCALATE_SLANG)
 		expect(errors).toHaveLength(0)
-		const ops = ast.flows[0].agents[0].ops
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
 
-		expect(ops[0].kind).toBe("escalate")
-		if (ops[0].kind === "escalate") {
-			expect(ops[0].recipient).toBe("Human")
-			expect(ops[0].reason).toBe("Please approve this")
+		expect(ops[0]!.type).toBe("EscalateOp")
+		if (ops[0]!.type === "EscalateOp") {
+			expect(ops[0]!.target).toBe("Human")
+			expect(ops[0]!.reason).toBe("Please approve this")
 		}
 	})
 
 	it("returns errors for invalid syntax", () => {
-		const { ast, errors } = parseSlang("this is not valid slang {")
+		const { errors } = parseSlang("this is not valid slang {")
 		expect(errors.length).toBeGreaterThan(0)
 	})
 
@@ -170,7 +208,7 @@ flow "vars-test" () {
     mode: "code"
     role: "Test"
 
-    let x = stake get_value() -> @out
+    let x = 5
     set x = "hello"
 
     commit
@@ -179,9 +217,9 @@ flow "vars-test" () {
 `
 		const { ast, errors } = parseSlang(src)
 		expect(errors).toHaveLength(0)
-		const ops = ast.flows[0].agents[0].ops
-		expect(ops[0].kind).toBe("let")
-		expect(ops[1].kind).toBe("set")
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("LetOp")
+		expect(ops[1]!.type).toBe("SetOp")
 	})
 
 	it("parses repeat-until and when-otherwise blocks", () => {
@@ -198,7 +236,7 @@ flow "control-test" () {
       when done {
         commit
       } otherwise {
-        stake retry() -> @out
+        stake redo() -> @out
       }
     }
 
@@ -208,8 +246,9 @@ flow "control-test" () {
 `
 		const { ast, errors } = parseSlang(src)
 		expect(errors).toHaveLength(0)
-		const ops = ast.flows[0].agents[0].ops
-		expect(ops[1].kind).toBe("repeat")
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("LetOp")
+		expect(ops[1]!.type).toBe("RepeatBlock")
 	})
 })
 
@@ -322,8 +361,8 @@ describe("FlowState serialization", () => {
 
 		// Check mailbox
 		expect(restored.mailbox).toHaveLength(1)
-		expect(restored.mailbox[0].from).toBe("Agent1")
-		expect(restored.mailbox[0].value).toEqual({ result: "done" })
+		expect(restored.mailbox[0]!.from).toBe("Agent1")
+		expect(restored.mailbox[0]!.value).toEqual({ result: "done" })
 	})
 
 	it("deserializes an empty flow state", () => {
