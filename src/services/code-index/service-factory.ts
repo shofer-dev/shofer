@@ -44,6 +44,10 @@ export interface CodeIndexServiceFactoryOptions {
 	cacheManager: CacheManager
 	/** Optional callback fired during embedder-validation retries so the UI can surface progress. */
 	notifyRetryStatus?: (msg: string) => void
+	/** Path used for Qdrant collection naming. Defaults to workspacePath.
+	 *  Set to the main repo path for worktrees so linked worktrees share
+	 *  the same Qdrant collection. */
+	indexKeyPath?: string
 }
 
 /**
@@ -54,12 +58,14 @@ export class CodeIndexServiceFactory {
 	private readonly workspacePath: string
 	private readonly cacheManager: CacheManager
 	private readonly notifyRetryStatus: ((msg: string) => void) | undefined
+	private readonly indexKeyPath: string
 
 	constructor(options: CodeIndexServiceFactoryOptions) {
 		this.configManager = options.configManager
 		this.workspacePath = options.workspacePath
 		this.cacheManager = options.cacheManager
 		this.notifyRetryStatus = options.notifyRetryStatus
+		this.indexKeyPath = options.indexKeyPath ?? options.workspacePath
 	}
 
 	/**
@@ -232,8 +238,15 @@ export class CodeIndexServiceFactory {
 			throw new Error(t("embeddings:serviceFactory.qdrantUrlMissing"))
 		}
 
-		// Assuming constructor is updated: new QdrantVectorStore(workspacePath, url, vectorSize, apiKey?)
-		return new QdrantVectorStore(this.workspacePath, config.qdrantUrl, vectorSize, config.qdrantApiKey)
+		return new QdrantVectorStore(
+			this.workspacePath,
+			config.qdrantUrl,
+			vectorSize,
+			config.qdrantApiKey,
+			"ws-",
+			undefined,
+			this.indexKeyPath,
+		)
 	}
 
 	/**

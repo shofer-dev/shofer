@@ -1,4 +1,6 @@
 import * as vscode from "vscode"
+import fs from "fs/promises"
+import path from "path"
 
 /**
  * Minimal type declarations for the VS Code built-in Git extension API (v1).
@@ -77,6 +79,44 @@ export interface SubmoduleInfo {
  */
 export class GitSource {
 	private api: GitAPI | undefined
+
+	/**
+	 * Given a workspace directory path, checks whether it is a git worktree
+	 * (has a `.git` file instead of a `.git` directory). If so, parses the
+	 * `gitdir:` line inside `.git` to derive the main repository path.
+	 * Returns the main repo path if resolvable, otherwise returns the
+	 * original workspacePath unchanged.
+	 *
+	 * A `.git` file in a worktree looks like:
+	 *   gitdir: /path/to/main/.git/worktrees/name
+	 *
+	 * This is a filesystem-only operation — no git CLI is involved.
+	 */
+	static async resolveWorktreeMainRepoPath(workspacePath: string): Promise<string> {
+		try {
+			const gitPath = path.join(workspacePath, ".git")
+			const stat = await fs.stat(gitPath)
+			if (!stat.isFile()) {
+				return workspacePath // regular repo with .git directory
+			}
+			const content = await fs.readFile(gitPath, "utf8")
+			const match = content.match(/^gitdir:\s*(.+)$/m)
+			if (!match) {
+				return workspacePath
+			}
+			const gitdirTarget = match[1].trim()
+			// gitdirTarget is like: /path/to/main/.git/worktrees/name
+			// The parent of the "worktrees" directory is the main .git, whose
+			// parent is the main repo root.
+			const worktreesIdx = gitdirTarget.lastIndexOf("/.git/worktrees/")
+			if (worktreesIdx === -1) {
+				return workspacePath
+			}
+			return gitdirTarget.substring(0, worktreesIdx)
+		} catch {
+			return workspacePath
+		}
+	}
 
 	/**
 	 * Lazily resolves the VS Code Git extension API.

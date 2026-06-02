@@ -38,14 +38,19 @@ export class CacheManager implements ICacheManager {
 	/**
 	 * @param context VS Code extension context
 	 * @param workspacePath Path to the workspace
+	 * @param indexKeyPath Path used for the cache file hash. Defaults to
+	 *        workspacePath. Set to the main repo path for worktrees so linked
+	 *        worktrees share the same cache file.
 	 */
 	constructor(
 		private context: vscode.ExtensionContext,
 		private workspacePath: string,
+		indexKeyPath?: string,
 	) {
+		const keyPath = indexKeyPath ?? workspacePath
 		this.cachePath = vscode.Uri.joinPath(
 			context.globalStorageUri,
-			`shofer-index-cache-${createHash("sha256").update(workspacePath).digest("hex")}.json`,
+			`shofer-index-cache-${createHash("sha256").update(keyPath).digest("hex")}.json`,
 		)
 		this._debouncedSaveCache = debounce(async () => {
 			await this._performSave()
