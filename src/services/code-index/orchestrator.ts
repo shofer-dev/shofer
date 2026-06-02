@@ -328,8 +328,15 @@ export class CodeIndexOrchestrator {
 				}
 				// ── End Phase 2 ───────────────────────────────────────────
 
-				// Layer A: full incremental scan (Phase 1 fast-path)
-				await this.vectorStore.markIndexingIncomplete()
+				// Layer A: full incremental scan (Phase 1 fast-path).
+				// Do NOT call markIndexingIncomplete() here — the existing Qdrant
+				// collection is a complete, valid index. Writing
+				// indexing_complete=false before the scan finishes would poison the
+				// metadata marker if the scan is interrupted (e.g., VS Code
+				// deactivating on a worktree switch), causing the next startup to
+				// treat the healthy index as missing and re-embed from scratch.
+				// The full-scan else branch keeps its markIndexingIncomplete() call
+				// since that genuinely starts from an empty collection.
 
 				// Run incremental scan - scanner will skip unchanged files using cache
 				const result = await this.scanner.scanDirectory(
