@@ -21,6 +21,7 @@ Design for the **Workflow** abstraction in Shofer: a container for coordinated T
 2. [The Slang Specification for "Implement a Feature"](#the-slang-specification-for-implement-a-feature)
 3. [Architecture Overview](#architecture-overview)
 4. [Slang → Shofer Mapping](#slang--shofer-mapping)
+    - Full language reference: [`slang_specs.md`](slang_specs.md)
 5. [Workflow Executor Design](#workflow-executor-design)
 6. [New Mode: "Implement a Feature"](#new-mode-implement-a-feature)
 7. [Agent-to-Task Dispatch](#agent-to-task-dispatch)
@@ -450,22 +451,23 @@ The Workflow **is** a Shofer [`Task`](../src/core/task/Task.ts) — but its **lo
 
 ### Concepts
 
-| Slang Concept                 | Shofer Execution                                                                                                                                                     |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `flow "name"`                 | A **Workflow Task** (extends `Task`). Mode string = the flow name. Loop: `slangLoop()`, not `recursivelyMakeShoferRequests()`.                                       |
-| `agent Name { mode: "code" }` | Agent is a background Task spawned via `new_task(is_background=true, mode: "code")`. The linked mode provides the system prompt, tool access, and API configuration. |
-| `agent Name { model: "x" }`   | Overrides the mode's default API Configuration profile.                                                                                                              |
-| `agent Name { role: "..." }`  | Overrides the mode's `roleDefinition` (becomes the Task's system prompt).                                                                                            |
-| `stake func(args) -> @Target` | Workflow: (1) resumes/prompts agent Task, (2) blocks via `wait_for_task`, (3) routes `attempt_completion` result to `@Target`'s mailbox.                             |
-| `stake func(args)` (local)    | Workflow prompts agent; result stored in `FlowState.bindings`, not routed.                                                                                           |
-| `await binding <- @Source`    | Workflow blocks until `@Source`'s result in mailbox, resumes awaiting agent.                                                                                         |
-| `commit`                      | Agent calls `attempt_completion`. Workflow marks agent `committed`.                                                                                                  |
-| `escalate @Human`             | Workflow Task handles this directly. Slang loop pauses, blocks on `ask_followup_question`. Agent never knows it was escalated.                                       |
-| `let / set`                   | Stored in `FlowState.bindings` (Workflow memory).                                                                                                                    |
-| `repeat until / when`         | Workflow Task's `slangLoop()` evaluates and branches.                                                                                                                |
-| `converge when:`              | Workflow checks condition each round; on true → `attempt_completion` on the Workflow Task itself.                                                                    |
-| `budget:`                     | Aggregate descendant costs. On exhaustion → `abortBackgroundChildren()` + `attempt_completion(error)`.                                                               |
-| `output: { ... }`             | Injected into agent Task's system prompt as structured-output directive.                                                                                             |
+| Slang Concept                 | Shofer Execution                                                                                                                                                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow "name"`                 | A **Workflow Task** (extends `Task`). Mode string = the flow name. Loop: `slangLoop()`, not `recursivelyMakeShoferRequests()`.                                                                                   |
+| `agent Name { mode: "code" }` | Agent is a background Task spawned via `new_task(is_background=true, mode: "code")`. The linked mode provides the system prompt, tool access, and API configuration.                                             |
+| `agent Name { tools: [...] }` | ToolGroup names mapped directly to the mode's `groups:` at spawn time. Only the 9 group names (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`) are valid values. |
+| `agent Name { model: "x" }`   | (Parsed, not yet wired) Would override the mode's default API Configuration profile.                                                                                                                             |
+| `agent Name { role: "..." }`  | (Parsed, not yet wired) Would override the mode's `roleDefinition`. Currently used only for peer resource descriptions.                                                                                          |
+| `stake func(args) -> @Target` | Workflow: (1) resumes/prompts agent Task, (2) blocks via `wait_for_task`, (3) validates output against schema (retries on failure), (4) routes result to `@Target`'s mailbox.                                    |
+| `stake func(args)` (local)    | Workflow prompts agent; result stored in `FlowState.bindings`, not routed.                                                                                                                                       |
+| `await binding <- @Source`    | Workflow blocks until `@Source`'s result in mailbox, resumes awaiting agent.                                                                                                                                     |
+| `commit`                      | Agent calls `attempt_completion`. Workflow marks agent `committed`.                                                                                                                                              |
+| `escalate @Human`             | Workflow Task handles this directly. Slang loop pauses, blocks on `ask_followup_question`. Agent never knows it was escalated.                                                                                   |
+| `let / set`                   | Stored in `FlowState.bindings` (Workflow memory).                                                                                                                                                                |
+| `repeat until / when`         | Workflow Task's `slangLoop()` evaluates and branches.                                                                                                                                                            |
+| `converge when:`              | Workflow checks condition each round; on true → `attempt_completion` on the Workflow Task itself.                                                                                                                |
+| `budget:`                     | Aggregate descendant costs. On exhaustion → `abortBackgroundChildren()` + `attempt_completion(error)`.                                                                                                           |
+| `output: { ... }`             | Injected into agent Task's system prompt as structured-output directive. Validated against schema on completion; malformed JSON or missing fields trigger retry (max 3).                                         |
 
 ### Execution Flow (Round Model)
 
@@ -620,28 +622,71 @@ async slangLoop():
 
 ### Mode Selection for Agent Tasks
 
-When spawning an agent Task, the Workflow selects a mode:
+When spawning an agent Task, the Workflow selects a mode by slug:
 
 ```slang
 agent Developer {
-  model: "claude-sonnet"     → selects API profile matching this model
-  tools: [write_to_file,      → maps to mode with these tool groups
-          apply_diff,
-          execute_command,
-          read_file, grep_search]
-  role: "Feature implementer" → becomes mode's roleDefinition
+  mode: "code"               → uses the "code" Shofer mode (required)
+  tools: [write, execute,     → ToolGroup names → mode's groups at spawn
+          read, mcp]
+  model: "claude-sonnet"     → (parsed, not yet wired)
+  role: "Feature implementer" → (parsed, not yet wired; used for peer descriptions)
+  context: {                  → controls what context the agent receives
+    include_agents_md: true   → (planned) inject AGENTS.md rules
+  }
 }
 ```
 
 The mapping is:
 
-1. `tools: [...]` → find or compose a mode whose `groups` cover the declared tools
-2. `model: "..."` → select the API Configuration profile by name
-3. `role: "..."` → injected as the mode's `roleDefinition` / system prompt
+1. `tools: [...]` → each value is a **ToolGroup name** (one of `read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`). These become the mode's `groups:` at spawn time, restricting the agent to only those tool groups.
+2. `model: "..."` → not yet wired; would select the API Configuration profile by name.
+3. `role: "..."` → not yet wired; would override the mode's `roleDefinition`.
+4. `context: {...}` → (not yet wired) controls what context the agent receives from the project. Initial knob: `include_agents_md` (boolean) to inject AGENTS.md rules into the agent's system prompt.
 
-For simple agents (e.g., Reviewer: read-only tools), existing modes work directly. For specialized agents, the Workflow composes a virtual mode at spawn time — no persisted `.shofermodes` entry needed.
+For simple agents (e.g., Reviewer: read-only tools), existing modes work directly. For specialized agents, the Workflow restricts the mode's tool groups via the `tools:` field at spawn time — no persisted `.shofermodes` entry needed.
 
 ---
+
+## Shofer Extensions (Shofermodes Capabilities)
+
+The `.slang` `agent` block extends the vendored Slang specification with Shofer-specific capabilities. These map directly to Shofer mode features defined in `.shofermodes` and the mode schema at [`packages/types/src/mode.ts`](../packages/types/src/mode.ts).
+
+### Implemented (current execution)
+
+| `.slang` key   | Status                   | Shofermode field        | Description                                                                                                                                                                                        |
+| -------------- | ------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode: "code"` | ✅ Wired                 | Maps to the mode `slug` | Spawns agent as a background Task in the named Shofer mode. The mode provides `roleDefinition`, `customInstructions`, `groups`, and API configuration.                                             |
+| `tools: [...]` | ⚙️ Parsed, not yet wired | Maps to `groups:`       | Each value is a ToolGroup name (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`). When wired, restricts the spawned Task to only the listed groups. |
+
+### Planned (parsed but not yet consumed by execution)
+
+| `.slang` key                | Status               | Shofermode field               | Description                                                                                                                                                                                                                                                                                        |
+| --------------------------- | -------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model: "profile"`          | Parsed, not consumed | API Configuration profile name | Overrides the mode's default API profile. Allows different agents in the same workflow to use different models (e.g., Architect uses Claude, Developer uses GPT-4).                                                                                                                                |
+| `role: "..."`               | Parsed, not consumed | `roleDefinition`               | Overrides the mode's system-prompt role definition. Currently used only for peer resource descriptions.                                                                                                                                                                                            |
+| `retry: <n>`                | Parsed, not consumed | N/A                            | Max LLM-call retries per `stake`. Default: 1. Would override the mode's implicit retry behavior.                                                                                                                                                                                                   |
+| `context: { ... }`          | Parsed, not consumed | N/A (new concept)              | Controls what ambient context the agent receives from the project. Initial knob:                                                                                                                                                                                                                   |
+| `context.include_agents_md` | Planned              | —                              | When `true`, injects the project's AGENTS.md rules (agent behavior conventions) into the agent's system prompt. Useful for agents that need to follow project-specific conventions (Developer, Reviewer). Default: `false` for shared resources (Codebase, Internet), `true` for execution agents. |
+
+### Context block design
+
+The `context:` block is an extensible container for future context-control knobs:
+
+```slang
+agent Developer {
+  mode: "code"
+  context: {
+    include_agents_md: true     ← inject AGENTS.md rules
+    // Future knobs (not yet designed):
+    // include_readme: true     ← inject README.md summary
+    // include_shofertools: true ← inject .shoferrules
+    // max_file_context: 20     ← limit @-mentioned file references
+  }
+}
+```
+
+Each knob controls a specific category of ambient context injected into the agent's system prompt at Task spawn time. The default values are agent-role-aware: shared-resource agents (Codebase, Internet) get minimal context; execution agents (Developer, Reviewer) get richer project context.
 
 ## Reusable Code from `@riktar/slang`
 
@@ -711,103 +756,16 @@ The loop structure (findExecutableAgents, parallel dispatch, mailbox routing, co
 
 ## Slang Language Reference
 
-This chapter documents the Slang syntax, grammar, and capabilities used for authoring Shofer workflow `.slang` files. Based on [Slang v0.7.5](https://github.com/riktar/slang/blob/master/SPEC.md).
+The full Slang language specification — lexical elements, reserved keywords,
+grammar (EBNF), operations, control flow, expressions, static-analysis warnings,
+runtime semantics, and the list of parsed-but-not-executed constructs — lives in
+its own document:
 
-### Core Primitives
+➡️ **[`slang_specs.md`](slang_specs.md)**
 
-Slang has exactly three core primitives:
-
-| Primitive | Syntax                                          | Semantics                                               |
-| --------- | ----------------------------------------------- | ------------------------------------------------------- |
-| `stake`   | `stake func(args) [-> @Target] [output: {...}]` | Produce content. Optionally send to a recipient agent.  |
-| `await`   | `await binding <- @Source`                      | Block until `@Source` sends data, bind it to `binding`. |
-| `commit`  | `commit [value] [if cond]`                      | Accept result, terminate this agent.                    |
-
-### Control Flow
-
-| Construct       | Syntax                                      | Semantics                                                           |
-| --------------- | ------------------------------------------- | ------------------------------------------------------------------- |
-| `when` / `else` | `when expr { ... } [else { ... }]`          | Conditional branch. `else` runs when condition is false.            |
-| `repeat until`  | `repeat until expr { ... }`                 | Loop until condition true (max 100 iterations enforced by runtime). |
-| `let`           | `let name = value`                          | Declare agent-local variable.                                       |
-| `set`           | `set name = value`                          | Update previously declared variable.                                |
-| `escalate`      | `escalate @Human [reason: "..."] [if cond]` | Pause flow, ask user. Handled by Workflow Task, NOT the agent.      |
-
-### Agent Configuration
-
-Each agent maps to a Shofer mode. The `.slang` agent section links to an existing mode:
-
-```slang
-agent Name {
-  mode: "code"           -- Required: Shofer mode slug
-  model: "claude-sonnet" -- Optional: override API profile
-  role: "Description"    -- Optional: override mode's roleDefinition
-  retry: 3               -- Optional: max LLM call retries (default: 1)
-}
-```
-
-### Flow Constraints
-
-```slang
-converge when: condition     -- When does the flow terminate successfully?
-budget: tokens(N), rounds(N) -- Hard resource limits
-```
-
-| Constraint                            | Meaning                                     |
-| ------------------------------------- | ------------------------------------------- |
-| `tokens(N)`                           | Max total tokens across all agent LLM calls |
-| `rounds(N)`                           | Max number of execution rounds              |
-| `converge when: all_committed`        | All agents must commit                      |
-| `converge when: committed_count >= 1` | At least one agent commits                  |
-| `converge when: @Agent.committed`     | Specific agent must commit                  |
-
-### Structured Output Contracts
-
-The `output:` block declares the expected JSON shape of an `attempt_completion` result:
-
-```slang
-stake review(draft) -> @Decider
-  output: { approved: "boolean", score: "number", notes: "string" }
-```
-
-**Enforcement mechanism:** The Workflow Task injects the output contract into the agent Task's system prompt at dispatch time:
-
-```
-Your response MUST include a JSON object with the following fields:
-  - approved (boolean)
-  - score (number)
-  - notes (string)
-
-Include this JSON in your attempt_completion result. The result will be
-parsed and validated by the workflow executor.
-```
-
-The Workflow Task's `slangLoop()` parses the `attempt_completion` result against the output schema. If the JSON is missing or malformed, the Workflow re-prompts the agent with an error message. This is a system-prompt-level contract — not a JSON-schema-level enforcement at the API layer.
-
-### Special Recipients
-
-| Recipient    | Meaning                                      |
-| ------------ | -------------------------------------------- |
-| `@AgentName` | Send to a specific agent                     |
-| `@out`       | Send to flow output (becomes final result)   |
-| `@all`       | Broadcast to every other agent               |
-| `@any`       | Accept from any single agent                 |
-| `*`          | Wildcard — accept from anyone (`await` only) |
-
-### Agent State (accessible in conditions)
-
-| Expression         | Type    | Description                               |
-| ------------------ | ------- | ----------------------------------------- |
-| `@Agent.output`    | any     | Last staked output                        |
-| `@Agent.committed` | boolean | Whether agent has committed               |
-| `@Agent.status`    | string  | `idle`, `running`, `committed`, `blocked` |
-| `committed_count`  | number  | How many agents have committed            |
-| `all_committed`    | boolean | True when all agents committed            |
-| `round`            | number  | Current round number                      |
-
-### Comments
-
-Single-line: `-- This is a comment`
+That document is the authoritative reference for the **Shofer implementation** of
+Slang (the vendored lexer/parser/resolver plus the `WorkflowTask` interpreter),
+which is what `.slang` workflow files are validated and executed against.
 
 ---
 
@@ -834,9 +792,16 @@ When the slang loop processes a `stake` operation for an agent:
 
     Context: [agent's current bindings and variables]
 
-    [If output contract defined]: Your response MUST include a JSON object
-    with the following fields: { field: type, ... }. Include this JSON in
-    your attempt_completion result.
+    [If output contract defined]:
+    OUTPUT CONTRACT:
+    Your attempt_completion result MUST be ONLY a valid JSON object
+    (no markdown, no extra text) with exactly these fields:
+      - fieldName: fieldType
+      - ...
+    Example: {"fieldName": ..., ...}
+    The result will be validated against this schema. Missing fields or
+    non-JSON will cause a retry (max 3 retries before the agent is
+    marked as error).
     ```
 
 2. The prompt is enqueued via `agentTask.messageQueueService.addMessage(prompt)` — the standard queue-drain path.
