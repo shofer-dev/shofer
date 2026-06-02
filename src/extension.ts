@@ -78,6 +78,7 @@ import {
 	registerTerminalActions,
 	CodeActionProvider,
 } from "./activate"
+import { showSlangVisualizationForFile } from "./core/webview/SlangVisualizationProvider"
 import { initializeI18n } from "./i18n"
 
 /**
