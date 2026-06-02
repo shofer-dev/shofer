@@ -1,13 +1,4 @@
 {
-	"newTask": {
-		"label": "New Task",
-		"description": "Start a new AI-powered task"
-	},
-	"newWorkflow": {
-		"label": "New Workflow",
-		"description": "Launch a multi-agent workflow"
-	},
-	"chooseWhatToCreate": "Choose what to create",
 	"selectWorkflow": "Select a workflow to launch",
 	"slangWorkflow": "Slang workflow",
 	"noWorkflowsFound": "No .slang workflow files found. Add them to .shofer/workflows/ in your workspace or ~/.shofer/workflows/ globally."
