@@ -70,6 +70,33 @@ function getBudget(flow: UpstreamFlowDecl): { bTokens?: number; bRounds?: number
 	return out
 }
 
+/** Refs that denote wildcards / external sinks rather than peer agents. */
+const NON_PEER_REFS = new Set(["out", "all", "any", "*", "human"])
+
+/**
+ * Names of the peer agents an agent communicates with, derived from the flow's
+ * declared topology: every agent it stakes to (sends work) or awaits from
+ * (consumes output), recursively through when/repeat control flow. Wildcards
+ * and external sinks (@out, @all, @any, @Human) are excluded.
+ */
+function getCommunicationPeers(agent: UpstreamAgentDecl): Set<string> {
+	const peers = new Set<string>()
+	const walk = (op: Operation): void => {
+		if (op.type === "StakeOp") {
+			for (const r of op.recipients) if (!NON_PEER_REFS.has(r.ref)) peers.add(r.ref)
+		} else if (op.type === "AwaitOp") {
+			for (const s of op.sources) if (!NON_PEER_REFS.has(s.ref)) peers.add(s.ref)
+		} else if (op.type === "WhenBlock") {
+			for (const inner of op.body) walk(inner)
+			if (op.elseBlock) for (const inner of op.elseBlock.body) walk(inner)
+		} else if (op.type === "RepeatBlock") {
+			for (const inner of op.body) walk(inner)
+		}
+	}
+	for (const op of agent.operations) walk(op)
+	return peers
+}
+
 // ── Compiled instruction model ──
 //
 // Each agent's structured operation tree is compiled once into a flat
@@ -582,18 +609,27 @@ export class WorkflowTask extends Task {
 		return prompt
 	}
 
-	/** Peer agent tasks an agent may query directly (search/browser helpers). */
+	/** Peer agent tasks an agent may query directly via send_message_to_task.
+	 *
+	 * Derived from the flow's declared communication topology: an agent may
+	 * directly query any live peer it stakes to or awaits from, regardless of
+	 * mode. This keeps direct-query access aligned with the edges the workflow
+	 * author actually declared rather than an arbitrary mode allowlist. */
 	private getPeerResources(agentName: string): Array<{ name: string; taskId: string; role: string }> {
+		const decl = getAgentDecls(this.flowDecl).find((a) => a.name === agentName)
+		if (!decl) return []
+		const peerNames = getCommunicationPeers(decl)
 		const resources: Array<{ name: string; taskId: string; role: string }> = []
-		for (const [name, agentState] of this.flowState.agents) {
-			if (name === agentName) continue
-			if (agentState.taskId && agentState.status !== "committed") {
-				const decl = getAgentDecls(this.flowDecl).find((a) => a.name === name)
-				const mode = (decl?.meta as any)?.mode || "unknown"
-				if (mode === "search" || mode === "browser") {
-					resources.push({ name, taskId: agentState.taskId, role: decl?.meta?.role || `Agent '${name}'` })
-				}
-			}
+		for (const peerName of peerNames) {
+			if (peerName === agentName) continue
+			const agentState = this.flowState.agents.get(peerName)
+			if (!agentState || !agentState.taskId || agentState.status === "committed") continue
+			const peerDecl = getAgentDecls(this.flowDecl).find((a) => a.name === peerName)
+			resources.push({
+				name: peerName,
+				taskId: agentState.taskId,
+				role: peerDecl?.meta?.role || `Agent '${peerName}'`,
+			})
 		}
 		return resources
 	}
