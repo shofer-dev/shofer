@@ -27,7 +27,23 @@ function getSimilarity(original: string, search: string): number {
 
 	// Calculate similarity ratio (0 to 1, where 1 is an exact match)
 	const maxLength = Math.max(normalizedOriginal.length, normalizedSearch.length)
-	return 1 - dist / maxLength
+	const normalizedScore = 1 - dist / maxLength
+
+	// If normalized similarity is below 80%, also try raw comparison.
+	// Normalization (whitespace collapse, smart-quote replacement) can
+	// misrepresent files containing significant escape sequences or
+	// precise indentation — e.g. TS string arrays with embedded \'
+	// escapes in SEARCH blocks. Raw Levenshtein captures structural
+	// similarity that normalization strips.
+	if (normalizedScore < 0.8) {
+		const rawDist = distance(original, search)
+		const rawMax = Math.max(original.length, search.length)
+		const rawScore = 1 - rawDist / rawMax
+		// Return the best of both passes.
+		return normalizedScore >= rawScore ? normalizedScore : rawScore
+	}
+
+	return normalizedScore
 }
 
 /**
