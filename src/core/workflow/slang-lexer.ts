@@ -135,6 +135,10 @@ export enum TokenType {
 	Contains = "contains",
 	True = "true",
 	False = "false",
+	Title = "title",
+	Description = "description",
+	Icon = "icon",
+	Param = "param",
 	LBrace = "{",
 	RBrace = "}",
 	LParen = "(",
@@ -193,6 +197,10 @@ const KEYWORDS: Record<string, TokenType> = {
 	contains: TokenType.Contains,
 	true: TokenType.True,
 	false: TokenType.False,
+	title: TokenType.Title,
+	description: TokenType.Description,
+	icon: TokenType.Icon,
+	param: TokenType.Param,
 }
 
 export interface Token {

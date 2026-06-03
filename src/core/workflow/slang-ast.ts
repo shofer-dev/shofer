@@ -37,15 +37,30 @@ export interface FlowDecl extends BaseNode {
 	/** Optional typed parameters: `flow "name" (param: "type") { ... }` */
 	params?: FlowParam[]
 	body: FlowBodyItem[]
+	/** Optional UI title for the workflow. Distinct from `name` (the machine identifier). */
+	title?: string
+	/** Optional markdown description of the workflow. Multiline; rendered in the UI. */
+	description?: string
+	/** Optional icon key for the workflow (e.g. "rocket", "gear", "search"). Rendered in UI. */
+	icon?: string
 }
 
 export interface FlowParam {
 	name: string
 	/** Advisory type annotation ("string" | "number" | "boolean"), not enforced at runtime */
 	paramType: string
+	/** Optional markdown description of this input variable. Multiline; rendered in the UI. */
+	description?: string
 }
 
-export type FlowBodyItem = ImportStmt | AgentDecl | ConvergeStmt | BudgetStmt | DeliverStmt | ExpectStmt
+export type FlowBodyItem = ImportStmt | AgentDecl | ConvergeStmt | BudgetStmt | DeliverStmt | ExpectStmt | ParamMetaDecl
+
+/** Metadata for a flow parameter — defined inside the flow body via `param <name> { ... }`. */
+export interface ParamMetaDecl extends BaseNode {
+	type: "ParamMetaDecl"
+	name: string
+	description?: string
+}
 
 // ─── Import ───
 

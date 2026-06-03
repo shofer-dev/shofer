@@ -35,6 +35,7 @@ import type {
 	BudgetItem,
 	DeliverStmt,
 	ExpectStmt,
+	ParamMetaDecl,
 	Expr,
 	Span,
 	Position,
@@ -155,9 +156,30 @@ class Parser {
 		}
 
 		this.expect(TokenType.LBrace)
+
+		// Parse flow-level meta fields (title, description, icon) before the main body.
+		let title: string | undefined
+		let description: string | undefined
+		let icon: string | undefined
+		while (this.check(TokenType.Title) || this.check(TokenType.Description) || this.check(TokenType.Icon)) {
+			if (this.check(TokenType.Title)) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				title = this.expect(TokenType.String).value
+			} else if (this.check(TokenType.Description)) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				description = this.expect(TokenType.String).value
+			} else if (this.check(TokenType.Icon)) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				icon = this.expect(TokenType.String).value
+			}
+		}
+
 		const body = this.parseFlowBody()
 		const end = this.expect(TokenType.RBrace)
-		return { type: "FlowDecl", name, params, body, span: this.spanFrom(start, end) }
+		return { type: "FlowDecl", name, params, body, title, description, icon, span: this.spanFrom(start, end) }
 	}
 
 	private parseFlowParams(): FlowParam[] {
@@ -204,6 +226,9 @@ class Parser {
 					break
 				case TokenType.Expect:
 					items.push(this.parseExpectStmt())
+					break
+				case TokenType.Param:
+					items.push(this.parseParamMetaDecl())
 					break
 				default:
 					throw new ParseError(SlangErrorCode.P204, formatErrorMessage(SlangErrorCode.P204), t, this.source)
@@ -565,6 +590,26 @@ class Parser {
 		return { type: "ExpectStmt", expr, span: this.spanFrom(start) }
 	}
 
+	private parseParamMetaDecl(): ParamMetaDecl {
+		const start = this.expect(TokenType.Param)
+		this.expect(TokenType.Colon)
+		const name = this.expect(TokenType.Ident).value
+		let description: string | undefined
+		this.expect(TokenType.LBrace)
+		while (!this.check(TokenType.RBrace) && !this.check(TokenType.EOF)) {
+			if (this.check(TokenType.Description)) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				description = this.expect(TokenType.String).value
+			} else {
+				// Skip unknown meta fields inside param block
+				this.advance()
+			}
+		}
+		this.expect(TokenType.RBrace)
+		return { type: "ParamMetaDecl", name, description, span: this.spanFrom(start) }
+	}
+
 	// ─── Expressions ───
 
 	private parseExpr(): Expr {
@@ -745,6 +790,10 @@ function isKeywordToken(type: TokenType): boolean {
 		type === TokenType.As ||
 		type === TokenType.Escalate ||
 		type === TokenType.Repeat ||
-		type === TokenType.Until
+		type === TokenType.Until ||
+		type === TokenType.Title ||
+		type === TokenType.Description ||
+		type === TokenType.Icon ||
+		type === TokenType.Param
 	)
 }

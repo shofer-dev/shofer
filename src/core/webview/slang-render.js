@@ -13,6 +13,28 @@ function esc(s) {
 		.replace(/"/g, String.fromCharCode(38) + "quot;")
 }
 
+/** Map user-facing icon keys to emoji. Extend as needed. */
+function iconToEmoji(key) {
+	var map = {
+		rocket: "\uD83D\uDE80", // 🚀
+		gear: "\u2699\uFE0F", // ⚙️
+		search: "\uD83D\uDD0D", // 🔍
+		beaker: "\uD83E\uDDEA", // 🧪
+		brain: "\uD83E\uDDE0", // 🧠
+		lightbulb: "\uD83D\uDCA1", // 💡
+		wrench: "\uD83D\uDD27", // 🔧
+		shield: "\uD83D\uDEE1\uFE0F", // 🛡️
+		bolt: "\u26A1", // ⚡
+		star: "\u2B50", // ⭐
+		heart: "\u2764\uFE0F", // ❤️
+		fire: "\uD83D\uDD25", // 🔥
+		check: "\u2705", // ✅
+		database: "\uD83D\uDDC4\uFE0F", // 🗄️
+		package: "\uD83D\uDCE6", // 📦
+	}
+	return map[key] || "\u26A1" // default ⚡
+}
+
 function safeRender(payload) {
 	try {
 		if (payload) _lastPayload = payload
@@ -1124,12 +1146,32 @@ function render(payload) {
 		return
 	}
 
-	var h = '<div class="flow-header"><h2><span>⚡</span> flow "' + esc(flow.name) + '"</h2>'
+	// Build a param-description lookup from ParamMetaDecl nodes.
+	var paramDescriptions = {}
+	for (var pi = 0; pi < (flow.body || []).length; pi++) {
+		var pItem = flow.body[pi]
+		if (pItem.type === "ParamMetaDecl" && pItem.description) {
+			paramDescriptions[pItem.name] = pItem.description
+		}
+	}
+
+	var displayTitle = flow.title || flow.name
+	var iconEmoji = flow.icon ? iconToEmoji(flow.icon) : "\u26A1" // ⚡ default
+	var h = '<div class="flow-header"><h2><span>' + esc(iconEmoji) + "</span> " + esc(displayTitle) + "</h2>"
+	if (flow.title && flow.title !== flow.name) {
+		h += '<div class="flow-id">flow "' + esc(flow.name) + '"</div>'
+	}
+	if (flow.description) {
+		h += '<div class="flow-desc">' + esc(flow.description).replace(/\\n/g, "<br>") + "</div>"
+	}
 	if (flow.params && flow.params.length > 0) {
 		h += '<div class="params">Params: '
 		for (var i = 0; i < flow.params.length; i++) {
+			var pDesc = paramDescriptions[flow.params[i].name]
 			h +=
-				"<code>" +
+				"<code" +
+				(pDesc ? ' title="' + esc(pDesc) + '"' : "") +
+				">" +
 				esc(flow.params[i].name) +
 				': "' +
 				esc(flow.params[i].paramType) +
