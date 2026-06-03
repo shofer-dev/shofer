@@ -3,7 +3,6 @@ import {
 	VSCodeCheckbox,
 	VSCodeRadioGroup,
 	VSCodeRadio,
-	VSCodeTextArea,
 	VSCodeLink,
 	VSCodeTextField,
 } from "@vscode/webview-ui-toolkit/react"
@@ -1137,17 +1136,12 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 					<div className="text-sm text-vscode-descriptionForeground mb-2">
 						{t("prompts:roleDefinition.description")}
 					</div>
-					<VSCodeTextArea
-						resize="vertical"
+					<textarea
 						value={getEffectiveRoleDefinition()}
 						onChange={(e) => {
-							const value =
-								(e as unknown as CustomEvent)?.detail?.target?.value ??
-								((e as any).target as HTMLTextAreaElement).value
-							// Buffer the edit; SettingsView's Save will commit via commitBuffers().
-							setModeOverrideField(visualMode, "roleDefinition", value)
+							setModeOverrideField(visualMode, "roleDefinition", e.target.value)
 						}}
-						className="w-full"
+						className="w-full text-vscode-input-foreground bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded px-3 py-2 resize-y font-[var(--vscode-editor-font-family)] text-[13px] leading-normal"
 						rows={5}
 						data-testid={`${getCurrentMode()?.slug || "code"}-prompt-textarea`}
 					/>
@@ -1214,16 +1208,12 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 					<div className="text-sm text-vscode-descriptionForeground mb-2">
 						{t("prompts:whenToUse.description")}
 					</div>
-					<VSCodeTextArea
-						resize="vertical"
+					<textarea
 						value={getEffectiveWhenToUse()}
 						onChange={(e) => {
-							const value =
-								(e as unknown as CustomEvent)?.detail?.target?.value ??
-								((e as any).target as HTMLTextAreaElement).value
-							setModeOverrideField(visualMode, "whenToUse", value)
+							setModeOverrideField(visualMode, "whenToUse", e.target.value)
 						}}
-						className="w-full"
+						className="w-full text-vscode-input-foreground bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded px-3 py-2 resize-y font-[var(--vscode-editor-font-family)] text-[13px] leading-normal"
 						rows={4}
 						data-testid={`${getCurrentMode()?.slug || "code"}-when-to-use-textarea`}
 					/>
@@ -1344,17 +1334,13 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 							modeName: getCurrentMode()?.name || "Code",
 						})}
 					</div>
-					<VSCodeTextArea
-						resize="vertical"
+					<textarea
 						value={getEffectiveModeCustomInstructions()}
 						onChange={(e) => {
-							const value =
-								(e as unknown as CustomEvent)?.detail?.target?.value ??
-								((e as any).target as HTMLTextAreaElement).value
-							setModeOverrideField(visualMode, "customInstructions", value)
+							setModeOverrideField(visualMode, "customInstructions", e.target.value)
 						}}
 						rows={10}
-						className="w-full"
+						className="w-full text-vscode-input-foreground bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded px-3 py-2 resize-y font-[var(--vscode-editor-font-family)] text-[13px] leading-normal"
 						data-testid={`${getCurrentMode()?.slug || "code"}-custom-instructions-textarea`}
 					/>
 					<div className="text-xs text-vscode-descriptionForeground mt-1.5">
@@ -1449,19 +1435,15 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 								aria-label="Learn more about global custom instructions"></VSCodeLink>
 						</Trans>
 					</div>
-					<VSCodeTextArea
-						resize="vertical"
+					<textarea
 						value={getEffectiveGlobalCustomInstructions()}
 						onChange={(e) => {
-							const value =
-								(e as unknown as CustomEvent)?.detail?.target?.value ??
-								((e as any).target as HTMLTextAreaElement).value
 							// Buffer the edit; commitBuffers() will persist on Save.
-							setGlobalCIOverride(value)
+							setGlobalCIOverride(e.target.value)
 							markDirty()
 						}}
 						rows={4}
-						className="w-full"
+						className="w-full text-vscode-input-foreground bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded px-3 py-2 resize-y font-[var(--vscode-editor-font-family)] text-[13px] leading-normal"
 						data-testid="global-custom-instructions-textarea"
 					/>
 					<div className="text-xs text-vscode-descriptionForeground mt-1.5">
@@ -1581,14 +1563,13 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 									}}>
 									{t("prompts:createModeDialog.roleDefinition.description")}
 								</div>
-								<VSCodeTextArea
-									resize="vertical"
+								<textarea
 									value={newModeRoleDefinition}
 									onChange={(e) => {
-										setNewModeRoleDefinition((e.target as HTMLTextAreaElement).value)
+										setNewModeRoleDefinition(e.target.value)
 									}}
 									rows={4}
-									className="w-full"
+									className="w-full text-vscode-input-foreground bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded px-3 py-2 resize-y font-[var(--vscode-editor-font-family)] text-[13px] leading-normal"
 								/>
 								{roleDefinitionError && (
 									<div className="text-xs text-vscode-errorForeground mt-1">
@@ -1619,14 +1600,13 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 								<div className="text-[13px] text-vscode-descriptionForeground mb-2">
 									{t("prompts:createModeDialog.whenToUse.description")}
 								</div>
-								<VSCodeTextArea
-									resize="vertical"
+								<textarea
 									value={newModeWhenToUse}
 									onChange={(e) => {
-										setNewModeWhenToUse((e.target as HTMLTextAreaElement).value)
+										setNewModeWhenToUse(e.target.value)
 									}}
 									rows={3}
-									className="w-full"
+									className="w-full text-vscode-input-foreground bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded px-3 py-2 resize-y font-[var(--vscode-editor-font-family)] text-[13px] leading-normal"
 								/>
 							</div>
 							<div className="mb-4">
@@ -1666,14 +1646,13 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 								<div className="text-[13px] text-vscode-descriptionForeground mb-2">
 									{t("prompts:createModeDialog.customInstructions.description")}
 								</div>
-								<VSCodeTextArea
-									resize="vertical"
+								<textarea
 									value={newModeCustomInstructions}
 									onChange={(e) => {
-										setNewModeCustomInstructions((e.target as HTMLTextAreaElement).value)
+										setNewModeCustomInstructions(e.target.value)
 									}}
 									rows={4}
-									className="w-full"
+									className="w-full text-vscode-input-foreground bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] rounded px-3 py-2 resize-y font-[var(--vscode-editor-font-family)] text-[13px] leading-normal"
 								/>
 							</div>
 						</div>
