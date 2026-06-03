@@ -37,6 +37,9 @@ export type {
 // Convenience: parse + validate (our wrapper)
 export { parseSlang, validateSlangAST, type SlangAST } from "./slang-parser"
 
+// Unified validate (parse + analyze in one call)
+export { validateSlangProgram, type SlangValidationResult } from "./validate-slang"
+
 // WorkflowTask
 export { WorkflowTask, createWorkflowTask, discoverWorkflows, type WorkflowTaskOptions } from "./WorkflowTask"
 
