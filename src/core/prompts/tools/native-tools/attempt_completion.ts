@@ -8,7 +8,7 @@ IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user th
 If you are running as a subtask with a SUBTASK CONSTRAINTS section in your system prompt, your result will be truncated if it exceeds the specified limit. Keep your result concise and within the character budget.
 
 Parameters:
-- result: (required) The result of the task. Formulate this result in a way that is final and does not require further input from the user. Don't end your result with questions or offers for further assistance.
+- result: (required) The result of the task. Formulate this result in a way that is final and does not require further input from the user. Do not write an interrogative sentence (e.g., "Would you like me to…?"). A question mark that is part of a code reference, filename, URL, or technical term is fine.
 - rating: (required) A self-assessment of how successfully you completed the task. Use one of: "poor" (significant issues or incomplete), "well" (acceptable but room for improvement), "excellent" (executed excellently, high quality).
 - feedback: (optional) Free-text feedback for Shofer.Dev engineers about tooling, system prompt, or other issues encountered during the task. Use this to report things that didn't work as expected or suggest concrete improvements. Only provide this if you noticed something worth reporting.
 
