@@ -78,7 +78,7 @@ import {
 	registerTerminalActions,
 	CodeActionProvider,
 } from "./activate"
-import { showSlangVisualizationForFile } from "./core/webview/SlangVisualizationProvider"
+import { SlangEditorProvider } from "./core/webview/SlangEditorProvider"
 import { initializeI18n } from "./i18n"
 
 /**
@@ -312,19 +312,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	registerCommands({ context, outputChannel, provider })
 
-	// Auto-open slang visualization when opening a .slang file
-	context.subscriptions.push(
-		vscode.window.onDidChangeActiveTextEditor((editor) => {
-			if (editor && editor.document.fileName.endsWith(".slang")) {
-				showSlangVisualizationForFile(context.extensionUri, editor.document.uri)
-			}
-		}),
-	)
-	// Also handle files already open at activation time
-	const activeEditor = vscode.window.activeTextEditor
-	if (activeEditor && activeEditor.document.fileName.endsWith(".slang")) {
-		showSlangVisualizationForFile(context.extensionUri, activeEditor.document.uri)
-	}
+	// Register custom editor for .slang files (opens as an editor tab)
+	SlangEditorProvider.register(context)
 
 	/**
 	 * We use the text document content provider API to show the left side for diff

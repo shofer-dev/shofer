@@ -57,6 +57,17 @@
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
+		"customEditors": [
+			{
+				"viewType": "shofer.slangEditor",
+				"displayName": "Slang Visualization",
+				"selector": [
+					{
+						"filenamePattern": "*.slang"
+					}
+				]
+			}
+		],
 		"viewsContainers": {
 			"activitybar": [
 				{
