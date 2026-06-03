@@ -878,16 +878,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					return
 				}
 
-				// Queue message if:
-				// - Task is busy (sendingDisabled)
-				// - API request in progress (isStreaming)
-				// - Queue has items (preserve message order during drain)
-				// - Command is running (command_output) - user's message should be queued for AI, not sent to terminal
+				// Queue message if the user is NOT actively responding to
+				// a pending ask AND the task is busy or the queue has items.
+				//
+				// When an ask is awaiting (followup, tool, command,
+				// use_mcp_server, completion_result, resume_task,
+				// resume_completed_task, budget_limit, mistake_limit_reached),
+				// the user's response should go directly to the host via
+				// askResponse, NOT through the queue — even if messages are
+				// already queued.
+				//
+				// Exception: "command_output" is NOT a user-facing ask — it
+				// means a terminal command is running and the user's text
+				// should be queued for the AI, not sent to the terminal.
+				const isRespondingToAsk = shoferAskRef.current && shoferAskRef.current !== "command_output"
 				if (
-					sendingDisabled ||
-					isStreaming ||
-					messageQueue.length > 0 ||
-					shoferAskRef.current === "command_output"
+					!isRespondingToAsk &&
+					(sendingDisabled ||
+						isStreaming ||
+						messageQueue.length > 0 ||
+						shoferAskRef.current === "command_output")
 				) {
 					try {
 						console.log("queueMessage", text, images)
