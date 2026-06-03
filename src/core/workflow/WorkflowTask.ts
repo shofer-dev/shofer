@@ -70,6 +70,30 @@ function getBudget(flow: UpstreamFlowDecl): { bTokens?: number; bRounds?: number
 	return out
 }
 
+/** Default value for a slang parameter type when none is provided by the user. */
+function defaultParamValue(type: string): unknown {
+	switch (type) {
+		case "number":
+			return 0
+		case "boolean":
+			return false
+		default:
+			return ""
+	}
+}
+
+/** Coerce a raw user-input string to the expected slang parameter type. */
+function coerceParam(raw: string, type: string): unknown {
+	switch (type) {
+		case "number":
+			return Number(raw)
+		case "boolean":
+			return raw.toLowerCase() === "true" || raw === "1"
+		default:
+			return raw
+	}
+}
+
 /** Refs that denote wildcards / external sinks rather than peer agents. */
 const NON_PEER_REFS = new Set(["out", "all", "any", "*", "human"])
 
@@ -329,6 +353,16 @@ export class WorkflowTask extends Task {
 				`**Workflow: ${this.flowState.flowName}**\n\nOrchestrating ${agentNames.length} agent(s): ${agentNames.map((n) => `\`${n}\``).join(", ")}`,
 			)
 
+			// Collect any flow parameters the user needs to provide BEFORE
+			// starting the slang loop. Uses the same ask("followup", …)
+			// mechanism as escalate @Human — posts the question to the
+			// webview, and the answer arrives later via
+			// handleWebviewAskResponse, which unblocks slangLoop().
+			if (this.needsFlowParams()) {
+				this.requestFlowParams()
+				return // slangLoop will be started by handleWebviewAskResponse
+			}
+
 			await this.slangLoop()
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] slangLoop failed:`, error)
@@ -336,6 +370,79 @@ export class WorkflowTask extends Task {
 			this.flowState.status = "error"
 			await this.emitTaskCompleted("poor")
 		}
+	}
+
+	/** True when the flow declares params that haven't been populated yet. */
+	private needsFlowParams(): boolean {
+		const declParams = this.flowDecl.params
+		if (!declParams || declParams.length === 0) return false
+		return declParams.some((p) => !(p.name in (this.flowState.params || {})))
+	}
+
+	/**
+	 * Post a followup ask so the user can enter parameter values. The
+	 * webview (WorkflowView) renders a textbox. When the user responds,
+	 * {@link handleWebviewAskResponse} parses the values and starts the
+	 * slang loop.
+	 */
+	private requestFlowParams(): void {
+		const declParams = this.flowDecl.params!
+		const missing = declParams.filter((p) => !(p.name in (this.flowState.params || {})))
+		const paramList = missing.map((p) => `  ${p.name}: ${p.paramType}`).join("\n")
+		const question = [
+			`Workflow **${this.flowState.flowName}** needs the following parameter(s):`,
+			"",
+			paramList,
+			"",
+			`Enter one \`key=value\` pair per line.`,
+		].join("\n")
+
+		outputLog(
+			`[WorkflowTask#${this.taskId}] Requesting ${missing.length} flow param(s): ${missing.map((p) => p.name).join(", ")} question=${JSON.stringify(question).substring(0, 120)}`,
+		)
+		const provider = this.providerRef.deref()
+		outputLog(
+			`[WorkflowTask#${this.taskId}] #DEBUG isCurrentTask=${provider?.getCurrentTask()?.taskId === this.taskId} focusedTaskId=${provider?.taskManager?.getFocusedTaskId()} shoferMessages.length=${this.shoferMessages.length}`,
+		)
+		// Fire-and-forget: the answer arrives via handleWebviewAskResponse.
+		void this.ask("followup", question)
+			.then(({ text }) => {
+				outputLog(
+					`[WorkflowTask#${this.taskId}] Flow params answer received: ${JSON.stringify(text).substring(0, 200)}`,
+				)
+				const response = text?.trim() ?? ""
+				for (const line of response.split(/\n/)) {
+					const trimmed = line.trim()
+					if (!trimmed) continue
+					const match = trimmed.match(/^(\w[\w-]*)\s*[:=]\s*(.+)$/)
+					if (match) {
+						const [, key, rawValue] = match
+						const param = missing.find((p) => p.name === key)
+						if (param) {
+							this.flowState.params[key] = coerceParam(rawValue.trim(), param.paramType)
+							outputLog(
+								`[WorkflowTask#${this.taskId}] Flow param ${key}=${JSON.stringify(this.flowState.params[key])} (type=${param.paramType})`,
+							)
+						}
+					}
+				}
+				// Fill in any still-missing params with defaults.
+				for (const p of missing) {
+					if (!(p.name in (this.flowState.params || {}))) {
+						this.flowState.params[p.name] = defaultParamValue(p.paramType)
+						outputLog(
+							`[WorkflowTask#${this.taskId}] Flow param '${p.name}' not provided, using default (${this.flowState.params[p.name]})`,
+						)
+					}
+				}
+				outputLog(`[WorkflowTask#${this.taskId}] Flow params collected, starting slang loop`)
+				void this.slangLoop()
+			})
+			.catch((error) => {
+				outputError(`[WorkflowTask#${this.taskId}] Failed to collect flow params:`, error)
+				this.flowState.status = "error"
+				void this.emitTaskCompleted("poor")
+			})
 	}
 
 	/**
