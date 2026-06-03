@@ -876,11 +876,9 @@ export class WorkflowTask extends Task {
 				// Check the in-memory ManagedTask state first — it is set
 				// synchronously by TaskManager in response to TaskCompleted/
 				// TaskAborted events and is the authoritative source.
-				// Persisted HistoryItem.taskState can lag behind because
-				// AttemptCompletionTool's background-child path calls
-				// updateTaskHistory({ ...oldHistoryItem, completionResultSummary })
-				// which spreads the old idle taskState, and that write races
-				// with TaskManager.setState("completed").
+				// The persisted HistoryItem.taskState is a reliable fallback
+				// now that the single-writer violation in AttemptCompletionTool
+				// has been fixed (Phase 1 of state_simplification.md).
 				const managedState = provider.taskManager.getTaskState(taskId)
 				const liveLc =
 					managedState?.lifecycle === "completed" || managedState?.lifecycle === "error"
@@ -943,8 +941,11 @@ export class WorkflowTask extends Task {
 				this.flowState.tokensUsed += (historyItem.tokensIn || 0) + (historyItem.tokensOut || 0)
 
 				let result: unknown = historyItem.completionResultSummary
+				// Use in-memory TaskManager state for the lifecycle trace (set
+				// synchronously by lifecycle events), not the persisted snapshot.
+				const liveLc = provider.taskManager.getTaskState(state.taskId)?.lifecycle
 				outputLog(
-					`[WorkflowTask#${this.taskId}] #TRACE collectStakeResults '${name}' taskId=${state.taskId} lifecycle=${historyItem.taskState?.lifecycle} completionResultSummary=${typeof result === "string" ? `"${result.substring(0, 80)}${result.length > 80 ? "..." : ""}"` : String(result)}`,
+					`[WorkflowTask#${this.taskId}] #TRACE collectStakeResults '${name}' taskId=${state.taskId} lifecycle=${liveLc} completionResultSummary=${typeof result === "string" ? `"${result.substring(0, 80)}${result.length > 80 ? "..." : ""}"` : String(result)}`,
 				)
 				let validationError: string | null = null
 				const outputSchema = instr.op.output

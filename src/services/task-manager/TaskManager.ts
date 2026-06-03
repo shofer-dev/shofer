@@ -395,7 +395,15 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			const existing = provider.taskHistoryStore.get(targetTaskId)
 			if (!existing) return
 			if (TaskManager.statesEqual(existing.taskState, state)) return
-			await provider.updateTaskHistory({ ...existing, taskState: state })
+			// Write only { id, taskState } — do NOT spread the stale in-memory
+			// snapshot.  TaskHistoryStore.upsert() merges { ...existing, ...item }
+			// so passing just the fields we intend to update is safe and avoids
+			// the "spread stale state" anti-pattern that caused the race in
+			// Phase 1 of state_simplification.md.
+			await provider.updateTaskHistory({
+				id: targetTaskId,
+				taskState: state,
+			} as HistoryItem)
 		} catch (err) {
 			outputError(
 				`[TaskManager] Failed to persist taskState for ${targetTaskId}:`,

@@ -44,6 +44,7 @@ interface DelegationProvider {
 	updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]>
 	taskManager?: {
 		getManagedTaskInstance?(taskId: string): Task | undefined
+		getTaskState?(taskId: string): { lifecycle: string; rating?: string } | undefined
 	}
 }
 
@@ -213,12 +214,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								// Persist file stats + completion summary only — taskState is
 								// owned exclusively by TaskManager, which writes it in response
 								// to the TaskCompleted event emitted below.
+								// Do NOT spread historyItem here — it carries a stale taskState
+								// snapshot (read before TaskCompleted fired), and spreading it
+								// races with TaskManager.persistState()'s write of the correct
+								// "completed" state. Only pass the fields we intend to update.
 								await provider.updateTaskHistory({
-									...historyItem,
+									id: task.taskId,
 									completionResultSummary: effectiveResult,
 									insertions: fileStats.insertions,
 									deletions: fileStats.deletions,
-								})
+								} as HistoryItem)
 							} catch (err) {
 								outputError(
 									`[AttemptCompletionTool] Failed to persist background child completion for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
@@ -281,15 +286,22 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			try {
 				const provider = task.providerRef.deref() as DelegationProvider | undefined
 				if (provider) {
-					const { historyItem } = await provider.getTaskWithId(task.taskId)
-					if (historyItem && historyItem.taskState?.lifecycle !== "completed") {
+					// Use the in-memory TaskManager state (set synchronously by the
+					// TaskCompleted event emitted above in subtask paths, or about to
+					// be emitted below) rather than the persisted HistoryItem snapshot
+					// which can carry a stale taskState.
+					const liveState = provider.taskManager?.getTaskState?.(task.taskId)
+					if (liveState?.lifecycle !== "completed") {
 						const fileStats = await computeFileChangeStats(task)
+						// Only pass the fields we intend to update — do NOT spread
+						// a stale historyItem snapshot and overwrite the taskState
+						// that TaskManager.set/persistState() will set.
 						await provider.updateTaskHistory({
-							...historyItem,
+							id: task.taskId,
 							completionResultSummary: effectiveResult,
 							insertions: fileStats.insertions,
 							deletions: fileStats.deletions,
-						})
+						} as HistoryItem)
 					}
 				}
 			} catch (err) {

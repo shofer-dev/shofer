@@ -83,6 +83,14 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		}
 
 		const readPersistedStatus = async (taskId: string): Promise<"completed" | "pending"> => {
+			// Check in-memory TaskManager state first (set synchronously by
+			// lifecycle events), falling back to the persisted HistoryItem
+			// snapshot only when no managed entry exists yet (e.g. restored
+			// task without a live instance).
+			const liveState = provider.taskManager.getTaskState(taskId)
+			if (liveState) {
+				return liveState.lifecycle === "completed" ? "completed" : "pending"
+			}
 			try {
 				const { historyItem } = await provider.getTaskWithId(taskId)
 				return historyItem.taskState?.lifecycle === "completed" ? "completed" : "pending"
