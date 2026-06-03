@@ -110,6 +110,7 @@ export const toolParamNames = [
 	"feedback",
 	// sed tool parameters (pattern already listed above for find_files)
 	"replacement",
+	"isRegex", // sed explicit regex/literal mode
 	"global",
 	"maxResults", // result cap for grep_search / git_search / rag_search (see helpers/searchCap.ts)
 	// attempt_completion rating (feedback already listed above for give_feedback)
@@ -230,7 +231,7 @@ export type NativeToolArgs = {
 	view_image: { path: string; filePath?: string }
 	lsp_search: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
-	sed: { path: string; pattern: string; replacement: string; global?: boolean | null }
+	sed: { path: string; pattern: string; replacement: string; isRegex?: boolean | null; global?: boolean | null }
 	git_search: { query: string; maxResults?: number | null }
 	call_mcp_tool_async: {
 		server_name: string

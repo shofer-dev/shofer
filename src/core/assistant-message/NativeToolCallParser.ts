@@ -926,6 +926,7 @@ export class NativeToolCallParser {
 						path: partialArgs.path ?? partialArgs.filePath,
 						pattern: partialArgs.pattern,
 						replacement: partialArgs.replacement,
+						isRegex: this.coerceOptionalBoolean(partialArgs.isRegex),
 						global: this.coerceOptionalBoolean(partialArgs.global),
 					}
 				}
