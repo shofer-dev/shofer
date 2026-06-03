@@ -592,7 +592,6 @@ class Parser {
 
 	private parseParamMetaDecl(): ParamMetaDecl {
 		const start = this.expect(TokenType.Param)
-		this.expect(TokenType.Colon)
 		const name = this.expect(TokenType.Ident).value
 		let description: string | undefined
 		this.expect(TokenType.LBrace)
