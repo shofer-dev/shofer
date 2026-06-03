@@ -1104,7 +1104,9 @@ function updateConnectedEdges(agent) {
 			tn = _layout[e.to]
 		if (!fn || !tn) continue
 		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.idx, e.total, _layers[e.from], _layers[e.to])
-		var eg = _svgEl.querySelector('.edge-group[data-edge="' + esc(e.from) + "__" + esc(e.to) + "__" + e.idx + '"]')
+		var eg = _svgEl.querySelector(
+			'.edge-group[data-edge="' + esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx + '"]',
+		)
 		if (!eg) continue
 		var hit = eg.querySelector(".edge-hit"),
 			path = eg.querySelector(".edge-path")
