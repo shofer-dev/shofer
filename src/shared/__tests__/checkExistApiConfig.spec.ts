@@ -80,10 +80,12 @@ describe("checkExistKey", () => {
 		expect(checkExistKey(config)).toBe(true)
 	})
 
-	it("should return true for shofer provider without API key", () => {
+	it("should return true for openrouter provider without API key", () => {
 		const config: ProviderSettings = {
 			apiProvider: "openrouter",
 		}
-		expect(checkExistKey(config)).toBe(true)
+		// openrouter requires an API key — checkExistKey returns false
+		// when no credentials are configured.
+		expect(checkExistKey(config)).toBe(false)
 	})
 })

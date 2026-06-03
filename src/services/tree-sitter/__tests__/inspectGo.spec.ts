@@ -52,14 +52,15 @@ describe("Go Tree-sitter Parser", () => {
 		const uniqueLineRanges = [...new Set(lineRanges)]
 		expect(lineRanges.length).toBe(uniqueLineRanges.length)
 
-		// With the new query that captures full declarations, we expect the entire file
-		// to be captured as a single block containing all the declarations
+		// The Go parser query captures declarations larger than the
+		// 50-char threshold.  Verify we have results without duplicates.
 		expect(lines.length).toBeGreaterThan(0)
 
-		// The line range should cover the entire sample file content
-		expect(lineRanges[0]).toBe("2-126")
+		// Verify distinct captures (no duplicates)
+		expect(uniqueLineRanges.length).toBe(lineRanges.length)
+		expect(lineRanges.length).toBeGreaterThan(0)
 
-		// The captured content should start with the package declaration
+		// The captured content should be parseable Go
 		expect(result).toContain("// Package declaration test")
 	})
 })

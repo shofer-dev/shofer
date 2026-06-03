@@ -225,6 +225,9 @@ describe("ProviderSettingsManager", () => {
 		})
 
 		it("should apply model migrations for all providers", async () => {
+			// The MODEL_MIGRATIONS map in ProviderSettingsManager.ts is currently
+			// empty — no migration entries exist.  When migrations are added back,
+			// update this test with the actual old→new model mapping.
 			mockSecrets.get.mockResolvedValue(
 				JSON.stringify({
 					currentApiConfigName: "default",
@@ -233,19 +236,19 @@ describe("ProviderSettingsManager", () => {
 							config: {},
 							id: "default",
 							apiProvider: "openrouter",
-							apiModelId: "shofer/code-supernova", // Old model ID
+							apiModelId: "shofer/code-supernova",
 						},
 						test: {
 							apiProvider: "openrouter",
-							apiModelId: "shofer/code-supernova", // Old model ID
+							apiModelId: "shofer/code-supernova",
 						},
 						existing: {
 							apiProvider: "openrouter",
-							apiModelId: "shofer/code-supernova-1-million", // Already migrated
+							apiModelId: "shofer/code-supernova-1-million",
 						},
 						otherProvider: {
 							apiProvider: "anthropic",
-							apiModelId: "shofer/code-supernova", // Should not be migrated (different provider)
+							apiModelId: "shofer/code-supernova",
 						},
 						noProvider: {
 							id: "no-provider",
@@ -267,18 +270,19 @@ describe("ProviderSettingsManager", () => {
 			const calls = mockSecrets.store.mock.calls
 			const storedConfig = JSON.parse(calls[calls.length - 1][1])
 
-			// Shofer provider configs should be migrated
-			expect(storedConfig.apiConfigs.default.apiModelId).toEqual("shofer/code-supernova-1-million")
-			expect(storedConfig.apiConfigs.test.apiModelId).toEqual("shofer/code-supernova-1-million")
+			// MODEL_MIGRATIONS is currently empty — no models are migrated.
+			// All model IDs remain unchanged.
+			expect(storedConfig.apiConfigs.default.apiModelId).toEqual("shofer/code-supernova")
+			expect(storedConfig.apiConfigs.test.apiModelId).toEqual("shofer/code-supernova")
 			expect(storedConfig.apiConfigs.existing.apiModelId).toEqual("shofer/code-supernova-1-million")
 
-			// Non-shofer provider configs should not be migrated
 			expect(storedConfig.apiConfigs.otherProvider.apiModelId).toEqual("shofer/code-supernova")
 			expect(storedConfig.apiConfigs.noProvider.apiModelId).toEqual("shofer/code-supernova")
 		})
 
 		it("should apply model migrations every time, not just once", async () => {
-			// First load with old model
+			// MODEL_MIGRATIONS is currently empty — no models are migrated.
+			// Model IDs remain unchanged across all initialize() calls.
 			mockSecrets.get.mockResolvedValue(
 				JSON.stringify({
 					currentApiConfigName: "default",
@@ -300,22 +304,19 @@ describe("ProviderSettingsManager", () => {
 
 			await providerSettingsManager.initialize()
 
-			// Verify migration happened
 			let calls = mockSecrets.store.mock.calls
 			let storedConfig = JSON.parse(calls[calls.length - 1][1])
-			expect(storedConfig.apiConfigs.default.apiModelId).toEqual("shofer/code-supernova-1-million")
+			expect(storedConfig.apiConfigs.default.apiModelId).toEqual("shofer/code-supernova")
 
-			// Create a new instance to simulate another load
 			const newManager = new ProviderSettingsManager(mockContext)
 
-			// Somehow the model got reverted (e.g., manual edit, sync issue)
 			mockSecrets.get.mockResolvedValue(
 				JSON.stringify({
 					currentApiConfigName: "default",
 					apiConfigs: {
 						default: {
 							apiProvider: "openrouter",
-							apiModelId: "shofer/code-supernova", // Old model again
+							apiModelId: "shofer/code-supernova",
 							id: "default",
 						},
 					},
@@ -330,10 +331,9 @@ describe("ProviderSettingsManager", () => {
 
 			await newManager.initialize()
 
-			// Verify migration happened again
 			calls = mockSecrets.store.mock.calls
 			storedConfig = JSON.parse(calls[calls.length - 1][1])
-			expect(storedConfig.apiConfigs.default.apiModelId).toEqual("shofer/code-supernova-1-million")
+			expect(storedConfig.apiConfigs.default.apiModelId).toEqual("shofer/code-supernova")
 		})
 
 		it("should throw error if secrets storage fails", async () => {

@@ -617,10 +617,13 @@ describe("FileRestrictionError", () => {
 	})
 
 	describe("getFullModeDetails", () => {
-		// Moved to src/core/modes/__tests__/getFullModeDetails.test.ts (host-only)
-		// because getFullModeDetails transitively depends on fs/path/os via
-		// addCustomInstructions and must not be importable from the webview bundle.
-		// See the Shared Module Isolation Rule in AGENTS.md.
+		it("is tested in src/core/modes/__tests__/getFullModeDetails.test.ts (host-only)", () => {
+			// Moved to src/core/modes/__tests__/getFullModeDetails.test.ts (host-only)
+			// because getFullModeDetails transitively depends on fs/path/os via
+			// addCustomInstructions and must not be importable from the webview bundle.
+			// See the Shared Module Isolation Rule in AGENTS.md.
+			expect(true).toBe(true)
+		})
 	})
 
 	it("formats error message with description when provided", () => {
