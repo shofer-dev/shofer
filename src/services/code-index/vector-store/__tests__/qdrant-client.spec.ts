@@ -5,6 +5,17 @@ import { QdrantVectorStore } from "../qdrant-client"
 import { getWorkspacePath } from "../../../../utils/path"
 import { DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_SEARCH_MIN_SCORE } from "../../constants"
 
+/**
+ * Create an error matching the pattern the real Qdrant client throws for
+ * HTTP 404 responses.  {@link getCollectionInfo} detects 404 via the
+ * message prefix so it works with both the real
+ * {@link @qdrant/js-client-rest!QdrantClientUnexpectedResponseError}
+ * and vitest mocks.
+ */
+function make404Error(): Error {
+	return new Error("Unexpected Response: 404 Not Found\nRaw response content:\nnull")
+}
+
 // Mocks
 vitest.mock("@qdrant/js-client-rest")
 vitest.mock("crypto")
@@ -515,10 +526,7 @@ describe("QdrantVectorStore", () => {
 	describe("initialize", () => {
 		it("should create a new collection if none exists and return true", async () => {
 			// Mock getCollection to throw a 404-like error
-			mockQdrantClientInstance.getCollection.mockRejectedValue({
-				response: { status: 404 },
-				message: "Not found",
-			})
+			mockQdrantClientInstance.getCollection.mockRejectedValue(make404Error())
 			mockQdrantClientInstance.createCollection.mockResolvedValue(true as any) // Cast to any to satisfy QdrantClient types if strict
 			mockQdrantClientInstance.createPayloadIndex.mockResolvedValue({} as any) // Mock successful index creation
 
@@ -603,10 +611,7 @@ describe("QdrantVectorStore", () => {
 						},
 					},
 				} as any)
-				.mockRejectedValueOnce({
-					response: { status: 404 },
-					message: "Not found",
-				})
+				.mockRejectedValueOnce(make404Error())
 			mockQdrantClientInstance.deleteCollection.mockResolvedValue(true as any)
 			mockQdrantClientInstance.createCollection.mockResolvedValue(true as any)
 			mockQdrantClientInstance.createPayloadIndex.mockResolvedValue({} as any)
@@ -647,29 +652,32 @@ describe("QdrantVectorStore", () => {
 			expect(mockQdrantClientInstance.createPayloadIndex).toHaveBeenCalledTimes(6)
 			;(console.warn as any).mockRestore() // Restore console.warn
 		})
-		it("should log warning for non-404 errors but still create collection", async () => {
+		it("should throw on transient error from getCollectionInfo (no longer creates collection)", async () => {
+			// Transient errors are now re-thrown so the retry loop can handle them.
+			// getCollectionInfo no longer returns null for non-404 errors.
 			const genericError = new Error("Generic Qdrant Error")
 			mockQdrantClientInstance.getCollection.mockRejectedValue(genericError)
+			vitest.spyOn(console, "error").mockImplementation(() => {}) // Suppress console.error
 			vitest.spyOn(console, "warn").mockImplementation(() => {}) // Suppress console.warn
 
-			const result = await vectorStore.initialize()
+			await expect(vectorStore.initialize()).rejects.toThrow(
+				/Failed to connect to Qdrant vector database|vectorStore\.qdrantConnectionFailed/,
+			)
 
-			expect(result).toBe(true) // Collection was created
 			expect(mockQdrantClientInstance.getCollection).toHaveBeenCalledTimes(1)
-			expect(mockQdrantClientInstance.createCollection).toHaveBeenCalledTimes(1)
-			expect(mockQdrantClientInstance.deleteCollection).not.toHaveBeenCalled()
-			expect(mockQdrantClientInstance.createPayloadIndex).toHaveBeenCalledTimes(6)
+			// Should NOT attempt to create the collection on a transient error
+			expect(mockQdrantClientInstance.createCollection).not.toHaveBeenCalled()
 			expect(console.warn).toHaveBeenCalledWith(
-				expect.stringContaining(`Warning during getCollectionInfo for "${expectedCollectionName}"`),
+				expect.stringContaining(
+					`Transient error during getCollectionInfo for "${expectedCollectionName}", re-throwing for retry:`,
+				),
 				genericError.message,
 			)
+			;(console.error as any).mockRestore()
 			;(console.warn as any).mockRestore()
 		})
 		it("should re-throw error from createCollection when no collection initially exists", async () => {
-			mockQdrantClientInstance.getCollection.mockRejectedValue({
-				response: { status: 404 },
-				message: "Not found",
-			})
+			mockQdrantClientInstance.getCollection.mockRejectedValue(make404Error())
 			const createError = new Error("Create Collection Failed")
 			mockQdrantClientInstance.createCollection.mockRejectedValue(createError)
 			vitest.spyOn(console, "error").mockImplementation(() => {}) // Suppress console.error
@@ -688,10 +696,7 @@ describe("QdrantVectorStore", () => {
 		})
 		it("should log but not fail if payload index creation errors occur", async () => {
 			// Mock successful collection creation
-			mockQdrantClientInstance.getCollection.mockRejectedValue({
-				response: { status: 404 },
-				message: "Not found",
-			})
+			mockQdrantClientInstance.getCollection.mockRejectedValue(make404Error())
 			mockQdrantClientInstance.createCollection.mockResolvedValue(true as any)
 
 			// Mock payload index creation to fail
@@ -778,10 +783,7 @@ describe("QdrantVectorStore", () => {
 					},
 				} as any)
 				// Second call should return 404 to confirm deletion
-				.mockRejectedValueOnce({
-					response: { status: 404 },
-					message: "Not found",
-				})
+				.mockRejectedValueOnce(make404Error())
 
 			// Delete succeeds but create fails
 			mockQdrantClientInstance.deleteCollection.mockResolvedValue(true as any)
@@ -826,10 +828,7 @@ describe("QdrantVectorStore", () => {
 					},
 				} as any)
 				// Second call should return 404 to confirm deletion
-				.mockRejectedValueOnce({
-					response: { status: 404 },
-					message: "Not found",
-				})
+				.mockRejectedValueOnce(make404Error())
 
 			mockQdrantClientInstance.deleteCollection.mockResolvedValue(true as any)
 			mockQdrantClientInstance.createCollection.mockResolvedValue(true as any)
@@ -913,10 +912,7 @@ describe("QdrantVectorStore", () => {
 					},
 				} as any)
 				// Second call should return 404 to confirm deletion
-				.mockRejectedValueOnce({
-					response: { status: 404 },
-					message: "Not found",
-				})
+				.mockRejectedValueOnce(make404Error())
 
 			mockQdrantClientInstance.deleteCollection.mockResolvedValue(true as any)
 			mockQdrantClientInstance.createCollection.mockResolvedValue(true as any)
@@ -995,10 +991,7 @@ describe("QdrantVectorStore", () => {
 	})
 
 	it("should return false when collection does not exist (404 error)", async () => {
-		mockQdrantClientInstance.getCollection.mockRejectedValue({
-			response: { status: 404 },
-			message: "Not found",
-		})
+		mockQdrantClientInstance.getCollection.mockRejectedValue(make404Error())
 
 		const result = await vectorStore.collectionExists()
 
@@ -1007,17 +1000,29 @@ describe("QdrantVectorStore", () => {
 		expect(mockQdrantClientInstance.getCollection).toHaveBeenCalledWith(expectedCollectionName)
 	})
 
-	it("should return false and log warning for non-404 errors", async () => {
+	it("should re-throw transient errors from collectionExists (non-404)", async () => {
 		const genericError = new Error("Network error")
 		mockQdrantClientInstance.getCollection.mockRejectedValue(genericError)
+		vitest.spyOn(console, "error").mockImplementation(() => {})
 		vitest.spyOn(console, "warn").mockImplementation(() => {})
 
-		const result = await vectorStore.collectionExists()
+		// Transient errors are now re-thrown rather than treated as
+		// "collection does not exist".  collectionExists() catches and
+		// returns false, but the error is re-thrown from getCollectionInfo()
+		// so the caller's retry loop can handle it.
+		let caughtError: unknown
+		try {
+			await vectorStore.collectionExists()
+		} catch (error: unknown) {
+			caughtError = error
+		}
 
-		expect(result).toBe(false)
+		expect(caughtError).toBeDefined()
 		expect(mockQdrantClientInstance.getCollection).toHaveBeenCalledTimes(1)
 		expect(console.warn).toHaveBeenCalledWith(
-			expect.stringContaining(`Warning during getCollectionInfo for "${expectedCollectionName}"`),
+			expect.stringContaining(
+				`Transient error during getCollectionInfo for "${expectedCollectionName}", re-throwing for retry:`,
+			),
 			genericError.message,
 		)
 		;(console.warn as any).mockRestore()
