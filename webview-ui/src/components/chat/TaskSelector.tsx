@@ -1,19 +1,7 @@
 import { memo, useState, useCallback, useMemo, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import {
-	GitBranch,
-	Plus,
-	Trash2,
-	Pencil,
-	Check,
-	X,
-	Archive,
-	Pin,
-	PinOff,
-	ChevronRight,
-	ChevronDown,
-} from "lucide-react"
+import { GitBranch, Trash2, Pencil, Check, X, Archive, Pin, PinOff, ChevronRight, ChevronDown } from "lucide-react"
 
 import type { HistoryItem, TaskState, TaskLifecycle, CompletionRating } from "@shofer/types"
 
@@ -616,8 +604,8 @@ function renderTaskRow({
  * so the chat header can show the current task's title in its place. Open state
  * is intentionally kept local — the trigger is a one-shot toggle event.
  *
- * Layout: sticky header with task count + close button, full-width "New Task"
- * button, date-bucketed sections (Today / Yesterday / Last 7 Days / Older),
+ * Layout: sticky header with task count + close button,
+ * date-bucketed sections (Today / Yesterday / Last 7 Days / Older),
  * and a footer link to the full history view. Slides in from the right with
  * a transparent backdrop for click-outside dismissal; Escape also closes it.
  */
@@ -653,11 +641,6 @@ export const TaskSelector = memo(
 
 		// Build the flattened DFS tree once per taskHistory change.
 		const flatTree = useMemo(() => buildFlatTree(taskHistory), [taskHistory])
-
-		const handleCreateTask = useCallback(() => {
-			vscode.postMessage({ type: "createParallelTask" })
-			setIsOpen(false)
-		}, [])
 
 		const handleFocusTask = useCallback((taskId: string) => {
 			vscode.postMessage({ type: "focusParallelTask", taskId })
@@ -887,22 +870,6 @@ export const TaskSelector = memo(
 								<X className="w-4 h-4" />
 							</button>
 						</StandardTooltip>
-					</div>
-
-					{/* New task button — full-width pill, like VS Code's "New Session" */}
-					<div className="px-2 pt-2 pb-2 flex-shrink-0">
-						<button
-							onClick={handleCreateTask}
-							className={cn(
-								"flex items-center justify-center gap-2 w-full px-3 py-1.5 text-sm rounded",
-								"bg-[var(--vscode-button-secondaryBackground,var(--vscode-button-background))]",
-								"text-[var(--vscode-button-secondaryForeground,var(--vscode-button-foreground))]",
-								"hover:bg-[var(--vscode-button-secondaryHoverBackground,var(--vscode-button-hoverBackground))]",
-								"transition-colors",
-							)}>
-							<Plus className="w-4 h-4" />
-							<span>{t("chat:taskSelector.newTask", "New Task")}</span>
-						</button>
 					</div>
 
 					{/* Scrollable list area */}
