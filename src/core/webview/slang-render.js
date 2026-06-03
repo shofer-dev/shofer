@@ -229,7 +229,7 @@ function defs() {
 }
 
 function renderNode(nm, meta) {
-	var color = meta.hasLoop ? COLORS.stake : COLORS.agent
+	var color = COLORS.agent
 	var mode = meta.mode,
 		role = meta.role
 	var s =
@@ -278,13 +278,6 @@ function renderNode(nm, meta) {
 				"</text>"
 		}
 	}
-	if (meta.hasLoop) {
-		s +=
-			'<rect class="loop-badge" x="14" y="32" width="32" height="16" rx="3" fill="' +
-			COLORS.stake +
-			'" opacity="0.18" />'
-		s += '<text class="loop-label" x="30" y="44" text-anchor="middle" fill="' + COLORS.stake + '">🔄</text>'
-	}
 	return s
 }
 
@@ -316,7 +309,7 @@ function renderEdge(e, idx, total, layout, layers) {
 	var d = edgePathData(fn.x, fn.y, tn.x, tn.y, idx, total, fromLayer, toLayer)
 	var color = e.kind === "stake" ? COLORS.stake : COLORS.await
 	var marker = e.kind === "stake" ? "url(#ah-stake)" : "url(#ah-await)"
-	var key = esc(e.from) + "__" + esc(e.to) + "__" + idx
+	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + idx
 	var s =
 		'<g class="edge-group" data-edge="' +
 		key +
@@ -432,7 +425,7 @@ function compileTopologySVG(flow, agentNames, agentMeta) {
 		var nm = names[ni],
 			pos = _layout[nm],
 			meta = agentMeta[nm] || {},
-			nc = meta.hasLoop ? "node-rect loop-rect" : "node-rect"
+			nc = "node-rect"
 		svg += '<g class="node-group" data-agent="' + esc(nm) + '" transform="translate(' + pos.x + "," + pos.y + ')">'
 		svg += '<rect class="' + nc + '" x="0" y="0" width="' + NODE_W + '" height="' + NODE_H + '" rx="9" />'
 		svg += renderNode(nm, meta) + "</g>"
@@ -455,8 +448,12 @@ function compileSequenceSVG(flow, agentNames) {
 		if (agent.type !== "AgentDecl") continue
 		var from = agent.name
 
-		function extractTimeline(ops) {
+		function extractTimeline(ops, depth) {
 			if (!ops) return
+			depth = depth || 0
+			// Only recurse into conditionals/loops one level deep to avoid
+			// exploding the timeline with duplicate inner-body events.
+			var maxDepth = 1
 			for (var i = 0; i < ops.length; i++) {
 				var op = ops[i]
 				if (op.type === "StakeOp" && op.recipients) {
@@ -493,11 +490,13 @@ function compileSequenceSVG(flow, agentNames) {
 						type: "stake",
 					})
 				}
-				if (op.type === "WhenBlock") {
-					extractTimeline(op.body)
-					if (op.elseBlock) extractTimeline(op.elseBlock.body)
+				if (depth < maxDepth) {
+					if (op.type === "WhenBlock") {
+						extractTimeline(op.body, depth + 1)
+						if (op.elseBlock) extractTimeline(op.elseBlock.body, depth + 1)
+					}
+					if (op.type === "RepeatBlock") extractTimeline(op.body, depth + 1)
 				}
-				if (op.type === "RepeatBlock") extractTimeline(op.body)
 			}
 		}
 		extractTimeline(agent.operations)
