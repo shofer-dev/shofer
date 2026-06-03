@@ -405,7 +405,7 @@ export class WorkflowTask extends Task {
 			`[WorkflowTask#${this.taskId}] #DEBUG isCurrentTask=${provider?.getCurrentTask()?.taskId === this.taskId} focusedTaskId=${provider?.taskManager?.getFocusedTaskId()} shoferMessages.length=${this.shoferMessages.length}`,
 		)
 		// Fire-and-forget: the answer arrives via handleWebviewAskResponse.
-		void this.ask("followup", question)
+		void this.ask("followup", JSON.stringify({ question }))
 			.then(({ text }) => {
 				outputLog(
 					`[WorkflowTask#${this.taskId}] Flow params answer received: ${JSON.stringify(text).substring(0, 200)}`,
