@@ -176,18 +176,39 @@ export class QdrantVectorStore implements IVectorStore {
 		}
 	}
 
+	/**
+	 * Retrieves collection metadata from Qdrant.
+	 *
+	 * Returns `null` only when the collection genuinely does not exist (HTTP 404).
+	 * Transient errors (network failures, timeouts) are re-thrown so the
+	 * caller's retry loop can handle them, avoiding the symptom where a brief
+	 * Qdrant outage causes {@link initialize} to attempt a `createCollection`
+	 * on an already-existing collection and get a misleading "Conflict" error.
+	 *
+	 * Detection is message-based (not instanceof) so it works identically
+	 * with the real {@link @qdrant/js-client-rest!QdrantClientUnexpectedResponseError}
+	 * and with vitest mocks that throw plain {@link Error} instances.
+	 */
 	private async getCollectionInfo(): Promise<Schemas["CollectionInfo"] | null> {
 		try {
 			const collectionInfo = await this.client.getCollection(this.collectionName)
 			return collectionInfo
 		} catch (error: unknown) {
+			// QdrantClientUnexpectedResponseError (and our test mocks) embed
+			// "Unexpected Response: 404 …" in the message for a missing collection.
+			if (error instanceof Error && /^Unexpected Response: 404\b/.test(error.message)) {
+				return null
+			}
+
+			// Transient error (network failure, timeout, DNS, etc.) — re-throw
+			// so the orchestrator's retryWithBackoff loop can recover.
 			if (error instanceof Error) {
 				outputWarn(
-					`[QdrantVectorStore] Warning during getCollectionInfo for "${this.collectionName}". Collection may not exist or another error occurred:`,
+					`[QdrantVectorStore] Transient error during getCollectionInfo for "${this.collectionName}", re-throwing for retry:`,
 					error.message,
 				)
 			}
-			return null
+			throw error
 		}
 	}
 
