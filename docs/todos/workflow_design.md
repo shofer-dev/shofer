@@ -1091,6 +1091,63 @@ This ensures agents know about shared resources without needing to discover them
 
 ---
 
+## Key Files
+
+### Core Engine — Slang Parser + Workflow Executor
+
+All under [`src/core/workflow/`](../src/core/workflow/):
+
+| File                                                                        | Purpose                                                                                                                                                          |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                   | **Main executor** — `slangLoop()` (round-based VM), agent dispatch/spawn/resume, stake routing, mailbox, escalate, converge/budget, output validation with retry |
+| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                     | Lexer (vendored `@riktar/slang`, MIT) — tokenizes `.slang` source                                                                                                |
+| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts) | Parser (vendored, ~750 lines) — produces typed AST with error recovery                                                                                           |
+| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                   | Public API — `parseSlang()`, `validateSlangAST()`                                                                                                                |
+| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)               | Dependency graph, deadlock detection, static analysis warnings                                                                                                   |
+| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                         | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)                                                                                       |
+| [`slang-types.ts`](../src/core/workflow/slang-types.ts)                     | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                                                                  |
+| [`index.ts`](../src/core/workflow/index.ts)                                 | Barrel export                                                                                                                                                    |
+
+### Extension Host Integration
+
+| File                                                                                 | Purpose                                                                             |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| [`registerCommands.ts`](../src/activate/registerCommands.ts)                         | `+` button → QuickPick (New Task / New Workflow), `slangVisualization.show` command |
+| [`extension.ts`](../src/extension.ts)                                                | Auto-open Slang visualization on `.slang` file open                                 |
+| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                         | `createTask()` — spawns agent Tasks with `initialMode`                              |
+| [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)           | `listWorkflows` / `createWorkflow` IPC handlers                                     |
+| [`SlangVisualizationProvider.ts`](../src/core/webview/SlangVisualizationProvider.ts) | `.slang` file visualizer webview panel (agent cards, flow arrows, diagnostics)      |
+| [`history.ts`](../../packages/types/src/history.ts)                                  | `HistoryItem` extensions: `isWorkflow`, `slangSource`, `flowState`                  |
+| [`package.json`](../package.json)                                                    | Command + menu contributions for `slangVisualization.show`                          |
+
+### Webview UI
+
+| File                                                                        | Purpose                                                                       |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`TaskSelector.tsx`](../../webview-ui/src/components/chat/TaskSelector.tsx) | Workflow-aware task tree (codicon-organization icon, "Workflow: name" titles) |
+| [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx)         | Hides TodoList/ContextWindow/cost for workflow roots                          |
+
+### i18n
+
+| File                                        | Purpose                                      |
+| ------------------------------------------- | -------------------------------------------- |
+| [`plus.json`](../i18n/locales/en/plus.json) | "New Task" / "New Workflow" dropdown strings |
+
+### Example Workflows
+
+| File                                                                                                 | Purpose                                                                     |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [`.shofer/workflows/hello-world.slang`](../../../../.shofer/workflows/hello-world.slang)             | Minimal single-agent flow                                                   |
+| [`.shofer/workflows/feature-test.slang`](../../../../.shofer/workflows/feature-test.slang)           | Exhaustive feature test                                                     |
+| [`.shofer/workflows/implement-feature.slang`](../../../../.shofer/workflows/implement-feature.slang) | Realistic 5-agent flow (Architect, Codebase, Internet, Developer, Reviewer) |
+
+### Documentation
+
+| File                                       | Purpose                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| [`workflow_design.md`](workflow_design.md) | This document — architecture, Slang→Shofer mapping, executor design |
+| [`slang_specs.md`](slang_specs.md)         | Language reference — grammar, operations, semantics, pitfalls       |
+
 ## Related Documents
 
 - [`parallelism.md`](../parallelism.md) — Parent-child orchestration and background Tasks
