@@ -97,6 +97,21 @@ body {
 	margin: 0 2px;
 }
 
+.flow-header .flow-id {
+	font-size: 0.8em;
+	color: var(--z-meta);
+	margin-bottom: 4px;
+	font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.flow-header .flow-desc {
+	font-size: 0.85em;
+	color: var(--z-meta);
+	margin-bottom: 6px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
 .flow-header .constraints {
 	font-size: 0.82em;
 	color: var(--z-meta);
