@@ -1580,6 +1580,7 @@ export class NativeToolCallParser {
 							path: args.path ?? args.filePath,
 							pattern: args.pattern,
 							replacement: args.replacement,
+							isRegex: this.coerceOptionalBoolean(args.isRegex),
 							global: this.coerceOptionalBoolean(args.global),
 						} as NativeArgsFor<TName>
 					}

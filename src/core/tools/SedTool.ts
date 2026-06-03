@@ -29,6 +29,7 @@ interface SedParams {
 	path: string
 	pattern: string
 	replacement: string
+	isRegex?: boolean | null
 	global?: boolean
 }
 
@@ -37,7 +38,9 @@ export class SedTool extends BaseTool<"sed"> {
 
 	async execute(params: SedParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
-		const { path: relPath, pattern, replacement, global = true } = params
+		const { path: relPath, pattern, replacement, isRegex: isRegexParam, global = true } = params
+		// Explicit literal mode (isRegex: false) suppresses all regex escaping/fallback.
+		const regexMode = isRegexParam !== false
 
 		try {
 			if (!relPath) {
