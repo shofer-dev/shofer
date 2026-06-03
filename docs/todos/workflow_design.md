@@ -1097,16 +1097,17 @@ This ensures agents know about shared resources without needing to discover them
 
 All under [`src/core/workflow/`](../src/core/workflow/):
 
-| File                                                                        | Purpose                                                                                                                                                          |
-| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                   | **Main executor** — `slangLoop()` (round-based VM), agent dispatch/spawn/resume, stake routing, mailbox, escalate, converge/budget, output validation with retry |
-| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                     | Lexer (vendored `@riktar/slang`, MIT) — tokenizes `.slang` source                                                                                                |
-| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts) | Parser (vendored, ~750 lines) — produces typed AST with error recovery                                                                                           |
-| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                   | Public API — `parseSlang()`, `validateSlangAST()`                                                                                                                |
-| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)               | Dependency graph, deadlock detection, static analysis warnings                                                                                                   |
-| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                         | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)                                                                                       |
-| [`slang-types.ts`](../src/core/workflow/slang-types.ts)                     | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                                                                  |
-| [`index.ts`](../src/core/workflow/index.ts)                                 | Barrel export                                                                                                                                                    |
+| File                                                                                    | Purpose                                                                                                                                                          |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                               | **Main executor** — `slangLoop()` (round-based VM), agent dispatch/spawn/resume, stake routing, mailbox, escalate, converge/budget, output validation with retry |
+| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                                 | Lexer (vendored `@riktar/slang`, MIT) — tokenizes `.slang` source                                                                                                |
+| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)             | Parser (vendored, ~750 lines) — produces typed AST with error recovery                                                                                           |
+| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                               | Public API — `parseSlang()`, `validateSlangAST()`                                                                                                                |
+| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)                           | Dependency graph, deadlock detection, static analysis warnings                                                                                                   |
+| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                                     | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)                                                                                       |
+| [`slang-types.ts`](../src/core/workflow/slang-types.ts)                                 | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                                                                  |
+| [`index.ts`](../src/core/workflow/index.ts)                                             | Barrel export                                                                                                                                                    |
+| [`__tests__/slang-parser.test.ts`](../src/core/workflow/__tests__/slang-parser.test.ts) | Unit tests for the Slang parser                                                                                                                                  |
 
 ### Extension Host Integration
 
@@ -1122,16 +1123,20 @@ All under [`src/core/workflow/`](../src/core/workflow/):
 
 ### Webview UI
 
-| File                                                                        | Purpose                                                                       |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [`TaskSelector.tsx`](../../webview-ui/src/components/chat/TaskSelector.tsx) | Workflow-aware task tree (codicon-organization icon, "Workflow: name" titles) |
-| [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx)         | Hides TodoList/ContextWindow/cost for workflow roots                          |
+| File                                                                            | Purpose                                                                                                                                                        |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorkflowView.tsx`](../../webview-ui/src/components/chat/WorkflowView.tsx)     | **Dedicated workflow chat surface** — mirrors ChatView for WorkflowTasks, toggled via `isHidden` to preserve scroll/draft/expansion state across task switches |
+| [`TaskSelector.tsx`](../../webview-ui/src/components/chat/TaskSelector.tsx)     | Workflow-aware task tree (codicon-organization icon, "Workflow: name" titles)                                                                                  |
+| [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx)             | Defers to WorkflowView when `currentTaskItem.isWorkflow`; hides own TodoList/ContextWindow/cost for workflow roots                                             |
+| [`LauncherView.tsx`](../../webview-ui/src/components/launcher/LauncherView.tsx) | Workflow picker UI — lists discovered `.slang` workflows as launchable cards                                                                                   |
+| [`App.tsx`](../../webview-ui/src/App.tsx)                                       | Mounts `WorkflowView` beside `ChatView`, routes based on `currentTaskItem.isWorkflow`                                                                          |
 
 ### i18n
 
-| File                                        | Purpose                                      |
-| ------------------------------------------- | -------------------------------------------- |
-| [`plus.json`](../i18n/locales/en/plus.json) | "New Task" / "New Workflow" dropdown strings |
+| File                                                                  | Purpose                                                                       |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`launcher.json`](../../webview-ui/src/i18n/locales/en/launcher.json) | "Choose a workflow" / "Discovering workflows…" / "No workflows found" strings |
+| [`chat.json`](../../webview-ui/src/i18n/locales/en/chat.json)         | `workflow`, `workflowReadonly`, `workflowStarting` strings                    |
 
 ### Example Workflows
 

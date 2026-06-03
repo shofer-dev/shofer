@@ -363,6 +363,10 @@ export class WorkflowTask extends Task {
 		const budgetRounds = budget.bRounds || DEFAULT_BUDGET_ROUNDS
 		const budgetTokens = budget.bTokens || DEFAULT_BUDGET_TOKENS
 
+		outputLog(
+			`[WorkflowTask#${this.taskId}] #TRACE slangLoop start — flow='${this.flowState.flowName}' budgetRounds=${budgetRounds} budgetTokens=${budgetTokens}`,
+		)
+
 		while (
 			this.flowState.round < budgetRounds &&
 			this.flowState.tokensUsed < budgetTokens &&
@@ -371,14 +375,26 @@ export class WorkflowTask extends Task {
 		) {
 			this.flowState.round++
 
+			outputLog(
+				`[WorkflowTask#${this.taskId}] #TRACE ── Round ${this.flowState.round} begin ── agents: ${[...this.flowState.agents.entries()].map(([n, s]) => `${n}=${s.status}@op${s.opIndex}`).join(", ")}`,
+			)
+
 			// 1. Advance every non-running / non-terminal agent over its
 			//    non-blocking instructions until it either blocks (stake / await
 			//    / escalate) or commits.
 			const stakes: string[] = []
 			const escalations: string[] = []
 			for (const [name, state] of this.flowState.agents) {
-				if (state.status === "running" || state.status === "committed" || state.status === "error") continue
+				if (state.status === "running" || state.status === "committed" || state.status === "error") {
+					outputLog(
+						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent skip '${name}' — status=${state.status} (not idle/blocked)`,
+					)
+					continue
+				}
 				const result = this.advanceAgent(state)
+				outputLog(
+					`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${name}' result=${result.type} status=${state.status} opIndex=${state.opIndex}`,
+				)
 				switch (result.type) {
 					case "stake":
 						stakes.push(name)
@@ -396,12 +412,16 @@ export class WorkflowTask extends Task {
 						// Program exhausted with no explicit commit — treat as done
 						// (advanceAgent may have set "error" via its step-limit guard).
 						if ((state.status as string) !== "error") state.status = "committed"
+						outputLog(
+							`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${name}' reached end of program — status forced to ${state.status}`,
+						)
 						break
 				}
 			}
 
 			// 2. Converged?
 			if (this.checkConverge()) {
+				outputLog(`[WorkflowTask#${this.taskId}] #TRACE checkConverge=true → handleConverge`)
 				await this.handleConverge()
 				return
 			}
@@ -409,7 +429,12 @@ export class WorkflowTask extends Task {
 			// 3. No agent can make progress and none committed → deadlock.
 			if (stakes.length === 0 && escalations.length === 0) {
 				this.flowState.status = "deadlock"
-				outputError(`[WorkflowTask#${this.taskId}] Deadlock at round ${this.flowState.round}`)
+				const agentDump = [...this.flowState.agents.entries()]
+					.map(([n, s]) => `${n}=${s.status}@op${s.opIndex}(taskId=${s.taskId || "none"})`)
+					.join(", ")
+				outputError(
+					`[WorkflowTask#${this.taskId}] #TRACE Deadlock at round ${this.flowState.round}. Agents: [${agentDump}] convergeExpr=${JSON.stringify(getConvergeExpr(this.flowDecl))} allCommitted=${this.allAgentsCommitted()}`,
+				)
 				await this.sayProgress(
 					`⛔ Deadlock at round ${this.flowState.round}: no agent can make progress and none have committed.`,
 				)
@@ -468,7 +493,14 @@ export class WorkflowTask extends Task {
 	 */
 	private advanceAgent(state: AgentState): AdvanceResult {
 		const program = this.programs.get(state.name)
-		if (!program) return { type: "end" }
+		if (!program) {
+			outputLog(`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}': no compiled program → end`)
+			return { type: "end" }
+		}
+
+		outputLog(
+			`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' enter — opIndex=${state.opIndex}/${program.length} program=[${program.map((i) => i.kind).join(",")}]`,
+		)
 
 		let guard = 0
 		while (state.opIndex < program.length) {
@@ -479,6 +511,9 @@ export class WorkflowTask extends Task {
 			}
 
 			const instr = program[state.opIndex]!
+			outputLog(
+				`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' exec opIndex=${state.opIndex} instr=${instr.kind}`,
+			)
 			switch (instr.kind) {
 				case "let":
 				case "set":
@@ -495,30 +530,51 @@ export class WorkflowTask extends Task {
 				}
 				case "commit":
 					if (instr.op.condition && !this.toBool(this.evalExpr(instr.op.condition, state))) {
+						outputLog(
+							`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' commit condition NOT met → skip (opIndex now ${state.opIndex + 1})`,
+						)
 						state.opIndex++
 						break
 					}
 					state.status = "committed"
 					if (instr.op.value) state.output = this.evalExpr(instr.op.value, state)
+					outputLog(
+						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → committed (hasValue=${!!instr.op.value})`,
+					)
 					return { type: "committed" }
 				case "stake":
+					outputLog(
+						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → stake call=${instr.op.call.name} recipients=[${instr.op.recipients.map((r) => r.ref).join(",")}] hasOutput=${!!instr.op.output}`,
+					)
 					return { type: "stake", op: instr.op }
 				case "escalate":
 					if (instr.op.condition && !this.toBool(this.evalExpr(instr.op.condition, state))) {
+						outputLog(
+							`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' escalate condition NOT met → skip`,
+						)
 						state.opIndex++
 						break
 					}
+					outputLog(
+						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → escalate target=${instr.op.target || "Human"}`,
+					)
 					return { type: "escalate", op: instr.op }
 				case "await": {
 					const sources = instr.op.sources.map((s) => s.ref)
 					const mail = this.consumeMail(state.name, sources)
 					if (mail) {
+						outputLog(
+							`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' await satisfied — mail from=${mail.from} for binding=${instr.op.binding}`,
+						)
 						state.bindings.set(instr.op.binding, mail.value)
 						state.waitingFor = undefined
 						state.opIndex++
 						break
 					}
 					state.waitingFor = sources.join(",")
+					outputLog(
+						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → awaiting ${state.waitingFor} (mailbox has ${this.flowState.mailbox.length} entries)`,
+					)
 					return { type: "await" }
 				}
 			}
@@ -690,7 +746,11 @@ export class WorkflowTask extends Task {
 			if (!instr || instr.kind !== "stake") continue
 
 			const prompt = this.buildStakePrompt(name, state, instr.op)
-			if (!state.taskId) await this.spawnAgentTask(name, prompt)
+			const isNew = !state.taskId
+			outputLog(
+				`[WorkflowTask#${this.taskId}] #TRACE dispatchStakes '${name}' isNew=${isNew} taskId=${state.taskId || "none"} promptLen=${prompt.length}`,
+			)
+			if (isNew) await this.spawnAgentTask(name, prompt)
 			else await this.resumeAgentTask(name, prompt)
 			state.status = "running"
 		}
@@ -698,17 +758,31 @@ export class WorkflowTask extends Task {
 
 	private async spawnAgentTask(agentName: string, prompt: string): Promise<void> {
 		const provider = this.providerRef.deref()
-		if (!provider) return
+		if (!provider) {
+			outputLog(`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' FAIL: no provider`)
+			return
+		}
 
 		const agentDecl = getAgentDecls(this.flowDecl).find((a) => a.name === agentName)
-		if (!agentDecl) return
+		if (!agentDecl) {
+			outputLog(`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' FAIL: no agentDecl in AST`)
+			return
+		}
 
 		const agentState = this.flowState.agents.get(agentName)
-		if (!agentState) return
+		if (!agentState) {
+			outputLog(
+				`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' FAIL: no agentState in flowState`,
+			)
+			return
+		}
 
 		const mode = (agentDecl.meta as any)?.mode || "code"
 
 		try {
+			outputLog(
+				`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' creating task mode='${mode}' isBackground=true`,
+			)
 			const task = await provider.createTask(prompt, undefined, this, {
 				isBackground: true,
 				initialMode: mode,
@@ -727,6 +801,10 @@ export class WorkflowTask extends Task {
 				outputLog(
 					`[WorkflowTask#${this.taskId}] Spawned agent '${agentName}' (mode='${mode}') as task ${task.taskId}`,
 				)
+			} else {
+				outputLog(
+					`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' createTask returned null/undefined`,
+				)
 			}
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] Failed to spawn agent '${agentName}':`, error)
@@ -736,19 +814,32 @@ export class WorkflowTask extends Task {
 
 	private async resumeAgentTask(agentName: string, prompt: string): Promise<void> {
 		const agentState = this.flowState.agents.get(agentName)
-		if (!agentState?.taskId) return
+		if (!agentState?.taskId) {
+			outputLog(`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' FAIL: no taskId`)
+			return
+		}
 
 		const provider = this.providerRef.deref()
-		if (!provider) return
+		if (!provider) {
+			outputLog(`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' FAIL: no provider`)
+			return
+		}
 
 		try {
+			outputLog(`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' taskId=${agentState.taskId}`)
 			let agentTask = provider.taskManager.getManagedTaskInstance(agentState.taskId)
 			if (!agentTask) {
+				outputLog(
+					`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' task not live, rehydrating from history`,
+				)
 				const { historyItem } = await provider.getTaskWithId(agentState.taskId)
 				await provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
 				agentTask = provider.taskManager.getManagedTaskInstance(agentState.taskId)
 			}
 			agentTask?.messageQueueService.addMessage(prompt)
+			outputLog(
+				`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' prompt queued (${prompt.length} chars)`,
+			)
 		} catch (error) {
 			outputError(`[WorkflowTask#${this.taskId}] Failed to resume agent '${agentName}':`, error)
 			agentState.status = "error"
@@ -763,30 +854,73 @@ export class WorkflowTask extends Task {
 		if (!provider) return
 
 		const taskIds = names.map((n) => this.flowState.agents.get(n)?.taskId).filter(Boolean) as string[]
-		if (taskIds.length === 0) return
+		if (taskIds.length === 0) {
+			outputLog(
+				`[WorkflowTask#${this.taskId}] #TRACE waitForStakes: no taskIds to wait for (agents may not have been spawned)`,
+			)
+			return
+		}
+
+		outputLog(
+			`[WorkflowTask#${this.taskId}] #TRACE waitForStakes: waiting for ${taskIds.length} task(s): ${taskIds.join(", ")}`,
+		)
 
 		const startTime = Date.now()
+		let pollCount = 0
 		while (Date.now() - startTime < AGENT_RESULT_TIMEOUT_MS && !this.abort) {
+			pollCount++
 			let allDone = true
+			const statuses: string[] = []
 			for (const taskId of taskIds) {
 				const handle = this.backgroundChildren.get(taskId)
-				try {
-					const { historyItem } = await provider.getTaskWithId(taskId)
-					const lc = historyItem.taskState?.lifecycle
-					if (lc === "completed") {
-						if (handle) handle.status = "completed"
-					} else if (lc === "error") {
-						if (handle) handle.status = "error"
-					} else {
-						allDone = false
+				// Check the in-memory ManagedTask state first — it is set
+				// synchronously by TaskManager in response to TaskCompleted/
+				// TaskAborted events and is the authoritative source.
+				// Persisted HistoryItem.taskState can lag behind because
+				// AttemptCompletionTool's background-child path calls
+				// updateTaskHistory({ ...oldHistoryItem, completionResultSummary })
+				// which spreads the old idle taskState, and that write races
+				// with TaskManager.setState("completed").
+				const managedState = provider.taskManager.getTaskState(taskId)
+				const liveLc =
+					managedState?.lifecycle === "completed" || managedState?.lifecycle === "error"
+						? managedState.lifecycle
+						: undefined
+				let lc: string | undefined = liveLc
+				let source = "live"
+
+				if (liveLc === "completed" || liveLc === "error") {
+					// Live task already terminal — use it directly, no history call needed.
+				} else {
+					try {
+						const { historyItem } = await provider.getTaskWithId(taskId)
+						lc = historyItem.taskState?.lifecycle
+						source = "persisted"
+					} catch {
+						lc = "fetch_error"
+						source = "error"
 					}
-				} catch {
+				}
+
+				statuses.push(`${taskId.slice(-6)}=${lc || "undefined"}(${source})`)
+				if (lc === "completed") {
+					if (handle) handle.status = "completed"
+				} else if (lc === "error") {
+					if (handle) handle.status = "error"
+				} else {
 					allDone = false
 				}
+			}
+			if (pollCount === 1 || pollCount % 10 === 0 || allDone) {
+				outputLog(
+					`[WorkflowTask#${this.taskId}] #TRACE waitForStakes poll#${pollCount} allDone=${allDone} lifecycles=[${statuses.join(", ")}]`,
+				)
 			}
 			if (allDone) break
 			await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
 		}
+		const elapsed = Date.now() - startTime
+		outputLog(`[WorkflowTask#${this.taskId}] #TRACE waitForStakes done — elapsed=${elapsed}ms polls=${pollCount}`)
 	}
 
 	/**
@@ -809,6 +943,9 @@ export class WorkflowTask extends Task {
 				this.flowState.tokensUsed += (historyItem.tokensIn || 0) + (historyItem.tokensOut || 0)
 
 				let result: unknown = historyItem.completionResultSummary
+				outputLog(
+					`[WorkflowTask#${this.taskId}] #TRACE collectStakeResults '${name}' taskId=${state.taskId} lifecycle=${historyItem.taskState?.lifecycle} completionResultSummary=${typeof result === "string" ? `"${result.substring(0, 80)}${result.length > 80 ? "..." : ""}"` : String(result)}`,
+				)
 				let validationError: string | null = null
 				const outputSchema = instr.op.output
 
@@ -870,6 +1007,9 @@ export class WorkflowTask extends Task {
 				this.routeOutput(name, instr.op, result)
 				state.opIndex++
 				state.status = "idle"
+				outputLog(
+					`[WorkflowTask#${this.taskId}] #TRACE collectStakeResults '${name}' success — opIndex advanced to ${state.opIndex}, status→idle, output=${typeof result === "string" ? `"${result.substring(0, 60)}${result.length > 60 ? "..." : ""}"` : String(result).substring(0, 80)}`,
+				)
 			} catch (error) {
 				outputError(`[WorkflowTask#${this.taskId}] Failed to read result for '${name}':`, error)
 				state.status = "error"
@@ -932,8 +1072,13 @@ export class WorkflowTask extends Task {
 
 	private checkConverge(): boolean {
 		const convergeExpr = getConvergeExpr(this.flowDecl)
-		if (!convergeExpr) return this.allAgentsCommitted()
-		return this.toBool(this.evalExpr(convergeExpr, this.globalEvalState()))
+		const result = convergeExpr
+			? this.toBool(this.evalExpr(convergeExpr, this.globalEvalState()))
+			: this.allAgentsCommitted()
+		outputLog(
+			`[WorkflowTask#${this.taskId}] #TRACE checkConverge result=${result} hasExpr=${!!convergeExpr} allCommitted=${this.allAgentsCommitted()} committed=${this.committedCount()}/${this.flowState.agents.size}`,
+		)
+		return result
 	}
 
 	private allAgentsCommitted(): boolean {
