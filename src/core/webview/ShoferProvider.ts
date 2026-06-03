@@ -2866,6 +2866,20 @@ export class ShoferProvider
 				await collectChildIds(id)
 			}
 
+			// Tear down any live (in-memory) instances managed by TaskManager.
+			// Without this, children of a deleted parent survive as zombies in the
+			// parallel-task map — still consuming resources, still listed in
+			// TaskSelector, but with no persisted history to back them.
+			for (const taskId of allIdsToDelete) {
+				if (taskId !== id) {
+					try {
+						await this.taskManager.deleteManagedTask(taskId)
+					} catch {
+						// Not registered as a managed task — fine.
+					}
+				}
+			}
+
 			// Remove from stack if any of the tasks to delete are in the current task stack
 			for (const taskId of allIdsToDelete) {
 				if (taskId === this.getCurrentTask()?.taskId) {
@@ -4861,16 +4875,69 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Delete a managed task.
+	 * Delete a managed task and all its descendants.
+	 *
+	 * The persisted cascade is handled by `deleteTaskWithId` which recursively
+	 * collects child IDs (via `childIds` in persisted history) and deletes them
+	 * from the task-history store, shadow checkpoints, and on-disk task directories.
+	 *
+	 * Live (in-memory) child tasks running in `TaskManager` are also aborted and
+	 * removed here so they don't become zombie instances — `deleteTaskWithId`
+	 * only touches persisted state.
 	 */
 	public async deleteManagedTask(taskId: string): Promise<void> {
 		try {
-			await this.taskManager.deleteManagedTask(taskId)
-			// Also delete from task history (files + index), same as clicking delete in HistoryView.
+			// Collect the full set of descendant IDs from persisted history before
+			// deleting anything, so we know which live tasks to tear down.
+			const allIdsToDelete = await this.collectCascadedTaskIds(taskId)
+
+			// Tear down live instances managed by TaskManager (abort + unregister).
+			for (const id of allIdsToDelete) {
+				try {
+					await this.taskManager.deleteManagedTask(id)
+				} catch (error) {
+					this.log(`Failed to tear down managed task ${id}: ${error}`)
+				}
+			}
+
+			// Persisted cascade: delete from task-history store, shadow checkpoints,
+			// and on-disk task directories for all descendants.
 			await this.deleteTaskWithId(taskId)
 		} catch (error) {
 			this.log(`Failed to delete managed task: ${error}`)
 		}
+	}
+
+	/**
+	 * Walk the `childIds` chain through persisted history to build the complete
+	 * set of task IDs to delete (the requested task + all descendants).
+	 *
+	 * This reads the same persisted history that `deleteTaskWithId` operates on,
+	 * so the two views are guaranteed consistent.
+	 */
+	private async collectCascadedTaskIds(rootId: string): Promise<string[]> {
+		const result: string[] = [rootId]
+
+		const walk = async (taskId: string): Promise<void> => {
+			try {
+				const { historyItem } = await this.getTaskWithId(taskId)
+				if (historyItem.childIds && historyItem.childIds.length > 0) {
+					for (const childId of historyItem.childIds) {
+						result.push(childId)
+						await walk(childId)
+					}
+				}
+			} catch {
+				// Task not found in persisted history — may be a freshly created
+				// background child that hasn't been persisted yet. Still included
+				// in the result so TaskManager can clean it up.
+			}
+		}
+
+		await walk(rootId)
+
+		// Deduplicate in case of cycles (shouldn't happen, but defensive).
+		return [...new Set(result)]
 	}
 
 	/**
