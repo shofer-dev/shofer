@@ -40,12 +40,17 @@ Where the two differ, this document wins.
 ## File Structure
 
 A `.slang` file contains exactly one top-level construct: a `flow`. The flow body
-holds (in any order) an optional `import`, one or more `agent` declarations, and
-the flow constraints (`converge`, `budget`) plus optional `deliver`/`expect`
-statements.
+holds (in any order) optional `title`/`description`/`icon` meta fields,
+an optional `import`, one or more `agent` declarations, optional `param` metadata
+blocks, and the flow constraints (`converge`, `budget`) plus optional
+`deliver`/`expect` statements.
 
 ```slang
 flow "my-flow" (param: "string") {
+  title: "My Flow"
+  description: "A simple example workflow."
+  icon: "rocket"
+
   import "shared/common.slang" as common   -- optional, inside the flow body
 
   agent Worker {
@@ -96,7 +101,7 @@ when  if  else  otherwise  converge  budget
 role  model  tools  retry  output
 tokens  rounds  time  count  reason
 let  set  repeat  until  deliver  expect
-contains  true  false
+contains  true  false  title  description  icon  param
 ```
 
 > Keywords _are_ allowed as **dot-access property names** (e.g.
@@ -108,6 +113,10 @@ contains  true  false
 
 ```slang
 flow "<name>" (<param>: "<type>", ...) {
+  title: "<UI title>"
+  description: "<markdown description>"
+  icon: "<icon key>"
+
   <body>
 }
 ```
@@ -117,9 +126,53 @@ flow "<name>" (<param>: "<type>", ...) {
   annotation (`"string"` | `"number"` | `"boolean"`) — **not enforced at runtime**.
 - Parameters are referenced by bare identifier inside agent bodies (e.g. `feature`).
 
+### Optional Flow Meta Fields
+
+These appear **after** the opening `{` but **before** any `agent`, `import`, `converge`, or `budget` statements. All are optional strings.
+
+| Field         | Syntax                 | Description                                                                                                         |
+| ------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `title`       | `title: "My Workflow"` | Human-readable UI title. Distinct from the machine name.                                                            |
+| `description` | `description: "..."`   | Markdown description of the workflow. Rendered in the UI. Can be multiline (use `\n` escapes in the quoted string). |
+| `icon`        | `icon: "rocket"`       | Icon key for the workflow (e.g. `"rocket"`, `"gear"`, `"search"`). Rendered next to the title in the UI.            |
+
 ```slang
 flow "feature-test" (topic: "string", threshold: "number", verbose: "boolean") {
+  title: "Feature Tester"
+  description: "Tests every Slang feature:\nstake routing, await, escalate, repeat-until,\nwhen-otherwise, let/set, converge, budget,\noutput schemas, and multi-agent coordination."
+  icon: "beaker"
+
   ...
+}
+```
+
+### Param Metadata
+
+Each flow input parameter can have an optional metadata block inside the flow body, providing a UI description:
+
+```slang
+param <name> {
+  description: "<markdown description>"
+}
+```
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| `description` | Optional markdown description of this input variable for the UI. |
+
+```slang
+flow "report" (format: "string", verbose: "boolean") {
+  title: "Report Generator"
+  param format {
+    description: "Output format: `pdf`, `html`, or `markdown`."
+  }
+  param verbose {
+    description: "When true, includes detailed debug output."
+  }
+
+  agent Generator {
+    ...
+  }
 }
 ```
 
@@ -497,17 +550,22 @@ Informal EBNF of the Shofer-accepted grammar (`--` comments stripped by the lexe
 
 ```ebnf
 program        = flow ;
-flow           = 'flow' string '(' [ params ] ')' '{' { flow_item } '}' ;
+flow           = 'flow' string '(' [ params ] ')' '{' { flow_meta } { flow_item } '}' ;
 params         = param { ',' param } ;
 param          = ident ':' string ;
 
-flow_item      = import | agent | converge | budget | deliver | expect ;
+flow_meta      = 'title' ':' string
+               | 'description' ':' string
+               | 'icon' ':' string ;
+
+flow_item      = import | agent | converge | budget | deliver | expect | param_meta ;
 import         = 'import' string 'as' ident ;
 converge       = 'converge' 'when' ':' expr ;
 budget         = 'budget' ':' budget_item { ',' budget_item } ;
 budget_item    = ( 'tokens' | 'rounds' | 'time' ) '(' expr ')' ;
 deliver        = 'deliver' func_call ;
 expect         = 'expect' expr ;
+param_meta     = 'param' ident '{' { 'description' ':' string } '}' ;
 
 agent          = 'agent' ident '{' { agent_meta } { operation } '}' ;
 agent_meta     = 'role'  ':' string
