@@ -282,11 +282,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		for (const [childId, handle] of this.backgroundChildren) {
 			if (!this.isBackgroundChildAlive(childId)) {
 				try {
-					// Check final status from history
+					// Use TaskManager.getTaskState() (in-memory, set synchronously
+					// by lifecycle events) rather than the persisted HistoryItem
+					// snapshot which can lag behind due to the async persistState
+					// fire-and-forget write.
 					const provider = this.providerRef.deref()
 					if (provider) {
-						const historyItem = await (provider as any).getTaskWithId(childId)
-						handle.status = historyItem.taskState?.lifecycle === "completed" ? "completed" : "error"
+						const taskState = (provider as any).taskManager?.getTaskState(childId)
+						handle.status = taskState?.lifecycle === "completed" ? "completed" : "error"
 					}
 				} catch (_) {
 					handle.status = "error"

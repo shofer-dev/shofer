@@ -77,18 +77,30 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			handle.status !== "cancelled" &&
 			handle.status !== "waiting_for_parent"
 		) {
-			let resolvedFromHistory = false
-			try {
-				const { historyItem } = await provider.getTaskWithId(task_id)
-				if (historyItem.taskState?.lifecycle === "completed") {
-					handle.status = "completed"
-					resolvedFromHistory = true
-				}
-			} catch (_) {
-				// No persisted history yet — fall through to live check.
+			// Authoritative-status resolution order:
+			//   1. In-memory TaskManager state (set synchronously by lifecycle events)
+			//   2. Persisted HistoryItem snapshot (fallback when no managed entry exists)
+			//   3. Live managed Task instance (taskStatus-derived heuristic)
+			let resolvedFromLive = false
+			const liveState = provider.taskManager.getTaskState(task_id)
+			if (liveState?.lifecycle === "completed") {
+				handle.status = "completed"
+				resolvedFromLive = true
 			}
 
-			if (!resolvedFromHistory) {
+			if (!resolvedFromLive) {
+				try {
+					const { historyItem } = await provider.getTaskWithId(task_id)
+					if (historyItem.taskState?.lifecycle === "completed") {
+						handle.status = "completed"
+						resolvedFromLive = true
+					}
+				} catch (_) {
+					// No persisted history yet — fall through to live check.
+				}
+			}
+
+			if (!resolvedFromLive) {
 				const liveTask = provider.taskManager.getManagedTaskInstance(task_id)
 				if (liveTask) {
 					handle.status = mapTaskStatusToBackground(liveTask.taskStatus)
