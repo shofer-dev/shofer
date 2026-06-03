@@ -59,6 +59,14 @@ async function main() {
 						srcDir,
 						buildDir,
 					)
+					copyPaths(
+						[
+							["core/webview/slang-render.js", "slang-render.js"],
+							["core/webview/slang-render.css", "slang-render.css"],
+						],
+						srcDir,
+						distDir,
+					)
 				})
 			},
 		},
