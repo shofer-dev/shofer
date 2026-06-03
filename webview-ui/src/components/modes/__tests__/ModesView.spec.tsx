@@ -104,12 +104,9 @@ describe("PromptsView", () => {
 			</ExtensionStateContext.Provider>,
 		)
 
-		const textarea = await waitFor(() => screen.getByTestId("code-prompt-textarea"))
+		const textarea = (await waitFor(() => screen.getByTestId("code-prompt-textarea"))) as HTMLTextAreaElement
 
-		const changeEvent = new CustomEvent("change", {
-			detail: { target: { value: "New prompt value" } },
-		})
-		fireEvent(textarea, changeEvent)
+		fireEvent.change(textarea, { target: { value: "New prompt value" } })
 
 		// Typing must NOT post — the override is buffered locally.
 		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "updatePrompt" }))
@@ -132,8 +129,8 @@ describe("PromptsView", () => {
 			</ExtensionStateContext.Provider>,
 		)
 
-		const textarea = await waitFor(() => screen.getByTestId("code-prompt-textarea"))
-		fireEvent(textarea, new CustomEvent("change", { detail: { target: { value: "throwaway" } } }))
+		const textarea = (await waitFor(() => screen.getByTestId("code-prompt-textarea"))) as HTMLTextAreaElement
+		fireEvent.change(textarea, { target: { value: "throwaway" } })
 
 		ref.current?.discardBuffers()
 
@@ -239,9 +236,8 @@ describe("PromptsView", () => {
 			</ExtensionStateContext.Provider>,
 		)
 
-		const textarea = screen.getByTestId("global-custom-instructions-textarea")
-		Object.defineProperty(textarea, "value", { writable: true, value: "" })
-		fireEvent(textarea, new Event("change", { bubbles: true }))
+		const textarea = screen.getByTestId("global-custom-instructions-textarea") as HTMLTextAreaElement
+		fireEvent.change(textarea, { target: { value: "" } })
 
 		// Typing/clearing must NOT post immediately.
 		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "customInstructions" }))
@@ -300,7 +296,7 @@ describe("PromptsView", () => {
 		)
 
 		const textarea = (await waitFor(() => screen.getByTestId("code-prompt-textarea"))) as HTMLTextAreaElement
-		fireEvent(textarea, new CustomEvent("change", { detail: { target: { value: "User typed value" } } }))
+		fireEvent.change(textarea, { target: { value: "User typed value" } })
 
 		// Simulate a host state push that produces a brand-new context object
 		// reference but does not change the role-definition field for `code`.
@@ -325,8 +321,8 @@ describe("PromptsView", () => {
 			</ExtensionStateContext.Provider>,
 		)
 
-		const textarea = await waitFor(() => screen.getByTestId("code-prompt-textarea"))
-		fireEvent(textarea, new CustomEvent("change", { detail: { target: { value: "dirty" } } }))
+		const textarea = (await waitFor(() => screen.getByTestId("code-prompt-textarea"))) as HTMLTextAreaElement
+		fireEvent.change(textarea, { target: { value: "dirty" } })
 
 		expect(onModesDirty).toHaveBeenCalled()
 	})
