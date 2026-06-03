@@ -101,21 +101,36 @@ export class SedTool extends BaseTool<"sed"> {
 			// Detect regex metacharacters for literal fallback logic below.
 			const METACHAR_REGEX = /[.*+?^${}()|[\]\\]/
 
-			// Compile the regex; if it fails and the pattern has metacharacters,
-			// retry as a literal string before reporting an error.
+			// Compile the regex; if regexMode is false, skip regex entirely
+			// and build a literal regex from the escaped pattern directly.
 			let regex: RegExp
 			let matchSource: "regex" | "literal" = "regex"
-			try {
-				const flags = global ? "g" : ""
-				regex = new RegExp(pattern, flags)
-			} catch (compileErr) {
-				if (METACHAR_REGEX.test(pattern)) {
-					try {
-						const escapedPattern = pattern.replace(METACHAR_REGEX, "\\$&")
-						regex = new RegExp(escapedPattern, global ? "g" : "")
-						matchSource = "literal"
-					} catch {
-						// Literal also failed — report original compile error.
+			if (!regexMode) {
+				// Literal mode — escape all metacharacters and compile immediately.
+				const escaped = pattern.replace(METACHAR_REGEX, "\\$&")
+				regex = new RegExp(escaped, global ? "g" : "")
+				matchSource = "literal"
+			} else {
+				try {
+					const flags = global ? "g" : ""
+					regex = new RegExp(pattern, flags)
+				} catch (compileErr) {
+					if (METACHAR_REGEX.test(pattern)) {
+						try {
+							const escapedPattern = pattern.replace(METACHAR_REGEX, "\\$&")
+							regex = new RegExp(escapedPattern, global ? "g" : "")
+							matchSource = "literal"
+						} catch {
+							// Literal also failed — report original compile error.
+							task.consecutiveMistakeCount++
+							task.recordToolError("sed")
+							const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}\n</error_details>`
+							await task.say("error", formattedError)
+							task.didToolFailInCurrentTurn = true
+							pushToolResult(formattedError)
+							return
+						}
+					} else {
 						task.consecutiveMistakeCount++
 						task.recordToolError("sed")
 						const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}\n</error_details>`
@@ -124,14 +139,6 @@ export class SedTool extends BaseTool<"sed"> {
 						pushToolResult(formattedError)
 						return
 					}
-				} else {
-					task.consecutiveMistakeCount++
-					task.recordToolError("sed")
-					const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}\n</error_details>`
-					await task.say("error", formattedError)
-					task.didToolFailInCurrentTurn = true
-					pushToolResult(formattedError)
-					return
 				}
 			}
 
