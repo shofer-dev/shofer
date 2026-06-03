@@ -4266,6 +4266,12 @@ export const webviewMessageHandler = async (
 				// Register with TaskManager and show in TaskSelector
 				await provider.addShoferToStack(task)
 
+				// Register with TaskManager so focusTask() can find the live
+				// instance via getManagedTaskInstance() on switch-back. Without
+				// this, switching away and back using TaskSelector rehydrates
+				// a plain Task (not WorkflowTask) and renders "Starting workflow…".
+				provider.taskManager.registerBackgroundTask(task)
+
 				// Seed the workflow extension into persisted history BEFORE the
 				// first state broadcast so `currentTaskItem.isWorkflow` is set on
 				// the initial frame and the webview routes to WorkflowView
