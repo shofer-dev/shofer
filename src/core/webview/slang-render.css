@@ -1,0 +1,209 @@
+:root {
+	--z-flow: var(--vscode-charts-blue, #3b82f6);
+	--z-agent: var(--vscode-charts-green, #22c55e);
+	--z-stake: var(--vscode-charts-orange, #f59e0b);
+	--z-await: var(--vscode-charts-purple, #a855f7);
+	--z-meta: var(--vscode-descriptionForeground, #888);
+	--z-err: var(--vscode-errorForeground, #f87171);
+	--z-warn: var(--vscode-charts-yellow, #eab308);
+	--z-bg: var(--vscode-editor-background, #1e1e1e);
+	--z-fg: var(--vscode-foreground, #d4d4d4);
+	--z-card-bg: var(--vscode-editorWidget-background, rgba(255, 255, 255, 0.04));
+	--z-card-border: var(--vscode-widget-border, #3c3c3c);
+	--z-code-bg: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
+	--node-shad: rgba(0, 0, 0, 0.45);
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+	color: var(--z-fg);
+	background: var(--z-bg);
+	margin: 0;
+	padding: 20px 24px;
+	line-height: 1.45;
+}
+.flow-header {
+	border-left: 4px solid var(--z-flow);
+	background: var(--z-card-bg);
+	border-radius: 6px;
+	padding: 10px 18px;
+	margin-bottom: 10px;
+}
+.flow-header h2 {
+	margin: 0 0 4px;
+	font-size: 1.1em;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.flow-header .params {
+	font-size: 0.85em;
+	color: var(--z-meta);
+	margin-bottom: 6px;
+}
+.flow-header .params code {
+	color: var(--z-fg);
+	font-size: 0.95em;
+	background: var(--z-code-bg);
+	padding: 1px 6px;
+	border-radius: 3px;
+	margin: 0 2px;
+}
+.flow-header .constraints {
+	font-size: 0.82em;
+	color: var(--z-meta);
+	display: flex;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.flow-header .constraints .badge {
+	background: var(--z-code-bg);
+	padding: 1px 8px;
+	border-radius: 3px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 0.92em;
+	color: var(--z-fg);
+}
+.diag-section {
+	margin-top: 16px;
+}
+.diag-item {
+	padding: 6px 14px;
+	border-left: 4px solid var(--z-err);
+	margin-bottom: 4px;
+	font-size: 0.85em;
+	background: var(--z-card-bg);
+	border-radius: 0 4px 4px 0;
+}
+.diag-item.z-warning {
+	border-left-color: var(--z-warn);
+}
+.diag-item .diag-tag {
+	font-weight: 600;
+	margin-right: 8px;
+}
+.diag-item.z-error .diag-tag {
+	color: var(--z-err);
+}
+.diag-item.z-warning .diag-tag {
+	color: var(--z-warn);
+}
+/* Graph hint bar */
+.graph-hint {
+	font-size: 11px;
+	color: var(--z-meta);
+	margin-bottom: 10px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	user-select: none;
+	background: var(--z-card-bg);
+	border-radius: 4px;
+	padding: 5px 12px;
+	border: 1px solid var(--z-card-border);
+}
+/* SVG container */
+.graph-container {
+	position: relative;
+	overflow: auto;
+	border: 1px solid var(--z-card-border);
+	border-radius: 8px;
+	background: var(--z-bg);
+}
+.graph-container svg {
+	display: block;
+	overflow: visible;
+	min-height: 200px;
+}
+/* Nodes */
+.node-group {
+	cursor: grab;
+	transition: filter 0.15s ease;
+}
+.node-group:active,
+.node-group.dragging {
+	cursor: grabbing;
+}
+.node-group.dragging {
+	filter: url(#node-shadow);
+	z-index: 10;
+}
+.node-rect {
+	fill: var(--z-card-bg);
+	stroke: var(--z-agent);
+	stroke-width: 1.8;
+	transition:
+		stroke-width 0.15s ease,
+		filter 0.15s ease;
+}
+.node-rect.loop-rect {
+	stroke: var(--z-stake);
+	stroke-dasharray: 6 3;
+	stroke-width: 2.2;
+}
+.node-group:hover .node-rect {
+	stroke-width: 2.4;
+	filter: drop-shadow(2px 3px 6px var(--node-shad));
+}
+.node-group:hover .node-rect.loop-rect {
+	stroke-width: 3;
+	stroke-dasharray: 8 4;
+}
+.node-header {
+	pointer-events: none;
+}
+/* Edges — the visible path */
+.edge-path {
+	fill: none;
+	stroke-width: 2.2;
+	stroke-linecap: round;
+	opacity: 0.65;
+	transition:
+		opacity 0.15s ease,
+		stroke-width 0.15s ease;
+}
+.edge-group:hover .edge-path {
+	opacity: 1;
+	stroke-width: 3.5;
+}
+.edge-hit {
+	fill: none;
+	stroke: transparent;
+	stroke-width: 14;
+}
+.edge-label {
+	font-size: 11px;
+	font-family: var(--vscode-editor-font-family);
+	font-weight: 500;
+	pointer-events: none;
+}
+.edge-label-bg {
+	fill: var(--z-bg);
+	stroke: var(--z-card-border);
+	stroke-width: 0.5;
+	opacity: 0.92;
+}
+.loop-badge {
+	font-size: 10px;
+	font-weight: 700;
+	pointer-events: none;
+}
+.loop-label {
+	font-size: 1.2em;
+	pointer-events: none;
+}
+/* Empty / error states */
+.empty {
+	text-align: center;
+	opacity: 0.5;
+	padding: 60px 20px;
+}
+.empty h2 {
+	margin: 0 0 8px;
+}
+.empty p {
+	margin: 0;
+}
