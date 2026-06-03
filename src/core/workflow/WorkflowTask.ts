@@ -458,11 +458,29 @@ export class WorkflowTask extends Task {
 			await this.dispatchStakes(stakes)
 			await this.waitForStakes(stakes)
 			await this.collectStakeResults(stakes)
+
+			// 6. Budget check — exit immediately when a single stake blows
+			//    the budget, rather than waiting for the next while-guard
+			//    evaluation at the top of the loop.
+			if (this.flowState.tokensUsed >= budgetTokens) {
+				this.flowState.status = "budget_exceeded"
+				outputLog(
+					`[WorkflowTask#${this.taskId}] Budget exceeded mid-round: ${this.flowState.tokensUsed} >= ${budgetTokens}`,
+				)
+				await this.sayProgress(
+					`⚠️ Budget exhausted (${this.flowState.tokensUsed} tokens used, limit ${budgetTokens}). Stopping.`,
+				)
+				await super.abortBackgroundChildren()
+				await this.persistCheckpoint()
+				await this.emitTaskCompleted("poor")
+				return
+			}
+
 			await this.sayProgress(
 				`✓ Round ${this.flowState.round} complete (${this.committedCount()}/${this.flowState.agents.size} agents committed).`,
 			)
 
-			// 6. Re-check convergence and checkpoint.
+			// 7. Re-check convergence and checkpoint.
 			if (this.checkConverge()) {
 				await this.handleConverge()
 				return
@@ -791,6 +809,11 @@ export class WorkflowTask extends Task {
 				keepCurrentTask: true,
 			})
 			if (task) {
+				// Register with TaskManager so the ManagedTask event listeners
+				// fire on lifecycle changes (e.g. setState("completed") in
+				// response to TaskCompleted). Without this, waitForStakes poll
+				// never sees the agent as terminal and the flow deadlocks.
+				provider.taskManager.registerBackgroundTask(task)
 				this.backgroundChildren.set(task.taskId, {
 					taskId: task.taskId,
 					status: "running",
