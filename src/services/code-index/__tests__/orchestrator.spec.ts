@@ -107,8 +107,8 @@ describe("CodeIndexOrchestrator - error path cleanup gating", () => {
 	})
 
 	it("should not call clearCollection() or clear cache when initialize() fails (indexing not started)", async () => {
-		// Use fake timers so the exponential-backoff delays (2s → 4s → 8s → 16s → 32s)
-		// don't slow down the test.  Without this the 5-attempt retry loop takes ~62 real seconds.
+		// Use fake timers so the exponential-backoff delays (2s → 4s → 8s → 16s)
+		// don't slow down the test.  Without this the 5-attempt retry loop takes ~30 real seconds.
 		vitest.useFakeTimers()
 
 		// Arrange: fail at initialize()
@@ -125,9 +125,11 @@ describe("CodeIndexOrchestrator - error path cleanup gating", () => {
 		)
 
 		// Act — the orchestrator calls vectorStore.initialize() inside a retryWithBackoff
-		// loop; advance through all 5 sleep delays (2000 + 4000 + 8000 + 16000 + 32000 ms).
+		// loop with 5 attempts; the 4 sleeps between them sum to 2+4+8+16 = 30 s.
+		// Advance just enough to exhaust all retries but NOT the 30 s auto-recovery
+		// timer that _scheduleAutoRecovery() sets after all retries fail.
 		const startIndexingPromise = orchestrator.startIndexing()
-		await vitest.advanceTimersByTimeAsync(62000)
+		await vitest.advanceTimersByTimeAsync(35000)
 		await startIndexingPromise
 
 		// Assert
@@ -229,17 +231,13 @@ describe("CodeIndexOrchestrator - stopIndexing", () => {
 	})
 
 	it("should abort indexing when stopIndexing() is called", async () => {
-		// Make scanner hang until aborted
+		// Make scanner hang until aborted (polling-based to avoid event-listener timing issues)
 		scanner.scanDirectory.mockImplementation(
 			async (_dir: string, _onError?: any, _onBlocksIndexed?: any, _onFileParsed?: any, signal?: AbortSignal) => {
-				// Wait for abort signal
-				await new Promise<void>((resolve) => {
-					if (signal?.aborted) {
-						resolve()
-						return
-					}
-					signal?.addEventListener("abort", () => resolve())
-				})
+				// Spin-wait for the abort signal
+				while (!signal?.aborted) {
+					await new Promise((r) => setTimeout(r, 5))
+				}
 				return { stats: { processed: 0, skipped: 0 }, totalBlockCount: 0 }
 			},
 		)
@@ -276,13 +274,9 @@ describe("CodeIndexOrchestrator - stopIndexing", () => {
 		// Make scanner throw AbortError when signal is aborted
 		scanner.scanDirectory.mockImplementation(
 			async (_dir: string, _onError?: any, _onBlocksIndexed?: any, _onFileParsed?: any, signal?: AbortSignal) => {
-				await new Promise<void>((resolve) => {
-					if (signal?.aborted) {
-						resolve()
-						return
-					}
-					signal?.addEventListener("abort", () => resolve())
-				})
+				while (!signal?.aborted) {
+					await new Promise((r) => setTimeout(r, 5))
+				}
 				throw new DOMException("Indexing aborted", "AbortError")
 			},
 		)
@@ -314,13 +308,9 @@ describe("CodeIndexOrchestrator - stopIndexing", () => {
 	it("should preserve partial index data after stop", async () => {
 		scanner.scanDirectory.mockImplementation(
 			async (_dir: string, _onError?: any, _onBlocksIndexed?: any, _onFileParsed?: any, signal?: AbortSignal) => {
-				await new Promise<void>((resolve) => {
-					if (signal?.aborted) {
-						resolve()
-						return
-					}
-					signal?.addEventListener("abort", () => resolve())
-				})
+				while (!signal?.aborted) {
+					await new Promise((r) => setTimeout(r, 5))
+				}
 				return { stats: { processed: 5, skipped: 0 }, totalBlockCount: 5 }
 			},
 		)

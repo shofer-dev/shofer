@@ -332,7 +332,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			baseUrl: "http://localhost:4000",
 		})
 
-		// Verify response was sent
+		// Verify final response was sent with all providers aggregated
 		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 			type: "routerModels",
 			routerModels: {
@@ -340,7 +340,6 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				requesty: mockModels,
 				unbound: mockModels,
 				litellm: mockModels,
-				shofer: {},
 				ollama: {},
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
@@ -425,7 +424,6 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				openrouter: mockModels,
 				requesty: mockModels,
 				unbound: mockModels,
-				shofer: {},
 				litellm: {},
 				ollama: {},
 				lmstudio: {},
@@ -480,7 +478,6 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				openrouter: mockModels,
 				requesty: {},
 				unbound: mockModels,
-				shofer: {},
 				litellm: {},
 				ollama: {},
 				lmstudio: {},
