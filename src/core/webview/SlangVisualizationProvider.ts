@@ -18,6 +18,7 @@ import * as vscode from "vscode"
 import * as path from "path"
 
 import { parseSlang, validateSlangAST } from "../workflow/slang-parser"
+import { outputError, outputLog } from "../../utils/outputChannelLogger"
 import type { Program, FlowDecl } from "../workflow/slang-ast"
 
 // ─── Public entry points ───────────────────────────────────────────────
@@ -117,13 +118,46 @@ class SlangVisualizationPanel {
 		const warnings = result.errors.length > 0 ? [] : validateSlangAST(result.ast)
 		const diags = [...result.errors, ...warnings]
 		const flow = result.ast.flows[0]
+		const fileName = this._sourceUri ? path.basename(this._sourceUri.fsPath) : (flow?.name ?? "unknown")
+
+		// Log to output channel for diagnostics.
+		outputLog(`[Slang] Rendering ${fileName}...`)
+		outputLog(`[Slang] Source length: ${source.length} chars`)
+		outputLog(`[Slang] Parse errors: ${result.errors.length}`)
+		outputLog(`[Slang] Validation warnings: ${warnings.length}`)
+		outputLog(`[Slang] Flows found: ${result.ast.flows.length}`)
+		if (flow) {
+			const agents = flow.body.filter((b) => b.type === "AgentDecl")
+			outputLog(`[Slang] Agents found: ${agents.length}`)
+			for (const a of agents) {
+				const agent = a as any
+				outputLog(`[Slang]   - @${agent.name}: ${agent.operations?.length ?? 0} operations`)
+			}
+		}
+
+		if (result.errors.length > 0) {
+			outputError(`[Slang] Parse errors in ${fileName}:`)
+			for (const e of result.errors) outputError(`  ${e}`)
+		}
+		if (warnings.length > 0) {
+			outputLog(`[Slang] Validation warnings in ${fileName}:`)
+			for (const w of warnings) outputLog(`  ${w}`)
+		}
+		if (result.errors.length === 0 && warnings.length === 0) {
+			outputLog(
+				`[Slang] Parsed ${fileName} successfully (${flow?.body.filter((b) => b.type === "AgentDecl").length ?? 0} agents, ${diags.length} diagnostics).`,
+			)
+		}
+
 		if (!flow) {
-			this._panel.webview.html = this._buildEmptyHtml()
+			// Render an error page with diagnostics instead of the generic empty state.
+			this._panel.title = "Slang: Parse Error"
+			this._panel.webview.html = this._buildErrorHtml(fileName, diags)
 			return
 		}
-		const title = this._sourceUri ? path.basename(this._sourceUri.fsPath) : flow.name
-		this._panel.title = "Slang: " + title
-		const payload = { type: "render" as const, fileName: title, flow: stripSpans(flow), diags }
+
+		this._panel.title = "Slang: " + fileName
+		const payload = { type: "render" as const, fileName: fileName, flow: stripSpans(flow), diags }
 		this._panel.webview.html = this._buildHtml(payload)
 	}
 
@@ -135,6 +169,21 @@ class SlangVisualizationPanel {
 			csp +
 			'">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>Slang Visualization</title>\n<style>\n  body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }\n  .empty { text-align: center; opacity: 0.5; max-width: 400px; }\n  .empty h2 { margin: 0 0 8px; }\n  .empty p { margin: 0; }\n</style>\n</head>\n<body>\n<div class="empty">\n  <h2>No .slang file open</h2>\n  <p>Open a .slang file in the editor to see its visualization.</p>\n</div>\n</body>\n</html>'
 		)
+	}
+
+	private _buildErrorHtml(fileName: string, diags: string[]): string {
+		const nonce = makeNonce()
+		const csp = buildCsp(this._panel.webview.cspSource, nonce)
+		const safeName = escapeHtml(fileName)
+		const diagItems = diags
+			.map((d) => {
+				const isErr = d.toLowerCase().includes("error")
+				const cls = isErr ? "z-error" : "z-warning"
+				const tag = isErr ? "ERROR" : "WARN"
+				return `<div class="diag-item ${cls}"><span class="diag-tag">${tag}</span>${escapeHtml(d)}</div>`
+			})
+			.join("")
+		return `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta http-equiv="Content-Security-Policy" content="${csp}">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>Slang — Parse Error: ${safeName}</title>\n<style>\n  :root { --z-err: var(--vscode-errorForeground, #f87171); --z-warn: var(--vscode-charts-yellow, #eab308); --z-bg: var(--vscode-editor-background, #1e1e1e); --z-fg: var(--vscode-foreground, #d4d4d4); --z-card-bg: var(--vscode-editorWidget-background, rgba(255,255,255,0.04)); }\n  body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--z-fg); background: var(--z-bg); margin: 0; padding: 24px; }\n  .error-header { border-left: 4px solid var(--z-err); background: var(--z-card-bg); border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; }\n  .error-header h2 { margin: 0 0 4px; font-size: 1.1em; color: var(--z-err); }\n  .error-header p { margin: 0; font-size: 0.92em; opacity: 0.7; }\n  .diag-item { padding: 6px 14px; border-left: 4px solid var(--z-err); margin-bottom: 4px; font-size: 0.85em; background: var(--z-card-bg); border-radius: 0 4px 4px 0; }\n  .diag-item.z-warning { border-left-color: var(--z-warn); }\n  .diag-item .diag-tag { font-weight: 600; margin-right: 8px; }\n  .diag-item.z-error .diag-tag { color: var(--z-err); }\n  .diag-item.z-warning .diag-tag { color: var(--z-warn); }\n</style>\n</head>\n<body>\n<div class="error-header">\n  <h2>❌ Parse Error${safeName ? ": " + safeName : ""}</h2>\n  <p>The .slang file could not be parsed. Fix the errors below:</p>\n</div>\n<div class="diag-section">${diagItems || '<div class="diag-item z-warning"><span class="diag-tag">WARN</span>No diagnostics available.</div>'}</div>\n</body>\n</html>`
 	}
 
 	private _buildHtml(payload: any): string {
@@ -159,7 +208,7 @@ class SlangVisualizationPanel {
 			jsonPayload +
 			";\n  " +
 			RENDER_SCRIPT +
-			"\n  render(__payload);\n})();\n</script>\n</body>\n</html>"
+			"\n  safeRender(__payload);\n})();\n</script>\n</body>\n</html>"
 		)
 	}
 
@@ -217,140 +266,142 @@ function stripSpans(obj: any): any {
 
 // ─── CSS ─────────────────────────────────────────────────────────────────
 
-const CSS =
-	"\\n" +
-	"  :root {\\n" +
-	"    --z-flow: var(--vscode-charts-blue, #3b82f6);\\n" +
-	"    --z-agent: var(--vscode-charts-green, #22c55e);\\n" +
-	"    --z-stake: var(--vscode-charts-orange, #f59e0b);\\n" +
-	"    --z-await: var(--vscode-charts-purple, #a855f7);\\n" +
-	"    --z-escalate: var(--vscode-charts-yellow, #eab308);\\n" +
-	"    --z-control: var(--vscode-charts-blue, #3b82f6);\\n" +
-	"    --z-meta: var(--vscode-descriptionForeground, #888);\\n" +
-	"    --z-err: var(--vscode-errorForeground, #f87171);\\n" +
-	"    --z-warn: var(--vscode-charts-yellow, #eab308);\\n" +
-	"    --z-bg: var(--vscode-editor-background, #1e1e1e);\\n" +
-	"    --z-fg: var(--vscode-foreground, #d4d4d4);\\n" +
-	"    --z-card-bg: var(--vscode-editorWidget-background, rgba(255,255,255,0.04));\\n" +
-	"    --z-card-border: var(--vscode-widget-border, #3c3c3c);\\n" +
-	"    --z-code-bg: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.1));\\n" +
-	"    --z-bq-bg: var(--vscode-textBlockQuote-background, rgba(128,128,128,0.05));\\n" +
-	"  }\\n" +
-	"  * { box-sizing: border-box; }\\n" +
-	"  body {\\n" +
-	"    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);\\n" +
-	"    color: var(--z-fg); background: var(--z-bg);\\n" +
-	"    margin: 0; padding: 20px 24px; line-height: 1.45;\\n" +
-	"  }\\n" +
-	"  .flow-header {\\n" +
-	"    border-left: 4px solid var(--z-flow); background: var(--z-card-bg);\\n" +
-	"    border-radius: 6px; padding: 14px 18px; margin-bottom: 24px;\\n" +
-	"  }\\n" +
-	"  .flow-header h2 { margin: 0 0 8px; font-size: 1.2em; display: flex; align-items: center; gap: 8px; }\\n" +
-	"  .flow-header .params { font-size: 0.85em; color: var(--z-meta); margin-bottom: 8px; }\\n" +
-	"  .flow-header .params code {\\n" +
-	"    color: var(--z-fg); font-size: 0.95em;\\n" +
-	"    background: var(--z-code-bg); padding: 1px 6px; border-radius: 3px; margin: 0 2px;\\n" +
-	"  }\\n" +
-	"  .flow-header .constraints { font-size: 0.85em; color: var(--z-meta); display: flex; gap: 20px; flex-wrap: wrap; }\\n" +
-	"  .flow-header .constraints .badge {\\n" +
-	"    background: var(--z-code-bg); padding: 1px 8px; border-radius: 3px;\\n" +
-	"    font-family: var(--vscode-editor-font-family); font-size: 0.92em; color: var(--z-fg);\\n" +
-	"  }\\n" +
-	"  .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px; }\\n" +
-	"  .agent-card {\\n" +
-	"    border: 1px solid var(--z-card-border); border-radius: 8px; overflow: hidden;\\n" +
-	"    background: var(--z-card-bg); transition: border-color 0.2s;\\n" +
-	"  }\\n" +
-	"  .agent-card:hover { border-color: var(--z-agent); }\\n" +
-	"  .agent-card-header {\\n" +
-	"    padding: 10px 14px; background: var(--z-code-bg);\\n" +
-	"    border-bottom: 1px solid var(--z-card-border);\\n" +
-	"    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;\\n" +
-	"  }\\n" +
-	"  .agent-card-header .agent-name { font-weight: 700; font-size: 1.05em; color: var(--z-agent); }\\n" +
-	"  .agent-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }\\n" +
-	"  .agent-tag {\\n" +
-	"    font-size: 0.72em; padding: 1px 7px; border-radius: 3px;\\n" +
-	"    background: var(--z-code-bg); color: var(--z-meta); white-space: nowrap;\\n" +
-	"  }\\n" +
-	"  .agent-tag.z-mode { border: 1px solid var(--z-agent); color: var(--z-agent); }\\n" +
-	"  .agent-tag.z-model { border: 1px solid var(--z-flow); color: var(--z-flow); }\\n" +
-	"  .agent-tag.z-tools { border: 1px solid var(--z-stake); color: var(--z-stake); }\\n" +
-	"  .agent-tag.z-retry { border: 1px solid var(--z-warn); color: var(--z-warn); }\\n" +
-	"  .agent-card-role {\\n" +
-	"    padding: 6px 14px; font-size: 0.82em; color: var(--z-meta);\\n" +
-	"    font-style: italic; border-bottom: 1px solid var(--z-card-border);\\n" +
-	"  }\\n" +
-	"  .agent-card-ops { padding: 4px 0; }\\n" +
-	"  .op-row {\\n" +
-	"    display: flex; align-items: flex-start; gap: 6px;\\n" +
-	"    padding: 5px 14px; border-left: 3px solid transparent;\\n" +
-	"    font-size: 0.88em; transition: background 0.15s;\\n" +
-	"  }\\n" +
-	"  .op-row:hover { background: var(--z-bq-bg); }\\n" +
-	"  .op-row.z-stake  { border-left-color: var(--z-stake); }\\n" +
-	"  .op-row.z-await  { border-left-color: var(--z-await); }\\n" +
-	"  .op-row.z-commit { border-left-color: var(--z-agent); }\\n" +
-	"  .op-row.z-escalate { border-left-color: var(--z-escalate); }\\n" +
-	"  .op-row.z-let, .op-row.z-set { border-left-color: var(--z-meta); }\\n" +
-	"  .op-row.z-when, .op-row.z-repeat { border-left-color: var(--z-control); font-weight: 600; }\\n" +
-	"  .op-icon { width: 18px; text-align: center; flex-shrink: 0; font-weight: bold; font-size: 0.85em; }\\n" +
-	"  .op-row.z-stake .op-icon  { color: var(--z-stake); }\\n" +
-	"  .op-row.z-await .op-icon  { color: var(--z-await); }\\n" +
-	"  .op-row.z-commit .op-icon { color: var(--z-agent); }\\n" +
-	"  .op-row.z-escalate .op-icon { color: var(--z-escalate); }\\n" +
-	"  .op-row.z-when .op-icon, .op-row.z-repeat .op-icon { color: var(--z-control); }\\n" +
-	"  .op-row.z-let .op-icon, .op-row.z-set .op-icon { color: var(--z-meta); }\\n" +
-	"  .op-detail { flex: 1; min-width: 0; }\\n" +
-	"  .op-detail .kw { font-weight: 600; }\\n" +
-	"  .op-detail .fn { color: var(--vscode-textLink-foreground, #4daafc); font-family: var(--vscode-editor-font-family); }\\n" +
-	"  .op-detail .ex { opacity: 0.85; font-family: var(--vscode-editor-font-family); font-size: 0.93em; word-break: break-word; }\\n" +
-	"  .op-detail .out-schema { font-size: 0.82em; color: var(--z-meta); margin-top: 2px; font-family: var(--vscode-editor-font-family); }\\n" +
-	"  .op-detail .out-schema .sk { color: var(--z-await); }\\n" +
-	"  .op-detail .out-schema .st { opacity: 0.7; }\\n" +
-	"  .route-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }\\n" +
-	"  .rb { font-size: 0.75em; padding: 1px 7px; border-radius: 3px; font-family: var(--vscode-editor-font-family); font-weight: 600; white-space: nowrap; }\\n" +
-	"  .rb-out { background: rgba(240,173,78,0.25); color: var(--z-stake); }\\n" +
-	"  .rb-out-special { background: rgba(240,173,78,0.4); color: var(--z-stake); }\\n" +
-	"  .rb-in  { background: rgba(168,85,247,0.25); color: var(--z-await); }\\n" +
-	"  .rb-in-special { background: rgba(168,85,247,0.4); color: var(--z-await); }\\n" +
-	"  .rb-human { background: rgba(234,179,8,0.3); color: var(--z-escalate); }\\n" +
-	"  .op-detail .cond { font-size: 0.82em; color: var(--z-meta); font-style: italic; margin-top: 2px; }\\n" +
-	"  .op-row.n1 { padding-left: 30px; }\\n" +
-	"  .op-row.n2 { padding-left: 44px; }\\n" +
-	"  .op-row.n3 { padding-left: 58px; }\\n" +
-	"  .diag-section { margin-top: 24px; }\\n" +
-	"  .diag-item {\\n" +
-	"    padding: 6px 14px; border-left: 4px solid var(--z-err);\\n" +
-	"    margin-bottom: 4px; font-size: 0.85em;\\n" +
-	"    background: var(--z-card-bg); border-radius: 0 4px 4px 0;\\n" +
-	"  }\\n" +
-	"  .diag-item.z-warning { border-left-color: var(--z-warn); }\\n" +
-	"  .diag-item .diag-tag { font-weight: 600; margin-right: 8px; }\\n" +
-	"  .diag-item.z-error .diag-tag { color: var(--z-err); }\\n" +
-	"  .diag-item.z-warning .diag-tag { color: var(--z-warn); }\\n" +
-	"  .flow-arrows { margin: 16px 0; padding: 10px 14px; background: var(--z-code-bg); border-radius: 6px; }\\n" +
-	"  .flow-arrows > span { font-weight: 600; font-size: 0.85em; color: var(--z-meta); cursor: pointer; }\\n" +
-	"  .flow-arrows .arrow-list { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }\\n" +
-	"  .arrow-item {\\n" +
-	"    font-size: 0.82em; padding: 3px 10px; border-radius: 4px;\\n" +
-	"    background: var(--z-card-bg); border: 1px solid var(--z-card-border);\\n" +
-	"    font-family: var(--vscode-editor-font-family);\\n" +
-	"  }\\n" +
-	"  .arrow-item .from { color: var(--z-agent); font-weight: 600; }\\n" +
-	"  .arrow-item .to { color: var(--z-stake); font-weight: 600; }\\n" +
-	"  .arrow-item .sep { color: var(--z-meta); margin: 0 4px; }\\n" +
-	"  @media (max-width: 440px) { .agents-grid { grid-template-columns: 1fr; } body { padding: 12px; } }\\n"
+const CSS = `
+  :root {
+    --z-flow: var(--vscode-charts-blue, #3b82f6);
+    --z-agent: var(--vscode-charts-green, #22c55e);
+    --z-stake: var(--vscode-charts-orange, #f59e0b);
+    --z-await: var(--vscode-charts-purple, #a855f7);
+    --z-meta: var(--vscode-descriptionForeground, #888);
+    --z-err: var(--vscode-errorForeground, #f87171);
+    --z-warn: var(--vscode-charts-yellow, #eab308);
+    --z-bg: var(--vscode-editor-background, #1e1e1e);
+    --z-fg: var(--vscode-foreground, #d4d4d4);
+    --z-card-bg: var(--vscode-editorWidget-background, rgba(255,255,255,0.04));
+    --z-card-border: var(--vscode-widget-border, #3c3c3c);
+    --z-code-bg: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.1));
+    --node-shad: rgba(0,0,0,0.45);
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
+    color: var(--z-fg); background: var(--z-bg);
+    margin: 0; padding: 20px 24px; line-height: 1.45;
+  }
+  .flow-header {
+    border-left: 4px solid var(--z-flow); background: var(--z-card-bg);
+    border-radius: 6px; padding: 10px 18px; margin-bottom: 10px;
+  }
+  .flow-header h2 { margin: 0 0 4px; font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
+  .flow-header .params { font-size: 0.85em; color: var(--z-meta); margin-bottom: 6px; }
+  .flow-header .params code {
+    color: var(--z-fg); font-size: 0.95em;
+    background: var(--z-code-bg); padding: 1px 6px; border-radius: 3px; margin: 0 2px;
+  }
+  .flow-header .constraints { font-size: 0.82em; color: var(--z-meta); display: flex; gap: 16px; flex-wrap: wrap; }
+  .flow-header .constraints .badge {
+    background: var(--z-code-bg); padding: 1px 8px; border-radius: 3px;
+    font-family: var(--vscode-editor-font-family); font-size: 0.92em; color: var(--z-fg);
+  }
+  .diag-section { margin-top: 16px; }
+  .diag-item {
+    padding: 6px 14px; border-left: 4px solid var(--z-err);
+    margin-bottom: 4px; font-size: 0.85em;
+    background: var(--z-card-bg); border-radius: 0 4px 4px 0;
+  }
+  .diag-item.z-warning { border-left-color: var(--z-warn); }
+  .diag-item .diag-tag { font-weight: 600; margin-right: 8px; }
+  .diag-item.z-error .diag-tag { color: var(--z-err); }
+  .diag-item.z-warning .diag-tag { color: var(--z-warn); }
+  /* Graph hint bar */
+  .graph-hint {
+    font-size: 11px; color: var(--z-meta); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px; user-select: none;
+    background: var(--z-card-bg); border-radius: 4px;
+    padding: 5px 12px; border: 1px solid var(--z-card-border);
+  }
+  /* SVG container */
+  .graph-container {
+    position: relative; overflow: auto;
+    border: 1px solid var(--z-card-border); border-radius: 8px;
+    background: var(--z-bg);
+  }
+  .graph-container svg { display: block; overflow: visible; min-height: 200px; }
+  /* Nodes */
+  .node-group { cursor: grab; transition: filter 0.15s ease; }
+  .node-group:active, .node-group.dragging { cursor: grabbing; }
+  .node-group.dragging { filter: url(#node-shadow); z-index: 10; }
+  .node-rect {
+    fill: var(--z-card-bg);
+    stroke: var(--z-agent);
+    stroke-width: 1.8;
+    transition: stroke-width 0.15s ease, filter 0.15s ease;
+  }
+  .node-group:hover .node-rect {
+    stroke-width: 2.4;
+    filter: drop-shadow(2px 3px 6px var(--node-shad));
+  }
+  .node-header {
+    pointer-events: none;
+  }
+  /* Edges — the visible path */
+  .edge-path {
+    fill: none; stroke-width: 2.2; stroke-linecap: round;
+    opacity: 0.65; transition: opacity 0.15s ease, stroke-width 0.15s ease;
+  }
+  .edge-group:hover .edge-path {
+    opacity: 1; stroke-width: 3.5;
+  }
+  .edge-hit {
+    fill: none; stroke: transparent; stroke-width: 14;
+  }
+  .edge-label {
+    font-size: 11px; font-family: var(--vscode-editor-font-family);
+    font-weight: 500; pointer-events: none;
+  }
+  .edge-label-bg {
+    fill: var(--z-bg); stroke: var(--z-card-border);
+    stroke-width: 0.5; opacity: 0.92;
+  }
+  /* Empty / error states */
+  .empty { text-align: center; opacity: 0.5; padding: 60px 20px; }
+  .empty h2 { margin: 0 0 8px; }
+  .empty p { margin: 0; }
+`
 
 // ─── Render script ──────────────────────────────────────────────────────
+// Self-contained JS that builds an interactive SVG diagram from the flow AST.
+//
+// Layout:
+//   - Topological column layout (left → right) using stake-edge BFS.
+//   - Nodes are vertically centered within each column for visual balance.
+//   - Forward edges route as smooth cubic bezier curves with parallel-edge offsetting.
+//   - Back-edges (target on same or earlier layer) route above/below to avoid crossing.
+//
+// Interactivity:
+//   - Nodes are draggable via mouse. Edge paths update live during drag.
+//   - Hover effects on nodes (scale + glow) and edges (highlight).
+//   - Drop-shadow filter makes nodes feel elevated above the edge layer.
+//   - All event listeners are attached in JS (no inline handlers) to comply with CSP.
 
 const RENDER_SCRIPT = [
-	"// escape",
+	"// ── escape ──",
 	"function esc(s){",
 	"  return String(s).replace(/&/g,'\x26amp;').replace(/</g,'\x26lt;').replace(/>/g,'\x26gt;').replace(/\"/g,'\x26quot;');",
 	"}",
-	"// expr",
+	"// ── safe wrapper to catch render errors ──",
+	"function safeRender(payload){",
+	"  try{",
+	"    render(payload);",
+	"  }catch(e){",
+	"    var app=document.getElementById('app');",
+	"    if(app){",
+	"      app.innerHTML='<div class=\"empty\"><h2>⚠️ Render Error</h2><p style=\"color:#f87171\">'+esc(String(e))+'</p><pre style=\"font-size:11px;text-align:left;opacity:0.7\">'+esc(e.stack)+'</pre></div>';",
+	"    }",
+	"    console.error('[Slang Render Error]', e);",
+	"  }",
+	"}",
+	"// ── expr to string ──",
 	"function exprStr(e){",
 	"  if(!e)return'?';",
 	"  switch(e.type){",
@@ -370,148 +421,260 @@ const RENDER_SCRIPT = [
 	"  if(s.length>m)return s.slice(0,m)+'\\u2026';",
 	"  return s;",
 	"}",
-	"// routes",
-	"function renderRoutes(rec,kind){",
-	"  var h=' <span class=\"route-badges\">';",
-	"  for(var i=0;i<rec.length;i++){",
-	"    var r=rec[i],ref=r.ref||r,c='rb';",
-	"    if(kind==='out')c+=ref==='out'||ref==='all'?' rb-out-special':' rb-out';",
-	"    else c+=ref==='any'||ref==='*'?' rb-in-special':' rb-in';",
-	"    if(ref==='Human')c+=' rb-human';",
-	"    h+='<span class=\"'+c+'\">'+(kind==='out'?'→':'←')+' @'+esc(ref)+'</span>';",
+	"// ── graph extraction ──",
+	"var COLORS={stake:'var(--z-stake,#f59e0b)',await:'var(--z-await,#a855f7)',agent:'var(--z-agent,#22c55e)',flow:'var(--z-flow,#3b82f6)'};",
+	"var NODE_W=200, NODE_H=80, NODE_GAP_X=280, NODE_GAP_Y=120, MARGIN=48;",
+	"function buildGraphEdges(flow){",
+	"  var agentNames={};",
+	"  for(var i=0;i<(flow.body||[]).length;i++){",
+	"    var item=flow.body[i];",
+	"    if(item.type==='AgentDecl')agentNames[item.name]=true;",
 	"  }",
-	"  return h+'</span>';",
-	"}",
-	"function renderSources(srcs){",
-	"  var h='<span class=\"route-badges\">';",
-	"  for(var i=0;i<srcs.length;i++){",
-	"    var s=srcs[i],ref=s.ref||s,c='rb';",
-	"    c+=ref==='any'||ref==='*'?' rb-in-special':' rb-in';",
-	"    if(ref==='Human')c+=' rb-human';",
-	"    h+='<span class=\"'+c+'\">← @'+esc(ref)+'</span>';",
-	"  }",
-	"  return h+'</span>';",
-	"}",
-	"// helpers",
-	"function H(kw,fn,extra){",
-	"  return '<span class=\"kw\">'+esc(kw)+'</span>'+(fn?' <span class=\"fn\">'+esc(fn)+'</span>':'')+(extra||'');",
-	"}",
-	"function HE(kw,ex){",
-	"  return '<span class=\"kw\">'+esc(kw)+'</span> <span class=\"ex\">'+exprShort(ex,40)+'</span>';",
-	"}",
-	"// renderOp",
-	"function renderOp(op,depth){",
-	"  depth=depth||0;",
-	"  var cls='',icon='',html='';",
-	"  switch(op.type){",
-	"    case'StakeOp':",
-	"      cls='z-stake';icon='→';",
-	"      html=H('stake',op.call.name);",
-	"      if(op.call.args&&op.call.args.length>0){",
-	"        html+='('+op.call.args.map(function(a){",
-	"          var p=a.name?a.name+': ':'';",
-	"          return p+exprShort(a.value,30);",
-	"        }).join(', ')+')';",
-	"      }else html+='()';",
-	"      if(op.recipients&&op.recipients.length>0)html+=renderRoutes(op.recipients,'out');",
-	"      if(op.condition){html+=' <span class=\"cond\">if '+exprShort(op.condition,30)+'</span>';}",
-	"      if(op.output&&op.output.fields){",
-	"        html+=' <span class=\"out-schema\">output: {'+",
-	"          op.output.fields.map(function(f){",
-	"            return'<span class=\"sk\">'+esc(f.name)+'</span>: <span class=\"st\">'+esc(f.fieldType)+'</span>';",
-	"          }).join(', ')+'}</span>';",
-	"      }",
-	"      break;",
-	"    case'AwaitOp':",
-	"      cls='z-await';icon='←';",
-	"      html=H('await',op.binding);",
-	"      if(op.sources&&op.sources.length>0)html+=' '+renderSources(op.sources);",
-	"      break;",
-	"    case'CommitOp':",
-	"      cls='z-commit';icon='✓';",
-	"      html=H('commit',null);",
-	"      if(op.value)html+=' <span class=\"ex\">'+exprShort(op.value,40)+'</span>';",
-	"      if(op.condition)html+=' <span class=\"cond\">if '+exprShort(op.condition,30)+'</span>';",
-	"      break;",
-	"    case'EscalateOp':",
-	"      cls='z-escalate';icon='⚑';",
-	"      html=H('escalate','@'+op.target);",
-	"      if(op.reason)html+=' reason: <span class=\"ex\">\"'+esc(op.reason.slice(0,60))+'\"</span>';",
-	"      if(op.condition)html+=' <span class=\"cond\">if '+exprShort(op.condition,30)+'</span>';",
-	"      break;",
-	"    case'WhenBlock':",
-	"      cls='z-when n'+depth;icon='';",
-	"      html=HE('when',op.condition)+' {';",
-	"      if(op.body){",
-	"        for(var wi=0;wi<op.body.length;wi++){",
-	"          html+='</div></div><div class=\"op-row '+cls+'\">'+renderOp(op.body[wi],depth+1);",
-	"        }",
-	"      }",
-	"      if(op.elseBlock&&op.elseBlock.body){",
-	'        html+=\'</div></div><div class="op-row \'+cls+\'"><div class="op-icon"></div><div class="op-detail"><span class="kw">otherwise</span> {\';',
-	"        for(var ej=0;ej<op.elseBlock.body.length;ej++){",
-	"          html+='</div></div><div class=\"op-row '+cls+'\">'+renderOp(op.elseBlock.body[ej],depth+1);",
-	"        }",
-	"      }",
-	'      html+=\'</div></div><div class="op-row \'+cls+\'"><div class="op-icon"></div><div class="op-detail">}\';',
-	"      return'<div class=\"op-icon\">'+icon+'</div><div class=\"op-detail\">'+html;",
-	"    case'RepeatBlock':",
-	"      cls='z-repeat n'+depth;icon='';",
-	"      html=HE('repeat until',op.condition)+' {';",
-	"      if(op.body){",
-	"        for(var rk=0;rk<op.body.length;rk++){",
-	"          html+='</div></div><div class=\"op-row '+cls+'\">'+renderOp(op.body[rk],depth+1);",
-	"        }",
-	"      }",
-	'      html+=\'</div></div><div class="op-row \'+cls+\'"><div class="op-icon"></div><div class="op-detail">}\';',
-	"      return'<div class=\"op-icon\">'+icon+'</div><div class=\"op-detail\">'+html;",
-	"    case'LetOp':",
-	"      cls='z-let';icon='=';",
-	"      html='<span class=\"kw\">let</span> <span class=\"fn\">'+esc(op.name)+'</span> = <span class=\"ex\">'+exprShort(op.value,30)+'</span>';",
-	"      break;",
-	"    case'SetOp':",
-	"      cls='z-set';icon='≔';",
-	"      html='<span class=\"kw\">set</span> <span class=\"fn\">'+esc(op.name)+'</span> = <span class=\"ex\">'+exprShort(op.value,30)+'</span>';",
-	"      break;",
-	"    default:",
-	"      cls='';icon='?';",
-	"      html='<span class=\"kw\">'+esc(op.type)+'</span>';",
-	"  }",
-	"  return'<div class=\"op-icon\">'+icon+'</div><div class=\"op-detail\">'+html;",
-	"}",
-	"// arrows",
-	"function buildFlowArrows(flow){",
-	"  var arrows=[];",
+	"  var edges=[];",
+	"  function isAgentRef(ref){ return agentNames.hasOwnProperty(ref); }",
 	"  for(var ai=0;ai<(flow.body||[]).length;ai++){",
-	"    var item=flow.body[ai];",
-	"    if(item.type!=='AgentDecl')continue;",
-	"    var from=item.name;",
-	"    function walkOps(ops){",
+	"    var agent=flow.body[ai];",
+	"    if(agent.type!=='AgentDecl')continue;",
+	"    var from=agent.name;",
+	"    function scan(ops){",
 	"      if(!ops)return;",
 	"      for(var i=0;i<ops.length;i++){",
 	"        var op=ops[i];",
 	"        if(op.type==='StakeOp'&&op.recipients){",
 	"          for(var j=0;j<op.recipients.length;j++){",
 	"            var r=op.recipients[j],to=r.ref||r;",
-	"            if(to==='out'||to==='all')continue;",
-	"            arrows.push({from:from,to:to,label:op.call?op.call.name:'stake'});",
+	"            if(!isAgentRef(to))continue;",
+	"            edges.push({from:from,to:to,label:op.call?op.call.name:'stake',kind:'stake'});",
 	"          }",
 	"        }",
-	"        if(op.type==='WhenBlock'){walkOps(op.body);if(op.elseBlock)walkOps(op.elseBlock.body);}",
-	"        if(op.type==='RepeatBlock')walkOps(op.body);",
+	"        if(op.type==='AwaitOp'&&op.sources){",
+	"          for(var k=0;k<op.sources.length;k++){",
+	"            var src=op.sources[k],srcRef=src.ref||src;",
+	"            if(!isAgentRef(srcRef))continue;",
+	"            edges.push({from:srcRef,to:from,label:op.binding||'await',kind:'await'});",
+	"          }",
+	"        }",
+	"        if(op.type==='WhenBlock'){scan(op.body);if(op.elseBlock)scan(op.elseBlock.body);}",
+	"        if(op.type==='RepeatBlock')scan(op.body);",
 	"      }",
 	"    }",
-	"    walkOps(item.operations);",
+	"    scan(agent.operations);",
 	"  }",
-	"  return arrows;",
+	"  return edges;",
 	"}",
-	"// render",
+	"// ── topological layering (BFS from sources) ──",
+	"function assignLayers(agentNames,edges){",
+	"  var names=Object.keys(agentNames);",
+	"  var layer={},inDegree={};",
+	"  for(var i=0;i<names.length;i++){layer[names[i]]=-1;inDegree[names[i]]=0;}",
+	"  var adj={};",
+	"  for(var i=0;i<names.length;i++)adj[names[i]]=[];",
+	"  for(var i=0;i<edges.length;i++){",
+	"    var e=edges[i];",
+	"    adj[e.from]=adj[e.from]||[];",
+	"    adj[e.from].push(e.to);",
+	"    if(inDegree.hasOwnProperty(e.to))inDegree[e.to]++;",
+	"  }",
+	"  var queue=[];",
+	"  for(var i=0;i<names.length;i++){",
+	"    if(inDegree[names[i]]===0){queue.push(names[i]);layer[names[i]]=0;}",
+	"  }",
+	"  if(queue.length===0&&names.length>0){queue.push(names[0]);layer[names[0]]=0;}",
+	"  var head=0;",
+	"  while(head<queue.length){",
+	"    var cur=queue[head++];",
+	"    var nbrs=adj[cur]||[];",
+	"    for(var i=0;i<nbrs.length;i++){",
+	"      var nb=nbrs[i];",
+	"      if(layer[nb]===-1){",
+	"        layer[nb]=layer[cur]+1;",
+	"        queue.push(nb);",
+	"      }",
+	"    }",
+	"  }",
+	"  for(var i=0;i<names.length;i++){if(layer[names[i]]===-1)layer[names[i]]=0;}",
+	"  return layer;",
+	"}",
+	"function buildColumns(layer,agentNames){",
+	"  var maxLayer=0;",
+	"  var keys=Object.keys(layer);",
+	"  for(var i=0;i<keys.length;i++){if(layer[keys[i]]>maxLayer)maxLayer=layer[keys[i]];}",
+	"  var cols=[];",
+	"  for(var i=0;i<=maxLayer;i++)cols.push([]);",
+	"  for(var i=0;i<keys.length;i++){cols[layer[keys[i]]].push(keys[i]);}",
+	"  return cols;",
+	"}",
+	"// ── SVG defs (markers + drop-shadow filter) ──",
+	"function defs(){",
+	"  return'<defs>'",
+	'    +\'<filter id="node-shadow" x="-10%" y="-5%" width="130%" height="125%">\'',
+	'    +\'<feDropShadow dx="1.5" dy="2.5" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>\'',
+	"    +'</filter>'",
+	'    +\'<marker id="ah-stake" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto">\'',
+	"    +'<polygon points=\"0 0, 11 4, 0 8\" fill=\"'+COLORS.stake+'\"/></marker>'",
+	'    +\'<marker id="ah-await" markerWidth="11" markerHeight="8" refX="0" refY="4" orient="auto">\'',
+	"    +'<polygon points=\"11 0, 0 4, 11 8\" fill=\"'+COLORS.await+'\"/></marker>'",
+	"    +'</defs>';",
+	"}",
+	"// ── render an individual node (inside a <g> group) ──",
+	"function renderNode(nm,meta){",
+	"  var color=COLORS.agent;",
+	"  var mode=meta.mode,role=meta.role;",
+	"  // Header strip",
+	'  var s=\'<rect class="node-header" x="1" y="1" width="\'+(NODE_W-2)+\'" height="26" rx="7" fill="\'+color+\'" opacity="0.15" />\';',
+	"  // Name",
+	'  s+=\'<text x="14" y="20" font-size="13" font-weight="700" fill="\'+color+\'" style="pointer-events:none">@\'+esc(nm)+\'</text>\';',
+	"  // Mode badge (top-right)",
+	"  if(mode){",
+	"    var mw=esc(mode).length*7.5+14;",
+	'    s+=\'<rect x="\'+(NODE_W-mw-6)+\'" y="6" width="\'+mw+\'" height="16" rx="3" fill="\'+color+\'" opacity="0.2" />\';',
+	'    s+=\'<text x="\'+(NODE_W-mw+1)+\'" y="18" font-size="10" font-weight="600" fill="\'+color+\'" style="pointer-events:none">\'+esc(mode)+\'</text>\';',
+	"  }",
+	"  // Role (truncated to fit)",
+	"  if(role){",
+	"    var maxChars=Math.floor((NODE_W-28)/6.3);",
+	"    var r1=role.length>maxChars?role.slice(0,maxChars)+'\\u2026':role;",
+	'    s+=\'<text x="14" y="48" font-size="11" fill="var(--z-meta,#888)" style="pointer-events:none">\'+esc(r1)+\'</text>\';',
+	"    if(role.length>maxChars*1.5){",
+	"      var r2=role.slice(maxChars,maxChars*2-3)+'\\u2026';",
+	'      s+=\'<text x="14" y="64" font-size="11" fill="var(--z-meta,#888)" style="pointer-events:none">\'+esc(r2)+\'</text>\';',
+	"    }",
+	"  }",
+	"  return s;",
+	"}",
+	"// ── edge path builder (called during render AND during drag updates) ──",
+	"function edgePathData(fromX,fromY,toX,toY,idx,total,fromLayer,toLayer){",
+	"  // Vertical offset: spread parallel edges between the same pair apart",
+	"  var offset=0;",
+	"  if(total>1){",
+	"    var center=(total-1)/2;",
+	"    offset=(idx-center)*14;",
+	"  }",
+	"  var x1=fromX+NODE_W, y1=fromY+NODE_H/2+offset;",
+	"  var x2=toX, y2=toY+NODE_H/2+offset;",
+	"  var dx=Math.abs(x2-x1);",
+	"  var curve=Math.min(dx*0.45, 140); // softer curve for short distances",
+	"  // For forward edges (fromLayer < toLayer): smooth bezier",
+	"  // For back/same-layer edges: arc above",
+	"  if(fromLayer!=null&&toLayer!=null&&fromLayer>=toLayer){",
+	"    // Back-edge: route above the nodes",
+	"    var arcH=Math.max(60, Math.abs(fromLayer-toLayer)*50 + 20);",
+	"    return 'M'+x1+','+y1",
+	"      +' C'+x1+','+(y1-arcH)+' '+x2+','+(y2-arcH)+' '+x2+','+y2;",
+	"  }",
+	"  return 'M'+x1+','+y1",
+	"    +' C'+(x1+curve)+','+y1+' '+(x2-curve)+','+y2+' '+x2+','+y2;",
+	"}",
+	"// ── render a single edge as a <g> group ──",
+	"function renderEdge(e,idx,total,layout,layers){",
+	"  var fn=layout[e.from],tn=layout[e.to];",
+	"  if(!fn||!tn)return'';",
+	"  var fromLayer=layers[e.from],toLayer=layers[e.to];",
+	"  var d=edgePathData(fn.x,fn.y,tn.x,tn.y,idx,total,fromLayer,toLayer);",
+	"  var color=e.kind==='stake'?COLORS.stake:COLORS.await;",
+	"  var marker=e.kind==='stake'?'url(#ah-stake)':'url(#ah-await)';",
+	"  var key=esc(e.from)+'__'+esc(e.to)+'__'+idx;",
+	"  var s='<g class=\"edge-group\" data-edge=\"'+key+'\" data-from=\"'+esc(e.from)+'\" data-to=\"'+esc(e.to)+'\" data-idx=\"'+idx+'\" data-kind=\"'+e.kind+'\">';",
+	"  // Invisible wider hit area for easier hover",
+	'  s+=\'<path class="edge-hit" d="\'+d+\'" stroke="transparent" stroke-width="14" fill="none" style="cursor:pointer" />\';',
+	'  s+=\'<path class="edge-path" d="\'+d+\'" stroke="\'+color+\'" fill="none" stroke-width="2.2" marker-end="\'+marker+\'" />\';',
+	"  // Label at the midpoint of the bezier",
+	"  if(e.label){",
+	"    var midT=0.5;",
+	"    var cx,cy;",
+	"    var x1=fn.x+NODE_W,y1=fn.y+NODE_H/2,x2=tn.x,y2=tn.y+NODE_H/2;",
+	"    if(fromLayer!=null&&toLayer!=null&&fromLayer>=toLayer){",
+	"      var arcH=Math.max(60,Math.abs(fromLayer-toLayer)*50+20);",
+	"      cx=(x1+x2)/2; cy=(y1+y2)/2-arcH*0.7;",
+	"    }else{",
+	"      cx=(x1+x2)/2; cy=(y1+y2)/2;",
+	"    }",
+	"    var lw=esc(e.label).length*6.5+10;",
+	'    s+=\'<rect class="edge-label-bg" x="\'+(cx-lw/2)+\'" y="\'+(cy-9)+\'" width="\'+lw+\'" height="18" rx="4" />\';',
+	'    s+=\'<text class="edge-label" x="\'+cx+\'" y="\'+(cy+5)+\'" text-anchor="middle" fill="\'+color+\'" font-size="11" font-weight="500">\'+esc(e.label)+\'</text>\';',
+	"  }",
+	"  s+='</g>';",
+	"  return s;",
+	"}",
+	"// ── drag state (module-level so event handlers can access it) ──",
+	"var _dragNode=null, _dragSX=0, _dragSY=0, _dragOX=0, _dragOY=0;",
+	"var _svgn=null, _layout=null, _edges=null, _layers=null, _svgEl=null;",
+	"function beginDrag(e){",
+	"  var g=e.currentTarget;",
+	"  var agent=g.getAttribute('data-agent');",
+	"  if(!agent||!_layout||!_layout[agent])return;",
+	"  e.preventDefault();",
+	"  _dragNode=agent;",
+	"  _dragSX=e.clientX; _dragSY=e.clientY;",
+	"  _dragOX=_layout[agent].x; _dragOY=_layout[agent].y;",
+	"  g.classList.add('dragging');",
+	"  g.setAttribute('filter','url(#node-shadow)');",
+	"}",
+	"function moveDrag(e){",
+	"  if(!_dragNode)return;",
+	"  e.preventDefault();",
+	"  var dx=e.clientX-_dragSX, dy=e.clientY-_dragSY;",
+	"  var nx=_dragOX+dx, ny=_dragOY+dy;",
+	"  // Clamp to reasonable bounds",
+	"  nx=Math.max(-NODE_W*0.5,nx);",
+	"  ny=Math.max(-NODE_H*0.5,ny);",
+	"  _layout[_dragNode].x=nx;",
+	"  _layout[_dragNode].y=ny;",
+	"  // Move the SVG group",
+	"  var g=_svgn.querySelector('.node-group[data-agent=\"'+esc(_dragNode)+'\"]');",
+	"  if(g)g.setAttribute('transform','translate('+nx+','+ny+')');",
+	"  // Update all edges that connect to this agent",
+	"  updateConnectedEdges(_dragNode);",
+	"}",
+	"function endDrag(e){",
+	"  if(!_dragNode)return;",
+	"  var g=_svgn.querySelector('.node-group[data-agent=\"'+esc(_dragNode)+'\"]');",
+	"  if(g){g.classList.remove('dragging');g.removeAttribute('filter');}",
+	"  _dragNode=null;",
+	"}",
+	"function updateConnectedEdges(agent){",
+	"  if(!_edges||!_layout||!_layers||!_svgEl)return;",
+	"  for(var ei=0;ei<_edges.length;ei++){",
+	"    var e=_edges[ei];",
+	"    if(e.from!==agent&&e.to!==agent)continue;",
+	"    var fn=_layout[e.from],tn=_layout[e.to];",
+	"    if(!fn||!tn)continue;",
+	"    var fromLayer=_layers[e.from],toLayer=_layers[e.to];",
+	"    var key=esc(e.from)+'__'+esc(e.to)+'__'+e.idx;",
+	"    var eg=_svgEl.querySelector('.edge-group[data-edge=\"'+key+'\"]');",
+	"    if(!eg)continue;",
+	"    var d=edgePathData(fn.x,fn.y,tn.x,tn.y,e.idx,e.total,fromLayer,toLayer);",
+	"    var hit=eg.querySelector('.edge-hit');",
+	"    var path=eg.querySelector('.edge-path');",
+	"    if(hit)hit.setAttribute('d',d);",
+	"    if(path)path.setAttribute('d',d);",
+	"    // Also update the edge label position so it follows the arrow",
+	"    var lblRect=eg.querySelector('.edge-label-bg');",
+	"    var lblText=eg.querySelector('.edge-label');",
+	"    if(lblRect&&lblText&&e.label){",
+	"      var x1=fn.x+NODE_W,y1=fn.y+NODE_H/2,x2=tn.x,y2=tn.y+NODE_H/2;",
+	"      var ecx,ecy;",
+	"      if(fromLayer!=null&&toLayer!=null&&fromLayer>=toLayer){",
+	"        var arcH2=Math.max(60,Math.abs(fromLayer-toLayer)*50+20);",
+	"        ecx=(x1+x2)/2; ecy=(y1+y2)/2-arcH2*0.7;",
+	"      }else{",
+	"        ecx=(x1+x2)/2; ecy=(y1+y2)/2;",
+	"      }",
+	"      var lw2=esc(e.label).length*6.5+10;",
+	"      lblRect.setAttribute('x',ecx-lw2/2);",
+	"      lblRect.setAttribute('y',ecy-9);",
+	"      lblText.setAttribute('x',ecx);",
+	"      lblText.setAttribute('y',ecy+5);",
+	"    }",
+	"  }",
+	"}",
+	"// ── main render ──",
 	"function render(payload){",
 	"  var flow=payload.flow,diags=payload.diags||[];",
 	"  var app=document.getElementById('app');",
 	"  var diagsEl=document.getElementById('diags');",
 	"  if(!flow){app.innerHTML='<div class=\"empty\"><h2>No flow found</h2></div>';return;}",
-	"  // header",
+	"  // ── header ──",
 	"  var h='<div class=\"flow-header\"><h2><span>⚡</span> flow \"'+esc(flow.name)+'\"</h2>';",
 	"  if(flow.params&&flow.params.length>0){",
 	"    h+='<div class=\"params\">Params: ';",
@@ -541,44 +704,80 @@ const RENDER_SCRIPT = [
 	"  if(!hasCon)h+='<span style=\"opacity:0.5\">No converge statement</span>';",
 	"  if(!hasBud)h+='<span style=\"opacity:0.5\">Default budget (30 rounds, 300k tokens)</span>';",
 	"  h+='</div></div>';",
+	"  h+='<div class=\"graph-hint\">🖱️ Drag nodes to rearrange &nbsp;|&nbsp; 🔄 Auto-layout from topology</div>';",
+	"  // ── build graph data ──",
+	"  var agentNames={};",
+	"  var agentMeta={};",
+	"  for(var ai=0;ai<(flow.body||[]).length;ai++){",
+	"    var agent=flow.body[ai];",
+	"    if(agent.type!=='AgentDecl')continue;",
+	"    agentNames[agent.name]=true;",
+	"    agentMeta[agent.name]={mode:agent.meta&&agent.meta.mode?agent.meta.mode:'',role:agent.meta&&agent.meta.role?agent.meta.role:''};",
+	"  }",
+	"  var rawEdges=buildGraphEdges(flow);",
+	"  _layers=assignLayers(agentNames,rawEdges);",
+	"  var cols=buildColumns(_layers,agentNames);",
+	"  // Compute positions with vertical centering within each column.",
+	"  var maxColHeight=0;",
+	"  for(var ci=0;ci<cols.length;ci++){",
+	"    var ch=cols[ci].length*NODE_GAP_Y;",
+	"    if(ch>maxColHeight)maxColHeight=ch;",
+	"  }",
+	"  if(maxColHeight===0)maxColHeight=NODE_GAP_Y;",
+	"  _layout={};",
+	"  for(var ci=0;ci<cols.length;ci++){",
+	"    var col=cols[ci];",
+	"    var x=MARGIN+ci*NODE_GAP_X;",
+	"    var colH=col.length*NODE_GAP_Y;",
+	"    var y0=MARGIN+(maxColHeight-colH)/2; // vertical centering",
+	"    for(var ri=0;ri<col.length;ri++){",
+	"      _layout[col[ri]]={x:x,y:y0+ri*NODE_GAP_Y};",
+	"    }",
+	"  }",
+	"  // Deduplicate edges: merge same (from→to×kind) into one edge with combined label",
+	"  var mergeMap={};",
+	"  for(var ei=0;ei<rawEdges.length;ei++){",
+	"    var re=rawEdges[ei],mk=re.from+'|||'+re.to+'|||'+re.kind;",
+	"    if(!mergeMap[mk])mergeMap[mk]={from:re.from,to:re.to,kind:re.kind,labels:[]};",
+	"    if(mergeMap[mk].labels.indexOf(re.label)===-1)mergeMap[mk].labels.push(re.label);",
+	"  }",
+	"  _edges=[];",
+	"  var mergeKeys=Object.keys(mergeMap);",
+	"  for(var pi=0;pi<mergeKeys.length;pi++){",
+	"    var g=mergeMap[mergeKeys[pi]];",
+	"    var lbl=g.labels.length===1?g.labels[0]:g.labels[0]+' (+'+(g.labels.length-1)+' more)';",
+	"    _edges.push({from:g.from,to:g.to,label:lbl,kind:g.kind,idx:0,total:1});",
+	"  }",
+	"  // ── SVG dimensions ──",
+	"  var svgW=cols.length*NODE_GAP_X+NODE_W+2*MARGIN;",
+	"  var svgH=maxColHeight+NODE_H+MARGIN*2;",
+	"  if(cols.length===0){svgW=400;svgH=120;}",
+	"  if(svgW<500)svgW=500;",
+	"  if(svgH<300)svgH=300;",
+	"  // ── assemble SVG ──",
+	'  var svg=\'<svg id="slang-svg" width="\'+svgW+\'" height="\'+svgH+\'" xmlns="http://www.w3.org/2000/svg">\';',
+	"  svg+=defs();",
+	"  // Edge layer (below nodes)",
+	"  svg+='<g id=\"edge-layer\">';",
+	"  for(var ei=0;ei<_edges.length;ei++){",
+	"    svg+=renderEdge(_edges[ei],_edges[ei].idx,_edges[ei].total,_layout,_layers);",
+	"  }",
+	"  svg+='</g>';",
+	"  // Node layer",
+	"  svg+='<g id=\"node-layer\">';",
+	"  var names=Object.keys(_layout);",
+	"  for(var ni=0;ni<names.length;ni++){",
+	"    var nm=names[ni],pos=_layout[nm],meta=agentMeta[nm]||{};",
+	"    svg+='<g class=\"node-group\" data-agent=\"'+esc(nm)+'\" transform=\"translate('+pos.x+','+pos.y+')\">';",
+	'    svg+=\'<rect class="node-rect" x="0" y="0" width="\'+NODE_W+\'" height="\'+NODE_H+\'" rx="9" />\';',
+	"    svg+=renderNode(nm,meta);",
+	"    svg+='</g>';",
+	"  }",
+	"  svg+='</g>';",
+	"  svg+='</svg>';",
+	"  h+='<div class=\"graph-container\">'+svg+'</div>';",
 	"  app.innerHTML=h;",
-	"  // arrows",
-	"  var arrows=buildFlowArrows(flow);",
-	"  if(arrows.length>0){",
-	"    var ah='<div class=\"flow-arrows\"><span>🔄 Message Flow ('+arrows.length+' edges)</span><div class=\"arrow-list\">';",
-	"    for(var ai=0;ai<arrows.length;ai++){",
-	"      var a=arrows[ai];",
-	'      ah+=\'<div class="arrow-item"><span class="from">@\'+esc(a.from)+\'</span><span class="sep"> → </span><span class="to">@\'+esc(a.to)+\'</span> <span style="opacity:0.6">(\'+esc(a.label)+\')</span></div>\';',
-	"    }",
-	"    ah+='</div></div>';",
-	"    app.innerHTML+=ah;",
-	"  }",
-	"  // agents",
-	"  var grid='<div class=\"agents-grid\">';",
-	"  for(var agi=0;agi<(flow.body||[]).length;agi++){",
-	"    var agentItem=flow.body[agi];",
-	"    if(agentItem.type!=='AgentDecl')continue;",
-	"    var agent=agentItem;",
-	'    grid+=\'<div class="agent-card"><div class="agent-card-header">\';',
-	"    grid+='<span class=\"agent-name\">@'+esc(agent.name)+'</span><span class=\"agent-tags\">';",
-	"    if(agent.meta){",
-	"      if(agent.meta.mode)grid+='<span class=\"agent-tag z-mode\">mode: '+esc(agent.meta.mode)+'</span>';",
-	"      if(agent.meta.model)grid+='<span class=\"agent-tag z-model\">model: '+esc(agent.meta.model)+'</span>';",
-	"      if(agent.meta.tools&&agent.meta.tools.length>0)grid+='<span class=\"agent-tag z-tools\">tools: '+esc(agent.meta.tools.join(', '))+'</span>';",
-	"      if(agent.meta.retry!=null)grid+='<span class=\"agent-tag z-retry\">retry: '+esc(String(agent.meta.retry))+'</span>';",
-	"    }",
-	"    grid+='</span></div>';",
-	"    if(agent.meta&&agent.meta.role){",
-	"      grid+='<div class=\"agent-card-role\" title=\"'+esc(agent.meta.role)+'\">'+esc(agent.meta.role.slice(0,120))+'</div>';",
-	"    }",
-	"    grid+='<div class=\"agent-card-ops\">';",
-	"    var ops=agent.operations||[];",
-	"    for(var opi=0;opi<ops.length;opi++){grid+='<div class=\"op-row\">'+renderOp(ops[opi],0)+'</div>';}",
-	"    grid+='</div></div>';",
-	"  }",
-	"  grid+='</div>';",
-	"  app.innerHTML+=grid;",
-	"  // diags",
+	"  // ── diags ──",
 	"  if(diags.length>0){",
 	"    var dHtml='';",
 	"    for(var di=0;di<diags.length;di++){",
@@ -587,5 +786,15 @@ const RENDER_SCRIPT = [
 	"    }",
 	"    diagsEl.innerHTML=dHtml;",
 	"  }else{diagsEl.innerHTML='';}",
+	"  // ── wire up drag handlers ──",
+	"  _svgn=document;",
+	"  _svgEl=document.getElementById('slang-svg');",
+	"  var groups=_svgEl?Array.prototype.slice.call(_svgEl.querySelectorAll('.node-group')):[];",
+	"  for(var gi=0;gi<groups.length;gi++){",
+	"    var g=groups[gi];",
+	"    g.addEventListener('mousedown',beginDrag);",
+	"  }",
+	"  document.addEventListener('mousemove',moveDrag);",
+	"  document.addEventListener('mouseup',endDrag);",
 	"}",
 ].join("\n")
