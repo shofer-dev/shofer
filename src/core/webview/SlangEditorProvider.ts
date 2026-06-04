@@ -16,7 +16,7 @@ import * as vscode from "vscode"
 import * as path from "path"
 
 import { parseSlang, validateSlangAST } from "../workflow/slang-parser"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 import type { FlowDecl } from "../workflow/slang-ast"
 
 // ─── Render script + stylesheet (loaded once at module scope) ───────────
@@ -81,30 +81,30 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 		const diags = [...result.errors, ...warnings]
 		const flow = result.ast.flows[0]
 
-		outputLog(`[Slang] Rendering ${fileName}...`)
-		outputLog(`[Slang] Source length: ${source.length} chars`)
-		outputLog(`[Slang] Parse errors: ${result.errors.length}`)
-		outputLog(`[Slang] Validation warnings: ${warnings.length}`)
-		outputLog(`[Slang] Flows found: ${result.ast.flows.length}`)
+		webviewLog.info(`[Slang] Rendering ${fileName}...`)
+		webviewLog.info(`[Slang] Source length: ${source.length} chars`)
+		webviewLog.info(`[Slang] Parse errors: ${result.errors.length}`)
+		webviewLog.info(`[Slang] Validation warnings: ${warnings.length}`)
+		webviewLog.info(`[Slang] Flows found: ${result.ast.flows.length}`)
 		if (flow) {
 			const agents = flow.body.filter((b) => b.type === "AgentDecl")
-			outputLog(`[Slang] Agents found: ${agents.length}`)
+			webviewLog.info(`[Slang] Agents found: ${agents.length}`)
 			for (const a of agents) {
 				const agent = a as any
-				outputLog(`[Slang]   - @${agent.name}: ${agent.operations?.length ?? 0} operations`)
+				webviewLog.info(`[Slang]   - @${agent.name}: ${agent.operations?.length ?? 0} operations`)
 			}
 		}
 
 		if (result.errors.length > 0) {
-			outputError(`[Slang] Parse errors in ${fileName}:`)
-			for (const e of result.errors) outputError(`  ${e}`)
+			webviewLog.error(`[Slang] Parse errors in ${fileName}:`)
+			for (const e of result.errors) webviewLog.error(`  ${e}`)
 		}
 		if (warnings.length > 0) {
-			outputLog(`[Slang] Validation warnings in ${fileName}:`)
-			for (const w of warnings) outputLog(`  ${w}`)
+			webviewLog.info(`[Slang] Validation warnings in ${fileName}:`)
+			for (const w of warnings) webviewLog.info(`  ${w}`)
 		}
 		if (result.errors.length === 0 && warnings.length === 0) {
-			outputLog(
+			webviewLog.info(
 				`[Slang] Parsed ${fileName} successfully (${flow?.body.filter((b) => b.type === "AgentDecl").length ?? 0} agents, ${diags.length} diagnostics).`,
 			)
 		}
