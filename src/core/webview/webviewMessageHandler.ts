@@ -4235,24 +4235,34 @@ export const webviewMessageHandler = async (
 				const flowName = message.flowName
 				const flowParams = message.flowParams
 				if (!flowName) {
-					provider.log("createWorkflow: missing flowName")
+					provider.log("[createWorkflow] ERROR: missing flowName")
 					break
 				}
 
-				provider.log(`[createWorkflow] Launching workflow '${flowName}'`)
+				provider.log(
+					`[createWorkflow] Launching workflow '${flowName}' with params=${JSON.stringify(flowParams ?? {})}`,
+				)
 
 				const { createWorkflowTask } = await import("../workflow/index")
 				const { discoverWorkflows } = await import("../workflow/index")
 				const workflows = await discoverWorkflows(provider.cwd)
+				provider.log(
+					`[createWorkflow] Discovered ${workflows.size} workflow(s): ${[...workflows.keys()].join(", ") || "(none)"}`,
+				)
 				const slangSource = workflows.get(flowName)
 				if (!slangSource) {
-					provider.log(`createWorkflow: flow '${flowName}' not found`)
+					provider.log(`[createWorkflow] ERROR: flow '${flowName}' not found among discovered workflows`)
 					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
 					break
 				}
 
+				provider.log(
+					`[createWorkflow] Slang source for '${flowName}' is ${slangSource.length} chars. First 200: ${slangSource.slice(0, 200)}`,
+				)
 				const task = await createWorkflowTask(provider, slangSource, flowParams)
-				provider.log(`[createWorkflow] Created WorkflowTask ${task.taskId} for flow '${flowName}'`)
+				provider.log(
+					`[createWorkflow] Created WorkflowTask ${task.taskId} for flow '${flowName}' — ${task.flowState.agents.size} agent(s): ${[...task.flowState.agents.keys()].join(", ")}`,
+				)
 
 				// Pop the current task to the background (parallel execution)
 				// without aborting it, so the launched workflow becomes the
@@ -4261,6 +4271,8 @@ export const webviewMessageHandler = async (
 				if (poppedTask) {
 					provider.taskManager.registerBackgroundTask(poppedTask)
 					provider.log(`[createWorkflow] Task ${poppedTask.taskId} moved to background (workflow launch)`)
+				} else {
+					provider.log(`[createWorkflow] No task to pop — stack was empty (normal for first task)`)
 				}
 
 				// Register with TaskManager and show in TaskSelector
@@ -4285,8 +4297,13 @@ export const webviewMessageHandler = async (
 				await provider.postStateToWebview()
 
 				// Start the workflow loop
+				provider.log(
+					`[createWorkflow] Calling task.start() for ${task.taskId} — slangLoopStarted=${(task as any).slangLoopStarted}`,
+				)
 				task.start()
-				provider.log(`[createWorkflow] Started slang loop for ${task.taskId}`)
+				provider.log(
+					`[createWorkflow] task.start() returned for ${task.taskId} (fire-and-forget — slang loop runs async)`,
+				)
 			} catch (error) {
 				provider.log(`Error creating workflow: ${error}`)
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
