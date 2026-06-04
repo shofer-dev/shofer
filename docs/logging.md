@@ -46,22 +46,22 @@ automatically — no UI changes needed.
 
 ### Components
 
-| Component          | File                                                                                                                  | Role                                                                                                          |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `CompactTransport` | [`src/utils/logging/CompactTransport.ts`](../src/utils/logging/CompactTransport.ts)                                   | Filters by level + categories, writes to Output Channel and optional file                                     |
-| `CompactLogger`    | [`src/utils/logging/CompactLogger.ts`](../src/utils/logging/CompactLogger.ts)                                         | Variadic `ILogger` implementation with `child()` for subsystem scoping                                        |
-| `ILogger` / types  | [`src/utils/logging/types.ts`](../src/utils/logging/types.ts)                                                         | Interfaces and config types                                                                                   |
-| `index.ts`         | [`src/utils/logging/index.ts`](../src/utils/logging/index.ts)                                                         | `bootstrapLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                    |
-| Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | 16 pre-scoped logger instances (Task, Webview, Git, …)                                                        |
-| LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel; renders checkboxes from live `logCategoriesKnown`                                |
-| Settings schema    | [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                   | `logLevel` and `logCategories` Zod schemas                                                                    |
-| ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel`, `logCategories`, and `logCategoriesKnown`                                  |
-| Activation         | [`src/extension.ts`](../src/extension.ts)                                                                             | `bootstrapLogging()` at line 108, persistence restore at line 155                                             |
-| Message handler    | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Wires `logLevel` and `logCategories` changes to live transport                                                |
-| State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state                                                    |
-| Legacy compat      | [`src/utils/outputChannelLogger.ts`](../src/utils/outputChannelLogger.ts)                                             | `stringifyForLog` and `createOutputChannelLogger` retained;<br>`outputLog`/`outputWarn`/`outputError` removed |
-| i18n               | [`webview-ui/src/i18n/locales/en/settings.json`](../webview-ui/src/i18n/locales/en/settings.json)                     | `logging` section with level labels and 16 category names                                                     |
-| Tests              | [`src/utils/logging/__tests__/`](../src/utils/logging/__tests__/)                                                     | `CompactLogger.spec.ts` (15 tests), `CompactTransport.spec.ts` (9 tests)                                      |
+| Component          | File                                                                                                                  | Role                                                                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CompactTransport` | [`src/utils/logging/CompactTransport.ts`](../src/utils/logging/CompactTransport.ts)                                   | Filters by level + categories, writes to Output Channel and optional file                                                                                          |
+| `CompactLogger`    | [`src/utils/logging/CompactLogger.ts`](../src/utils/logging/CompactLogger.ts)                                         | Variadic `ILogger` implementation with `child()` for subsystem scoping                                                                                             |
+| `ILogger` / types  | [`src/utils/logging/types.ts`](../src/utils/logging/types.ts)                                                         | Interfaces and config types                                                                                                                                        |
+| `index.ts`         | [`src/utils/logging/index.ts`](../src/utils/logging/index.ts)                                                         | `bootstrapLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                                                                         |
+| Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | 16 pre-scoped logger instances (Task, Webview, Git, …)                                                                                                             |
+| LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel; renders checkboxes from live `logCategoriesKnown`                                                                                     |
+| Settings schema    | [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                   | `logLevel` and `logCategories` Zod schemas                                                                                                                         |
+| ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel`, `logCategories`, and `logCategoriesKnown`                                                                                       |
+| Activation         | [`src/extension.ts`](../src/extension.ts)                                                                             | `bootstrapLogging()` at line 108, persistence restore at line 155                                                                                                  |
+| Message handler    | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Wires `logLevel` and `logCategories` changes to live transport                                                                                                     |
+| State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state                                                                                                         |
+| Legacy compat      | [`src/utils/outputChannelLogger.ts`](../src/utils/outputChannelLogger.ts)                                             | `stringifyForLog` and `createOutputChannelLogger` retained;<br>`outputLog`/`outputWarn`/`outputError` removed                                                      |
+| i18n               | [`webview-ui/src/i18n/locales/en/settings.json`](../webview-ui/src/i18n/locales/en/settings.json)                     | `logging` section with level labels and 16 category names                                                                                                          |
+| Tests              | [`src/utils/logging/__tests__/`](../src/utils/logging/__tests__/)                                                     | `CompactLogger.spec.ts` (15 tests), `CompactTransport.spec.ts` (12 tests, incl. late channel-binding regression), `index.spec.ts` (3 tests, eager-init regression) |
 
 ## Log Levels
 
@@ -141,9 +141,14 @@ File output is disabled by default. Enable it via `CompactTransportConfig.fileOu
 
 ## Lifecycle
 
+0. **Module load** ([`logging/index.ts`](../src/utils/logging/index.ts)):
+    - The shared `CompactTransport` (channel-less) and root `CompactLogger`
+      are created **eagerly** with `level: "debug"`, so subsystem loggers
+      imported before activation bind to the real transport rather than a noop.
 1. **Activation** ([`extension.ts`](../src/extension.ts)):
-    - `bootstrapLogging(outputChannel)` creates the shared `CompactTransport`
-      and root `CompactLogger` with `level: "debug"` (all messages pass).
+    - `bootstrapLogging(outputChannel)` attaches the Output Channel to the
+      already-created transport via `setOutputChannel()` and emits the session
+      marker.
 2. **Persistence restore** ([`extension.ts`](../src/extension.ts)):
     - After `ContextProxy.getInstance(context)` is ready, saved `logLevel`
       and `logCategories` are read and applied to the live transport.
@@ -201,3 +206,23 @@ log.info("initialized")
   query/filter tooling (the user would need `jq` or similar).
 - **No MCP/log server integration** — logs are not forwarded to the
   observability stack (Loki/Mimir/Tempo).
+
+### Resolved
+
+- **Import-ordering noop binding (fixed)** — subsystem loggers in
+  `subsystems.ts` are bound via `getLogger().child({ ctx })` at
+  module-_import_ time, which runs before `activate()`. The shared transport
+  and root logger are therefore created **eagerly** at `logging/index.ts`
+  module load (channel-less), and `bootstrapLogging()` only attaches the
+  Output Channel via `CompactTransport.setOutputChannel()`. Previously the
+  transport/logger were created inside `bootstrapLogging()`, so every
+  subsystem logger captured the `_noopLogger` (whose `child()` returns
+  itself) and dropped all output forever, making the level/category filters
+  appear to have no effect. Guarded by
+  [`__tests__/index.spec.ts`](../src/utils/logging/__tests__/index.spec.ts),
+  which asserts `getLogger()` is non-noop before `bootstrapLogging()` on the
+  production path.
+- **`getLogLevel()` typed accessor (fixed)** — `getLogLevel()` previously
+  reached into `(_transport as any)._level`. `CompactTransport` now exposes a
+  typed `getLevel(): LogLevel` getter (mirroring `getKnownCategories()`) and
+  `getLogLevel()` delegates to it.

@@ -95,6 +95,13 @@ export class CompactTransport implements ICompactTransport {
 	}
 
 	/**
+	 * Return the current minimum log level.
+	 */
+	getLevel(): LogLevel {
+		return this._level
+	}
+
+	/**
 	 * Set the set of allowed context identifiers (whitelist).
 	 * When `undefined` (default), all categories are shown.
 	 * When an array, only entries whose `c` matches one of the
