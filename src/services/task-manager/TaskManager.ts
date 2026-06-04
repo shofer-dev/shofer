@@ -82,14 +82,29 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	private providerRef: WeakRef<ShoferProvider>
 
 	/**
-	 * Per-task persist queue.  Each fire-and-forget persistState call chains
-	 * onto the previous one so writes for the same task are serialized — the
-	 * second write can never land before the first one.
+	 * Per-task monotonic version counter for the latest-wins persist strategy.
+	 * Incremented on every `setState()` call for the task.  Each
+	 * `enqueuePersist()` captures the current version; when the async I/O
+	 * completes, the captured version is compared against the live counter.
+	 * If they differ, the write is stale and is silently dropped.
 	 *
-	 * Without this, a fire-and-forget `completed+rating` write launched by
-	 * `attempt_completion` → `TaskCompleted` can land AFTER a subsequent
-	 * `running` write from `TaskActive` → `cancelAndProcessQueuedMessages`,
-	 * leaving the stale rated state on disk after a restart.
+	 * This handles three race conditions:
+	 * 1. Fire-and-forget `completed+rating` write from `attempt_completion`
+	 *    landing AFTER a subsequent `running` write — the `running` write
+	 *    incremented the counter, so the stale `completed` write is skipped.
+	 * 2. Process restart between enqueue and write — the counter is lost, so
+	 *    no stale write survives (restore loads from disk directly).
+	 * 3. Slow I/O — even if a write takes seconds to complete, it never
+	 *    retroactively overwrites a newer state.
+	 */
+	private persistVersions: Map<string, number> = new Map()
+
+	/**
+	 * Per-task persist promise chains. Each new `enqueuePersist` call
+	 * chains onto the previous promise for the same task, so writes are
+	 * serialized — the second write always starts after the first completes.
+	 * Combined with `persistVersions` (latest-wins), this ensures that the
+	 * last `setState` call for any task always ends up on disk.
 	 */
 	private persistChains: Map<string, Promise<void>> = new Map()
 
@@ -395,47 +410,72 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		if (TaskManager.statesEqual(prevState, state)) return
 
 		managedTask.state = state
+
+		// Bump the per-task version counter so any in-flight persist for an
+		// older state will detect that it's stale and silently drop.
+		const version = (this.persistVersions.get(targetTaskId) ?? 0) + 1
+		this.persistVersions.set(targetTaskId, version)
+
 		this.emit("managedTask:state-changed", targetTaskId, state)
 		this.emit("tasks:updated", this.getManagedTasks())
-		this.enqueuePersist(targetTaskId, state)
-	}
-
-	private async persistState(targetTaskId: string, state: TaskState): Promise<void> {
-		const provider = this.providerRef.deref()
-		if (!provider) return
-		try {
-			const existing = provider.taskHistoryStore.get(targetTaskId)
-			if (!existing) return
-			if (TaskManager.statesEqual(existing.taskState, state)) return
-			// Write only { id, taskState } — do NOT spread the stale in-memory
-			// snapshot.  TaskHistoryStore.upsert() merges { ...existing, ...item }
-			// so passing just the fields we intend to update is safe and avoids
-			// the "spread stale state" anti-pattern that caused the race in
-			// Phase 1 of state_simplification.md.
-			await provider.updateTaskHistory({
-				id: targetTaskId,
-				taskState: state,
-			} as HistoryItem)
-		} catch (err) {
-			taskLog.error(
-				`[TaskManager] Failed to persist taskState for ${targetTaskId}:`,
-				err instanceof Error ? err.message : String(err),
-			)
-		}
+		this.enqueuePersist(targetTaskId, state, version)
 	}
 
 	/**
-	 * Fire-and-forget persist that is serialized per task.
+	 * Fire-and-forget persist with latest-wins semantics.
 	 *
-	 * Without chaining, two fire-and-forget writes for the same task can land
-	 * out of order: a `completed+rating` write from `attempt_completion` can
-	 * overwrite a later `running` write from `cancelAndProcessQueuedMessages`
-	 * if the I/O scheduler delivers them backwards.  Chaining onto the previous
-	 * promise guarantees the second write always lands after the first.
+	 * Each call captures a monotonic version from `persistVersions`.  When the
+	 * async I/O completes, the captured version is compared against the live
+	 * counter — if another `setState` fired in the meantime, this write is
+	 * stale and is silently dropped.
+	 *
+	 * Combined with the chaining from `enqueuePersist`, this ensures:
+	 * - Writes for the same task never race (chaining guarantees serial order).
+	 * - Stale writes that complete after a newer `setState` are discarded
+	 *   (version check).
+	 * - A slow in-flight write does not block the process from shutting down
+	 *   with the latest state on disk — the live `managedTask.state` is the
+	 *   source of truth, and `setState` bumps the counter synchronously.
 	 */
-	private enqueuePersist(targetTaskId: string, state: TaskState): void {
+	private persistState(targetTaskId: string, state: TaskState, capturedVersion: number): Promise<void> {
+		const currentVersion = this.persistVersions.get(targetTaskId)
+		if (currentVersion !== undefined && currentVersion !== capturedVersion) {
+			taskLog.debug(
+				`[TaskManager] Skipping stale persist for ${targetTaskId}: version=${capturedVersion}, current=${currentVersion}, state=${state.lifecycle}`,
+			)
+			return Promise.resolve()
+		}
+
+		const provider = this.providerRef.deref()
+		if (!provider) return Promise.resolve()
+		return (async () => {
+			try {
+				const existing = provider.taskHistoryStore.get(targetTaskId)
+				if (!existing) return
+				if (TaskManager.statesEqual(existing.taskState, state)) return
+				taskLog.debug(
+					`[TaskManager] Persisting state for ${targetTaskId}: v${capturedVersion} ${state.lifecycle}${state.rating ? ":" + state.rating : ""}`,
+				)
+				await provider.updateTaskHistory({
+					id: targetTaskId,
+					taskState: state,
+				} as HistoryItem)
+			} catch (err) {
+				taskLog.error(
+					`[TaskManager] Failed to persist taskState for ${targetTaskId}:`,
+					err instanceof Error ? err.message : String(err),
+				)
+			}
+		})()
+	}
+
+	/**
+	 * Enqueue a persist, chaining onto the previous one for this task.
+	 * The version ensures that only the latest write actually hits disk.
+	 */
+	private enqueuePersist(targetTaskId: string, state: TaskState, version: number): void {
 		const prev = this.persistChains.get(targetTaskId) ?? Promise.resolve()
-		const next = prev.then(() => this.persistState(targetTaskId, state))
+		const next = prev.then(() => this.persistState(targetTaskId, state, version))
 		// Prune the chain once it settles so the map doesn't grow unbounded.
 		next.finally(() => {
 			if (this.persistChains.get(targetTaskId) === next) {
@@ -443,6 +483,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			}
 		})
 		this.persistChains.set(targetTaskId, next)
+		taskLog.debug(
+			`[TaskManager] Enqueued persist for ${targetTaskId}: v${version} ${state.lifecycle}${state.rating ? ":" + state.rating : ""}`,
+		)
 	}
 
 	renameManagedTask(targetTaskId: string, name: string): void {
@@ -643,9 +686,16 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 */
 	private static sanitizeRestoredState(state: TaskState | undefined): TaskState {
 		if (!state) return IDLE_TASK_STATE
-		if (state.lifecycle === "running" || state.lifecycle === "waiting_input" || state.lifecycle === "waiting")
+		if (state.lifecycle === "running" || state.lifecycle === "waiting_input" || state.lifecycle === "waiting") {
+			taskLog.debug(`[TaskManager] sanitizeRestoredState: downgrading ${state.lifecycle} → idle`)
 			return IDLE_TASK_STATE
-		if (isTerminalLifecycle(state.lifecycle) || state.lifecycle === "idle") return state
+		}
+		if (isTerminalLifecycle(state.lifecycle) || state.lifecycle === "idle") {
+			taskLog.debug(
+				`[TaskManager] sanitizeRestoredState: preserving ${state.lifecycle}${state.rating ? ":" + state.rating : ""}`,
+			)
+			return state
+		}
 		return IDLE_TASK_STATE
 	}
 
