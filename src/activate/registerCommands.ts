@@ -18,7 +18,6 @@ import { CodeIndexManager } from "../services/code-index/manager"
 import { GitIndexManager } from "../services/git-index/git-index-manager"
 import { AssistantAgentManager } from "../services/assistant-agent/manager"
 import { showAssistantAgentChatPanel } from "../core/webview/AssistantAgentChatProvider"
-import { showSlangVisualization } from "../core/webview/SlangVisualizationProvider"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 
 /**
@@ -335,10 +334,6 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		}
 		await manager.clearIndexData()
 		vscode.window.showInformationMessage("Git history index cleared.")
-	},
-	// ─── Slang Visualization ────────────────────────────────────────────
-	"slangVisualization.show": () => {
-		showSlangVisualization(context.extensionUri)
 	},
 
 	// ─── Webview ──────────────────────────────────────────────────────────
