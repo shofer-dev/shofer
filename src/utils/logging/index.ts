@@ -26,14 +26,32 @@ import type { ILogger, LogLevel } from "./types"
 /** Shared transport — all loggers write through this single instance. */
 let _transport: CompactTransport | undefined
 
-/** Root logger instance. Created eagerly in test; in production it is created
- *  during `bootstrapLogging()` once the Output Channel is available. */
+/** Root logger instance. */
 let _logger: CompactLogger | undefined
 
+// Eagerly create the shared transport + root logger at module-load time
+// (outside tests). This is critical for correctness: the subsystem loggers in
+// `subsystems.ts` are created with `getLogger().child({ ctx })` at *import*
+// time. Because those modules sit in the extension's static import graph, that
+// evaluation runs BEFORE `activate()` calls `bootstrapLogging()`. If the root
+// logger did not exist yet, every subsystem logger (`taskLog`, `webviewLog`,
+// …) would capture the throw-away `_noopLogger` (whose `child()` returns
+// itself) and silently drop ALL output forever — making the log-level and
+// category filters appear to have no effect. Creating the real transport here
+// means every subsystem logger binds to it; `bootstrapLogging()` only attaches
+// the Output Channel afterwards via `CompactTransport.setOutputChannel()`.
+if (process.env.NODE_ENV !== "test") {
+	_transport = new CompactTransport(undefined, { level: "debug" })
+	_logger = new CompactLogger(_transport)
+}
+
 /**
- * Wire the VS Code Output Channel into the shared logging transport and
- * return the root logger.  Must be called once during extension activation
- * before any module-level code logs.
+ * Attach the VS Code Output Channel to the shared logging transport and return
+ * the root logger.  Must be called once during extension activation.
+ *
+ * The transport and root logger are created eagerly at module load (see above)
+ * so loggers imported before activation bind to the real transport; this
+ * function only wires in the Output Channel and emits the session marker.
  *
  * In test environments (`NODE_ENV === "test"`) a silent noop logger is
  * returned instead so test output is not flooded.
@@ -43,9 +61,16 @@ export function bootstrapLogging(outputChannel: vscode.OutputChannel): ILogger {
 		return _noopLogger
 	}
 
-	const transport = new CompactTransport(outputChannel, { level: "debug" })
-	_transport = transport
-	_logger = new CompactLogger(transport)
+	if (!_transport || !_logger) {
+		// Defensive: eager init is skipped only under NODE_ENV==="test", but
+		// guard anyway so a missing transport can never leave us logger-less.
+		_transport = new CompactTransport(outputChannel, { level: "debug" })
+		_logger = new CompactLogger(_transport)
+		return _logger
+	}
+
+	_transport.setOutputChannel(outputChannel)
+	_transport.writeHumanLine(`Log session started (level: ${getLogLevel()})`)
 	return _logger
 }
 

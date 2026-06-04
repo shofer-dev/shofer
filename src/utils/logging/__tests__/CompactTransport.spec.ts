@@ -238,4 +238,62 @@ describe("CompactTransport", () => {
 			expect(visible).toBeDefined()
 		})
 	})
+
+	// Regression: subsystem loggers in `subsystems.ts` are created via
+	// `getLogger().child({ ctx })` at module-import time, which runs BEFORE
+	// `bootstrapLogging()` attaches the Output Channel. The eager-transport fix
+	// relies on a channel-less transport that late-binds its channel via
+	// `setOutputChannel()` — loggers bound to it before the channel exists must
+	// still emit (and still honour level/category filters) once it is attached.
+	describe("Late channel binding (setOutputChannel)", () => {
+		let lateChannel: MockOutputChannel
+		let lateTransport: CompactTransport
+
+		beforeEach(() => {
+			lateChannel = new MockOutputChannel()
+			// Constructed with NO output channel, exactly like the eager
+			// module-load transport in logging/index.ts.
+			lateTransport = new CompactTransport(undefined, { level: "debug" })
+		})
+
+		afterEach(() => {
+			lateTransport.close()
+		})
+
+		test("entries written before attach are not lost to the channel after attach", () => {
+			lateTransport.write({ t: Date.now(), l: "info", m: "before attach", c: "Task" })
+
+			// No channel yet → nothing buffered to a channel.
+			expect(lateChannel.lines.length).toBe(0)
+
+			lateTransport.setOutputChannel(lateChannel as any)
+			lateTransport.write({ t: Date.now(), l: "info", m: "after attach", c: "Task" })
+
+			const after = lateChannel.lines.find((l) => l.includes("after attach"))
+			expect(after).toBeDefined()
+			expect(after).toContain("[Task]")
+		})
+
+		test("category filter set before attach is honoured after attach", () => {
+			lateTransport.setCategories(["Task"])
+			lateTransport.setOutputChannel(lateChannel as any)
+
+			lateTransport.write({ t: Date.now(), l: "info", m: "task line", c: "Task" })
+			lateTransport.write({ t: Date.now(), l: "info", m: "git line", c: "Git" })
+
+			expect(lateChannel.lines.find((l) => l.includes("task line"))).toBeDefined()
+			expect(lateChannel.lines.find((l) => l.includes("git line"))).toBeUndefined()
+		})
+
+		test("level filter changed live after attach takes effect", () => {
+			lateTransport.setOutputChannel(lateChannel as any)
+			lateTransport.setLevel("warn")
+
+			lateTransport.write({ t: Date.now(), l: "info", m: "info dropped", c: "Task" })
+			lateTransport.write({ t: Date.now(), l: "warn", m: "warn kept", c: "Task" })
+
+			expect(lateChannel.lines.find((l) => l.includes("info dropped"))).toBeUndefined()
+			expect(lateChannel.lines.find((l) => l.includes("warn kept"))).toBeDefined()
+		})
+	})
 })
