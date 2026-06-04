@@ -438,12 +438,17 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 *   source of truth, and `setState` bumps the counter synchronously.
 	 */
 	private persistState(targetTaskId: string, state: TaskState, capturedVersion: number): Promise<void> {
-		const currentVersion = this.persistVersions.get(targetTaskId)
-		if (currentVersion !== undefined && currentVersion !== capturedVersion) {
-			taskLog.debug(
-				`[TaskManager] Skipping stale persist for ${targetTaskId}: version=${capturedVersion}, current=${currentVersion}, state=${state.lifecycle}`,
-			)
-			return Promise.resolve()
+		// Fast-path: skip the entire I/O trip if the version is already stale
+		// before we even start. This catches the case where two setState calls
+		// happen synchronously before the first I/O begins.
+		{
+			const currentVersion = this.persistVersions.get(targetTaskId)
+			if (currentVersion !== undefined && currentVersion !== capturedVersion) {
+				taskLog.debug(
+					`[TaskManager] Skipping stale persist for ${targetTaskId}: version=${capturedVersion}, current=${currentVersion}, state=${state.lifecycle}`,
+				)
+				return Promise.resolve()
+			}
 		}
 
 		const provider = this.providerRef.deref()
@@ -453,6 +458,22 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 				const existing = provider.taskHistoryStore.get(targetTaskId)
 				if (!existing) return
 				if (TaskManager.statesEqual(existing.taskState, state)) return
+
+				// Re-check version AFTER the I/O completes (read + equality
+				// check). If a newer setState bumped the counter while we were
+				// waiting, this write is stale and must be silently dropped.
+				// Without this post-I/O re-check, a slow completed+rating
+				// persist from attempt_completion completes after a synchronous
+				// running write in cancelAndProcessQueuedMessages and overwrites
+				// the running state on disk.
+				const currentVersion = this.persistVersions.get(targetTaskId)
+				if (currentVersion !== undefined && currentVersion !== capturedVersion) {
+					taskLog.debug(
+						`[TaskManager] Dropping stale persist after I/O for ${targetTaskId}: v${capturedVersion} ${state.lifecycle} (current=v${currentVersion})`,
+					)
+					return
+				}
+
 				taskLog.debug(
 					`[TaskManager] Persisting state for ${targetTaskId}: v${capturedVersion} ${state.lifecycle}${state.rating ? ":" + state.rating : ""}`,
 				)
