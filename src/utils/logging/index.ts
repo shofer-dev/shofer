@@ -146,5 +146,5 @@ export function getLogKnownCategories(): string[] {
 }
 
 export function getLogLevel(): LogLevel {
-	return _transport ? ((_transport as any)._level ?? "debug") : "debug"
+	return _transport?.getLevel() ?? "debug"
 }
