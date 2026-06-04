@@ -1826,6 +1826,14 @@ export class ShoferProvider
 			return undefined
 		}
 
+		// Preload-Before-Publish invariant: populate shoferMessages (and
+		// apiConversationHistory) from disk BEFORE the task goes onto the
+		// stack, just like the plain-task path does at line ~1688. Without
+		// this, WorkflowView renders the empty-stream "Starting workflow…"
+		// spinner on restore because the task's shoferMessages is [] at the
+		// moment showTaskWithId pushes its postStateToWebview.
+		await workflowTask.preloadShoferMessages()
+
 		if (isRehydratingCurrentTask) {
 			const stackIndex = this.shoferStack.length - 1
 			const oldTask = this.shoferStack[stackIndex]
@@ -3191,6 +3199,7 @@ export class ShoferProvider
 			assistantAgentApiConfigId,
 			assistantAgentMaxContextTokens,
 			assistantAgentContextFillThreshold,
+			logLevel,
 		} = await this.getState()
 
 		let cloudOrganizations: any[] = []
@@ -3384,6 +3393,7 @@ export class ShoferProvider
 			assistantAgentApiConfigId,
 			assistantAgentMaxContextTokens,
 			assistantAgentContextFillThreshold,
+			logLevel: logLevel ?? "info",
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
@@ -3617,6 +3627,7 @@ export class ShoferProvider
 			assistantAgentApiConfigId: stateValues.assistantAgentApiConfigId,
 			assistantAgentMaxContextTokens: stateValues.assistantAgentMaxContextTokens,
 			assistantAgentContextFillThreshold: stateValues.assistantAgentContextFillThreshold,
+			logLevel: stateValues.logLevel,
 		}
 	}
 
