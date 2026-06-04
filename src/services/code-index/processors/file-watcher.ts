@@ -31,31 +31,6 @@ import { Package } from "../../../shared/package"
 import { codeIndexLog } from "../../../utils/logging/subsystems"
 
 /**
- * Diagnostic logger that lazily resolves the shared Shofer output channel.
- *
- * The file-watcher cannot statically import `../../../extension` (the extension
- * entrypoint already imports `code-index/manager`, which transitively wires in
- * this file — that would form a require-cycle). A lazy dynamic import keeps the
- * cycle out of the module graph while still routing diagnostics to the user-
- * visible channel per the project's Output Channel Logging Rule.
- */
-function log(...args: unknown[]): void {
-	void import("../../../extension")
-		.then(({ getOutputChannel }) => {
-			const ch = getOutputChannel()
-			if (!ch) return
-			const stamp = new Date().toISOString()
-			for (const arg of args) {
-				const body = typeof arg === "string" ? arg : JSON.stringify(arg)
-				ch.appendLine(`${stamp} [code-index/file-watcher] ${body}`)
-			}
-		})
-		.catch(() => {
-			/* output channel not yet wired; silently drop */
-		})
-}
-
-/**
  * Implementation of the file watcher interface
  */
 export class FileWatcher implements IFileWatcher {
@@ -141,7 +116,7 @@ export class FileWatcher implements IFileWatcher {
 		const filePattern = new vscode.RelativePattern(this.workspacePath, globSuffix)
 		this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern)
 
-		log(`initialize: workspace=${this.workspacePath} glob=${globSuffix}`)
+		codeIndexLog.debug(`initialize: workspace=${this.workspacePath} glob=${globSuffix}`)
 
 		// Register event handlers
 		this.fileWatcher.onDidCreate(this.handleFileCreated.bind(this))
@@ -168,7 +143,7 @@ export class FileWatcher implements IFileWatcher {
 	 * @param uri URI of the created file
 	 */
 	private async handleFileCreated(uri: vscode.Uri): Promise<void> {
-		log(`event create: ${generateRelativeFilePath(uri.fsPath, this.workspacePath)}`)
+		codeIndexLog.debug(`event create: ${generateRelativeFilePath(uri.fsPath, this.workspacePath)}`)
 		this.accumulatedEvents.set(uri.fsPath, { uri, type: "create" })
 		this.scheduleBatchProcessing()
 	}
@@ -178,7 +153,7 @@ export class FileWatcher implements IFileWatcher {
 	 * @param uri URI of the changed file
 	 */
 	private async handleFileChanged(uri: vscode.Uri): Promise<void> {
-		log(`event change: ${generateRelativeFilePath(uri.fsPath, this.workspacePath)}`)
+		codeIndexLog.debug(`event change: ${generateRelativeFilePath(uri.fsPath, this.workspacePath)}`)
 		this.accumulatedEvents.set(uri.fsPath, { uri, type: "change" })
 		this.scheduleBatchProcessing()
 	}
@@ -188,7 +163,7 @@ export class FileWatcher implements IFileWatcher {
 	 * @param uri URI of the deleted file
 	 */
 	private async handleFileDeleted(uri: vscode.Uri): Promise<void> {
-		log(`event delete: ${generateRelativeFilePath(uri.fsPath, this.workspacePath)}`)
+		codeIndexLog.debug(`event delete: ${generateRelativeFilePath(uri.fsPath, this.workspacePath)}`)
 		this.accumulatedEvents.set(uri.fsPath, { uri, type: "delete" })
 		this.scheduleBatchProcessing()
 	}
@@ -681,7 +656,7 @@ export class FileWatcher implements IFileWatcher {
 			// Check if file is in an ignored directory
 			// Use relative path to avoid matching parent directories outside the workspace
 			if (isPathInIgnoredDirectory(relativeFilePath)) {
-				log(`skip ${relativeFilePath}: in ignored directory`)
+				codeIndexLog.debug(`skip ${relativeFilePath}: in ignored directory`)
 				return {
 					path: filePath,
 					status: "skipped" as const,
@@ -694,7 +669,7 @@ export class FileWatcher implements IFileWatcher {
 				!this.ignoreController.validateAccess(filePath) ||
 				(this.ignoreInstance && this.ignoreInstance.ignores(relativeFilePath))
 			) {
-				log(`skip ${relativeFilePath}: ignored by .shoferignore/.gitignore`)
+				codeIndexLog.debug(`skip ${relativeFilePath}: ignored by .shoferignore/.gitignore`)
 				return {
 					path: filePath,
 					status: "skipped" as const,
@@ -746,7 +721,9 @@ export class FileWatcher implements IFileWatcher {
 				// empty markdown file). We do NOT short-circuit here — the cache
 				// entry must still be refreshed and any previously-indexed
 				// segments must be cleaned up via the dedup path below.
-				log(`${relativeFilePath}: parser produced 0 blocks (file too small or no parseable content)`)
+				codeIndexLog.debug(
+					`${relativeFilePath}: parser produced 0 blocks (file too small or no parseable content)`,
+				)
 			}
 
 			// Per-segment dedup: compare new segment hashes against the

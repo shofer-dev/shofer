@@ -12,30 +12,6 @@ const OLLAMA_EMBEDDING_TIMEOUT_MS = 60000 // 60 seconds for embedding requests
 const OLLAMA_VALIDATION_TIMEOUT_MS = 30000 // 30 seconds for validation requests
 
 /**
- * Diagnostic logger that lazily resolves the shared Shofer output channel.
- *
- * Static import of `../../../extension` would form a require-cycle
- * (extension → code-index/manager → … → embedders/ollama). The lazy
- * dynamic import keeps the cycle out of the module graph while still routing
- * diagnostics to the user-visible channel per the Output Channel Logging Rule.
- */
-function log(...args: unknown[]): void {
-	void import("../../../extension")
-		.then(({ getOutputChannel }) => {
-			const ch = getOutputChannel()
-			if (!ch) return
-			const stamp = new Date().toISOString()
-			for (const arg of args) {
-				const body = typeof arg === "string" ? arg : JSON.stringify(arg)
-				ch.appendLine(`${stamp} [code-index/ollama] ${body}`)
-			}
-		})
-		.catch(() => {
-			/* output channel not yet wired; silently drop */
-		})
-}
-
-/**
  * Implements the IEmbedder interface using a local Ollama instance.
  */
 export class CodeIndexOllamaEmbedder implements IEmbedder {
@@ -101,7 +77,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				})
 				clearTimeout(timeoutId)
 				if (!resp.ok) {
-					log(
+					codeIndexLog.debug(
 						`/api/show ${resp.status} ${resp.statusText} for ${modelId} — ` +
 							`falling back to ${CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS} tokens`,
 					)
@@ -114,12 +90,12 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 					.map(([, v]) => v as number)
 				const resolved =
 					ctxValues.length > 0 ? Math.min(...ctxValues) : CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS
-				log(
+				codeIndexLog.debug(
 					`/api/show ${modelId} context_length=${resolved} tokens (sources: ${ctxValues.join(",") || "none"})`,
 				)
 				return resolved
 			} catch (err: any) {
-				log(
+				codeIndexLog.debug(
 					`/api/show probe failed for ${modelId}: ${err?.message ?? err} — ` +
 						`falling back to ${CodeIndexOllamaEmbedder.FALLBACK_CONTEXT_TOKENS} tokens`,
 				)
@@ -158,7 +134,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 					}
 					const prefixedText = `${queryPrefix}${text}`
 					if (prefixedText.length > maxSafeChars) {
-						log(
+						codeIndexLog.debug(
 							`prefix would overflow item ${index}: ` +
 								`${prefixedText.length} chars > ${maxSafeChars} cap — dropping prefix`,
 						)
@@ -177,7 +153,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 			if (text.length > maxSafeChars) {
 				const originalLen = text.length
 				const truncated = text.substring(0, maxSafeChars)
-				log(
+				codeIndexLog.debug(
 					`truncation: item ${index} ${originalLen} chars > ${maxSafeChars} cap ` +
 						`(usable=${usableTokens} tokens × ${CodeIndexOllamaEmbedder.CHARS_PER_TOKEN} chars/token), ` +
 						`truncated to ${truncated.length}`,
@@ -196,7 +172,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 			const totalChars = itemLengths.reduce((a, b) => a + b, 0)
 			const maxChars = itemLengths.length > 0 ? Math.max(...itemLengths) : 0
 			const maxIdx = itemLengths.indexOf(maxChars)
-			log(
+			codeIndexLog.debug(
 				`POST ${url} model=${modelToUse} items=${itemLengths.length} ` +
 					`totalChars=${totalChars} maxChars=${maxChars} (item ${maxIdx}) ` +
 					`modelCtx=${modelContextTokens} usableTokens=${usableTokens} cap=${maxSafeChars}`,
@@ -229,7 +205,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 			// Diagnostic: log the full text of each item being sent to Ollama
 			// for vector construction.
 			for (let i = 0; i < processedTexts.length; i++) {
-				log(`embed item[${i}] (len=${processedTexts[i].length}): ${processedTexts[i]}`)
+				codeIndexLog.debug(`embed item[${i}] (len=${processedTexts[i].length}): ${processedTexts[i]}`)
 			}
 
 			const response = await fetch(url, {
@@ -259,7 +235,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				}
 				// Diagnostic: dump per-item lengths so we can see which input the
 				// server is rejecting on a 400 "input length exceeds context length".
-				log(
+				codeIndexLog.debug(
 					`ERROR ${response.status} ${response.statusText} from ${url} ` +
 						`model=${modelToUse} modelCtx=${modelContextTokens} cap=${maxSafeChars} ` +
 						`items=${itemLengths.length} maxChars=${maxChars} totalChars=${totalChars} ` +
