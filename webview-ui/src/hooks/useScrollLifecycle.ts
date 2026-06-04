@@ -249,12 +249,12 @@ export function useScrollLifecycle({
 			// Cancel any in-flight browser smooth-scroll animation.
 			// scrollToBottomSmooth uses behavior: "smooth", which runs on
 			// the compositor thread; clear() above only kills the debounce
-			// timer — it does NOT abort the animation.  Reading and
-			// re-assigning scrollTop freezes the scrollable at its current
-			// position and cancels the smooth scroll in all browsers.
+			// timer — it does NOT abort the animation.  Issuing an instant
+			// scrollTo interrupts the in-flight smooth scroll at the
+			// current position in all browsers.
 			const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
 			if (scroller) {
-				scroller.scrollTop = scroller.scrollTop
+				scroller.scrollTo({ top: scroller.scrollTop, behavior: "auto" })
 			}
 			// Open a brief immune window so any in-flight programmatic
 			// scroll-to-bottom that completes after this point cannot
