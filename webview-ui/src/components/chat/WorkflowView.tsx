@@ -121,6 +121,24 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		processorRef.current.reset()
 	}, [taskTs])
 
+	/** Tracks which taskTs values have completed their initial hydration
+	 *  cycle in this WorkflowView mount lifetime.  On re-entry to a
+	 *  previously-hydrated task, skipHydration is true so the scroll
+	 *  position is preserved rather than being forcibly moved to bottom. */
+	const hydratedTaskTsRef = useRef<Set<number>>(new Set())
+	const prevHydratableTaskTsRef = useRef<number | undefined>(taskTs)
+
+	// When taskTs changes, mark the *outgoing* task as hydrated so any
+	// future re-entry preserves the user's scroll position.
+	if (taskTs !== prevHydratableTaskTsRef.current) {
+		if (prevHydratableTaskTsRef.current !== undefined) {
+			hydratedTaskTsRef.current.add(prevHydratableTaskTsRef.current)
+		}
+		prevHydratableTaskTsRef.current = taskTs
+	}
+
+	const skipHydration = taskTs ? hydratedTaskTsRef.current.has(taskTs) : false
+
 	const processedMessages = useMemo(() => {
 		return processorRef.current.process(messages)
 	}, [messages])
@@ -1571,6 +1589,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		isStreaming,
 		isHidden,
 		hasTask: !!task,
+		skipHydration,
 	})
 
 	// Expanding a row indicates the user is browsing; disable sticky follow.
