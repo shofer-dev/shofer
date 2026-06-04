@@ -4347,7 +4347,7 @@ export class ShoferProvider
 				freshStatus = (historyItem.flowState as Record<string, unknown>)?.status as string | undefined
 			}
 			if (freshStatus && freshStatus !== "running") {
-				outputLog(
+				webviewLog.info(
 					`[cancelTask] Skipping rehydrate: WorkflowTask ${task.taskId} was stopped (status=${freshStatus})`,
 				)
 				return
