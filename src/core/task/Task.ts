@@ -142,7 +142,7 @@ import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
-import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 import { time } from "../../utils/perf"
 import { recordLlmDuration, incLlmCalls, incLlmErrors, classifyLlmError } from "../../metrics/registry"
 
@@ -616,7 +616,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				block.type === "tool_result" && block.tool_use_id === toolResult.tool_use_id,
 		)
 		if (existingResult) {
-			outputWarn(
+			taskLog.warn(
 				`[Task#pushToolResultToUserContent] Skipping duplicate tool_result for tool_use_id: ${toolResult.tool_use_id}`,
 			)
 			return false
@@ -759,7 +759,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.fileContextTracker = new FileContextTracker(provider, this.taskId)
 
 		this.shoferIgnoreController.initialize().catch((error) => {
-			outputError("Failed to initialize ShoferIgnoreController:", error)
+			taskLog.error("Failed to initialize ShoferIgnoreController:", error)
 		})
 
 		this.apiConfiguration = apiConfiguration
@@ -1022,7 +1022,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					this.updateApiConfiguration(newState.apiConfiguration)
 				}
 			} catch (error) {
-				outputError(
+				taskLog.error(
 					`[Task#${this.taskId}.${this.instanceId}] Failed to update API configuration on profile change:`,
 					error,
 				)
@@ -1269,7 +1269,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const tailFp = this._userMessageFingerprint(tail)
 		if (!tailFp || tailFp !== fp) return
 		const stack = new Error("DUPLICATE_USER_APPEND").stack ?? "<no stack>"
-		outputWarn(
+		taskLog.warn(
 			`[Task#${this.taskId}.${this.instanceId}] DUPLICATE_USER_APPEND detected: ` +
 				`previous tail user message has matching fingerprint (env_details Current Time elided). ` +
 				`apiConversationHistory.length=${this.apiConversationHistory.length}, ` +
@@ -1462,7 +1462,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				globalStoragePath: this.globalStoragePath,
 			})
 		} catch (error) {
-			outputError("Failed to append API message:", error)
+			taskLog.error("Failed to append API message:", error)
 		}
 	}
 
@@ -1515,7 +1515,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				timeout: 30_000, // 30 second timeout as safety net
 			}).catch(() => {
 				// If timeout or abort, log and proceed anyway to avoid hanging
-				outputWarn(
+				taskLog.warn(
 					`[Task#${this.taskId}] flushPendingToolResultsToHistory: timed out waiting for assistant message to be saved`,
 				)
 			})
@@ -1555,14 +1555,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 		} catch (error) {
 			saved = false
-			outputError("Failed to append pending tool-result message:", error)
+			taskLog.error("Failed to append pending tool-result message:", error)
 		}
 
 		if (saved) {
 			// Clear the pending content since it's now saved
 			this.userMessageContent = []
 		} else {
-			outputWarn(
+			taskLog.warn(
 				`[Task#${this.taskId}] flushPendingToolResultsToHistory: save failed, retaining pending tool results in memory`,
 			)
 		}
@@ -1587,7 +1587,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			})
 			return true
 		} catch (error) {
-			outputError("Failed to save API conversation history:", error)
+			taskLog.error("Failed to save API conversation history:", error)
 			return false
 		}
 	}
@@ -1602,7 +1602,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		for (let attempt = 0; attempt < delays.length; attempt++) {
 			await new Promise<void>((resolve) => setTimeout(resolve, delays[attempt]))
-			outputWarn(
+			taskLog.warn(
 				`[Task#${this.taskId}] retrySaveApiConversationHistory: retry attempt ${attempt + 1}/${delays.length}`,
 			)
 
@@ -1677,7 +1677,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		try {
 			store = await this.getBlobStore()
 		} catch (error) {
-			outputError("Failed to obtain BlobStore for externalisation:", error)
+			taskLog.error("Failed to obtain BlobStore for externalisation:", error)
 			return
 		}
 		const content = message.content as unknown
@@ -1685,7 +1685,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			try {
 				message.content = (await store.externalizeIfOverCap(content, cap)) as typeof message.content
 			} catch (error) {
-				outputError("Failed to externalise message content:", error)
+				taskLog.error("Failed to externalise message content:", error)
 			}
 			return
 		}
@@ -1707,7 +1707,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					}
 				}
 			} catch (error) {
-				outputError("Failed to externalise content block:", error)
+				taskLog.error("Failed to externalise content block:", error)
 			}
 		}
 	}
@@ -1792,7 +1792,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				globalStoragePath: this.globalStoragePath,
 			})
 		} catch (error) {
-			outputError("Failed to append Shofer message:", error)
+			taskLog.error("Failed to append Shofer message:", error)
 		}
 		const provider = this.providerRef.deref()
 		// §4.2: Ship an incremental `shoferMessageAppended` delta instead of the
@@ -1860,7 +1860,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				globalStoragePath: this.globalStoragePath,
 			})
 		} catch (error) {
-			outputError("Failed to append updated Shofer message:", error)
+			taskLog.error("Failed to append updated Shofer message:", error)
 		}
 		this.emit(ShoferEventName.Message, { action: "updated", message })
 	}
@@ -1887,7 +1887,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			return await this._refreshTaskMetadata()
 		} catch (error) {
-			outputError("Failed to save Shofer messages:", error)
+			taskLog.error("Failed to save Shofer messages:", error)
 			return false
 		}
 	}
@@ -1962,7 +1962,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			return true
 		} catch (error) {
-			outputError("Failed to refresh task metadata:", error)
+			taskLog.error("Failed to refresh task metadata:", error)
 			return false
 		}
 	}
@@ -2445,7 +2445,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.shoferMessages[lastFollowUpIndex].isAnswered = true
 				// Save the updated messages
 				this.saveShoferMessages().catch((error) => {
-					outputError("Failed to save answered follow-up state:", error)
+					taskLog.error("Failed to save answered follow-up state:", error)
 				})
 			}
 		}
@@ -2460,7 +2460,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.shoferMessages[lastToolAskIndex].isAnswered = true
 				void this.updateShoferMessage(this.shoferMessages[lastToolAskIndex])
 				this.saveShoferMessages().catch((error) => {
-					outputError("Failed to save answered tool-ask state:", error)
+					taskLog.error("Failed to save answered tool-ask state:", error)
 				})
 			}
 		}
@@ -2544,10 +2544,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// hydrated yet, causing it to interpret the message as a new task request.
 				this.handleWebviewAskResponse("messageResponse", text, images)
 			} else {
-				outputError("[Task#submitUserMessage] Provider reference lost")
+				taskLog.error("[Task#submitUserMessage] Provider reference lost")
 			}
 		} catch (error) {
-			outputError("[Task#submitUserMessage] Failed to submit user message:", error)
+			taskLog.error("[Task#submitUserMessage] Failed to submit user message:", error)
 		}
 	}
 
@@ -2563,7 +2563,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		try {
 			return await this.fileContextTracker.getFilesReadByRoo()
 		} catch (error) {
-			outputError(`[Task#${context}] Failed to get files read by Shofer:`, error)
+			taskLog.error(`[Task#${context}] Failed to get files read by Shofer:`, error)
 			return undefined
 		}
 	}
@@ -2872,7 +2872,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), MCP_READY_DEADLINE_MS)),
 			])
 			if (!mcpHub) {
-				outputWarn(
+				taskLog.warn(
 					`[Task#getEnabledMcpToolsCount] MCP hub not ready within ${MCP_READY_DEADLINE_MS}ms; skipping tool-count warning`,
 				)
 				return { enabledToolCount: 0, enabledServerCount: 0 }
@@ -2881,7 +2881,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const servers = mcpHub.getServers()
 			return countEnabledMcpTools(servers)
 		} catch (error) {
-			outputError("[Task#getEnabledMcpToolsCount] Error counting MCP tools:", error)
+			taskLog.error("[Task#getEnabledMcpToolsCount] Error counting MCP tools:", error)
 			return { enabledToolCount: 0, enabledServerCount: 0 }
 		}
 	}
@@ -3061,7 +3061,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// already usable; the write only matters for subsequent reloads.
 		// Errors are logged but do not block the resume flow.
 		void this.overwriteShoferMessages(modifiedShoferMessages).catch((err) => {
-			outputWarn(`preloadShoferMessages: background sanitized save failed: ${err}`)
+			taskLog.warn(`preloadShoferMessages: background sanitized save failed: ${err}`)
 		})
 	}
 
@@ -3315,7 +3315,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	public cancelCurrentRequest(): void {
 		if (this.currentRequestAbortController) {
-			outputLog(`[Task#${this.taskId}.${this.instanceId}] Aborting current HTTP request`)
+			taskLog.info(`[Task#${this.taskId}.${this.instanceId}] Aborting current HTTP request`)
 			this.currentRequestAbortController.abort()
 			this.currentRequestAbortController = undefined
 		}
@@ -3357,7 +3357,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						await child.abortTask(false)
 					}
 				} catch (err) {
-					outputError(`[Task#abortBackgroundChildren] Failed to abort child ${childId}:`, err)
+					taskLog.error(`[Task#abortBackgroundChildren] Failed to abort child ${childId}:`, err)
 				}
 			}),
 		)
@@ -3472,7 +3472,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		try {
 			this.dispose() // Call the centralized dispose method
 		} catch (error) {
-			outputError(`Error during task ${this.taskId}.${this.instanceId} disposal:`, error)
+			taskLog.error(`Error during task ${this.taskId}.${this.instanceId} disposal:`, error)
 			// Don't rethrow - we want abort to always succeed
 		}
 		// Save the countdown message in the automatic retry or other content.
@@ -3480,7 +3480,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Save the countdown message in the automatic retry or other content.
 			await this._flushSaveShoferMessages()
 		} catch (error) {
-			outputError(`Error saving messages during abort for task ${this.taskId}.${this.instanceId}:`, error)
+			taskLog.error(`Error saving messages during abort for task ${this.taskId}.${this.instanceId}:`, error)
 		}
 	}
 
@@ -3717,7 +3717,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	public dispose(): void {
-		outputLog(`[Task#dispose] disposing task ${this.taskId}.${this.instanceId}`)
+		taskLog.info(`[Task#dispose] disposing task ${this.taskId}.${this.instanceId}`)
 
 		// Drain any pending debounced save before tearing down listeners, so
 		// the trailing fire cannot execute against a half-disposed instance.
@@ -3728,14 +3728,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._debouncedSaveShoferMessages.cancel()
 			void this.saveShoferMessages()
 		} catch (error) {
-			outputError("Error draining debounced save during dispose:", error)
+			taskLog.error("Error draining debounced save during dispose:", error)
 		}
 
 		// Cancel any in-progress HTTP request
 		try {
 			this.cancelCurrentRequest()
 		} catch (error) {
-			outputError("Error cancelling current request:", error)
+			taskLog.error("Error cancelling current request:", error)
 		}
 
 		// Remove provider profile change listener
@@ -3748,7 +3748,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.providerProfileChangeListener = undefined
 			}
 		} catch (error) {
-			outputError("Error removing provider profile change listener:", error)
+			taskLog.error("Error removing provider profile change listener:", error)
 		}
 
 		// Dispose message queue and remove event listeners.
@@ -3760,14 +3760,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			this.messageQueueService.dispose()
 		} catch (error) {
-			outputError("Error disposing message queue:", error)
+			taskLog.error("Error disposing message queue:", error)
 		}
 
 		// Remove all event listeners to prevent memory leaks.
 		try {
 			this.removeAllListeners()
 		} catch (error) {
-			outputError("Error removing event listeners:", error)
+			taskLog.error("Error removing event listeners:", error)
 		}
 
 		// Release any terminals associated with this task.
@@ -3775,7 +3775,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Release any terminals associated with this task.
 			TerminalRegistry.releaseTerminalsForTask(this.taskId)
 		} catch (error) {
-			outputError("Error releasing terminals:", error)
+			taskLog.error("Error releasing terminals:", error)
 		}
 
 		// Cleanup command output artifacts
@@ -3785,7 +3785,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				return OutputInterceptor.cleanup(outputDir)
 			})
 			.catch((error) => {
-				outputError("Error cleaning up command output artifacts:", error)
+				taskLog.error("Error cleaning up command output artifacts:", error)
 			})
 
 		try {
@@ -3794,14 +3794,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.shoferIgnoreController = undefined
 			}
 		} catch (error) {
-			outputError("Error disposing ShoferIgnoreController:", error)
+			taskLog.error("Error disposing ShoferIgnoreController:", error)
 			// This is the critical one for the leak fix.
 		}
 
 		try {
 			this.fileContextTracker.dispose()
 		} catch (error) {
-			outputError("Error disposing file context tracker:", error)
+			taskLog.error("Error disposing file context tracker:", error)
 		}
 
 		try {
@@ -3810,7 +3810,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				this.diffViewProvider.revertChanges().catch(outputError)
 			}
 		} catch (error) {
-			outputError("Error reverting diff changes:", error)
+			taskLog.error("Error reverting diff changes:", error)
 		}
 	}
 
@@ -4003,7 +4003,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				for (const [name, path] of Object.entries(mentionLoadedSkills)) {
 					this.loadedSkills.set(name, path)
 				}
-				outputLog(
+				taskLog.info(
 					`[Task] mention-loaded skills set on task. loadedSkills now:`,
 					Array.from(this.loadedSkills.entries()),
 				)
@@ -4391,7 +4391,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 										// be added to assistantMessageContent, causing API 400 errors:
 										// "tool_use ids must be unique"
 										if (this.streamingToolCallIndices.has(event.id)) {
-											outputWarn(
+											taskLog.warn(
 												`[Task#${this.taskId}] Ignoring duplicate tool_call_start for ID: ${event.id} (tool: ${event.name})`,
 											)
 											continue
@@ -4511,7 +4511,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								})
 
 								if (!toolUse) {
-									outputError(`Failed to parse tool call for task ${this.taskId}:`, chunk)
+									taskLog.error(`Failed to parse tool call for task ${this.taskId}:`, chunk)
 									break
 								}
 
@@ -4555,7 +4555,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						}
 
 						if (this.abort) {
-							outputLog(`aborting stream, this.abandoned = ${this.abandoned}`)
+							taskLog.info(`aborting stream, this.abandoned = ${this.abandoned}`)
 
 							if (!this.abandoned) {
 								// Only need to gracefully abort if this instance
@@ -4696,7 +4696,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							while (!item.done) {
 								// Check for timeout
 								if (performance.now() - startTime > timeoutMs) {
-									outputWarn(
+									taskLog.warn(
 										`[Background Usage Collection] Timed out after ${timeoutMs}ms for model: ${modelId}, processed ${chunkCount} chunks`,
 									)
 									// Clean up the iterator before breaking
@@ -4739,12 +4739,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									lastApiReqIndex,
 								)
 							} else {
-								outputWarn(
+								taskLog.warn(
 									`[Background Usage Collection] Suspicious: request ${apiReqIndex} is complete, but no usage info was found. Model: ${modelId}`,
 								)
 							}
 						} catch (error) {
-							outputError("Error draining stream for usage data:", error)
+							taskLog.error("Error draining stream for usage data:", error)
 							// Still try to capture whatever usage data we have collected so far
 							if (
 								bgInputTokens > 0 ||
@@ -4768,7 +4768,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 					// Start the background task and handle any errors
 					drainStreamInBackgroundToFindAllUsage(lastApiReqIndex).catch((error) => {
-						outputError("Background usage collection failed:", error)
+						taskLog.error("Background usage collection failed:", error)
 					})
 				} catch (error) {
 					// Abandoned happens when extension is no longer waiting for the
@@ -4811,7 +4811,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						} else {
 							// Stream failed - log the error and retry with the same content
 							// The existing rate limiting will prevent rapid retries
-							outputError(
+							taskLog.error(
 								`[Task#${this.taskId}.${this.instanceId}] Stream failed, will retry: ${streamingFailedMessage}`,
 							)
 
@@ -4822,7 +4822,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 								// Check if task was aborted during the backoff
 								if (this.abort) {
-									outputLog(
+									taskLog.info(
 										`[Task#${this.taskId}.${this.instanceId}] Task aborted during mid-stream retry backoff`,
 									)
 									// Abort the entire task
@@ -5022,7 +5022,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								const sanitizedId = sanitizeToolUseId(mcpBlock.id)
 								// Pre-flight deduplication: Skip if we've already added this ID
 								if (seenToolUseIds.has(sanitizedId)) {
-									outputWarn(
+									taskLog.warn(
 										`[Task#${this.taskId}] Pre-flight deduplication: Skipping duplicate MCP tool_use ID: ${sanitizedId} (tool: ${mcpBlock.name})`,
 									)
 									continue
@@ -5043,7 +5043,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								const sanitizedId = sanitizeToolUseId(toolCallId)
 								// Pre-flight deduplication: Skip if we've already added this ID
 								if (seenToolUseIds.has(sanitizedId)) {
-									outputWarn(
+									taskLog.warn(
 										`[Task#${this.taskId}] Pre-flight deduplication: Skipping duplicate tool_use ID: ${sanitizedId} (tool: ${toolUse.name})`,
 									)
 									continue
@@ -5289,7 +5289,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						// Check if task was aborted during the backoff
 						if (this.abort) {
-							outputLog(
+							taskLog.info(
 								`[Task#${this.taskId}.${this.instanceId}] Task aborted during empty-assistant retry backoff`,
 							)
 							break
@@ -5382,7 +5382,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// Wait for MCP servers to be connected before generating system prompt
 			await pWaitFor(() => !mcpHub!.isConnecting, { timeout: 10_000 }).catch(() => {
-				outputError("MCP servers failed to connect in time")
+				taskLog.error("MCP servers failed to connect in time")
 			})
 		}
 
@@ -5521,7 +5521,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const currentProfileId = this.getCurrentProfileId(state)
 
 		// Log the context window error for debugging
-		outputWarn(
+		taskLog.warn(
 			`[Task#${this.taskId}] Context window exceeded for model ${this.api.getModel().id}. ` +
 				`Current tokens: ${contextTokens}, Context window: ${contextWindow}. ` +
 				`Forcing truncation to ${FORCED_CONTEXT_REDUCTION_PERCENT}% of current context.`,
@@ -6015,7 +6015,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Set up abort handling - when the signal is aborted, clean up the controller reference
 		abortSignal.addEventListener("abort", () => {
-			outputLog(`[Task#${this.taskId}.${this.instanceId}] AbortSignal triggered for current request`)
+			taskLog.info(`[Task#${this.taskId}.${this.instanceId}] AbortSignal triggered for current request`)
 			this.currentRequestAbortController = undefined
 		})
 
@@ -6056,7 +6056,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// If it's a context window error and we haven't exceeded max retries for this error type
 			if (isContextWindowExceededError && retryAttempt < MAX_CONTEXT_WINDOW_RETRIES) {
-				outputWarn(
+				taskLog.warn(
 					`[Task#${this.taskId}] Context window exceeded for model ${this.api.getModel().id}. ` +
 						`Retry attempt ${retryAttempt + 1}/${MAX_CONTEXT_WINDOW_RETRIES}. ` +
 						`Attempting automatic truncation...`,
@@ -6246,7 +6246,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				return
 			}
 
-			outputError("Exponential backoff failed:", err)
+			taskLog.error("Exponential backoff failed:", err)
 		}
 	}
 
@@ -6529,13 +6529,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				if (queued) {
 					setTimeout(() => {
 						this.submitUserMessage(queued.text, queued.images).catch((err) =>
-							outputError(`[Task] Failed to submit queued message:`, err),
+							taskLog.error(`[Task] Failed to submit queued message:`, err),
 						)
 					}, 0)
 				}
 			}
 		} catch (e) {
-			outputError(`[Task] Queue processing error:`, e)
+			taskLog.error(`[Task] Queue processing error:`, e)
 		}
 	}
 
@@ -6618,24 +6618,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.interactiveAsk = undefined
 		this.emit(ShoferEventName.TaskActive, this.taskId)
 
-		// Persist the running state to disk BEFORE restarting the task loop.
-		// TaskManager.onActive → setState(makeState("running")) triggers a
-		// fire-and-forget persistState write. If VS Code restarts before that
-		// write lands, sanitizeRestoredState preserves the stale completed+rating
-		// from the previous attempt_completion cycle — the task row shows an
-		// "excellent" icon instead of "idle". Awaiting the disk write here closes
-		// that race: even if the restart happens immediately after, the persisted
-		// state is "running" which sanitizeRestoredState downgrades to "idle".
-		{
-			const provider = this.providerRef.deref()
-			if (provider) {
-				await provider.updateTaskHistory({
-					id: this.taskId,
-					taskState: { lifecycle: "running" },
-				} as HistoryItem)
-			}
-		}
-
 		// Step 6: Restart the task loop with the captured queued message.
 		// We dequeued at the top of this method (before triggering abort) to
 		// guarantee we still hold the message even if any disposal path ran.
@@ -6658,7 +6640,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// parseMentions can resolve slash-style skill mentions and track
 		// them in Task.loadedSkills for the SkillsButton popover.
 		this._runTaskLoop([{ type: "text", text: `<user_message>\n${queued.text}\n</user_message>` }]).catch((err) => {
-			outputError(`[Task] Failed to restart task loop:`, err)
+			taskLog.error(`[Task] Failed to restart task loop:`, err)
 		})
 	}
 

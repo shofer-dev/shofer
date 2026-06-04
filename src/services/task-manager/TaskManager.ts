@@ -81,6 +81,18 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	private providerRef: WeakRef<ShoferProvider>
 
+	/**
+	 * Per-task persist queue.  Each fire-and-forget persistState call chains
+	 * onto the previous one so writes for the same task are serialized — the
+	 * second write can never land before the first one.
+	 *
+	 * Without this, a fire-and-forget `completed+rating` write launched by
+	 * `attempt_completion` → `TaskCompleted` can land AFTER a subsequent
+	 * `running` write from `TaskActive` → `cancelAndProcessQueuedMessages`,
+	 * leaving the stale rated state on disk after a restart.
+	 */
+	private persistChains: Map<string, Promise<void>> = new Map()
+
 	constructor(provider: ShoferProvider) {
 		super()
 		this.providerRef = new WeakRef(provider)
@@ -385,7 +397,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		managedTask.state = state
 		this.emit("managedTask:state-changed", targetTaskId, state)
 		this.emit("tasks:updated", this.getManagedTasks())
-		void this.persistState(targetTaskId, state)
+		this.enqueuePersist(targetTaskId, state)
 	}
 
 	private async persistState(targetTaskId: string, state: TaskState): Promise<void> {
@@ -410,6 +422,27 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 				err instanceof Error ? err.message : String(err),
 			)
 		}
+	}
+
+	/**
+	 * Fire-and-forget persist that is serialized per task.
+	 *
+	 * Without chaining, two fire-and-forget writes for the same task can land
+	 * out of order: a `completed+rating` write from `attempt_completion` can
+	 * overwrite a later `running` write from `cancelAndProcessQueuedMessages`
+	 * if the I/O scheduler delivers them backwards.  Chaining onto the previous
+	 * promise guarantees the second write always lands after the first.
+	 */
+	private enqueuePersist(targetTaskId: string, state: TaskState): void {
+		const prev = this.persistChains.get(targetTaskId) ?? Promise.resolve()
+		const next = prev.then(() => this.persistState(targetTaskId, state))
+		// Prune the chain once it settles so the map doesn't grow unbounded.
+		next.finally(() => {
+			if (this.persistChains.get(targetTaskId) === next) {
+				this.persistChains.delete(targetTaskId)
+			}
+		})
+		this.persistChains.set(targetTaskId, next)
 	}
 
 	renameManagedTask(targetTaskId: string, name: string): void {
