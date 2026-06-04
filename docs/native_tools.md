@@ -432,7 +432,7 @@ Create a new task instance in the chosen mode. Supports two execution models:
 
 ### `check_task_status`
 
-Check the current status of a background child task started with `new_task` using `is_background=true`. Returns the task's status and, if it has completed/errored/cancelled, its result or error message. If the child is blocked waiting for clarification from the parent (it called `ask_followup_question`), the pending question is surfaced here so the parent can answer it via `answer_subtask_question`. Set `include_activity` to `true` to also see what the child is currently doing.
+Check the current status of a background child task started with `new_task` using `is_background=true`. Returns the task's current mode, status, and — if it has completed/errored/cancelled — its result or error message. If the child is blocked waiting for clarification from the parent (it called `ask_followup_question`), the pending question is surfaced here so the parent can answer it via `answer_subtask_question`. Set `include_activity` to `true` to also see what the child is currently doing.
 
 | Param              | Type            | Required | Description                                                                    |
 | ------------------ | --------------- | :------: | ------------------------------------------------------------------------------ |
