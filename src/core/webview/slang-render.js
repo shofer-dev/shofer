@@ -432,8 +432,8 @@ function renderEdge(e, layout, layers) {
 			y1 = fn.y + NODE_H / 2,
 			x2 = tn.x,
 			y2 = tn.y + NODE_H / 2
-		if (fromLayer != null && toLayer != null && fromLayer >= toLayer) {
-			var arcH = Math.max(60, Math.abs(fromLayer - toLayer) * 50 + 20)
+		if (layers[e.from] != null && layers[e.to] != null && layers[e.from] >= layers[e.to]) {
+			var arcH = Math.max(60, Math.abs(layers[e.from] - layers[e.to]) * 50 + 20)
 			cx = (x1 + x2) / 2
 			cy = (y1 + y2) / 2 - arcH * 0.7
 		} else {
