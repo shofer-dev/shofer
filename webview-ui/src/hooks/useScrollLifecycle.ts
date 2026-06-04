@@ -234,6 +234,10 @@ export function useScrollLifecycle({
 
 	const enterUserBrowsingHistory = useCallback(
 		(_source: ScrollFollowDisengageSource) => {
+			console.log(
+				`[scroll] enterUserBrowsingHistory source=${_source} ` +
+					`prevPhase=${scrollPhaseRef.current} isAtBottom=${isAtBottomRef.current}`,
+			)
 			transitionScrollPhase("USER_BROWSING_HISTORY", _source)
 			setShowScrollToBottom(true)
 			// Cancel any pending debounced scroll-to-bottom calls
@@ -242,6 +246,16 @@ export function useScrollLifecycle({
 			// fires ~10 ms after the user scrolls up, pulling them right
 			// back to the bottom.
 			scrollToBottomSmooth.clear()
+			// Cancel any in-flight browser smooth-scroll animation.
+			// scrollToBottomSmooth uses behavior: "smooth", which runs on
+			// the compositor thread; clear() above only kills the debounce
+			// timer — it does NOT abort the animation.  Reading and
+			// re-assigning scrollTop freezes the scrollable at its current
+			// position and cancels the smooth scroll in all browsers.
+			const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
+			if (scroller) {
+				scroller.scrollTop = scroller.scrollTop
+			}
 			// Open a brief immune window so any in-flight programmatic
 			// scroll-to-bottom that completes after this point cannot
 			// pull the user back to ANCHORED_FOLLOWING.
@@ -264,7 +278,7 @@ export function useScrollLifecycle({
 				userIntentScrollUpTimeoutRef.current = null
 			}, 200)
 		},
-		[scrollToBottomSmooth, transitionScrollPhase],
+		[scrollToBottomSmooth, scrollContainerRef, transitionScrollPhase],
 	)
 
 	const clearHydrationWindow = useCallback(() => {
@@ -397,6 +411,13 @@ export function useScrollLifecycle({
 			const shouldForcePinForAnchoredStreaming =
 				scrollPhaseRef.current === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current
 			if (isAtBottomRef.current || shouldForcePinForAnchoredStreaming) {
+				if (shouldForcePinForAnchoredStreaming && !isAtBottomRef.current) {
+					console.log(
+						"[scroll] handleRowHeightChange: force-pin for streaming " +
+							`isTaller=${isTaller} isAtBottom=${isAtBottomRef.current} ` +
+							`userIntent=${userIntentScrollUpRef.current}`,
+					)
+				}
 				if (isTaller) {
 					scrollToBottomSmooth()
 				} else {
@@ -463,6 +484,10 @@ export function useScrollLifecycle({
 			}
 
 			if (currentPhase === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current) {
+				console.log(
+					"[scroll] atBottomStateChange: streaming safety-net re-scroll " +
+						`isAtBottom=${isAtBottom} userIntentScrollUp=${userIntentScrollUpRef.current}`,
+				)
 				scrollToBottomAuto()
 				setShowScrollToBottom(false)
 				return
