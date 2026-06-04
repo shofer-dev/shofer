@@ -61,4 +61,7 @@ export const workflowLog = getLogger().child({ ctx: "Workflow" })
 export const i18nLog = getLogger().child({ ctx: "I18n" })
 
 /** General utilities (countTokens, path, perf, etc.) */
+
+/** Scroll lifecycle (useScrollLifecycle webview-to-host diagnostic forwarding) */
+export const scrollLog = getLogger().child({ ctx: "Scroll" })
 export const utilLog = getLogger().child({ ctx: "Utils" })
