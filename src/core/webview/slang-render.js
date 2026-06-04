@@ -365,8 +365,8 @@ function renderNode(nm, meta) {
 	return s
 }
 
-function edgePathData(fnX, fnY, tnX, tnY, sections) {
-	// If Elk.js provided bend-point sections, use them directly.
+function edgePathData(fnX, fnY, tnX, tnY, sections, fromLayer, toLayer) {
+	// If dagre provided bend-point sections, use them directly.
 	if (sections && sections.length > 0) {
 		var d = ""
 		for (var si = 0; si < sections.length; si++) {
@@ -383,11 +383,16 @@ function edgePathData(fnX, fnY, tnX, tnY, sections) {
 		}
 		return d
 	}
-	// Fallback bezier when Elk provides no sections.
+	// Fallback bezier (used during drag when sections are stale).
 	var x1 = fnX + NODE_W,
 		y1 = fnY + NODE_H / 2,
 		x2 = tnX,
 		y2 = tnY + NODE_H / 2
+	// Back-edge / same-layer edge: arc above nodes instead of through them.
+	if (fromLayer != null && toLayer != null && fromLayer >= toLayer) {
+		var arcH = Math.max(60, Math.abs(fromLayer - toLayer) * 50 + 20)
+		return "M" + x1 + "," + y1 + " C" + x1 + "," + (y1 - arcH) + " " + x2 + "," + (y2 - arcH) + " " + x2 + "," + y2
+	}
 	var dx = Math.abs(x2 - x1)
 	var curve = Math.min(dx * 0.45, 140)
 	return "M" + x1 + "," + y1 + " C" + (x1 + curve) + "," + y1 + " " + (x2 - curve) + "," + y2 + " " + x2 + "," + y2
@@ -397,7 +402,7 @@ function renderEdge(e, layout, layers) {
 	var fn = layout[e.from],
 		tn = layout[e.to]
 	if (!fn || !tn) return ""
-	var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.sections)
+	var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.sections, layers[e.from], layers[e.to])
 	var color = e.kind === "stake" ? COLORS.stake : COLORS.await
 	var marker = e.kind === "stake" ? "url(#ah-stake)" : "url(#ah-await)"
 	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx
@@ -1291,8 +1296,8 @@ function updateConnectedEdges(agent) {
 		var fn = _layout[e.from],
 			tn = _layout[e.to]
 		if (!fn || !tn) continue
-		// Sections from dagre layout are stale after drag — use bezier fallback.
-		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, null)
+		// Sections from dagre layout are stale after drag — use bezier fallback with layer info.
+		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, null, _layers[e.from], _layers[e.to])
 		var eg = _svgEl.querySelector(
 			'.edge-group[data-edge="' + esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx + '"]',
 		)
