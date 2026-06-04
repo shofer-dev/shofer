@@ -383,6 +383,7 @@ export type ExtensionState = Pick<
 	| "logLevel"
 	| "logCategories"
 > & {
+	logCategoriesKnown?: string[]
 	lockApiConfigAcrossModes?: boolean
 	version: string
 	shoferMessages: ShoferMessage[]

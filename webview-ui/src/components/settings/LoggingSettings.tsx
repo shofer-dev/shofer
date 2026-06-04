@@ -20,39 +20,76 @@ const LOG_LEVEL_DESCRIPTIONS: Record<LogLevel, string> = {
 }
 
 /**
- * All known subsystem categories.
- * Must match the `ctx` values in `src/utils/logging/subsystems.ts` and
- * the `ALL_CATEGORIES` const in `CompactTransport.ts`.
+ * i18n keys for category labels.
+ * The UI attempts to render `settings:logging.categories.<lowercase(ctx)>`.
+ * If a ctx string doesn't have a matching key, the raw ctx value is
+ * displayed directly (no translation layer needed for new categories).
  */
-const CATEGORIES = [
-	{ id: "Task", labelKey: "task" },
-	{ id: "Webview", labelKey: "webview" },
-	{ id: "Git", labelKey: "git" },
-	{ id: "CodeIndex", labelKey: "codeIndex" },
-	{ id: "AssistantAgent", labelKey: "assistantAgent" },
-	{ id: "MCP", labelKey: "mcp" },
-	{ id: "Checkpoints", labelKey: "checkpoints" },
-	{ id: "API", labelKey: "api" },
-	{ id: "FS", labelKey: "fs" },
-	{ id: "Config", labelKey: "config" },
-	{ id: "Skills", labelKey: "skills" },
-	{ id: "Marketplace", labelKey: "marketplace" },
-	{ id: "Metrics", labelKey: "metrics" },
-	{ id: "Workflow", labelKey: "workflow" },
-	{ id: "I18n", labelKey: "i18n" },
-	{ id: "Utils", labelKey: "utils" },
-] as const
+function categoryLabelKey(ctx: string): string {
+	// Map known ctx values to their i18n keys
+	const known = new Map<string, string>([
+		["Task", "task"],
+		["Webview", "webview"],
+		["Git", "git"],
+		["CodeIndex", "codeIndex"],
+		["AssistantAgent", "assistantAgent"],
+		["MCP", "mcp"],
+		["Checkpoints", "checkpoints"],
+		["API", "api"],
+		["FS", "fs"],
+		["Config", "config"],
+		["Skills", "skills"],
+		["Marketplace", "marketplace"],
+		["Metrics", "metrics"],
+		["Workflow", "workflow"],
+		["I18n", "i18n"],
+		["Utils", "utils"],
+	])
+	return known.get(ctx) ?? ctx // fallback to raw value for new/unknown categories
+}
 
 type LoggingSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	logLevel?: LogLevel
 	logCategories?: string[]
+	logCategoriesKnown?: string[]
 	setCachedStateField: SetCachedStateField<"logLevel" | "logCategories">
 }
 
-export const LoggingSettings = ({ logLevel, logCategories, setCachedStateField, ...props }: LoggingSettingsProps) => {
+export const LoggingSettings = ({
+	logLevel,
+	logCategories,
+	logCategoriesKnown,
+	setCachedStateField,
+	...props
+}: LoggingSettingsProps) => {
 	const { t } = useAppTranslation()
 
 	const currentLevel: LogLevel = logLevel ?? "info"
+
+	// Dynamically known categories — auto-populated from the live transport.
+	// Falls back to a hardcoded set before any log lines have been emitted.
+	const categories =
+		logCategoriesKnown && logCategoriesKnown.length > 0
+			? logCategoriesKnown
+			: [
+					"Task",
+					"Webview",
+					"Git",
+					"CodeIndex",
+					"AssistantAgent",
+					"MCP",
+					"Checkpoints",
+					"API",
+					"FS",
+					"Config",
+					"Skills",
+					"Marketplace",
+					"Metrics",
+					"Workflow",
+					"I18n",
+					"Utils",
+				]
+
 	// undefined → show all; empty array → show none; non-empty → whitelist
 	const selectedCategories: Set<string> = new Set(logCategories)
 
@@ -62,20 +99,15 @@ export const LoggingSettings = ({ logLevel, logCategories, setCachedStateField, 
 		if (next.has(category)) {
 			next.delete(category)
 		} else {
-			// When first category is added, start from the full set so the
-			// user doesn't have to tick every single one.
 			if (next.size === 0 && logCategories === undefined) {
-				// User is moving from "all" to a whitelist — pre-fill all,
-				// then remove this one so they deselect by unchecking.
-				CATEGORIES.forEach((c) => next.add(c.id))
+				categories.forEach((c) => next.add(c))
 				next.delete(category)
 			} else {
 				next.add(category)
 			}
 		}
 
-		// If the user selected all categories, or none, set undefined (show all)
-		if (next.size === 0 || next.size === CATEGORIES.length) {
+		if (next.size === 0 || next.size === categories.length) {
 			setCachedStateField("logCategories", undefined)
 		} else {
 			setCachedStateField("logCategories", [...next])
@@ -87,7 +119,7 @@ export const LoggingSettings = ({ logLevel, logCategories, setCachedStateField, 
 		return logCategories.includes(category)
 	}
 
-	const categoryCount = logCategories?.length ?? CATEGORIES.length
+	const categoryCount = logCategories?.length ?? categories.length
 
 	return (
 		<div {...props}>
@@ -126,21 +158,28 @@ export const LoggingSettings = ({ logLevel, logCategories, setCachedStateField, 
 					section="logging"
 					label={t("settings:logging.categoriesLabel")}>
 					<label className="block font-medium mb-2">
-						{t("settings:logging.categoriesLabel")} ({categoryCount}/{CATEGORIES.length})
+						{t("settings:logging.categoriesLabel")} ({categoryCount}/{categories.length})
 					</label>
 					<div className="text-vscode-descriptionForeground text-xs mb-3">
 						{t("settings:logging.categoriesDescription")}
 					</div>
 					<div className="grid grid-cols-2 gap-1">
-						{CATEGORIES.map(({ id, labelKey }) => (
-							<VSCodeCheckbox
-								key={id}
-								checked={isCategoryEnabled(id)}
-								onChange={() => toggleCategory(id)}
-								data-testid={`log-category-${id}`}>
-								{t(`settings:logging.categories.${labelKey}`)}
-							</VSCodeCheckbox>
-						))}
+						{categories.map((ctx) => {
+							// Try i18n key first, fall back to raw ctx if key is missing
+							const labelKey = categoryLabelKey(ctx)
+							const key = `settings:logging.categories.${labelKey}`
+							const translated = t(key)
+							const label = translated !== key ? translated : ctx
+							return (
+								<VSCodeCheckbox
+									key={ctx}
+									checked={isCategoryEnabled(ctx)}
+									onChange={() => toggleCategory(ctx)}
+									data-testid={`log-category-${ctx}`}>
+									{label}
+								</VSCodeCheckbox>
+							)
+						})}
 					</div>
 				</SearchableSetting>
 			</Section>

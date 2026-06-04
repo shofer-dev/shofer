@@ -3396,6 +3396,15 @@ export class ShoferProvider
 			assistantAgentContextFillThreshold,
 			logLevel: logLevel ?? "info",
 			logCategories: logCategories ?? undefined,
+			logCategoriesKnown: (() => {
+				try {
+					const { getLogKnownCategories } = require("../../utils/logging")
+					const cats = getLogKnownCategories()
+					return cats.length > 0 ? cats : undefined
+				} catch {
+					return undefined
+				}
+			})(),
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
