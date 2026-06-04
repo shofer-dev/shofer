@@ -380,17 +380,10 @@ class Parser {
 		const binding = this.expect(TokenType.Ident).value
 		this.expect(TokenType.BackArrow)
 		const sources: Source[] = []
-		// Accept both Ident and AgentRef for sources (Shofer extension)
-		const srcRefToken = this.peek()
-		const srcRef =
-			srcRefToken.type === TokenType.AgentRef ? this.advance().value : this.expect(TokenType.Ident).value
-		sources.push({ ref: srcRef })
+		// Accept Ident, AgentRef, or Star for sources (Shofer extension: * is wildcard)
+		sources.push(this.parseSource())
 		while (this.match(TokenType.Comma)) {
-			// Accept both Ident and AgentRef for sources (Shofer extension)
-			const nextSrcRefToken = this.peek()
-			const nextSrcRef =
-				nextSrcRefToken.type === TokenType.AgentRef ? this.advance().value : this.expect(TokenType.Ident).value
-			sources.push({ ref: nextSrcRef })
+			sources.push(this.parseSource())
 		}
 
 		// Optional trailing options (currently unused but part of the grammar)
@@ -404,16 +397,37 @@ class Parser {
 		return { type: "AwaitOp", binding, sources, options, span: this.spanFrom(start) }
 	}
 
+	/** Parse a single await source: Ident | AgentRef | Star. */
+	private parseSource(): Source {
+		const t = this.peek()
+		if (t.type === TokenType.Star) {
+			this.advance()
+			return { ref: "*" }
+		}
+		if (t.type === TokenType.AgentRef) {
+			return { ref: this.advance().value }
+		}
+		// Accept bare Ident as a source ref (Shofer extension).
+		return { ref: this.expect(TokenType.Ident).value }
+	}
+
 	private parseCommitOp(): CommitOp {
 		const start = this.expect(TokenType.Commit)
 		let value: Expr | undefined
 		let condition: Expr | undefined
 
-		if (this.check(TokenType.If)) {
-			condition = this.parseOptionalCondition()
-		} else if (!this.isOperationStart() && !this.check(TokenType.RBrace) && !this.check(TokenType.EOF)) {
+		// Parse optional value expression (must come before optional 'if' guard).
+		if (
+			!this.check(TokenType.If) &&
+			!this.isOperationStart() &&
+			!this.check(TokenType.RBrace) &&
+			!this.check(TokenType.EOF)
+		) {
 			value = this.parseExpr()
 		}
+
+		// Parse optional 'if' guard.
+		condition = this.parseOptionalCondition()
 
 		return { type: "CommitOp", value, condition, span: this.spanFrom(start) }
 	}
