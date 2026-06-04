@@ -18,7 +18,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { getTaskDirectoryPath } from "../../utils/storage"
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 import { appendJsonLine, dedupeByKey, readJsonLines, serializeJsonLines, writeJsonLines } from "./jsonlLog"
 
 export type ApiMessage = Anthropic.MessageParam & {
@@ -61,10 +61,10 @@ async function unlinkLegacyIfPresent(taskDir: string): Promise<void> {
 		const legacy = path.join(taskDir, name)
 		try {
 			await fs.unlink(legacy)
-			outputWarn(`[readApiMessages] unlinked legacy ${name} (hard cutover to JSONL)`)
+			taskLog.warn(`[readApiMessages] unlinked legacy ${name} (hard cutover to JSONL)`)
 		} catch (e: any) {
 			if (e && e.code !== "ENOENT") {
-				outputWarn(`[readApiMessages] failed to unlink ${legacy}: ${e.message}`)
+				taskLog.warn(`[readApiMessages] failed to unlink ${legacy}: ${e.message}`)
 			}
 		}
 	}

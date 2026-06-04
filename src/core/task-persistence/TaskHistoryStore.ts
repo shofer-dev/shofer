@@ -7,7 +7,7 @@ import type { HistoryItem } from "@shofer/types"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { getStorageBasePath } from "../../utils/storage"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 /**
  * Index file format for fast startup reads.
@@ -123,7 +123,7 @@ export class TaskHistoryStore {
 
 		// Synchronously flush the index (best-effort)
 		this.flushIndex().catch((err) => {
-			outputError("[TaskHistoryStore] Error flushing index on dispose:", err)
+			taskLog.error("[TaskHistoryStore] Error flushing index on dispose:", err)
 		})
 	}
 
@@ -376,7 +376,7 @@ export class TaskHistoryStore {
 			const loadMs = Date.now() - loadT0
 
 			if (process.env.DEBUG) {
-				outputLog(`[_index] load size=${byteSize} parseMs=${loadMs} entries=${index.entries?.length ?? 0}`)
+				taskLog.info(`[_index] load size=${byteSize} parseMs=${loadMs} entries=${index.entries?.length ?? 0}`)
 			}
 
 			if (index.version === 1 && Array.isArray(index.entries)) {
@@ -409,7 +409,7 @@ export class TaskHistoryStore {
 
 		if (process.env.DEBUG) {
 			const writeMs = Date.now() - writeT0
-			outputLog(`[_index] write entries=${entries.length} elapsed=${writeMs}ms`)
+			taskLog.info(`[_index] write entries=${entries.length} elapsed=${writeMs}ms`)
 		}
 	}
 
@@ -430,7 +430,7 @@ export class TaskHistoryStore {
 			try {
 				await this.writeIndex()
 			} catch (err) {
-				outputError("[TaskHistoryStore] Failed to write index:", err)
+				taskLog.error("[TaskHistoryStore] Failed to write index:", err)
 			}
 		}, TaskHistoryStore.INDEX_WRITE_DEBOUNCE_MS)
 	}
@@ -503,22 +503,22 @@ export class TaskHistoryStore {
 						}
 						watchDebounce = setTimeout(() => {
 							this.reconcile().catch((err) => {
-								outputError("[TaskHistoryStore] Reconciliation after fs.watch failed:", err)
+								taskLog.error("[TaskHistoryStore] Reconciliation after fs.watch failed:", err)
 							})
 						}, 500)
 					})
 
 					this.fsWatcher.on("error", (err) => {
-						outputError("[TaskHistoryStore] fs.watch error:", err)
+						taskLog.error("[TaskHistoryStore] fs.watch error:", err)
 						// fs.watch is unreliable on some platforms; periodic reconciliation
 						// serves as the fallback.
 					})
 				} catch (err) {
-					outputError("[TaskHistoryStore] Failed to start fs.watch:", err)
+					taskLog.error("[TaskHistoryStore] Failed to start fs.watch:", err)
 				}
 			})
 			.catch((err) => {
-				outputError("[TaskHistoryStore] Failed to get tasks dir for watcher:", err)
+				taskLog.error("[TaskHistoryStore] Failed to get tasks dir for watcher:", err)
 			})
 	}
 
@@ -538,7 +538,7 @@ export class TaskHistoryStore {
 			try {
 				await this.reconcile()
 			} catch (err) {
-				outputError("[TaskHistoryStore] Periodic reconciliation failed:", err)
+				taskLog.error("[TaskHistoryStore] Periodic reconciliation failed:", err)
 			}
 			this.startPeriodicReconciliation()
 		}, TaskHistoryStore.RECONCILE_INTERVAL_MS)

@@ -4,7 +4,7 @@ import { saveTaskMessages } from "../task-persistence"
 import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 import { t } from "../../i18n"
-import { outputError } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 export interface CheckpointRestoreConfig {
 	provider: ShoferProvider
@@ -80,7 +80,7 @@ export async function handleCheckpointRestoreOperation(config: CheckpointRestore
 		// For edit operations, the task cancellation in checkpointRestore
 		// will trigger reinitialization, which will process pendingEditAfterRestore
 	} catch (error) {
-		outputError(`Error in checkpoint restore (${operation}):`, error)
+		webviewLog.error(`Error in checkpoint restore (${operation}):`, error)
 		vscode.window.showErrorMessage(
 			`Error during checkpoint restore: ${error instanceof Error ? error.message : String(error)}`,
 		)

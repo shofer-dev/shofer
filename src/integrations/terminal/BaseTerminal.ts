@@ -1,6 +1,6 @@
 import { truncateOutput, applyRunLengthEncoding } from "../misc/extract-text"
 
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 import type {
 	ShoferTerminalProvider,
 	ShoferTerminal,
@@ -50,7 +50,7 @@ export abstract class BaseTerminal implements ShoferTerminal {
 			if (!this.process) {
 				this.running = false
 
-				outputWarn(
+				webviewLog.warn(
 					`[Terminal ${this.provider}/${this.id}] process is undefined, so cannot set terminal stream (probably user-initiated non-Shofer command)`,
 				)
 

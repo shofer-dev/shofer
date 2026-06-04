@@ -14,7 +14,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 
 import { BaseProvider } from "./base-provider"
-import { outputError } from "../../utils/outputChannelLogger"
+import { apiLog } from "../../utils/logging/subsystems"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
 const QWEN_OAUTH_BASE_URL = "https://chat.qwen.ai"
@@ -87,7 +87,7 @@ export class QwenCodeHandler extends BaseProvider implements SingleCompletionHan
 			const credsStr = await fs.readFile(keyFile, "utf-8")
 			return JSON.parse(credsStr)
 		} catch (error) {
-			outputError(
+			apiLog.error(
 				`Error reading or parsing credentials file at ${getQwenCachedCredentialPath(this.options.qwenCodeOauthPath)}`,
 			)
 			throw new Error(`Failed to load Qwen OAuth credentials: ${error}`)
@@ -155,7 +155,7 @@ export class QwenCodeHandler extends BaseProvider implements SingleCompletionHan
 		try {
 			await fs.writeFile(filePath, JSON.stringify(newCredentials, null, 2))
 		} catch (error) {
-			outputError("Failed to save refreshed credentials:", error)
+			apiLog.error("Failed to save refreshed credentials:", error)
 			// Continue with the refreshed token in memory even if file write fails
 		}
 

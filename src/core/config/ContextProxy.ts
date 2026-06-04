@@ -20,7 +20,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { logger } from "../../utils/logging"
+import { configLog as logger } from "../../utils/logging/subsystems"
 import { supportPrompt } from "../../shared/support-prompt"
 
 type GlobalStateKey = keyof GlobalState

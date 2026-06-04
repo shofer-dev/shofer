@@ -3,7 +3,7 @@ import workerpool from "workerpool"
 
 import { countTokensResultSchema } from "../workers/types"
 import { tiktoken } from "./tiktoken"
-import { outputError } from "./outputChannelLogger"
+import { utilLog } from "./logging/subsystems"
 
 let pool: workerpool.Pool | null | undefined = undefined
 
@@ -40,7 +40,7 @@ export async function countTokens(
 		return result.count
 	} catch (error) {
 		pool = null
-		outputError(error)
+		utilLog.error(String(error))
 		return tiktoken(content)
 	}
 }

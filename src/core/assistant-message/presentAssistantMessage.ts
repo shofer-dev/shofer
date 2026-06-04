@@ -69,7 +69,8 @@ import { sleepTool } from "../tools/SleepTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
-import { outputError, outputLog, outputWarn, stringifyForLog } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
+import { stringifyForLog } from "../../utils/outputChannelLogger"
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -122,8 +123,8 @@ export async function presentAssistantMessage(shofer: Task) {
 		// This provides 80-90% reduction in cloning overhead (5-100ms saved per block).
 		block = { ...shofer.assistantMessageContent[shofer.currentStreamingContentIndex] }
 	} catch (error) {
-		outputError(`ERROR cloning block:`, error)
-		outputError(
+		webviewLog.error(`ERROR cloning block:`, error)
+		webviewLog.error(
 			`Block content:`,
 			stringifyForLog(shofer.assistantMessageContent[shofer.currentStreamingContentIndex]),
 		)
@@ -170,7 +171,7 @@ export async function presentAssistantMessage(shofer: Task) {
 
 			const pushToolResult = (content: ToolResponse, feedbackImages?: string[]) => {
 				if (hasToolResult) {
-					outputWarn(
+					webviewLog.warn(
 						`[presentAssistantMessage] Skipping duplicate tool_result for mcp_tool_use: ${toolCallId}`,
 					)
 					return
@@ -573,7 +574,7 @@ export async function presentAssistantMessage(shofer: Task) {
 			const pushToolResult = (content: ToolResponse) => {
 				// Native tool calling: only allow ONE tool_result per tool call
 				if (hasToolResult) {
-					outputWarn(
+					webviewLog.warn(
 						`[presentAssistantMessage] Skipping duplicate tool_result for tool_use_id: ${toolCallId}`,
 					)
 					return
@@ -1038,7 +1039,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					// incorrectly rejected as a "duplicate" on the next presentAssistantMessage call.
 					if (!block.partial) {
 						if (shofer.didExecuteAttemptCompletion) {
-							outputLog(
+							webviewLog.info(
 								`[presentAssistantMessage] Skipping duplicate attempt_completion (tool_use_id: ${toolCallId})`,
 							)
 							pushToolResult(
@@ -1281,7 +1282,7 @@ export async function presentAssistantMessage(shofer: Task) {
 											? parseParamsError.message
 											: String(parseParamsError)
 									const message = `Custom tool "${block.name}" argument validation failed: ${errMsg}`
-									outputError(message)
+									webviewLog.error(message)
 									shofer.consecutiveMistakeCount++
 									await shofer.say("error", message)
 									pushToolResult(formatResponse.toolError(message))
@@ -1297,7 +1298,7 @@ export async function presentAssistantMessage(shofer: Task) {
 							// §4.9: cap stringified args/result so a large custom-tool
 							// payload (e.g. file contents) cannot allocate a multi-MB
 							// string in the `large_object` space just for logging.
-							outputLog(
+							webviewLog.info(
 								`${customTool.name}.execute(): ${stringifyForLog(customToolArgs)} -> ${stringifyForLog(result)}`,
 							)
 
@@ -1446,7 +1447,7 @@ async function checkpointSaveAndMark(task: Task) {
 		await task.checkpointSave(true)
 		task.currentStreamingDidCheckpoint = true
 	} catch (error) {
-		outputError(
+		webviewLog.error(
 			`[Task#presentAssistantMessage] Error saving checkpoint: ${error instanceof Error ? error.message : String(error)}`,
 			error,
 		)

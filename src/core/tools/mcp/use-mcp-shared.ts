@@ -4,7 +4,7 @@ import type { Task } from "../../task/Task"
 import { formatResponse } from "../../prompts/responses"
 import { t } from "../../../i18n"
 import { toolNamesMatch } from "../../../utils/mcp-name"
-import { outputError } from "../../../utils/outputChannelLogger"
+import { mcpLog } from "../../../utils/logging/subsystems"
 
 /**
  * Result of MCP tool existence validation.
@@ -118,7 +118,7 @@ export async function validateMcpToolExists(
 
 		return { isValid: true, availableTools: server.tools.map((t) => t.name), resolvedToolName: tool.name }
 	} catch (error) {
-		outputError("Error validating MCP tool existence:", error)
+		mcpLog.error("Error validating MCP tool existence:", error)
 		return { isValid: true }
 	}
 }

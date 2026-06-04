@@ -4,11 +4,19 @@ import { CompactTransport } from "../CompactTransport"
 import fs from "fs"
 import path from "path"
 
+/** Minimal mock OutputChannel for testing the human-readable line path. */
+class MockOutputChannel {
+	lines: string[] = []
+	appendLine(line: string): void {
+		this.lines.push(line)
+	}
+}
+
 describe("CompactTransport", () => {
 	const testDir = "./test-logs"
 	const testLogPath = path.join(testDir, "test.log")
 	let transport: CompactTransport
-	const originalWrite = process.stdout.write
+	let outputChannel: MockOutputChannel
 
 	const cleanupTestLogs = () => {
 		const rmDirRecursive = (dirPath: string) => {
@@ -16,14 +24,11 @@ describe("CompactTransport", () => {
 				fs.readdirSync(dirPath).forEach((file) => {
 					const curPath = path.join(dirPath, file)
 					if (fs.lstatSync(curPath).isDirectory()) {
-						// Recursive call for directories
 						rmDirRecursive(curPath)
 					} else {
-						// Delete file
 						fs.unlinkSync(curPath)
 					}
 				})
-				// Remove directory after it's empty
 				fs.rmdirSync(dirPath)
 			}
 		}
@@ -36,12 +41,12 @@ describe("CompactTransport", () => {
 	}
 
 	beforeEach(() => {
-		process.stdout.write = () => true
+		outputChannel = new MockOutputChannel()
 		cleanupTestLogs()
 		fs.mkdirSync(testDir, { recursive: true })
 
-		transport = new CompactTransport({
-			level: "fatal",
+		transport = new CompactTransport(outputChannel as any, {
+			level: "debug",
 			fileOutput: {
 				enabled: true,
 				path: testLogPath,
@@ -50,7 +55,6 @@ describe("CompactTransport", () => {
 	})
 
 	afterEach(() => {
-		process.stdout.write = originalWrite
 		transport.close()
 		cleanupTestLogs()
 	})
@@ -124,7 +128,7 @@ describe("CompactTransport", () => {
 		test("handles file path with deep directories", () => {
 			const deepDir = path.join(testDir, "deep/nested/path")
 			const deepPath = path.join(deepDir, "test.log")
-			const deepTransport = new CompactTransport({
+			const deepTransport = new CompactTransport(outputChannel as any, {
 				fileOutput: { enabled: true, path: deepPath },
 			})
 
@@ -138,7 +142,6 @@ describe("CompactTransport", () => {
 				expect(fs.existsSync(deepPath)).toBeTruthy()
 			} finally {
 				deepTransport.close()
-				// Clean up the deep directory structure
 				const rmDirRecursive = (dirPath: string) => {
 					if (fs.existsSync(dirPath)) {
 						fs.readdirSync(dirPath).forEach((file) => {
@@ -169,52 +172,70 @@ describe("CompactTransport", () => {
 
 			const fileContent = fs.readFileSync(testLogPath, "utf-8")
 			const lines = fileContent.trim().split("\n")
-			// +1 for session start line
 			expect(lines.length).toBe(entries.length + 1)
 		})
 	})
 
-	describe("Delta Timestamp Conversion", () => {
-		let output: string[] = []
+	describe("Output Channel", () => {
+		test("writes human-readable lines to the output channel", () => {
+			transport.write({
+				t: Date.now(),
+				l: "info",
+				m: "hello world",
+				c: "TestCtx",
+			})
 
-		beforeEach(() => {
-			output = []
-			vi.useFakeTimers()
-			const baseTime = 1000000000000
-			vi.setSystemTime(baseTime) // Set time before transport creation
-
-			process.stdout.write = (str: string): boolean => {
-				output.push(str)
-				return true
-			}
+			expect(outputChannel.lines.length).toBeGreaterThanOrEqual(1)
+			// Find the log line (skip session start marker)
+			const logLine = outputChannel.lines.find((l) => l.includes("hello world"))
+			expect(logLine).toBeDefined()
+			expect(logLine).toContain("INFO")
+			expect(logLine).toContain("[TestCtx]")
+			expect(logLine).toContain("hello world")
 		})
 
-		afterEach(() => {
-			vi.useRealTimers()
+		test("prefixes with level and context", () => {
+			transport.write({
+				t: Date.now(),
+				l: "warn",
+				m: "warning message",
+				c: "Git",
+			})
+
+			const logLine = outputChannel.lines.find((l) => l.includes("warning message"))
+			expect(logLine).toContain("WARN")
+			expect(logLine).toContain("[Git]")
 		})
 
-		test("converts absolute timestamps to deltas", () => {
-			const baseTime = Date.now() // Use current fake time
-			const transport = new CompactTransport({
-				level: "info",
-				fileOutput: { enabled: false, path: "null" },
-			})
+		test("respects level filtering for output channel", () => {
+			transport.setLevel("warn")
 
-			transport.write({
-				t: baseTime,
-				l: "info",
-				m: "first",
-			})
+			transport.write({ t: Date.now(), l: "debug", m: "debug msg" })
+			transport.write({ t: Date.now(), l: "info", m: "info msg" })
+			transport.write({ t: Date.now(), l: "warn", m: "warn msg" })
 
-			transport.write({
-				t: baseTime + 100,
-				l: "info",
-				m: "second",
-			})
+			const debugMsg = outputChannel.lines.find((l) => l.includes("debug msg"))
+			const infoMsg = outputChannel.lines.find((l) => l.includes("info msg"))
+			const warnMsg = outputChannel.lines.find((l) => l.includes("warn msg"))
 
-			const entries = output.map((str) => JSON.parse(str))
-			expect(entries[0].t).toBe(0) // First entry should have 0 delta from transport creation
-			expect(entries[1].t).toBe(100) // Delta from previous entry
+			expect(debugMsg).toBeUndefined()
+			expect(infoMsg).toBeUndefined()
+			expect(warnMsg).toBeDefined()
+		})
+	})
+
+	describe("Level Filtering", () => {
+		test("setLevel changes the minimum level", () => {
+			transport.setLevel("error")
+
+			transport.write({ t: Date.now(), l: "warn", m: "should be filtered" })
+			transport.write({ t: Date.now(), l: "error", m: "should be visible" })
+
+			const filtered = outputChannel.lines.find((l) => l.includes("should be filtered"))
+			const visible = outputChannel.lines.find((l) => l.includes("should be visible"))
+
+			expect(filtered).toBeUndefined()
+			expect(visible).toBeDefined()
 		})
 	})
 })

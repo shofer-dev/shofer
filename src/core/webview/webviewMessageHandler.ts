@@ -78,7 +78,7 @@ import { getCommand } from "../../utils/commands"
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 import {
 	handleListWorktrees,
 	handleCreateWorktree,
@@ -119,7 +119,7 @@ async function reinitializeAssistantAgent(provider: ShoferProvider): Promise<voi
 			await mgr.initialize()
 		}
 	} catch (error) {
-		outputError("[AssistantAgentManager] re-initialize failed:", error)
+		webviewLog.error("[AssistantAgentManager] re-initialize failed:", error)
 	}
 }
 
@@ -292,7 +292,7 @@ export const webviewMessageHandler = async (
 	const handleDeleteMessageConfirm = async (messageTs: number, restoreCheckpoint?: boolean): Promise<void> => {
 		const currentShofer = provider.getCurrentTask()
 		if (!currentShofer) {
-			outputError("[handleDeleteMessageConfirm] No current shofer available")
+			webviewLog.error("[handleDeleteMessageConfirm] No current shofer available")
 			return
 		}
 
@@ -332,7 +332,7 @@ export const webviewMessageHandler = async (
 					})
 				} else {
 					// No checkpoint found before this message
-					outputLog("[handleDeleteMessageConfirm] No checkpoint found before message")
+					webviewLog.info("[handleDeleteMessageConfirm] No checkpoint found before message")
 					vscode.window.showWarningMessage("No checkpoint found before this message")
 				}
 			} else {
@@ -368,7 +368,7 @@ export const webviewMessageHandler = async (
 				await provider.postStateToWebview()
 			}
 		} catch (error) {
-			outputError("Error in delete message:", error)
+			webviewLog.error("Error in delete message:", error)
 			vscode.window.showErrorMessage(
 				t("common:errors.message.error_deleting_message", {
 					error: error instanceof Error ? error.message : String(error),
@@ -394,10 +394,10 @@ export const webviewMessageHandler = async (
 
 				hasCheckpoint = checkpoints.length > 0
 			} else {
-				outputLog("[webviewMessageHandler] Edit - Message not found in shoferMessages!")
+				webviewLog.info("[webviewMessageHandler] Edit - Message not found in shoferMessages!")
 			}
 		} else {
-			outputLog("[webviewMessageHandler] Edit - No currentShofer available!")
+			webviewLog.info("[webviewMessageHandler] Edit - No currentShofer available!")
 		}
 
 		// Send message to webview to show edit confirmation dialog
@@ -421,7 +421,7 @@ export const webviewMessageHandler = async (
 	): Promise<void> => {
 		const currentShofer = provider.getCurrentTask()
 		if (!currentShofer) {
-			outputError("[handleEditMessageConfirm] No current shofer available")
+			webviewLog.error("[handleEditMessageConfirm] No current shofer available")
 			return
 		}
 
@@ -430,7 +430,7 @@ export const webviewMessageHandler = async (
 
 		if (messageIndex === -1) {
 			const errorMessage = t("common:errors.message.message_not_found", { messageTs })
-			outputError("[handleEditMessageConfirm]", errorMessage)
+			webviewLog.error("[handleEditMessageConfirm]", errorMessage)
 			await vscode.window.showErrorMessage(errorMessage)
 			return
 		}
@@ -466,7 +466,7 @@ export const webviewMessageHandler = async (
 					return
 				} else {
 					// No checkpoint found before this message
-					outputLog("[handleEditMessageConfirm] No checkpoint found before message")
+					webviewLog.info("[handleEditMessageConfirm] No checkpoint found before message")
 					vscode.window.showWarningMessage("No checkpoint found before this message")
 					// Continue with non-checkpoint edit
 				}
@@ -539,7 +539,7 @@ export const webviewMessageHandler = async (
 
 			await currentShofer.submitUserMessage(editedContent, images)
 		} catch (error) {
-			outputError("Error in edit message:", error)
+			webviewLog.error("Error in edit message:", error)
 			vscode.window.showErrorMessage(
 				t("common:errors.message.error_editing_message", {
 					error: error instanceof Error ? error.message : String(error),
@@ -897,6 +897,20 @@ export const webviewMessageHandler = async (
 						if (!value) {
 							continue
 						}
+					} else if (key === "logLevel") {
+						if (value && typeof value === "string") {
+							// Wire log level change into the live transport immediately.
+							const { setLogLevel } = await import("../../utils/logging")
+							setLogLevel(value as "debug" | "info" | "warn" | "error" | "fatal")
+						}
+					} else if (key === "logCategories") {
+						// Wire category whitelist into the live transport immediately.
+						const { setLogCategories } = await import("../../utils/logging")
+						if (Array.isArray(value) && value.length > 0) {
+							setLogCategories(value as string[])
+						} else {
+							setLogCategories(undefined) // show all
+						}
 					}
 
 					await provider.contextProxy.setValue(key as keyof ShoferSettings, newValue)
@@ -1005,7 +1019,7 @@ export const webviewMessageHandler = async (
 				const results = []
 
 				// Only log start and end of the operation
-				outputLog(`Batch deletion started: ${ids.length} tasks total`)
+				webviewLog.info(`Batch deletion started: ${ids.length} tasks total`)
 
 				for (let i = 0; i < ids.length; i += batchSize) {
 					const batch = ids.slice(i, i + batchSize)
@@ -1016,7 +1030,7 @@ export const webviewMessageHandler = async (
 							return { id, success: true }
 						} catch (error) {
 							// Keep error logging for debugging purposes
-							outputLog(
+							webviewLog.info(
 								`Failed to delete task ${id}: ${error instanceof Error ? error.message : String(error)}`,
 							)
 							return { id, success: false }
@@ -1034,7 +1048,7 @@ export const webviewMessageHandler = async (
 				// Log final results
 				const successCount = results.filter((r) => r.success).length
 				const failCount = results.length - successCount
-				outputLog(
+				webviewLog.info(
 					`Batch deletion completed: ${successCount}/${ids.length} tasks successful, ${failCount} tasks failed`,
 				)
 			}
@@ -1062,7 +1076,7 @@ export const webviewMessageHandler = async (
 					aggregatedCosts: result.aggregatedCosts,
 				})
 			} catch (error) {
-				outputError("Error getting task with aggregated costs:", error)
+				webviewLog.error("Error getting task with aggregated costs:", error)
 				await provider.postMessageToWebview({
 					type: "taskWithAggregatedCosts",
 					// Include taskId when available for correlation in UI logs.
@@ -1125,7 +1139,7 @@ export const webviewMessageHandler = async (
 				try {
 					return await getModels(options)
 				} catch (error) {
-					outputError(
+					webviewLog.error(
 						`Failed to fetch models in webviewMessageHandler requestRouterModels for ${options.provider}:`,
 						error,
 					)
@@ -1215,7 +1229,7 @@ export const webviewMessageHandler = async (
 				} else {
 					// Handle rejection: Post a specific error message for this provider.
 					const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason)
-					outputError(`Error fetching models for ${routerName}:`, result.reason)
+					webviewLog.error(`Error fetching models for ${routerName}:`, result.reason)
 
 					routerModels[routerName] = {} // Ensure it's an empty object in the main routerModels message.
 
@@ -1253,7 +1267,7 @@ export const webviewMessageHandler = async (
 				}
 			} catch (error) {
 				// Silently fail - user hasn't configured Ollama yet
-				outputLog("Ollama models fetch failed:", error)
+				webviewLog.info("Ollama models fetch failed:", error)
 			}
 			break
 		}
@@ -1278,7 +1292,7 @@ export const webviewMessageHandler = async (
 				}
 			} catch (error) {
 				// Silently fail - user hasn't configured LM Studio yet.
-				outputLog("LM Studio models fetch failed:", error)
+				webviewLog.info("LM Studio models fetch failed:", error)
 			}
 			break
 		}
@@ -1773,7 +1787,7 @@ export const webviewMessageHandler = async (
 						value: vscode.workspace.getConfiguration().get(setting),
 					})
 				} catch (error) {
-					outputError(`Failed to get VSCode setting ${message.setting}:`, error)
+					webviewLog.error(`Failed to get VSCode setting ${message.setting}:`, error)
 
 					await provider.postMessageToWebview({
 						type: "vsCodeSetting",
@@ -3206,7 +3220,7 @@ export const webviewMessageHandler = async (
 					})
 					await provider.postStateToWebview()
 				} catch (error) {
-					outputError("Marketplace: Error filtering items:", error)
+					webviewLog.error("Marketplace: Error filtering items:", error)
 					vscode.window.showErrorMessage("Failed to filter marketplace items")
 				}
 			}
@@ -3227,7 +3241,7 @@ export const webviewMessageHandler = async (
 						message.mpInstallOptions,
 					)
 					await provider.postStateToWebview()
-					outputLog(`Marketplace item installed and config file opened: ${configFilePath}`)
+					webviewLog.info(`Marketplace item installed and config file opened: ${configFilePath}`)
 
 					// Send success message to webview
 					provider.postMessageToWebview({
@@ -3236,7 +3250,7 @@ export const webviewMessageHandler = async (
 						slug: message.mpItem.id,
 					})
 				} catch (error) {
-					outputError(`Error installing marketplace item: ${error}`)
+					webviewLog.error(`Error installing marketplace item: ${error}`)
 					// Send error message to webview
 					provider.postMessageToWebview({
 						type: "marketplaceInstallResult",
@@ -3262,7 +3276,7 @@ export const webviewMessageHandler = async (
 						slug: message.mpItem.id,
 					})
 				} catch (error) {
-					outputError(`Error removing marketplace item: ${error}`)
+					webviewLog.error(`Error removing marketplace item: ${error}`)
 
 					// Show error message to user
 					vscode.window.showErrorMessage(
@@ -3282,7 +3296,7 @@ export const webviewMessageHandler = async (
 				const errorMessage = !marketplaceManager
 					? "Marketplace manager is not available"
 					: "Missing required parameters for marketplace item removal"
-				outputError(errorMessage)
+				webviewLog.error(errorMessage)
 
 				vscode.window.showErrorMessage(errorMessage)
 
@@ -3305,9 +3319,11 @@ export const webviewMessageHandler = async (
 						parameters: message.payload.parameters,
 					})
 					await provider.postStateToWebview()
-					outputLog(`Marketplace item with parameters installed and config file opened: ${configFilePath}`)
+					webviewLog.info(
+						`Marketplace item with parameters installed and config file opened: ${configFilePath}`,
+					)
 				} catch (error) {
-					outputError(`Error installing marketplace item with parameters: ${error}`)
+					webviewLog.error(`Error installing marketplace item with parameters: ${error}`)
 					vscode.window.showErrorMessage(
 						`Failed to install marketplace item: ${error instanceof Error ? error.message : String(error)}`,
 					)

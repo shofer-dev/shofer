@@ -7,7 +7,7 @@
  */
 
 import type * as vscode from "vscode"
-import { outputLog } from "../../utils/outputChannelLogger"
+import { mcpLog as mcpSysLog } from "../../utils/logging/subsystems"
 
 let outputChannel: vscode.OutputChannel | undefined
 
@@ -21,5 +21,5 @@ export function mcpLog(message: string): void {
 	}
 	// Mirror to console so it also shows up in the Extension Host log,
 	// which is convenient when tailing logs from a terminal/dev-tools.
-	outputLog(message)
+	mcpSysLog.info(message)
 }

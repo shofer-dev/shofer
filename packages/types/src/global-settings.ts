@@ -280,6 +280,20 @@ export const globalSettingsSchema = z.object({
 	 * @default 1048576 (1 MiB)
 	 */
 	shoferMcpMaxResponseBytes: z.number().int().min(0).optional(),
+
+	/**
+	 * Minimum log level for the extension's output channel logger.
+	 * Log entries below this threshold are silently dropped.
+	 * @default "info"
+	 */
+	logLevel: z.enum(["debug", "info", "warn", "error", "fatal"]).optional(),
+
+	/**
+	 * Whitelist of log categories (ctx identifiers) to display.
+	 * When undefined or empty, all categories are shown.
+	 * @default undefined (all categories)
+	 */
+	logCategories: z.array(z.string()).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

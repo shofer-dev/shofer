@@ -26,7 +26,7 @@ import type { ChangedFileEntry, ChangedFilesPayload } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import type { FileSnapshot } from "../context-tracking/FileContextTracker"
-import { outputLog, outputWarn, outputError } from "../../utils/outputChannelLogger"
+import { fsLog } from "../../utils/logging/subsystems"
 
 /** Normalize to POSIX-style workspace-relative path for stable webview keys. */
 function toPosix(p: string): string {
@@ -150,7 +150,7 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 				const lines = currentContent.split("\n").length - 1
 				insertions = Math.max(0, lines)
 			} else {
-				outputWarn(
+				fsLog.warn(
 					`[ChangedFilesService] base copy missing for ${relPath} (snapshot says text), diff stats unavailable`,
 				)
 			}
@@ -268,7 +268,7 @@ export async function restoreAll(task: Task): Promise<void> {
 		try {
 			await restoreFile(task, p)
 		} catch (err) {
-			outputError(`[ChangedFilesService] restoreFile(${p}) failed:`, err)
+			fsLog.error(`[ChangedFilesService] restoreFile(${p}) failed:`, err)
 		}
 	}
 }
@@ -303,7 +303,7 @@ export async function acceptFile(task: Task, relPath: string): Promise<void> {
 	// Clear the final snapshot so the file disappears from the panel
 	// (it now matches the updated baseline and there's nothing to redo).
 	await task.fileContextTracker.removeFinalSnapshot(posix)
-	outputLog(
+	fsLog.info(
 		`[ChangedFilesService] acceptFile(${posix}): promoted disk → base, kind=${content !== undefined ? "text" : "absent"}`,
 	)
 }
@@ -311,12 +311,12 @@ export async function acceptFile(task: Task, relPath: string): Promise<void> {
 /** Accepts all files Shofer edited in the current Task. */
 export async function acceptAll(task: Task): Promise<void> {
 	const candidates = await task.fileContextTracker.getFilesEditedByRoo()
-	outputLog(`[ChangedFilesService] acceptAll: ${candidates.length} candidate(s)`)
+	fsLog.info(`[ChangedFilesService] acceptAll: ${candidates.length} candidate(s)`)
 	for (const p of candidates) {
 		try {
 			await acceptFile(task, p)
 		} catch (err) {
-			outputError(`[ChangedFilesService] acceptFile(${p}) failed:`, err)
+			fsLog.error(`[ChangedFilesService] acceptFile(${p}) failed:`, err)
 		}
 	}
 }

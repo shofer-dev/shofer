@@ -5,7 +5,7 @@ import { ApiMessage } from "../task-persistence/apiMessages"
 import { cleanupAfterTruncation } from "../condense"
 import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
 import { getTaskDirectoryPath } from "../../utils/storage"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 export interface RewindOptions {
 	/** Whether to include the target message in deletion (edit=true, delete=false) */
@@ -107,13 +107,13 @@ export class MessageManager {
 			// Collect condenseIds from condense_context events
 			if (msg.say === "condense_context" && msg.contextCondense?.condenseId) {
 				condenseIds.add(msg.contextCondense.condenseId)
-				outputLog(`[MessageManager] Found condense_context to remove: ${msg.contextCondense.condenseId}`)
+				taskLog.info(`[MessageManager] Found condense_context to remove: ${msg.contextCondense.condenseId}`)
 			}
 
 			// Collect truncationIds from sliding_window_truncation events
 			if (msg.say === "sliding_window_truncation" && msg.contextTruncation?.truncationId) {
 				truncationIds.add(msg.contextTruncation.truncationId)
-				outputLog(
+				taskLog.info(
 					`[MessageManager] Found sliding_window_truncation to remove: ${msg.contextTruncation.truncationId}`,
 				)
 			}
@@ -186,7 +186,7 @@ export class MessageManager {
 		if (removedIds.condenseIds.size > 0) {
 			apiHistory = apiHistory.filter((msg) => {
 				if (msg.isSummary && msg.condenseId && removedIds.condenseIds.has(msg.condenseId)) {
-					outputLog(`[MessageManager] Removing orphaned Summary with condenseId: ${msg.condenseId}`)
+					taskLog.info(`[MessageManager] Removing orphaned Summary with condenseId: ${msg.condenseId}`)
 					return false
 				}
 				return true
@@ -197,7 +197,7 @@ export class MessageManager {
 		if (removedIds.truncationIds.size > 0) {
 			apiHistory = apiHistory.filter((msg) => {
 				if (msg.isTruncationMarker && msg.truncationId && removedIds.truncationIds.has(msg.truncationId)) {
-					outputLog(
+					taskLog.info(
 						`[MessageManager] Removing orphaned truncation marker with truncationId: ${msg.truncationId}`,
 					)
 					return false
@@ -233,7 +233,7 @@ export class MessageManager {
 
 			// Cleanup artifacts asynchronously (fire-and-forget with error handling)
 			this.cleanupOrphanedArtifacts(validIds).catch((error) => {
-				outputError("[MessageManager] Error cleaning up orphaned command output artifacts:", error)
+				taskLog.error("[MessageManager] Error cleaning up orphaned command output artifacts:", error)
 			})
 		}
 
@@ -266,7 +266,7 @@ export class MessageManager {
 			await OutputInterceptor.cleanupByIds(outputDir, validIds)
 		} catch (error) {
 			// Silently fail - cleanup is best-effort
-			outputLog("[MessageManager] Artifact cleanup skipped:", error)
+			taskLog.info("[MessageManager] Artifact cleanup skipped:", error)
 		}
 	}
 }

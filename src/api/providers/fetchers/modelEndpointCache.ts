@@ -14,7 +14,7 @@ import { safeWriteJson } from "../../../utils/safeWriteJson"
 
 import { getOpenRouterModelEndpoints } from "./openrouter"
 import { getModels } from "./modelCache"
-import { outputLog, outputError } from "../../../utils/outputChannelLogger"
+import { apiLog } from "../../../utils/logging/subsystems"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 
@@ -53,7 +53,7 @@ export const getModelEndpoints = async ({
 	let modelProviders = memoryCache.get<ModelRecord>(key)
 
 	if (modelProviders) {
-		// outputLog(`[getModelProviders] NodeCache hit for ${key} -> ${Object.keys(modelProviders).length}`)
+		// apiLog.info(`[getModelProviders] NodeCache hit for ${key} -> ${Object.keys(modelProviders).length}`)
 		return modelProviders
 	}
 
@@ -78,14 +78,14 @@ export const getModelEndpoints = async ({
 	}
 
 	if (Object.keys(modelProviders).length > 0) {
-		// outputLog(`[getModelProviders] API fetch for ${key} -> ${Object.keys(modelProviders).length}`)
+		// apiLog.info(`[getModelProviders] API fetch for ${key} -> ${Object.keys(modelProviders).length}`)
 		memoryCache.set(key, modelProviders)
 
 		try {
 			await writeModelEndpoints(key, modelProviders)
-			// outputLog(`[getModelProviders] wrote ${key} endpoints to file cache`)
+			// apiLog.info(`[getModelProviders] wrote ${key} endpoints to file cache`)
 		} catch (error) {
-			outputError(`[getModelProviders] error writing ${key} endpoints to file cache`, error)
+			apiLog.error(`[getModelProviders] error writing ${key} endpoints to file cache`, error)
 		}
 
 		return modelProviders
@@ -93,9 +93,9 @@ export const getModelEndpoints = async ({
 
 	try {
 		modelProviders = await readModelEndpoints(router)
-		// outputLog(`[getModelProviders] read ${key} endpoints from file cache`)
+		// apiLog.info(`[getModelProviders] read ${key} endpoints from file cache`)
 	} catch (error) {
-		outputError(`[getModelProviders] error reading ${key} endpoints from file cache`, error)
+		apiLog.error(`[getModelProviders] error reading ${key} endpoints from file cache`, error)
 	}
 
 	return modelProviders ?? {}

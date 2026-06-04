@@ -36,7 +36,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { ApiStream } from "../transform/stream"
 import { BaseProvider } from "./base-provider"
-import { logger } from "../../utils/logging"
+import { apiLog as logger } from "../../utils/logging/subsystems"
 import { Package } from "../../shared/package"
 import { MultiPointStrategy } from "../transform/cache-strategy/multi-point-strategy"
 import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"

@@ -4,7 +4,7 @@ import { supportPrompt } from "../../shared/support-prompt"
 import { singleCompletionHandler } from "../../utils/single-completion-handler"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { ShoferProvider } from "./ShoferProvider"
-import { outputError } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 export interface MessageEnhancerOptions {
 	text: string
@@ -122,7 +122,7 @@ export class MessageEnhancer {
 				.join("\n")
 		} catch (error) {
 			// Log error but don't fail the enhancement
-			outputError("Failed to extract task history:", error)
+			webviewLog.error("Failed to extract task history:", error)
 			return ""
 		}
 	}

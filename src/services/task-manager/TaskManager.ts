@@ -13,7 +13,7 @@ import type {
 import { ShoferEventName, isTerminalLifecycle, IDLE_TASK_STATE } from "@shofer/types"
 
 import type { Task } from "../../core/task/Task"
-import { outputError } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { incTaskCreated, incTaskCompleted, incTaskErrored } from "../../metrics/registry"
 
@@ -417,7 +417,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 				taskState: state,
 			} as HistoryItem)
 		} catch (err) {
-			outputError(
+			taskLog.error(
 				`[TaskManager] Failed to persist taskState for ${targetTaskId}:`,
 				err instanceof Error ? err.message : String(err),
 			)

@@ -19,7 +19,7 @@ import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { fsLog } from "../../utils/logging/subsystems"
 
 interface RenameSymbolParams {
 	path: string
@@ -148,7 +148,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 					}
 					await task.fileContextTracker?.captureOriginal(relPath, original)
 				} catch (err) {
-					outputWarn(`[RenameSymbolTool] captureOriginal failed for ${relPath}:`, err)
+					fsLog.warn(`[RenameSymbolTool] captureOriginal failed for ${relPath}:`, err)
 				}
 			}
 
@@ -163,7 +163,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 					await task.fileContextTracker?.trackFileContext(relPath, "shofer_edited")
 					task.didEditFile = true
 				} catch (err) {
-					outputWarn(`[RenameSymbolTool] trackFileContext failed for ${relPath}:`, err)
+					fsLog.warn(`[RenameSymbolTool] trackFileContext failed for ${relPath}:`, err)
 				}
 			}
 

@@ -21,7 +21,7 @@ import { t } from "../../i18n"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getWorktreeCommandWarning } from "../../utils/worktreePathGuard"
-import { outputError } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 class ShellIntegrationError extends Error {}
 
@@ -257,7 +257,7 @@ export async function executeCommandInTerminal(
 				})
 			})
 			.catch((error) => {
-				outputError("[ExecuteCommandTool] Failed to publish command output:", error)
+				taskLog.error("[ExecuteCommandTool] Failed to publish command output:", error)
 			})
 
 		return commandOutputSayChain

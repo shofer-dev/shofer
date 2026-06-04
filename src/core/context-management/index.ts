@@ -8,7 +8,7 @@ import { MAX_CONDENSE_THRESHOLD, MIN_CONDENSE_THRESHOLD, summarizeConversation, 
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/types"
 import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
-import { outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 /**
  * Context Management
@@ -298,7 +298,7 @@ export async function manageContext({
 			effectiveThreshold = profileThreshold
 		} else {
 			// Invalid threshold value, fall back to global setting
-			outputWarn(
+			taskLog.warn(
 				`Invalid profile threshold ${profileThreshold} for profile "${currentProfileId}". Using global default of ${autoCondenseContextPercent}%`,
 			)
 			effectiveThreshold = autoCondenseContextPercent

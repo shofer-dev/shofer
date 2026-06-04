@@ -31,7 +31,7 @@ import type { AssistantAgentConfig } from "@shofer/types"
 
 import { buildApiHandler, type ApiHandler } from "../../api"
 import { estimateUsdCost } from "./pricing"
-import { logger } from "../../utils/logging"
+import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
 
 const LOG_PREFIX = "[AssistantAgent.LlmClient]"
 

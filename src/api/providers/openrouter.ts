@@ -39,7 +39,7 @@ import type { ApiHandlerCreateMessageMetadata, SingleCompletionHandler } from ".
 import { handleOpenAIError } from "./utils/openai-error-handler"
 import { generateImageWithProvider, ImageGenerationResult } from "./utils/image-generation"
 import { applyRouterToolPreferences } from "./utils/router-tool-preferences"
-import { outputError } from "../../utils/outputChannelLogger"
+import { apiLog } from "../../utils/logging/subsystems"
 
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {
@@ -158,7 +158,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 
 		// Load models asynchronously to populate cache before getModel() is called
 		this.loadDynamicModels().catch((error) => {
-			outputError("[OpenRouterHandler] Failed to load dynamic models:", error)
+			apiLog.error("[OpenRouterHandler] Failed to load dynamic models:", error)
 		})
 	}
 
@@ -176,7 +176,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			this.models = models
 			this.endpoints = endpoints
 		} catch (error) {
-			outputError("[OpenRouterHandler] Error loading dynamic models:", {
+			apiLog.error("[OpenRouterHandler] Error loading dynamic models:", {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
 			})

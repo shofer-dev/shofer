@@ -13,7 +13,7 @@ import {
 	SkillNameValidationError,
 	SKILL_NAME_MAX_LENGTH,
 } from "@shofer/types"
-import { outputError } from "../../utils/outputChannelLogger"
+import { skillsLog } from "../../utils/logging/subsystems"
 import { t } from "../../i18n"
 
 // Re-export for convenience
@@ -107,11 +107,11 @@ export class SkillsManager {
 
 			// Validate required fields (only name and description for now)
 			if (!frontmatter.name || typeof frontmatter.name !== "string") {
-				outputError(`Skill at ${skillDir} is missing required 'name' field`)
+				skillsLog.error(`Skill at ${skillDir} is missing required 'name' field`)
 				return
 			}
 			if (!frontmatter.description || typeof frontmatter.description !== "string") {
-				outputError(`Skill at ${skillDir} is missing required 'description' field`)
+				skillsLog.error(`Skill at ${skillDir} is missing required 'description' field`)
 				return
 			}
 
@@ -119,7 +119,7 @@ export class SkillsManager {
 			// Per the Agent Skills spec: "name field must match the parent directory name"
 			const effectiveSkillName = skillName || path.basename(skillDir)
 			if (frontmatter.name !== effectiveSkillName) {
-				outputError(`Skill name "${frontmatter.name}" doesn't match directory "${effectiveSkillName}"`)
+				skillsLog.error(`Skill name "${frontmatter.name}" doesn't match directory "${effectiveSkillName}"`)
 				return
 			}
 
@@ -127,7 +127,7 @@ export class SkillsManager {
 			const nameValidation = validateSkillNameShared(effectiveSkillName)
 			if (!nameValidation.valid) {
 				const errorMessage = this.getSkillNameErrorMessage(effectiveSkillName, nameValidation.error!)
-				outputError(`Skill name "${effectiveSkillName}" is invalid: ${errorMessage}`)
+				skillsLog.error(`Skill name "${effectiveSkillName}" is invalid: ${errorMessage}`)
 				return
 			}
 
@@ -136,7 +136,7 @@ export class SkillsManager {
 			// - non-empty (after trimming)
 			const description = frontmatter.description.trim()
 			if (description.length < 1 || description.length > 1024) {
-				outputError(
+				skillsLog.error(
 					`Skill "${effectiveSkillName}" has an invalid description length: must be 1-1024 characters (got ${description.length})`,
 				)
 				return
@@ -172,7 +172,7 @@ export class SkillsManager {
 				modeSlugs, // New: array of mode slugs, undefined = any mode
 			})
 		} catch (error) {
-			outputError(`Failed to load skill at ${skillDir}:`, error)
+			skillsLog.error(`Failed to load skill at ${skillDir}:`, error)
 		}
 	}
 

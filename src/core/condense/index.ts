@@ -11,7 +11,7 @@ import { findLast } from "../../shared/array"
 import { supportPrompt } from "../../shared/support-prompt"
 import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import { generateFoldedFileContext } from "./foldedFileContext"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 export type { FoldedFileContextResult, FoldedFileContextOptions } from "./foldedFileContext"
 
@@ -323,7 +323,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 
 	// Validate that the API handler supports message creation
 	if (!apiHandler || typeof apiHandler.createMessage !== "function") {
-		outputError("API handler is invalid for condensing. Cannot proceed.")
+		taskLog.error("API handler is invalid for condensing. Cannot proceed.")
 		const error = t("common:errors.condense_handler_invalid")
 		return { ...response, error }
 	}
@@ -345,7 +345,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 			}
 		}
 	} catch (error) {
-		outputError("Error during condensing API call:", error)
+		taskLog.error("Error during condensing API call:", error)
 		const errorMessage = error instanceof Error ? error.message : String(error)
 
 		// Capture detailed error information for debugging
@@ -434,7 +434,7 @@ ${commandBlocks}
 				}
 			}
 		} catch (error) {
-			outputError("[summarizeConversation] Failed to generate folded file context:", error)
+			taskLog.error("[summarizeConversation] Failed to generate folded file context:", error)
 			// Continue without folded context - non-critical failure
 		}
 	}

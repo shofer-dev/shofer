@@ -1,7 +1,7 @@
 import * as path from "path"
 import os from "os"
 import * as vscode from "vscode"
-import { outputLog } from "./outputChannelLogger"
+import { utilLog } from "./logging/subsystems"
 
 /*
 The Node.js 'path' module resolves and normalizes paths differently depending on the platform:
@@ -130,7 +130,7 @@ export const getWorkspacePathForContext = (contextPath?: string): string => {
 			return workspaceFolder.uri.fsPath
 		}
 		// Debug logging when falling back
-		outputLog(`[CodeIndex] No workspace found for context path: ${contextPath}, falling back to default`)
+		utilLog.info(`[CodeIndex] No workspace found for context path: ${contextPath}, falling back to default`)
 	}
 
 	// Fall back to current behavior

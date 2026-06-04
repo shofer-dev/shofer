@@ -2,7 +2,7 @@
 
 import { AwsBedrockHandler } from "../bedrock"
 import { BedrockRuntimeClient, ConverseStreamCommand } from "@aws-sdk/client-bedrock-runtime"
-import { logger } from "../../../utils/logging"
+import { apiLog as logger } from "../../../utils/logging/subsystems"
 
 // Mock the AWS SDK
 vi.mock("@aws-sdk/client-bedrock-runtime")

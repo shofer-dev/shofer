@@ -4,7 +4,7 @@ import { LLM, LLMInfo, LLMInstanceInfo, LMStudioClient } from "@lmstudio/sdk"
 import { type ModelInfo, lMStudioDefaultModelInfo } from "@shofer/types"
 
 import { flushModels, getModels } from "./modelCache"
-import { outputWarn, outputError } from "../../../utils/outputChannelLogger"
+import { apiLog } from "../../../utils/logging/subsystems"
 
 const modelsWithLoadedDetails = new Set<string>()
 
@@ -26,9 +26,9 @@ export const forceFullModelDetailsLoad = async (baseUrl: string, modelId: string
 		modelsWithLoadedDetails.add(modelId)
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ECONNREFUSED") {
-			outputWarn(`Error connecting to LMStudio at ${baseUrl}`)
+			apiLog.warn(`Error connecting to LMStudio at ${baseUrl}`)
 		} else {
-			outputError(
+			apiLog.error(
 				`Error refreshing LMStudio model details: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 			)
 		}
@@ -79,7 +79,7 @@ export async function getLMStudioModels(baseUrl = "http://localhost:1234"): Prom
 				models[model.path] = parseLMStudioModel(model)
 			}
 		} catch (error) {
-			outputWarn("Failed to list downloaded models, falling back to loaded models only")
+			apiLog.warn("Failed to list downloaded models, falling back to loaded models only")
 		}
 
 		// Get loaded models for their runtime info (context size)
@@ -118,9 +118,9 @@ export async function getLMStudioModels(baseUrl = "http://localhost:1234"): Prom
 		}
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ECONNREFUSED") {
-			outputWarn(`Error connecting to LMStudio at ${baseUrl}`)
+			apiLog.warn(`Error connecting to LMStudio at ${baseUrl}`)
 		} else {
-			outputError(
+			apiLog.error(
 				`Error fetching LMStudio models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 			)
 		}

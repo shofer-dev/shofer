@@ -1,4 +1,4 @@
-import { outputWarn } from "./outputChannelLogger"
+import { configLog } from "./logging/subsystems"
 
 export type InjectableConfigType =
 	| string
@@ -54,7 +54,7 @@ export async function injectVariables<C extends InjectableConfigType>(
 				const nestedValue = value[name]
 
 				if (nestedValue == null) {
-					outputWarn(`[injectVariables] variable "${name}" referenced but not found in "${key}"`)
+					configLog.warn(`[injectVariables] variable "${name}" referenced but not found in "${key}"`)
 					return propNotFoundValue ?? match
 				}
 

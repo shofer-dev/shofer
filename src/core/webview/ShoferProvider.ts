@@ -103,7 +103,7 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
-import { outputError, outputLog, outputWarn } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 import { time } from "../../utils/perf"
 import { setProviderReady } from "../../metrics/server"
 
@@ -2008,14 +2008,14 @@ export class ShoferProvider
 
 			if (fs.existsSync(portFilePath)) {
 				localPort = fs.readFileSync(portFilePath, "utf8").trim()
-				outputLog(`[ShoferProvider:Vite] Using Vite server port from ${portFilePath}: ${localPort}`)
+				webviewLog.info(`[ShoferProvider:Vite] Using Vite server port from ${portFilePath}: ${localPort}`)
 			} else {
-				outputLog(
+				webviewLog.info(
 					`[ShoferProvider:Vite] Port file not found at ${portFilePath}, using default port: ${localPort}`,
 				)
 			}
 		} catch (err) {
-			outputError("[ShoferProvider:Vite] Failed to read Vite port file:", err)
+			webviewLog.error("[ShoferProvider:Vite] Failed to read Vite port file:", err)
 		}
 
 		const localServerUrl = `localhost:${localPort}`
@@ -2711,7 +2711,7 @@ export class ShoferProvider
 		try {
 			apiConversationHistory = await readApiMessages({ taskId: id, globalStoragePath })
 		} catch (error) {
-			outputWarn(
+			webviewLog.warn(
 				`[getTaskWithId] api_conversation_history.jsonl corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -2721,7 +2721,7 @@ export class ShoferProvider
 		// an empty `api_conversation_history.jsonl` is expected, not a fault. Only
 		// warn for tasks that should have API turns.
 		if (apiConversationHistory.length === 0 && !historyItem.isWorkflow) {
-			outputWarn(`[getTaskWithId] api_conversation_history.jsonl missing or empty for task ${id}`)
+			webviewLog.warn(`[getTaskWithId] api_conversation_history.jsonl missing or empty for task ${id}`)
 		}
 
 		return {
@@ -2805,7 +2805,7 @@ export class ShoferProvider
 			const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 			uiMessages = (await readTaskMessages({ taskId: id, globalStoragePath })) as typeof uiMessages
 		} catch (err) {
-			outputWarn(
+			webviewLog.warn(
 				`[exportTaskWithIdJson] Could not read ui_messages.jsonl for task ${id}: ${err instanceof Error ? err.message : String(err)}`,
 			)
 		}
@@ -2870,7 +2870,7 @@ export class ShoferProvider
 						}
 					} catch (error) {
 						// Child task may already be deleted or not found, continue
-						outputLog(`[deleteTaskWithId] child task ${taskId} not found, skipping`)
+						webviewLog.info(`[deleteTaskWithId] child task ${taskId} not found, skipping`)
 					}
 				}
 
@@ -2914,7 +2914,7 @@ export class ShoferProvider
 				try {
 					await ShadowCheckpointService.deleteTask({ taskId, globalStorageDir, workspaceDir })
 				} catch (error) {
-					outputError(
+					webviewLog.error(
 						`[deleteTaskWithId${taskId}] failed to delete associated shadow repository or branch: ${error instanceof Error ? error.message : String(error)}`,
 					)
 				}
@@ -2923,9 +2923,9 @@ export class ShoferProvider
 				try {
 					const dirPath = await getTaskDirectoryPath(globalStoragePath, taskId)
 					await fs.rm(dirPath, { recursive: true, force: true })
-					outputLog(`[deleteTaskWithId${taskId}] removed task directory`)
+					webviewLog.info(`[deleteTaskWithId${taskId}] removed task directory`)
 				} catch (error) {
-					outputError(
+					webviewLog.error(
 						`[deleteTaskWithId${taskId}] failed to remove task directory: ${error instanceof Error ? error.message : String(error)}`,
 					)
 				}
@@ -3013,11 +3013,11 @@ export class ShoferProvider
 		try {
 			const [marketplaceResult, marketplaceInstalledMetadata] = await Promise.all([
 				this.marketplaceManager.getMarketplaceItems().catch((error) => {
-					outputError("Failed to fetch marketplace items:", error)
+					webviewLog.error("Failed to fetch marketplace items:", error)
 					return { organizationMcps: [], marketplaceItems: [], errors: [error.message] }
 				}),
 				this.marketplaceManager.getInstallationMetadata().catch((error) => {
-					outputError("Failed to fetch installation metadata:", error)
+					webviewLog.error("Failed to fetch installation metadata:", error)
 					return { project: {}, global: {} } as MarketplaceInstalledMetadata
 				}),
 			])
@@ -3031,7 +3031,7 @@ export class ShoferProvider
 				errors: marketplaceResult.errors,
 			})
 		} catch (error) {
-			outputError("Failed to fetch marketplace data:", error)
+			webviewLog.error("Failed to fetch marketplace data:", error)
 
 			// Send empty data on error to prevent UI from hanging
 			this.postMessageToWebview({
@@ -3101,7 +3101,7 @@ export class ShoferProvider
 
 			return mergedCommands
 		} catch (error) {
-			outputError(`Error merging ${commandType} commands:`, error)
+			webviewLog.error(`Error merging ${commandType} commands:`, error)
 			// Return empty array as fallback to prevent crashes
 			return []
 		}
@@ -3200,6 +3200,7 @@ export class ShoferProvider
 			assistantAgentMaxContextTokens,
 			assistantAgentContextFillThreshold,
 			logLevel,
+			logCategories,
 		} = await this.getState()
 
 		let cloudOrganizations: any[] = []
@@ -3394,6 +3395,7 @@ export class ShoferProvider
 			assistantAgentMaxContextTokens,
 			assistantAgentContextFillThreshold,
 			logLevel: logLevel ?? "info",
+			logCategories: logCategories ?? undefined,
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
@@ -3440,7 +3442,7 @@ export class ShoferProvider
 		try {
 			organizationAllowList = await Promise.resolve({ allowAll: true, providers: {} } as any)
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`[getState] failed to get organization allow list: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -3450,7 +3452,7 @@ export class ShoferProvider
 		try {
 			cloudUserInfo = null
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`[getState] failed to get cloud user info: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -3460,7 +3462,7 @@ export class ShoferProvider
 		try {
 			cloudIsAuthenticated = false
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`[getState] failed to get cloud authentication state: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -3470,7 +3472,7 @@ export class ShoferProvider
 		try {
 			sharingEnabled = await Promise.resolve(false)
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`[getState] failed to get sharing enabled state: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -3480,7 +3482,7 @@ export class ShoferProvider
 		try {
 			publicSharingEnabled = await Promise.resolve(false)
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`[getState] failed to get public sharing enabled state: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -3490,7 +3492,7 @@ export class ShoferProvider
 		try {
 			organizationSettingsVersion = -1
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`[getState] failed to get organization settings version: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -3500,7 +3502,7 @@ export class ShoferProvider
 		try {
 			taskSyncEnabled = false
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`[getState] failed to get task sync enabled state: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -3628,6 +3630,7 @@ export class ShoferProvider
 			assistantAgentMaxContextTokens: stateValues.assistantAgentMaxContextTokens,
 			assistantAgentContextFillThreshold: stateValues.assistantAgentContextFillThreshold,
 			logLevel: stateValues.logLevel,
+			logCategories: stateValues.logCategories,
 		}
 	}
 
@@ -3769,11 +3772,11 @@ export class ShoferProvider
 
 	public log(message: string) {
 		// `this.outputChannel` is the same `OutputChannel` instance that
-		// activate() registers as the shared global channel via
-		// `setExtensionOutputChannel`, so calling both `appendLine` here and
-		// `outputLog` would double every line in the "Shofer" output panel.
-		// The provider owns the channel directly; `outputLog` is the fallback
-		// for utility modules that don't have a provider handle.
+		// activate() wired into the shared CompactTransport via
+		// `bootstrapLogging()`.  Logging through the transport (via the
+		// subsystem loggers) is the canonical path; this direct append
+		// is retained for callers that already hold a provider reference
+		// and want to bypass level filtering.
 		this.outputChannel.appendLine(message)
 	}
 
@@ -4208,7 +4211,7 @@ export class ShoferProvider
 		// ones bail early. Without this, two rapid clicks produce two concurrent
 		// abortTask() → dispose() chains which race on cleanup and log errors.
 		if (this._cancelling) {
-			outputLog(`[cancelTask] cancellation already in progress; ignoring duplicate`)
+			webviewLog.info(`[cancelTask] cancellation already in progress; ignoring duplicate`)
 			return
 		}
 		this._cancelling = true
@@ -4227,7 +4230,7 @@ export class ShoferProvider
 			return
 		}
 
-		outputLog(`[cancelTask] cancelling task ${task.taskId}.${task.instanceId}`)
+		webviewLog.info(`[cancelTask] cancelling task ${task.taskId}.${task.instanceId}`)
 
 		let historyItem: HistoryItem | undefined
 		try {
@@ -4284,7 +4287,7 @@ export class ShoferProvider
 			},
 		).catch(() => {
 			const current = this.getCurrentTask()
-			outputError(
+			webviewLog.error(
 				`Failed to abort task ${task.taskId}.${task.instanceId} within 3s timeout` +
 					(current
 						? ` (isStreaming=${current.isStreaming}, didFinishAbortingStream=${current.didFinishAbortingStream}, isWaitingForFirstChunk=${current.isWaitingForFirstChunk})`
@@ -4327,7 +4330,7 @@ export class ShoferProvider
 	public async clearTask(): Promise<void> {
 		if (this.shoferStack.length > 0) {
 			const task = this.shoferStack[this.shoferStack.length - 1]
-			outputLog(`[clearTask] clearing task ${task.taskId}.${task.instanceId}`)
+			webviewLog.info(`[clearTask] clearing task ${task.taskId}.${task.instanceId}`)
 			await this.removeShoferFromStack()
 		}
 	}
@@ -4570,15 +4573,15 @@ export class ShoferProvider
 
 			// Specific error for no webview available
 			const error = new Error("No webview available for URI conversion")
-			outputError(error.message)
+			webviewLog.error(error.message)
 			// Fallback to file URI if no webview available
 			return fileUri.toString()
 		} catch (error) {
 			// More specific error handling
 			if (error instanceof TypeError) {
-				outputError("Invalid file path provided for URI conversion:", error)
+				webviewLog.error("Invalid file path provided for URI conversion:", error)
 			} else {
-				outputError("Failed to convert to webview URI:", error)
+				webviewLog.error("Failed to convert to webview URI:", error)
 			}
 			// Return file URI as fallback
 			return vscode.Uri.file(filePath).toString()

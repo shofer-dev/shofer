@@ -27,7 +27,7 @@ import {
 	type AssistantAgentCostTracking,
 } from "@shofer/types"
 
-import { logger } from "../../utils/logging"
+import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
 
 /** Persisted snapshot returned by load() / accepted by save(). */
 export interface ConversationSnapshot {

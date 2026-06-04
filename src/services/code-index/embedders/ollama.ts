@@ -5,7 +5,7 @@ import { t } from "../../../i18n"
 import { withValidationErrorHandling, sanitizeErrorMessage } from "../shared/validation-helpers"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
-import { outputError } from "../../../utils/outputChannelLogger"
+import { codeIndexLog } from "../../../utils/logging/subsystems"
 
 // Timeout constants for Ollama API requests
 const OLLAMA_EMBEDDING_TIMEOUT_MS = 60000 // 60 seconds for embedding requests
@@ -294,7 +294,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 			})
 
 			// Log the original error for debugging purposes
-			outputError("Ollama embedding failed:", error)
+			codeIndexLog.error("Ollama embedding failed:", error)
 
 			// Handle specific error types with better messages
 			if (error.name === "AbortError") {

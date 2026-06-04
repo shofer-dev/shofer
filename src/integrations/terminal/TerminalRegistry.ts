@@ -7,7 +7,7 @@ import { TerminalProcess } from "./TerminalProcess"
 import { Terminal } from "./Terminal"
 import { ExecaTerminal } from "./ExecaTerminal"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 // Although vscode.window.terminals provides a list of all open terminals,
 // there's no way to know whether they're busy or not (exitStatus does not
@@ -53,7 +53,7 @@ export class TerminalRegistry {
 					const stream = e.execution.read()
 					const terminal = this.getTerminalByVSCETerminal(e.terminal)
 
-					outputLog("[onDidStartTerminalShellExecution]", {
+					webviewLog.info("[onDidStartTerminalShellExecution]", {
 						command: e.execution?.commandLine?.value,
 						terminalId: terminal?.id,
 					})
@@ -62,7 +62,7 @@ export class TerminalRegistry {
 						terminal.setActiveStream(stream)
 						terminal.busy = true // Mark terminal as busy when shell execution starts
 					} else {
-						outputError(
+						webviewLog.error(
 							"[onDidStartTerminalShellExecution] Shell execution started, but not from a Shofer-registered terminal:",
 							e,
 						)
@@ -80,14 +80,14 @@ export class TerminalRegistry {
 					const process = terminal?.process
 					const exitDetails = TerminalProcess.interpretExitCode(e.exitCode)
 
-					outputLog("[onDidEndTerminalShellExecution]", {
+					webviewLog.info("[onDidEndTerminalShellExecution]", {
 						command: e.execution?.commandLine?.value,
 						terminalId: terminal?.id,
 						...exitDetails,
 					})
 
 					if (!terminal) {
-						outputError(
+						webviewLog.error(
 							"[onDidEndTerminalShellExecution] Shell execution ended, but not from a Shofer-registered terminal:",
 							e,
 						)
@@ -96,7 +96,7 @@ export class TerminalRegistry {
 					}
 
 					if (!terminal.running) {
-						outputError(
+						webviewLog.error(
 							"[TerminalRegistry] Shell execution end event received, but process is not running for terminal:",
 							{ terminalId: terminal?.id, command: process?.command, exitCode: e.exitCode },
 						)
@@ -106,7 +106,7 @@ export class TerminalRegistry {
 					}
 
 					if (!process) {
-						outputError(
+						webviewLog.error(
 							"[TerminalRegistry] Shell execution end event received on running terminal, but process is undefined:",
 							{ terminalId: terminal.id, exitCode: e.exitCode },
 						)
@@ -124,7 +124,7 @@ export class TerminalRegistry {
 				this.disposables.push(endDisposable)
 			}
 		} catch (error) {
-			outputError("[TerminalRegistry] Error setting up shell execution handlers:", error)
+			webviewLog.error("[TerminalRegistry] Error setting up shell execution handlers:", error)
 		}
 	}
 

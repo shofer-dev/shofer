@@ -11,7 +11,7 @@ import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { parseToolBoolean } from "./helpers/toolInputParsing"
 import type { ToolUse } from "../../shared/tools"
-import { outputError } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 interface NewTaskParams {
 	mode: string
@@ -231,7 +231,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					})
 				} catch (err) {
 					// Non-fatal: parent history metadata may be stale but child still runs.
-					outputError(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
+					taskLog.error(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
 				}
 
 				// Track in-memory handle on the parent task instance.

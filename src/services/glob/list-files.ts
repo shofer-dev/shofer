@@ -7,7 +7,7 @@ import ignore from "ignore"
 import { arePathsEqual } from "../../utils/path"
 import { getBinPath } from "../../services/ripgrep"
 import { DIRS_TO_IGNORE } from "./constants"
-import { outputError, outputWarn } from "../../utils/outputChannelLogger"
+import { utilLog } from "../../utils/logging/subsystems"
 
 /**
  * Context object for directory scanning operations
@@ -102,7 +102,7 @@ async function getFirstLevelDirectories(dirPath: string, ignoreInstance: ReturnT
 			}
 		}
 	} catch (err) {
-		outputWarn(`Could not read directory ${absolutePath}: ${err}`)
+		utilLog.warn(`Could not read directory ${absolutePath}: ${err}`)
 	}
 
 	return directories
@@ -346,7 +346,7 @@ async function createIgnoreInstance(dirPath: string): Promise<ReturnType<typeof 
 			ignoreInstance.add(content)
 		} catch (err) {
 			// Continue if we can't read a .gitignore file
-			outputWarn(`Could not read .gitignore at ${gitignoreFile}: ${err}`)
+			utilLog.warn(`Could not read .gitignore at ${gitignoreFile}: ${err}`)
 		}
 	}
 
@@ -498,7 +498,7 @@ async function listFilteredDirectories(
 			}
 		} catch (err) {
 			// Continue if we can't read a directory
-			outputWarn(`Could not read directory ${currentPath}: ${err}`)
+			utilLog.warn(`Could not read directory ${currentPath}: ${err}`)
 		}
 
 		return false // Limit not reached
@@ -663,7 +663,7 @@ async function execRipgrep(rgPath: string, args: string[], limit: number): Promi
 		// Set timeout to avoid hanging
 		const timeoutId = setTimeout(() => {
 			rgProcess.kill()
-			outputWarn("ripgrep timed out, returning partial results")
+			utilLog.warn("ripgrep timed out, returning partial results")
 			resolve(results.slice(0, limit))
 		}, 10_000)
 
@@ -681,7 +681,7 @@ async function execRipgrep(rgPath: string, args: string[], limit: number): Promi
 
 		// Process stderr but don't fail on non-zero exit codes
 		rgProcess.stderr.on("data", (data) => {
-			outputError(`ripgrep stderr: ${data}`)
+			utilLog.error(`ripgrep stderr: ${data}`)
 		})
 
 		// Handle process completion
@@ -694,7 +694,7 @@ async function execRipgrep(rgPath: string, args: string[], limit: number): Promi
 
 			// Log non-zero exit codes but don't fail
 			if (code !== 0 && code !== null && code !== 143 /* SIGTERM */) {
-				outputWarn(`ripgrep process exited with code ${code}, returning partial results`)
+				utilLog.warn(`ripgrep process exited with code ${code}, returning partial results`)
 			}
 
 			resolve(results.slice(0, limit))

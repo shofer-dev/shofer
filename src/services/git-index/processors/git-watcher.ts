@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 import type { IGitWatcher, GitCommitBlock } from "../interfaces/git"
 import { GitLogExtractor } from "./git-log-extractor"
 import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
-import { logger } from "../../../utils/logging"
+import { gitLog as logger } from "../../../utils/logging/subsystems"
 
 const LOG_PREFIX = "[GitWatcher]"
 

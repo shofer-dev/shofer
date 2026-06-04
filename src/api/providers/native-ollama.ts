@@ -8,7 +8,7 @@ import type { ApiHandlerOptions } from "../../shared/api"
 import { getOllamaModels } from "./fetchers/ollama"
 import { TagMatcher } from "../../utils/tag-matcher"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { outputError } from "../../utils/outputChannelLogger"
+import { apiLog } from "../../utils/logging/subsystems"
 
 interface OllamaChatOptions {
 	temperature: number
@@ -309,7 +309,7 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 					}
 				}
 			} catch (streamError: any) {
-				outputError("Error processing Ollama stream:", streamError)
+				apiLog.error("Error processing Ollama stream:", streamError)
 				throw new Error(`Ollama stream processing error: ${streamError.message || "Unknown error"}`)
 			}
 		} catch (error: any) {
@@ -327,7 +327,7 @@ export class NativeOllamaHandler extends BaseProvider implements SingleCompletio
 				)
 			}
 
-			outputError(`Ollama API error (${statusCode || "unknown"}): ${errorMessage}`)
+			apiLog.error(`Ollama API error (${statusCode || "unknown"}): ${errorMessage}`)
 			throw error
 		}
 	}

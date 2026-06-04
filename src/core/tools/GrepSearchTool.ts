@@ -35,7 +35,7 @@ import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { GREP_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
-import { outputError } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 interface GrepSearchParams {
 	path: string
@@ -366,7 +366,7 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 			try {
 				rawOutput = await execRipgrep(rgPath, rgArgs, maxRgLines)
 			} catch (error) {
-				outputError("Error executing ripgrep:", error)
+				taskLog.error("Error executing ripgrep:", error)
 				pushToolResult(`No results found for: ${query}`)
 				return
 			}

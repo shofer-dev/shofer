@@ -3,7 +3,7 @@ import axios from "axios"
 import type { ModelRecord } from "@shofer/types"
 
 import { DEFAULT_HEADERS } from "../constants"
-import { outputError } from "../../../utils/outputChannelLogger"
+import { apiLog } from "../../../utils/logging/subsystems"
 /**
  * Fetches available models from a LiteLLM server
  *
@@ -61,13 +61,13 @@ export async function getLiteLLMModels(apiKey: string, baseUrl: string): Promise
 			}
 		} else {
 			// If response.data.data is not in the expected format, consider it an error.
-			outputError("Error fetching LiteLLM models: Unexpected response format", response.data)
+			apiLog.error("Error fetching LiteLLM models: Unexpected response format", response.data)
 			throw new Error("Failed to fetch LiteLLM models: Unexpected response format.")
 		}
 
 		return models
 	} catch (error: any) {
-		outputError("Error fetching LiteLLM models:", error.message ? error.message : error)
+		apiLog.error("Error fetching LiteLLM models:", error.message ? error.message : error)
 		if (axios.isAxiosError(error) && error.response) {
 			throw new Error(
 				`Failed to fetch LiteLLM models: ${error.response.status} ${error.response.statusText}. Check base URL and API key.`,

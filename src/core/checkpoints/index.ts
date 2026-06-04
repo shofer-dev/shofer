@@ -15,7 +15,7 @@ import { getApiMetrics } from "../../shared/getApiMetrics"
 import { DIFF_VIEW_URI_SCHEME } from "../../integrations/editor/DiffViewProvider"
 
 import { CheckpointServiceOptions, RepoPerTaskCheckpointService } from "../../services/checkpoints"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { checkpointLog } from "../../utils/logging/subsystems"
 
 const WARNING_THRESHOLD_MS = 5000
 
@@ -41,7 +41,7 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 	const checkpointTimeoutMs = task.checkpointTimeout * 1000
 
 	const log = (message: string) => {
-		outputLog(message)
+		checkpointLog.info(message)
 
 		try {
 			provider?.log(message)
@@ -95,7 +95,7 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 						sendCheckpointInitWarn(task, "WAIT_TIMEOUT", WARNING_THRESHOLD_MS / 1000)
 					}
 
-					outputLog(
+					checkpointLog.info(
 						`[Task#getCheckpointService] waiting for service to initialize (${Math.round(elapsed / 1000)}s)`,
 					)
 					return !!task.checkpointService && !!task?.checkpointService?.isInitialized
@@ -190,11 +190,11 @@ async function checkGitInstallation(
 					{ isNonInteractive: true },
 				).catch((err) => {
 					log("[Task#getCheckpointService] caught unexpected error in say('checkpoint_saved')")
-					outputError(err)
+					checkpointLog.error(err)
 				})
 			} catch (err) {
 				log("[Task#getCheckpointService] caught unexpected error in on('checkpoint'), disabling checkpoints")
-				outputError(err)
+				checkpointLog.error(err instanceof Error ? err : String(err))
 				task.enableCheckpoints = false
 			}
 		})
@@ -209,7 +209,7 @@ async function checkGitInstallation(
 		log(
 			`[Task#getCheckpointService] Unexpected error during Git check: ${err instanceof Error ? err.message : String(err)}`,
 		)
-		outputError("Git check error:", err)
+		checkpointLog.error("Git check error:", err)
 		task.enableCheckpoints = false
 		task.checkpointServiceInitializing = false
 	}
@@ -228,7 +228,7 @@ export async function checkpointSave(task: Task, force = false, suppressMessage 
 	return service
 		.saveCheckpoint(`Task: ${task.taskId}, Time: ${Date.now()}`, { allowEmpty: force, suppressMessage })
 		.catch((err) => {
-			outputError("[Task#checkpointSave] caught unexpected error, disabling checkpoints", err)
+			checkpointLog.error("[Task#checkpointSave] caught unexpected error, disabling checkpoints", err)
 			task.enableCheckpoints = false
 		})
 }

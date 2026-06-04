@@ -4,7 +4,7 @@ import { Dirent } from "fs"
 import matter from "gray-matter"
 import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands"
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { configLog } from "../../utils/logging/subsystems"
 
 /**
  * Maximum depth for resolving symlinks to prevent cyclic symlink loops
@@ -342,7 +342,7 @@ async function scanCommandDirectory(
 					})
 				}
 			} catch (error) {
-				outputWarn(`Failed to read command file ${resolvedPath}:`, error)
+				configLog.warn(`Failed to read command file ${resolvedPath}:`, error)
 			}
 		}
 	} catch {

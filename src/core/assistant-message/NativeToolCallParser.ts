@@ -26,7 +26,7 @@ import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpTool
 type NativeArgsFor<TName extends ToolName> = TName extends keyof NativeToolArgs ? NativeToolArgs[TName] : never
 
 import { isPrivateLmTool } from "../task/build-tools"
-import { outputError, outputWarn } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 /**
  * Parser for native tool calls (OpenAI-style function calling).
@@ -1006,8 +1006,8 @@ export class NativeToolCallParser {
 			!customToolRegistry.has(resolvedName) &&
 			!isPrivateLmTool(resolvedName)
 		) {
-			outputError(`Invalid tool name: ${toolCall.name} (resolved: ${resolvedName})`)
-			outputError(`Valid tool names:`, toolNames)
+			webviewLog.error(`Invalid tool name: ${toolCall.name} (resolved: ${resolvedName})`)
+			webviewLog.error(`Valid tool names:`, toolNames)
 			return null
 		}
 
@@ -1027,7 +1027,7 @@ export class NativeToolCallParser {
 					!customToolRegistry.has(resolvedName) &&
 					!isPrivateLmTool(resolvedName)
 				) {
-					outputWarn(
+					webviewLog.warn(
 						`Unknown parameter '${key}' for tool '${resolvedName}' (check the tool schema for valid params)`,
 					)
 					continue
@@ -1633,11 +1633,11 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
-			outputError(
+			webviewLog.error(
 				`Failed to parse tool call arguments: ${error instanceof Error ? error.message : String(error)}`,
 			)
 
-			outputError(`Tool call: ${JSON.stringify(toolCall, null, 2)}`)
+			webviewLog.error(`Tool call: ${JSON.stringify(toolCall, null, 2)}`)
 			return null
 		}
 	}
@@ -1660,7 +1660,9 @@ export class NativeToolCallParser {
 			// Format: mcp--serverName--toolName (using -- separator)
 			const parsed = parseMcpToolName(normalizedName)
 			if (!parsed) {
-				outputError(`Invalid dynamic MCP tool name format: ${toolCall.name} (normalized: ${normalizedName})`)
+				webviewLog.error(
+					`Invalid dynamic MCP tool name format: ${toolCall.name} (normalized: ${normalizedName})`,
+				)
 				return null
 			}
 
@@ -1679,7 +1681,7 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
-			outputError(`Failed to parse dynamic MCP tool:`, error)
+			webviewLog.error(`Failed to parse dynamic MCP tool:`, error)
 			return null
 		}
 	}

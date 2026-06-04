@@ -44,7 +44,7 @@ import {
 import { ContextProxy } from "../../core/config/ContextProxy"
 import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
 import { buildApiHandler } from "../../api"
-import { logger } from "../../utils/logging"
+import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 
 import { AssistantAgentDirectoryTree } from "./directory-tree"
