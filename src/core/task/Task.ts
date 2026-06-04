@@ -6620,6 +6620,29 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.interactiveAsk = undefined
 		this.emit(ShoferEventName.TaskActive, this.taskId)
 
+		// Persist the running state to disk BEFORE restarting the task loop.
+		// TaskManager.enqueuePersist → persistState uses a latest-wins version
+		// counter to prevent the stale completed+rating from overwriting the
+		// running write, but if the process is killed between setState and
+		// the async persist completing, the version counter is lost. This
+		// synchronous write guarantees running is on disk before the task
+		// loop restarts. The version counter still protects against the
+		// fire-and-forget completed+rating write landing after this one.
+		{
+			const provider = this.providerRef.deref()
+			if (provider) {
+				try {
+					await provider.updateTaskHistory({
+						id: this.taskId,
+						taskState: { lifecycle: "running" },
+					} as HistoryItem)
+				} catch {
+					// Best-effort — if the write fails we proceed anyway;
+					// the TaskManager chain will retry asynchronously.
+				}
+			}
+		}
+
 		// Step 6: Restart the task loop with the captured queued message.
 		// We dequeued at the top of this method (before triggering abort) to
 		// guarantee we still hold the message even if any disposal path ran.
