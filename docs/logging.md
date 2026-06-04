@@ -1,0 +1,175 @@
+# Logging System
+
+## Overview
+
+The Shofer logging system writes human-readable lines to the "Shofer" VS Code
+Output Channel and optionally appends compact JSON-lines to a file on disk.
+Every log line carries a **severity** (`debug`, `info`, `warn`, `error`,
+`fatal`) and an optional **context tag** (e.g., `[Task]`, `[Git]`, `[MCP]`)
+identifying which subsystem produced it.
+
+Both severity threshold and category whitelist can be changed at runtime from
+**Settings → Logging** without a reload.
+
+## Architecture
+
+```
+ Settings → Logging (LoggingSettings.tsx)
+     │
+     │  user changes logLevel / logCategories
+     ▼
+ webviewMessageHandler.ts
+     │
+     │  setLogLevel(level)  /  setLogCategories([...])
+     ▼
+ logging/index.ts  ──────────────────────────────────┐
+     │                                                │
+     │  bootstrapLogging(outputChannel)                │
+     ▼                                                │
+ CompactTransport (singleton)                         │
+     │                                                │
+     │  write() ── level filter ── category filter ── Output Channel
+     │                                                │
+     │  write() ────────────────────────────── file (optional JSON-lines)
+     │                                                │
+     ▲                                                │
+ CompactLogger (root) ── child({ ctx }) ──► subsystem loggers
+                                              (subsystems.ts)
+```
+
+### Components
+
+| Component          | File                                                                                                                  | Role                                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `CompactTransport` | [`src/utils/logging/CompactTransport.ts`](../src/utils/logging/CompactTransport.ts)                                   | Filters by level + categories, writes to Output Channel and optional file                                     |
+| `CompactLogger`    | [`src/utils/logging/CompactLogger.ts`](../src/utils/logging/CompactLogger.ts)                                         | Variadic `ILogger` implementation with `child()` for subsystem scoping                                        |
+| `ILogger` / types  | [`src/utils/logging/types.ts`](../src/utils/logging/types.ts)                                                         | Interfaces and config types                                                                                   |
+| `index.ts`         | [`src/utils/logging/index.ts`](../src/utils/logging/index.ts)                                                         | `bootstrapLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                    |
+| Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | 16 pre-scoped logger instances (Task, Webview, Git, …)                                                        |
+| LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel                                                                                   |
+| Settings schema    | [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                   | `logLevel` and `logCategories` Zod schemas                                                                    |
+| ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel` and `logCategories`                                                         |
+| Activation         | [`src/extension.ts`](../src/extension.ts)                                                                             | `bootstrapLogging()` at line 108, persistence restore at line 155                                             |
+| Message handler    | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Wires `logLevel` and `logCategories` changes to live transport                                                |
+| State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state                                                    |
+| Legacy compat      | [`src/utils/outputChannelLogger.ts`](../src/utils/outputChannelLogger.ts)                                             | `stringifyForLog` and `createOutputChannelLogger` retained;<br>`outputLog`/`outputWarn`/`outputError` removed |
+| i18n               | [`webview-ui/src/i18n/locales/en/settings.json`](../webview-ui/src/i18n/locales/en/settings.json)                     | `logging` section with level labels and 16 category names                                                     |
+| Tests              | [`src/utils/logging/__tests__/`](../src/utils/logging/__tests__/)                                                     | `CompactLogger.spec.ts` (15 tests), `CompactTransport.spec.ts` (9 tests)                                      |
+
+## Log Levels
+
+| Level   | Meaning                                                    | Default?   |
+| ------- | ---------------------------------------------------------- | ---------- |
+| `debug` | All messages including detailed diagnostics. Very verbose. |            |
+| `info`  | Standard operational messages.                             | ✅ default |
+| `warn`  | Warnings — things that may need attention.                 |            |
+| `error` | Errors — failures that affect functionality.               |            |
+| `fatal` | Fatal errors — the most severe failures.                   |            |
+
+Entries below the configured level are silently dropped by the transport.
+
+## Subsystem Categories
+
+Each subsystem logger is created via `getLogger().child({ ctx: "Name" })`.
+The `ctx` is the tag shown in the output channel.
+
+| ctx              | Logger export       | Description                                       |
+| ---------------- | ------------------- | ------------------------------------------------- |
+| `Task`           | `taskLog`           | Core task engine (Task, BaseTool, condense, etc.) |
+| `Webview`        | `webviewLog`        | Webview / provider / IPC layer                    |
+| `Git`            | `gitLog`            | Git index, file watcher, git history              |
+| `CodeIndex`      | `codeIndexLog`      | Code index (RAG) and tree-sitter                  |
+| `AssistantAgent` | `assistantAgentLog` | Assistant agent subsystem                         |
+| `MCP`            | `mcpLog`            | MCP servers and transport                         |
+| `Checkpoints`    | `checkpointLog`     | Checkpoints / shadow git                          |
+| `API`            | `apiLog`            | API providers (Anthropic, OpenAI, Bedrock, etc.)  |
+| `FS`             | `fsLog`             | File I/O utilities (safeWriteJson, storage, etc.) |
+| `Config`         | `configLog`         | Configuration, ContextProxy, settings migration   |
+| `Skills`         | `skillsLog`         | Skills subsystem                                  |
+| `Marketplace`    | `marketplaceLog`    | Marketplace / installer                           |
+| `Metrics`        | `metricsLog`        | Metrics / Prometheus                              |
+| `Workflow`       | `workflowLog`       | Workflow engine (.slang)                          |
+| `I18n`           | `i18nLog`           | Translations                                      |
+| `Utils`          | `utilLog`           | General utilities (countTokens, path, perf, etc.) |
+
+## Output Format
+
+### Output Channel (human-readable)
+
+```
+2026-06-04 18:00:00.123 INFO  [Git] polling for new commits
+2026-06-04 18:00:01.456 WARN  [API] rate limit approaching {"remaining":5}
+2026-06-04 18:00:02.789 ERROR [Task] tool execution failed
+```
+
+Format: `YYYY-MM-DD HH:MM:SS.mmm LEVEL [ctx] message {optional JSON data}`
+
+### File (optional JSON-lines, delta timestamps)
+
+```json
+{"t":0,"l":"info","m":"Log session started","d":{"timestamp":"2026-06-04T09:00:00.000Z"}}
+{"t":123,"l":"info","m":"polling for new commits","c":"Git"}
+{"t":1333,"l":"warn","m":"rate limit approaching","c":"API","d":{"remaining":5}}
+```
+
+File output is disabled by default. Enable it via `CompactTransportConfig.fileOutput`.
+
+## Lifecycle
+
+1. **Activation** ([`extension.ts`](../src/extension.ts)):
+    - `bootstrapLogging(outputChannel)` creates the shared `CompactTransport`
+      and root `CompactLogger` with `level: "debug"` (all messages pass).
+2. **Persistence restore** ([`extension.ts`](../src/extension.ts)):
+    - After `ContextProxy.getInstance(context)` is ready, saved `logLevel`
+      and `logCategories` are read and applied to the live transport.
+3. **Module loading**: Subsystem loggers in `subsystems.ts` call
+   `getLogger().child({ ctx: "..." })` at module import time.
+4. **Runtime**: `webviewMessageHandler.ts` calls `setLogLevel()` and
+   `setLogCategories()` immediately when the user changes settings.
+
+## Adding a New Subsystem Logger
+
+1. Add an export to [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts):
+    ```ts
+    export const myLog = getLogger().child({ ctx: "MyNew" })
+    ```
+2. Add the `"MyNew"` string to `ALL_CATEGORIES` in
+   [`CompactTransport.ts`](../src/utils/logging/CompactTransport.ts).
+3. Add a `{ id: "MyNew", labelKey: "myNew" }` entry to `CATEGORIES` in
+   [`LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx).
+4. Add a `"myNew"` key under `"logging.categories"` in
+   [`settings.json`](../webview-ui/src/i18n/locales/en/settings.json).
+5. Import and use in the new subsystem's files.
+
+## Usage in Code
+
+```ts
+// Prefer subsystem loggers
+import { taskLog } from "../../utils/logging/subsystems"
+taskLog.info("task started", { taskId })
+taskLog.error(error) // Error object → stack capture + message
+taskLog.warn("unexpected value:", someVar) // extra args stringified
+
+// Or create an ad-hoc scoped logger
+import { getLogger } from "../../utils/logging"
+const log = getLogger().child({ ctx: "MyFeature" })
+log.info("initialized")
+```
+
+## Testing
+
+- The logger is a **noop in tests** (`NODE_ENV === "test"`) — no output
+  channel is needed.
+- `MockTransport` in [`__tests__/MockTransport.ts`](../src/utils/logging/__tests__/MockTransport.ts)
+  captures entries in-memory for assertion.
+
+## Gaps & Areas for Improvement
+
+- **No per-category level thresholds** — all categories share the same
+  minimum level. A future enhancement could allow `"Git": "warn"` to
+  suppress Git debug/info while keeping Task at `"debug"`.
+- **No log rotation** — the optional file output appends indefinitely.
+- **No structured export** — JSON-lines file output has no built-in
+  query/filter tooling (the user would need `jq` or similar).
+- **No MCP/log server integration** — logs are not forwarded to the
+  observability stack (Loki/Mimir/Tempo).
