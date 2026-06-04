@@ -2222,15 +2222,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const isStatusMutable = !partial && isBlocking && !isMessageQueued && isWaitingForInput
 
 		if (isStatusMutable) {
-			// For background tasks (not the focused task), emit state changes immediately
-			// so the task selector shows the correct indicator without delay.
-			// For focused tasks, use a 2s delay to prevent UI flickering during quick interactions
-			// (e.g., tool approvals that might be quickly auto-approved).
-			// Exception: "followup" asks should show yellow immediately since the LLM is
-			// genuinely waiting for user input.
-			const isBackgroundTask = provider?.taskManager?.getFocusedTaskId() !== this.taskId
-			const isFollowupAsk = type === "followup"
-			const statusMutationTimeout = isBackgroundTask || isFollowupAsk ? 0 : 2_000
+			// Emit state changes immediately. The notification guard in
+			// TaskManager.onInteractive checks focusedTaskId at emit time,
+			// avoiding the TOCTOU race that occurred when the delay was
+			// computed synchronously but the emit fired asynchronously
+			// after focus could have changed (the task may have been
+			// backgrounded during the 2s window, causing the notification
+			// to fire for what is now a focused task).
+			//
+			// The old 2s focused-task delay was meant to prevent TaskSelector
+			// icon flicker from quick auto-approvals, but the auto-approval
+			// fast-path in Task.ask() returns before reaching this block, so
+			// the delay only applied to asks the user would definitely see.
 
 			if (isInteractiveAsk(type)) {
 				timeouts.push(
@@ -2242,7 +2245,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							this.emit(ShoferEventName.TaskInteractive, this.taskId)
 							provider?.postMessageToWebview({ type: "interactionRequired" })
 						}
-					}, statusMutationTimeout),
+					}, 0),
 				)
 			} else if (isResumableAsk(type)) {
 				timeouts.push(
@@ -2253,7 +2256,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							this.resumableAsk = message
 							this.emit(ShoferEventName.TaskResumable, this.taskId)
 						}
-					}, statusMutationTimeout),
+					}, 0),
 				)
 			} else if (isIdleAsk(type)) {
 				timeouts.push(
@@ -2279,7 +2282,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								this.emit(ShoferEventName.TaskIdle, this.taskId)
 							}
 						}
-					}, statusMutationTimeout),
+					}, 0),
 				)
 			}
 		} else if (isMessageQueued && shouldDrainQueuedMessageForAsk) {
@@ -6614,6 +6617,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.resumableAsk = undefined
 		this.interactiveAsk = undefined
 		this.emit(ShoferEventName.TaskActive, this.taskId)
+
+		// Persist the running state to disk BEFORE restarting the task loop.
+		// TaskManager.onActive → setState(makeState("running")) triggers a
+		// fire-and-forget persistState write. If VS Code restarts before that
+		// write lands, sanitizeRestoredState preserves the stale completed+rating
+		// from the previous attempt_completion cycle — the task row shows an
+		// "excellent" icon instead of "idle". Awaiting the disk write here closes
+		// that race: even if the restart happens immediately after, the persisted
+		// state is "running" which sanitizeRestoredState downgrades to "idle".
+		{
+			const provider = this.providerRef.deref()
+			if (provider) {
+				await provider.updateTaskHistory({
+					id: this.taskId,
+					taskState: { lifecycle: "running" },
+				} as HistoryItem)
+			}
+		}
 
 		// Step 6: Restart the task loop with the captured queued message.
 		// We dequeued at the top of this method (before triggering abort) to
