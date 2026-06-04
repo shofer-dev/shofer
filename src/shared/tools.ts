@@ -208,7 +208,7 @@ export type NativeToolArgs = {
 		contextBefore?: number | null
 		contextAfter?: number | null
 	}
-	switch_mode: { mode_slug: string; reason: string }
+	switch_mode: { mode_slug: string; reason: string; task_id?: string }
 	set_task_title: { title: string }
 	give_feedback: { feedback: string }
 	update_todo_list: { todos: string }
@@ -365,7 +365,7 @@ export interface AttemptCompletionToolUse extends ToolUse<"attempt_completion"> 
 
 export interface SwitchModeToolUse extends ToolUse<"switch_mode"> {
 	name: "switch_mode"
-	params: Partial<Pick<Record<ToolParamName, string>, "mode_slug" | "reason">>
+	params: Partial<Pick<Record<ToolParamName, string>, "mode_slug" | "reason" | "task_id">>
 }
 
 export interface NewTaskToolUse extends ToolUse<"new_task"> {
