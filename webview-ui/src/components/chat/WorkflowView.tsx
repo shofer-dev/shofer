@@ -131,26 +131,8 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	const scrollTopByTaskTsRef = useRef<Map<number, number>>(new Map())
 	const prevHydratableTaskTsRef = useRef<number | undefined>(taskTs)
 
-	// When taskTs changes, snapshot the outgoing task's scrollTop and mark
-	// it as hydrated so future re-entry preserves the scroll position.
-	if (taskTs !== prevHydratableTaskTsRef.current) {
-	 if (prevHydratableTaskTsRef.current !== undefined) {
-	 	hydratedTaskTsRef.current.add(prevHydratableTaskTsRef.current)
-	 	// Snapshot the current scroll position of the OUTGOING task
-	 	// so we can restore it when the user returns to this task.
-	 	const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
-	 	if (scroller) {
-	 		scrollTopByTaskTsRef.current.set(prevHydratableTaskTsRef.current, scroller.scrollTop)
-	 	}
-	 }
-	 prevHydratableTaskTsRef.current = taskTs
-	}
-
-	const skipHydration = taskTs ? hydratedTaskTsRef.current.has(taskTs) : false
-	const restoreScrollTop = taskTs ? (scrollTopByTaskTsRef.current.get(taskTs) ?? null) : null
-
 	const processedMessages = useMemo(() => {
-		return processorRef.current.process(messages)
+	 return processorRef.current.process(messages)
 	}, [messages])
 
 	const modifiedMessages = processedMessages.modifiedMessages
@@ -179,6 +161,25 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+	// --- Per-task scroll position snapshot & restore ---
+	// When taskTs changes, snapshot the outgoing task's scrollTop (now that
+	// scrollContainerRef is declared) and mark the task as hydrated so any
+	// future re-entry preserves the scroll position.
+	if (taskTs !== prevHydratableTaskTsRef.current) {
+		if (prevHydratableTaskTsRef.current !== undefined) {
+			hydratedTaskTsRef.current.add(prevHydratableTaskTsRef.current)
+			const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
+			if (scroller) {
+				scrollTopByTaskTsRef.current.set(prevHydratableTaskTsRef.current, scroller.scrollTop)
+			}
+		}
+		prevHydratableTaskTsRef.current = taskTs
+	}
+
+	const skipHydration = taskTs ? hydratedTaskTsRef.current.has(taskTs) : false
+	const restoreScrollTop = taskTs ? (scrollTopByTaskTsRef.current.get(taskTs) ?? null) : null
+
 	const lastTtsRef = useRef<string>("")
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
