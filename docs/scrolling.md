@@ -15,6 +15,12 @@ The message list is rendered by **[react-virtuoso](https://virtuoso.dev/)** (`<V
 
 A sibling `<div ref={scrollContainerRef}>` wraps the Virtuoso and is used to scope scroll/wheel/pointer event listeners so they only fire for interactions inside the chat column.
 
+### Render-phase ref synchronization
+
+When `taskTs` changes, the `<Virtuoso key={task.ts}>` unmounts the old instance and mounts a new one **during the render phase** — before the `useEffect` that transitions to `HYDRATING_PINNED_TO_BOTTOM` fires. Without pre-emptive ref sync, the freshly mounted Virtuoso fires its callbacks (notably `atBottomStateChangeCallback`) against stale refs from the previous task, causing the scroll anchor to be lost.
+
+To close this race, `useScrollLifecycle` synchronizes `scrollPhaseRef`, `isAtBottomRef`, and `userDisengagedRef` **during the render phase** via `taskTs !== prevTaskTsRef.current` — before the Virtuoso mounts. This mirrors the Preload-Before-Publish Rule: refs consumed by the Virtuoso must be set before the Virtuoso is "published" (mounted).
+
 ## Scroll Phase State Machine
 
 All scroll state lives in `useScrollLifecycle`. It is a three-phase state machine:
@@ -151,6 +157,14 @@ The hook depends on three external packages not mentioned:
 ### Debug `console.log` instrumentation
 
 The hook contains 10 `console.log` statements logging every phase transition, scroll command, and state change. These are intentional debug instrumentation but are not gated behind a debug flag. A future improvement would be to replace them with the IPC-forwarded logger or a `__DEV__` guard.
+
+### Resolved: Render-phase ref synchronization (task-switch race)
+
+Previously, when `taskTs` changed, `scrollPhaseRef`, `isAtBottomRef`, and `userDisengagedRef` would retain stale values from the previous task until the hydration `useEffect` fired **after paint**. The newly mounted `<Virtuoso key={task.ts}>` would fire `atBottomStateChangeCallback` during render, reading those stale refs and making wrong decisions (suppressing the scroll-to-bottom or entering the wrong phase). Fixed by synchronizing the refs during the **render phase** via `taskTs !== prevTaskTsRef.current`, before the Virtuoso mounts. See § "Render-phase ref synchronization" above.
+
+### Resolved: `initialTopMostItemIndex` out-of-bounds on empty lists
+
+The `initialTopMostItemIndex={groupedMessages.length}` prop passed an out-of-bounds index (one past the last item) when `groupedMessages` is non-empty, and index 0 when empty. react-virtuoso may ignore out-of-bounds `initialTopMostItemIndex` values, causing the list to render at the top instead of the bottom. Fixed by clamping to `groupedMessages.length - 1` when non-empty.
 
 ### Pointer-scroll tracking deserves a dedicated subsection
 

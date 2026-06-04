@@ -2034,7 +2034,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							className="scrollable grow overflow-y-scroll mb-1"
 							increaseViewportBy={{ top: 3_000, bottom: 1000 }}
 							data={groupedMessages}
-							initialTopMostItemIndex={groupedMessages.length}
+							initialTopMostItemIndex={groupedMessages.length > 0 ? groupedMessages.length - 1 : 0}
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}

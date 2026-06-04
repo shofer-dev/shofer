@@ -130,6 +130,43 @@ export function useScrollLifecycle({
 	const userIntentScrollUpRef = useRef(false)
 	const userIntentScrollUpTimeoutRef = useRef<number | null>(null)
 
+	// --- Previous taskTs tracker ---
+	// Tracks the last taskTs seen during render so we can detect task
+	// switches synchronously (before the new Virtuoso mounts).
+	const prevTaskTsRef = useRef(taskTs)
+
+	// -----------------------------------------------------------------------
+	// Render-phase ref synchronization (task switch)
+	// -----------------------------------------------------------------------
+	// When taskTs changes, synchronize scroll refs DURING the render phase
+	// — before the new Virtuoso mounts and fires atBottomStateChangeCallback.
+	// Without this, the callback reads stale refs from the previous task.
+	//
+	// This mirrors the Preload-Before-Publish Rule: refs that the Virtuoso
+	// consumes must be set before the Virtuoso is "published" (mounted).
+	if (taskTs !== prevTaskTsRef.current) {
+		prevTaskTsRef.current = taskTs
+
+		isAtBottomRef.current = false
+		userDisengagedRef.current = false
+		userIntentScrollUpRef.current = false
+
+		if (userDisengagedTimeoutRef.current !== null) {
+			window.clearTimeout(userDisengagedTimeoutRef.current)
+			userDisengagedTimeoutRef.current = null
+		}
+		if (userIntentScrollUpTimeoutRef.current !== null) {
+			window.clearTimeout(userIntentScrollUpTimeoutRef.current)
+			userIntentScrollUpTimeoutRef.current = null
+		}
+
+		if (taskTs) {
+			scrollPhaseRef.current = "HYDRATING_PINNED_TO_BOTTOM"
+		} else {
+			scrollPhaseRef.current = "USER_BROWSING_HISTORY"
+		}
+	}
+
 	// -----------------------------------------------------------------------
 	// Phase transitions
 	// -----------------------------------------------------------------------
