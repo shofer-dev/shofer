@@ -164,6 +164,19 @@ export class CompactTransport implements ICompactTransport {
 		return [...this._knownCategories].sort()
 	}
 
+	/**
+	 * Register a category (ctx) as known without emitting a log line.
+	 *
+	 * Called when a subsystem child logger is *created* so the category
+	 * appears in the Settings UI immediately, rather than only after the
+	 * subsystem has emitted its first line. Without this, the category
+	 * whitelist would be incomplete and unstable (categories popping in as
+	 * code paths happen to execute).
+	 */
+	registerCategory(ctx: string): void {
+		this._knownCategories.add(ctx)
+	}
+
 	write(entry: CompactLogEntry): void {
 		// Auto-discover categories: any entry with a ctx we haven't seen
 		// before is added to the known set

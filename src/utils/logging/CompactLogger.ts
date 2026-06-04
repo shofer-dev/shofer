@@ -94,6 +94,12 @@ export class CompactLogger implements ILogger {
 	/** @inheritdoc */
 	child(meta: LogMeta): ILogger {
 		const combinedMeta = this.parentMeta ? { ...this.parentMeta, ...meta } : meta
+		// Register the ctx eagerly so the subsystem shows up in the Settings
+		// category list as soon as the logger is declared, not only after it
+		// has emitted its first line (see CompactTransport.registerCategory).
+		if (combinedMeta.ctx !== undefined) {
+			this.transport.registerCategory(combinedMeta.ctx)
+		}
 		return new CompactLogger(this.transport, combinedMeta)
 	}
 

@@ -19,35 +19,6 @@ const LOG_LEVEL_DESCRIPTIONS: Record<LogLevel, string> = {
 	fatal: "Fatal errors only — the most severe failures.",
 }
 
-/**
- * i18n keys for category labels.
- * The UI attempts to render `settings:logging.categories.<lowercase(ctx)>`.
- * If a ctx string doesn't have a matching key, the raw ctx value is
- * displayed directly (no translation layer needed for new categories).
- */
-function categoryLabelKey(ctx: string): string {
-	// Map known ctx values to their i18n keys
-	const known = new Map<string, string>([
-		["Task", "task"],
-		["Webview", "webview"],
-		["Git", "git"],
-		["CodeIndex", "codeIndex"],
-		["AssistantAgent", "assistantAgent"],
-		["MCP", "mcp"],
-		["Checkpoints", "checkpoints"],
-		["API", "api"],
-		["FS", "fs"],
-		["Config", "config"],
-		["Skills", "skills"],
-		["Marketplace", "marketplace"],
-		["Metrics", "metrics"],
-		["Workflow", "workflow"],
-		["I18n", "i18n"],
-		["Utils", "utils"],
-	])
-	return known.get(ctx) ?? ctx // fallback to raw value for new/unknown categories
-}
-
 type LoggingSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	logLevel?: LogLevel
 	logCategories?: string[]
@@ -87,6 +58,7 @@ export const LoggingSettings = ({
 					"Metrics",
 					"Workflow",
 					"I18n",
+					"Scroll",
 					"Utils",
 				]
 
@@ -119,7 +91,10 @@ export const LoggingSettings = ({
 		return logCategories.includes(category)
 	}
 
-	const categoryCount = logCategories?.length ?? categories.length
+	// Count only displayed categories that are enabled so the label can never
+	// read e.g. "16/6" when a stale whitelist references categories that are no
+	// longer in the known set.
+	const categoryCount = categories.filter((c) => isCategoryEnabled(c)).length
 
 	return (
 		<div {...props}>
@@ -165,18 +140,17 @@ export const LoggingSettings = ({
 					</div>
 					<div className="grid grid-cols-2 gap-1">
 						{categories.map((ctx) => {
-							// Try i18n key first, fall back to raw ctx if key is missing
-							const labelKey = categoryLabelKey(ctx)
-							const key = `settings:logging.categories.${labelKey}`
-							const translated = t(key)
-							const label = translated !== key ? translated : ctx
+							// The checkbox label is the raw `ctx` tag so it matches
+							// exactly what appears in the Output Channel (e.g.
+							// `[CodeIndex]`). `ctx` is the single source of truth —
+							// no separate translated label layer that could drift.
 							return (
 								<VSCodeCheckbox
 									key={ctx}
 									checked={isCategoryEnabled(ctx)}
 									onChange={() => toggleCategory(ctx)}
 									data-testid={`log-category-${ctx}`}>
-									{label}
+									{ctx}
 								</VSCodeCheckbox>
 							)
 						})}
