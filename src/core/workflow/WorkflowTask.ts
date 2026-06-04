@@ -494,7 +494,13 @@ export class WorkflowTask extends Task {
 		void askNext(0).catch((error) => {
 			if (this.abort) {
 				outputLog(`[WorkflowTask#${this.taskId}] Flow param collection aborted — task is stopping`)
-				return // don't emitTaskCompleted; the abort path handles cleanup
+				// Persist the aborted status to history BEFORE cancelTask
+				// re-reads it and rehydrates. Without this, the rehydrated
+				// instance sees flowState.status === "running" and
+				// re-enters requestFlowParams().
+				this.flowState.status = "aborted"
+				void this.persistCheckpoint()
+				return
 			}
 			outputError(`[WorkflowTask#${this.taskId}] Failed to collect flow params:`, error)
 			this.flowState.status = "error"
