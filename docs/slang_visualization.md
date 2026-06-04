@@ -227,6 +227,14 @@ The visualization adapts to VS Code themes via CSS variables.
 - ✅ CSP-safe event handling (`data-view` attributes + JS listeners, no inline `onclick`)
 - ✅ VSCode theme-aware CSS variables
 - ✅ Sequence timeline depth cap to prevent explosion from nested loops
+- ✅ Zoom & pan controls (`+`/`−`/fit buttons, mousewheel zoom, drag-pan)
+- ✅ Fit-to-view button (resets viewBox to initial SVG dimensions)
+- ✅ Edge hover highlights (connected nodes stay bright, others dim to 25%)
+- ✅ Sequence activation boxes on lifelines (faint highlight at each event Y)
+- ✅ Agent role overflow tooltip (SVG `<title>` shows full untruncated role)
+- ✅ CSP debugging (`console.log` warning on render start to surface blocked handlers)
+- ✅ Rich markdown descriptions (`renderMarkdown()`: inline code, bold, italic, links)
+- ✅ Param description tooltips (styled `.param-tooltip` bubble on hover)
 
 ## Gaps & Planned Improvements
 
@@ -234,28 +242,19 @@ The visualization adapts to VS Code themes via CSS variables.
 
 | Gap                                  | Description                                                                                   | Priority |
 | ------------------------------------ | --------------------------------------------------------------------------------------------- | -------- |
-| **Zoom & pan**                       | Large flows (5+ agents with nested loops) overflow the SVG viewport with no zoom/pan controls | Medium   |
-| **Fit-to-view**                      | No "fit all" or "zoom to selection" button                                                    | Low      |
-| **Edge hover highlights**            | Hovering over an edge could highlight connected nodes and dim others                          | Low      |
-| **Sequence lifecycle states**        | Lifelines don't show activation blocks (running vs blocked vs idle) — all are static lines    | Low      |
 | **Sequence concurrency**             | Parallel stake dispatches are indistinguishable from sequential ones                          | Low      |
 | **Swimlane nesting depth indicator** | Deeply nested operations have the same fixed `opacity="0.7"` — could use a gradient or indent | Low      |
-| **Agent role overflow**              | Role text is truncated to 2 lines max without tooltip                                         | Low      |
 
 ### Infrastructure
 
-| Gap                                              | Description                                                                                                                                                                                                                                              | Priority |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **SlangEditorProvider.ts not in source control** | `git` refuses to track the file (exists on disk, `git add -f` silent no-op). Suspect submodule or `.gitignore` issue at the repo boundary.                                                                                                               | High     |
-| **Dual provider maintenance**                    | `SlangVisualizationProvider` duplicates the HTML generation logic from `SlangEditorProvider`. Should be consolidated into a shared helper.                                                                                                               | Medium   |
-| **No unit tests for render JS**                  | The `slang-render.js` 1299-line browser script has no automated tests. A jsdom-based test suite covering the three compilers would catch regressions.                                                                                                    | Medium   |
-| **Build copies stale dist/**                     | `esbuild.mjs` copies files at `onEnd`, but the `src/dist/` directory can get out of sync with `src/core/webview/` during development if `./deploy.sh dev build shofer` is not run after every edit. A file-watcher mode for `slang-render.*` would help. | Medium   |
-| **CSP debugging**                                | CSP violations are silent in the webview (no console errors). A CSP report-uri or dev-mode warning when inline event handlers are detected would catch them.                                                                                             | Low      |
+| Gap                                   | Description                                                                                                                                                                                                                                              | Priority |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| **SlangEditorProvider.ts not in git** | `git` refuses to track the file (exists on disk, `git add -f` silent no-op). Suspect submodule or `.gitignore` issue at the repo boundary.                                                                                                               | High     |
+| **No unit tests for render JS**       | The `slang-render.js` script has no automated tests. A jsdom-based test suite covering the three compilers would catch regressions.                                                                                                                      | Medium   |
+| **Build copies stale dist/**          | `esbuild.mjs` copies files at `onEnd`, but the `src/dist/` directory can get out of sync with `src/core/webview/` during development if `./deploy.sh dev build shofer` is not run after every edit. A file-watcher mode for `slang-render.*` would help. | Medium   |
 
 ### Flow Metadata
 
-| Gap                            | Description                                                                                                          | Priority |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Icon registry**              | `iconToEmoji()` is a hardcoded map. A user-extensible registry (e.g. custom icon keys → SVG) would be more flexible. | Low      |
-| **Rich description rendering** | `description` is rendered as plain text with `\n` → `<br>`. Markdown (bold, inline code, links) is not supported.    | Low      |
-| **Param description tooltips** | Param descriptions are shown as `title` attributes on `<code>` elements — no hover styling or expandable detail.     | Low      |
+| Gap               | Description                                                                                                          | Priority |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- | -------- |
+| **Icon registry** | `iconToEmoji()` is a hardcoded map. A user-extensible registry (e.g. custom icon keys → SVG) would be more flexible. | Low      |
