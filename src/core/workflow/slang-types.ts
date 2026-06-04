@@ -22,7 +22,7 @@ export interface FlowState {
 	sourcePath?: string
 }
 
-export type FlowStatus = "running" | "converged" | "budget_exceeded" | "escalated" | "deadlock" | "error"
+export type FlowStatus = "running" | "converged" | "budget_exceeded" | "escalated" | "deadlock" | "error" | "aborted"
 
 export interface AgentState {
 	name: string
