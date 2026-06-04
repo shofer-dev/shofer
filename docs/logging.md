@@ -52,7 +52,7 @@ automatically — no UI changes needed.
 | `CompactLogger`    | [`src/utils/logging/CompactLogger.ts`](../src/utils/logging/CompactLogger.ts)                                         | Variadic `ILogger` implementation with `child()` for subsystem scoping                                                                                             |
 | `ILogger` / types  | [`src/utils/logging/types.ts`](../src/utils/logging/types.ts)                                                         | Interfaces and config types                                                                                                                                        |
 | `index.ts`         | [`src/utils/logging/index.ts`](../src/utils/logging/index.ts)                                                         | `bootstrapLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                                                                         |
-| Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | 16 pre-scoped logger instances (Task, Webview, Git, …)                                                                                                             |
+| Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | 17 pre-scoped logger instances (Task, Webview, Git, …)                                                                                                             |
 | LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel; renders checkboxes from live `logCategoriesKnown`                                                                                     |
 | Settings schema    | [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                   | `logLevel` and `logCategories` Zod schemas                                                                                                                         |
 | ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel`, `logCategories`, and `logCategoriesKnown`                                                                                       |
@@ -60,7 +60,7 @@ automatically — no UI changes needed.
 | Message handler    | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Wires `logLevel` and `logCategories` changes to live transport                                                                                                     |
 | State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state                                                                                                         |
 | Legacy compat      | [`src/utils/outputChannelLogger.ts`](../src/utils/outputChannelLogger.ts)                                             | `stringifyForLog` and `createOutputChannelLogger` retained;<br>`outputLog`/`outputWarn`/`outputError` removed                                                      |
-| i18n               | [`webview-ui/src/i18n/locales/en/settings.json`](../webview-ui/src/i18n/locales/en/settings.json)                     | `logging` section with level labels and 16 category names                                                                                                          |
+| i18n               | [`webview-ui/src/i18n/locales/en/settings.json`](../webview-ui/src/i18n/locales/en/settings.json)                     | `logging` section with level labels (category checkboxes are labelled by their raw `ctx`, not a translated string)                                                 |
 | Tests              | [`src/utils/logging/__tests__/`](../src/utils/logging/__tests__/)                                                     | `CompactLogger.spec.ts` (15 tests), `CompactTransport.spec.ts` (12 tests, incl. late channel-binding regression), `index.spec.ts` (3 tests, eager-init regression) |
 
 ## Log Levels
@@ -78,44 +78,50 @@ Entries below the configured level are silently dropped by the transport.
 ## Category Auto-Discovery
 
 Categories are **not hardcoded**. The transport maintains a `Set<string>` of
-every `ctx` value it has ever seen in any `CompactLogEntry`. This set is
-exposed as `logCategoriesKnown` on the `ExtensionState` and rendered
-dynamically by `LoggingSettings.tsx`.
+every `ctx` value it has seen. A category is registered as soon as its
+subsystem child logger is _created_ (`CompactLogger.child()` calls
+`transport.registerCategory(ctx)`), so all subsystems in `subsystems.ts` are
+known immediately at module load — not only after they have emitted their first
+line. The set is also extended by any `ctx` seen on `write()`. It is exposed as
+`logCategoriesKnown` on the `ExtensionState` and rendered dynamically by
+`LoggingSettings.tsx`.
 
-| Layer     | Mechanism                                                                                                            |
-| --------- | -------------------------------------------------------------------------------------------------------------------- |
-| Transport | [`_knownCategories.add(entry.c)`](../src/utils/logging/CompactTransport.ts) on every `write()`                       |
-| Index     | [`getLogKnownCategories()`](../src/utils/logging/index.ts) returns sorted array                                      |
-| State     | [`ShoferProvider`](../src/core/webview/ShoferProvider.ts) pushes `logCategoriesKnown` to webview state               |
-| UI        | [`LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) renders one checkbox per category |
+| Layer     | Mechanism                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Transport | [`registerCategory(ctx)`](../src/utils/logging/CompactTransport.ts) on `child()` + `_knownCategories.add(entry.c)` on `write()` |
+| Index     | [`getLogKnownCategories()`](../src/utils/logging/index.ts) returns sorted array                                                 |
+| State     | [`ShoferProvider`](../src/core/webview/ShoferProvider.ts) pushes `logCategoriesKnown` to webview state                          |
+| UI        | [`LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) renders one checkbox per category            |
 
-For categories with a matching i18n key (`settings:logging.categories.<lowercase>`),
-a translated label is shown. Unknown categories fall back to displaying the
-raw `ctx` string directly, so a brand-new subsystem appears immediately.
+Each checkbox is labelled by its raw `ctx` value (e.g. `CodeIndex`), so the
+label always matches the `[CodeIndex]` tag shown in the Output Channel. There
+is no separate translated-label layer that could drift out of sync, and a
+brand-new subsystem appears immediately with its `ctx` as the label.
 
 ## Subsystem Categories
 
 Each subsystem logger is created via `getLogger().child({ ctx: "Name" })`.
 The `ctx` is the tag shown in the output channel.
 
-| ctx              | Logger export       | Description                                       |
-| ---------------- | ------------------- | ------------------------------------------------- |
-| `Task`           | `taskLog`           | Core task engine (Task, BaseTool, condense, etc.) |
-| `Webview`        | `webviewLog`        | Webview / provider / IPC layer                    |
-| `Git`            | `gitLog`            | Git index, file watcher, git history              |
-| `CodeIndex`      | `codeIndexLog`      | Code index (RAG) and tree-sitter                  |
-| `AssistantAgent` | `assistantAgentLog` | Assistant agent subsystem                         |
-| `MCP`            | `mcpLog`            | MCP servers and transport                         |
-| `Checkpoints`    | `checkpointLog`     | Checkpoints / shadow git                          |
-| `API`            | `apiLog`            | API providers (Anthropic, OpenAI, Bedrock, etc.)  |
-| `FS`             | `fsLog`             | File I/O utilities (safeWriteJson, storage, etc.) |
-| `Config`         | `configLog`         | Configuration, ContextProxy, settings migration   |
-| `Skills`         | `skillsLog`         | Skills subsystem                                  |
-| `Marketplace`    | `marketplaceLog`    | Marketplace / installer                           |
-| `Metrics`        | `metricsLog`        | Metrics / Prometheus                              |
-| `Workflow`       | `workflowLog`       | Workflow engine (.slang)                          |
-| `I18n`           | `i18nLog`           | Translations                                      |
-| `Utils`          | `utilLog`           | General utilities (countTokens, path, perf, etc.) |
+| ctx              | Logger export       | Description                                                                                |
+| ---------------- | ------------------- | ------------------------------------------------------------------------------------------ |
+| `Task`           | `taskLog`           | Core task engine — task lifecycle, tool execution, context condensing, and the agent loop. |
+| `Webview`        | `webviewLog`        | Webview ↔ extension-host IPC, the provider, and message routing.                          |
+| `Git`            | `gitLog`            | Git index, the working-tree file watcher, and git history queries.                         |
+| `CodeIndex`      | `codeIndexLog`      | Code (RAG) indexing, embeddings, and tree-sitter parsing.                                  |
+| `AssistantAgent` | `assistantAgentLog` | The assistant-agent subsystem that answers questions and drives clarifying prompts.        |
+| `MCP`            | `mcpLog`            | MCP server lifecycle, transport, and tool discovery.                                       |
+| `Checkpoints`    | `checkpointLog`     | Checkpoint creation/restore via the shadow-git workspace snapshots.                        |
+| `API`            | `apiLog`            | LLM API providers (Anthropic, OpenAI, Bedrock, …) — requests, streaming, and retries.      |
+| `FS`             | `fsLog`             | File I/O utilities such as `safeWriteJson`, storage paths, and disk persistence.           |
+| `Config`         | `configLog`         | Configuration, `ContextProxy` settings/secrets, and settings migration.                    |
+| `Skills`         | `skillsLog`         | Skill discovery, loading, and invocation.                                                  |
+| `Marketplace`    | `marketplaceLog`    | Marketplace browsing and the item installer.                                               |
+| `Metrics`        | `metricsLog`        | Metrics collection and the Prometheus exporter.                                            |
+| `Workflow`       | `workflowLog`       | The `.slang` workflow engine — parsing, execution, and stake resolution.                   |
+| `I18n`           | `i18nLog`           | Translation loading and locale resolution.                                                 |
+| `Scroll`         | `scrollLog`         | Webview scroll-lifecycle diagnostics forwarded from the chat view to the host.             |
+| `Utils`          | `utilLog`           | General-purpose utilities (token counting, path handling, perf timing, …).                 |
 
 ## Output Format
 
@@ -165,14 +171,10 @@ File output is disabled by default. Enable it via `CompactTransportConfig.fileOu
     ```
 2. Import and use in the new subsystem's files.
 
-The category will appear automatically in Settings → Logging as "MyNew".
-To add a human-readable label, add a key to
-[`settings.json`](../webview-ui/src/i18n/locales/en/settings.json) under
-`"logging.categories"`:
-
-```json
-"myNew": "My New Subsystem"
-```
+The category appears automatically in Settings → Logging as `MyNew` (the raw
+`ctx`) as soon as the module is loaded — no i18n key or UI change is needed.
+Choose a concise, recognizable `ctx` since it is shown verbatim both in the
+Output Channel tag (`[MyNew]`) and on the Settings checkbox.
 
 ## Usage in Code
 

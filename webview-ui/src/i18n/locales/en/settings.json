@@ -1151,24 +1151,6 @@
 			"fatal": "Fatal"
 		},
 		"categoriesLabel": "Log categories",
-		"categoriesDescription": "Show only log lines from the selected subsystems. Deselect all to show everything.",
-		"categories": {
-			"task": "Task Engine",
-			"webview": "Webview / IPC",
-			"git": "Git",
-			"codeIndex": "Code Index (RAG)",
-			"assistantAgent": "Assistant Agent",
-			"mcp": "MCP",
-			"checkpoints": "Checkpoints",
-			"api": "API Providers",
-			"fs": "File I/O",
-			"config": "Config / Settings",
-			"skills": "Skills",
-			"marketplace": "Marketplace",
-			"metrics": "Metrics",
-			"workflow": "Workflow (.slang)",
-			"i18n": "Translations",
-			"scroll": "Scroll Lifecycle",			"utils": "Utilities"
-		}
+		"categoriesDescription": "Show only log lines from the selected subsystems. Deselect all to show everything."
 	}
 }

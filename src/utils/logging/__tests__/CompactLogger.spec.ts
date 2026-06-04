@@ -89,6 +89,25 @@ describe("CompactLogger", () => {
 
 			expect(transport.entries[0].c).toBe("parent")
 		})
+
+		test("registers ctx as a known category at creation, before emitting", () => {
+			const parentLogger = new CompactLogger(transport)
+
+			parentLogger.child({ ctx: "EagerlyKnown" })
+
+			// No log line emitted yet, but the category is already discoverable
+			// so it appears in the Settings UI immediately.
+			expect(transport.getKnownCategories()).toContain("EagerlyKnown")
+			expect(transport.entries.length).toBe(0)
+		})
+
+		test("does not register a category when child has no ctx", () => {
+			const parentLogger = new CompactLogger(transport)
+
+			parentLogger.child({ userId: "123" })
+
+			expect(transport.getKnownCategories()).toEqual([])
+		})
 	})
 
 	describe("Lifecycle", () => {
