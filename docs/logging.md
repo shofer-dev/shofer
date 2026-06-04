@@ -11,6 +11,11 @@ identifying which subsystem produced it.
 Both severity threshold and category whitelist can be changed at runtime from
 **Settings → Logging** without a reload.
 
+Categories are **auto-discovered**: any `ctx` value that passes through the
+transport is collected and surfaced to the Settings UI. A new subsystem added
+via `getLogger().child({ ctx: "MyNew" })` appears in the checkbox list
+automatically — no UI changes needed.
+
 ## Architecture
 
 ```
@@ -28,9 +33,11 @@ Both severity threshold and category whitelist can be changed at runtime from
      ▼                                                │
  CompactTransport (singleton)                         │
      │                                                │
-     │  write() ── level filter ── category filter ── Output Channel
+     │  write() ── auto-discover ctx ── level filter ── category filter ── Output Channel
      │                                                │
-     │  write() ────────────────────────────── file (optional JSON-lines)
+     │  write() ── auto-discover ctx ───────── file (optional JSON-lines)
+     │                                                │
+     │  getKnownCategories() ──► ShoferProvider ──► webview (logCategoriesKnown)
      │                                                │
      ▲                                                │
  CompactLogger (root) ── child({ ctx }) ──► subsystem loggers
@@ -46,9 +53,9 @@ Both severity threshold and category whitelist can be changed at runtime from
 | `ILogger` / types  | [`src/utils/logging/types.ts`](../src/utils/logging/types.ts)                                                         | Interfaces and config types                                                                                   |
 | `index.ts`         | [`src/utils/logging/index.ts`](../src/utils/logging/index.ts)                                                         | `bootstrapLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                    |
 | Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | 16 pre-scoped logger instances (Task, Webview, Git, …)                                                        |
-| LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel                                                                                   |
+| LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel; renders checkboxes from live `logCategoriesKnown`                                |
 | Settings schema    | [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                   | `logLevel` and `logCategories` Zod schemas                                                                    |
-| ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel` and `logCategories`                                                         |
+| ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel`, `logCategories`, and `logCategoriesKnown`                                  |
 | Activation         | [`src/extension.ts`](../src/extension.ts)                                                                             | `bootstrapLogging()` at line 108, persistence restore at line 155                                             |
 | Message handler    | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Wires `logLevel` and `logCategories` changes to live transport                                                |
 | State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state                                                    |
@@ -67,6 +74,24 @@ Both severity threshold and category whitelist can be changed at runtime from
 | `fatal` | Fatal errors — the most severe failures.                   |            |
 
 Entries below the configured level are silently dropped by the transport.
+
+## Category Auto-Discovery
+
+Categories are **not hardcoded**. The transport maintains a `Set<string>` of
+every `ctx` value it has ever seen in any `CompactLogEntry`. This set is
+exposed as `logCategoriesKnown` on the `ExtensionState` and rendered
+dynamically by `LoggingSettings.tsx`.
+
+| Layer     | Mechanism                                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------------------------- |
+| Transport | [`_knownCategories.add(entry.c)`](../src/utils/logging/CompactTransport.ts) on every `write()`                       |
+| Index     | [`getLogKnownCategories()`](../src/utils/logging/index.ts) returns sorted array                                      |
+| State     | [`ShoferProvider`](../src/core/webview/ShoferProvider.ts) pushes `logCategoriesKnown` to webview state               |
+| UI        | [`LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) renders one checkbox per category |
+
+For categories with a matching i18n key (`settings:logging.categories.<lowercase>`),
+a translated label is shown. Unknown categories fall back to displaying the
+raw `ctx` string directly, so a brand-new subsystem appears immediately.
 
 ## Subsystem Categories
 
@@ -133,13 +158,16 @@ File output is disabled by default. Enable it via `CompactTransportConfig.fileOu
     ```ts
     export const myLog = getLogger().child({ ctx: "MyNew" })
     ```
-2. Add the `"MyNew"` string to `ALL_CATEGORIES` in
-   [`CompactTransport.ts`](../src/utils/logging/CompactTransport.ts).
-3. Add a `{ id: "MyNew", labelKey: "myNew" }` entry to `CATEGORIES` in
-   [`LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx).
-4. Add a `"myNew"` key under `"logging.categories"` in
-   [`settings.json`](../webview-ui/src/i18n/locales/en/settings.json).
-5. Import and use in the new subsystem's files.
+2. Import and use in the new subsystem's files.
+
+The category will appear automatically in Settings → Logging as "MyNew".
+To add a human-readable label, add a key to
+[`settings.json`](../webview-ui/src/i18n/locales/en/settings.json) under
+`"logging.categories"`:
+
+```json
+"myNew": "My New Subsystem"
+```
 
 ## Usage in Code
 
