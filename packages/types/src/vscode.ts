@@ -76,9 +76,6 @@ export const commandIds = [
 
 	// Diagnostics
 	"heapSnapshot",
-
-	// Slang Visualization
-	"slangVisualization.show",
 ] as const
 
 export type CommandId = (typeof commandIds)[number]

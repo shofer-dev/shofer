@@ -35,6 +35,29 @@ function iconToEmoji(key) {
 	return map[key] || "\u26A1" // default ⚡
 }
 
+/**
+ * Lightweight markdown-to-HTML renderer for flow descriptions and param docs.
+ * HTML-escapes input, then applies a safe subset of markdown:
+ *   `code` → <code>, **bold** → <b>, *italic* → <i>, [text](url) → <a>, \n → <br>
+ */
+function renderMarkdown(text) {
+	if (!text) return ""
+	var html = esc(text)
+	// [text](url) — run first so other transforms don't interfere with URL chars
+	html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+	// `inline code`
+	html = html.replace(/`([^`]+)`/g, "<code>$1</code>")
+	// **bold**
+	html = html.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+	// *italic* (single asterisk, not already consumed by **)
+	html = html.replace(/\*([^*]+)\*/g, "<i>$1</i>")
+	// Literal backslash-n sequences (surviving JSON round-trip)
+	html = html.replace(/\\n/g, "<br>")
+	// Actual newline characters
+	html = html.replace(/\n/g, "<br>")
+	return html
+}
+
 function safeRender(payload) {
 	try {
 		if (payload) _lastPayload = payload
@@ -43,7 +66,7 @@ function safeRender(payload) {
 		var app = document.getElementById("app")
 		if (app) {
 			app.innerHTML =
-				'<div class="empty"><h2>⚠️ Render Error</h2><p style="color:#f87171">' +
+				'<div class="empty"><h2>\u26A0\uFE0F Render Error</h2><p style="color:#f87171">' +
 				esc(String(e)) +
 				'</p><pre style="font-size:11px;text-align:left;opacity:0.7">' +
 				esc(e.stack) +
@@ -289,7 +312,9 @@ function renderNode(nm, meta) {
 		var maxChars = Math.floor((NODE_W - 28) / 6.3)
 		var r1 = role.length > maxChars ? role.slice(0, maxChars) + "\u2026" : role
 		s +=
-			'<text x="14" y="48" font-size="11" fill="var(--z-meta,#888)" style="pointer-events:none">' +
+			'<text x="14" y="48" font-size="11" fill="var(--z-meta,#888)" style="pointer-events:none"><title>' +
+			esc(role) +
+			"</title>" +
 			esc(r1) +
 			"</text>"
 		if (role.length > maxChars * 1.5) {
@@ -435,6 +460,10 @@ function compileTopologySVG(flow, agentNames, agentMeta) {
 		'<svg id="slang-svg" width="' +
 		svgW +
 		'" height="' +
+		svgH +
+		'" viewBox="0 0 ' +
+		svgW +
+		" " +
 		svgH +
 		'" xmlns="http://www.w3.org/2000/svg">' +
 		defs() +
@@ -596,6 +625,33 @@ function compileSequenceSVG(flow, agentNames) {
 			'">' +
 			esc(ev.label) +
 			"</text>"
+
+		// ── Activation boxes on lifelines ──
+		var actW = 8,
+			actH = 30
+		var cxFrom = MARGIN + fIdx * COL_W + COL_W / 2
+		var cxTo = MARGIN + tIdx * COL_W + COL_W / 2
+		s +=
+			'<rect class="seq-activation" x="' +
+			(cxFrom - actW / 2) +
+			'" y="' +
+			(y - actH / 2) +
+			'" width="' +
+			actW +
+			'" height="' +
+			actH +
+			'" rx="2" />'
+		s +=
+			'<rect class="seq-activation" x="' +
+			(cxTo - actW / 2) +
+			'" y="' +
+			(y - actH / 2) +
+			'" width="' +
+			actW +
+			'" height="' +
+			actH +
+			'" rx="2" />'
+
 		s += "</g>"
 	}
 	if (timelineEvents.length === 0) {
@@ -1057,6 +1113,111 @@ var _svgn = null,
 	_layers = null,
 	_svgEl = null
 
+// ── Zoom & pan state (topology view only) ──
+var _zoomViewBox = null,
+	_zoomPanning = false,
+	_zoomPanSX = 0,
+	_zoomPanSY = 0,
+	_zoomPanOX = 0,
+	_zoomPanOY = 0
+
+function applyZoom() {
+	if (!_svgEl || !_zoomViewBox) return
+	_svgEl.setAttribute("viewBox", _zoomViewBox.x + " " + _zoomViewBox.y + " " + _zoomViewBox.w + " " + _zoomViewBox.h)
+}
+
+function zoomIn() {
+	if (!_zoomViewBox) return
+	var cx = _zoomViewBox.x + _zoomViewBox.w / 2
+	var cy = _zoomViewBox.y + _zoomViewBox.h / 2
+	_zoomViewBox.w *= 0.8
+	_zoomViewBox.h *= 0.8
+	_zoomViewBox.x = cx - _zoomViewBox.w / 2
+	_zoomViewBox.y = cy - _zoomViewBox.h / 2
+	applyZoom()
+}
+
+function zoomOut() {
+	if (!_zoomViewBox) return
+	var cx = _zoomViewBox.x + _zoomViewBox.w / 2
+	var cy = _zoomViewBox.y + _zoomViewBox.h / 2
+	_zoomViewBox.w *= 1.25
+	_zoomViewBox.h *= 1.25
+	_zoomViewBox.x = cx - _zoomViewBox.w / 2
+	_zoomViewBox.y = cy - _zoomViewBox.h / 2
+	applyZoom()
+}
+
+function zoomFit() {
+	if (!_svgEl) return
+	var w = parseFloat(_svgEl.getAttribute("width")) || 500
+	var h = parseFloat(_svgEl.getAttribute("height")) || 300
+	_zoomViewBox = { x: 0, y: 0, w: w, h: h }
+	applyZoom()
+}
+
+function beginSvgPan(e) {
+	if (!_zoomViewBox) return
+	// Only start panning if the mousedown target is not a node or edge element
+	var el = e.target
+	while (el && el !== _svgEl) {
+		if (el.getAttribute) {
+			var cls = el.getAttribute("class") || ""
+			if (cls.indexOf("node-group") !== -1 || cls.indexOf("edge-group") !== -1) return
+		}
+		el = el.parentNode
+	}
+	e.preventDefault()
+	_zoomPanning = true
+	_zoomPanSX = e.clientX
+	_zoomPanSY = e.clientY
+	_zoomPanOX = _zoomViewBox.x
+	_zoomPanOY = _zoomViewBox.y
+	_svgEl.style.cursor = "grabbing"
+}
+
+function moveSvgPan(e) {
+	if (!_zoomPanning || !_svgEl) return
+	e.preventDefault()
+	var rect = _svgEl.getBoundingClientRect()
+	var dx = e.clientX - _zoomPanSX
+	var dy = e.clientY - _zoomPanSY
+	if (rect.width > 0 && rect.height > 0) {
+		_zoomViewBox.x = _zoomPanOX - dx * (_zoomViewBox.w / rect.width)
+		_zoomViewBox.y = _zoomPanOY - dy * (_zoomViewBox.h / rect.height)
+	}
+	applyZoom()
+}
+
+function endSvgPan(e) {
+	if (!_zoomPanning) return
+	_zoomPanning = false
+	if (_svgEl) _svgEl.style.cursor = ""
+}
+
+// ── Edge-hover highlight ──
+function edgeHoverIn(e) {
+	var edge = e.currentTarget
+	var from = edge.getAttribute("data-from")
+	var to = edge.getAttribute("data-to")
+	if (!_svgEl) return
+	var nodes = _svgEl.querySelectorAll(".node-group")
+	for (var i = 0; i < nodes.length; i++) {
+		var agent = nodes[i].getAttribute("data-agent")
+		if (agent !== from && agent !== to) {
+			nodes[i].classList.add("z-dimmed")
+		}
+	}
+}
+
+function edgeHoverOut(e) {
+	if (!_svgEl) return
+	var nodes = _svgEl.querySelectorAll(".node-group")
+	for (var i = 0; i < nodes.length; i++) {
+		nodes[i].classList.remove("z-dimmed")
+	}
+}
+
 function beginDrag(e) {
 	var g = e.currentTarget,
 		agent = g.getAttribute("data-agent")
@@ -1139,6 +1300,9 @@ function updateConnectedEdges(agent) {
 
 // ── main orchestration layout router ──
 function render(payload) {
+	// CSP debugging: warn in console so devs know where to look if interactivity breaks
+	console.log("[Slang] Render starting \u2014 if tab buttons don\u2019t work, check CSP blocks inline handlers")
+
 	var flow = payload.flow,
 		diags = payload.diags || []
 	var app = document.getElementById("app"),
@@ -1164,20 +1328,20 @@ function render(payload) {
 		h += '<div class="flow-id">flow "' + esc(flow.name) + '"</div>'
 	}
 	if (flow.description) {
-		h += '<div class="flow-desc">' + esc(flow.description).replace(/\\n/g, "<br>") + "</div>"
+		h += '<div class="flow-desc">' + renderMarkdown(flow.description) + "</div>"
 	}
 	if (flow.params && flow.params.length > 0) {
 		h += '<div class="params">Params: '
 		for (var i = 0; i < flow.params.length; i++) {
 			var pDesc = paramDescriptions[flow.params[i].name]
 			h +=
-				"<code" +
-				(pDesc ? ' title="' + esc(pDesc) + '"' : "") +
-				">" +
+				'<span class="param-tip"><code>' +
 				esc(flow.params[i].name) +
 				': "' +
 				esc(flow.params[i].paramType) +
 				'"</code>' +
+				(pDesc ? '<span class="param-tooltip">' + renderMarkdown(pDesc) + "</span>" : "") +
+				"</span>" +
 				(i < flow.params.length - 1 ? ", " : "")
 		}
 		h += "</div>"
@@ -1189,13 +1353,16 @@ function render(payload) {
 		var bItem = flow.body[bi]
 		if (bItem.type === "ConvergeStmt") {
 			hasCon = true
-			h += '<span>🎯 Converge when: <span class="badge">' + esc(exprStr(bItem.condition)) + "</span></span>"
+			h +=
+				'<span>\uD83C\uDFAF Converge when: <span class="badge">' +
+				esc(exprStr(bItem.condition)) +
+				"</span></span>"
 		}
 		if (bItem.type === "BudgetStmt" && bItem.items) {
 			hasBud = true
 			for (var bj = 0; bj < bItem.items.length; bj++)
 				h +=
-					"<span>💰 " +
+					"<span>\uD83D\uDCB0 " +
 					esc(bItem.items[bj].kind) +
 					': <span class="badge">' +
 					esc(exprStr(bItem.items[bj].value)) +
@@ -1223,12 +1390,24 @@ function render(payload) {
 
 	if (_currentView === "topology") {
 		h +=
-			'<div class="graph-hint">🖱️ Drag nodes to rearrange &nbsp;|&nbsp; 🔄 Auto-layout from topology layers</div>'
+			'<div class="graph-hint">\uD83D\uDD90\uFE0F Drag nodes to rearrange &nbsp;|&nbsp; \uD83D\uDD04 Auto-layout from topology layers' +
+			" &nbsp;|&nbsp; \uD83D\uDD0D Scroll to zoom, drag background to pan</div>"
 	} else if (_currentView === "sequence") {
-		h += '<div class="graph-hint">⏱️ Message-passing chronology mapped top-to-bottom across processing tracks</div>'
+		h +=
+			'<div class="graph-hint">\u23F1\uFE0F Message-passing chronology mapped top-to-bottom across processing tracks</div>'
 	} else {
 		h +=
-			'<div class="graph-hint">🧬 Sequential operation blocks and branching statements broken down per agent lane</div>'
+			'<div class="graph-hint">\uD83E\uDDEC Sequential operation blocks and branching statements broken down per agent lane</div>'
+	}
+
+	// ── Zoom controls (topology only) ──
+	if (_currentView === "topology") {
+		h +=
+			'<div class="zoom-controls">' +
+			'<button class="zoom-btn" data-zoom="in" title="Zoom in">+</button>' +
+			'<button class="zoom-btn" data-zoom="out" title="Zoom out">\u2212</button>' +
+			'<button class="zoom-btn" data-zoom="fit" title="Fit to view">\u26F6</button>' +
+			"</div>"
 	}
 
 	var agentNames = {},
@@ -1288,11 +1467,63 @@ function render(payload) {
 	if (_currentView === "topology") {
 		_svgn = document
 		_svgEl = document.getElementById("slang-svg")
+
+		// Initialize zoom state from SVG dimensions
+		if (_svgEl) {
+			var initW = parseFloat(_svgEl.getAttribute("width")) || 500
+			var initH = parseFloat(_svgEl.getAttribute("height")) || 300
+			_zoomViewBox = { x: 0, y: 0, w: initW, h: initH }
+		}
+
+		// ── Node drag ──
 		var groups = _svgEl ? Array.prototype.slice.call(_svgEl.querySelectorAll(".node-group")) : []
 		for (var gi = 0; gi < groups.length; gi++) groups[gi].addEventListener("mousedown", beginDrag)
 		document.removeEventListener("mousemove", moveDrag)
 		document.addEventListener("mousemove", moveDrag)
 		document.removeEventListener("mouseup", endDrag)
 		document.addEventListener("mouseup", endDrag)
+
+		// ── Edge hover highlights ──
+		var edgeGroups = _svgEl ? Array.prototype.slice.call(_svgEl.querySelectorAll(".edge-group")) : []
+		for (var ei = 0; ei < edgeGroups.length; ei++) {
+			edgeGroups[ei].addEventListener("mouseenter", edgeHoverIn)
+			edgeGroups[ei].addEventListener("mouseleave", edgeHoverOut)
+		}
+
+		// ── Zoom buttons ──
+		var zoomBtns = document.querySelectorAll(".zoom-btn[data-zoom]")
+		for (var zi = 0; zi < zoomBtns.length; zi++) {
+			zoomBtns[zi].addEventListener("click", function () {
+				var action = this.getAttribute("data-zoom")
+				if (action === "in") zoomIn()
+				else if (action === "out") zoomOut()
+				else if (action === "fit") zoomFit()
+			})
+		}
+
+		// ── Mousewheel zoom on SVG ──
+		if (_svgEl) {
+			_svgEl.addEventListener("wheel", function (e) {
+				if (!_zoomViewBox) return
+				e.preventDefault()
+				var rect = _svgEl.getBoundingClientRect()
+				var mx = e.clientX - rect.left
+				var my = e.clientY - rect.top
+				var vbX = _zoomViewBox.x + (mx / rect.width) * _zoomViewBox.w
+				var vbY = _zoomViewBox.y + (my / rect.height) * _zoomViewBox.h
+				var factor = e.deltaY > 0 ? 1.15 : 0.87
+				_zoomViewBox.w *= factor
+				_zoomViewBox.h *= factor
+				_zoomViewBox.x = vbX - (mx / rect.width) * _zoomViewBox.w
+				_zoomViewBox.y = vbY - (my / rect.height) * _zoomViewBox.h
+				applyZoom()
+			})
+			// ── Background drag-to-pan on SVG ──
+			_svgEl.addEventListener("mousedown", beginSvgPan)
+			document.removeEventListener("mousemove", moveSvgPan)
+			document.addEventListener("mousemove", moveSvgPan)
+			document.removeEventListener("mouseup", endSvgPan)
+			document.addEventListener("mouseup", endSvgPan)
+		}
 	}
 }

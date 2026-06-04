@@ -348,4 +348,100 @@ body {
 
 .empty p {
 	margin: 0;
+
+	/* Edge hover: dim non-connected nodes */
+	.z-dimmed {
+		opacity: 0.25;
+		transition: opacity 0.2s ease;
+	}
+
+	/* Sequence activation boxes on lifelines */
+	.seq-activation {
+		fill: var(--z-agent);
+		opacity: 0.12;
+		stroke: none;
+		pointer-events: none;
+	}
+
+	/* Param description tooltip */
+	.params code.param-tip {
+		position: relative;
+		cursor: help;
+		border-bottom: 1px dotted var(--z-meta);
+	}
+
+	.params code.param-tip .param-tooltip {
+		display: none;
+		position: absolute;
+		bottom: calc(100% + 6px);
+		left: 50%;
+		transform: translateX(-50%);
+		background: var(--z-card-bg);
+		color: var(--z-fg);
+		border: 1px solid var(--z-card-border);
+		border-radius: 4px;
+		padding: 4px 8px;
+		font-size: 0.82em;
+		white-space: nowrap;
+		max-width: 280px;
+		z-index: 10;
+		pointer-events: none;
+	}
+
+	.params code.param-tip:hover .param-tooltip {
+		display: block;
+	}
+
+	/* Flow description markdown elements */
+	.flow-desc code {
+		background: var(--z-code-bg);
+		padding: 1px 5px;
+		border-radius: 3px;
+		font-family: var(--vscode-editor-font-family, monospace);
+		font-size: 0.92em;
+	}
+
+	.flow-desc a {
+		color: var(--z-flow);
+		text-decoration: underline;
+	}
+
+	.flow-desc b {
+		font-weight: 700;
+	}
+
+	.flow-desc i {
+		font-style: italic;
+	}
+
+	/* Zoom controls bar */
+	.zoom-bar {
+		display: flex;
+		gap: 4px;
+		margin-bottom: 8px;
+		justify-content: flex-end;
+	}
+
+	.zoom-btn {
+		background: var(--z-card-bg);
+		border: 1px solid var(--z-card-border);
+		color: var(--z-meta);
+		width: 28px;
+		height: 24px;
+		border-radius: 4px;
+		font-size: 14px;
+		line-height: 1;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition:
+			color 0.1s ease,
+			border-color 0.1s ease;
+	}
+
+	.zoom-btn:hover {
+		color: var(--z-fg);
+		border-color: var(--z-fg);
+	}
 }
