@@ -434,7 +434,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					case "attempt_completion":
 						return `[${block.name}]`
 					case "switch_mode":
-						return `[${block.name} to '${block.params.mode_slug}'${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
+						return `[${block.name} to '${block.params.mode_slug}'${block.params.task_id ? ` for task ${block.params.task_id}` : ""}${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "set_task_title":
 						return `[${block.name} to '${block.params.title}']`
 					case "give_feedback":

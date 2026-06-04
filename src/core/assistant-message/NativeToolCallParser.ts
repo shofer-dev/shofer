@@ -590,6 +590,7 @@ export class NativeToolCallParser {
 					nativeArgs = {
 						mode_slug: partialArgs.mode_slug,
 						reason: partialArgs.reason,
+						task_id: partialArgs.task_id,
 					}
 				}
 				break
@@ -1231,6 +1232,7 @@ export class NativeToolCallParser {
 						nativeArgs = {
 							mode_slug: args.mode_slug,
 							reason: args.reason,
+							task_id: args.task_id,
 						} as NativeArgsFor<TName>
 					}
 					break

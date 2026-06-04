@@ -392,7 +392,7 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 | ------------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------------------- |
 | `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question                                     |
 | `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                      |
-| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch to a different mode                                  |
+| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                |
 | `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                       |
 | `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task              |
 | `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any) |
@@ -403,6 +403,16 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 | `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
 | `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
 | `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                  |
+
+### `switch_mode`
+
+Request to switch to a different mode. When the optional `task_id` parameter is provided, the mode switch is applied to the specified background child task instead of the calling task — this allows a parent to control the mode of its children. The user must approve the mode switch.
+
+| Param       | Type           | Required | Description                                                                                           |
+| ----------- | -------------- | :------: | ----------------------------------------------------------------------------------------------------- |
+| `mode_slug` | string         |    ✅    | Slug of the mode to switch to (e.g., `code`, `ask`, `architect`)                                      |
+| `reason`    | string         |    ✅    | Explanation for why the mode switch is needed                                                         |
+| `task_id`   | string \| null |    –     | Optional task ID of a background child task. When provided, switches the child's mode instead of own. |
 
 ### `new_task`
 
