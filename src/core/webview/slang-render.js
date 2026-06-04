@@ -1291,7 +1291,8 @@ function updateConnectedEdges(agent) {
 		var fn = _layout[e.from],
 			tn = _layout[e.to]
 		if (!fn || !tn) continue
-		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.sections)
+		// Sections from dagre layout are stale after drag — use bezier fallback.
+		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, null)
 		var eg = _svgEl.querySelector(
 			'.edge-group[data-edge="' + esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx + '"]',
 		)
