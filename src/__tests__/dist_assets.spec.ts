@@ -58,7 +58,7 @@ describe("dist assets", () => {
 	})
 
 	describe("slang visualization", () => {
-		test.each(["slang-render.js", "slang-render.css"])("should have %s file", (filename) => {
+		test.each(["slang-render.js", "slang-render.css", "dagre.min.js"])("should have %s file", (filename) => {
 			expect(fs.existsSync(path.join(distPath, filename))).toBe(true)
 		})
 	})

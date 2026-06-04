@@ -8,6 +8,7 @@
  * for `.dtvis` files.
  *
  * Design: self-contained inline HTML/CSS/JS (no webview-ui build step).
+ * Dagre is loaded as an external script via webview URI for graph layout.
  */
 
 import * as fs from "fs"
@@ -52,13 +53,18 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 			localResourceRoots: [this._context.extensionUri],
 		}
 
+		// Resolve dagre as webview URI so the sandboxed webview can load it.
+		const dagreUri = webviewPanel.webview.asWebviewUri(
+			vscode.Uri.joinPath(this._context.extensionUri, "dist", "dagre.min.js"),
+		)
+
 		// Initial render
-		this._render(webviewPanel, document.getText(), path.basename(document.fileName))
+		this._render(webviewPanel, document.getText(), path.basename(document.fileName), dagreUri)
 
 		// Watch for document changes (both from source editor and external saves)
 		const changeSubscription = vscode.workspace.onDidChangeTextDocument((e) => {
 			if (e.document.uri.toString() === document.uri.toString()) {
-				this._render(webviewPanel, e.document.getText(), path.basename(document.fileName))
+				this._render(webviewPanel, e.document.getText(), path.basename(document.fileName), dagreUri)
 			}
 		})
 
@@ -69,7 +75,7 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 
 	// ─── Render helpers ─────────────────────────────────────────────────
 
-	private _render(panel: vscode.WebviewPanel, source: string, fileName: string): void {
+	private _render(panel: vscode.WebviewPanel, source: string, fileName: string, dagreUri: vscode.Uri): void {
 		const result = parseSlang(source)
 		const warnings = result.errors.length > 0 ? [] : validateSlangAST(result.ast)
 		const diags = [...result.errors, ...warnings]
@@ -104,7 +110,7 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 		}
 
 		const nonce = makeNonce()
-		const csp = buildCsp(panel.webview.cspSource, nonce)
+		const csp = buildCsp(panel.webview.cspSource, nonce, dagreUri)
 
 		if (!flow) {
 			panel.title = "Slang: Parse Error"
@@ -127,7 +133,11 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 			escapeHtml(fileName) +
 			"</title>\n<style>" +
 			CSS +
-			'</style>\n</head>\n<body>\n<div id="app"></div>\n<div id="diags" class="diag-section"></div>\n<script nonce="' +
+			'</style>\n</head>\n<body>\n<div id="app"></div>\n<div id="diags" class="diag-section"></div>\n<script src="' +
+			escapeHtml(dagreUri.toString()) +
+			'" nonce="' +
+			nonce +
+			'"></script>\n<script nonce="' +
 			nonce +
 			'">\n(function () {\n  "use strict";\n  var __payload = ' +
 			jsonPayload +
@@ -159,11 +169,13 @@ function makeNonce(): string {
 	return text
 }
 
-function buildCsp(cspSource: string, nonce: string): string {
+function buildCsp(cspSource: string, nonce: string, dagreUri: vscode.Uri): string {
 	return (
 		"default-src 'none'; style-src " +
 		cspSource +
-		" 'unsafe-inline'; script-src 'nonce-" +
+		" 'unsafe-inline'; script-src " +
+		dagreUri.toString() +
+		" 'nonce-" +
 		nonce +
 		"'; img-src " +
 		cspSource +

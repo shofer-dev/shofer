@@ -63,6 +63,7 @@ async function main() {
 						[
 							["core/webview/slang-render.js", "slang-render.js"],
 							["core/webview/slang-render.css", "slang-render.css"],
+							["node_modules/dagre/dist/dagre.min.js", "dagre.min.js"],
 						],
 						srcDir,
 						distDir,
