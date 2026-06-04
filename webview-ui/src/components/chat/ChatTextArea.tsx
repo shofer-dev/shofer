@@ -155,6 +155,23 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 		const [gitCommits, setGitCommits] = useState<any[]>([])
 		const [showDropdown, setShowDropdown] = useState(false)
+		const stopGuardRef = useRef(false)
+
+		// Reset the stop guard when the task becomes non-stoppable (e.g. after
+		// rehydration), so the button can be clicked again for the next task.
+		useEffect(() => {
+			if (!isStreaming && !canStop) {
+				stopGuardRef.current = false
+			}
+		}, [isStreaming, canStop])
+
+		const handleStop = useCallback(() => {
+			if (stopGuardRef.current) {
+				return // Already clicked — prevent duplicate cancelTask IPC
+			}
+			stopGuardRef.current = true
+			onStop?.()
+		}, [onStop])
 		const [fileSearchResults, setFileSearchResults] = useState<SearchResult[]>([])
 		const [searchLoading, setSearchLoading] = useState(false)
 		const [searchRequestId, setSearchRequestId] = useState<string>("")
@@ -1331,8 +1348,8 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 																		keyCombination: sendKeyCombination,
 																	})
 													}
-													disabled={false}
-													onClick={showStop ? onStop : onSend}
+													disabled={showStop && stopGuardRef.current}
+													onClick={showStop ? handleStop : onSend}
 													className={cn(
 														"relative inline-flex items-center justify-center",
 														"bg-transparent border-none p-1.5",
