@@ -231,11 +231,27 @@ function applyDagreLayout(agentNames, rawEdges) {
 	// Extract layout from dagre output (dagre gives center coords; convert to top-left)
 	var layout = {}
 	var layers = {}
+	// dagre's LR layout places nodes in distinct x-columns per layer.
+	// Collect unique x positions (rounded) and assign layer numbers from left to right.
+	var xPositions = []
+	var xToLayer = {}
+	for (var ni = 0; ni < names.length; ni++) {
+		var n = g.node(names[ni])
+		if (n) {
+			var rx = Math.round(n.x)
+			if (xPositions.indexOf(rx) === -1) xPositions.push(rx)
+		}
+	}
+	xPositions.sort(function (a, b) {
+		return a - b
+	})
+	for (var xi = 0; xi < xPositions.length; xi++) xToLayer[xPositions[xi]] = xi
+
 	for (var ni = 0; ni < names.length; ni++) {
 		var n = g.node(names[ni])
 		if (n) {
 			layout[names[ni]] = { x: n.x - NODE_W / 2, y: n.y - NODE_H / 2 }
-			layers[names[ni]] = n.rank || 0
+			layers[names[ni]] = xToLayer[Math.round(n.x)] || 0
 		}
 	}
 
