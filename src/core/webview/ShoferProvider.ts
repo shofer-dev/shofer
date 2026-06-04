@@ -4329,20 +4329,29 @@ export class ShoferProvider
 		}
 
 		// When a WorkflowTask was stopped before the slang loop started
-		// (e.g. during param collection), there is no work to resume.
-		// Detect this by checking flowState.status — param collection
-		// persists "aborted" via persistCheckpoint() in the .catch().
-		// If the status is no longer "running", the task was stopped
-		// cleanly; skip rehydrate so it stays stopped.
-		if (
-			historyItem.isWorkflow &&
-			historyItem.flowState &&
-			(historyItem.flowState as Record<string, unknown>).status !== "running"
-		) {
-			outputLog(
-				`[cancelTask] Skipping rehydrate: WorkflowTask ${task.taskId} was stopped (status=${(historyItem.flowState as Record<string, unknown>).status})`,
-			)
-			return
+		// (e.g. during param collection), there is no work to resume —
+		// the task was just asking the user a question. The live
+		// WorkflowTask's .catch() handler already set flowState.status
+		// to "aborted" and persisted it during abortTask(). Skip
+		// rehydrate so the task stays stopped instead of re-asking the
+		// same question.
+		if (historyItem.isWorkflow) {
+			// Re-read history from disk — abortTask() may have updated
+			// the persisted flowState.status to "aborted".
+			let freshStatus: string | undefined
+			try {
+				const fresh = await this.getTaskWithId(historyItem.id)
+				freshStatus = (fresh.historyItem.flowState as Record<string, unknown>)?.status as string | undefined
+			} catch {
+				// Fall back to the in-memory snapshot
+				freshStatus = (historyItem.flowState as Record<string, unknown>)?.status as string | undefined
+			}
+			if (freshStatus && freshStatus !== "running") {
+				outputLog(
+					`[cancelTask] Skipping rehydrate: WorkflowTask ${task.taskId} was stopped (status=${freshStatus})`,
+				)
+				return
+			}
 		}
 
 		// Clears task again, so we need to abortTask manually above.
