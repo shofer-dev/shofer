@@ -2,6 +2,7 @@ import { execFile } from "child_process"
 import * as path from "path"
 import { promisify } from "util"
 
+import { codeIndexLog } from "../../../utils/logging/subsystems"
 import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
 
 const execFileAsync = promisify(execFile)
@@ -92,7 +93,7 @@ export class GitIgnoreFilter implements IIgnoreFilter {
 		try {
 			this.includedSet = await GitIgnoreFilter.listIncludedPaths(this.workspacePath)
 		} catch (error) {
-			console.warn("[code-index] GitIgnoreFilter.refresh failed; keeping previous snapshot:", error)
+			codeIndexLog.warn("GitIgnoreFilter.refresh failed; keeping previous snapshot:", error)
 		}
 	}
 
