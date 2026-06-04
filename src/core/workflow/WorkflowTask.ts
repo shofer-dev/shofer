@@ -435,6 +435,11 @@ export class WorkflowTask extends Task {
 						this.flowState.params[p.name] = defaultParamValue(p.paramType)
 					}
 				}
+				// Persist params immediately so that if the workflow is
+				// stopped/cancelled after collection but before
+				// slangLoop starts, the rehydrated instance sees the
+				// populated params and skips re-asking.
+				void this.persistCheckpoint()
 				outputLog(`[WorkflowTask#${this.taskId}] Flow params collected, starting slang loop`)
 				void this.slangLoop()
 				return Promise.resolve()
@@ -957,6 +962,28 @@ export class WorkflowTask extends Task {
 					createdAt: Date.now(),
 					parentTaskId: this.taskId,
 				})
+
+				// Persist the parent-child relationship in the parent workflow's
+				// history item so cascade-deletion (deleteManagedTask) can find
+				// agent children via the persisted childIds chain.
+				try {
+					const { historyItem: parentHistory } = await provider.getTaskWithId(this.taskId)
+					const backgroundChildIds = Array.from(
+						new Set([...(parentHistory.backgroundChildIds ?? []), task.taskId]),
+					)
+					const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), task.taskId]))
+					await provider.updateTaskHistory({
+						...parentHistory,
+						backgroundChildIds,
+						childIds,
+					})
+				} catch (err) {
+					// Non-fatal: parent history metadata may be stale but the agent
+					// task still runs.
+					outputError(
+						`[WorkflowTask#${this.taskId}] Failed to update parent history for agent '${agentName}': ${err}`,
+					)
+				}
 				agentState.taskId = task.taskId
 				outputLog(
 					`[WorkflowTask#${this.taskId}] Spawned agent '${agentName}' (mode='${mode}') as task ${task.taskId}`,
