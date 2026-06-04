@@ -260,12 +260,6 @@
 				"command": "shofer.walkthrough.openRoocodeGuide",
 				"title": "%walkthrough.openRoocodeGuide.title%",
 				"category": "%configuration.title%"
-			},
-			{
-				"command": "shofer.slangVisualization.show",
-				"title": "%command.slangVisualization.show.title%",
-				"icon": "$(graph)",
-				"category": "%configuration.title%"
 			}
 		],
 		"menus": {
@@ -320,11 +314,6 @@
 				{
 					"submenu": "shofer.contextMenu",
 					"group": "1"
-				},
-				{
-					"command": "shofer.slangVisualization.show",
-					"group": "2_shofer@1",
-					"when": "resourceExtname == .slang"
 				}
 			],
 			"explorer/context": [

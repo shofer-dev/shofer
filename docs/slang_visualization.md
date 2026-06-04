@@ -29,10 +29,9 @@ The editor generates a self-contained HTML page with inline SVG, CSS, and JavaSc
 
 Two providers exist:
 
-| Provider                  | File                                                                                 | Role                                                   | Status                                            |
-| ------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------- |
-| `SlangEditorProvider`     | [`SlangEditorProvider.ts`](../src/core/webview/SlangEditorProvider.ts)               | Custom editor for `.slang` files (opens as editor tab) | ✅ Primary                                        |
-| `SlangVisualizationPanel` | [`SlangVisualizationProvider.ts`](../src/core/webview/SlangVisualizationProvider.ts) | Side-panel webview (legacy)                            | ⚠️ Retained for `slangVisualization.show` command |
+| Provider              | File                                                                   | Role                                                   | Status     |
+| --------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------ | ---------- |
+| `SlangEditorProvider` | [`SlangEditorProvider.ts`](../src/core/webview/SlangEditorProvider.ts) | Custom editor for `.slang` files (opens as editor tab) | ✅ Primary |
 
 ## Component Diagram
 
@@ -50,7 +49,7 @@ Two providers exist:
 │  │                                                             │
 │  │   File watcher: onDidChangeTextDocument → re-render         │
 │  │                                                             │
-│  └── SlangVisualizationPanel (legacy command)                  │
+
 │                                                               │
 │  esbuild.mjs: copyPaths hook ensures slang-render.{js,css}    │
 │  are copied from src/core/webview/ → dist/ at build time.      │
@@ -189,15 +188,14 @@ The visualization adapts to VS Code themes via CSS variables.
 
 ### Core Engine — Parser + Editor Provider
 
-| File                                                                                 | Purpose                                                                           |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| [`SlangEditorProvider.ts`](../src/core/webview/SlangEditorProvider.ts)               | `CustomTextEditorProvider` — parses `.slang`, generates HTML, watches for changes |
-| [`SlangVisualizationProvider.ts`](../src/core/webview/SlangVisualizationProvider.ts) | Legacy side-panel provider (`slangVisualization.show` command)                    |
-| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                                  | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)        |
-| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                            | Public API — `parseSlang()`, `validateSlangAST()`                                 |
-| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)          | Vendored parser from `@riktar/slang` (MIT)                                        |
-| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                              | Lexer (vendored)                                                                  |
-| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)                        | Static analysis — dependency graph, deadlock detection, warnings                  |
+| File                                                                        | Purpose                                                                           |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [`SlangEditorProvider.ts`](../src/core/webview/SlangEditorProvider.ts)      | `CustomTextEditorProvider` — parses `.slang`, generates HTML, watches for changes |
+| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                         | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)        |
+| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                   | Public API — `parseSlang()`, `validateSlangAST()`                                 |
+| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts) | Vendored parser from `@riktar/slang` (MIT)                                        |
+| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                     | Lexer (vendored)                                                                  |
+| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)               | Static analysis — dependency graph, deadlock detection, warnings                  |
 
 ### Webview Render Engine
 
