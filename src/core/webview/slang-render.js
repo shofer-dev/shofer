@@ -190,61 +190,82 @@ function buildGraphEdges(flow) {
 	return edges
 }
 
-function assignLayers(agentNames, edges) {
-	var names = Object.keys(agentNames)
-	var layer = {},
-		inDegree = {}
-	for (var i = 0; i < names.length; i++) {
-		layer[names[i]] = -1
-		inDegree[names[i]] = 0
-	}
-	var adj = {}
-	for (var i = 0; i < names.length; i++) adj[names[i]] = []
-	for (var i = 0; i < edges.length; i++) {
-		var e = edges[i]
-		adj[e.from] = adj[e.from] || []
-		adj[e.from].push(e.to)
-		if (inDegree.hasOwnProperty(e.to)) inDegree[e.to]++
-	}
-	var queue = []
-	for (var i = 0; i < names.length; i++) {
-		if (inDegree[names[i]] === 0) {
-			queue.push(names[i])
-			layer[names[i]] = 0
-		}
-	}
-	if (queue.length === 0 && names.length > 0) {
-		queue.push(names[0])
-		layer[names[0]] = 0
-	}
-	var head = 0
-	while (head < queue.length) {
-		var cur = queue[head++]
-		var nbrs = adj[cur] || []
-		for (var i = 0; i < nbrs.length; i++) {
-			var nb = nbrs[i]
-			if (layer[nb] === -1) {
-				layer[nb] = layer[cur] + 1
-				queue.push(nb)
-			}
-		}
-	}
-	for (var i = 0; i < names.length; i++) {
-		if (layer[names[i]] === -1) layer[names[i]] = 0
-	}
-	return layer
-}
+// ── Dagre layout engine ─────────────────────────────────────────────
+// Delegates directed-graph layout to ELK layered algorithm.
+// In: agent names + edges from buildGraphEdges()
+// Out: { layout: { agent -> {x,y} }, layers: { agent -> layer }, edges: [...] }
+function applyDagreLayout(agentNames, rawEdges) {
+	var g = new dagre.graphlib.Graph({ directed: true })
 
-function buildColumns(layer, agentNames) {
-	var maxLayer = 0,
-		keys = Object.keys(layer)
-	for (var i = 0; i < keys.length; i++) {
-		if (layer[keys[i]] > maxLayer) maxLayer = layer[keys[i]]
+	g.setGraph({
+		rankdir: "LR",
+		nodesep: NODE_GAP_Y - NODE_H,
+		ranksep: NODE_GAP_X - NODE_W,
+		marginx: MARGIN,
+		marginy: MARGIN,
+	})
+
+	var names = Object.keys(agentNames)
+	for (var i = 0; i < names.length; i++) {
+		g.setNode(names[i], { width: NODE_W, height: NODE_H })
 	}
-	var cols = []
-	for (var i = 0; i <= maxLayer; i++) cols.push([])
-	for (var i = 0; i < keys.length; i++) cols[layer[keys[i]]].push(keys[i])
-	return cols
+
+	// Merge duplicate edges between same (from, to, kind) pairs
+	var mergeMap = {}
+	for (var i = 0; i < rawEdges.length; i++) {
+		var re = rawEdges[i],
+			mk = re.from + "|||" + re.to + "|||" + re.kind
+		if (!mergeMap[mk]) mergeMap[mk] = { from: re.from, to: re.to, kind: re.kind, labels: [] }
+		if (mergeMap[mk].labels.indexOf(re.label) === -1) mergeMap[mk].labels.push(re.label)
+	}
+
+	var mergeKeys = Object.keys(mergeMap)
+	for (var mkI = 0; mkI < mergeKeys.length; mkI++) {
+		var mg = mergeMap[mergeKeys[mkI]]
+		var lbl = mg.labels.length === 1 ? mg.labels[0] : mg.labels[0] + " (+" + (mg.labels.length - 1) + " more)"
+		g.setEdge(mg.from, mg.to, { kind: mg.kind, label: lbl })
+	}
+
+	dagre.layout(g)
+
+	// Extract layout from dagre output (dagre gives center coords; convert to top-left)
+	var layout = {}
+	var layers = {}
+	for (var ni = 0; ni < names.length; ni++) {
+		var n = g.node(names[ni])
+		if (n) {
+			layout[names[ni]] = { x: n.x - NODE_W / 2, y: n.y - NODE_H / 2 }
+			layers[names[ni]] = n.rank || 0
+		}
+	}
+
+	// Build edge list with dagre routing points
+	var edges = []
+	var ei = 0
+	g.edges().forEach(function (e) {
+		var edgeInfo = g.edge(e)
+		var dagrePoints = edgeInfo.points || []
+		var sections = []
+		if (dagrePoints.length > 0) {
+			sections.push({
+				startPoint: dagrePoints[0],
+				endPoint: dagrePoints[dagrePoints.length - 1],
+				bendPoints: dagrePoints.slice(1, -1),
+			})
+		}
+		edges.push({
+			from: e.v,
+			to: e.w,
+			label: edgeInfo.label || "",
+			kind: edgeInfo.kind || "stake",
+			idx: ei,
+			total: mergeKeys.length,
+			sections: sections,
+		})
+		ei++
+	})
+
+	return { layout: layout, layers: layers, edges: edges }
 }
 
 function defs() {
@@ -328,32 +349,39 @@ function renderNode(nm, meta) {
 	return s
 }
 
-function edgePathData(fromX, fromY, toX, toY, idx, total, fromLayer, toLayer) {
-	var offset = 0
-	if (total > 1) {
-		var center = (total - 1) / 2
-		offset = (idx - center) * 14
+function edgePathData(fnX, fnY, tnX, tnY, sections) {
+	// If Elk.js provided bend-point sections, use them directly.
+	if (sections && sections.length > 0) {
+		var d = ""
+		for (var si = 0; si < sections.length; si++) {
+			var sec = sections[si]
+			var sp = sec.startPoint,
+				ep = sec.endPoint
+			if (si === 0) d += "M" + sp.x + "," + sp.y
+			if (sec.bendPoints && sec.bendPoints.length > 0) {
+				for (var bi = 0; bi < sec.bendPoints.length; bi++) {
+					d += " L" + sec.bendPoints[bi].x + "," + sec.bendPoints[bi].y
+				}
+			}
+			d += " L" + ep.x + "," + ep.y
+		}
+		return d
 	}
-	var x1 = fromX + NODE_W,
-		y1 = fromY + NODE_H / 2 + offset
-	var x2 = toX,
-		y2 = toY + NODE_H / 2 + offset
+	// Fallback bezier when Elk provides no sections.
+	var x1 = fnX + NODE_W,
+		y1 = fnY + NODE_H / 2,
+		x2 = tnX,
+		y2 = tnY + NODE_H / 2
 	var dx = Math.abs(x2 - x1)
 	var curve = Math.min(dx * 0.45, 140)
-	if (fromLayer != null && toLayer != null && fromLayer >= toLayer) {
-		var arcH = Math.max(60, Math.abs(fromLayer - toLayer) * 50 + 20)
-		return "M" + x1 + "," + y1 + " C" + x1 + "," + (y1 - arcH) + " " + x2 + "," + (y2 - arcH) + " " + x2 + "," + y2
-	}
 	return "M" + x1 + "," + y1 + " C" + (x1 + curve) + "," + y1 + " " + (x2 - curve) + "," + y2 + " " + x2 + "," + y2
 }
 
-function renderEdge(e, idx, total, layout, layers) {
+function renderEdge(e, layout, layers) {
 	var fn = layout[e.from],
 		tn = layout[e.to]
 	if (!fn || !tn) return ""
-	var fromLayer = layers[e.from],
-		toLayer = layers[e.to]
-	var d = edgePathData(fn.x, fn.y, tn.x, tn.y, idx, total, fromLayer, toLayer)
+	var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.sections)
 	var color = e.kind === "stake" ? COLORS.stake : COLORS.await
 	var marker = e.kind === "stake" ? "url(#ah-stake)" : "url(#ah-await)"
 	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + idx
@@ -423,38 +451,22 @@ function renderEdge(e, idx, total, layout, layers) {
 // ── view compiler 1: network topology graphics ──
 function compileTopologySVG(flow, agentNames, agentMeta) {
 	var rawEdges = buildGraphEdges(flow)
-	_layers = assignLayers(agentNames, rawEdges)
-	var cols = buildColumns(_layers, agentNames)
-	var maxColHeight = 0
-	for (var ci = 0; ci < cols.length; ci++) {
-		var ch = cols[ci].length * NODE_GAP_Y
-		if (ch > maxColHeight) maxColHeight = ch
+	var dagreResult = applyDagreLayout(agentNames, rawEdges)
+	_layout = dagreResult.layout
+	_layers = dagreResult.layers
+	_edges = dagreResult.edges
+
+	// Compute SVG canvas size from node positions
+	var maxX = 0,
+		maxY = 0
+	var names = Object.keys(_layout)
+	for (var ni = 0; ni < names.length; ni++) {
+		var pos = _layout[names[ni]]
+		if (pos.x + NODE_W > maxX) maxX = pos.x + NODE_W
+		if (pos.y + NODE_H > maxY) maxY = pos.y + NODE_H
 	}
-	if (maxColHeight === 0) maxColHeight = NODE_GAP_Y
-	_layout = {}
-	for (var ci = 0; ci < cols.length; ci++) {
-		var col = cols[ci],
-			x = MARGIN + ci * NODE_GAP_X,
-			colH = col.length * NODE_GAP_Y,
-			y0 = MARGIN + (maxColHeight - colH) / 2
-		for (var ri = 0; ri < col.length; ri++) _layout[col[ri]] = { x: x, y: y0 + ri * NODE_GAP_Y }
-	}
-	var mergeMap = {}
-	for (var ei = 0; ei < rawEdges.length; ei++) {
-		var re = rawEdges[ei],
-			mk = re.from + "|||" + re.to + "|||" + re.kind
-		if (!mergeMap[mk]) mergeMap[mk] = { from: re.from, to: re.to, kind: re.kind, labels: [] }
-		if (mergeMap[mk].labels.indexOf(re.label) === -1) mergeMap[mk].labels.push(re.label)
-	}
-	_edges = []
-	var mergeKeys = Object.keys(mergeMap)
-	for (var pi = 0; pi < mergeKeys.length; pi++) {
-		var g = mergeMap[mergeKeys[pi]],
-			lbl = g.labels.length === 1 ? g.labels[0] : g.labels[0] + " (+" + (g.labels.length - 1) + " more)"
-		_edges.push({ from: g.from, to: g.to, label: lbl, kind: g.kind, idx: 0, total: 1 })
-	}
-	var svgW = Math.max(500, cols.length * NODE_GAP_X + NODE_W + 2 * MARGIN)
-	var svgH = Math.max(300, maxColHeight + NODE_H + MARGIN * 2)
+	var svgW = Math.max(500, maxX + MARGIN)
+	var svgH = Math.max(300, maxY + MARGIN)
 
 	var svg =
 		'<svg id="slang-svg" width="' +
@@ -468,8 +480,7 @@ function compileTopologySVG(flow, agentNames, agentMeta) {
 		'" xmlns="http://www.w3.org/2000/svg">' +
 		defs() +
 		'<g id="edge-layer">'
-	for (var ei = 0; ei < _edges.length; ei++)
-		svg += renderEdge(_edges[ei], _edges[ei].idx, _edges[ei].total, _layout, _layers)
+	for (var ei = 0; ei < _edges.length; ei++) svg += renderEdge(_edges[ei], _layout, _layers)
 	svg += '</g><g id="node-layer">'
 	var names = Object.keys(_layout)
 	for (var ni = 0; ni < names.length; ni++) {
@@ -1264,7 +1275,7 @@ function updateConnectedEdges(agent) {
 		var fn = _layout[e.from],
 			tn = _layout[e.to]
 		if (!fn || !tn) continue
-		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.idx, e.total, _layers[e.from], _layers[e.to])
+		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.sections)
 		var eg = _svgEl.querySelector(
 			'.edge-group[data-edge="' + esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx + '"]',
 		)

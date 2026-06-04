@@ -25,7 +25,7 @@ Reference for the `.slang` file visualization system in Shofer. Covers the curre
 
 The visualization system renders `.slang` files as interactive diagrams inside a **VS Code custom editor**. When a `.slang` file is opened (double-click in Explorer, click in tab), VS Code delegates to a [`CustomTextEditorProvider`](https://code.visualstudio.com/api/extension-guides/custom-editors) registered in `package.json`.
 
-The editor generates a self-contained HTML page with inline SVG, CSS, and JavaScript — there is **no webview-ui build step**, no React, and no npm dependency for the render engine. Everything runs in a sandboxed webview with a Content Security Policy (CSP) nonce.
+The editor generates a self-contained HTML page with inline SVG, CSS, and JavaScript — there is **no webview-ui build step**, no React. Graph layout is delegated to **dagre** (v0.8.5, ~280KB) loaded as an external script via webview URI. The render engine script remains inlined. Everything runs in a sandboxed webview with a Content Security Policy (CSP) nonce.
 
 Two providers exist:
 
@@ -62,7 +62,7 @@ Two providers exist:
 │  HTML payload: { type: "render", fileName, flow, diags }      │
 │                                                               │
 │  slang-render.css (352 lines)  ─  VSCode CSS variables        │
-│  slang-render.js (1299 lines) ─  Three view compilers         │
+│  slang-render.js (1533→now dagre-backed) ─  Three view compilers         │
 │                                                               │
 │  ┌─────────────┐ ┌─────────────┐ ┌──────────────────────────┐ │
 │  │  Topology   │ │  Sequence   │ │  Agent Logic Flow        │ │
@@ -95,7 +95,7 @@ The **default view** — a directed graph showing agent relationships and data r
 | ----------------- | ----------------------------------------------------------------------------------------- |
 | **Nodes**         | Agent cards (name + mode badge + role) rendered as SVG `<g>` groups                       |
 | **Edges**         | `stake → @Recipient` as orange arrows, `await ← @Source` as purple arrows                 |
-| **Layout**        | BFS-based topological layering from sources (agents with no incoming edges)               |
+| **Layout**        | dagre layered layout (LR rankdir) from sources (agents with no incoming edges)            |
 | **Drag**          | `mousedown`/`mousemove`/`mouseup` handlers on `.node-group` elements                      |
 | **Edge updates**  | `updateConnectedEdges()` redispatches `edgePathData()` with current `_layout` coordinates |
 | **Edge labels**   | Text at bezier midpoints with background rects, repositioned during drag                  |

@@ -766,7 +766,7 @@
 		"@qdrant/js-client-rest": "^1.14.0",
 		"@riktar/slang": "github:riktar/slang",
 		"@shofer/core": "workspace:^",
-		"elkjs": "0.11.1",
+		"dagre": "0.8.5",
 		"@shofer/ipc": "workspace:^",
 		"@shofer/telemetry": "workspace:^",
 		"@shofer/types": "workspace:^",
