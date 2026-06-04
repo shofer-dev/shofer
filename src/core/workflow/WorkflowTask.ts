@@ -432,6 +432,12 @@ export class WorkflowTask extends Task {
 			`[WorkflowTask#${this.taskId}] Collecting ${missing.length} flow param(s): ${missing.map((p) => p.name).join(", ")}`,
 		)
 		void askNext(0).catch((error) => {
+			if (this.abort) {
+				outputLog(
+					`[WorkflowTask#${this.taskId}] Flow param collection aborted — task is stopping`,
+				)
+				return // don't emitTaskCompleted; the abort path handles cleanup
+			}
 			outputError(`[WorkflowTask#${this.taskId}] Failed to collect flow params:`, error)
 			this.flowState.status = "error"
 			void this.emitTaskCompleted("poor")
