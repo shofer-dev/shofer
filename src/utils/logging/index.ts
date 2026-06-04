@@ -112,6 +112,14 @@ export function setLogCategories(categories: string[] | undefined): void {
 /**
  * Get the current minimum log level.  Returns `"debug"` before bootstrap.
  */
+/**
+ * Get the set of all ctx values seen by the transport since bootstrap.
+ * Used by the Settings UI to auto-populate category checkboxes.
+ */
+export function getLogKnownCategories(): string[] {
+	return _transport?.getKnownCategories() ?? []
+}
+
 export function getLogLevel(): LogLevel {
 	return _transport ? ((_transport as any)._level ?? "debug") : "debug"
 }

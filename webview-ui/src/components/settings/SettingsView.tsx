@@ -1013,6 +1013,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							<LoggingSettings
 								logLevel={logLevel as "debug" | "info" | "warn" | "error" | "fatal"}
 								logCategories={logCategories as string[] | undefined}
+								logCategoriesKnown={cachedState.logCategoriesKnown as string[] | undefined}
 								setCachedStateField={setCachedStateField}
 							/>
 						)}

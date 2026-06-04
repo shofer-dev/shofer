@@ -46,27 +46,6 @@ function formatHumanLine(entry: CompactLogEntry): string {
  * @implements {ICompactTransport}
  */
 /** All known subsystem context identifiers. */
-export const ALL_CATEGORIES = [
-	"Task",
-	"Webview",
-	"Git",
-	"CodeIndex",
-	"AssistantAgent",
-	"MCP",
-	"Checkpoints",
-	"API",
-	"FS",
-	"Config",
-	"Skills",
-	"Marketplace",
-	"Metrics",
-	"Workflow",
-	"I18n",
-	"Utils",
-] as const
-
-export type LogCategory = (typeof ALL_CATEGORIES)[number]
-
 export class CompactTransport implements ICompactTransport {
 	private sessionStart: number
 	private lastTimestamp: number
@@ -74,6 +53,7 @@ export class CompactTransport implements ICompactTransport {
 	private initialized: boolean = false
 	private _level: LogLevel
 	private _categories: string[] | undefined
+	private _knownCategories: Set<string> = new Set()
 	private _outputChannel: vscode.OutputChannel | undefined
 
 	/**
@@ -169,7 +149,21 @@ export class CompactTransport implements ICompactTransport {
 	 * Writes a log entry to configured outputs.
 	 * @param entry - The log entry to write
 	 */
+	/**
+	 * Return the set of all ctx values seen by this transport.
+	 * Used by the Settings UI to auto-populate category checkboxes.
+	 */
+	getKnownCategories(): string[] {
+		return [...this._knownCategories].sort()
+	}
+
 	write(entry: CompactLogEntry): void {
+		// Auto-discover categories: any entry with a ctx we haven't seen
+		// before is added to the known set
+		if (entry.c !== undefined) {
+			this._knownCategories.add(entry.c)
+		}
+
 		// Level filtering
 		if (!isLevelEnabled(this._level, entry.l)) {
 			return
