@@ -4284,6 +4284,19 @@ export const webviewMessageHandler = async (
 				// a plain Task (not WorkflowTask) and renders "Starting workflow…".
 				provider.taskManager.registerBackgroundTask(task)
 
+				// Focus the workflow task so that its interactive asks don't
+				// trigger desktop notifications (focusedTaskId guards the
+				// needs_input notification in TaskManager.onInteractive).
+				try {
+					await provider.taskManager.focusTask(task.taskId)
+				} catch {
+					// focusTask may throw if the task wasn't seeded in managedTasks
+					// yet (shouldn't happen as registerBackgroundTask does that).
+					provider.log(
+						`[createWorkflow] Failed to focus task ${task.taskId} — notification guard may mis-fire`,
+					)
+				}
+
 				// Seed the workflow extension into persisted history BEFORE the
 				// first state broadcast so `currentTaskItem.isWorkflow` is set on
 				// the initial frame and the webview routes to WorkflowView
