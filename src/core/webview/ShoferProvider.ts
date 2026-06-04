@@ -4328,6 +4328,23 @@ export class ShoferProvider
 			return
 		}
 
+		// When a WorkflowTask was stopped before the slang loop started
+		// (e.g. during param collection), there is no work to resume.
+		// Detect this by checking flowState.status — param collection
+		// persists "aborted" via persistCheckpoint() in the .catch().
+		// If the status is no longer "running", the task was stopped
+		// cleanly; skip rehydrate so it stays stopped.
+		if (
+			historyItem.isWorkflow &&
+			historyItem.flowState &&
+			(historyItem.flowState as Record<string, unknown>).status !== "running"
+		) {
+			outputLog(
+				`[cancelTask] Skipping rehydrate: WorkflowTask ${task.taskId} was stopped (status=${(historyItem.flowState as Record<string, unknown>).status})`,
+			)
+			return
+		}
+
 		// Clears task again, so we need to abortTask manually above.
 		await this.createTaskWithHistoryItem({ ...historyItem, rootTask, parentTask })
 
