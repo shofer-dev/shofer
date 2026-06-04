@@ -334,8 +334,30 @@ export class WorkflowTask extends Task {
 		}
 	}
 
+	override async abortTask(): Promise<void> {
+		// Persist the aborted state BEFORE the super call disposes the
+		// task, so the rehydrated instance from cancelTask sees a
+		// terminal status in start() and doesn't restart.
+		this.flowState.status = "aborted"
+		try {
+			await this.persistCheckpoint()
+		} catch {
+			// Best-effort — persistCheckpoint may fail if the provider
+			// reference was already cleared.
+		}
+		await super.abortTask()
+	}
+
 	override async start(): Promise<void> {
 		if (this.slangLoopStarted) return
+		// If the flow was stopped (via cancelTask) before starting, the
+		// rehydrated instance carries a terminal status. Don't restart.
+		if ((this.flowState.status as string) !== "running") {
+			outputLog(
+				`[WorkflowTask#${this.taskId}] Skipping start — flow status is ${this.flowState.status} (was stopped)`,
+			)
+			return
+		}
 		this.slangLoopStarted = true
 		try {
 			this.emit(ShoferEventName.TaskStarted)

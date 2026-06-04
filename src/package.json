@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "1.0.65",
+	"version": "1.0.66",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -766,6 +766,7 @@
 		"@qdrant/js-client-rest": "^1.14.0",
 		"@riktar/slang": "github:riktar/slang",
 		"@shofer/core": "workspace:^",
+		"elkjs": "0.11.1",
 		"@shofer/ipc": "workspace:^",
 		"@shofer/telemetry": "workspace:^",
 		"@shofer/types": "workspace:^",
