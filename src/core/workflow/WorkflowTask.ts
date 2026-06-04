@@ -341,17 +341,34 @@ export class WorkflowTask extends Task {
 			this.emit(ShoferEventName.TaskStarted)
 			this.taskStartedEmitted = true
 
-			// Seed the chat stream with a header message so `messages.at(0)` is
-			// defined — WorkflowView keys its TaskHeader / Virtuoso off this first
-			// message and otherwise renders the empty-stream spinner fallback.
 			const agentNames = [...this.flowState.agents.keys()]
 			outputLog(
 				`[WorkflowTask#${this.taskId}] Starting workflow '${this.flowState.flowName}' with ${agentNames.length} agent(s): ${agentNames.join(", ")}`,
 			)
-			await this.say(
-				"text",
-				`**Workflow: ${this.flowState.flowName}**\n\nOrchestrating ${agentNames.length} agent(s): ${agentNames.map((n) => `\`${n}\``).join(", ")}`,
+
+			// Emit a canary say() FIRST so that even if the header say() fails,
+			// the chat stream is non-empty and WorkflowView won't render the
+			// "Starting workflow…" spinner indefinitely. This also serves as a
+			// diagnostic: if you see this message but no header, the header's
+			// say() call is the failure point.
+			await this.sayProgress(
+				`⚙️ Initializing workflow **${this.flowState.flowName}** (${agentNames.length} agent(s))…`,
 			)
+
+			// Seed the chat stream with a header message so `messages.at(0)` is
+			// defined — WorkflowView keys its TaskHeader / Virtuoso off this first
+			// message and otherwise renders the empty-stream spinner fallback.
+			try {
+				await this.say(
+					"text",
+					`**Workflow: ${this.flowState.flowName}**\n\nOrchestrating ${agentNames.length} agent(s): ${agentNames.map((n) => `\`${n}\``).join(", ")}`,
+				)
+			} catch (headerError) {
+				outputError(`[WorkflowTask#${this.taskId}] Failed to emit header say():`, headerError)
+				// Don't re-throw — the canary sayProgress above already seeded
+				// the stream, so WorkflowView will show it. Continue with the
+				// slang loop so the workflow can still make progress.
+			}
 
 			// Collect any flow parameters the user needs to provide BEFORE
 			// starting the slang loop. Uses the same ask("followup", …)
@@ -365,8 +382,24 @@ export class WorkflowTask extends Task {
 
 			await this.slangLoop()
 		} catch (error) {
-			outputError(`[WorkflowTask#${this.taskId}] slangLoop failed:`, error)
-			await this.sayProgress(`❌ Workflow failed: ${error instanceof Error ? error.message : String(error)}`)
+			outputError(`[WorkflowTask#${this.taskId}] start() failed:`, error)
+			// Log the full error shape for diagnostics — especially useful when
+			// the error is a non-Error object (e.g. a rejected promise with no
+			// .message) that would render as "[object Object]" in the chat.
+			if (error && typeof error === "object") {
+				try {
+					outputError(
+						`[WorkflowTask#${this.taskId}] Error detail: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`,
+					)
+				} catch {
+					outputError(`[WorkflowTask#${this.taskId}] Error detail (non-serializable): ${String(error)}`)
+				}
+			}
+			try {
+				await this.sayProgress(`❌ Workflow failed: ${error instanceof Error ? error.message : String(error)}`)
+			} catch (sayError) {
+				outputError(`[WorkflowTask#${this.taskId}] Failed to emit error sayProgress:`, sayError)
+			}
 			this.flowState.status = "error"
 			await this.emitTaskCompleted("poor")
 		}
@@ -433,9 +466,7 @@ export class WorkflowTask extends Task {
 		)
 		void askNext(0).catch((error) => {
 			if (this.abort) {
-				outputLog(
-					`[WorkflowTask#${this.taskId}] Flow param collection aborted — task is stopping`,
-				)
+				outputLog(`[WorkflowTask#${this.taskId}] Flow param collection aborted — task is stopping`)
 				return // don't emitTaskCompleted; the abort path handles cleanup
 			}
 			outputError(`[WorkflowTask#${this.taskId}] Failed to collect flow params:`, error)
