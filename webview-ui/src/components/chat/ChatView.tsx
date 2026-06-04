@@ -142,18 +142,28 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	 *  previously-hydrated task, skipHydration is true so the scroll
 	 *  position is preserved rather than being forcibly moved to bottom. */
 	const hydratedTaskTsRef = useRef<Set<number>>(new Set())
+	/** Per-taskTs saved scrollTop positions, snapshotted when leaving a task
+	 *  so they can be restored on re-entry. */
+	const scrollTopByTaskTsRef = useRef<Map<number, number>>(new Map())
 	const prevHydratableTaskTsRef = useRef<number | undefined>(taskTs)
 
-	// When taskTs changes, mark the *outgoing* task as hydrated so any
-	// future re-entry preserves the user's scroll position.
+	// When taskTs changes, snapshot the outgoing task's scrollTop and mark
+	// it as hydrated so future re-entry preserves the scroll position.
 	if (taskTs !== prevHydratableTaskTsRef.current) {
 		if (prevHydratableTaskTsRef.current !== undefined) {
 			hydratedTaskTsRef.current.add(prevHydratableTaskTsRef.current)
+			// Snapshot the current scroll position of the OUTGOING task
+			// so we can restore it when the user returns to this task.
+			const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
+			if (scroller) {
+				scrollTopByTaskTsRef.current.set(prevHydratableTaskTsRef.current, scroller.scrollTop)
+			}
 		}
 		prevHydratableTaskTsRef.current = taskTs
 	}
 
 	const skipHydration = taskTs ? hydratedTaskTsRef.current.has(taskTs) : false
+	const restoreScrollTop = taskTs ? (scrollTopByTaskTsRef.current.get(taskTs) ?? null) : null
 
 	const processedMessages = useMemo(() => {
 		return processorRef.current.process(messages)
@@ -1648,6 +1658,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		isHidden,
 		hasTask: !!task,
 		skipHydration,
+		restoreScrollTop,
 	})
 
 	// Expanding a row indicates the user is browsing; disable sticky follow.
