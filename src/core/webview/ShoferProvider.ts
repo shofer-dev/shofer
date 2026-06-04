@@ -154,6 +154,7 @@ export class ShoferProvider
 	private taskEventListeners: WeakMap<Task, Array<() => void>> = new WeakMap()
 	private currentWorkspacePath: string | undefined
 	private _disposed = false
+	private _cancelling = false
 
 	// Diagnostic: monotonic counter so we can correlate paired lifecycle events
 	// (resolve → html-set → visibility change → dispose) for a single WebviewView
@@ -4192,6 +4193,23 @@ export class ShoferProvider
 	}
 
 	public async cancelTask(): Promise<void> {
+		// Guard against concurrent Stop clicks — the first one wins, subsequent
+		// ones bail early. Without this, two rapid clicks produce two concurrent
+		// abortTask() → dispose() chains which race on cleanup and log errors.
+		if (this._cancelling) {
+			outputLog(`[cancelTask] cancellation already in progress; ignoring duplicate`)
+			return
+		}
+		this._cancelling = true
+
+		try {
+			await this._cancelTaskInner()
+		} finally {
+			this._cancelling = false
+		}
+	}
+
+	private async _cancelTaskInner(): Promise<void> {
 		const task = this.getCurrentTask()
 
 		if (!task) {
@@ -4199,14 +4217,6 @@ export class ShoferProvider
 		}
 
 		outputLog(`[cancelTask] cancelling task ${task.taskId}.${task.instanceId}`)
-
-		// Capture any queued messages from the old task BEFORE aborting
-		// These will be transferred to the new task after rehydration
-		// When the user explicitly clicks Stop, we should NOT transfer
-		// queued messages to the rehydrated task. The "Send Now" flow
-		// (cancelAndProcessQueuedMessages) already handles the case where
-		// the user genuinely wants to send queued messages.
-		// const queuedMessages = [...task.messageQueueService.messages]
 
 		let historyItem: HistoryItem | undefined
 		try {
@@ -4237,20 +4247,26 @@ export class ShoferProvider
 		// This ensures the stream fails quickly rather than waiting for network timeout
 		task.cancelCurrentRequest()
 
-		// Begin abort (non-blocking)
-		task.abortTask()
-
-		// Immediately mark the original instance as abandoned to prevent any residual activity
+		// Mark the original instance as abandoned to prevent any residual activity
 		task.abandoned = true
 
+		// Await abortTask so dispose runs to completion before we proceed.
+		// The streaming loop's catch block may also call abortTask() when it
+		// sees this.abort === true — that second call is idempotent (all
+		// dispose steps are wrapped in try/catch) so the double-dispose is
+		// harmless. The important thing is that one full cleanup completes
+		// here before we try to rehydrate.
+		await task.abortTask()
+
+		// After abortTask, the stream loop's finally block will set
+		// isStreaming = false. Wait briefly for that to propagate — the
+		// timeout here is short because abortTask already did the heavy
+		// lifting (dispose, save messages, revert diffs).
 		await pWaitFor(
 			() =>
 				this.getCurrentTask()! === undefined ||
 				this.getCurrentTask()!.isStreaming === false ||
 				this.getCurrentTask()!.didFinishAbortingStream ||
-				// If only the first chunk is processed, then there's no
-				// need to wait for graceful abort (closes edits, browser,
-				// etc).
 				this.getCurrentTask()!.isWaitingForFirstChunk,
 			{
 				timeout: 3_000,
@@ -4575,9 +4591,19 @@ export class ShoferProvider
 		images?: string[],
 		worktreeDir?: string,
 	): Promise<void> {
+		this.log(
+			`[createManagedTask] Called — name=${name || "(auto)"} ` +
+				`textLen=${text?.length ?? 0} images=${images?.length ?? 0} ` +
+				`worktreeDir=${worktreeDir ?? "(none)"} ` +
+				`stackDepth=${this.shoferStack.length}`,
+		)
+
 		// Pop the current task from the stack WITHOUT aborting it — it continues in background
 		// Save reference so we can restore it if task creation fails
 		const poppedTask = this.popFromStackWithoutAborting()
+		this.log(
+			`[createManagedTask] Popped task: ${poppedTask ? `${poppedTask.taskId} [${poppedTask.constructor.name}]` : "(none — stack was empty)"}`,
+		)
 
 		try {
 			// Register the popped task as a background task (if it's not already registered)
@@ -4596,6 +4622,7 @@ export class ShoferProvider
 			if (!task) {
 				throw new Error("Failed to create task")
 			}
+			this.log(`[createManagedTask] createTask returned task ${task.taskId}`)
 
 			// Register the task with the TaskManager
 			const managedTask = await this.taskManager.createManagedTask(taskName, task)
