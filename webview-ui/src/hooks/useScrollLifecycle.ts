@@ -62,8 +62,14 @@ export interface UseScrollLifecycleOptions {
 	hasTask: boolean
 	/** When true, skip the hydration scroll-to-bottom cycle on task switch.
 	 *  Use for re-entering already-completed or previously-viewed tasks
-	 *  where the user's scroll position should be preserved. */
+	 *  where the user's scroll position should be preserved.
+	 *  The caller is responsible for snapshoting and restoring scrollTop
+	 *  per task (externally, via the Virtuoso's scrollable element). */
 	skipHydration?: boolean
+	/** Scroll position to restore after the Virtuoso mounts for this task.
+	 *  When provided, the hook will schedule a deferred scrollTo to this
+	 *  scrollTop after the Virtuoso layout is ready. */
+	restoreScrollTop?: number | null
 }
 
 export interface UseScrollLifecycleReturn {
@@ -91,6 +97,7 @@ export function useScrollLifecycle({
 	isHidden,
 	hasTask,
 	skipHydration = false,
+	restoreScrollTop = null,
 }: UseScrollLifecycleOptions): UseScrollLifecycleReturn {
 	// --- Mounted guard ---
 	const isMountedRef = useRef(true)
@@ -404,6 +411,37 @@ export function useScrollLifecycle({
 			cancelReanchorFrame()
 		}
 	}, [cancelReanchorFrame, clearHydrationWindow, skipHydration, startHydrationWindow, taskTs, transitionScrollPhase])
+
+	// When skipHydration is set and restoreScrollTop is provided, schedule a
+	// deferred scroll-to-position after the Virtuoso has mounted and laid out.
+	useEffect(() => {
+		if (!skipHydration || restoreScrollTop === null || restoreScrollTop === undefined) {
+			return
+		}
+
+		const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
+		if (!scroller) {
+			return
+		}
+
+		// Defer past the current microtask to let the Virtuoso finish mounting
+		// and its internal layout calculations settle.
+		let cancelled = false
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				if (cancelled) return
+				console.log(
+					`[scroll] restoring scrollTop=${restoreScrollTop} current=${scroller.scrollTop} ` +
+						`taskTs=${taskTs}`,
+				)
+				scroller.scrollTo({ top: restoreScrollTop, behavior: "instant" })
+			})
+		})
+
+		return () => {
+			cancelled = true
+		}
+	}, [restoreScrollTop, scrollContainerRef, skipHydration, taskTs])
 
 	// -----------------------------------------------------------------------
 	// Row height change handler
