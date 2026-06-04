@@ -78,7 +78,7 @@ import { getCommand } from "../../utils/commands"
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog, scrollLog } from "../../utils/logging/subsystems"
 import {
 	handleListWorktrees,
 	handleCreateWorktree,
@@ -569,10 +569,19 @@ export const webviewMessageHandler = async (
 	}
 
 	switch (message.type) {
-		case "webviewLog":
-			// Diagnostic log forwarded from the webview — only when DEBUG is set.
-			provider.debug?.(`[webview] ${message.text ?? ""}`)
+		case "webviewLog": {
+			const text = message.text ?? ""
+			// Route [scroll:*] messages to the Scroll subsystem logger so
+			// they appear under the "Scroll" category in Settings → Logging.
+			if (text.startsWith("[scroll:")) {
+				scrollLog.info(text)
+			} else {
+				webviewLog.info(text)
+			}
+			// Also keep the existing debug path for the output channel.
+			provider.debug?.(`[webview] ${text}`)
 			break
+		}
 		case "getBlobContent": {
 			// §4.3: webview-side resolution of a `<shofer-blob/>` reference.
 			// The renderer requests by sha256; we route to the currently

@@ -1168,7 +1168,7 @@
 			"metrics": "Metrics",
 			"workflow": "Workflow (.slang)",
 			"i18n": "Translations",
-			"utils": "Utilities"
+			"scroll": "Scroll Lifecycle",			"utils": "Utilities"
 		}
 	}
 }
