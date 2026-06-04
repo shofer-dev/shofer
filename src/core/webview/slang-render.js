@@ -400,7 +400,7 @@ function renderEdge(e, layout, layers) {
 	var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.sections)
 	var color = e.kind === "stake" ? COLORS.stake : COLORS.await
 	var marker = e.kind === "stake" ? "url(#ah-stake)" : "url(#ah-await)"
-	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + idx
+	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx
 	var s =
 		'<g class="edge-group" data-edge="' +
 		key +
@@ -409,7 +409,7 @@ function renderEdge(e, layout, layers) {
 		'" data-to="' +
 		esc(e.to) +
 		'" data-idx="' +
-		idx +
+		e.idx +
 		'" data-kind="' +
 		e.kind +
 		'">'
