@@ -21,10 +21,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import debounce from "debounce"
 import type { VirtuosoHandle } from "react-virtuoso"
+import { vscode } from "@src/utils/vscode"
 
 const HYDRATION_WINDOW_MS = 600
 const HYDRATION_RETRY_WINDOW_MS = 160
 const MAX_HYDRATION_RETRIES = 3
+
+// ---------------------------------------------------------------------------
+// Logging helper — posts to the Shofer Output Channel so logs survive
+// webview reloads and are filterable via the output channel search.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Types
@@ -157,6 +163,7 @@ export function useScrollLifecycle({
 	// This mirrors the Preload-Before-Publish Rule: refs that the Virtuoso
 	// consumes must be set before the Virtuoso is "published" (mounted).
 	if (taskTs !== prevTaskTsRef.current) {
+		const prevTs = prevTaskTsRef.current
 		prevTaskTsRef.current = taskTs
 
 		isAtBottomRef.current = false
@@ -172,11 +179,15 @@ export function useScrollLifecycle({
 			userIntentScrollUpTimeoutRef.current = null
 		}
 
-		if (taskTs && !skipHydration) {
-			scrollPhaseRef.current = "HYDRATING_PINNED_TO_BOTTOM"
-		} else {
-			scrollPhaseRef.current = "USER_BROWSING_HISTORY"
-		}
+		const nextPhase: ScrollPhase = taskTs && !skipHydration ? "HYDRATING_PINNED_TO_BOTTOM" : "USER_BROWSING_HISTORY"
+		scrollPhaseRef.current = nextPhase
+
+		vscode.postMessage({
+			type: "webviewLog",
+			text:
+				`[scroll:taskSwitch] prevTs=${prevTs ?? "none"} taskTs=${taskTs ?? "none"} ` +
+				`skipHydration=${skipHydration} restoreScrollTop=${restoreScrollTop} → phase=${nextPhase}`,
+		})
 	}
 
 	// -----------------------------------------------------------------------
@@ -187,9 +198,16 @@ export function useScrollLifecycle({
 		if (scrollPhaseRef.current === nextPhase) {
 			return
 		}
+		const prev = scrollPhaseRef.current
 		scrollPhaseRef.current = nextPhase
 		setScrollPhase(nextPhase)
-	}, [])
+		vscode.postMessage({
+			type: "webviewLog",
+			text:
+				`[scroll:phase] ${prev} → ${nextPhase} ` +
+				`reason=${_reason ?? "?"} taskTs=${taskTs} isAtBottom=${isAtBottomRef.current}`,
+		})
+	}, [taskTs])
 
 	// -----------------------------------------------------------------------
 	// Scroll commands
@@ -209,23 +227,35 @@ export function useScrollLifecycle({
 					// debounce window and may have been overtaken by a
 					// user scroll-up.
 					if (scrollPhaseRef.current !== "ANCHORED_FOLLOWING") {
+						vscode.postMessage({
+							type: "webviewLog",
+							text: `[scroll:smooth] SKIP (phase=${scrollPhaseRef.current})`,
+						})
 						return
 					}
+					vscode.postMessage({
+						type: "webviewLog",
+						text: `[scroll:smooth] scrollToIndex LAST taskTs=${taskTs}`,
+					})
 					virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" })
 				},
 				10,
 				{ immediate: true },
 			),
-		[virtuosoRef],
+		[virtuosoRef, taskTs],
 	)
 
 	const scrollToBottomAuto = useCallback(() => {
+		vscode.postMessage({
+			type: "webviewLog",
+			text: `[scroll:auto] scrollToIndex LAST taskTs=${taskTs}`,
+		})
 		virtuosoRef.current?.scrollToIndex({
 			index: "LAST",
 			align: "end",
 			behavior: "auto",
 		})
-	}, [virtuosoRef])
+	}, [virtuosoRef, taskTs])
 
 	const cancelReanchorFrame = useCallback(() => {
 		if (reanchorAnimationFrameRef.current !== null) {
@@ -246,10 +276,13 @@ export function useScrollLifecycle({
 
 	const enterUserBrowsingHistory = useCallback(
 		(_source: ScrollFollowDisengageSource) => {
-			console.log(
-				`[scroll] enterUserBrowsingHistory source=${_source} ` +
-					`prevPhase=${scrollPhaseRef.current} isAtBottom=${isAtBottomRef.current}`,
-			)
+			vscode.postMessage({
+				type: "webviewLog",
+				text:
+					`[scroll:disengage] source=${_source} ` +
+					`prevPhase=${scrollPhaseRef.current} isAtBottom=${isAtBottomRef.current} ` +
+					`taskTs=${taskTs}`,
+			})
 			transitionScrollPhase("USER_BROWSING_HISTORY", _source)
 			setShowScrollToBottom(true)
 			// Cancel any pending debounced scroll-to-bottom calls
@@ -293,7 +326,7 @@ export function useScrollLifecycle({
 				userIntentScrollUpTimeoutRef.current = null
 			}, 200)
 		},
-		[scrollToBottomSmooth, scrollContainerRef, transitionScrollPhase],
+		[scrollToBottomSmooth, scrollContainerRef, transitionScrollPhase, taskTs],
 	)
 
 	const clearHydrationWindow = useCallback(() => {
@@ -319,6 +352,10 @@ export function useScrollLifecycle({
 				enterAnchoredFollowing("hydration-complete")
 			} else if (hydrationRetryCountRef.current < MAX_HYDRATION_RETRIES) {
 				hydrationRetryCountRef.current++
+				vscode.postMessage({
+					type: "webviewLog",
+					text: `[scroll:hydrate] retry ${hydrationRetryCountRef.current}/${MAX_HYDRATION_RETRIES} taskTs=${taskTs}`,
+				})
 				scrollToBottomAuto()
 				hydrationTimeoutRef.current = window.setTimeout(() => {
 					finishHydrationWindow()
@@ -327,14 +364,22 @@ export function useScrollLifecycle({
 			} else {
 				// Retry budget exhausted. Keep anchored follow rather than
 				// downgrading to browsing mode due to non-user transient drift.
+				vscode.postMessage({
+					type: "webviewLog",
+					text: `[scroll:hydrate] retries exhausted taskTs=${taskTs}`,
+				})
 				enterAnchoredFollowing("hydration-retry-exhausted")
 			}
 		}
 
 		clearHydrationWindow()
-	}, [clearHydrationWindow, enterAnchoredFollowing, scrollToBottomAuto])
+	}, [clearHydrationWindow, enterAnchoredFollowing, scrollToBottomAuto, taskTs])
 
 	const startHydrationWindow = useCallback(() => {
+		vscode.postMessage({
+			type: "webviewLog",
+			text: `[scroll:hydrate] START taskTs=${taskTs} windowMs=${HYDRATION_WINDOW_MS}`,
+		})
 		isHydratingRef.current = true
 		hydrationRetryCountRef.current = 0
 		if (hydrationTimeoutRef.current !== null) {
@@ -354,7 +399,7 @@ export function useScrollLifecycle({
 				}
 			})
 		})
-	}, [finishHydrationWindow, scrollToBottomAuto])
+	}, [finishHydrationWindow, scrollToBottomAuto, taskTs])
 
 	// -----------------------------------------------------------------------
 	// Lifecycle effects
@@ -421,6 +466,10 @@ export function useScrollLifecycle({
 
 		const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
 		if (!scroller) {
+			vscode.postMessage({
+				type: "webviewLog",
+				text: `[scroll:restore] SKIP — no scroller element taskTs=${taskTs}`,
+			})
 			return
 		}
 
@@ -430,10 +479,13 @@ export function useScrollLifecycle({
 		requestAnimationFrame(() => {
 			requestAnimationFrame(() => {
 				if (cancelled) return
-				console.log(
-					`[scroll] restoring scrollTop=${restoreScrollTop} current=${scroller.scrollTop} ` +
+				vscode.postMessage({
+					type: "webviewLog",
+					text:
+						`[scroll:restore] scrollTo top=${restoreScrollTop} ` +
+						`current=${scroller.scrollTop} scrollerHeight=${scroller.scrollHeight} ` +
 						`taskTs=${taskTs}`,
-				)
+				})
 				scroller.scrollTo({ top: restoreScrollTop, behavior: "instant" })
 			})
 		})
@@ -461,11 +513,12 @@ export function useScrollLifecycle({
 				scrollPhaseRef.current === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current
 			if (isAtBottomRef.current || shouldForcePinForAnchoredStreaming) {
 				if (shouldForcePinForAnchoredStreaming && !isAtBottomRef.current) {
-					console.log(
-						"[scroll] handleRowHeightChange: force-pin for streaming " +
-							`isTaller=${isTaller} isAtBottom=${isAtBottomRef.current} ` +
-							`userIntent=${userIntentScrollUpRef.current}`,
-					)
+					vscode.postMessage({
+						type: "webviewLog",
+						text:
+							`[scroll:forcePin] isTaller=${isTaller} isAtBottom=${isAtBottomRef.current} ` +
+							`userIntent=${userIntentScrollUpRef.current} taskTs=${taskTs}`,
+					})
 				}
 				if (isTaller) {
 					scrollToBottomSmooth()
@@ -474,7 +527,7 @@ export function useScrollLifecycle({
 				}
 			}
 		},
-		[isStreaming, scrollToBottomSmooth, scrollToBottomAuto],
+		[isStreaming, scrollToBottomSmooth, scrollToBottomAuto, taskTs],
 	)
 
 	// -----------------------------------------------------------------------
@@ -533,18 +586,32 @@ export function useScrollLifecycle({
 			}
 
 			if (currentPhase === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current) {
-				console.log(
-					"[scroll] atBottomStateChange: streaming safety-net re-scroll " +
-						`isAtBottom=${isAtBottom} userIntentScrollUp=${userIntentScrollUpRef.current}`,
-				)
+				vscode.postMessage({
+					type: "webviewLog",
+					text:
+						`[scroll:safetyNet] streaming re-scroll ` +
+						`isAtBottom=${isAtBottom} userIntentScrollUp=${userIntentScrollUpRef.current} ` +
+						`taskTs=${taskTs}`,
+				})
 				scrollToBottomAuto()
 				setShowScrollToBottom(false)
 				return
 			}
 
+			// Not-at-bottom while ANCHORED_FOLLOWING (non-streaming):
+			// this is a genuine user scroll-up intent not caught by
+			// the other detectors. Transition to browse mode.
+			if (currentPhase === "ANCHORED_FOLLOWING" && !isAtBottom && !isStreaming) {
+				// set the user-intent flag so handleRowHeightChange won't
+				// force-pin while we're in the middle of disengaging.
+				userIntentScrollUpRef.current = true
+				enterUserBrowsingHistory("pointer-scroll-up")
+				return
+			}
+
 			setShowScrollToBottom(false)
 		},
-		[enterAnchoredFollowing, enterUserBrowsingHistory, isStreaming, scrollToBottomAuto],
+		[enterAnchoredFollowing, enterUserBrowsingHistory, isStreaming, scrollToBottomAuto, taskTs],
 	)
 
 	// -----------------------------------------------------------------------
