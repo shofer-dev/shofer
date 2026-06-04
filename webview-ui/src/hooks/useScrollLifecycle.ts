@@ -60,6 +60,10 @@ export interface UseScrollLifecycleOptions {
 	isStreaming: boolean
 	isHidden: boolean
 	hasTask: boolean
+	/** When true, skip the hydration scroll-to-bottom cycle on task switch.
+	 *  Use for re-entering already-completed or previously-viewed tasks
+	 *  where the user's scroll position should be preserved. */
+	skipHydration?: boolean
 }
 
 export interface UseScrollLifecycleReturn {
@@ -86,6 +90,7 @@ export function useScrollLifecycle({
 	isStreaming,
 	isHidden,
 	hasTask,
+	skipHydration = false,
 }: UseScrollLifecycleOptions): UseScrollLifecycleReturn {
 	// --- Mounted guard ---
 	const isMountedRef = useRef(true)
@@ -160,7 +165,7 @@ export function useScrollLifecycle({
 			userIntentScrollUpTimeoutRef.current = null
 		}
 
-		if (taskTs) {
+		if (taskTs && !skipHydration) {
 			scrollPhaseRef.current = "HYDRATING_PINNED_TO_BOTTOM"
 		} else {
 			scrollPhaseRef.current = "USER_BROWSING_HISTORY"
@@ -370,7 +375,10 @@ export function useScrollLifecycle({
 		scrollPhaseRef.current = scrollPhase
 	}, [scrollPhase])
 
-	// Task switch: always enter hydration and scroll to the bottom.
+	// Task switch: enter hydration and scroll to the bottom.
+	// When skipHydration is true (e.g. re-entering a completed task),
+	// stay in USER_BROWSING_HISTORY so the user's previous scroll
+	// position is preserved.
 	useEffect(() => {
 		isAtBottomRef.current = false
 		clearHydrationWindow()
@@ -382,7 +390,7 @@ export function useScrollLifecycle({
 			userDisengagedTimeoutRef.current = null
 		}
 
-		if (taskTs) {
+		if (taskTs && !skipHydration) {
 			transitionScrollPhase("HYDRATING_PINNED_TO_BOTTOM")
 			setShowScrollToBottom(false)
 			startHydrationWindow()
@@ -395,7 +403,7 @@ export function useScrollLifecycle({
 			clearHydrationWindow()
 			cancelReanchorFrame()
 		}
-	}, [cancelReanchorFrame, clearHydrationWindow, startHydrationWindow, taskTs, transitionScrollPhase])
+	}, [cancelReanchorFrame, clearHydrationWindow, skipHydration, startHydrationWindow, taskTs, transitionScrollPhase])
 
 	// -----------------------------------------------------------------------
 	// Row height change handler
