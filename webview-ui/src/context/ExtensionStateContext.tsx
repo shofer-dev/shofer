@@ -191,17 +191,31 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Partial
 
 	const customModePrompts = { ...prevCustomModePrompts, ...(newCustomModePrompts ?? {}) }
 	const experiments = { ...prevExperiments, ...(newExperiments ?? {}) }
-	// Defensive: message queues and task identifiers can arrive as undefined
-	// from the backend (optional chaining returns undefined). When serialised
-	// through VS Code's webview.postMessage (JSON), undefined values are
-	// stripped. Without explicit defaults the spread below preserves the
-	// previous stale value from a different task.
+	// Defensive: message queues can arrive as undefined from the backend.
+	// When serialised through VS Code's webview.postMessage (JSON), undefined
+	// values are stripped. Without explicit defaults the spread below
+	// preserves the previous stale value from a different task.
+	//
+	// currentTaskItem is NOT fallback-defended: when the backend sends a
+	// state push without currentTaskItem (JSON-stripped undefined — happens
+	// after launchTask pops the current task leaving an empty stack), the
+	// webview MUST clear its stale currentTaskItem. Falling back to
+	// prevRest.currentTaskItem is exactly what causes the "Starting
+	// workflow…" view to persist after launching a new task from a
+	// WorkflowView — the old workflow task's HistoryItem (with
+	// isWorkflow:true) survives across state pushes and keeps WorkflowView
+	// visible when ChatView should be shown.
+	const currentTaskId = newRest.currentTaskId ?? prevRest.currentTaskId
 	const rest = {
 		...prevRest,
 		...newRest,
 		messageQueue: newRest.messageQueue ?? [],
-		currentTaskId: newRest.currentTaskId ?? prevRest.currentTaskId,
-		currentTaskItem: newRest.currentTaskItem ?? prevRest.currentTaskItem,
+		currentTaskId,
+		// Only keep the old currentTaskItem when the backend explicitly
+		// sent one. When absent (JSON-stripped undefined), clear to
+		// undefined so the webview does not render a stale workflow or
+		// task that has already been popped from the stack.
+		currentTaskItem: newRest.currentTaskItem ?? undefined,
 	}
 
 	// Protect shoferMessages from stale state pushes using sequence numbering.
