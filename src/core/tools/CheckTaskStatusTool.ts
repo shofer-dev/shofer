@@ -5,6 +5,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
+import { getModeBySlug } from "../../shared/modes"
 import type { ToolUse } from "../../shared/tools"
 import { readTaskMessages } from "../task-persistence/taskMessages"
 import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
@@ -49,6 +50,27 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			pushToolResult(formatResponse.toolError("Provider reference lost"))
 			return
 		}
+
+		// Resolve the child's mode for inclusion in the response.
+		// Consult the live instance first (most current), falling back to
+		// persisted HistoryItem.mode, then the handle's initial mode.
+		let childMode: string | undefined
+		const customModes = (await provider.getState())?.customModes
+		const liveChild = provider.taskManager.getManagedTaskInstance(task_id)
+		if (liveChild) {
+			childMode = await liveChild.getTaskMode()
+		}
+
+		if (!childMode) {
+			try {
+				const { historyItem } = await provider.getTaskWithId(task_id)
+				childMode = historyItem.mode
+			} catch {
+				// No persisted history — leave mode undefined.
+			}
+		}
+
+		const modeDisplayName = childMode ? (getModeBySlug(childMode, customModes)?.name ?? childMode) : "unknown"
 
 		// Finalize the streaming partial "tool" ask so the ChatRow shows a complete
 		// entry. Auto-approval marks this tool as always-approved, so askApproval
@@ -185,7 +207,7 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		}
 
 		pushToolResult(
-			`Task: ${task_id}\nStatus: ${handle.status}\n` +
+			`Task: ${task_id}\nMode: ${modeDisplayName}\nStatus: ${handle.status}\n` +
 				(result ? `Result: ${result.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : "") +
 				(errorText ? `Error: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : "") +
 				(recentActivity ? `\n${recentActivity}` : "") +
