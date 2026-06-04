@@ -1,6 +1,6 @@
 import type { ModelInfo, ModelRecord } from "@shofer/types"
 import { fetchPoeModels, getModels } from "ai-sdk-provider-poe/code"
-import { outputError } from "../../../utils/outputChannelLogger"
+import { apiLog } from "../../../utils/logging/subsystems"
 
 export async function getPoeModels(apiKey?: string, baseURL?: string): Promise<ModelRecord> {
 	try {
@@ -37,7 +37,7 @@ export async function getPoeModels(apiKey?: string, baseURL?: string): Promise<M
 
 		return models
 	} catch (error) {
-		outputError(
+		apiLog.error(
 			`[Poe] Error fetching models: ${JSON.stringify(error, Object.getOwnPropertyNames(error as object), 2)}`,
 		)
 		return {}

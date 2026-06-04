@@ -31,7 +31,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
 import { Package } from "../../../shared/package"
-import { outputError } from "../../../utils/outputChannelLogger"
+import { codeIndexLog } from "../../../utils/logging/subsystems"
 
 export class DirectoryScanner implements IDirectoryScanner {
 	private readonly batchSegmentThreshold: number
@@ -290,7 +290,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 					if (error instanceof DOMException && error.name === "AbortError") {
 						throw error
 					}
-					outputError(`Error processing file ${filePath} in workspace ${scanWorkspace}:`, error)
+					codeIndexLog.error(`Error processing file ${filePath} in workspace ${scanWorkspace}:`, error)
 					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 						error: sanitizeErrorMessage(error instanceof Error ? error.message : String(error)),
 						stack: error instanceof Error ? sanitizeErrorMessage(error.stack || "") : undefined,
@@ -391,7 +391,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 						const errorStatus = error?.status || error?.response?.status || error?.statusCode
 						const errorMessage = error instanceof Error ? error.message : String(error)
 
-						outputError(
+						codeIndexLog.error(
 							`[DirectoryScanner] Failed to delete points for ${cachedFilePath} in workspace ${scanWorkspace}:`,
 							error,
 						)
@@ -418,7 +418,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 							)
 						}
 						// Log error and continue processing instead of re-throwing
-						outputError(`Failed to delete points for removed file: ${cachedFilePath}`, error)
+						codeIndexLog.error(`Failed to delete points for removed file: ${cachedFilePath}`, error)
 					}
 				}
 			}
@@ -489,7 +489,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 				await this.qdrantClient.deletePointsByIds(staleSegmentIds)
 			} catch (deleteError: any) {
 				const errorMessage = deleteError instanceof Error ? deleteError.message : String(deleteError)
-				outputError(
+				codeIndexLog.error(
 					`[DirectoryScanner] Failed to delete stale segment points in workspace ${scanWorkspace}:`,
 					deleteError,
 				)
@@ -609,7 +609,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 				success = true
 			} catch (error) {
 				lastError = error as Error
-				outputError(
+				codeIndexLog.error(
 					`[DirectoryScanner] Error processing batch (attempt ${attempts}) in workspace ${scanWorkspace}:`,
 					error,
 				)
@@ -629,7 +629,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 		}
 
 		if (!success && lastError) {
-			outputError(`[DirectoryScanner] Failed to process batch after ${MAX_BATCH_RETRIES} attempts`)
+			codeIndexLog.error(`[DirectoryScanner] Failed to process batch after ${MAX_BATCH_RETRIES} attempts`)
 			if (onError) {
 				// Preserve the original error message from embedders which now have detailed i18n messages
 				const errorMessage = lastError.message || "Unknown error"
@@ -827,7 +827,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 					}
 				} catch (error) {
 					if (error instanceof DOMException && error.name === "AbortError") throw error
-					outputError(`Error processing file ${filePath}:`, error)
+					codeIndexLog.error(`Error processing file ${filePath}:`, error)
 					if (onError) {
 						onError(error instanceof Error ? error : new Error(String(error)))
 					}
@@ -896,7 +896,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 					await this.qdrantClient.deletePointsByFilePath(filePath)
 				} catch {
 					// Best-effort — log but don't throw
-					outputError(`[DirectoryScanner] Failed to delete points for deleted file: ${filePath}`)
+					codeIndexLog.error(`[DirectoryScanner] Failed to delete points for deleted file: ${filePath}`)
 				}
 			}
 			this.cacheManager.deleteHash(filePath)

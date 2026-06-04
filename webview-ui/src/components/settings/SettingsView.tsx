@@ -78,6 +78,7 @@ import { ExperimentalSettings } from "./ExperimentalSettings"
 import { LanguageSettings } from "./LanguageSettings"
 import { About } from "./About"
 import { Section } from "./Section"
+import { LoggingSettings } from "./LoggingSettings"
 import PromptsSettings from "./PromptsSettings"
 import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { SkillsSettings } from "./SkillsSettings"
@@ -120,6 +121,7 @@ export const sectionNames = [
 	"ui",
 	"experimental",
 	"language",
+	"logging",
 	"about",
 ] as const
 
@@ -227,6 +229,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		assistantAgentMaxContextTokens,
 		assistantAgentContextFillThreshold,
 		codebaseIndexConfig,
+		logLevel,
+		logCategories,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -571,6 +575,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "ui", icon: Glasses },
 			{ id: "experimental", icon: FlaskConical },
 			{ id: "language", icon: Globe },
+			{ id: "logging", icon: Info },
 			{ id: "about", icon: Info },
 		],
 		[], // No dependencies needed now
@@ -1001,6 +1006,15 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 						{/* Language Section */}
 						{renderTab === "language" && (
 							<LanguageSettings language={language || "en"} setCachedStateField={setCachedStateField} />
+						)}
+
+						{/* Logging Section */}
+						{renderTab === "logging" && (
+							<LoggingSettings
+								logLevel={logLevel as "debug" | "info" | "warn" | "error" | "fatal"}
+								logCategories={logCategories as string[] | undefined}
+								setCachedStateField={setCachedStateField}
+							/>
 						)}
 
 						{/* About Section */}

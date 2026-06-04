@@ -5,7 +5,7 @@ import { getWorkspacePath } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { logger } from "../../utils/logging"
+import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
 
 const LOG_PREFIX = "[AskAssistantAgentTool]"
 

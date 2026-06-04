@@ -3,7 +3,7 @@ import axios from "axios"
 import type { ModelInfo } from "@shofer/types"
 
 import { parseApiPrice } from "../../../shared/cost"
-import { outputError } from "../../../utils/outputChannelLogger"
+import { apiLog } from "../../../utils/logging/subsystems"
 
 interface RawUnboundModel {
 	id: string
@@ -48,7 +48,7 @@ export async function getUnboundModels(apiKey?: string | null): Promise<Record<s
 			models[rawModel.id] = modelInfo
 		}
 	} catch (error) {
-		outputError(`Error fetching Unbound models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
+		apiLog.error(`Error fetching Unbound models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
 	}
 
 	return models

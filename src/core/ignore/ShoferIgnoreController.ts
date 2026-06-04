@@ -4,7 +4,7 @@ import fs from "fs/promises"
 import fsSync from "fs"
 import ignore, { Ignore } from "ignore"
 import * as vscode from "vscode"
-import { outputError } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 export const LOCK_TEXT_SYMBOL = "\u{1F512}"
 
@@ -77,7 +77,7 @@ export class ShoferIgnoreController {
 			}
 		} catch (error) {
 			// Should never happen: reading file failed even though it exists
-			outputError("Unexpected error loading .shoferignore:", error)
+			webviewLog.error("Unexpected error loading .shoferignore:", error)
 		}
 	}
 
@@ -187,7 +187,7 @@ export class ShoferIgnoreController {
 				.filter((x) => x.allowed)
 				.map((x) => x.path)
 		} catch (error) {
-			outputError("Error filtering paths:", error)
+			webviewLog.error("Error filtering paths:", error)
 			return [] // Fail closed for security
 		}
 	}

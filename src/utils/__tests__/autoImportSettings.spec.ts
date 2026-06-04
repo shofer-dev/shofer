@@ -18,7 +18,9 @@ vi.mock("vscode", () => ({
 	},
 	TreeItem: class {},
 	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-	ThemeIcon: class { constructor(_id: string) {} },
+	ThemeIcon: class {
+		constructor(_id: string) {}
+	},
 	EventEmitter: class {
 		event = vi.fn()
 		fire = vi.fn()
@@ -93,8 +95,8 @@ vi.mock("../../core/config/CustomModesManager", () => ({
 
 vi.mock("../../extension", () => ({}))
 
-vi.mock("../outputChannelLogger", () => ({
-	outputWarn: vi.fn(),
+vi.mock("../logging/subsystems", () => ({
+	configLog: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }))
 
 vi.mock("../../shared/package", () => ({
@@ -168,9 +170,7 @@ describe("autoImportSettings", () => {
 			customModesManager: mockCustomModesManager,
 		})
 
-		expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-			expect.stringContaining("Settings file not found"),
-		)
+		expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining("Settings file not found"))
 	})
 
 	it("should import settings when file exists and contains valid JSON", async () => {

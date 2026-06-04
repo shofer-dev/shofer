@@ -1,6 +1,6 @@
 import path from "path"
 import ignore, { Ignore } from "ignore"
-import { outputError } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 export const SHIELD_SYMBOL = "\u{1F6E1}"
 
@@ -54,7 +54,7 @@ export class ShoferProtectedController {
 			return this.ignoreInstance.ignores(relativePath)
 		} catch (error) {
 			// If there's an error processing the path, err on the side of caution
-			outputError(`Error checking protection for ${filePath}:`, error)
+			webviewLog.error(`Error checking protection for ${filePath}:`, error)
 			return false
 		}
 	}

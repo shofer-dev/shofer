@@ -23,7 +23,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { createHash } from "crypto"
 
-import { outputError, outputWarn } from "../../utils/outputChannelLogger"
+import { utilLog } from "../../utils/logging/subsystems"
 
 /** Default inline cap (bytes). Overridable via `shoferBlobCapBytes` setting. */
 export const DEFAULT_BLOB_CAP_BYTES = 2048
@@ -89,7 +89,7 @@ export class BlobStore {
 		} catch (err) {
 			const e = err as NodeJS.ErrnoException
 			if (e.code !== "EEXIST") {
-				outputError(`[BlobStore.write] Failed to write blob ${sha256}: ${e.message}`)
+				utilLog.error(`[BlobStore.write] Failed to write blob ${sha256}: ${e.message}`)
 				throw err
 			}
 		}
@@ -103,7 +103,7 @@ export class BlobStore {
 		} catch (err) {
 			const e = err as NodeJS.ErrnoException
 			if (e.code === "ENOENT") return undefined
-			outputWarn(`[BlobStore.read] Failed to read blob ${sha256}: ${e.message}`)
+			utilLog.warn(`[BlobStore.read] Failed to read blob ${sha256}: ${e.message}`)
 			return undefined
 		}
 	}
@@ -157,7 +157,7 @@ export class BlobStore {
 			await fs.rm(this.dir, { recursive: true, force: true })
 		} catch (err) {
 			const e = err as NodeJS.ErrnoException
-			outputWarn(`[BlobStore.deleteAll] ${this.dir}: ${e.message}`)
+			utilLog.warn(`[BlobStore.deleteAll] ${this.dir}: ${e.message}`)
 		}
 	}
 }

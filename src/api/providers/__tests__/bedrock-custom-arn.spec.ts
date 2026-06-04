@@ -2,7 +2,7 @@
 
 import { AwsBedrockHandler } from "../bedrock"
 import { ApiHandlerOptions } from "../../../shared/api"
-import { logger } from "../../../utils/logging"
+import { apiLog as logger } from "../../../utils/logging/subsystems"
 
 // Mock the logger
 vitest.mock("../../../utils/logging", () => ({

@@ -5,7 +5,7 @@ import debounce from "lodash.debounce"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName, codebaseIndexCacheSchema, type CodebaseIndexCacheEntry } from "@shofer/types"
-import { outputError } from "../../utils/outputChannelLogger"
+import { codeIndexLog } from "../../utils/logging/subsystems"
 import { recordIndexLoadDuration, recordIndexWriteDuration } from "../../metrics/registry"
 
 /**
@@ -95,7 +95,7 @@ export class CacheManager implements ICacheManager {
 				entries: this.entries,
 			})
 		} catch (error) {
-			outputError("Failed to save cache:", error)
+			codeIndexLog.error("Failed to save cache:", error)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
@@ -113,7 +113,12 @@ export class CacheManager implements ICacheManager {
 			await safeWriteJson(this.cachePath.fsPath, { version: 3, entries: {} })
 			this.entries = {}
 		} catch (error) {
-			outputError("Failed to clear cache file:", error, this.cachePath)
+			codeIndexLog.error(
+				"Failed to clear cache file at " +
+					String(this.cachePath) +
+					": " +
+					(error instanceof Error ? error.message : String(error)),
+			)
 			TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,

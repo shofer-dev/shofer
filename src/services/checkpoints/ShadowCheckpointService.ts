@@ -13,7 +13,7 @@ import { executeRipgrep } from "../../services/search/file-search"
 
 import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types"
 import { getExcludePatterns } from "./excludes"
-import { outputError, outputLog } from "../../utils/outputChannelLogger"
+import { checkpointLog } from "../../utils/logging/subsystems"
 
 /**
  * Creates a SimpleGit instance with sanitized environment variables to prevent
@@ -68,7 +68,7 @@ function createSanitizedGit(baseDir: string): SimpleGit {
 
 	// Log which git env vars were removed (helps with debugging Dev Container issues)
 	if (removedVars.length > 0) {
-		outputLog(
+		checkpointLog.info(
 			`[createSanitizedGit] Removed git environment variables for checkpoint isolation: ${removedVars.join(", ")}`,
 		)
 	}
@@ -556,9 +556,9 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		const success = await this.deleteBranch(git, branchName)
 
 		if (success) {
-			outputLog(`[${this.name}#deleteTask.${taskId}] deleted branch ${branchName}`)
+			checkpointLog.info(`[${this.name}#deleteTask.${taskId}] deleted branch ${branchName}`)
 		} else {
-			outputError(`[${this.name}#deleteTask.${taskId}] failed to delete branch ${branchName}`)
+			checkpointLog.error(`[${this.name}#deleteTask.${taskId}] failed to delete branch ${branchName}`)
 		}
 	}
 
@@ -566,7 +566,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 		const branches = await git.branchLocal()
 
 		if (!branches.all.includes(branchName)) {
-			outputError(`[${this.constructor.name}#deleteBranch] branch ${branchName} does not exist`)
+			checkpointLog.error(`[${this.constructor.name}#deleteBranch] branch ${branchName} does not exist`)
 			return false
 		}
 
@@ -593,7 +593,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 				await git.branch(["-D", branchName])
 				return true
 			} catch (error) {
-				outputError(
+				checkpointLog.error(
 					`[${this.constructor.name}#deleteBranch] failed to delete branch ${branchName}: ${error instanceof Error ? error.message : String(error)}`,
 				)
 

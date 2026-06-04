@@ -8,7 +8,7 @@ import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-
 import { Package } from "../../shared/package"
 
 import { ShoferProvider } from "./ShoferProvider"
-import { outputError } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 export const generateSystemPrompt = async (provider: ShoferProvider, message: WebviewMessage) => {
 	const {
@@ -38,7 +38,7 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 		const tempApiHandler = buildApiHandler(apiConfiguration)
 		modelInfo = tempApiHandler.getModel().info
 	} catch (error) {
-		outputError("Error fetching model info for system prompt preview:", error)
+		webviewLog.error("Error fetching model info for system prompt preview:", error)
 	}
 
 	const systemPrompt = await SYSTEM_PROMPT(

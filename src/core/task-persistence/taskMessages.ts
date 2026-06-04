@@ -25,7 +25,7 @@ import type { ShoferMessage } from "@shofer/types"
 
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { getTaskDirectoryPath } from "../../utils/storage"
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 import { appendJsonLine, dedupeByKey, readJsonLines, serializeJsonLines, writeJsonLines } from "./jsonlLog"
 
 const LEGACY_UI_MESSAGES = "ui_messages.json"
@@ -39,10 +39,10 @@ async function unlinkLegacyIfPresent(taskDir: string): Promise<void> {
 	const legacy = path.join(taskDir, LEGACY_UI_MESSAGES)
 	try {
 		await fs.unlink(legacy)
-		outputWarn(`[readTaskMessages] unlinked legacy ${LEGACY_UI_MESSAGES} (hard cutover to JSONL)`)
+		taskLog.warn(`[readTaskMessages] unlinked legacy ${LEGACY_UI_MESSAGES} (hard cutover to JSONL)`)
 	} catch (e: any) {
 		if (e && e.code !== "ENOENT") {
-			outputWarn(`[readTaskMessages] failed to unlink ${legacy}: ${e.message}`)
+			taskLog.warn(`[readTaskMessages] failed to unlink ${legacy}: ${e.message}`)
 		}
 	}
 }

@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import * as vscode from "vscode"
-import { outputWarn, outputError } from "../../utils/outputChannelLogger"
+import { apiLog } from "../../utils/logging/subsystems"
 
 /**
  * Safely converts a value into a plain object.
@@ -24,7 +24,7 @@ function asObjectSafe(value: any): object {
 
 		return {}
 	} catch (error) {
-		outputWarn("Shofer <Language Model API>: Failed to parse object:", error)
+		apiLog.warn("Shofer <Language Model API>: Failed to parse object:", error)
 		return {}
 	}
 }
@@ -54,7 +54,7 @@ function imageBlockToContentPart(part: Anthropic.ImageBlockParam): vscode.Langua
 			const bytes = Buffer.from(source.data, "base64")
 			return DataPart.image(bytes, source.media_type)
 		} catch (err) {
-			outputWarn("Shofer <Language Model API>: Failed to decode image data:", err)
+			apiLog.warn("Shofer <Language Model API>: Failed to decode image data:", err)
 		}
 	}
 	return new vscode.LanguageModelTextPart(
@@ -221,7 +221,7 @@ export function extractTextCountFromMessage(message: vscode.LanguageModelChatMes
 					try {
 						text += JSON.stringify(item.input)
 					} catch (error) {
-						outputError("Shofer <Language Model API>: Failed to stringify tool call input:", error)
+						apiLog.error("Shofer <Language Model API>: Failed to stringify tool call input:", error)
 					}
 				}
 			}

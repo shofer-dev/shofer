@@ -27,7 +27,7 @@ import { regexGrepSearch } from "../ripgrep"
 import { listFiles as globListFiles } from "../glob/list-files"
 import { CodeIndexManager } from "../code-index/manager"
 import { GitIndexManager } from "../git-index/git-index-manager"
-import { logger } from "../../utils/logging"
+import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
 
 const LOG_PREFIX = "[AssistantAgent.ToolExecutor]"
 

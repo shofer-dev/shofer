@@ -14,7 +14,7 @@ import { diagnosticsToProblemsString, getNewDiagnostics } from "../diagnostics"
 import { Task } from "../../core/task/Task"
 
 import { DecorationController } from "./DecorationController"
-import { outputError, outputWarn } from "../../utils/outputChannelLogger"
+import { fsLog } from "../../utils/logging/subsystems"
 
 export const DIFF_VIEW_URI_SCHEME = "shofer-diff"
 export const DIFF_VIEW_LABEL_CHANGES = "Original ↔ Shofer's Changes"
@@ -81,7 +81,7 @@ export class DiffViewProvider {
 			const task = this.taskRef.deref()
 			await task?.fileContextTracker?.captureOriginal(relPath, fileExists ? this.originalContent : undefined)
 		} catch (err) {
-			outputWarn(`[DiffViewProvider] captureOriginal failed for ${relPath}:`, err)
+			fsLog.warn(`[DiffViewProvider] captureOriginal failed for ${relPath}:`, err)
 		}
 
 		// For new files, create any necessary directories and keep track of new
@@ -113,7 +113,7 @@ export class DiffViewProvider {
 				try {
 					await vscode.window.tabGroups.close(tab)
 				} catch (err) {
-					outputError(`Failed to close tab ${tab.label}`, err)
+					fsLog.error(`Failed to close tab ${tab.label}`, err)
 				}
 			}
 			this.documentWasOpen = true
@@ -256,7 +256,7 @@ export class DiffViewProvider {
 				await delay(safeDelayMs)
 			} catch (error) {
 				// Log error but continue - delay failure shouldn't break the save operation
-				outputWarn(`Failed to apply write delay: ${error}`)
+				fsLog.warn(`Failed to apply write delay: ${error}`)
 			}
 
 			const postDiagnostics = vscode.languages.getDiagnostics()
@@ -477,7 +477,7 @@ export class DiffViewProvider {
 				vscode.window.tabGroups.close(tab).then(
 					() => undefined,
 					(err) => {
-						outputError(`Failed to close diff tab ${tab.label}`, err)
+						fsLog.error(`Failed to close diff tab ${tab.label}`, err)
 					},
 				),
 			)
@@ -705,7 +705,7 @@ export class DiffViewProvider {
 			}
 			await task?.fileContextTracker?.captureOriginal(relPath, fileExists ? original : undefined)
 		} catch (err) {
-			outputWarn(`[DiffViewProvider] saveDirectly captureOriginal failed for ${relPath}:`, err)
+			fsLog.warn(`[DiffViewProvider] saveDirectly captureOriginal failed for ${relPath}:`, err)
 		}
 
 		// Get diagnostics before editing the file
@@ -745,7 +745,7 @@ export class DiffViewProvider {
 			try {
 				await delay(safeDelayMs)
 			} catch (error) {
-				outputWarn(`Failed to apply write delay: ${error}`)
+				fsLog.warn(`Failed to apply write delay: ${error}`)
 			}
 
 			const postDiagnostics = vscode.languages.getDiagnostics()

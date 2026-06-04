@@ -26,7 +26,7 @@
 import * as http from "http"
 import * as path from "path"
 import * as fs from "fs/promises"
-import { outputLog, outputError } from "../utils/outputChannelLogger"
+import { metricsLog } from "../utils/logging/subsystems"
 import { registry, incMetricsScrape, recordMetricsScrapeDuration, incMetricsServerRestart } from "./registry"
 import { getWindowId, setWorkspaceLabel } from "./identity"
 
@@ -70,7 +70,7 @@ function buildRequestHandler(readyCheck: () => boolean) {
 					incMetricsScrape()
 				})
 				.catch((err) => {
-					outputError("[metrics-server] exposition failed:", err)
+					metricsLog.error("[metrics-server] exposition failed:", { error: String(err) })
 					res.writeHead(500, { "Content-Type": "text/plain" })
 					res.end("Internal Server Error\n")
 				})
@@ -118,7 +118,7 @@ async function writePortFile(globalStoragePath: string, port: number, workspace:
 		await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8")
 		_portFilePath = filePath
 	} catch (err) {
-		outputError("[metrics-server] Failed to write port file:", err)
+		metricsLog.error("[metrics-server] Failed to write port file:", { error: String(err) })
 		incMetricsServerRestart()
 	}
 }
@@ -148,7 +148,7 @@ export async function startMetricsServer(
 	onReady?: (port: number) => void,
 ): Promise<void> {
 	if (_server) {
-		outputLog("[metrics-server] Already started on port", _serverPort)
+		metricsLog.info(`[metrics-server] Already started on port ${_serverPort}`)
 		return
 	}
 
@@ -160,7 +160,7 @@ export async function startMetricsServer(
 		_server = http.createServer(buildRequestHandler(() => _providerReady))
 
 		_server.on("error", (err) => {
-			outputError("[metrics-server] Server error:", err)
+			metricsLog.error("[metrics-server] Server error:", { error: String(err) })
 			// Propagate bind-time errors (e.g. EADDRINUSE) so the caller can
 			// log a clear message rather than silently losing metrics.
 			if (!_serverPort) {
@@ -171,7 +171,7 @@ export async function startMetricsServer(
 
 		_server.listen(METRICS_PORT, "127.0.0.1", () => {
 			_serverPort = (_server!.address() as { port: number }).port
-			outputLog(`[metrics-server] Listening on 127.0.0.1:${_serverPort} (windowId=${getWindowId()})`)
+			metricsLog.info(`[metrics-server] Listening on 127.0.0.1:${_serverPort} (windowId=${getWindowId()})`)
 			void writePortFile(globalStoragePath, _serverPort, workspace)
 			if (onReady) onReady(_serverPort)
 			resolve()

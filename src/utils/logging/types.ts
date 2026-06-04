@@ -1,9 +1,22 @@
 /**
- * @fileoverview Core type definitions for the compact logging system
+ * @fileoverview Core type definitions for the compact logging system.
+ *
+ * The logger writes human-readable lines to a `vscode.OutputChannel` (the
+ * "Shofer" output panel) and optional JSON-lines to a file on disk.
+ *
+ * Log levels (ascending severity): debug < info < warn < error < fatal.
+ * At runtime the minimum level can be toggled via `setLevel()` — every
+ * log call below that threshold is silently dropped by the transport.
+ *
+ * Each entry carries an optional `ctx` (context/source identifier) set
+ * via `logger.child({ ctx: "GitIndex" })` so consumers can grep or
+ * filter by subsystem.
  */
 
+import type * as vscode from "vscode"
+
 /**
- * Represents a compact log entry format optimized for storage and transmission
+ * Represents a compact log entry format optimized for storage and transmission.
  */
 export interface CompactLogEntry {
 	/** Delta timestamp from last entry in milliseconds */
@@ -12,106 +25,110 @@ export interface CompactLogEntry {
 	l: string
 	/** Log message content */
 	m: string
-	/** Optional context identifier */
+	/** Optional context identifier (subsystem / component name) */
 	c?: string
 	/** Optional structured data payload */
 	d?: unknown
 }
 
-/** Available log levels in ascending order of severity */
+/** Available log levels in ascending order of severity. */
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "fatal"] as const
-/** Type representing valid log levels */
+/** Type representing valid log levels. */
 export type LogLevel = (typeof LOG_LEVELS)[number]
 
 /**
- * Metadata structure for log entries
+ * Metadata structure for log entries.
+ * `ctx` is the canonical subsystem tag; extra keys become the `d` payload.
  */
 export interface LogMeta {
-	/** Optional context identifier */
+	/** Optional context identifier (subsystem / component name). */
 	ctx?: string
-	/** Additional arbitrary metadata fields */
+	/** Additional arbitrary metadata fields. */
 	[key: string]: unknown
 }
 
 /**
- * Configuration options for CompactTransport
+ * Configuration options for CompactTransport.
  */
 export interface CompactTransportConfig {
-	/** Minimum log level to process */
+	/** Minimum log level to process. Defaults to `"debug"`. */
 	level?: LogLevel
-	/** File output configuration */
+	/** Optional file output. When omitted or `enabled: false`, only the
+	 *  Output Channel is used. */
 	fileOutput?: {
-		/** Whether file output is enabled */
+		/** Whether file output is enabled. */
 		enabled: boolean
-		/** Path to the log file */
+		/** Path to the log file (relative to the workspace root or absolute). */
 		path: string
 	}
 }
 
 /**
- * Interface for log transport implementations
+ * Interface for log transport implementations.
  */
 export interface ICompactTransport {
 	/**
-	 * Writes a log entry to the transport
+	 * Writes a log entry to the transport(s).
 	 * @param entry - The log entry to write
 	 */
 	write(entry: CompactLogEntry): void
 
 	/**
-	 * Closes the transport and performs cleanup
+	 * Update the minimum log level at runtime.
+	 * Entries below this level are silently dropped.
+	 * @param level - New minimum level
+	 */
+	setLevel(level: LogLevel): void
+
+	/**
+	 * Set the set of allowed context identifiers (whitelist).
+	 * When `undefined` (default), all categories are shown.
+	 * When an array, only entries whose `c` (ctx) matches one of the
+	 * strings in the array are written.
+	 * @param categories - Array of ctx strings to allow, or undefined for all
+	 */
+	setCategories(categories: string[] | undefined): void
+
+	/**
+	 * Closes the transport and performs cleanup (writes session-end marker, etc.).
 	 */
 	close(): void
 }
 
 /**
- * Interface for logger implementations
+ * Interface for logger implementations.
  */
 export interface ILogger {
-	/**
-	 * Logs a debug message
-	 * @param message - The message to log
-	 * @param meta - Optional metadata
-	 */
-	debug(message: string, meta?: LogMeta): void
+	/** Log a debug-level message. Extra args are stringified and appended. */
+	debug(message: string, ...extra: unknown[]): void
+
+	/** Log an info-level message. Extra args are stringified and appended. */
+	info(message: string, ...extra: unknown[]): void
+
+	/** Log a warning-level message. Extra args are stringified and appended. */
+	warn(message: string, ...extra: unknown[]): void
+
+	/** Log an error-level message. Accepts an `Error` object for stack capture. Extra args are stringified and appended. */
+	error(message: string | Error, ...extra: unknown[]): void
+
+	/** Log a fatal-level message. Accepts an `Error` object for stack capture. Extra args are stringified and appended. */
+	fatal(message: string | Error, ...extra: unknown[]): void
 
 	/**
-	 * Logs an info message
-	 * @param message - The message to log
-	 * @param meta - Optional metadata
-	 */
-	info(message: string, meta?: LogMeta): void
-
-	/**
-	 * Logs a warning message
-	 * @param message - The message to log
-	 * @param meta - Optional metadata
-	 */
-	warn(message: string, meta?: LogMeta): void
-
-	/**
-	 * Logs an error message
-	 * @param message - The message or error to log
-	 * @param meta - Optional metadata
-	 */
-	error(message: string | Error, meta?: LogMeta): void
-
-	/**
-	 * Logs a fatal error message
-	 * @param message - The message or error to log
-	 * @param meta - Optional metadata
-	 */
-	fatal(message: string | Error, meta?: LogMeta): void
-
-	/**
-	 * Creates a child logger with inherited metadata
+	 * Creates a child logger with inherited metadata.
+	 * Use this to tag all entries from a subsystem:
+	 *   const log = logger.child({ ctx: "AssistantAgent" })
 	 * @param meta - Metadata to merge with parent's metadata
 	 * @returns A new logger instance with combined metadata
 	 */
 	child(meta: LogMeta): ILogger
 
 	/**
-	 * Closes the logger and its transport
+	 * Update the minimum log level accepted by this logger's transport.
+	 * @param level - New minimum level
 	 */
+	setLevel(level: LogLevel): void
+
+	/** Closes the logger and its transport. */
 	close(): void
 }

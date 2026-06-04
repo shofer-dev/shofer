@@ -7,7 +7,7 @@ import { promisify } from "util"
 import type { GitRepositoryInfo, GitCommit } from "@shofer/types"
 
 import { truncateOutput } from "../integrations/misc/extract-text"
-import { outputError } from "./outputChannelLogger"
+import { gitLog } from "./logging/subsystems"
 
 const execAsync = promisify(exec)
 
@@ -223,13 +223,13 @@ export async function searchCommits(query: string, cwd: string): Promise<GitComm
 	try {
 		const isInstalled = await checkGitInstalled()
 		if (!isInstalled) {
-			outputError("Git is not installed")
+			gitLog.error("Git is not installed")
 			return []
 		}
 
 		const isRepo = await checkGitRepo(cwd)
 		if (!isRepo) {
-			outputError("Not a git repository")
+			gitLog.error("Not a git repository")
 			return []
 		}
 
@@ -272,7 +272,7 @@ export async function searchCommits(query: string, cwd: string): Promise<GitComm
 
 		return commits
 	} catch (error) {
-		outputError("Error searching commits:", error)
+		gitLog.error("Error searching commits:", { error: String(error) })
 		return []
 	}
 }
@@ -313,7 +313,7 @@ export async function getCommitInfo(hash: string, cwd: string): Promise<string> 
 		const output = summary + "\n\n" + diff.trim()
 		return truncateOutput(output, GIT_OUTPUT_LINE_LIMIT)
 	} catch (error) {
-		outputError("Error getting commit info:", error)
+		gitLog.error("Error getting commit info:", { error: String(error) })
 		return `Failed to get commit info: ${error instanceof Error ? error.message : String(error)}`
 	}
 }
@@ -342,7 +342,7 @@ export async function getWorkingState(cwd: string): Promise<string> {
 		const output = `Working directory changes:\n\n${status}\n\n${diff}`.trim()
 		return truncateOutput(output, lineLimit)
 	} catch (error) {
-		outputError("Error getting working state:", error)
+		gitLog.error("Error getting working state:", { error: String(error) })
 		return `Failed to get working state: ${error instanceof Error ? error.message : String(error)}`
 	}
 }
@@ -393,7 +393,7 @@ export async function getGitStatus(cwd: string, maxFiles: number = 20): Promise<
 
 		return output.join("\n")
 	} catch (error) {
-		outputError("Error getting git status:", error)
+		gitLog.error("Error getting git status:", { error: String(error) })
 		return null
 	}
 }

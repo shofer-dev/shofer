@@ -1,5 +1,5 @@
 import type { HistoryItem } from "@shofer/types"
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 export interface AggregatedCosts {
 	ownCost: number // This task's own API costs
@@ -26,7 +26,7 @@ export async function aggregateTaskCostsRecursive(
 ): Promise<AggregatedCosts> {
 	// Prevent infinite loops
 	if (visited.has(taskId)) {
-		outputWarn(`[aggregateTaskCostsRecursive] Circular reference detected: ${taskId}`)
+		webviewLog.warn(`[aggregateTaskCostsRecursive] Circular reference detected: ${taskId}`)
 		return { ownCost: 0, childrenCost: 0, totalCost: 0 }
 	}
 	visited.add(taskId)
@@ -34,7 +34,7 @@ export async function aggregateTaskCostsRecursive(
 	// Load this task's history
 	const history = await getTaskHistory(taskId)
 	if (!history) {
-		outputWarn(`[aggregateTaskCostsRecursive] Task ${taskId} not found`)
+		webviewLog.warn(`[aggregateTaskCostsRecursive] Task ${taskId} not found`)
 		return { ownCost: 0, childrenCost: 0, totalCost: 0 }
 	}
 

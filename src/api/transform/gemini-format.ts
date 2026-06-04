@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Content, Part } from "@google/genai"
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { apiLog } from "../../utils/logging/subsystems"
 
 type ThoughtSignatureContentBlock = {
 	type: "thoughtSignature"
@@ -138,7 +138,7 @@ export function convertAnthropicContentToGemini(
 			default:
 				// Skip unsupported content block types (e.g., "reasoning", "thinking", "redacted_thinking", "document")
 				// These are typically metadata from other providers that don't need to be sent to Gemini
-				outputWarn(`Skipping unsupported content block type: ${block.type}`)
+				apiLog.warn(`Skipping unsupported content block type: ${block.type}`)
 				return []
 		}
 	})

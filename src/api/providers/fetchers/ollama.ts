@@ -1,7 +1,7 @@
 import axios from "axios"
 import { ModelInfo, ollamaDefaultModelInfo } from "@shofer/types"
 import { z } from "zod"
-import { outputWarn, outputError } from "../../../utils/outputChannelLogger"
+import { apiLog } from "../../../utils/logging/subsystems"
 
 const OllamaModelDetailsSchema = z.object({
 	family: z.string(),
@@ -107,13 +107,13 @@ export async function getOllamaModels(
 
 			await Promise.all(modelInfoPromises)
 		} else {
-			outputError(`Error parsing Ollama models response: ${JSON.stringify(parsedResponse.error, null, 2)}`)
+			apiLog.error(`Error parsing Ollama models response: ${JSON.stringify(parsedResponse.error, null, 2)}`)
 		}
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ECONNREFUSED") {
-			outputWarn(`Failed connecting to Ollama at ${baseUrl}`)
+			apiLog.warn(`Failed connecting to Ollama at ${baseUrl}`)
 		} else {
-			outputError(`Error fetching Ollama models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
+			apiLog.error(`Error fetching Ollama models: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
 		}
 	}
 

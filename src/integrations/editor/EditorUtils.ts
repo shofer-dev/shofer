@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import * as path from "path"
-import { outputError } from "../../utils/outputChannelLogger"
+import { fsLog } from "../../utils/logging/subsystems"
 
 /**
  * Represents an effective range in a document along with the corresponding text.
@@ -91,7 +91,7 @@ export class EditorUtils {
 				text: document.getText(effectiveRange),
 			}
 		} catch (error) {
-			outputError("Error getting effective range:", error)
+			fsLog.error("Error getting effective range:", error)
 			return null
 		}
 	}
@@ -122,7 +122,7 @@ export class EditorUtils {
 			this.filePathCache.set(document, filePath)
 			return filePath
 		} catch (error) {
-			outputError("Error getting file path:", error)
+			fsLog.error("Error getting file path:", error)
 			return document.uri.fsPath
 		}
 	}
@@ -204,7 +204,7 @@ export class EditorUtils {
 				...(diagnostics.length > 0 ? { diagnostics } : {}),
 			}
 		} catch (error) {
-			outputError("Error getting editor context:", error)
+			fsLog.error("Error getting editor context:", error)
 			return null
 		}
 	}

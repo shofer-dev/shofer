@@ -14,7 +14,7 @@ import { withValidationErrorHandling, formatEmbeddingError, HttpError } from "..
 import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { handleOpenAIError } from "../../../api/providers/utils/openai-error-handler"
-import { outputError, outputWarn } from "../../../utils/outputChannelLogger"
+import { codeIndexLog } from "../../../utils/logging/subsystems"
 
 /**
  * OpenAI implementation of the embedder interface with batching and rate limiting
@@ -62,7 +62,7 @@ export class OpenAiEmbedder extends OpenAiNativeHandler implements IEmbedder {
 					const prefixedText = `${queryPrefix}${text}`
 					const estimatedTokens = Math.ceil(prefixedText.length / 4)
 					if (estimatedTokens > MAX_ITEM_TOKENS) {
-						outputWarn(
+						codeIndexLog.warn(
 							t("embeddings:textWithPrefixExceedsTokenLimit", {
 								index,
 								estimatedTokens,
@@ -90,7 +90,7 @@ export class OpenAiEmbedder extends OpenAiNativeHandler implements IEmbedder {
 				const itemTokens = Math.ceil(text.length / 4)
 
 				if (itemTokens > MAX_ITEM_TOKENS) {
-					outputWarn(
+					codeIndexLog.warn(
 						t("embeddings:textExceedsTokenLimit", {
 							index: i,
 							itemTokens,
@@ -157,7 +157,7 @@ export class OpenAiEmbedder extends OpenAiNativeHandler implements IEmbedder {
 				const httpError = error as HttpError
 				if (httpError?.status === 429 && hasMoreAttempts) {
 					const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempts)
-					outputWarn(
+					codeIndexLog.warn(
 						t("embeddings:rateLimitRetry", {
 							delayMs,
 							attempt: attempts + 1,
@@ -177,7 +177,7 @@ export class OpenAiEmbedder extends OpenAiNativeHandler implements IEmbedder {
 				})
 
 				// Log the error for debugging
-				outputError(`OpenAI embedder error (attempt ${attempts + 1}/${MAX_RETRIES}):`, error)
+				codeIndexLog.error(`OpenAI embedder error (attempt ${attempts + 1}/${MAX_RETRIES}):`, error)
 
 				// Format and throw the error
 				throw formatEmbeddingError(error, MAX_RETRIES)

@@ -5,7 +5,7 @@ import { Package } from "../shared/package"
 
 import { getCodeActionCommand } from "../utils/commands"
 import { EditorUtils } from "../integrations/editor/EditorUtils"
-import { outputError } from "../utils/outputChannelLogger"
+import { utilLog } from "../utils/logging/subsystems"
 
 export const TITLES: Record<CodeActionName, string> = {
 	EXPLAIN: "Explain with Shofer",
@@ -98,7 +98,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
 
 			return actions
 		} catch (error) {
-			outputError("Error providing code actions:", error)
+			utilLog.error("Error providing code actions:", { error: String(error) })
 			return []
 		}
 	}

@@ -10,7 +10,7 @@
  */
 
 import i18n from "../../../i18n/setup"
-import { outputError } from "../../../utils/outputChannelLogger"
+import { apiLog } from "../../../utils/logging/subsystems"
 
 /**
  * Handles API provider errors and transforms them into user-friendly messages
@@ -52,7 +52,7 @@ export function handleProviderError(
 		const msg = anyErr?.error?.metadata?.raw || error.message || ""
 
 		// Log the original error details for debugging
-		outputError(`[${providerName}] API error:`, {
+		apiLog.error(`[${providerName}] API error:`, {
 			message: msg,
 			name: error.name,
 			stack: error.stack,
@@ -94,7 +94,7 @@ export function handleProviderError(
 	}
 
 	// Non-Error: wrap with provider-specific prefix
-	outputError(`[${providerName}] Non-Error exception:`, error)
+	apiLog.error(`[${providerName}] Non-Error exception: ${String(error)}`)
 	const wrapped = new Error(`${providerName} ${messagePrefix} error: ${String(error)}`)
 
 	// Also try to preserve status for non-Error exceptions (e.g., plain objects with status)

@@ -16,7 +16,7 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../shared/
  * and reject invocations from outside callers.
  */
 import { isPrivateLmTool } from "../task/build-tools"
-import { outputError } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 /**
  * Checks if a tool name is a valid, known tool.
@@ -163,7 +163,7 @@ function doesFileMatchRegex(filePath: string, pattern: string): boolean {
 		const regex = new RegExp(pattern)
 		return regex.test(filePath)
 	} catch (error) {
-		outputError(`Invalid regex pattern: ${pattern}`, error)
+		taskLog.error(`Invalid regex pattern: ${pattern}`, error)
 		return false
 	}
 }

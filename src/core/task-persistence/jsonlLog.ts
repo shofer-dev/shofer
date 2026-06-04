@@ -29,7 +29,7 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 
-import { outputWarn } from "../../utils/outputChannelLogger"
+import { taskLog } from "../../utils/logging/subsystems"
 
 // Per-file write queue. Each entry is the tail promise; new ops are chained
 // onto it via `.then(..., ...)` so a rejected predecessor does not poison the
@@ -130,7 +130,7 @@ export async function readJsonLines<T>(filePath: string): Promise<T[] | null> {
 				// Truncated final line from a crashed appendFile. Drop silently.
 				continue
 			}
-			outputWarn(
+			taskLog.warn(
 				`[readJsonLines] skipping malformed line ${i + 1} in ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
 			)
 		}

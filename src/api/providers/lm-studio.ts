@@ -13,7 +13,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 
 import { BaseProvider } from "./base-provider"
-import { outputError } from "../../utils/outputChannelLogger"
+import { apiLog } from "../../utils/logging/subsystems"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { getModelsFromCache } from "./fetchers/modelCache"
 import { getApiRequestTimeout } from "./utils/timeout-config"
@@ -77,7 +77,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 		try {
 			inputTokens = await this.countTokens([{ type: "text", text: systemPrompt }, ...toContentBlocks(messages)])
 		} catch (err) {
-			outputError("[LmStudio] Failed to count input tokens:", err)
+			apiLog.error("[LmStudio] Failed to count input tokens:", err)
 			inputTokens = 0
 		}
 
@@ -158,7 +158,7 @@ export class LmStudioHandler extends BaseProvider implements SingleCompletionHan
 			try {
 				outputTokens = await this.countTokens([{ type: "text", text: assistantChunks.join("") }])
 			} catch (err) {
-				outputError("[LmStudio] Failed to count output tokens:", err)
+				apiLog.error("[LmStudio] Failed to count output tokens:", err)
 				outputTokens = 0
 			}
 

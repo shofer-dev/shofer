@@ -19,7 +19,7 @@ import { ContextProxy } from "./ContextProxy"
 import { CustomModesManager } from "./CustomModesManager"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
 import { t } from "../../i18n"
-import { outputError, outputWarn } from "../../utils/outputChannelLogger"
+import { configLog } from "../../utils/logging/subsystems"
 
 export type ImportOptions = {
 	providerSettingsManager: ProviderSettingsManager
@@ -285,7 +285,7 @@ export const exportSettings = async ({ providerSettingsManager, contextProxy }: 
 		await fs.mkdir(dirname, { recursive: true })
 		await safeWriteJson(uri.fsPath, { providerProfiles, globalSettings })
 	} catch (e) {
-		outputError("Failed to export settings:", e)
+		configLog.error("Failed to export settings:", e)
 		// Don't re-throw - the UI will handle showing error messages
 	}
 }
@@ -329,7 +329,7 @@ export const importSettingsWithFeedback = async (
 		// Show warnings if any profiles had issues but were still imported (with modifications)
 		if (result.warnings && result.warnings.length > 0) {
 			// Log full details to the console for debugging
-			outputWarn("Settings import completed with warnings:", result.warnings)
+			configLog.warn("Settings import completed with warnings:", result.warnings)
 
 			// Show a short summary in the toast notification
 			const count = result.warnings.length

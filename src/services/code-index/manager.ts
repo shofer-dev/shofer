@@ -16,7 +16,7 @@ import path from "path"
 import { t } from "../../i18n"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
-import { outputError } from "../../utils/outputChannelLogger"
+import { codeIndexLog } from "../../utils/logging/subsystems"
 import { updateCodeIndexMetrics, incCodeIndexError } from "../../metrics/registry"
 
 export class CodeIndexManager {
@@ -310,7 +310,7 @@ export class CodeIndexManager {
 			this._stateManager.setSystemState("Standby", "")
 		} catch (error) {
 			// Log error but continue with recovery - clearing service instances is more important
-			outputError("Failed to clear error state during recovery:", error)
+			codeIndexLog.error("Failed to clear error state during recovery:", error)
 		} finally {
 			// Force re-initialization by clearing service instances
 			// This ensures a clean slate even if state update failed
@@ -467,7 +467,7 @@ export class CodeIndexManager {
 				// Non-fatal: indexing proceeds with no git-derived filtering, with
 				// CODEBASE_INDEX_IGNORED_DIRS and .shoferignore still applied.
 				incCodeIndexError("gitignore")
-				outputError("Unexpected error loading .gitignore:", error)
+				codeIndexLog.error("Unexpected error loading .gitignore:", error)
 				TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 					error: error instanceof Error ? error.message : String(error),
 					stack: error instanceof Error ? error.stack : undefined,
@@ -559,7 +559,7 @@ export class CodeIndexManager {
 				} catch (error) {
 					// Error state already set in _recreateServices
 					incCodeIndexError("service-recreate")
-					outputError("Failed to recreate services:", error)
+					codeIndexLog.error("Failed to recreate services:", error)
 					TelemetryService.instance.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {
 						error: error instanceof Error ? error.message : String(error),
 						stack: error instanceof Error ? error.stack : undefined,

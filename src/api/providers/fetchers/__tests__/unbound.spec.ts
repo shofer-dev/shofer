@@ -1,6 +1,6 @@
 // Mocks must come first, before imports
 vi.mock("axios")
-vi.mock("../../../../utils/outputChannelLogger", () => ({ outputError: vi.fn() }))
+vi.mock("../../../../utils/logging/subsystems", () => ({ apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
 
 import type { Mock } from "vitest"
 import axios from "axios"
@@ -97,10 +97,10 @@ describe("getUnboundModels", () => {
 	})
 
 	it("returns empty object and logs error when axios throws", async () => {
-		const { outputError } = await import("../../../../utils/outputChannelLogger")
+		const { apiLog } = await import("../../../../utils/logging/subsystems")
 		mockedAxios.get.mockRejectedValue(new Error("Network error"))
 		const result = await getUnboundModels("key")
 		expect(result).toEqual({})
-		expect(outputError).toHaveBeenCalled()
+		expect(apiLog.error).toHaveBeenCalled()
 	})
 })

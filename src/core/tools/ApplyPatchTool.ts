@@ -15,7 +15,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 import { parsePatch, ParseError, processAllHunks } from "./apply-patch"
 import type { ApplyPatchFileChange } from "./apply-patch"
-import { outputError } from "../../utils/outputChannelLogger"
+import { fsLog } from "../../utils/logging/subsystems"
 
 interface ApplyPatchParams {
 	patch: string
@@ -428,7 +428,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			try {
 				await fs.unlink(absolutePath)
 			} catch (error) {
-				outputError(`Failed to delete original file after move: ${error}`)
+				fsLog.error(`Failed to delete original file after move: ${error}`)
 			}
 
 			await task.fileContextTracker.trackFileContext(change.movePath, "shofer_edited" as RecordSource)

@@ -13,7 +13,7 @@ import { GitCacheManager } from "./git-cache-manager"
 
 import { BATCH_SEGMENT_THRESHOLD } from "../code-index/constants"
 import { listSubmoduleDisplayPaths } from "../../utils/git-submodules"
-import { logger } from "../../utils/logging"
+import { gitLog as logger } from "../../utils/logging/subsystems"
 
 const LOG_PREFIX = "[GitHistoryOrchestrator]"
 

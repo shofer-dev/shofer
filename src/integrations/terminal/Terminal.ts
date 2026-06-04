@@ -6,7 +6,7 @@ import { BaseTerminal } from "./BaseTerminal"
 import { TerminalProcess } from "./TerminalProcess"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
 import { mergePromise } from "./mergePromise"
-import { outputLog, outputError } from "../../utils/outputChannelLogger"
+import { webviewLog } from "../../utils/logging/subsystems"
 
 export class Terminal extends BaseTerminal {
 	public terminal: vscode.Terminal
@@ -67,7 +67,7 @@ export class Terminal extends BaseTerminal {
 			// Set up event handlers
 			process.once("continue", () => resolve())
 			process.once("error", (error) => {
-				outputError(`[Terminal ${this.id}] error:`, error)
+				webviewLog.error(`[Terminal ${this.id}] error:`, error)
 				reject(error)
 			})
 
@@ -83,7 +83,7 @@ export class Terminal extends BaseTerminal {
 					process.run(command)
 				})
 				.catch(() => {
-					outputLog(`[Terminal ${this.id}] Shell integration not available. Command execution aborted.`)
+					webviewLog.info(`[Terminal ${this.id}] Shell integration not available. Command execution aborted.`)
 
 					// Clean up temporary directory if shell integration is not available
 					ShellIntegrationManager.zshCleanupTmpDir(this.id)

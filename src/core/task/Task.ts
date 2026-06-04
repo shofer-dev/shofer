@@ -3807,7 +3807,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		try {
 			// If we're not streaming then `abortStream` won't be called.
 			if (this.isStreaming && this.diffViewProvider.isEditing) {
-				this.diffViewProvider.revertChanges().catch(outputError)
+				this.diffViewProvider
+					.revertChanges()
+					.catch((e) => taskLog.error("Error reverting diff changes:", { error: String(e) }))
 			}
 		} catch (error) {
 			taskLog.error("Error reverting diff changes:", error)

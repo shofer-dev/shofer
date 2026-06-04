@@ -1,148 +1,131 @@
 /**
- * @fileoverview Implementation of the compact logging system's main logger class
+ * @fileoverview CompactLogger — implementation of `ILogger`.
+ *
+ * Each logger instance writes through a shared `CompactTransport` (or a
+ * custom one for testing).  Log level can be set per-logger at runtime
+ * via `setLevel()`.
+ *
+ * All log methods accept variadic arguments mirroring `console.*` / the
+ * old `outputLog` API.  Extra args are JSON-stringified and appended to
+ * the message (capped at 8 KB per arg to prevent large-object allocation).
  */
 
 import { ILogger, LogMeta, CompactLogEntry, LogLevel } from "./types"
 import { CompactTransport } from "./CompactTransport"
 
+const MAX_ARG_BYTES = 8 * 1024
+
+/** Format a single extra argument into a string suitable for log output. */
+function fmtArg(arg: unknown): string {
+	if (arg === null) return "null"
+	if (arg === undefined) return "undefined"
+	if (typeof arg === "string") return arg
+	if (arg instanceof Error) return `${arg.message}\n${arg.stack ?? ""}`
+	try {
+		const s = JSON.stringify(
+			arg,
+			(_k, v) => {
+				if (typeof v === "bigint") return `BigInt(${v})`
+				if (typeof v === "function") return `Function: ${(v as { name?: string }).name || "anonymous"}`
+				if (typeof v === "symbol") return (v as symbol).toString()
+				return v
+			},
+			2,
+		)
+		if (s.length <= MAX_ARG_BYTES) return s
+		return `${s.slice(0, MAX_ARG_BYTES)}…[+${s.length - MAX_ARG_BYTES} more bytes]`
+	} catch {
+		return `[Non-serializable: ${Object.prototype.toString.call(arg)}]`
+	}
+}
+
 /**
- * Main logger implementation providing compact, efficient logging capabilities
+ * Main logger implementation providing compact, efficient logging capabilities.
  * @implements {ILogger}
  */
 export class CompactLogger implements ILogger {
 	private transport: CompactTransport
 	private parentMeta: LogMeta | undefined
 
-	/**
-	 * Creates a new CompactLogger instance
-	 * @param transport - Optional custom transport instance
-	 * @param parentMeta - Optional parent metadata for hierarchical logging
-	 */
 	constructor(transport?: CompactTransport, parentMeta?: LogMeta) {
 		this.transport = transport ?? new CompactTransport()
 		this.parentMeta = parentMeta
 	}
 
-	/**
-	 * Logs a debug level message
-	 * @param message - The message to log
-	 * @param meta - Optional metadata to include
-	 */
-	debug(message: string, meta?: LogMeta): void {
-		this.log("debug", message, this.combineMeta(meta))
+	/** @inheritdoc */
+	debug(message: string, ...extra: unknown[]): void {
+		this.log("debug", this.fmtMessage(message, extra))
 	}
 
-	/**
-	 * Logs an info level message
-	 * @param message - The message to log
-	 * @param meta - Optional metadata to include
-	 */
-	info(message: string, meta?: LogMeta): void {
-		this.log("info", message, this.combineMeta(meta))
+	/** @inheritdoc */
+	info(message: string, ...extra: unknown[]): void {
+		this.log("info", this.fmtMessage(message, extra))
 	}
 
-	/**
-	 * Logs a warning level message
-	 * @param message - The message to log
-	 * @param meta - Optional metadata to include
-	 */
-	warn(message: string, meta?: LogMeta): void {
-		this.log("warn", message, this.combineMeta(meta))
+	/** @inheritdoc */
+	warn(message: string, ...extra: unknown[]): void {
+		this.log("warn", this.fmtMessage(message, extra))
 	}
 
-	/**
-	 * Logs an error level message
-	 * @param message - The error message or Error object
-	 * @param meta - Optional metadata to include
-	 */
-	error(message: string | Error, meta?: LogMeta): void {
-		this.handleErrorLog("error", message, meta)
+	/** @inheritdoc */
+	error(message: string | Error, ...extra: unknown[]): void {
+		if (message instanceof Error) {
+			this.log("error", message.message, {
+				error: { name: message.name, message: message.message, stack: message.stack },
+				...(extra.length ? { extra: extra.map(fmtArg).join(" ") } : {}),
+			})
+		} else {
+			this.log("error", this.fmtMessage(message, extra))
+		}
 	}
 
-	/**
-	 * Logs a fatal level message
-	 * @param message - The error message or Error object
-	 * @param meta - Optional metadata to include
-	 */
-	fatal(message: string | Error, meta?: LogMeta): void {
-		this.handleErrorLog("fatal", message, meta)
+	/** @inheritdoc */
+	fatal(message: string | Error, ...extra: unknown[]): void {
+		if (message instanceof Error) {
+			this.log("fatal", message.message, {
+				error: { name: message.name, message: message.message, stack: message.stack },
+				...(extra.length ? { extra: extra.map(fmtArg).join(" ") } : {}),
+			})
+		} else {
+			this.log("fatal", this.fmtMessage(message, extra))
+		}
 	}
 
-	/**
-	 * Creates a child logger inheriting this logger's metadata
-	 * @param meta - Additional metadata for the child logger
-	 * @returns A new logger instance with combined metadata
-	 */
+	/** @inheritdoc */
 	child(meta: LogMeta): ILogger {
 		const combinedMeta = this.parentMeta ? { ...this.parentMeta, ...meta } : meta
 		return new CompactLogger(this.transport, combinedMeta)
 	}
 
-	/**
-	 * Closes the logger and its transport
-	 */
+	/** @inheritdoc */
+	setLevel(level: LogLevel): void {
+		this.transport.setLevel(level)
+	}
+
+	/** @inheritdoc */
 	close(): void {
 		this.transport.close()
 	}
 
 	/**
-	 * Handles logging of error and fatal messages with special error object processing
-	 * @private
-	 * @param level - The log level (error or fatal)
-	 * @param message - The message or Error object to log
-	 * @param meta - Optional metadata to include
+	 * Format a message and its extra arguments into a single string.
+	 * Extra args are formatted and appended after the message, space-separated.
 	 */
-	private handleErrorLog(level: "error" | "fatal", message: string | Error, meta?: LogMeta): void {
-		if (message instanceof Error) {
-			const errorMeta: LogMeta = {
-				...meta,
-				ctx: meta?.ctx ?? level,
-				error: {
-					name: message.name,
-					message: message.message,
-					stack: message.stack,
-				},
-			}
-			this.log(level, message.message, this.combineMeta(errorMeta))
-		} else {
-			this.log(level, message, this.combineMeta(meta))
-		}
+	private fmtMessage(message: string, extra: unknown[]): string {
+		if (extra.length === 0) return message
+		return message + " " + extra.map(fmtArg).join(" ")
 	}
 
 	/**
-	 * Combines parent and current metadata with proper context handling
-	 * @private
-	 * @param meta - The current metadata to combine with parent metadata
-	 * @returns Combined metadata or undefined if no metadata exists
+	 * Core logging function that processes and writes log entries.
 	 */
-	private combineMeta(meta?: LogMeta): LogMeta | undefined {
-		if (!this.parentMeta) {
-			return meta
-		}
-		if (!meta) {
-			return this.parentMeta
-		}
-		return {
-			...this.parentMeta,
-			...meta,
-			ctx: meta.ctx || this.parentMeta.ctx,
-		}
-	}
-
-	/**
-	 * Core logging function that processes and writes log entries
-	 * @private
-	 * @param level - The log level
-	 * @param message - The message to log
-	 * @param meta - Optional metadata to include
-	 */
-	private log(level: LogLevel, message: string, meta?: LogMeta): void {
+	private log(level: LogLevel, message: string, data?: Record<string, unknown>): void {
 		const entry: CompactLogEntry = {
 			t: Date.now(),
 			l: level,
 			m: message,
-			c: meta?.ctx,
-			d: meta ? (({ ctx: _, ...rest }) => (Object.keys(rest).length > 0 ? rest : undefined))(meta) : undefined,
+			c: this.parentMeta?.ctx,
+			d: data && Object.keys(data).length > 0 ? data : undefined,
 		}
 
 		this.transport.write(entry)

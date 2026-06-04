@@ -27,7 +27,7 @@ if (fs.existsSync(envPath)) {
 		dotenvx.config({ path: envPath })
 	} catch (e) {
 		// Best-effort only: never fail extension activation due to optional env loading.
-		outputWarn("Failed to load environment variables:", e)
+		webviewLog.warn("Failed to load environment variables:", e)
 	}
 }
 
@@ -35,12 +35,9 @@ import { TelemetryService, PostHogTelemetryClient } from "@shofer/telemetry"
 import { customToolRegistry } from "@shofer/core"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
-import {
-	createDualLogger,
-	createOutputChannelLogger,
-	outputWarn,
-	setExtensionOutputChannel,
-} from "./utils/outputChannelLogger"
+import { createDualLogger, createOutputChannelLogger } from "./utils/outputChannelLogger"
+import { bootstrapLogging, setLogLevel, setLogCategories } from "./utils/logging"
+import { webviewLog } from "./utils/logging/subsystems"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
 import { Package } from "./shared/package"
@@ -106,11 +103,14 @@ export async function activate(context: vscode.ExtensionContext) {
 	extensionContext = context
 	outputChannel = vscode.window.createOutputChannel(Package.outputChannel)
 
+	// Bootstrap the shared logging transport — must happen before any module
+	// uses `getLogger()` so the Output Channel is wired.
+	bootstrapLogging(outputChannel)
+
 	// Set VS Code context key for marketplace visibility
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)
 	context.subscriptions.push(outputChannel)
 	setMcpOutputChannel(outputChannel)
-	setExtensionOutputChannel(outputChannel)
 	outputChannel.appendLine(`${Package.name} extension activated - ${JSON.stringify(Package)}`)
 
 	// Initialize network proxy configuration early, before any network requests.
@@ -151,6 +151,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	const contextProxy = await ContextProxy.getInstance(context)
+
+	// Restore persisted logging settings onto the live transport so they
+	// survive a VS Code restart.  bootstrapLogging() started the transport
+	// with defaults; the ContextProxy now has the user's saved values.
+	const savedLogLevel = contextProxy.getValue("logLevel") as string | undefined
+	const savedLogCategories = contextProxy.getValue("logCategories") as string[] | undefined
+	if (savedLogLevel) {
+		setLogLevel(savedLogLevel as "debug" | "info" | "warn" | "error" | "fatal")
+	}
+	if (savedLogCategories !== undefined) {
+		setLogCategories(savedLogCategories.length > 0 ? savedLogCategories : undefined)
+	}
 
 	// Start the Prometheus metrics server only when the 'prometheusMetrics'
 	// experimental flag is enabled (default: off).  Port is the constant 30099

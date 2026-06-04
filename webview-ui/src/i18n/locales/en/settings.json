@@ -44,6 +44,7 @@
 		"experimental": "Experimental",
 		"language": "Language",
 		"codebaseIndex": "RAG Indexer",
+		"logging": "Logging",
 		"about": "About Shofer"
 	},
 	"about": {
@@ -1137,6 +1138,37 @@
 			"input": "Input",
 			"output": "Output",
 			"cacheReads": "Cache reads"
+		}
+	},
+	"logging": {
+		"description": "Control the verbosity and source categories of the Shofer output channel. Log entries below the selected level are silently dropped. Uncheck categories to hide their output. The output channel is always available in the VS Code Output panel (select \"Shofer\" from the dropdown).",
+		"levelLabel": "Minimum log level",
+		"levels": {
+			"debug": "Debug",
+			"info": "Info",
+			"warn": "Warn",
+			"error": "Error",
+			"fatal": "Fatal"
+		},
+		"categoriesLabel": "Log categories",
+		"categoriesDescription": "Show only log lines from the selected subsystems. Deselect all to show everything.",
+		"categories": {
+			"task": "Task Engine",
+			"webview": "Webview / IPC",
+			"git": "Git",
+			"codeIndex": "Code Index (RAG)",
+			"assistantAgent": "Assistant Agent",
+			"mcp": "MCP",
+			"checkpoints": "Checkpoints",
+			"api": "API Providers",
+			"fs": "File I/O",
+			"config": "Config / Settings",
+			"skills": "Skills",
+			"marketplace": "Marketplace",
+			"metrics": "Metrics",
+			"workflow": "Workflow (.slang)",
+			"i18n": "Translations",
+			"utils": "Utilities"
 		}
 	}
 }

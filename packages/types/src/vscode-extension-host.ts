@@ -380,6 +380,8 @@ export type ExtensionState = Pick<
 	| "assistantAgentApiConfigId"
 	| "assistantAgentMaxContextTokens"
 	| "assistantAgentContextFillThreshold"
+	| "logLevel"
+	| "logCategories"
 > & {
 	lockApiConfigAcrossModes?: boolean
 	version: string

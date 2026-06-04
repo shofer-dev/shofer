@@ -15,7 +15,8 @@ import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../trans
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { outputLog, stringifyForLog } from "../../utils/outputChannelLogger"
+import { apiLog } from "../../utils/logging/subsystems"
+import { stringifyForLog } from "../../utils/outputChannelLogger"
 
 /**
  * Converts OpenAI-format tools to VSCode Language Model tools.
@@ -178,7 +179,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		try {
 			// Check if the client is already initialized
 			if (this.client) {
-				outputLog("Shofer <Language Model API>: Client already initialized")
+				apiLog.info("Shofer <Language Model API>: Client already initialized")
 				return
 			}
 			// Create a new client instance
@@ -421,7 +422,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		// Validate input
 		if (!text) {
-			outputLog("Shofer <Language Model API>: Empty text provided for token counting")
+			apiLog.info("Shofer <Language Model API>: Empty text provided for token counting")
 			return 0
 		}
 
@@ -445,7 +446,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			} else if (text instanceof vscode.LanguageModelChatMessage) {
 				// For chat messages, ensure we have content
 				if (!text.content || (Array.isArray(text.content) && text.content.length === 0)) {
-					outputLog("Shofer <Language Model API>: Empty chat message content")
+					apiLog.info("Shofer <Language Model API>: Empty chat message content")
 					return 0
 				}
 				const countMessage = extractTextCountFromMessage(text)
@@ -476,7 +477,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		} catch (error) {
 			// Handle specific error types
 			if (error instanceof vscode.CancellationError) {
-				outputLog("Shofer <Language Model API>: Token counting cancelled by user")
+				apiLog.info("Shofer <Language Model API>: Token counting cancelled by user")
 				return 0
 			}
 
@@ -485,7 +486,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 			// Log additional error details if available
 			if (error instanceof Error && error.stack) {
-				outputLog("Token counting error stack:", error.stack)
+				apiLog.info("Token counting error stack:", error.stack)
 			}
 
 			return 0 // Fallback to prevent stream interruption
@@ -513,7 +514,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 	private async getClient(): Promise<vscode.LanguageModelChat> {
 		if (!this.client) {
-			outputLog("Shofer <Language Model API>: Getting client with options:", {
+			apiLog.info("Shofer <Language Model API>: Getting client with options:", {
 				vsCodeLmModelSelector: this.options.vsCodeLmModelSelector,
 				hasOptions: !!this.options,
 				selectorKeys: this.options.vsCodeLmModelSelector ? Object.keys(this.options.vsCodeLmModelSelector) : [],
@@ -522,7 +523,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			try {
 				// Use default empty selector if none provided to get all available models
 				const selector = this.options?.vsCodeLmModelSelector || {}
-				outputLog("Shofer <Language Model API>: Creating client with selector:", selector)
+				apiLog.info("Shofer <Language Model API>: Creating client with selector:", selector)
 				this.client = await this.createClient(selector)
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Unknown error"
