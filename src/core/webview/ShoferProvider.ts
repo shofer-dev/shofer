@@ -1677,7 +1677,9 @@ export class ShoferProvider
 			workspacePath: historyItem.workspace,
 			onCreated: this.taskCreationCallback,
 			startTask: false,
-			// Preserve the status from the history item to avoid overwriting it when the task saves messages
+			// Drives the task's own resume bookkeeping (a `completed` lifecycle
+			// surfaces a `resume_completed_task` ask). The persisted `taskState`
+			// is owned solely by TaskManager — this is NOT used to seed it.
 			initialState: historyItem.taskState ?? { lifecycle: "idle" },
 		})
 
