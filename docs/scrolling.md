@@ -118,6 +118,26 @@ When `isAtBottom` becomes `false` while already in `ANCHORED_FOLLOWING` during s
 | `isHydratingRef`     | `boolean`        | Guards hydration-time bottom signals from being misinterpreted as user browse intent                                                                            |
 | `userDisengagedRef`  | `boolean`        | Immune-window flag: set for 500 ms whenever `enterUserBrowsingHistory` is called; prevents in-flight programmatic scrolls from re-engaging `ANCHORED_FOLLOWING` |
 
+## Per-Task Scroll Restoration (Re-entry)
+
+The `<Virtuoso key={task.ts}>` is keyed on the task timestamp, so switching tasks **unmounts and remounts** the entire list — any scroll position held in the DOM is destroyed. To make re-entering a previously-viewed task restore exactly where the user left off, `ChatView`/`WorkflowView` capture and replay react-virtuoso's native **`StateSnapshot`** (`{ ranges, scrollTop }`).
+
+### Why not a bare `scrollTop`?
+
+An earlier implementation snapshotted only the scroller's `scrollTop` pixel value and replayed it via `scrollTo({ top })` two animation frames after mount. This is fundamentally incompatible with virtualization: at mount the freshly-keyed Virtuoso has only measured the handful of rows in the initial viewport, so the scrollable element's `scrollHeight` is a few hundred pixels. A saved offset of tens of thousands of pixels is therefore **clamped back to ~0**, landing the user near the top instead of where they were. (Observed in the logs as `scrollTo top=49454 … scrollerHeight=293`.)
+
+### Capture
+
+In the render-phase task-switch block (the same place the outgoing task is marked hydrated), the hook owners call `virtuosoRef.current?.getState(cb)`. `getState` invokes its callback **synchronously**, and during the render phase `virtuosoRef` still points at the outgoing (committed) instance, so this captures the task being left. The snapshot — which includes the **measured item `ranges`** as well as `scrollTop` — is stored in a `Map<number, StateSnapshot>` keyed by `taskTs`.
+
+A guard (`snapshot.ranges.length > 0 || snapshot.scrollTop > 0`) prevents a transient empty/double-mount from clobbering a good snapshot with an all-zero one.
+
+### Restore
+
+On re-entry, `restoreSnapshot = virtuosoStateByTaskTsRef.current.get(taskTs)` is passed to the `restoreStateFrom` prop. react-virtuoso seeds its size cache from the snapshot's `ranges` **before first paint**, so the full content height is known immediately and the saved `scrollTop` resolves to the correct position with no clamping and no deferred `scrollTo`. The hook stays in `USER_BROWSING_HISTORY` (via `skipHydration`), so no scroll-to-bottom cycle fights the restore.
+
+When no snapshot exists (a never-viewed task), `restoreStateFrom` is `undefined` and the list falls back to `initialTopMostItemIndex` (the last item) plus the hydration scroll-to-bottom cycle.
+
 ## Session Search Integration
 
 The `<SessionSearch>` overlay (Ctrl+F) can navigate to a specific message. When the user jumps to a search result, `virtuosoRef.current.scrollToIndex({ index, align: "center" })` is called directly from `ChatView` — bypassing the scroll lifecycle phase transitions. This intentionally leaves the phase unchanged (the user is actively seeking a message, not passively browsing).

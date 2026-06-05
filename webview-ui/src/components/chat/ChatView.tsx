@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react"
 import { useDeepCompareEffect, useEvent } from "react-use"
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
+import { Virtuoso, type VirtuosoHandle, type StateSnapshot } from "react-virtuoso"
 import removeMd from "remove-markdown"
 import useSound from "use-sound"
 import { LRUCache } from "lru-cache"
@@ -142,9 +142,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	 *  previously-hydrated task, skipHydration is true so the scroll
 	 *  position is preserved rather than being forcibly moved to bottom. */
 	const hydratedTaskTsRef = useRef<Set<number>>(new Set())
-	/** Per-taskTs saved scrollTop positions, snapshotted when leaving a task
-	 *  so they can be restored on re-entry. */
-	const scrollTopByTaskTsRef = useRef<Map<number, number>>(new Map())
+	/** Per-taskTs saved Virtuoso state snapshots (measured item ranges +
+	 *  scrollTop), captured when leaving a task so the scroll position can be
+	 *  restored pixel-perfectly on re-entry. Unlike a bare scrollTop value, the
+	 *  snapshot carries the measured item sizes, so restoration is correct even
+	 *  though the virtualized list has not re-measured its rows yet at mount. */
+	const virtuosoStateByTaskTsRef = useRef<Map<number, StateSnapshot>>(new Map())
 	const prevHydratableTaskTsRef = useRef<number | undefined>(taskTs)
 
 	const processedMessages = useMemo(() => {
@@ -179,22 +182,29 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 
 	// --- Per-task scroll position snapshot & restore ---
-	// When taskTs changes, snapshot the outgoing task's scrollTop (now that
-	// scrollContainerRef is declared) and mark the task as hydrated so any
+	// When taskTs changes, snapshot the outgoing task's full Virtuoso state
+	// (now that virtuosoRef is declared) and mark the task as hydrated so any
 	// future re-entry preserves the scroll position.
 	if (taskTs !== prevHydratableTaskTsRef.current) {
 		if (prevHydratableTaskTsRef.current !== undefined) {
-			hydratedTaskTsRef.current.add(prevHydratableTaskTsRef.current)
-			const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
-			if (scroller) {
-				scrollTopByTaskTsRef.current.set(prevHydratableTaskTsRef.current, scroller.scrollTop)
-			}
+			const leavingTs = prevHydratableTaskTsRef.current
+			hydratedTaskTsRef.current.add(leavingTs)
+			// getState invokes its callback synchronously. During the render
+			// phase virtuosoRef still points at the outgoing (committed)
+			// instance, so this captures the task we are leaving. Guard against
+			// clobbering a good snapshot with an empty one from a transient
+			// double-mount: only store once items have been measured.
+			virtuosoRef.current?.getState((snapshot) => {
+				if (snapshot.ranges.length > 0 || snapshot.scrollTop > 0) {
+					virtuosoStateByTaskTsRef.current.set(leavingTs, snapshot)
+				}
+			})
 		}
 		prevHydratableTaskTsRef.current = taskTs
 	}
 
 	const skipHydration = taskTs ? hydratedTaskTsRef.current.has(taskTs) : false
-	const restoreScrollTop = taskTs ? (scrollTopByTaskTsRef.current.get(taskTs) ?? null) : null
+	const restoreSnapshot = taskTs ? virtuosoStateByTaskTsRef.current.get(taskTs) : undefined
 
 	const lastTtsRef = useRef<string>("")
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
@@ -1659,7 +1669,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		isHidden,
 		hasTask: !!task,
 		skipHydration,
-		restoreScrollTop,
 	})
 
 	// Expanding a row indicates the user is browsing; disable sticky follow.
@@ -2066,6 +2075,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							increaseViewportBy={{ top: 3_000, bottom: 1000 }}
 							data={groupedMessages}
 							initialTopMostItemIndex={groupedMessages.length > 0 ? groupedMessages.length - 1 : 0}
+							restoreStateFrom={restoreSnapshot}
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
