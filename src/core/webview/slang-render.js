@@ -813,6 +813,39 @@ function compileSwimlaneSVG(flow, agentNames) {
 	// Mutable Y cursor shared across recursive calls
 	var _cy = 0
 
+	// Build name->lane-spine mapping for cross-lane arrows
+	var agentSpines = {}
+	for (var i = 0; i < agents.length; i++) {
+		agentSpines[agents[i].name] = MARGIN + i * LANE_W + (LANE_W - 10) / 2
+	}
+
+	// Cross-lane arrow helper: draws a horizontal arrow at the current _cy.
+	function crossLaneArrow(fromSpineX, toSpineX, kind) {
+		var midY = _cy + BLOCK_H / 2
+		var color = kind === "stake" ? COLORS.stake : COLORS.await
+		var marker = kind === "stake" ? "url(#ah-stake)" : "url(#ah-await)"
+		var dir = fromSpineX < toSpineX ? 1 : -1
+		var x1 = fromSpineX + dir * (BLOCK_W / 2 + 6)
+		var x2 = toSpineX - dir * (BLOCK_W / 2 + 6)
+		// Skip if lanes are adjacent (arrow would overlap blocks)
+		if (Math.abs(x2 - x1) < 20) return ""
+		return (
+			'<line class="swimlane-cross-arrow" x1="' +
+			x1 +
+			'" y1="' +
+			midY +
+			'" x2="' +
+			x2 +
+			'" y2="' +
+			midY +
+			'" stroke="' +
+			color +
+			'" fill="none" stroke-width="1.5" marker-end="' +
+			marker +
+			'" opacity="0.5" />'
+		)
+	}
+
 	// Render a single operation; mutates _cy and returns SVG fragment
 	function renderOp(op, spineX, depth) {
 		var str = ""
@@ -856,6 +889,13 @@ function compileSwimlaneSVG(flow, agentNames) {
 				'" opacity="' +
 				opacity +
 				'" />'
+			// Cross-lane arrow: from this lane to each recipient
+			if (op.recipients) {
+				for (var sj = 0; sj < op.recipients.length; sj++) {
+					var rt = op.recipients[sj].ref || op.recipients[sj]
+					if (agentSpines[rt]) str += crossLaneArrow(spineX, agentSpines[rt], "stake")
+				}
+			}
 			_cy += SPACING_Y
 		} else if (op.type === "AwaitOp") {
 			var albl = "AWAIT <- " + esc(op.binding || "msg")
@@ -895,6 +935,13 @@ function compileSwimlaneSVG(flow, agentNames) {
 				'" opacity="' +
 				opacity +
 				'" />'
+			// Cross-lane arrow: from each source to this lane
+			if (op.sources) {
+				for (var sk = 0; sk < op.sources.length; sk++) {
+					var sr = op.sources[sk].ref || op.sources[sk]
+					if (agentSpines[sr]) str += crossLaneArrow(agentSpines[sr], spineX, "await")
+				}
+			}
 			_cy += SPACING_Y
 		} else if (op.type === "EscalateOp") {
 			var ereason = op.reason ? esc(op.reason) : "approval"
