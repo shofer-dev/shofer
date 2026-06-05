@@ -233,12 +233,14 @@ Searches the codebase using the LSP workspace symbol provider. Falls back to wor
 
 ### `git_search`
 
-Semantic search over git commit history (commit messages only — not diffs, not file contents). Uses embedding-based cosine similarity against a Qdrant collection of indexed commit messages. Requires the git index to be enabled and initialized.
+Semantic search over git commit history (commit messages only — not diffs, not file contents). Uses embedding-based cosine similarity against a Qdrant collection of indexed commit messages. Requires the git index to be enabled and initialized. Optionally filtered by an ISO 8601 date range applied as a post-filter on `author_date`.
 
-| Param        | Type           | Required | Description                         |
-| ------------ | -------------- | :------: | ----------------------------------- |
-| `query`      | string         |    ✅    | Text to search for in git history   |
-| `maxResults` | number \| null |    ✅    | Max results to return (default: 20) |
+| Param        | Type           | Required | Description                                                                                                        |
+| ------------ | -------------- | :------: | ------------------------------------------------------------------------------------------------------------------ |
+| `query`      | string         |    ✅    | Text to search for in git history                                                                                  |
+| `maxResults` | number \| null |    ✅    | Max results to return (default: 20)                                                                                |
+| `since`      | string \| null |    ✅    | Optional ISO 8601 date string (e.g., `"2024-01-01T00:00:00Z"`). Only include commits where `author_date >= since`. |
+| `until`      | string \| null |    ✅    | Optional ISO 8601 date string (e.g., `"2024-12-31T23:59:59Z"`). Only include commits where `author_date <= until`. |
 
 ### `rag_search`
 

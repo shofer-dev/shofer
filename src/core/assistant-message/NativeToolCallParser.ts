@@ -532,6 +532,8 @@ export class NativeToolCallParser {
 					nativeArgs = {
 						query: partialArgs.query,
 						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
+						since: partialArgs.since,
+						until: partialArgs.until,
 					}
 				}
 				break
@@ -782,7 +784,9 @@ export class NativeToolCallParser {
 				break
 
 			case "list_background_tasks":
-				nativeArgs = {}
+				nativeArgs = {
+					scope: partialArgs.scope === "peers" ? "peers" : "children",
+				}
 				break
 
 			case "create_directory":
@@ -1178,7 +1182,9 @@ export class NativeToolCallParser {
 						nativeArgs = {
 							query: args.query,
 							maxResults: this.coerceOptionalNumber(args.maxResults),
-						} as NativeArgsFor<TName>
+							since: args.since,
+							until: args.until,
+						} as unknown as NativeArgsFor<TName>
 					}
 					break
 

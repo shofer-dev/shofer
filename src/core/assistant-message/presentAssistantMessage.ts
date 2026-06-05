@@ -449,8 +449,17 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name}]`
 					case "rag_search":
 						return `[${block.name} for '${block.params.query}']`
-					case "git_search":
-						return `[${block.name} for '${block.params.query}']`
+					case "git_search": {
+						const range = [
+							block.params.since && `since=${block.params.since}`,
+							block.params.until && `until=${block.params.until}`,
+						]
+							.filter(Boolean)
+							.join(", ")
+						return range
+							? `[${block.name} for '${block.params.query}' (${range})]`
+							: `[${block.name} for '${block.params.query}']`
+					}
 					case "ask_assistant_agent":
 						return `[${block.name} for '${block.params.question}']`
 					case "lsp_search":
