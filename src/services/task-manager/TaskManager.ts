@@ -509,6 +509,23 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		)
 	}
 
+	/**
+	 * Await any in-flight persist for the given task.
+	 *
+	 * Lets a caller guarantee that the latest `setState` has been flushed to
+	 * disk before proceeding — e.g. `Task.cancelAndProcessQueuedMessages`
+	 * awaits this after emitting `TaskActive` (which synchronously routes
+	 * through `setState(running)`) so the restarted loop cannot lose a race
+	 * with a slower `completed` write. This is the single-writer-respecting
+	 * alternative to writing `taskState` directly from the task.
+	 */
+	async waitForPendingPersist(targetTaskId: string): Promise<void> {
+		const chain = this.persistChains.get(targetTaskId)
+		if (chain) {
+			await chain.catch(() => {})
+		}
+	}
+
 	renameManagedTask(targetTaskId: string, name: string): void {
 		const managedTask = this.managedTasks.get(targetTaskId)
 		if (managedTask) {

@@ -1,7 +1,7 @@
 import NodeCache from "node-cache"
 import getFolderSize from "get-folder-size"
 
-import type { ShoferMessage, HistoryItem, TaskState } from "@shofer/types"
+import type { ShoferMessage, HistoryItem } from "@shofer/types"
 
 import { combineApiRequests } from "../../shared/combineApiRequests"
 import { combineCommandSequences } from "../../shared/combineCommandSequences"
@@ -26,8 +26,6 @@ export type TaskMetadataOptions = {
 	mode?: string
 	/** Provider profile name for the task (sticky profile feature) */
 	apiConfigName?: string
-	/** Initial execution state for the task (e.g., for child tasks) */
-	initialState?: TaskState
 	/** When true, persist `isBackground: true` on the history item. */
 	isBackground?: boolean
 	/** Per-root-task cost limit (only set on root tasks). */
@@ -50,7 +48,6 @@ export async function taskMetadata({
 	cwd,
 	mode,
 	apiConfigName,
-	initialState,
 	isBackground,
 	costLimit,
 	loadedSkills,
@@ -112,9 +109,14 @@ export async function taskMetadata({
 	}
 
 	// Create historyItem once with pre-calculated values.
-	// initialStatus is included when provided (e.g., "active" for child tasks)
-	// to ensure the status is set from the very first save, avoiding race conditions
-	// where attempt_completion might run before a separate status update.
+	//
+	// NOTE: `taskState` is deliberately NOT written here. It is owned
+	// exclusively by `TaskManager.setState` (Single-Writer Persistence Rule).
+	// Because `TaskHistoryStore.upsert` merges (`{ ...existing, ...item }`),
+	// omitting `taskState` preserves whatever TaskManager last persisted —
+	// whereas writing a static `initialState` snapshot here would clobber the
+	// live lifecycle on every metadata save (e.g. reverting a re-activated
+	// task's `running` back to a stale `completed:excellent`).
 	const historyItem: HistoryItem = {
 		id,
 		rootTaskId,
@@ -135,7 +137,6 @@ export async function taskMetadata({
 		mode,
 		...(cwd ? { cwd } : {}),
 		...(typeof apiConfigName === "string" && apiConfigName.length > 0 ? { apiConfigName } : {}),
-		...(initialState ? { taskState: initialState } : {}),
 		...(isBackground ? { isBackground: true } : {}),
 		...(costLimit ? { costLimit } : {}),
 		...(loadedSkills && loadedSkills.length > 0 ? { loadedSkills } : {}),

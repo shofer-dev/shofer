@@ -183,4 +183,26 @@ describe("TaskManager persistence", () => {
 			expect(manager.getTaskState("t-fresh")).toEqual(IDLE_TASK_STATE)
 		})
 	})
+
+	describe("waitForPendingPersist", () => {
+		it("resolves after the in-flight persist for the task has flushed to disk", async () => {
+			const initial = makeHistoryItem({ taskState: { lifecycle: "completed", rating: "excellent" } })
+			const { manager, store } = buildManager(initial)
+			await manager.restoreManagedTasks([])
+			seedManaged(manager, initial.id, { lifecycle: "completed", rating: "excellent" })
+
+			manager.setState(initial.id, { lifecycle: "running" })
+			await manager.waitForPendingPersist(initial.id)
+
+			// After awaiting, the running state must be durably on disk — it must
+			// NOT still carry the stale completed+rating.
+			expect(store.get(initial.id)?.taskState).toEqual({ lifecycle: "running" })
+		})
+
+		it("is a no-op when there is no pending persist for the task", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([])
+			await expect(manager.waitForPendingPersist("nonexistent")).resolves.toBeUndefined()
+		})
+	})
 })

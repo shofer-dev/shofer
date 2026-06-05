@@ -1935,7 +1935,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				cwd: this._cwd !== this.workspacePath ? this._cwd : undefined,
 				mode: this._taskMode || defaultModeSlug,
 				apiConfigName: this._taskApiConfigName,
-				initialState: this.initialState,
 				isBackground: this.isBackground,
 				costLimit: this.costLimit,
 				loadedSkills: this.loadedSkills.size > 0 ? Array.from(this.loadedSkills.keys()) : undefined,
@@ -6620,25 +6619,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.interactiveAsk = undefined
 		this.emit(ShoferEventName.TaskActive, this.taskId)
 
-		// Persist the running state to disk BEFORE restarting the task loop.
-		// TaskManager.enqueuePersist → persistState uses a latest-wins version
-		// counter to prevent the stale completed+rating from overwriting the
-		// running write, but if the process is killed between setState and
-		// the async persist completing, the version counter is lost. This
-		// synchronous write guarantees running is on disk before the task
-		// loop restarts. The version counter still protects against the
-		// fire-and-forget completed+rating write landing after this one.
+		// Ensure the running state is durably on disk BEFORE restarting the
+		// task loop. Emitting TaskActive above synchronously routes through
+		// TaskManager.setState(running) → enqueuePersist; we await that exact
+		// persist via the single writer rather than writing taskState directly
+		// (which would violate the Single-Writer Persistence Rule and race the
+		// fire-and-forget completed+rating write from attempt_completion).
 		{
 			const provider = this.providerRef.deref()
-			if (provider) {
+			if (provider?.taskManager) {
 				try {
-					await provider.updateTaskHistory({
-						id: this.taskId,
-						taskState: { lifecycle: "running" },
-					} as HistoryItem)
+					await provider.taskManager.waitForPendingPersist(this.taskId)
 				} catch {
-					// Best-effort — if the write fails we proceed anyway;
-					// the TaskManager chain will retry asynchronously.
+					// Best-effort — the TaskManager chain will retry asynchronously.
 				}
 			}
 		}
