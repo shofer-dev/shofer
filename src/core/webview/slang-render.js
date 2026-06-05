@@ -908,6 +908,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 			_cy += SPACING_Y
 		} else if (op.type === "EscalateOp") {
 			var ereason = op.reason ? esc(op.reason) : "approval"
+			if (ereason.length > 28) ereason = ereason.slice(0, 25) + "\u2026"
 			str +=
 				'<rect class="flow-box" x="' +
 				(spineX - BLOCK_W / 2) +
