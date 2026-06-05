@@ -733,7 +733,10 @@ function compileSwimlaneSVG(flow, agentNames) {
 			n++
 			if (o.type === "WhenBlock") {
 				n += countOps(o.body)
-				if (o.elseBlock) n += countOps(o.elseBlock.body)
+				if (o.elseBlock && o.elseBlock.body && o.elseBlock.body.length > 0) {
+					n += 0.5 // OTHERWISE adds _cy += SPACING_Y / 2
+					n += countOps(o.elseBlock.body)
+				}
 			}
 			if (o.type === "RepeatBlock") n += countOps(o.body)
 		}
