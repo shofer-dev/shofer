@@ -11,6 +11,8 @@ import { GIT_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./hel
 interface GitSearchParams {
 	query: string
 	maxResults?: number | null
+	since?: string | null
+	until?: string | null
 }
 
 /**
@@ -24,7 +26,7 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 
 	async execute(params: GitSearchParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
-		const { query } = params
+		const { query, since, until } = params
 		// Resolve through the shared cap (default 20, hard ceiling 50) so the
 		// behaviour matches grep_search / rag_search exactly. Invalid model-supplied
 		// values (NaN, 0, negative, absurdly large) collapse to the safe default.
@@ -103,8 +105,31 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 				return
 			}
 
-			const truncated = searchResults.length > maxResults
-			const cappedResults = truncated ? searchResults.slice(0, maxResults) : searchResults
+			// Post-filter by optional time range. ISO 8601 author_date strings
+			// compare lexicographically, so simple string comparison works.
+			const hasTimeFilter = since !== undefined || until !== undefined
+			let filteredResults = searchResults
+			if (hasTimeFilter) {
+				filteredResults = searchResults.filter((r) => {
+					const authorDate = r.payload.author_date
+					if (!authorDate) return false
+					if (since !== undefined && authorDate < since) return false
+					if (until !== undefined && authorDate > until) return false
+					return true
+				})
+
+				if (filteredResults.length === 0) {
+					const rangeLabel = [since && `since=${since}`, until && `until=${until}`].filter(Boolean).join(", ")
+					pushToolResult(
+						`No commits found in the time range (${rangeLabel}) for the query: "${query}". ` +
+							`${searchResults.length} semantic matches were filtered out by the date constraint.`,
+					)
+					return
+				}
+			}
+
+			const truncated = filteredResults.length > maxResults
+			const cappedResults = truncated ? filteredResults.slice(0, maxResults) : filteredResults
 
 			const jsonResult = {
 				query,

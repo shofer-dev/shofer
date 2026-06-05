@@ -156,6 +156,9 @@ export const toolParamNames = [
 	"filePaths",
 	// answer_subtask_question parameter
 	"answer",
+	// git_search time range parameters
+	"since",
+	"until",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
