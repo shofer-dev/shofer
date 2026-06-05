@@ -1014,8 +1014,8 @@ function compileSwimlaneSVG(flow, agentNames) {
 				'">WHEN: ' +
 				esc(wcond) +
 				"</text>"
+			var bodyStartY = _cy - SPACING_Y
 			_cy += SPACING_Y
-			var bodyStartY = _cy
 			str += renderOpList(op.body, spineX, depth + 1)
 			// Bounding box around the WHEN body
 			if (_cy > bodyStartY) {
@@ -1063,7 +1063,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 					opacity +
 					'">OTHERWISE</text>'
 				_cy += SPACING_Y
-				var elseStartY = _cy
+				var elseStartY = _cy - SPACING_Y
 				str += renderOpList(op.elseBlock.body, spineX, depth + 1)
 				// Bounding box around the OTHERWISE body
 				if (_cy > elseStartY) {
@@ -1117,8 +1117,8 @@ function compileSwimlaneSVG(flow, agentNames) {
 				'">REPEAT UNTIL: ' +
 				esc(rcond) +
 				"</text>"
+			var repeatStartY = _cy - SPACING_Y
 			_cy += SPACING_Y
-			var repeatStartY = _cy
 			str += renderOpList(op.body, spineX, depth + 1)
 			// Bounding box around the REPEAT body
 			if (_cy > repeatStartY) {
