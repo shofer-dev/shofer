@@ -33,6 +33,12 @@ export interface TextContent {
 	type: "text"
 	content: string
 	partial: boolean
+	/**
+	 * Stable per-block identity assigned when the streamed text block is first
+	 * created. Threaded into `Task.say("text", …)` so the partial → final handoff
+	 * locates the owning chat message by identity instead of tail position.
+	 */
+	id?: string
 }
 
 export const toolParamNames = [

@@ -2686,6 +2686,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		progressStatus?: ToolProgressStatus,
 		options: {
 			isNonInteractive?: boolean
+			/**
+			 * Stable identity of the streamed assistant content block. When
+			 * provided, the partial → finalization handoff below locates the
+			 * owning message by this id (position-independent) instead of
+			 * matching `shoferMessages.at(-1)`. This is the root-cause fix for
+			 * duplicate "Shofer said" bubbles: a tool_result (or any other
+			 * message) appended between the streaming partial and its
+			 * finalization no longer defeats the merge.
+			 */
+			streamBlockId?: string
 		} = {},
 		contextCondense?: ContextCondense,
 		contextTruncation?: ContextTruncation,
@@ -2695,6 +2705,58 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		if (partial !== undefined) {
+			// Identity-based path: when the caller supplies a stable block id,
+			// find the owning message by id anywhere in the history rather than
+			// assuming it is the last entry. This keeps streaming text
+			// finalization correct even when other messages were interleaved.
+			const streamBlockId = options.streamBlockId
+			if (streamBlockId) {
+				const existingIdx = findLastIndex(this.shoferMessages, (m) => m.streamBlockId === streamBlockId)
+
+				if (existingIdx !== -1) {
+					// The message for this block already exists: update it in
+					// place. We never create a second message for the same id,
+					// so re-delivery and out-of-order finalization are both
+					// idempotent.
+					const existing = this.shoferMessages[existingIdx]
+					existing.text = text
+					existing.images = images
+					existing.partial = partial
+					existing.progressStatus = progressStatus
+
+					if (partial) {
+						this.updateShoferMessage(existing)
+					} else {
+						if (!options.isNonInteractive) {
+							this.lastMessageTs = existing.ts
+						}
+						this._debouncedSaveShoferMessages.cancel()
+						await this.saveShoferMessages()
+						this.updateShoferMessage(existing)
+					}
+				} else {
+					// First chunk for this block: create the message tagged with
+					// its identity so later updates/finalization can find it.
+					const sayTs = Date.now()
+
+					if (!options.isNonInteractive) {
+						this.lastMessageTs = sayTs
+					}
+
+					await this.addToShoferMessages({
+						ts: sayTs,
+						type: "say",
+						say: type,
+						text,
+						images,
+						partial: partial || undefined,
+						streamBlockId,
+					})
+				}
+
+				return
+			}
+
 			const lastMessage = this.shoferMessages.at(-1)
 
 			const isUpdatingPreviousPartial =
@@ -4525,6 +4587,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 										type: "text",
 										content: assistantMessage,
 										partial: true,
+										// Stable identity for the streaming → finalization
+										// handoff in say(); prevents duplicate "Shofer said".
+										id: uuidv7(),
 									})
 									this.userMessageContentReady = false
 								}
