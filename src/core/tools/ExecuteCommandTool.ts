@@ -11,7 +11,6 @@ import { Task } from "../task/Task"
 
 import { ToolUse, ToolResponse } from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
-import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { ExitCodeDetails, ShoferTerminalCallbacks, ShoferTerminalProcess } from "../../integrations/terminal/types"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../integrations/terminal/Terminal"
@@ -55,9 +54,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 				return
 			}
 
-			const canonicalCommand = unescapeHtmlEntities(command)
-
-			const ignoredFileAttemptedToAccess = task.shoferIgnoreController?.validateCommand(canonicalCommand)
+			const ignoredFileAttemptedToAccess = task.shoferIgnoreController?.validateCommand(command)
 
 			if (ignoredFileAttemptedToAccess) {
 				await task.say("shoferignore_error", ignoredFileAttemptedToAccess)
@@ -69,7 +66,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 
 			// For worktree-scoped tasks, prepend a warning to the approval
 			// message so the user can see the command isn't sandboxed.
-			let commandToApprove = canonicalCommand
+			let commandToApprove = command
 			const worktreeWarning = getWorktreeCommandWarning(task)
 			if (worktreeWarning) {
 				commandToApprove = `${worktreeWarning}\n${commandToApprove}`
@@ -98,9 +95,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 				.get<string[]>("commandTimeoutAllowlist", [])
 
 			// Check if command matches any prefix in the allowlist
-			const isCommandAllowlisted = commandTimeoutAllowlist.some((prefix) =>
-				canonicalCommand.startsWith(prefix.trim()),
-			)
+			const isCommandAllowlisted = commandTimeoutAllowlist.some((prefix) => command.startsWith(prefix.trim()))
 
 			// Convert seconds to milliseconds for internal use, but skip timeout if command is allowlisted
 			const commandExecutionTimeout = isCommandAllowlisted ? 0 : commandExecutionTimeoutSeconds * 1000
@@ -110,7 +105,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 
 			const options: ExecuteCommandOptions = {
 				executionId,
-				command: canonicalCommand,
+				command: command,
 				customCwd,
 				terminalShellIntegrationDisabled,
 				commandExecutionTimeout,
