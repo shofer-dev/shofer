@@ -602,14 +602,62 @@ function compileSequenceSVG(flow, agentNames) {
 		extractTimeline(agent.operations, layers[from] || 0)
 	}
 
-	// Sort events by their source agent's layer, then by intra-agent sequential
-	// position (seq). This groups agent interactions by dependency order while
-	// preserving the line-by-line ordering of operations within each agent.
-	// Adjacent StakeOp/AwaitOp pairs stay adjacent instead of being split by layer.
-	timelineEvents.sort(function (a, b) {
+	// ── Merge matched stake/await pairs ────────────────────────────────
+	// A stake S->@T (sender→target) and an await B<-@S (same sender/receiver)
+	// are two sides of the same logical message. Collapse them into one event,
+	// preferring the stake's label (action name) over the await's (binding name).
+	// Escalate-to-Human is handled symmetrically: stake A→@Human + await @Human→A.
+	var merged = []
+	var consumed = {} // index → true for events already pushed to merged
+	for (var si = 0; si < timelineEvents.length; si++) {
+		if (timelineEvents[si].type !== "stake") continue
+		consumed[si] = true // mark this stake as handled
+		var stakeEv = timelineEvents[si]
+		// Look for a matching await: same from/to pair, or escalate symmetry
+		var pairIdx = -1
+		for (var ai = 0; ai < timelineEvents.length; ai++) {
+			if (ai === si || consumed[ai]) continue
+			var awaitEv = timelineEvents[ai]
+			if (awaitEv.type !== "await") continue
+			// Agent-to-agent: stake.from === await.from && stake.to === await.to
+			if (stakeEv.from === awaitEv.from && stakeEv.to === awaitEv.to) {
+				pairIdx = ai
+				break
+			}
+			// Human escalation: stake.from === await.to && stake.to === "@Human" && await.from === "@Human"
+			if (stakeEv.to === "@Human" && awaitEv.from === "@Human" && stakeEv.from === awaitEv.to) {
+				pairIdx = ai
+				break
+			}
+		}
+		if (pairIdx !== -1) {
+			consumed[pairIdx] = true
+		}
+		merged.push({
+			from: stakeEv.from,
+			to: stakeEv.to,
+			label: stakeEv.label || (pairIdx !== -1 ? timelineEvents[pairIdx].label : "") || "",
+			type: stakeEv.type,
+			layer: stakeEv.layer,
+			seq: stakeEv.seq,
+		})
+	}
+	// Push uncovered events (those with no matching pair) — e.g. standalone
+	// await @any, awaits gated behind a when-block where the stake is unreachable.
+	for (var ui = 0; ui < timelineEvents.length; ui++) {
+		if (consumed[ui]) continue
+		merged.push(timelineEvents[ui])
+	}
+
+	// Sort events by their intra-agent sequential position (seq). This groups
+	// agent interactions by dependency order while preserving the line-by-line
+	// ordering of operations within each agent.
+	merged.sort(function (a, b) {
 		if (a.seq !== b.seq) return a.seq - b.seq
 		return 0
 	})
+
+	timelineEvents = merged
 
 	var svgW = Math.max(600, columns.length * COL_W + MARGIN * 2)
 	var svgH = Math.max(400, timelineEvents.length * STEP_H + TOP_PAD + 100)
