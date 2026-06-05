@@ -292,6 +292,27 @@ class Parser {
 				this.advance()
 				this.expect(TokenType.Colon)
 				meta.retry = parseInt(this.expect(TokenType.Number).value, 10)
+			} else if (
+				this.check(TokenType.Ident) &&
+				this.peek().value === "peers" &&
+				this.tokens[this.pos + 1]?.type === TokenType.Colon
+			) {
+				// Shofer extension: 'peers: [@Agent1, @Agent2]' — declared direct-message peers.
+				this.advance() // "peers"
+				this.expect(TokenType.Colon)
+				this.expect(TokenType.LBracket)
+				meta.peers = []
+				if (!this.check(TokenType.RBracket)) {
+					const refToken =
+						this.peek().type === TokenType.AgentRef ? this.advance() : this.expect(TokenType.Ident)
+					meta.peers.push(refToken.value)
+					while (this.match(TokenType.Comma)) {
+						const refToken =
+							this.peek().type === TokenType.AgentRef ? this.advance() : this.expect(TokenType.Ident)
+						meta.peers.push(refToken.value)
+					}
+				}
+				this.expect(TokenType.RBracket)
 			} else if (this.isOperationStart()) {
 				operations.push(this.parseOperation())
 			} else {

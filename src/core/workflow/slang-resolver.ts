@@ -134,6 +134,9 @@ export interface FlowDiagnostic {
 	message: string
 }
 
+/** Refs that denote wildcards / external sinks rather than peer agents. */
+const NON_PEER_REFS = new Set(["out", "all", "any", "*", "human"])
+
 export function analyzeFlow(flow: FlowDecl): FlowDiagnostic[] {
 	const diagnostics: FlowDiagnostic[] = []
 	const agentNodes = flow.body.filter((n): n is AgentDecl => n.type === "AgentDecl")
@@ -167,6 +170,24 @@ export function analyzeFlow(flow: FlowDecl): FlowDiagnostic[] {
 				level: "warning",
 				message: `Agent "${agent.name}" has no commit — it will never signal completion`,
 			})
+		}
+
+		// Validate declared peers: every @ref must resolve to a known agent.
+		if (agent.meta.peers && agent.meta.peers.length > 0) {
+			for (const peerName of agent.meta.peers) {
+				const lower = peerName.toLowerCase()
+				if (NON_PEER_REFS.has(lower)) {
+					diagnostics.push({
+						level: "error",
+						message: `Agent "${agent.name}" declares wildcard/external sink "@${peerName}" in peers: — only concrete agents are allowed`,
+					})
+				} else if (!agentNames.has(peerName)) {
+					diagnostics.push({
+						level: "error",
+						message: `Agent "${agent.name}" declares unknown agent "@${peerName}" in peers:`,
+					})
+				}
+			}
 		}
 
 		function checkOperation(op: Operation): void {

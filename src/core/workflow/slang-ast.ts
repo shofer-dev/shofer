@@ -84,6 +84,10 @@ export interface AgentMeta {
 	model?: string
 	tools?: string[]
 	retry?: number
+	/** Agent names (from @refs) this agent may send_message_to_task to directly.
+	 *  Wildcards / external sinks are excluded. Absent ⇒ no sibling grant
+	 *  (parent + own children only, per least-privilege). */
+	peers?: string[]
 }
 
 // ─── Operations ───
