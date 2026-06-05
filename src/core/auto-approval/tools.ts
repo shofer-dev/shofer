@@ -54,6 +54,7 @@ const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	listBackgroundTasks: "list_background_tasks",
 	cancelTasks: "cancel_tasks",
 	answerSubtaskQuestion: "answer_subtask_question",
+	sendMessageToTask: "send_message_to_task",
 
 	// questions group
 	askFollowupQuestion: "ask_followup_question",

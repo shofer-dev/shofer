@@ -83,6 +83,11 @@ export enum TelemetryEventName {
 	MCP_ASYNC_CALL_COMPLETED = "MCP Async Call Completed",
 	MCP_ASYNC_CALL_CANCELLED = "MCP Async Call Cancelled",
 	MCP_ASYNC_CALL_TIMED_OUT = "MCP Async Call Timed Out",
+
+	// Peer messaging
+	TASK_PEER_MESSAGE_SENT = "Task Peer Message Sent",
+	TASK_PEER_MESSAGE_RECEIVED = "Task Peer Message Received",
+	TASK_PEER_DISCOVERY = "Task Peer Discovery",
 }
 
 /**
@@ -218,6 +223,9 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.MCP_ASYNC_CALL_COMPLETED,
 			TelemetryEventName.MCP_ASYNC_CALL_CANCELLED,
 			TelemetryEventName.MCP_ASYNC_CALL_TIMED_OUT,
+			TelemetryEventName.TASK_PEER_MESSAGE_SENT,
+			TelemetryEventName.TASK_PEER_MESSAGE_RECEIVED,
+			TelemetryEventName.TASK_PEER_DISCOVERY,
 		]),
 		properties: telemetryPropertiesSchema,
 	}),

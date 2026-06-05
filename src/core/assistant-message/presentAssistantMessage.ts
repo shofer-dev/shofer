@@ -62,6 +62,7 @@ import { waitForTaskTool } from "../tools/WaitForTaskTool"
 import { listBackgroundTasksTool } from "../tools/ListBackgroundTasksTool"
 import { cancelTasksTool } from "../tools/CancelTasksTool"
 import { answerSubtaskQuestionTool } from "../tools/AnswerSubtaskQuestionTool"
+import { sendMessageToTaskTool } from "../tools/SendMessageToTaskTool"
 import { callMcpToolAsyncTool } from "../tools/CallMcpToolAsyncTool"
 import { checkMcpCallStatusTool } from "../tools/CheckMcpCallStatusTool"
 import { waitForMcpCallTool } from "../tools/WaitForMcpCallTool"
@@ -483,6 +484,10 @@ export async function presentAssistantMessage(shofer: Task) {
 						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
 						return `[${block.name} for '${idsStr ?? ""}']`
 					}
+					case "send_message_to_task": {
+						const w = block.params.wait === true ? " (sync)" : ""
+						return `[${block.name} → '${block.params.task_id ?? ""}'${w}]`
+					}
 					case "cancel_tasks": {
 						const ids = block.params.task_ids
 						const idsStr = Array.isArray(ids) ? ids.join(", ") : ids
@@ -651,6 +656,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					"list_background_tasks",
 					"cancel_tasks",
 					"answer_subtask_question",
+					"send_message_to_task",
 					"generate_image",
 				])
 
@@ -1121,6 +1127,13 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "answer_subtask_question":
 					await answerSubtaskQuestionTool.handle(shofer, block as ToolUse<"answer_subtask_question">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "send_message_to_task":
+					await sendMessageToTaskTool.handle(shofer, block as ToolUse<"send_message_to_task">, {
 						askApproval,
 						handleError,
 						pushToolResult,

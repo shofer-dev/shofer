@@ -92,6 +92,8 @@ export const toolNames = [
 	"call_mcp_tool_async",
 	"check_mcp_call_status",
 	"wait_for_mcp_call",
+	// Peer messaging
+	"send_message_to_task",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -166,6 +168,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	call_mcp_tool_async: "call mcp tools asynchronously",
 	check_mcp_call_status: "check async mcp call status",
 	wait_for_mcp_call: "wait for async mcp calls",
+	send_message_to_task: "send messages to peer tasks",
 } as const
 
 /**
@@ -232,6 +235,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"list_background_tasks",
 			"cancel_tasks",
 			"answer_subtask_question",
+			"send_message_to_task",
 		],
 	},
 	questions: {

@@ -42,16 +42,52 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		const effectiveWait = wait ?? "all"
 		const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT_SECONDS
 
-		// Validate all task IDs exist in this task's background children.
+		// Validate all task IDs exist in this task's background children OR as
+		// same-root peers (relaxed gate for peer-aware wait).
 		const handles = new Map<string, TaskHandle>()
 		const missing: string[] = []
 		for (const id of task_ids) {
 			const handle = task.backgroundChildren.get(id)
-			if (!handle) {
-				missing.push(id)
-			} else {
+			if (handle) {
 				handles.set(id, handle)
+				continue
 			}
+
+			// Peer check: same rootTaskId, not a direct child.
+			if (task.rootTaskId) {
+				const provider = task.providerRef.deref()
+				let isPeer = false
+				if (provider) {
+					try {
+						const { historyItem } = await provider.getTaskWithId(id)
+						if (historyItem.rootTaskId === task.rootTaskId) {
+							isPeer = true
+						}
+					} catch {
+						const live = provider.taskManager.getManagedTaskInstance(id)
+						if (live && live.rootTaskId === task.rootTaskId) {
+							isPeer = true
+						}
+					}
+				}
+				if (isPeer) {
+					if (task.knownPeers && !task.knownPeers.has(id)) {
+						isPeer = false
+					}
+					if (isPeer) {
+						// Create a synthetic handle for the peer — wait_for_task
+						// listens for managedTask:* events keyed by id.
+						handles.set(id, {
+							taskId: id,
+							status: "running",
+							createdAt: Date.now(),
+							parentTaskId: "",
+						})
+						continue
+					}
+				}
+			}
+			missing.push(id)
 		}
 		if (missing.length > 0) {
 			pushToolResult(formatResponse.toolError(`Tasks not found in background children: ${missing.join(", ")}`))

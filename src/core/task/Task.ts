@@ -196,6 +196,18 @@ export interface McpAsyncCallHandle {
 	createdAt: number
 }
 
+/**
+ * Pending peer message awaiting delivery to this task.
+ * System-prompt injection (Form A) for busy async recipients; non-busy
+ * recipients receive peer messages via Form B (messageQueueService).
+ */
+export interface PendingPeerMessage {
+	senderTaskId: string
+	senderTitle: string
+	message: string
+	timestamp: number
+}
+
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	readonly taskId: string
 	readonly rootTaskId?: string
@@ -205,6 +217,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// NEW: Track background children
 	backgroundChildren: Map<string, TaskHandle> = new Map()
+
+	/**
+	 * Async peer notifications awaiting Form A delivery (system-prompt injection)
+	 * to a BUSY recipient. Non-busy recipients receive via Form B (messageQueueService).
+	 */
+	pendingPeerMessages: PendingPeerMessage[] = []
+
+	/**
+	 * Opt-in peer scope restriction. When set, peer tools only allow
+	 * communication with task IDs in this set (plus dynamically-added
+	 * children this task spawns). When undefined, full peer access
+	 * under the same rootTaskId.
+	 */
+	knownPeers?: Set<string>
 
 	/**
 	 * When this task is a background child whose `ask_followup_question`
@@ -5455,7 +5481,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			const modelInfo = this.api.getModel().info
 
-			const systemPrompt = await SYSTEM_PROMPT(
+			let systemPrompt = await SYSTEM_PROMPT(
 				provider.context,
 				this.cwd,
 				false,
@@ -5532,7 +5558,42 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						`- Estimated timeout: ${this.softTimeoutSec} seconds (soft guidance — the parent may wait longer and you may take longer). Pace your work accordingly.`,
 					)
 				}
-				return systemPrompt + "\n\n====\n\n" + constraints.join("\n")
+				systemPrompt = systemPrompt + "\n\n====\n\n" + constraints.join("\n")
+			}
+
+			// Inject Form A peer messages (async notifications for a BUSY recipient).
+			// Independent of parentTaskId — any background task can receive peer async
+			// messages via system-prompt injection when it is mid-turn.
+			if (this.pendingPeerMessages.length > 0) {
+				const peerBlocks: string[] = []
+				for (const pm of this.pendingPeerMessages) {
+					peerBlocks.push(
+						`\n\n====\n\n` +
+							`PEER MESSAGE from task ${pm.senderTaskId} ("${pm.senderTitle}"):\n` +
+							`${pm.message}\n\n` +
+							`You may respond using send_message_to_task(task_id="${pm.senderTaskId}", message=...).\n` +
+							`This is a notification — no response is required. If the message is not urgent,\n` +
+							`you may finish your current work first and respond later.`,
+					)
+				}
+				systemPrompt = systemPrompt + peerBlocks.join("")
+
+				// Telemetry: peer message received (Form A — injection time).
+				try {
+					const { TelemetryService } = await import("@shofer/telemetry")
+					for (const pm of this.pendingPeerMessages) {
+						TelemetryService.instance.capturePeerMessageReceived(this.taskId, {
+							targetTaskId: pm.senderTaskId,
+							mode: "async",
+							form: "A",
+						})
+					}
+				} catch {
+					// non-fatal
+				}
+
+				// Clear after injection (delivered once per message).
+				this.pendingPeerMessages = []
 			}
 
 			return systemPrompt
