@@ -1006,7 +1006,21 @@ function compileSwimlaneSVG(flow, agentNames) {
 					opacity +
 					'">OTHERWISE</text>'
 				_cy += SPACING_Y
+				var elseStartY = _cy
 				str += renderOpList(op.elseBlock.body, spineX, depth + 1)
+				// Bounding box around the OTHERWISE body
+				if (_cy > elseStartY) {
+					str +=
+						'<rect class="loop-bounding-box" x="' +
+						(spineX - BLOCK_W / 2 - 12) +
+						'" y="' +
+						elseStartY +
+						'" width="' +
+						(BLOCK_W + 24) +
+						'" height="' +
+						(_cy - elseStartY) +
+						'" rx="6" />'
+				}
 			}
 		} else if (op.type === "RepeatBlock") {
 			var rcond = op.condition ? exprShort(op.condition, 16) : "?"
