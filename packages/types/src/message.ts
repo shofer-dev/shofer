@@ -318,6 +318,16 @@ export const shoferMessageSchema = z.object({
 	apiProtocol: z.union([z.literal("openai"), z.literal("anthropic")]).optional(),
 	isAnswered: z.boolean().optional(),
 	/**
+	 * Stable identity of the streamed assistant content block that produced this
+	 * message. Set for streamed `say: "text"` (and reasoning) messages so that
+	 * the streaming → finalization handoff in `Task.say()` can locate the owning
+	 * message by identity rather than by tail position. This makes finalization
+	 * immune to other messages (tool_result, errors, grounding sources, …) being
+	 * appended to `shoferMessages` between the partial emission and its
+	 * finalization, which previously produced duplicate "Shofer said" bubbles.
+	 */
+	streamBlockId: z.string().optional(),
+	/**
 	 * True when this `ask` was auto-approved by `checkAutoApproval` and the
 	 * task short-circuited the wait-for-user-response flow. The webview uses
 	 * this flag to suppress the Approve/Deny action buttons that would

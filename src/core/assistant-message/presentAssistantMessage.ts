@@ -10,7 +10,7 @@ import { customToolRegistry } from "@shofer/core"
 import { t } from "../../i18n"
 
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
-import type { ToolParamName, ToolResponse, ToolUse, McpToolUse } from "../../shared/tools"
+import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } from "../../shared/tools"
 
 import { AskIgnoredError } from "../task/AskIgnoredError"
 import { Task } from "../task/Task"
@@ -350,21 +350,14 @@ export async function presentAssistantMessage(shofer: Task) {
 				content = content.replace(/\s?<\/thinking>/g, "")
 			}
 
-			// Guard against the LLM stream re-delivering an already-presented
-			// text block at the same streaming content index.  When a block that
-			// was already complete arrives again as another partial=true chunk
-			// with identical content, skip it.
-			const contentKey = `${shofer.currentStreamingContentIndex}:${content}`
-			if (block.partial && contentKey === (shofer as any)._lastPresentedTextKey) {
-				break
-			}
-			if (block.partial) {
-				;(shofer as any)._lastPresentedTextKey = contentKey
-			} else {
-				delete (shofer as any)._lastPresentedTextKey
-			}
-
-			await shofer.say("text", content, undefined, block.partial)
+			// Finalization is located by the block's stable identity (assigned
+			// when the streaming text block is first created), so the partial →
+			// complete handoff in say() is immune to other messages being
+			// appended in between. This is the root-cause fix that replaces the
+			// earlier position/content based dedup heuristics.
+			await shofer.say("text", content, undefined, block.partial, undefined, undefined, {
+				streamBlockId: (block as TextContent).id,
+			})
 			break
 		}
 		case "tool_use": {
