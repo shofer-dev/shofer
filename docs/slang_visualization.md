@@ -245,6 +245,12 @@ The visualization adapts to VS Code themes via CSS variables.
 | **Sequence concurrency**             | Parallel stake dispatches are indistinguishable from sequential ones                          | Low      |
 | **Swimlane nesting depth indicator** | Deeply nested operations have the same fixed `opacity="0.7"` — could use a gradient or indent | Low      |
 
+### Fixed
+
+| Fix                                   | Description                                                                                                                |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Duplicate stake/await in sequence** | Matched stake→@T + await←@S pairs (and escalate→@Human + await←@Human) are now merged into one timeline event per message. |
+
 ### Infrastructure
 
 | Gap                                   | Description                                                                                                                                                                                                                                              | Priority |
