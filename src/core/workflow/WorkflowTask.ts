@@ -278,6 +278,16 @@ export class WorkflowTask extends Task {
 	readonly flowDecl: UpstreamFlowDecl
 	flowState: FlowState
 	private slangLoopStarted = false
+	/**
+	 * True once {@link slangLoop} has actually begun iterating. Distinct from
+	 * {@link slangLoopStarted} (set in `start()` before flow-parameter
+	 * collection): while the task is blocked asking the user for flow params,
+	 * `slangLoopStarted` is already true but no orchestration work has run yet.
+	 * `abortTask()` uses this to detect a stop during param collection, where
+	 * there is nothing to resume and the user should just see a stop
+	 * confirmation.
+	 */
+	private slangLoopEntered = false
 
 	/**
 	 * Compiled, flat instruction list per agent. Rebuilt from the AST in the
@@ -335,10 +345,36 @@ export class WorkflowTask extends Task {
 	}
 
 	override async abortTask(): Promise<void> {
-		// Persist the aborted state BEFORE the super call disposes the
-		// task, so the rehydrated instance from cancelTask sees a
-		// terminal status in start() and doesn't restart.
+		// Decide whether this is a stop during flow-parameter collection
+		// BEFORE mutating any state below.
+		const stoppedDuringParamCollection =
+			!this.slangLoopEntered && (this.flowState.status as string) === "running" && !this.abort
+
+		// Persist the aborted state BEFORE the super call disposes the task,
+		// so the rehydrated instance from cancelTask sees a terminal status in
+		// start() and doesn't restart. Setting it first also makes the racing
+		// requestFlowParams().catch() (woken by the say() below mutating
+		// lastMessageTs) observe a terminal status and take its stop branch.
 		this.flowState.status = "aborted"
+
+		// When the workflow is stopped before the slang loop has begun any
+		// real work (i.e. while it is still blocked collecting flow params),
+		// there is nothing to resume — the task was merely waiting on a user
+		// question. Emit a confirmation line so the user sees that the
+		// workflow stopped. Emitting a `say` here also makes the last chat
+		// message a non-ask, which clears the pending `followup` ask in the
+		// webview so the Stop button disappears (cancelTask skips rehydrate
+		// for stopped workflows, so no other state push would clear it).
+		// `say` throws once `this.abort` is set, so this must run before the
+		// super call below.
+		if (stoppedDuringParamCollection) {
+			try {
+				await this.say("text", `🛑 Workflow **${this.flowState.flowName}** stopped.`)
+			} catch (error) {
+				workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to emit stop confirmation:`, error)
+			}
+		}
+
 		try {
 			await this.persistCheckpoint()
 		} catch {
@@ -492,7 +528,7 @@ export class WorkflowTask extends Task {
 			`[WorkflowTask#${this.taskId}] Collecting ${missing.length} flow param(s): ${missing.map((p) => p.name).join(", ")}`,
 		)
 		void askNext(0).catch((error) => {
-			if (this.abort) {
+			if (this.abort || (this.flowState.status as string) === "aborted") {
 				workflowLog.info(`[WorkflowTask#${this.taskId}] Flow param collection aborted — task is stopping`)
 				// Persist the aborted status to history BEFORE cancelTask
 				// re-reads it and rehydrates. Without this, the rehydrated
@@ -526,6 +562,7 @@ export class WorkflowTask extends Task {
 	}
 
 	private async slangLoop(): Promise<void> {
+		this.slangLoopEntered = true
 		const provider = this.providerRef.deref()
 		if (!provider) throw new Error("WorkflowTask: provider reference lost")
 
