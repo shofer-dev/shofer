@@ -1,6 +1,8 @@
 # Inter-Task Peer Messaging
 
-> **Status:** ✅ Implemented in Shofer v1.0.84. The core `send_message_to_task` tool, scope-relaxed peer tools (`check_task_status`, `wait_for_task`, `list_background_tasks` with `scope=peers`), `peer_task_ids` opt-in restrictor, and telemetry are all wired and compile clean. See [Remaining & Future Items](#remaining--future-items) for known gaps.
+> **Status:** ✅ Implemented in Shofer v1.0.84. The core `send_message_to_task` tool, scope-relaxed peer tools (`check_task_status`, `wait_for_task`, `list_background_tasks` with `scope=peers`), `peer_task_ids` opt-in restrictor, and telemetry are all wired and compile clean.  
+> ✅ **Least-privilege `knownPeers` default** (Shofer v1.0.85): `knownPeers` is always set for background tasks; `undefined` means deny-all (was: full same-root access). Baseline at spawn: `{ parentTaskId }` only — siblings require an explicit grant via `peer_task_ids` on `new_task`, or the `peers: [@Ref]` meta field in a slang agent declaration.  
+> See [Remaining & Future Items](#remaining--future-items) for known gaps.
 
 Design for direct communication between tasks sharing the same root task, enabling A2A-style collaboration without routing through the parent.
 
@@ -147,7 +149,7 @@ Always-available tool. Sends a message to a peer task. Two modes: async (fire-an
 1. `caller.rootTaskId` must be set (not a top-level task).
 2. `target.rootTaskId === caller.rootTaskId`.
 3. `target.taskId !== caller.taskId`.
-4. If the caller has `knownPeers` set (opt-in scope from `peer_task_ids`), `task_id` must be in that set.
+4. `task_id` must be in the caller's `knownPeers` set. `knownPeers` is **always set** for background tasks participating in peer messaging; when the set does not contain `task_id`, the call is rejected regardless of same-root membership.
 5. **Both `caller` and `target` must be background tasks** (`isBackgroundTask === true`). See [Background-task precondition](#background-task-precondition).
 
 #### Background-task precondition
@@ -301,9 +303,9 @@ The resolver map already routes correctly to an arbitrary waiter; only the `pare
 
 New optional parameter on [`NewTaskParams`](../src/core/tools/NewTaskTool.ts:16):
 
-| Param           | Type             | Required | Description                                                                                                                                                                                                          |
-| --------------- | ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `peer_task_ids` | string[] \| null | –        | If provided, restricts the spawned child's peer communication to only these task IDs (plus the parent and any tasks it itself spawns). If omitted/null, the child can communicate with any task under the same root. |
+| Param           | Type             | Required | Description                                                                                                                                                                                                                                                                           |
+| --------------- | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `peer_task_ids` | string[] \| null | –        | If provided, extends the spawned child's peer grant to include these task IDs (in addition to the parent and any tasks it itself spawns). If omitted/null, the child defaults to **least-privilege scope**: parent + own children only — no sibling access unless explicitly granted. |
 
 ### Implementation
 
@@ -317,7 +319,9 @@ The "dynamically added" union member is mutated in the [`NewTaskTool`](../src/co
 
 `peer_task_ids` values SHOULD be validated at spawn time: each listed id must correspond to an existing task sharing the spawner's `rootTaskId`. Unknown ids are rejected (fail loud) rather than silently producing an over-restrictive scope that fails opaquely on a later `send_message_to_task`.
 
-Peer tools (`check_task_status`, `wait_for_task`, `send_message_to_task`, `list_background_tasks` with `scope=peers`) consult `knownPeers` before allowing access. If `knownPeers` is `undefined`, no restriction applies (full peer access).
+Peer tools (`check_task_status`, `wait_for_task`, `send_message_to_task`, `list_background_tasks` with `scope=peers`) consult `knownPeers` before allowing access. `knownPeers` is **always set** (never `undefined`) for any background task participating in peer messaging; when `undefined`, all peer-tool access is denied. The guard is `if (!task.knownPeers || !task.knownPeers.has(id))` — always enforced.
+
+> **Slang workflows:** within a `.slang` flow, the canonical way to grant sibling access is the `peers: [@Ref]` agent meta field — the executor resolves refs to live task IDs at spawn time and sets `knownPeers` accordingly. `peer_task_ids` on `new_task` remains the mechanism for non-workflow or programmatic use.
 
 ---
 
@@ -412,10 +416,13 @@ Message queue (Form B) — reuses the queueMessage/Task.ask() path
 pendingPeerMessages: PendingPeerMessage[] = []
 
 /**
- * Opt-in peer scope restriction. When set, peer tools only allow
- * communication with task IDs in this set (plus dynamically-added
- * children this task spawns). When undefined, full peer access
- * under the same rootTaskId.
+ * Least-privilege peer scope. Always set for background tasks participating
+ * in peer messaging. Peer tools only allow communication with task IDs
+ * present in this set. When undefined, all peer-tool access is denied.
+ *
+ * Baseline at spawn: { parentTaskId } only. Children are added dynamically
+ * as they are spawned (NewTaskTool / WorkflowTask.spawnAgentTask). Sibling
+ * grants require explicit peer_task_ids (new_task) or peers: [@Ref] (slang).
  */
 knownPeers?: Set<string>
 ```
@@ -455,7 +462,7 @@ On extension restart:
 1. `TaskManager.restoreManagedTasks()` rehydrates the managed-task map from persisted history.
 2. Tasks are re-created with their `rootTaskId` from `HistoryItem`.
 3. `pendingPeerMessages` are **not** persisted — undelivered Form A notifications are lost across restarts. This is acceptable: the sender's sync call would have aborted on timeout, and async notifications are fire-and-forget by nature.
-4. `knownPeers` is **not** persisted — it's a runtime construct set at task creation. On restore, the task has full peer access unless explicitly re-restricted.
+4. `knownPeers` is **not** persisted — it is a runtime construct set at spawn time by `NewTaskTool` (for `new_task`) or `WorkflowTask.spawnAgentTask` (for slang agents). On restore, a task's `knownPeers` is `undefined` (deny-all) until the task is re-spawned. Tasks rehydrated from history into an existing peer tree must have their `knownPeers` re-established by whoever spawns them.
 
 ---
 
