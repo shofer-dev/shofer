@@ -158,9 +158,18 @@ Always-available tool. Sends a message to a peer task. Two modes: async (fire-an
 
 The same `isBackgroundTask` flag that gates `ask_followup_question` routing-to-parent thus gates participation in peer messaging: a task that is not independently schedulable is neither a reachable recipient nor a safe sync sender. A caller or target failing this check is rejected synchronously — `Error: Peer messaging requires both tasks to be background tasks.`
 
+**Parent/child sync is not peer sync.** The sync-response-routing generalization (§[Sync response routing](#sync-response-routing-initiator-addressed)) unifies result delivery by keying resolvers on the recipient's `taskId`, but the _initiator kinds_ remain mutually exclusive on the target's `isBackgroundTask` flag:
+
+| Initiator kind                     | Target's `isBackgroundTask`       | Sync resolver path                                              |
+| ---------------------------------- | --------------------------------- | --------------------------------------------------------------- |
+| Parent (`new_task`, foreground)    | `false`                           | `blockingChildResolvers` → `resumeBlockingParent` stack-pop     |
+| Peer (`send_message_to_task` sync) | `true` (enforced by precondition) | `pendingSyncResolvers` → fire resolver, skip stack manipulation |
+
+The unified routing map (`pendingSyncResolvers`) serves both, but the code branches at delivery: `AttemptCompletionTool` checks _which_ map entry exists and runs the corresponding bookkeeping (stack-pop + parent-history for parent initiators; resolver-only for peer initiators). An implementer MUST NOT collapse both paths into a single code branch — the `isBackgroundTask` flag and `parentTaskId` context determine which bookkeeping steps apply.
+
 ### Async mode (`wait = false`, default)
 
-Fire-and-forget from the **sender's** perspective: the tool returns immediately and never blocks. How the _recipient_ perceives the message depends only on whether the recipient is busy (see [Recipient delivery model](#recipient-delivery-model) below), **not** on the async/sync flag. Async and sync differ exclusively in whether the sender blocks awaiting a response.
+Fire-and-forget from the **sender's** perspective: the tool returns immediately and never blocks. How the _recipient_ perceives the message depends only on whether the recipient is busy (see [Recipient delivery model](#recipient-delivery-model) below), **not** on the async/sync flag. Async and sync differ exclusively in whether the sender blocks awaiting a response. Note that a response to an async message is optional — the recipient uses a fresh `send_message_to_task` call back (see [Response mechanism](#response-mechanism-differs-by-mode) below).
 
 1. The message is recorded as a `PendingPeerMessage` (resolved sender title from `TaskManager` at send time):
     ```typescript
@@ -238,7 +247,14 @@ Sync adds **sender-side blocking** on top of the same recipient delivery model. 
 
 5. The sender's `send_message_to_task` tool handler **awaits** a response promise stored alongside the message.
 
-6. When the recipient calls **`attempt_completion`**, its result is delivered to **whoever initiated the prompt the recipient is currently answering** — the _initiator_ — which may be a **peer** (sync `send_message_to_task`) or the structural **parent** (`new_task`). The initiator is recorded per-prompt at delivery time and is routed by the recipient's `taskId`, **not** assumed to be `parentTaskId` (subject to `MAX_SUBTASK_RESULT_LENGTH`). The response promise resolves with that result, and the initiator's blocking tool handler returns it as `tool_result`. Because `attempt_completion` is a terminal, self-declared state (see [`task_states.md`](task_states.md)), answering a sync request **completes the recipient task** — so sync is naturally suited to peers that are idle/completed (resumed solely to serve the request) or spawned as dedicated responders. Sync-messaging a `running` peer will end that peer's in-flight work when it answers; prefer async for a peer you do not want to terminate. See [Sync response routing](#sync-response-routing-initiator-addressed) for the plumbing.
+6. When the recipient calls **`attempt_completion`**, its result is delivered to **whoever initiated the prompt the recipient is currently answering** — the _initiator_ — which may be a **peer** (sync `send_message_to_task`) or the structural **parent** (`new_task`). The initiator is recorded per-prompt at delivery time and is routed by the recipient's `taskId`, **not** assumed to be `parentTaskId` (subject to `MAX_SUBTASK_RESULT_LENGTH`). The response promise resolves with that result, and the initiator's blocking tool handler returns it as `tool_result`.
+
+    > **⚠️ Sync-to-running-peer terminates the peer's in-flight work.** Because `attempt_completion` is a terminal, self-declared state (see [`task_states.md`](task_states.md)), the recipient answers a sync request by **completing itself** — the result goes to the initiator and the recipient task ends. If the recipient was `running` (actively working on its own task), that work is aborted. Only sync-message a `running` peer if you intend to interrupt and redirect it. For non-interrupting coordination:
+    >
+    > - Prefer **async** `send_message_to_task` — the recipient sees the message as a notification and can finish its own work before deciding whether to respond.
+    > - Prefer targeting peers that are **idle/completed** (resumed solely to serve the request) or spawned as **dedicated responders** whose whole purpose is to answer prompts.
+    >
+    > Sync is naturally suited to idle/completed peers and dedicated responders; sync-messaging a busy worker is a sharp tool. See [Sync response routing](#sync-response-routing-initiator-addressed) for the plumbing.
 
 7. **On timeout or sender abort:** the `AbortSignal` fires and the sender attempts to retract the prompt via [`messageQueueService.removeMessage(id)`](../src/core/message-queue/MessageQueueService.ts:78) using the id captured in step 3:
 
@@ -261,8 +277,8 @@ A sync request blocks its **initiator** until the recipient's next `attempt_comp
 
 **Existing plumbing (parent/child only).** Today the blocking-result path is:
 
-- [`NewTaskTool`](../src/core/tools/NewTaskTool.ts:277) registers a resolver via `provider.registerBlockingChildResolver(child.taskId, resolve)` and `await`s the promise. The map [`blockingChildResolvers: Map<childTaskId, (result) => void>`](../src/core/webview/ShoferProvider.ts:178) is keyed by the **completing task's id** — already relationship-agnostic.
-- On completion, [`AttemptCompletionTool.execute`](../src/core/tools/AttemptCompletionTool.ts:168) gates on `if (task.parentTaskId)` and calls [`resumeBlockingParent({ parentTaskId: task.parentTaskId, childTaskId, completionResult })`](../src/core/webview/ShoferProvider.ts:4339), which fires the resolver **and** rewrites `parentTaskId`'s history (`awaitingChildId`/`completedByChildId`) **and pops the child off `shoferStack`** to reveal the parent below it.
+- [`NewTaskTool`](../src/core/tools/NewTaskTool.ts:277) registers a resolver via `provider.registerBlockingChildResolver(child.taskId, resolve)` and `await`s the promise. The map [`blockingChildResolvers: Map<childTaskId, (result) => void>`](../src/core/webview/ShoferProvider.ts:180) is keyed by the **completing task's id** — already relationship-agnostic.
+- On completion, [`AttemptCompletionTool.execute`](../src/core/tools/AttemptCompletionTool.ts:168) gates on `if (task.parentTaskId)` and calls [`resumeBlockingParent({ parentTaskId: task.parentTaskId, childTaskId, completionResult })`](../src/core/webview/ShoferProvider.ts:4518), which fires the resolver **and** rewrites `parentTaskId`'s history (`awaitingChildId`/`completedByChildId`) **and pops the child off `shoferStack`** to reveal the parent below it.
 
 The resolver map already routes correctly to an arbitrary waiter; only the `parentTaskId` gate in `attempt_completion` and the stack/history bookkeeping in `resumeBlockingParent` assume the waiter is the structural parent sitting directly below the recipient in `shoferStack`.
 
@@ -270,7 +286,10 @@ The resolver map already routes correctly to an arbitrary waiter; only the `pare
 
 **Generalization for peer initiators.** Three focused changes decouple routing from the parent/stack assumption — no second result-delivery mechanism is introduced:
 
-1. **Record the initiator per prompt.** When a sync prompt is delivered — parent via `new_task`, or peer via sync `send_message_to_task` — register the resolver keyed by the **recipient's** `taskId` together with the **initiator's** `taskId`. Reuse the existing map, generalized to `pendingSyncResolvers: Map<recipientTaskId, { initiatorTaskId, resolve }>`. Exactly one sync prompt is in flight per recipient at a time (a second concurrent sync request to a busy-with-a-sync-prompt recipient is rejected, not queued).
+1. **Record the initiator per prompt.** When a sync prompt is delivered — parent via `new_task`, or peer via sync `send_message_to_task` — register the resolver keyed by the **recipient's** `taskId` together with the **initiator's** `taskId`. Reuse the existing map, generalized to `pendingSyncResolvers: Map<recipientTaskId, { initiatorTaskId, resolve }>`. Exactly one sync prompt is in flight per recipient at a time — enforce this at registration:
+    - **Sync `send_message_to_task` handler:** before registering, check `pendingSyncResolvers.has(target.taskId)`. If occupied, reject: `Error: Task <task_id> is already serving a sync request and cannot accept another until it completes.`
+    - **`NewTaskTool` (foreground path):** before calling `provider.registerBlockingChildResolver`, check `pendingSyncResolvers.has(child.taskId)` and reject if occupied — a task cannot simultaneously be a blocking child of its parent AND the target of a peer sync exchange.
+    - **`resumeBlockingParent`:** already deletes the resolver by `childTaskId` unconditionally after firing, so a previously-child task that becomes free can then be targeted by a peer sync. No extra enforcement needed at deletion time.
 2. **Route by recipient, not by parent.** `AttemptCompletionTool` looks up the pending resolver by **`task.taskId`** (the completing recipient) and fires it with the result. The `if (task.parentTaskId)` gate is replaced by "is there a pending sync resolver for my `taskId`?" — so a recipient whose structural parent is the Orchestrator can still return its verdict to a Coder **peer** that issued the prompt.
 3. **Decouple bookkeeping from routing.** Run `resumeBlockingParent`'s stack-pop + parent-history rewrite **only when the initiator is the structural parent** (initiator `===` `parentTaskId`, and the recipient is the stack frame directly above it). For a **peer** initiator, skip the stack/history manipulation entirely and just fire the resolver — the peer initiator lives elsewhere in the task tree, not below the recipient in `shoferStack`.
 
@@ -286,7 +305,7 @@ New optional parameter on [`NewTaskParams`](../src/core/tools/NewTaskTool.ts:16)
 
 ### Implementation
 
-When set, the spawned child's `Task` instance stores `knownPeers: Set<string>` containing the union of:
+When set, the spawned child's `Task` instance stores `knownPeers: Set<string>` (runtime-only; this is a `Set<string>` field on the `Task` class, NOT a persisted `@shofer/types` cross-boundary schema — see [Data Model Additions](#data-model-additions)) containing the union of:
 
 - `peer_task_ids` (explicitly listed peers)
 - The parent's `taskId` (always allowed)
@@ -306,7 +325,7 @@ Delivery form is chosen by the recipient's runtime state, **not** by the async/s
 
 ### Form A: System-prompt injection (busy recipient, async only)
 
-Used only when the recipient is mid-turn **and** the message is async. The message rides along in the recipient's system prompt on the in-flight/next API call — modeled after the existing subtask-constraints injection at [`Task.ts:5426-5471`](../src/core/task/Task.ts:5426).
+Used only when the recipient is mid-turn **and** the message is async. The message rides along in the recipient's system prompt on the next API call — modeled after the existing subtask-constraints injection at [`Task.ts:5493`](../src/core/task/Task.ts:5493).
 
 Key properties:
 
@@ -328,7 +347,7 @@ For sync, the recipient answers by calling **`attempt_completion`**, whose resul
 
 ### Injection / enqueue site
 
-Form A injection happens during system prompt construction, near the subtask-constraints flow at [`Task.ts:5426`](../src/core/task/Task.ts:5426). **Important:** that block is guarded by `if (this.parentTaskId)`. Peer eligibility is keyed on `rootTaskId`, **not** `parentTaskId`, so the peer-message injection MUST run **independently of that guard** (a peer can be eligible without the constraints branch firing). Treat the peer block as its own append step.
+Form A injection happens during system prompt construction, near the subtask-constraints flow at [`Task.ts:5493`](../src/core/task/Task.ts:5493). **Important:** that block is guarded by `if (this.parentTaskId)`. Peer eligibility is keyed on `rootTaskId`, **not** `parentTaskId`, so the peer-message injection MUST run **independently of that guard** (a peer can be eligible without the constraints branch firing). Treat the peer block as its own append step.
 
 Form B never touches the system prompt — it is enqueued as a user-turn via `messageQueueService.addMessage()` (the `queueMessage` path) and drained by `Task.ask()`.
 
@@ -359,7 +378,7 @@ Message queue (Form B) — reuses the queueMessage/Task.ask() path
 
 3. **The LLM is generally smart enough to avoid circular waits** — this is a well-understood pattern. The system prompt for sync messages explicitly states "The sender is blocked waiting" to encourage prompt response.
 
-4. **If timeout fires, the message is discarded.** No stale messages linger. Both tasks can retry independently.
+4. **If timeout fires, the message is discarded.** No stale messages linger. Both tasks can retry independently — the sender unblocks with a timeout error and may retry the same peer (if the recipient is still reachable) or escalate to a different peer. Note that the recipient may still be mid-work on a now-orphaned prompt (the queued message was already consumed before the timeout fired), but that work completes silently and does not block the sender.
 
 5. **The parent can always cancel stuck children** via `cancel_tasks` as a last resort.
 
@@ -442,11 +461,11 @@ On extension restart:
 
 All telemetry MUST go through typed `TelemetryService.instance.captureXxx(...)` wrappers (per the repo Telemetry Capture Rule); the names below are logical event kinds to add to `TelemetryEventName`, not raw Prometheus counters.
 
-| Event kind                   | Description                                                              |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| `task_peer_message_sent`     | labels: `mode` (async/sync), `status` (delivered/timeout/rejected/error) |
-| `task_peer_message_received` | labels: `mode` (async/sync)                                              |
-| `task_peer_discovery`        | `list_background_tasks` calls with `scope=peers`                         |
+| Event kind                   | Capture point / description                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task_peer_message_sent`     | Captured in `send_message_to_task` handler after delivery completes (or fails). Labels: `mode` (async/sync), `status` (delivered/timeout/rejected/error)                                                                                                                                                                                                                                                                     |
+| `task_peer_message_received` | Captured at **injection/enqueue time** for Form B (message enters the recipient's queue — the recipient _will_ see it on its next turn) and at **system-prompt construction time** for Form A (message is appended to prompt — the recipient may see it on the next API call). The event records the peer message was **presented**, not that the LLM acted on it (unobservable). Labels: `mode` (async/sync), `form` (A/B). |
+| `task_peer_discovery`        | `list_background_tasks` calls with `scope=peers`                                                                                                                                                                                                                                                                                                                                                                             |
 
 ---
 

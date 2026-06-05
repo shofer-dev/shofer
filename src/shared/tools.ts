@@ -159,6 +159,8 @@ export const toolParamNames = [
 	// git_search time range parameters
 	"since",
 	"until",
+	// send_message_to_task parameter
+	"timeout_sec",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -194,7 +196,7 @@ export type NativeToolArgs = {
 	}
 	check_task_status: { task_id: string; include_activity?: boolean | null }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }
-	list_background_tasks: Record<string, never>
+	list_background_tasks: { scope?: "children" | "peers" | null }
 	cancel_tasks: { task_ids: string[] }
 	answer_subtask_question: { task_id: string; answer: string }
 	ask_followup_question: {
@@ -250,6 +252,12 @@ export type NativeToolArgs = {
 	}
 	check_mcp_call_status: { call_id: string }
 	wait_for_mcp_call: { call_ids: string[]; wait?: "all" | "any"; timeout?: number }
+	send_message_to_task: {
+		task_id: string
+		message: string
+		wait?: boolean | null
+		timeout_sec?: number | null
+	}
 	// Add more tools as they are migrated to native protocol
 }
 

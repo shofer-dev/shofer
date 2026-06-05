@@ -180,6 +180,20 @@ export class ShoferProvider
 	private blockingChildResolvers: Map<string, (result: string) => void> = new Map()
 
 	/**
+	 * Peer sync resolvers: maps recipient task ID → pending sync request metadata.
+	 * Keyed by the RECIPIENT (the task that must call attempt_completion to answer),
+	 * and storing the initiator (the task that is blocked awaiting the answer) and
+	 * the resolve function. Used by both peer (sync send_message_to_task) and parent
+	 * (new_task) initiators; the AttemptCompletionTool routes by recipient taskId
+	 * and branches on whether the initiator is a peer or the structural parent.
+	 *
+	 * Exactly one sync prompt is in flight per recipient at a time; a second
+	 * concurrent sync request is rejected at registration time.
+	 */
+	private pendingSyncResolvers: Map<string, { initiatorTaskId: string; resolve: (result: string) => void }> =
+		new Map()
+
+	/**
 	 * Monotonically increasing sequence number for shoferMessages state pushes.
 	 * Used by the frontend to reject stale state that arrives out-of-order.
 	 */
@@ -4587,6 +4601,67 @@ export class ShoferProvider
 	 */
 	public registerBlockingChildResolver(childTaskId: string, resolver: (result: string) => void): void {
 		this.blockingChildResolvers.set(childTaskId, resolver)
+	}
+
+	/**
+	 * Register a peer sync resolver for a recipient task. Returns a Promise that
+	 * resolves with the recipient's attempt_completion result when answered.
+	 *
+	 * Rejects if a sync resolver is already registered for this recipient
+	 * (exactly one sync prompt per recipient at a time).
+	 */
+	public registerPendingSyncResolver(recipientTaskId: string, initiatorTaskId: string): Promise<string> {
+		if (this.pendingSyncResolvers.has(recipientTaskId)) {
+			return Promise.reject(
+				new Error(
+					`Task ${recipientTaskId} is already serving a sync request and cannot accept another until it completes.`,
+				),
+			)
+		}
+		return new Promise<string>((resolve) => {
+			this.pendingSyncResolvers.set(recipientTaskId, { initiatorTaskId, resolve })
+		})
+	}
+
+	/**
+	 * Check if a pending sync resolver exists for the given recipient task ID.
+	 */
+	public hasPendingSyncResolver(recipientTaskId: string): boolean {
+		return this.pendingSyncResolvers.has(recipientTaskId)
+	}
+
+	/**
+	 * Clear a pending sync resolver without firing it (timeout/abort path).
+	 */
+	public clearPendingSyncResolver(recipientTaskId: string): void {
+		this.pendingSyncResolvers.delete(recipientTaskId)
+	}
+
+	/**
+	 * Resolve a pending sync request for a recipient and deliver the result to the initiator.
+	 * Returns true if a sync (peer) resolver was found and fired; false if only a blocking-child
+	 * resolver (parent/child) was handled, or if no resolver was found.
+	 *
+	 * This is the generalized routing point called by AttemptCompletionTool — it checks
+	 * peer sync resolvers first, then falls through to the existing parent/child path.
+	 */
+	public async resolvePendingSyncForRecipient(params: {
+		recipientTaskId: string
+		completionResult: string
+	}): Promise<boolean> {
+		const { recipientTaskId, completionResult } = params
+
+		const peerEntry = this.pendingSyncResolvers.get(recipientTaskId)
+		if (peerEntry) {
+			this.pendingSyncResolvers.delete(recipientTaskId)
+			this.debug(
+				`[resolvePendingSyncForRecipient] peer path: recipientTaskId=${recipientTaskId} → initiator=${peerEntry.initiatorTaskId}`,
+			)
+			peerEntry.resolve(completionResult)
+			return true
+		}
+
+		return false
 	}
 
 	/**

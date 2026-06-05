@@ -41,6 +41,13 @@ interface DelegationProvider {
 		childTaskId: string
 		completionResult: string
 	}): Promise<boolean>
+	/**
+	 * Peer sync completion routing. Checks pendingSyncResolvers and fires
+	 * the resolver if a sync initiator is waiting. Does NOT handle parent/child
+	 * delegation — the existing if (task.parentTaskId) block owns that path.
+	 * @returns true if a peer sync resolver was found and fired; false otherwise.
+	 */
+	resolvePendingSyncForRecipient(params: { recipientTaskId: string; completionResult: string }): Promise<boolean>
 	updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]>
 	taskManager?: {
 		getManagedTaskInstance?(taskId: string): Task | undefined
@@ -165,6 +172,34 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			taskLog.info(
 				`[AttemptCompletionTool.execute] Checking delegation: taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}`,
 			)
+
+			// Peer sync check: fire a pending peer sync resolver if one exists.
+			// This is independent of parent/child delegation — the two resolver maps
+			// are mutually exclusive (enforced at registration time).
+			const provider2 = task.providerRef.deref() as DelegationProvider | undefined
+			if (provider2?.resolvePendingSyncForRecipient) {
+				try {
+					const peerHandled = await provider2.resolvePendingSyncForRecipient({
+						recipientTaskId: task.taskId,
+						completionResult: effectiveResult,
+					})
+
+					if (peerHandled) {
+						// Peer sync path: resolver fired, no stack manipulation needed.
+						// The peer initiator is elsewhere in the task tree.
+						taskLog.info(`[AttemptCompletionTool.execute] Peer sync resolved: taskId=${task.taskId}`)
+						pushToolResult("")
+						this.emitTaskCompleted(task, effectiveRating)
+						task.abort = true
+						return
+					}
+				} catch (err) {
+					taskLog.error(
+						`[AttemptCompletionTool] resolvePendingSyncForRecipient failed for ${task.taskId}: ${(err as Error)?.message ?? String(err)}`,
+					)
+					// Fall through to existing delegation logic / normal completion.
+				}
+			}
 
 			// Check for subtask using parentTaskId (metadata-driven delegation)
 			if (task.parentTaskId) {

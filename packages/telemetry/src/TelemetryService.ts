@@ -343,6 +343,18 @@ export class TelemetryService {
 	 * Aggregated across all files in a single batch to keep cardinality
 	 * bounded and avoid leaking individual file paths to telemetry.
 	 */
+	public capturePeerMessageSent(taskId: string, properties?: Record<string, string | number>): void {
+		this.captureEvent(TelemetryEventName.TASK_PEER_MESSAGE_SENT, { taskId, ...properties })
+	}
+
+	public capturePeerMessageReceived(taskId: string, properties?: Record<string, string | number>): void {
+		this.captureEvent(TelemetryEventName.TASK_PEER_MESSAGE_RECEIVED, { taskId, ...properties })
+	}
+
+	public capturePeerDiscovery(taskId: string): void {
+		this.captureEvent(TelemetryEventName.TASK_PEER_DISCOVERY, { taskId })
+	}
+
 	public captureCodeIndexSegmentDedup(properties: {
 		fileCount: number
 		totalBlocks: number

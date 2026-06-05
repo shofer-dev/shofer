@@ -38,10 +38,39 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		const { task_id } = params
 		const { askApproval, pushToolResult } = callbacks
 
-		// Check if task is tracked by this parent.
+		// Gate: accept direct children (fast path) OR same-root peers.
 		const handle = task.backgroundChildren.get(task_id)
-		if (!handle) {
-			pushToolResult(formatResponse.toolError(`Task ${task_id} not found in background children`))
+		const isDirectChild = !!handle
+		let isPeer = false
+
+		if (!isDirectChild) {
+			// Check if the task_id shares the caller's rootTaskId.
+			if (task.rootTaskId) {
+				const provider = task.providerRef.deref()
+				if (provider) {
+					try {
+						const { historyItem } = await provider.getTaskWithId(task_id)
+						if (historyItem.rootTaskId === task.rootTaskId) {
+							isPeer = true
+						}
+					} catch {
+						// Check live instance.
+						const live = provider.taskManager.getManagedTaskInstance(task_id)
+						if (live && live.rootTaskId === task.rootTaskId) {
+							isPeer = true
+						}
+					}
+				}
+			}
+
+			// Respect opt-in scope restriction.
+			if (isPeer && task.knownPeers && !task.knownPeers.has(task_id)) {
+				isPeer = false
+			}
+		}
+
+		if (!isDirectChild && !isPeer) {
+			pushToolResult(formatResponse.toolError(`Task ${task_id} not found in background children or peers.`))
 			return
 		}
 
@@ -85,49 +114,62 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			return
 		}
 
-		// Authoritative-status resolution order (see WaitForTaskTool for rationale):
-		//   1. `handle.status` if already terminal — AttemptCompletionTool marks
-		//      background children "completed" before the managed instance is
-		//      cleaned up, and live-instance inspection would incorrectly
-		//      downgrade that to "running".
-		//   2. Persisted HistoryItem.status — survives process restarts.
-		//   3. Live managed Task instance — only consulted when no terminal
-		//      verdict is available from (1) or (2).
-		if (
-			handle.status !== "completed" &&
-			handle.status !== "error" &&
-			handle.status !== "cancelled" &&
-			handle.status !== "waiting_for_parent"
-		) {
-			// Authoritative-status resolution order:
-			//   1. In-memory TaskManager state (set synchronously by lifecycle events)
-			//   2. Persisted HistoryItem snapshot (fallback when no managed entry exists)
-			//   3. Live managed Task instance (taskStatus-derived heuristic)
-			let resolvedFromLive = false
-			const liveState = provider.taskManager.getTaskState(task_id)
-			if (liveState?.lifecycle === "completed") {
-				handle.status = "completed"
-				resolvedFromLive = true
-			}
+		// For direct children, resolve status from the handle.
+		// For peers, resolve from the live / persisted state directly.
+		let effectiveStatus: BackgroundTaskStatus = "running"
 
-			if (!resolvedFromLive) {
-				try {
-					const { historyItem } = await provider.getTaskWithId(task_id)
-					if (historyItem.taskState?.lifecycle === "completed") {
-						handle.status = "completed"
-						resolvedFromLive = true
+		if (isDirectChild && handle) {
+			// Authoritative-status resolution order (see WaitForTaskTool for rationale):
+			if (
+				handle.status !== "completed" &&
+				handle.status !== "error" &&
+				handle.status !== "cancelled" &&
+				handle.status !== "waiting_for_parent"
+			) {
+				let resolvedFromLive = false
+				const liveState = provider.taskManager.getTaskState(task_id)
+				if (liveState?.lifecycle === "completed") {
+					handle.status = "completed"
+					resolvedFromLive = true
+				}
+
+				if (!resolvedFromLive) {
+					try {
+						const { historyItem } = await provider.getTaskWithId(task_id)
+						if (historyItem.taskState?.lifecycle === "completed") {
+							handle.status = "completed"
+							resolvedFromLive = true
+						}
+					} catch (_) {
+						// No persisted history yet — fall through to live check.
 					}
-				} catch (_) {
-					// No persisted history yet — fall through to live check.
+				}
+
+				if (!resolvedFromLive) {
+					const liveTask = provider.taskManager.getManagedTaskInstance(task_id)
+					if (liveTask) {
+						handle.status = mapTaskStatusToBackground(liveTask.taskStatus)
+					} else {
+						handle.status = "error"
+					}
 				}
 			}
-
-			if (!resolvedFromLive) {
-				const liveTask = provider.taskManager.getManagedTaskInstance(task_id)
-				if (liveTask) {
-					handle.status = mapTaskStatusToBackground(liveTask.taskStatus)
-				} else {
-					handle.status = "error"
+			effectiveStatus = handle.status
+		} else {
+			// Peer path: resolve status from live/persisted state.
+			let resolved = false
+			const liveState = provider.taskManager.getTaskState(task_id)
+			if (liveState) {
+				effectiveStatus = liveState.lifecycle === "completed" ? "completed" : "running"
+				resolved = true
+			}
+			if (!resolved) {
+				try {
+					const { historyItem } = await provider.getTaskWithId(task_id)
+					const lc = historyItem.taskState?.lifecycle
+					effectiveStatus = lc === "completed" ? "completed" : lc === "error" ? "error" : "running"
+				} catch {
+					effectiveStatus = "error"
 				}
 			}
 		}
@@ -138,9 +180,8 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 
 		const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
 
-		if (handle.status === "completed" || handle.status === "error" || handle.status === "cancelled") {
+		if (effectiveStatus === "completed" || effectiveStatus === "error" || effectiveStatus === "cancelled") {
 			const messages = await readTaskMessages({ taskId: task_id, globalStoragePath })
-			// Find the last completion or error message
 			for (let i = messages.length - 1; i >= 0; i--) {
 				const msg = messages[i]
 				if (msg.type === "say" && msg.say === "completion_result") {
@@ -207,7 +248,7 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		}
 
 		pushToolResult(
-			`Task: ${task_id}\nMode: ${modeDisplayName}\nStatus: ${handle.status}\n` +
+			`Task: ${task_id}\nMode: ${modeDisplayName}\nStatus: ${effectiveStatus}\n` +
 				(result ? `Result: ${result.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : "") +
 				(errorText ? `Error: ${errorText.slice(0, MAX_SUBTASK_RESULT_LENGTH)}\n` : "") +
 				(recentActivity ? `\n${recentActivity}` : "") +

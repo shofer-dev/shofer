@@ -113,8 +113,8 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 				filteredResults = searchResults.filter((r) => {
 					const authorDate = r.payload.author_date
 					if (!authorDate) return false
-					if (since !== undefined && authorDate < since) return false
-					if (until !== undefined && authorDate > until) return false
+					if (since != null && authorDate < since) return false
+					if (until != null && authorDate > until) return false
 					return true
 				})
 

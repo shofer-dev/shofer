@@ -21,6 +21,7 @@ interface NewTaskParams {
 	task_id?: string
 	softResultLength?: number
 	softTimeoutSec?: number
+	peer_task_ids?: string[] | null
 }
 
 /** Hard safety cap for subtask completion result length, in characters. */
@@ -242,6 +243,29 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					parentTaskId: task.taskId,
 				})
 
+				// Dynamic-add: if the spawner has a knownPeers restriction, the
+				// spawned child is automatically added so the spawner can message it.
+				if (task.knownPeers) {
+					task.knownPeers.add(child.taskId)
+				}
+
+				// Apply peer_task_ids restriction to the spawned child.
+				if (params.peer_task_ids && params.peer_task_ids.length > 0) {
+					// Validate all peer_task_ids share the spawner's rootTaskId.
+					for (const peerId of params.peer_task_ids) {
+						const peerLive = provider.taskManager.getManagedTaskInstance(peerId)
+						if (peerLive && peerLive.rootTaskId !== task.rootTaskId) {
+							pushToolResult(
+								formatResponse.toolError(
+									`peer_task_ids validation: task ${peerId} does not share your root task.`,
+								),
+							)
+							return
+						}
+					}
+					child.knownPeers = new Set<string>([...params.peer_task_ids, task.taskId])
+				}
+
 				pushToolResult(`Child task started: ${child.taskId}\nStatus: starting`)
 				return
 			} else {
@@ -273,6 +297,17 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 				// Register resolver after createTask so we have the child's taskId.
 				// The child runs asynchronously, so registration completes before any
+				// Peer sync collision check before registration: a task
+				// cannot simultaneously be a blocking child AND a peer sync target.
+				if (provider.hasPendingSyncResolver?.(child.taskId)) {
+					pushToolResult(
+						formatResponse.toolError(
+							`Task ${child.taskId} is already serving a sync request and cannot accept another until it completes.`,
+						),
+					)
+					return
+				}
+
 				// attempt_completion could fire.
 				provider.registerBlockingChildResolver(child.taskId, resolveChildCompletion)
 

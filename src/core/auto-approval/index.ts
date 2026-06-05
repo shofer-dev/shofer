@@ -201,6 +201,15 @@ export async function checkAutoApproval({
 			return state.alwaysAllowSubtasks === true ? { decision: "approve" } : { decision: "ask" }
 		}
 
+		// sendMessageToTask: async is always approved (fire-and-forget); sync is gated.
+		if ((tool?.tool as string) === "sendMessageToTask") {
+			const isSync = (tool as any).wait === true
+			if (!isSync) {
+				return { decision: "approve" }
+			}
+			return state.alwaysAllowSubtasks === true ? { decision: "approve" } : { decision: "ask" }
+		}
+
 		// Background-task status tools are purely informational queries against in-memory
 		// state owned by the parent task. They mutate nothing, so they are always auto-approved
 		// — matching the UX of `updateTodoList` / `skill`.
