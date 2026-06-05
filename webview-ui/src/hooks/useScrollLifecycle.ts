@@ -72,10 +72,6 @@ export interface UseScrollLifecycleOptions {
 	 *  The caller is responsible for snapshoting and restoring scrollTop
 	 *  per task (externally, via the Virtuoso's scrollable element). */
 	skipHydration?: boolean
-	/** Scroll position to restore after the Virtuoso mounts for this task.
-	 *  When provided, the hook will schedule a deferred scrollTo to this
-	 *  scrollTop after the Virtuoso layout is ready. */
-	restoreScrollTop?: number | null
 }
 
 export interface UseScrollLifecycleReturn {
@@ -103,7 +99,6 @@ export function useScrollLifecycle({
 	isHidden,
 	hasTask,
 	skipHydration = false,
-	restoreScrollTop = null,
 }: UseScrollLifecycleOptions): UseScrollLifecycleReturn {
 	// --- Mounted guard ---
 	const isMountedRef = useRef(true)
@@ -186,7 +181,7 @@ export function useScrollLifecycle({
 			type: "webviewLog",
 			text:
 				`[scroll:taskSwitch] prevTs=${prevTs ?? "none"} taskTs=${taskTs ?? "none"} ` +
-				`skipHydration=${skipHydration} restoreScrollTop=${restoreScrollTop} → phase=${nextPhase}`,
+				`skipHydration=${skipHydration} → phase=${nextPhase}`,
 		})
 	}
 
@@ -194,20 +189,23 @@ export function useScrollLifecycle({
 	// Phase transitions
 	// -----------------------------------------------------------------------
 
-	const transitionScrollPhase = useCallback((nextPhase: ScrollPhase, _reason?: string) => {
-		if (scrollPhaseRef.current === nextPhase) {
-			return
-		}
-		const prev = scrollPhaseRef.current
-		scrollPhaseRef.current = nextPhase
-		setScrollPhase(nextPhase)
-		vscode.postMessage({
-			type: "webviewLog",
-			text:
-				`[scroll:phase] ${prev} → ${nextPhase} ` +
-				`reason=${_reason ?? "?"} taskTs=${taskTs} isAtBottom=${isAtBottomRef.current}`,
-		})
-	}, [taskTs])
+	const transitionScrollPhase = useCallback(
+		(nextPhase: ScrollPhase, _reason?: string) => {
+			if (scrollPhaseRef.current === nextPhase) {
+				return
+			}
+			const prev = scrollPhaseRef.current
+			scrollPhaseRef.current = nextPhase
+			setScrollPhase(nextPhase)
+			vscode.postMessage({
+				type: "webviewLog",
+				text:
+					`[scroll:phase] ${prev} → ${nextPhase} ` +
+					`reason=${_reason ?? "?"} taskTs=${taskTs} isAtBottom=${isAtBottomRef.current}`,
+			})
+		},
+		[taskTs],
+	)
 
 	// -----------------------------------------------------------------------
 	// Scroll commands
@@ -456,44 +454,6 @@ export function useScrollLifecycle({
 			cancelReanchorFrame()
 		}
 	}, [cancelReanchorFrame, clearHydrationWindow, skipHydration, startHydrationWindow, taskTs, transitionScrollPhase])
-
-	// When skipHydration is set and restoreScrollTop is provided, schedule a
-	// deferred scroll-to-position after the Virtuoso has mounted and laid out.
-	useEffect(() => {
-		if (!skipHydration || restoreScrollTop === null || restoreScrollTop === undefined) {
-			return
-		}
-
-		const scroller = scrollContainerRef.current?.querySelector(".scrollable") as HTMLElement | null
-		if (!scroller) {
-			vscode.postMessage({
-				type: "webviewLog",
-				text: `[scroll:restore] SKIP — no scroller element taskTs=${taskTs}`,
-			})
-			return
-		}
-
-		// Defer past the current microtask to let the Virtuoso finish mounting
-		// and its internal layout calculations settle.
-		let cancelled = false
-		requestAnimationFrame(() => {
-			requestAnimationFrame(() => {
-				if (cancelled) return
-				vscode.postMessage({
-					type: "webviewLog",
-					text:
-						`[scroll:restore] scrollTo top=${restoreScrollTop} ` +
-						`current=${scroller.scrollTop} scrollerHeight=${scroller.scrollHeight} ` +
-						`taskTs=${taskTs}`,
-				})
-				scroller.scrollTo({ top: restoreScrollTop, behavior: "instant" })
-			})
-		})
-
-		return () => {
-			cancelled = true
-		}
-	}, [restoreScrollTop, scrollContainerRef, skipHydration, taskTs])
 
 	// -----------------------------------------------------------------------
 	// Row height change handler
