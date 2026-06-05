@@ -1,5 +1,7 @@
 # Inter-Task Peer Messaging
 
+> **Status:** ✅ Implemented in Shofer v1.0.84. The core `send_message_to_task` tool, scope-relaxed peer tools (`check_task_status`, `wait_for_task`, `list_background_tasks` with `scope=peers`), `peer_task_ids` opt-in restrictor, and telemetry are all wired and compile clean. See [Remaining & Future Items](#remaining--future-items) for known gaps.
+
 Design for direct communication between tasks sharing the same root task, enabling A2A-style collaboration without routing through the parent.
 
 ## Motivation
@@ -522,15 +524,24 @@ Rejected at scope validation: `target.rootTaskId !== caller.rootTaskId`.
 
 ---
 
-## Gaps & Future Work
+## Remaining & Future Items
 
-1. **Ephemerality of Form A notifications:** Async messages delivered to a _busy_ recipient via Form A (system-prompt injection) are not persisted in the recipient's message history — if the API call fails and retries, the message is re-injected, and if the recipient never generates another turn it is lost. (Form B deliveries do enter the message queue and are far more robust.) A future iteration could persist Form A notifications too.
+### Known gaps (v1.0.84)
+
+1. **Async messages to resumable-but-unloaded peers are lost.** If a peer has no live `Task` instance but persisted history showing it is resumable (`completed`/`idle`/`paused`/`waiting_input`/`waiting` lifecycle), the async delivery code has no `messageQueueService` to enqueue into — the message cannot be persisted for rehydration. The tool still reports "Message sent" (the sender isn't lied to in the sense that it was genuinely dispatched, but the recipient won't see it until its task is manually resumed from history). Sync mode correctly rejects in this case. A future iteration could persist Form B messages alongside the task's message history so they are re-enqueued on restore.
 
 2. **No broadcast mechanism.** Sending to multiple peers requires multiple `send_message_to_task` calls. A `broadcast_to_peers` variant could reduce round-trips but adds complexity (partial failures, fan-out semantics). Defer.
 
 3. **No message TTL beyond sync timeout.** A Form B async message queued for a paused/idle peer that is never resumed could linger in the queue indefinitely. A TTL parameter (e.g., "discard if not drained within N seconds") would be useful for time-sensitive notifications.
 
 4. **No read receipts.** The sender of an async message has no way to know if/when the recipient actually processed it. For fire-and-forget notifications this is fine; for coordination it may be desirable.
+
+5. **Ephemerality of Form A notifications (unchanged).** Form A messages are not persisted — if the recipient never generates another API call, the notification is silently lost. Form B deliveries are more robust.
+
+### Implementation notes
+
+- **`ShoferSayTool` + `ChatRow` (native_tools.md Steps 8-9):** Not implemented — `send_message_to_task` uses the raw `askApproval("tool", JSON.stringify({tool: "sendMessageToTask", …}))` path, which produces a generic chat row. A custom `ChatRow` renderer would be a UX improvement.
+- **i18n:** Tool-result error/confirmation strings use `formatResponse.toolError()` — consistent with all other tool handlers. The PEER MESSAGE / PEER PROMPT body text is agent-facing system text and is exempt per the design.
 
 ---
 
