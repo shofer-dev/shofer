@@ -20,6 +20,7 @@ import { ShoferEventName } from "@shofer/types"
 import { Task, type TaskOptions } from "../task/Task"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { workflowLog } from "../../utils/logging/subsystems"
+import { waitForTasksEventDriven } from "./wait-for-task-helper"
 
 import {
 	type AgentState,
@@ -92,33 +93,6 @@ function coerceParam(raw: string, type: string): unknown {
 		default:
 			return raw
 	}
-}
-
-/** Refs that denote wildcards / external sinks rather than peer agents. */
-const NON_PEER_REFS = new Set(["out", "all", "any", "*", "human"])
-
-/**
- * Names of the peer agents an agent communicates with, derived from the flow's
- * declared topology: every agent it stakes to (sends work) or awaits from
- * (consumes output), recursively through when/repeat control flow. Wildcards
- * and external sinks (@out, @all, @any, @Human) are excluded.
- */
-function getCommunicationPeers(agent: UpstreamAgentDecl): Set<string> {
-	const peers = new Set<string>()
-	const walk = (op: Operation): void => {
-		if (op.type === "StakeOp") {
-			for (const r of op.recipients) if (!NON_PEER_REFS.has(r.ref)) peers.add(r.ref)
-		} else if (op.type === "AwaitOp") {
-			for (const s of op.sources) if (!NON_PEER_REFS.has(s.ref)) peers.add(s.ref)
-		} else if (op.type === "WhenBlock") {
-			for (const inner of op.body) walk(inner)
-			if (op.elseBlock) for (const inner of op.elseBlock.body) walk(inner)
-		} else if (op.type === "RepeatBlock") {
-			for (const inner of op.body) walk(inner)
-		}
-	}
-	for (const op of agent.operations) walk(op)
-	return peers
 }
 
 // ── Compiled instruction model ──
@@ -940,18 +914,21 @@ export class WorkflowTask extends Task {
 		return prompt
 	}
 
-	/** Peer agent tasks an agent may query directly via send_message_to_task.
+	/**
+	 * Peer agent tasks an agent may query directly via send_message_to_task.
 	 *
-	 * Derived from the flow's declared communication topology: an agent may
-	 * directly query any live peer it stakes to or awaits from, regardless of
-	 * mode. This keeps direct-query access aligned with the edges the workflow
-	 * author actually declared rather than an arbitrary mode allowlist. */
+	 * Derived exclusively from the agent's declared `peers:` list (WI2) — the
+	 * authoritative source for direct-message grants. When no `peers:` are
+	 * declared, returns an empty array (prompt and `knownPeers` are both empty
+	 * for direct-message peers — the agent can only reach parent + own children).
+	 */
 	private getPeerResources(agentName: string): Array<{ name: string; taskId: string; role: string }> {
 		const decl = getAgentDecls(this.flowDecl).find((a) => a.name === agentName)
 		if (!decl) return []
-		const peerNames = getCommunicationPeers(decl)
+		const declaredPeers = decl.meta.peers
+		if (!declaredPeers || declaredPeers.length === 0) return []
 		const resources: Array<{ name: string; taskId: string; role: string }> = []
-		for (const peerName of peerNames) {
+		for (const peerName of declaredPeers) {
 			if (peerName === agentName) continue
 			const agentState = this.flowState.agents.get(peerName)
 			if (!agentState || !agentState.taskId || agentState.status === "committed") continue
@@ -1056,6 +1033,34 @@ export class WorkflowTask extends Task {
 					)
 				}
 				agentState.taskId = task.taskId
+
+				// Set knownPeers from declared peers: grant.
+				// Baseline: parent (workflow root) is always permitted.
+				const peerSet = new Set<string>([this.taskId])
+				const declaredPeers = agentDecl.meta.peers
+				if (declaredPeers && declaredPeers.length > 0) {
+					for (const peerName of declaredPeers) {
+						const peerState = this.flowState.agents.get(peerName)
+						if (peerState?.taskId) {
+							peerSet.add(peerState.taskId)
+						}
+					}
+				}
+				task.knownPeers = peerSet
+
+				// Back-fill: this agent's taskId into the knownPeers of any
+				// already-live agent that declared it as a peer.
+				for (const [otherName, otherState] of this.flowState.agents) {
+					if (otherName === agentName || !otherState.taskId) continue
+					const otherDecl = getAgentDecls(this.flowDecl).find((a) => a.name === otherName)
+					if (otherDecl?.meta.peers?.includes(agentName)) {
+						const otherTask = provider.taskManager.getManagedTaskInstance(otherState.taskId)
+						if (otherTask?.knownPeers) {
+							otherTask.knownPeers.add(task.taskId)
+						}
+					}
+				}
+
 				workflowLog.info(
 					`[WorkflowTask#${this.taskId}] Spawned agent '${agentName}' (mode='${mode}') as task ${task.taskId}`,
 				)
@@ -1108,7 +1113,16 @@ export class WorkflowTask extends Task {
 
 	// ── Wait & collect ──
 
-	/** Poll spawned agent tasks until they all reach a terminal lifecycle or timeout. */
+	/**
+	 * Wait for dispatched agent tasks using the shared event-driven helper
+	 * (same primitive used by {@link WaitForTaskTool}).
+	 *
+	 * Also handles routed agent questions (WI4): when a child's
+	 * `ask_followup_question` routes up to the WorkflowTask (parent),
+	 * the helper calls {@link relayChildQuestion} to surface it to the
+	 * user via `this.ask("followup", …)` and delivers the answer back
+	 * through the `answer_subtask_question` path.
+	 */
 	private async waitForStakes(names: string[]): Promise<void> {
 		const provider = this.providerRef.deref()
 		if (!provider) return
@@ -1125,62 +1139,99 @@ export class WorkflowTask extends Task {
 			`[WorkflowTask#${this.taskId}] #TRACE waitForStakes: waiting for ${taskIds.length} task(s): ${taskIds.join(", ")}`,
 		)
 
-		const startTime = Date.now()
-		let pollCount = 0
-		while (Date.now() - startTime < AGENT_RESULT_TIMEOUT_MS && !this.abort) {
-			pollCount++
-			let allDone = true
-			const statuses: string[] = []
-			for (const taskId of taskIds) {
-				const handle = this.backgroundChildren.get(taskId)
-				// Check the in-memory ManagedTask state first — it is set
-				// synchronously by TaskManager in response to TaskCompleted/
-				// TaskAborted events and is the authoritative source.
-				// The persisted HistoryItem.taskState is a reliable fallback
-				// now that the single-writer violation in AttemptCompletionTool
-				// has been fixed (Phase 1 of state_simplification.md).
-				const managedState = provider.taskManager.getTaskState(taskId)
-				const liveLc =
-					managedState?.lifecycle === "completed" || managedState?.lifecycle === "error"
-						? managedState.lifecycle
-						: undefined
-				let lc: string | undefined = liveLc
-				let source = "live"
-
-				if (liveLc === "completed" || liveLc === "error") {
-					// Live task already terminal — use it directly, no history call needed.
-				} else {
-					try {
-						const { historyItem } = await provider.getTaskWithId(taskId)
-						lc = historyItem.taskState?.lifecycle
-						source = "persisted"
-					} catch {
-						lc = "fetch_error"
-						source = "error"
-					}
-				}
-
-				statuses.push(`${taskId.slice(-6)}=${lc || "undefined"}(${source})`)
-				if (lc === "completed") {
-					if (handle) handle.status = "completed"
-				} else if (lc === "error") {
-					if (handle) handle.status = "error"
-				} else {
-					allDone = false
-				}
-			}
-			if (pollCount === 1 || pollCount % 10 === 0 || allDone) {
-				workflowLog.info(
-					`[WorkflowTask#${this.taskId}] #TRACE waitForStakes poll#${pollCount} allDone=${allDone} lifecycles=[${statuses.join(", ")}]`,
-				)
-			}
-			if (allDone) break
-			await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+		const handles = new Map<string, TaskHandle>()
+		for (const taskId of taskIds) {
+			const handle = this.backgroundChildren.get(taskId)
+			if (handle) handles.set(taskId, handle)
 		}
+		if (handles.size === 0) return
+
+		const isTerminal = (id: string) => {
+			const h = handles.get(id)!
+			return h.status === "completed" || h.status === "error" || h.status === "cancelled"
+		}
+
+		// Preseed with persisted state for tasks that may have completed
+		// between rounds (the event already fired).
+		for (const [taskId, handle] of handles) {
+			if (!isTerminal(taskId)) {
+				const managedState = provider.taskManager.getTaskState(taskId)
+				if (managedState?.lifecycle === "completed") {
+					handle.status = "completed"
+				} else if (managedState?.lifecycle === "error") {
+					handle.status = "error"
+				}
+			}
+		}
+
+		const startTime = Date.now()
+		await waitForTasksEventDriven(provider, {
+			handles,
+			conditionMet: () => [...handles.keys()].every((id) => isTerminal(id)),
+			timeoutMs: AGENT_RESULT_TIMEOUT_MS,
+			abortSignal: this.abortSignal,
+			onNeedsParentInput: async (childTaskId: string) => {
+				// WI4: Relay the child's question to the user, then deliver
+				// the answer via answer_subtask_question.
+				return this.relayChildQuestion(childTaskId)
+			},
+		})
+
 		const elapsed = Date.now() - startTime
+		const statuses = [...handles.entries()].map(([id, h]) => `${id.slice(-6)}=${h.status}`)
 		workflowLog.info(
-			`[WorkflowTask#${this.taskId}] #TRACE waitForStakes done — elapsed=${elapsed}ms polls=${pollCount}`,
+			`[WorkflowTask#${this.taskId}] #TRACE waitForStakes done — elapsed=${elapsed}ms statuses=[${statuses.join(", ")}]`,
 		)
+	}
+
+	/**
+	 * Relay a routed child question (from {@link AskFollowupQuestionTool})
+	 * to the user via {@link Task.ask}, then deliver the answer back
+	 * through the {@link AnswerSubtaskQuestionTool} path.
+	 *
+	 * This is WI4: the WorkflowTask acts as a relay, surfacing the
+	 * question in WorkflowView and piping the answer back to the child,
+	 * exactly as a parent LLM would.
+	 *
+	 * Returns true if the question was answered, false if the child was
+	 * not in question-awaiting state or the relay failed.
+	 */
+	private async relayChildQuestion(childTaskId: string): Promise<boolean> {
+		const provider = this.providerRef.deref()
+		if (!provider) return false
+
+		const liveInstance = provider.taskManager.getManagedTaskInstance(childTaskId)
+		if (!liveInstance) return false
+
+		const pendingQuestion = liveInstance.getPendingParentQuestion()
+		if (!pendingQuestion) return false
+
+		// Emit followup ask as the SAME JSON shape AskFollowupQuestionTool
+		// sends (line 43): { question, suggest: [{ answer, mode }] }.
+		// ChatRow.tsx:528 parses followup asks with safeJsonParse<FollowUpData>,
+		// so a plain string would render degraded and lose suggestion buttons.
+		const followUpJson = {
+			question: `Agent asked:\n> ${pendingQuestion.question}\n\nYour answer:`,
+			suggest: pendingQuestion.suggestions.map((s) => ({ answer: s.answer, mode: s.mode })),
+		}
+
+		workflowLog.info(
+			`[WorkflowTask#${this.taskId}] Relaying child question from task ${childTaskId}: "${pendingQuestion.question}"`,
+		)
+
+		// Block the executor on the user's answer — sibling agents keep
+		// running in their own task loops; only the workflow's wait phase
+		// is paused.
+		const { text } = await this.ask("followup", JSON.stringify(followUpJson))
+		const answer = text ?? ""
+
+		workflowLog.info(`[WorkflowTask#${this.taskId}] Relay answer for task ${childTaskId} (${answer.length} chars)`)
+
+		// Deliver the answer via answer_subtask_question path —
+		// resolvePendingParentQuestion settles the Promise the child
+		// is awaiting in AskFollowupQuestionTool.execute.
+		liveInstance.resolvePendingParentQuestion(answer)
+		return true
 	}
 
 	/**
