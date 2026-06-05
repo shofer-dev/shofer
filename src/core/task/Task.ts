@@ -2748,29 +2748,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// More performant than an entire `postStateToWebview`.
 					this.updateShoferMessage(lastMessage)
 				} else {
-					// It's possible the streaming partial (partial=true) was
-					// delivered via a previous `say` call but a tool-result or
-					// other message was inserted between the partial and this
-					// finalisation call, defeating `isUpdatingPreviousPartial`.
-					// Walk backwards past intervening non-say messages.
-					let prevSayIdx = this.shoferMessages.length - 1
-					while (prevSayIdx >= 0) {
-						const m = this.shoferMessages[prevSayIdx]
-						if (m.type === "say" && m.say === type) {
-							break
-						}
-						prevSayIdx--
-					}
-					if (prevSayIdx >= 0 && this.shoferMessages[prevSayIdx].text === text) {
-						const prevSay = this.shoferMessages[prevSayIdx]
-						prevSay.partial = false
-						prevSay.progressStatus = progressStatus
-						if (images) {
-							prevSay.images = images
-						}
-						this.updateShoferMessage(prevSay)
-						return
-					}
+					// This is a new and complete message, so add it like normal.
 					// Fall through: genuinely new message.
 					const sayTs = Date.now()
 
