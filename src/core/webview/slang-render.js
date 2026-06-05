@@ -524,6 +524,13 @@ function compileSequenceSVG(flow, agentNames) {
 	var COL_W = 220,
 		STEP_H = 50,
 		TOP_PAD = 60
+
+	// Extract all inter-agent events with source-agent context.
+	// Each event carries the layer of its source agent (from dagre topology).
+	var rawEdges = buildGraphEdges(flow)
+	var dagreResult = applyDagreLayout(agentNames, rawEdges)
+	var layers = dagreResult.layers
+
 	var timelineEvents = []
 
 	for (var ai = 0; ai < (flow.body || []).length; ai++) {
@@ -531,11 +538,9 @@ function compileSequenceSVG(flow, agentNames) {
 		if (agent.type !== "AgentDecl") continue
 		var from = agent.name
 
-		function extractTimeline(ops, depth) {
+		function extractTimeline(ops, layerFrom, depth) {
 			if (!ops) return
 			depth = depth || 0
-			// Only recurse into conditionals/loops one level deep to avoid
-			// exploding the timeline with duplicate inner-body events.
 			var maxDepth = 1
 			for (var i = 0; i < ops.length; i++) {
 				var op = ops[i]
@@ -546,8 +551,9 @@ function compileSequenceSVG(flow, agentNames) {
 							timelineEvents.push({
 								from: from,
 								to: to,
-								label: "stake " + (op.call ? op.call.name : ""),
+								label: op.call ? op.call.name : "",
 								type: "stake",
+								layer: layerFrom,
 							})
 					}
 				}
@@ -558,32 +564,46 @@ function compileSequenceSVG(flow, agentNames) {
 							timelineEvents.push({
 								from: src,
 								to: from,
-								label: "await " + (op.binding || ""),
+								label: op.binding || "",
 								type: "await",
+								layer: layers[src] || 0,
 							})
 						if (src === "Human")
-							timelineEvents.push({ from: "@Human", to: from, label: "user reply", type: "await" })
+							timelineEvents.push({
+								from: "@Human",
+								to: from,
+								label: "user reply",
+								type: "await",
+								layer: 0,
+							})
 					}
 				}
 				if (op.type === "EscalateOp") {
 					timelineEvents.push({
 						from: from,
 						to: "@Human",
-						label: "escalate (" + (op.reason || "approval") + ")",
+						label: op.reason || "approval",
 						type: "stake",
+						layer: layerFrom,
 					})
 				}
 				if (depth < maxDepth) {
 					if (op.type === "WhenBlock") {
-						extractTimeline(op.body, depth + 1)
-						if (op.elseBlock) extractTimeline(op.elseBlock.body, depth + 1)
+						extractTimeline(op.body, layerFrom, depth + 1)
+						if (op.elseBlock) extractTimeline(op.elseBlock.body, layerFrom, depth + 1)
 					}
-					if (op.type === "RepeatBlock") extractTimeline(op.body, depth + 1)
+					if (op.type === "RepeatBlock") extractTimeline(op.body, layerFrom, depth + 1)
 				}
 			}
 		}
-		extractTimeline(agent.operations)
+		extractTimeline(agent.operations, layers[from] || 0)
 	}
+
+	// Sort events by layer (topological dependency order), then by file order within layer.
+	timelineEvents.sort(function (a, b) {
+		if (a.layer !== b.layer) return a.layer - b.layer
+		return 0
+	})
 
 	var svgW = Math.max(600, columns.length * COL_W + MARGIN * 2)
 	var svgH = Math.max(400, timelineEvents.length * STEP_H + TOP_PAD + 100)
