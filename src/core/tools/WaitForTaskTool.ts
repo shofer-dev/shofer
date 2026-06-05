@@ -71,7 +71,7 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 					}
 				}
 				if (isPeer) {
-					if (task.knownPeers && !task.knownPeers.has(id)) {
+					if (!task.knownPeers || !task.knownPeers.has(id)) {
 						isPeer = false
 					}
 					if (isPeer) {

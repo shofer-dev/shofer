@@ -86,8 +86,8 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				}
 			}
 
-			// Check opt-in scope restriction.
-			if (task.knownPeers && !task.knownPeers.has(task_id)) {
+			// Check least-privilege peer scope: undefined ⇒ deny all.
+			if (!task.knownPeers || !task.knownPeers.has(task_id)) {
 				pushToolResult(formatResponse.toolError(`Task ${task_id} is not in your allowed peer set.`))
 				return
 			}
