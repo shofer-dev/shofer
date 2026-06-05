@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "1.0.80",
+	"version": "1.0.81",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -11,7 +11,7 @@
 	},
 	"engines": {
 		"vscode": "^1.84.0",
-		"node": "20.19.2"
+		"node": ">=20.19.2"
 	},
 	"author": {
 		"name": "Shofer"
@@ -764,7 +764,6 @@
 		"@mistralai/mistralai": "^1.9.18",
 		"@modelcontextprotocol/sdk": "1.14.0",
 		"@qdrant/js-client-rest": "^1.14.0",
-		"@riktar/slang": "github:riktar/slang",
 		"@shofer/core": "workspace:^",
 		"dagre": "0.8.5",
 		"@shofer/ipc": "workspace:^",
