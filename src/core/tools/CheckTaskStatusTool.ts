@@ -63,8 +63,8 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 				}
 			}
 
-			// Respect opt-in scope restriction.
-			if (isPeer && task.knownPeers && !task.knownPeers.has(task_id)) {
+			// Respect least-privilege peer scope: undefined ⇒ deny all.
+			if (isPeer && (!task.knownPeers || !task.knownPeers.has(task_id))) {
 				isPeer = false
 			}
 		}

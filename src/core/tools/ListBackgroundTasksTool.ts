@@ -42,8 +42,8 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 					}
 				}
 				if (task.rootTaskId && peerRootTaskId !== task.rootTaskId) continue
-				// Respect opt-in scope restriction.
-				if (task.knownPeers && !task.knownPeers.has(peerId)) continue
+				// Respect least-privilege peer scope: undefined ⇒ deny all.
+				if (!task.knownPeers || !task.knownPeers.has(peerId)) continue
 				tasks.push({
 					task_id: peerId,
 					title: managed.name ?? peerId,

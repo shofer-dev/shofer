@@ -225,10 +225,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	pendingPeerMessages: PendingPeerMessage[] = []
 
 	/**
-	 * Opt-in peer scope restriction. When set, peer tools only allow
-	 * communication with task IDs in this set (plus dynamically-added
-	 * children this task spawns). When undefined, full peer access
-	 * under the same rootTaskId.
+	 * Least-privilege peer scope restriction. Peer tools only allow
+	 * communication with task IDs present in this set. The baseline
+	 * always includes the parent (if any) and children this task spawns
+	 * (dynamically added). When undefined, no peer communication is
+	 * allowed at all — every peer-tool access is denied.
+	 *
+	 * Set explicitly by {@link NewTaskTool} at spawn time (baseline:
+	 * parent only) and extended by workflow agents via declared
+	 * `peers:` grants.
 	 */
 	knownPeers?: Set<string>
 

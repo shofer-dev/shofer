@@ -243,16 +243,22 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					parentTaskId: task.taskId,
 				})
 
-				// Dynamic-add: if the spawner has a knownPeers restriction, the
-				// spawned child is automatically added so the spawner can message it.
+				// Dynamic-add: add the spawned child's taskId to the spawner's
+				// knownPeers so the spawner can message it (least-privilege
+				// baseline — the spawner can reach parent + own children).
+				// When knownPeers is undefined (root user task with no peer grants),
+				// skip — the spawner does not participate in peer messaging.
 				if (task.knownPeers) {
 					task.knownPeers.add(child.taskId)
 				}
 
-				// Apply peer_task_ids restriction to the spawned child.
+				// Baseline knownPeers for the child: parent only (least-privilege default).
+				const childPeers = new Set<string>([task.taskId])
+
+				// Extend with peer_task_ids if explicitly granted.
 				if (params.peer_task_ids && params.peer_task_ids.length > 0) {
-					// Validate all peer_task_ids share the spawner's rootTaskId.
 					for (const peerId of params.peer_task_ids) {
+						// Validate all peer_task_ids share the spawner's rootTaskId.
 						const peerLive = provider.taskManager.getManagedTaskInstance(peerId)
 						if (peerLive && peerLive.rootTaskId !== task.rootTaskId) {
 							pushToolResult(
@@ -262,9 +268,10 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 							)
 							return
 						}
+						childPeers.add(peerId)
 					}
-					child.knownPeers = new Set<string>([...params.peer_task_ids, task.taskId])
 				}
+				child.knownPeers = childPeers
 
 				pushToolResult(`Child task started: ${child.taskId}\nStatus: starting`)
 				return
