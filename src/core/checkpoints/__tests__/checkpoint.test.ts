@@ -292,7 +292,6 @@ describe("Checkpoint functionality", () => {
 			})
 
 			expect(mockTask.enableCheckpoints).toBe(false)
-			expect(mockProvider.log).toHaveBeenCalledWith("[checkpointRestore] disabling checkpoints for this task")
 		})
 	})
 
@@ -401,7 +400,6 @@ describe("Checkpoint functionality", () => {
 			})
 
 			expect(mockTask.enableCheckpoints).toBe(false)
-			expect(mockProvider.log).toHaveBeenCalledWith("[checkpointDiff] disabling checkpoints for this task")
 		})
 	})
 
