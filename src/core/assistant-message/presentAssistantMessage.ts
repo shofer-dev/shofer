@@ -350,6 +350,20 @@ export async function presentAssistantMessage(shofer: Task) {
 				content = content.replace(/\s?<\/thinking>/g, "")
 			}
 
+			// Guard against the LLM stream re-delivering an already-presented
+			// text block at the same streaming content index.  When a block that
+			// was already complete arrives again as another partial=true chunk
+			// with identical content, skip it.
+			const contentKey = `${shofer.currentStreamingContentIndex}:${content}`
+			if (block.partial && contentKey === (shofer as any)._lastPresentedTextKey) {
+				break
+			}
+			if (block.partial) {
+				;(shofer as any)._lastPresentedTextKey = contentKey
+			} else {
+				delete (shofer as any)._lastPresentedTextKey
+			}
+
 			await shofer.say("text", content, undefined, block.partial)
 			break
 		}
