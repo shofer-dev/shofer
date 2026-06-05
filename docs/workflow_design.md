@@ -12,6 +12,10 @@ Design for the **Workflow** abstraction in Shofer: a container for coordinated T
 > ✅ FlowState persistence via HistoryItem (`isWorkflow`, `slangSource`, `flowState` fields)  
 > ✅ i18n (`plus.json` locale)  
 > ✅ Example workflow — [`.shofer/workflows/implement-feature.slang`](../../.shofer/workflows/implement-feature.slang)  
+> ✅ Least-privilege peer scope (`knownPeers` default-deny — `SendMessageToTaskTool`, `WaitForTaskTool`, `CheckTaskStatusTool`, `ListBackgroundTasksTool`)  
+> ✅ Declared peers in slang (`peers: [@Ref]` meta field — `slang-ast.ts`, parser, resolver, `WorkflowTask.spawnAgentTask`)  
+> ✅ Event-driven `waitForStakes` (shared [`wait-for-task-helper.ts`](../src/core/workflow/wait-for-task-helper.ts) with `WaitForTaskTool`)  
+> ✅ Question-routing relay (`WorkflowTask.relayChildQuestion` + `waitForTasksEventDriven`)  
 > 🔜 **Deferred**: Welcome View Redesign (Section §"Welcome View Redesign" below)  
 > 🔜 **Deferred**: TaskSelector/HistoryView WorkflowTask-aware adaptations
 
@@ -25,10 +29,12 @@ Design for the **Workflow** abstraction in Shofer: a container for coordinated T
 5. [Workflow Executor Design](#workflow-executor-design)
 6. [New Mode: "Implement a Feature"](#new-mode-implement-a-feature)
 7. [Agent-to-Task Dispatch](#agent-to-task-dispatch)
-8. [User Interaction](#user-interaction)
-9. [Open Design Questions](#open-design-questions)
-10. [Implementation Status](#implementation-status)
-11. [Related Documents](#related-documents)
+8. [Question Routing & the Executor (`ask_followup_question` / `answer_subtask_question`)](#question-routing--the-executor-ask_followup_question--answer_subtask_question)
+9. [Peer Scope — Least-privilege & Declared Peers](#peer-scope--least-privilege--declared-peers)
+10. [User Interaction](#user-interaction)
+11. [Open Design Questions](#open-design-questions)
+12. [Implementation Status](#implementation-status)
+13. [Related Documents](#related-documents)
 
 ---
 
@@ -593,7 +599,10 @@ async slangLoop():
      b. For each ready agent: resume/prompt its Task
         → agentTask.messageQueueService.addMessage(prompt)
         → Task's LLM loop wakes up and processes it
-     c. Call wait_for_task(all ready agent taskIds)
+     c. Wait (event-driven) for all ready agents via `waitForTasksEventDriven`:
+        - `managedTask:completed` / `managedTask:error` → terminal
+        - `managedTask:needs-parent-input` → relay child question to user
+          via `this.ask("followup", …)`, answer back via `resolvePendingParentQuestion`
      d. Collect attempt_completion results
      e. Route results to mailboxes (satisfy awaiting agents)
      f. Evaluate converge condition
@@ -687,6 +696,14 @@ agent Developer {
 ```
 
 Each knob controls a specific category of ambient context injected into the agent's system prompt at Task spawn time. The default values are agent-role-aware: shared-resource agents (Codebase, Internet) get minimal context; execution agents (Developer, Reviewer) get richer project context.
+
+> **⚠️ Future Item:** Currently [`spawnAgentTask()`](../src/core/workflow/WorkflowTask.ts) only consumes `mode:` (the Shofer mode slug) when creating agent Tasks. The fields `tools:`, `model:`, `role:`, `retry:`, and `context:` are **parsed** and stored on the AST but **not wired** into task creation. When wired:
+>
+> - **`tools:`** would restrict the spawned Task to only the listed ToolGroup names at spawn time (`provider.createTask(…, { toolGroups: […] })`), giving slang authors per-agent tool control without creating custom modes.
+> - **`model:`** would select the API Configuration profile by name, allowing different agents in the same workflow to use different models (e.g., Architect uses Claude, Developer uses GPT-4).
+> - **`role:`** would override the mode's `roleDefinition`, making the agent's system prompt fully self-describing in the `.slang` file rather than split between the slang source and the mode definition.
+> - **`retry:`** would set the max LLM-call retries per `stake`.
+> - **`context:`** (and its `include_agents_md` knob) would control what ambient project context is injected into the agent's system prompt at spawn time.
 
 ## Reusable Code from `@riktar/slang`
 
@@ -822,7 +839,7 @@ When the slang loop processes a `stake` operation for an agent:
 4. The Workflow's slang loop captures the response and feeds it as the `await` result.
 5. The agent Task **never knows** it was escalated — from its perspective, it receives the user's response as its next prompt.
 
-If an **agent Task** itself calls `ask_followup_question` (e.g., the Developer needs clarification), the existing [subtask question routing rule](../AGENTS.md#L26) applies: background children route to parent (the Workflow Task). The Workflow Task can answer via the existing `answer_subtask_question` mechanism.
+If an **agent Task** itself calls `ask_followup_question` (e.g., the Developer needs clarification), the existing [subtask question routing rule](../AGENTS.md#L26) applies: background children route to parent (the Workflow Task). The Workflow Task **relays** the question to the user and feeds the reply back through the unchanged `answer_subtask_question` path — see [Question Routing & the Executor](#question-routing--the-executor-ask_followup_question--answer_subtask_question).
 
 ### Agent lifecycle
 
@@ -925,6 +942,86 @@ This means earlier `stake` results are visible in the Task's message history as 
 
 ---
 
+## Question Routing & the Executor (`ask_followup_question` / `answer_subtask_question`)
+
+`ask_followup_question` has a single routing gate in
+[`AskFollowupQuestionTool`](../src/core/tools/AskFollowupQuestionTool.ts):
+
+```ts
+if (provider && task.parentTaskId && task.isBackgroundTask) {
+	// route to parent: setPendingParentQuestion(…) + emit "managedTask:needs-parent-input"
+} else {
+	// task.ask("followup", …) → goes to the USER
+}
+```
+
+Whether a question goes to the **user** or the **parent task** is decided entirely by
+`isBackgroundTask`. Agent Tasks in a workflow are spawned as **background** children of
+the WorkflowTask, so their questions route to the **executor** — not to the user.
+
+### The deadlock (and why it arose)
+
+The WorkflowTask makes **zero LLM calls** — it is a pure state machine. Without the
+relay, it never listened for `managedTask:needs-parent-input` and never called
+`resolvePendingParentQuestion`. An agent calling `ask_followup_question` would route
+its question to an executor that could never answer. The child's `await answerPromise`
+never settled; `waitForStakes` timed out.
+
+This is distinct from ordinary parent-child: when a standard LLM-driven parent uses
+`wait_for_task`, the `onNeedsParentInput` listener wakes it to answer with
+`answer_subtask_question`. The WorkflowTask's old polling loop had no equivalent.
+
+### Why sync `send_message_to_task` cannot replace it
+
+`send_message_to_task` requires **both** caller and target to be background tasks
+([`task_messaging.md`](task_messaging.md)). The WorkflowTask is the root/focused task
+(`isBackgroundTask === false`) — a disallowed sync target. Even if that precondition
+were relaxed, a task suspended in a wait loop is not running a tool loop and cannot
+respond to a sync message.
+
+### Resolution — the WorkflowTask relays to the user
+
+Both tools are **kept exactly as-is**. The only addition is
+`WorkflowTask.relayChildQuestion`, called from the `onNeedsParentInput` callback of
+[`waitForTasksEventDriven`](../src/core/workflow/wait-for-task-helper.ts):
+
+1. An agent calls `ask_followup_question`. The existing gate routes it to the
+   WorkflowTask: `setPendingParentQuestion(…)` registers the promise,
+   `emit("managedTask:needs-parent-input", childTaskId)` fires.
+2. The `waitForStakes` event loop catches the event and calls `relayChildQuestion`.
+3. `relayChildQuestion` calls `this.ask("followup", JSON.stringify({ question, suggest }))`
+   on the WorkflowTask — the question renders in WorkflowView with suggestion buttons,
+   identical to `escalate @Human` and input-parameter prompts.
+4. The user answers. `relayChildQuestion` calls
+   `childInstance.resolvePendingParentQuestion(answer)` — the child's `await answerPromise`
+   settles and the agent resumes its stake.
+
+All human interaction (input params, `escalate @Human`, mid-stake agent questions) is
+centralized in WorkflowView. The child cannot distinguish this from a normal parent-LLM
+answer.
+
+### Wait-phase integration — no race
+
+`ask_followup_question` **blocks** the child's tool loop: a child that is asking is
+suspended and cannot also be calling `attempt_completion`. Each agent is in exactly one
+state at any instant: `running` / `blocked-on-question` / `terminal`. There is no race
+between a question and a completion for the same child.
+
+Across parallel agents, child A completing while child B asks is handled in the same
+event loop — each agent has independent listeners. While `waitForStakes` is blocked
+in `this.ask` awaiting the user's relay answer, sibling agents keep running in their own
+task loops. The next event-loop iteration catches up on anything that finished.
+
+### Static vs. dynamic: why this lives in the wait phase
+
+`escalate @Human` is **statically declared** — the executor handles it in the **advance
+phase**, before dispatch, because it is visible in the AST. An agent's
+`ask_followup_question` is **dynamic** — it fires mid-stake, after dispatch, invisible
+to the AST. It must be handled in the **wait phase** (`waitForStakes`). Everything
+downstream (the `this.ask` call, WorkflowView rendering) is shared between both paths.
+
+---
+
 ## User Interaction
 
 ### `escalate @Human` Flow — Reuses Existing `ask_followup_question` → Parent Routing
@@ -943,7 +1040,7 @@ The mechanism reuses Shofer's existing [`ask_followup_question` routing](../AGEN
 
 The agent Task has no awareness that it was "escalated." From its perspective, it simply receives the user's response as its next prompt when resumed. This is intentional: the Workflow Task owns the control flow, not the LLM.
 
-Additionally, if an **agent Task** itself calls `ask_followup_question` (e.g., the Developer needs clarification), the [Subtask Question Routing Rule](../AGENTS.md#L26) applies: background children route questions to the parent. The Workflow Task can answer via the existing `answer_subtask_question` mechanism. This is separate from `escalate @Human` — which is a flow-level operation, not an agent-level question.
+Additionally, if an **agent Task** itself calls `ask_followup_question` (e.g., the Developer needs clarification mid-stake), the WorkflowTask **relays** the question to the user via `this.ask("followup", …)` and feeds the reply back via `resolvePendingParentQuestion` — see [§ Question Routing & the Executor](#question-routing--the-executor-ask_followup_question--answer_subtask_question). This is separate from `escalate @Human` — which is a static, flow-level operation handled in the advance phase.
 
 ### User Prompt During a Workflow
 
@@ -1031,15 +1128,15 @@ This is the same pattern as today's task resumption — the user controls when w
 
 The peer messaging design in [`task_messaging.md`](task_messaging.md) and this Workflow design are **fully compatible**:
 
-| `task_messaging.md` Concept                                                      | How It Maps to Workflows                                                                                |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Same-root scope** (`rootTaskId`)                                               | The Workflow Task is the root. All agent Tasks share `rootTaskId = workflowTaskId`.                     |
-| **Background-task requirement**                                                  | All agent Tasks are background Tasks (`isBackground=true`). ✅ Satisfied.                               |
-| **`send_message_to_task` (async)**                                               | Agents can fire-and-forget notify each other via system-prompt injection or queue-drain.                |
-| **`send_message_to_task` (sync)**                                                | Agents can request-response with timeout. `attempt_completion` routes result to the initiator.          |
-| **`check_task_status` / `list_background_tasks` / `wait_for_task` (peer scope)** | Agents can inspect and wait on siblings under the same workflow root.                                   |
-| **`ask_followup_question` → parent routing**                                     | Agent questions route to the Workflow Task (parent). Workflow can answer via `answer_subtask_question`. |
-| **`cancel_tasks` (parent-only)**                                                 | Workflow Task owns the lifecycle — `abortBackgroundChildren()` cancels all agents.                      |
+| `task_messaging.md` Concept                                                      | How It Maps to Workflows                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Same-root scope** (`rootTaskId`)                                               | The Workflow Task is the root. All agent Tasks share `rootTaskId = workflowTaskId`.                                                                                                                                                                                 |
+| **Background-task requirement**                                                  | All agent Tasks are background Tasks (`isBackground=true`). ✅ Satisfied.                                                                                                                                                                                           |
+| **`send_message_to_task` (async)**                                               | Agents can fire-and-forget notify each other via system-prompt injection or queue-drain.                                                                                                                                                                            |
+| **`send_message_to_task` (sync)**                                                | Agents can request-response with timeout. `attempt_completion` routes result to the initiator.                                                                                                                                                                      |
+| **`check_task_status` / `list_background_tasks` / `wait_for_task` (peer scope)** | Agents can inspect and wait on siblings — enforced by `knownPeers` (least-privilege; see [§ Peer Scope](#peer-scope--least-privilege--declared-peers)).                                                                                                             |
+| **`ask_followup_question` → parent routing**                                     | ✅ Retained — the WorkflowTask **relays** the routed question to the user via `this.ask` and settles it with `resolvePendingParentQuestion`. See [Question Routing & the Executor](#question-routing--the-executor-ask_followup_question--answer_subtask_question). |
+| **`cancel_tasks` (parent-only)**                                                 | Workflow Task owns the lifecycle — `abortBackgroundChildren()` cancels all agents.                                                                                                                                                                                  |
 
 **Key interaction:** The Workflow Task's `slangLoop()` uses `wait_for_task` and `queueMessage` programmatically — these are the same mechanisms that `send_message_to_task` and `check_task_status` expose to agent LLMs. There is no conflict. Agent-to-agent peer messaging (via `send_message_to_task`) happens **within** agent Tasks, independently of the Workflow's control loop. The Workflow only cares about `attempt_completion` results from its direct children.
 
@@ -1087,7 +1184,82 @@ To discover all available peers, use list_background_tasks(scope="peers").
 
 This ensures agents know about shared resources without needing to discover them through trial-and-error. The Workflow Task constructs these peer-resource listings from the `FlowState.agents` map at dispatch time.
 
-**`peer_task_ids` on spawn:** When the Workflow Task spawns the Developer and Reviewer, it can pass `peer_task_ids: [explorerTaskId]` to explicitly scope their peer communication to include the Codebase. This is the same `peer_task_ids` parameter from the `task_messaging.md` design — no new mechanism needed.
+**Declaring peers in slang:** The preferred mechanism for workflow agents is the `peers:` meta field on the agent declaration — `peers: [@Codebase]` — which the executor resolves to task IDs at spawn time and sets as the agent's `knownPeers`. See [§ Peer Scope](#peer-scope--least-privilege--declared-peers). The `peer_task_ids` parameter on `new_task` remains available for non-workflow or programmatic use; within slang, `peers:` is the canonical form.
+
+---
+
+## Peer Scope — Least-privilege & Declared Peers
+
+### Least-privilege `knownPeers` default
+
+`Task.knownPeers` is the enforcement gate for peer-messaging tools
+(`send_message_to_task`, `wait_for_task`, `check_task_status`, `list_background_tasks`).
+The field is **always set** (never `undefined`) for any task in the peer-messaging graph;
+when `undefined`, every peer-tool access is denied.
+
+| `knownPeers` value                           | Peer access                    |
+| -------------------------------------------- | ------------------------------ |
+| `undefined`                                  | Deny all peer-tool calls       |
+| `Set` (always the case for background tasks) | Allow only task IDs in the set |
+
+**Baseline at spawn time:** `{ parentTaskId }` — just the spawner. Children are added
+dynamically as they are spawned (`NewTaskTool` / `spawnAgentTask` extend the spawner's
+set with each child's taskId). Explicit sibling grants (`peer_task_ids` on `new_task`,
+or `peers:` in slang) are unioned onto this baseline. **The parent must explicitly
+grant sibling access — the default is deny.**
+
+Call sites updated to enforce the gate unconditionally (guard changed from
+`if (task.knownPeers && !task.knownPeers.has(id))` to `if (!task.knownPeers || !task.knownPeers.has(id))`):
+[`SendMessageToTaskTool`](../src/core/tools/SendMessageToTaskTool.ts),
+[`WaitForTaskTool`](../src/core/tools/WaitForTaskTool.ts),
+[`CheckTaskStatusTool`](../src/core/tools/CheckTaskStatusTool.ts),
+[`ListBackgroundTasksTool`](../src/core/tools/ListBackgroundTasksTool.ts).
+
+### Declared peers in slang (`peers: [@Ref]`)
+
+A `.slang` agent may declare which peers it may message **directly** over its lifetime:
+
+```slang
+agent Developer {
+  mode: "code"
+  peers: [@Codebase, @Reviewer]     -- may send_message_to_task to these two
+  stake implement(design: design) -> @Reviewer
+}
+```
+
+**Two communication planes:**
+
+| Plane       | Mechanism                             | Executor-mediated? | Tracked by `flowState`?            |
+| ----------- | ------------------------------------- | ------------------ | ---------------------------------- |
+| **Mailbox** | `stake -> @X` / `await <- @Y`         | Yes                | Yes — budget-counted, replayable   |
+| **Direct**  | `send_message_to_task` (via `peers:`) | No                 | No — agent-to-agent, opportunistic |
+
+`peers:` governs only the **direct** plane. An agent may declare a `peers:` grant for
+an agent it also stakes to — the two planes coexist independently.
+
+**Constraints:**
+
+- Only concrete agent `@references` are valid — wildcards and external sinks
+  (`@out`, `@all`, `@any`, `@Human`, `*`) are rejected by the resolver at parse time.
+- Absent `peers:` ⇒ no sibling grant (parent + own children only).
+- Grants are **directional**: A declaring B does not grant B the ability to initiate to A.
+
+**Back-fill:** Because agents may be spawned in any round, `spawnAgentTask` back-fills
+the newly-spawned agent's taskId into the `knownPeers` of any already-live agent that
+declared it — so peer messaging works regardless of spawn order.
+
+**PEER RESOURCES lockstep:** `getPeerResources()` reads `agentDecl.meta.peers`
+exclusively. When no `peers:` are declared, the "PEER RESOURCES" block is omitted
+entirely, keeping the prompt and the enforced `knownPeers` in lockstep — agents are
+never told to message peers they cannot reach.
+
+**Implementation files:**
+
+- [`slang-ast.ts`](../src/core/workflow/slang-ast.ts) — `AgentMeta.peers?: string[]`
+- [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts) — `peers: [@A, @B]` Ident-lookahead branch in `parseAgentDecl`
+- [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts) — static validation: concrete agents only, no wildcards
+- [`WorkflowTask.spawnAgentTask`](../src/core/workflow/WorkflowTask.ts) — sets `knownPeers` from declared peers + back-fill
+- [`WorkflowTask.getPeerResources`](../src/core/workflow/WorkflowTask.ts) — reads `meta.peers` as the sole authoritative source
 
 ---
 
@@ -1097,17 +1269,18 @@ This ensures agents know about shared resources without needing to discover them
 
 All under [`src/core/workflow/`](../src/core/workflow/):
 
-| File                                                                                    | Purpose                                                                                                                                                          |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                               | **Main executor** — `slangLoop()` (round-based VM), agent dispatch/spawn/resume, stake routing, mailbox, escalate, converge/budget, output validation with retry |
-| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                                 | Lexer (vendored `@riktar/slang`, MIT) — tokenizes `.slang` source                                                                                                |
-| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)             | Parser (vendored, ~750 lines) — produces typed AST with error recovery                                                                                           |
-| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                               | Public API — `parseSlang()`, `validateSlangAST()`                                                                                                                |
-| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)                           | Dependency graph, deadlock detection, static analysis warnings                                                                                                   |
-| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                                     | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)                                                                                       |
-| [`slang-types.ts`](../src/core/workflow/slang-types.ts)                                 | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                                                                  |
-| [`index.ts`](../src/core/workflow/index.ts)                                             | Barrel export                                                                                                                                                    |
-| [`__tests__/slang-parser.test.ts`](../src/core/workflow/__tests__/slang-parser.test.ts) | Unit tests for the Slang parser                                                                                                                                  |
+| File                                                                                    | Purpose                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                               | **Main executor** — `slangLoop()` (round-based VM), agent dispatch/spawn/resume, stake routing, mailbox, escalate, converge/budget, output validation with retry                                                                               |
+| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                                 | Lexer (vendored `@riktar/slang`, MIT) — tokenizes `.slang` source                                                                                                                                                                              |
+| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)             | Parser (vendored, ~750 lines) — produces typed AST with error recovery                                                                                                                                                                         |
+| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                               | Public API — `parseSlang()`, `validateSlangAST()`                                                                                                                                                                                              |
+| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)                           | Dependency graph, deadlock detection, static analysis warnings                                                                                                                                                                                 |
+| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                                     | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)                                                                                                                                                                     |
+| [`slang-types.ts`](../src/core/workflow/slang-types.ts)                                 | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                                                                                                                                                |
+| [`index.ts`](../src/core/workflow/index.ts)                                             | Barrel export                                                                                                                                                                                                                                  |
+| [`__tests__/slang-parser.test.ts`](../src/core/workflow/__tests__/slang-parser.test.ts) | Unit tests for the Slang parser                                                                                                                                                                                                                |
+| [`wait-for-task-helper.ts`](../src/core/workflow/wait-for-task-helper.ts)               | Shared event-driven wait helper — extracted from `WaitForTaskTool`; called by both the tool and `WorkflowTask.waitForStakes`. Handles `managedTask:completed`, `managedTask:error`, `managedTask:needs-parent-input` with AbortSignal timeout. |
 
 ### Extension Host Integration
 

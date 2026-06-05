@@ -187,6 +187,7 @@ agent <Name> {
   role: "<description>"   -- optional: system-prompt role definition
   tools: [group_a, ...]   -- optional: ToolGroup names, comma-separated
   retry: <number>         -- optional: max LLM-call retries
+  peers: [@Agent1, ...]   -- optional: declared direct-message peers (see below)
   context: {              -- optional: controls what project context the agent receives
     include_agents_md: <boolean>   -- inject AGENTS.md rules into the agent's system prompt
   }
@@ -207,6 +208,33 @@ agent <Name> {
 
 \* `mode` is technically optional in the grammar but will default to `"code"` at spawn.
 \*\* `role` is consumed in `getPeerResources()` for peer listings but does NOT override the mode's `roleDefinition`.
+
+### `peers:` — Declared Direct-Message Peers
+
+`peers:` declares which other agents this agent may message **directly** via
+`send_message_to_task`, bypassing the executor and mailbox. It is the explicit
+grant that least-privilege peer scoping (default-deny) requires.
+
+```slang
+agent Worker {
+  peers: [@Reviewer, @Coordinator]
+  stake do_work(...) -> @Reviewer
+  commit
+}
+```
+
+| Property                    | Detail                                                                                                                                                                                                                                             |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Value form                  | Comma-separated list of bare `@AgentRef` identifiers inside `[…]`.                                                                                                                                                                                 |
+| Default                     | Absent ⇒ no sibling grant (parent + own children only, per least-privilege).                                                                                                                                                                       |
+| Wildcards                   | `@out`, `@all`, `@any`, `@Human`, `*` are **not** valid in `peers:`. The resolver emits an error on wildcard peers.                                                                                                                                |
+| Unknown refs                | The resolver emits an error for `@Name` refs that don't resolve to a declared agent.                                                                                                                                                               |
+| Back-fill                   | If peer B is spawned after agent A, A's `knownPeers` is updated at B's spawn time.                                                                                                                                                                 |
+| Relationship to stake/await | `peers:` governs only the **direct-message** (`send_message_to_task`) permission. The executor-mediated stake/await plane (mailbox) is unaffected — an agent may declare a `peers:` grant for an agent it also stakes to, and both planes coexist. |
+
+### `context:`
+
+(Planned) Controls what project context the agent receives. Currently not recognized by the parser — using it causes a parse error.
 
 Meta fields, when present, must appear **before** the operations.
 

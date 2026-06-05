@@ -400,7 +400,8 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 | `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any) |
 | `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks           |
 | `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task          |
-| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List all background child tasks started by this task        |
+| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                   |
+| `send_message_to_task`    | 🟣 AW  | –     |        ✅        |   ✅   | Send async/sync messages to peer tasks under same root      |
 | `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                        |
 | `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
 | `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
@@ -423,14 +424,19 @@ Create a new task instance in the chosen mode. Supports two execution models:
 - **Synchronous (default):** The parent blocks until the child completes. Must be called alone — no other tools in the same turn.
 - **Background (`is_background=true`):** The child starts immediately and runs concurrently. The parent receives the child's `task_id` and continues without blocking. Use `check_task_status` or `wait_for_task` to retrieve results later.
 
-| Param              | Type            | Required | Description                                                                                                                |
-| ------------------ | --------------- | :------: | -------------------------------------------------------------------------------------------------------------------------- |
-| `mode`             | string          |    ✅    | Mode slug (e.g., `code`, `debug`)                                                                                          |
-| `message`          | string          |    ✅    | Initial instructions for the child task                                                                                    |
-| `todos`            | string \| null  |    –     | Initial markdown checklist for the child                                                                                   |
-| `is_background`    | boolean \| null |    –     | When `true`, run child concurrently and return `task_id` immediately (default: `false`)                                    |
-| `softResultLength` | number \| null  |    –     | Soft suggestion for max characters of the subtask's completion result (default: 2000). Hard safety cap: 100000 characters. |
-| `softTimeoutSec`   | number \| null  |    –     | Soft guidance in seconds for how long the parent expects to wait (default: 300). Informational only — not enforced.        |
+| Param              | Type             | Required | Description                                                                                                                                                                                                                                                                                                                                      |
+| ------------------ | ---------------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mode`             | string           |    ✅    | Mode slug (e.g., `code`, `debug`)                                                                                                                                                                                                                                                                                                                |
+| `message`          | string           |    ✅    | Initial instructions for the child task                                                                                                                                                                                                                                                                                                          |
+| `todos`            | string \| null   |    –     | Initial markdown checklist for the child                                                                                                                                                                                                                                                                                                         |
+| `is_background`    | boolean \| null  |    –     | When `true`, run child concurrently and return `task_id` immediately (default: `false`)                                                                                                                                                                                                                                                          |
+| `softResultLength` | number \| null   |    –     | Soft suggestion for max characters of the subtask's completion result (default: 2000). Hard safety cap: 100000 characters.                                                                                                                                                                                                                       |
+| `softTimeoutSec`   | number \| null   |    –     | Soft guidance in seconds for how long the parent expects to wait (default: 300). Informational only — not enforced.                                                                                                                                                                                                                              |
+| `peer_task_ids`    | string[] \| null |    –     | Least-privilege peer scope: the spawned child's baseline `knownPeers` is parent-only. If provided, these task IDs are added (must share `rootTaskId`). If omitted/null, the child can only communicate with its parent and its own children — sibling access is denied. Validated against `rootTaskId` at spawn time — unknown IDs are rejected. |
+
+The spawned child's `Task` instance always has `knownPeers: Set<string>` set (runtime-only, not persisted). Its baseline contains the parent's `taskId` plus any task the child later spawns (dynamic-add). Peer tools (`check_task_status`, `wait_for_task`, `send_message_to_task`, `list_background_tasks` with `scope="peers"`) enforce this set unconditionally — `undefined` means **no peer access whatsoever**.
+
+In a workflow, agents spawned by `WorkflowTask` also receive `knownPeers` derived from their declared `peers: [@Agent1, @Agent2]` list (see [slang_specs.md § Agent Declaration](slang_specs.md#agent-declaration)). The PEER RESOURCES block injected into agent prompts matches the enforced `knownPeers` set exactly.
 
 ### `check_task_status`
 
@@ -472,9 +478,25 @@ Answer a question that a background child task asked via `ask_followup_question`
 
 ### `list_background_tasks`
 
-List all background child tasks started by this task via `new_task` with `is_background=true`. Returns each task's ID, current status, and creation timestamp.
+List background tasks. With `scope="children"` (default), lists all background child tasks started by this task via `new_task` with `is_background=true`. With `scope="peers"`, lists all tasks sharing the same root task (siblings, aunts/uncles, grandchildren) — not just direct children. Returns each task's ID, title, current status, and creation timestamp.
 
-**Parameters:** None.
+| Param   | Type                              | Required | Description                                                                                           |
+| ------- | --------------------------------- | :------: | ----------------------------------------------------------------------------------------------------- |
+| `scope` | `"children"` \| `"peers"` \| null |    –     | `"children"` (default): direct children only. `"peers"`: all tasks sharing the caller's `rootTaskId`. |
+
+### `send_message_to_task`
+
+Send a message to a peer task sharing the same root task. Two modes: async (fire-and-forget, `wait=false`) and sync (blocking with mandatory timeout, `wait=true`). Both participants must be background (async) tasks spawned with `is_background=true`. Async messages are unconditionally auto-approved; sync messages are gated by `alwaysAllowSubtasks`.
+
+- **Async mode:** The tool returns immediately. If the recipient is mid-turn, the message is injected via system prompt (Form A); otherwise it is enqueued as an explicit annotated user-turn (Form B) that wakes/resumes the recipient.
+- **Sync mode:** The sender blocks until the recipient calls `attempt_completion` or the timeout expires. The recipient answers by calling `attempt_completion` — its result is returned to the blocked sender. WARNING: `attempt_completion` is terminal, so the recipient task ends after responding.
+
+| Param         | Type            | Required | Description                                                                                   |
+| ------------- | --------------- | :------: | --------------------------------------------------------------------------------------------- |
+| `task_id`     | string          |    ✅    | Target peer task ID (must share the caller's `rootTaskId`)                                    |
+| `message`     | string          |    ✅    | The message to deliver                                                                        |
+| `wait`        | boolean \| null |    –     | When `true`, block until the recipient responds or timeout expires. Default: `false` (async). |
+| `timeout_sec` | number \| null  |    –     | Maximum seconds to wait when `wait=true`. Default: 120. Always applied in sync mode.          |
 
 ### `set_task_title`
 
@@ -650,6 +672,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | `cancel_tasks`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `answer_subtask_question` |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `list_background_tasks`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `send_message_to_task`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `skills`                  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `set_task_title`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `give_feedback`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
