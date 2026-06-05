@@ -532,6 +532,7 @@ function compileSequenceSVG(flow, agentNames) {
 	var layers = dagreResult.layers
 
 	var timelineEvents = []
+	var _globalSeq = 0
 
 	for (var ai = 0; ai < (flow.body || []).length; ai++) {
 		var agent = flow.body[ai]
@@ -554,6 +555,7 @@ function compileSequenceSVG(flow, agentNames) {
 								label: op.call ? op.call.name : "",
 								type: "stake",
 								layer: layerFrom,
+								seq: _globalSeq++,
 							})
 					}
 				}
@@ -567,6 +569,7 @@ function compileSequenceSVG(flow, agentNames) {
 								label: op.binding || "",
 								type: "await",
 								layer: layers[src] || 0,
+								seq: _globalSeq++,
 							})
 						if (src === "Human")
 							timelineEvents.push({
@@ -599,9 +602,12 @@ function compileSequenceSVG(flow, agentNames) {
 		extractTimeline(agent.operations, layers[from] || 0)
 	}
 
-	// Sort events by layer (topological dependency order), then by file order within layer.
+	// Sort events by their source agent's layer, then by intra-agent sequential
+	// position (seq). This groups agent interactions by dependency order while
+	// preserving the line-by-line ordering of operations within each agent.
+	// Adjacent StakeOp/AwaitOp pairs stay adjacent instead of being split by layer.
 	timelineEvents.sort(function (a, b) {
-		if (a.layer !== b.layer) return a.layer - b.layer
+		if (a.seq !== b.seq) return a.seq - b.seq
 		return 0
 	})
 
