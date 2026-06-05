@@ -16,33 +16,44 @@ transport is collected and surfaced to the Settings UI. A new subsystem added
 via `getLogger().child({ ctx: "MyNew" })` appears in the checkbox list
 automatically — no UI changes needed.
 
+All logging in extension-host code goes through the shared `CompactTransport`.
+This includes [`ShoferProvider.log()`](../src/core/webview/ShoferProvider.ts) and
+[`ShoferProvider.debug()`](../src/core/webview/ShoferProvider.ts), which route
+through the `Webview` subsystem logger — both respect the user's level and
+category filter settings in **Settings → Logging**.
+
 ## Architecture
 
 ```
  Settings → Logging (LoggingSettings.tsx)
-     │
-     │  user changes logLevel / logCategories
-     ▼
+      │
+      │  user changes logLevel / logCategories
+      ▼
  webviewMessageHandler.ts
-     │
-     │  setLogLevel(level)  /  setLogCategories([...])
-     ▼
+      │
+      │  setLogLevel(level)  /  setLogCategories([...])
+      ▼
  logging/index.ts  ──────────────────────────────────┐
-     │                                                │
-     │  bootstrapLogging(outputChannel)                │
-     ▼                                                │
+      │                                                │
+      │  bootstrapLogging(outputChannel)                │
+      ▼                                                │
  CompactTransport (singleton)                         │
-     │                                                │
-     │  write() ── auto-discover ctx ── level filter ── category filter ── Output Channel
-     │                                                │
-     │  write() ── auto-discover ctx ───────── file (optional JSON-lines)
-     │                                                │
-     │  getKnownCategories() ──► ShoferProvider ──► webview (logCategoriesKnown)
-     │                                                │
-     ▲                                                │
- CompactLogger (root) ── child({ ctx }) ──► subsystem loggers
-                                              (subsystems.ts)
+      │                                                │
+      │  write() ── auto-discover ctx ── level filter ── category filter ── Output Channel
+      │                                                │
+      │  write() ── auto-discover ctx ───────── file (optional JSON-lines)
+      │                                                │
+      │  getKnownCategories() ──► ShoferProvider ──► webview (logCategoriesKnown)
+      │                                                │
+      ▲                                                │
+ CompactLogger (root) ── child({ ctx }) ──► subsystem loggers  ◄── provider.log() / provider.debug()
+                                               (subsystems.ts)           (via webviewLog)
 ```
+
+**Note:** [`ShoferProvider.log()`](../src/core/webview/ShoferProvider.ts) and
+[`ShoferProvider.debug()`](../src/core/webview/ShoferProvider.ts) route through
+`webviewLog` (the `Webview` subsystem logger), so they respect level and category
+filters. They no longer bypass the transport with direct `outputChannel.appendLine()`.
 
 ### Components
 
@@ -58,7 +69,7 @@ automatically — no UI changes needed.
 | ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel`, `logCategories`, and `logCategoriesKnown`                                                                                       |
 | Activation         | [`src/extension.ts`](../src/extension.ts)                                                                             | `bootstrapLogging()` at line 108, persistence restore at line 155                                                                                                  |
 | Message handler    | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                           | Wires `logLevel` and `logCategories` changes to live transport                                                                                                     |
-| State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state                                                                                                         |
+| State plumbing     | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | `getState()` → `getStateToPostToWebview()` → webview state;<br>`provider.log()` and `provider.debug()` route through `webviewLog` → transport                      |
 | Legacy compat      | [`src/utils/outputChannelLogger.ts`](../src/utils/outputChannelLogger.ts)                                             | `stringifyForLog` and `createOutputChannelLogger` retained;<br>`outputLog`/`outputWarn`/`outputError` removed                                                      |
 | i18n               | [`webview-ui/src/i18n/locales/en/settings.json`](../webview-ui/src/i18n/locales/en/settings.json)                     | `logging` section with level labels (category checkboxes are labelled by their raw `ctx`, not a translated string)                                                 |
 | Tests              | [`src/utils/logging/__tests__/`](../src/utils/logging/__tests__/)                                                     | `CompactLogger.spec.ts` (15 tests), `CompactTransport.spec.ts` (12 tests, incl. late channel-binding regression), `index.spec.ts` (3 tests, eager-init regression) |
@@ -211,6 +222,23 @@ log.info("initialized")
 
 ### Resolved
 
+- **`provider.log()` bypass (fixed)** — [`ShoferProvider.log()`](../src/core/webview/ShoferProvider.ts)
+  and [`ShoferProvider.debug()`](../src/core/webview/ShoferProvider.ts)
+  previously called `this.outputChannel.appendLine()` directly, bypassing
+  the `CompactTransport` level and category filters entirely. Messages
+  from all 102+ callers of `provider.log()` (via `webviewMessageHandler.ts`,
+  `skillsMessageHandler.ts`, `Task.ts`, …) appeared unconditionally in the
+  Output Channel regardless of the user's Settings → Logging checkboxes.
+  Both methods now route through `webviewLog.info()` / `webviewLog.debug()`,
+  gating output on the `[Webview]` category checkbox and log level.
+- **Checkpoint dual-write (fixed)** — The `log` closure in
+  [`checkpoints/index.ts`](../src/core/checkpoints/index.ts) dual-wrote
+  every checkpoint message via BOTH `checkpointLog.info()` (filtered) AND
+  `provider?.log()` (unfiltered, now routed through `webviewLog`). The
+  `provider?.log()` call was removed, so checkpoint messages only appear
+  under the `[Checkpoint]` category. Two ad-hoc `provider?.log()` calls in
+  `checkpointRestore` and `checkpointDiff` error paths were similarly
+  redirected to `checkpointLog.warn`.
 - **Import-ordering noop binding (fixed)** — subsystem loggers in
   `subsystems.ts` are bound via `getLogger().child({ ctx })` at
   module-_import_ time, which runs before `activate()`. The shared transport

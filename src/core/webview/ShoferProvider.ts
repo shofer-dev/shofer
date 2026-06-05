@@ -3795,20 +3795,30 @@ export class ShoferProvider
 
 	// logging
 
+	/**
+	 * Log an informational message through the Webview subsystem logger.
+	 *
+	 * Routes through the shared CompactTransport so the message respects
+	 * the user's level and category filter settings (Settings → Logging).
+	 * The message appears with the `[Webview]` ctx tag in the Output Channel
+	 * and is gated by the "Webview" category checkbox.
+	 */
 	public log(message: string) {
-		// `this.outputChannel` is the same `OutputChannel` instance that
-		// activate() wired into the shared CompactTransport via
-		// `bootstrapLogging()`.  Logging through the transport (via the
-		// subsystem loggers) is the canonical path; this direct append
-		// is retained for callers that already hold a provider reference
-		// and want to bypass level filtering.
-		this.outputChannel.appendLine(message)
+		webviewLog.info(message)
 	}
 
-	/** Debug-level logging: only emitted when process.env.DEBUG is set. */
+	/**
+	 * Debug-level logging: only emitted when {@link process.env.DEBUG} is set
+	 * AND the transport level is `"debug"`.
+	 *
+	 * Routes through the shared CompactTransport so the message respects the
+	 * user's level and category filter settings.  The guard on
+	 * `process.env.DEBUG` is preserved as a developer-only gate in addition to
+	 * the transport-level filter.
+	 */
 	public debug(message: string) {
 		if (process.env.DEBUG) {
-			this.outputChannel.appendLine(message)
+			webviewLog.debug(message)
 		}
 	}
 
