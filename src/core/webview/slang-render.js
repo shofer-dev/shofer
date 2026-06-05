@@ -958,7 +958,21 @@ function compileSwimlaneSVG(flow, agentNames) {
 				esc(wcond) +
 				"</text>"
 			_cy += SPACING_Y
+			var bodyStartY = _cy
 			str += renderOpList(op.body, spineX, depth + 1)
+			// Bounding box around the WHEN body
+			if (_cy > bodyStartY) {
+				str +=
+					'<rect class="loop-bounding-box" x="' +
+					(spineX - BLOCK_W / 2 - 12) +
+					'" y="' +
+					bodyStartY +
+					'" width="' +
+					(BLOCK_W + 24) +
+					'" height="' +
+					(_cy - bodyStartY) +
+					'" rx="6" />'
+			}
 			if (op.elseBlock && op.elseBlock.body && op.elseBlock.body.length > 0) {
 				_cy += Math.floor(SPACING_Y / 2)
 				var oPts =
@@ -1033,7 +1047,21 @@ function compileSwimlaneSVG(flow, agentNames) {
 				esc(rcond) +
 				"</text>"
 			_cy += SPACING_Y
+			var repeatStartY = _cy
 			str += renderOpList(op.body, spineX, depth + 1)
+			// Bounding box around the REPEAT body
+			if (_cy > repeatStartY) {
+				str +=
+					'<rect class="loop-bounding-box" x="' +
+					(spineX - BLOCK_W / 2 - 12) +
+					'" y="' +
+					repeatStartY +
+					'" width="' +
+					(BLOCK_W + 24) +
+					'" height="' +
+					(_cy - repeatStartY) +
+					'" rx="6" />'
+			}
 		} else if (op.type === "CommitOp") {
 			str +=
 				'<rect class="flow-box" x="' +

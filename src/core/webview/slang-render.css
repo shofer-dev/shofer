@@ -336,6 +336,15 @@ body {
 	pointer-events: none;
 }
 
+.loop-bounding-box {
+	fill: none;
+	stroke: var(--z-flow);
+	stroke-width: 1.2;
+	stroke-dasharray: 6 3;
+	opacity: 0.6;
+	pointer-events: none;
+}
+
 .empty {
 	text-align: center;
 	opacity: 0.5;
