@@ -12,7 +12,6 @@ import { stripLineNumbers, everyLineHasLineNumbers } from "../../integrations/mi
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
-import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
 import type { ToolUse } from "../../shared/tools"
@@ -89,10 +88,6 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 
 		if (newContent.endsWith("```")) {
 			newContent = newContent.split("\n").slice(0, -1).join("\n")
-		}
-
-		if (!task.api.getModel().id.includes("claude")) {
-			newContent = unescapeHtmlEntities(newContent)
 		}
 
 		const fullPath = relPath ? path.resolve(task.cwd, relPath) : ""
