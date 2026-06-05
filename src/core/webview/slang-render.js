@@ -820,6 +820,15 @@ function compileSwimlaneSVG(flow, agentNames) {
 
 		if (op.type === "StakeOp") {
 			var lbl = "STAKE: " + esc(op.call ? op.call.name : "func") + "()"
+			// Collect recipient names for tooltip
+			var toNames = []
+			if (op.recipients) {
+				for (var sj = 0; sj < op.recipients.length; sj++) {
+					var rt = op.recipients[sj].ref || op.recipients[sj]
+					toNames.push("@" + esc(rt))
+				}
+			}
+			var arrowDir = toNames.length > 0 ? " \u2192 " + toNames.join(", ") : ""
 			str +=
 				'<rect class="flow-box" x="' +
 				(spineX - BLOCK_W / 2) +
@@ -843,6 +852,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 				opacity +
 				'">' +
 				lbl +
+				arrowDir +
 				"</text>"
 			str +=
 				'<line class="flow-spine" x1="' +
