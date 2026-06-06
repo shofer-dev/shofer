@@ -87,6 +87,11 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 			models = await getVercelAiGatewayModels()
 			break
 
+		case "shofer":
+			// Shofer Router presents an OpenRouter-compatible /models endpoint.
+			models = await getOpenRouterModels()
+			break
+
 		case "poe":
 			models = await getPoeModels(options.apiKey, options.baseUrl)
 			break
