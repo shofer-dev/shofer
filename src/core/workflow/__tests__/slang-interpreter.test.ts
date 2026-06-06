@@ -86,8 +86,8 @@ function dotAccess(obj: Expr, property: string): Expr {
 	return { type: "DotAccess", object: obj, property, span: dummySpan() }
 }
 
-function binExpr(op: Expr["type"] extends "BinaryExpr" ? Expr["op"] : never, left: Expr, right: Expr): Expr {
-	return { type: "BinaryExpr", op, left, right, span: dummySpan() }
+function binExpr(op: string, left: Expr, right: Expr): Expr {
+	return { type: "BinaryExpr", op, left, right, span: dummySpan() } as Expr
 }
 
 function dummySpan() {
