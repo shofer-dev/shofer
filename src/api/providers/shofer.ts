@@ -18,9 +18,33 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import type { ApiHandlerOptions } from "../../shared/api"
 import type { ApiHandlerCreateMessageMetadata } from "../index"
-import { ApiStream } from "../transform/stream"
+import { ApiStream, ApiStreamChunk } from "../transform/stream"
 
 import { OpenRouterHandler } from "./openrouter"
+
+/**
+ * Wrap an AsyncGenerator into a runtime-constructed AsyncIterable to break
+ * esbuild CJS async-generator state-machine delegation chains.
+ *
+ * When two esbuild-CJS async generators are linked via yield*, esbuild's
+ * state-machine transform creates a delegation chain that silently hangs
+ * when the outermost iterator is consumed from yet another CJS async generator.
+ * Converting the inner generator into a plain function-based async iterator
+ * (no compile-time state machine) breaks the chain.
+ *
+ * See todos/cli_hang_bug.md for full investigation.
+ */
+function _wrapAsyncGenerator<T>(gen: AsyncGenerator<T>): AsyncGenerator<T> {
+	const iter = gen[Symbol.asyncIterator]()
+	return {
+		next: () => iter.next(),
+		return: iter.return?.bind(iter),
+		throw: iter.throw?.bind(iter),
+		[Symbol.asyncIterator]() {
+			return this
+		},
+	} as AsyncGenerator<T>
+}
 
 export class ShoferHandler extends OpenRouterHandler {
 	constructor(options: ApiHandlerOptions) {
@@ -38,6 +62,7 @@ export class ShoferHandler extends OpenRouterHandler {
 	}
 
 	/** @inheritdoc */
+	// eslint-disable-next-line require-yield
 	override async *createMessage(
 		systemPrompt: string,
 		messages: Anthropic.Messages.MessageParam[],
@@ -57,6 +82,13 @@ export class ShoferHandler extends OpenRouterHandler {
 			return originalCreate(body, options)
 		}) as any
 
-		yield* super.createMessage(systemPrompt, messages, metadata)
+		// Delegate to the parent async generator via a plain-function-based wrapper
+		// to avoid esbuild CJS async-generator state-machine entanglement.
+		// yield* between two esbuild-CJS async generators creates a delegation chain
+		// that hangs when the outer iterator is consumed from yet another CJS async
+		// generator (attemptApiRequest).  Converting the inner generator into a
+		// runtime-constructed AsyncIterator object (no compile-time state machine)
+		// breaks the chain.  See todos/cli_hang_bug.md.
+		return _wrapAsyncGenerator(super.createMessage(systemPrompt, messages, metadata))
 	}
 }
