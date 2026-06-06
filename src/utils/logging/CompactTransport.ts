@@ -41,6 +41,9 @@ function formatHumanLine(entry: CompactLogEntry): string {
 	return `${ts} ${level} ${ctx}${entry.m}${data}`
 }
 
+/** Maximum number of recent human-readable log lines kept in memory. */
+const RING_BUFFER_CAPACITY = 5000
+
 /**
  * Implements the compact logging transport using VS Code Output Channel.
  * @implements {ICompactTransport}
@@ -55,6 +58,9 @@ export class CompactTransport implements ICompactTransport {
 	private _categories: string[] | undefined
 	private _knownCategories: Set<string> = new Set()
 	private _outputChannel: vscode.OutputChannel | undefined
+	/** Ring buffer of recent human-readable log lines for the public API. */
+	private _ringBuffer: string[] = []
+	private _ringBufferIndex = 0
 
 	/**
 	 * Creates a new CompactTransport instance.
@@ -199,8 +205,17 @@ export class CompactTransport implements ICompactTransport {
 		}
 
 		// Human-readable output channel line
+		const humanLine = formatHumanLine(entry)
 		if (this._outputChannel) {
-			this._outputChannel.appendLine(formatHumanLine(entry))
+			this._outputChannel.appendLine(humanLine)
+		}
+
+		// Ring buffer for public API log access (headless/CLI consumers).
+		if (this._ringBuffer.length < RING_BUFFER_CAPACITY) {
+			this._ringBuffer.push(humanLine)
+		} else {
+			this._ringBuffer[this._ringBufferIndex % RING_BUFFER_CAPACITY] = humanLine
+			this._ringBufferIndex++
 		}
 
 		// Optional JSON-lines file output (compact, delta-timestamps)
@@ -220,6 +235,26 @@ export class CompactTransport implements ICompactTransport {
 			this.ensureInitialized()
 			writeFileSync(this.filePath, output, { flag: "a" })
 		}
+	}
+
+	/**
+	 * Return the most recent human-readable log lines from the in-memory ring
+	 * buffer. This gives headless/CLI consumers access to the same log output
+	 * that appears in the VSCode Output Channel panel.
+	 *
+	 * @param maxLines Maximum number of lines to return (default: 2000).
+	 * @returns Newline-joined log lines, most recent last.
+	 */
+	getRecentLogs(maxLines: number = 2000): string {
+		const buf = this._ringBuffer
+		if (buf.length <= RING_BUFFER_CAPACITY) {
+			// Buffer hasn't wrapped yet — straightforward slice.
+			return buf.slice(-maxLines).join("\n")
+		}
+		// Buffer has wrapped — reconstruct in order.
+		const start = this._ringBufferIndex % RING_BUFFER_CAPACITY
+		const ordered = [...buf.slice(start), ...buf.slice(0, start)]
+		return ordered.slice(-maxLines).join("\n")
 	}
 
 	/**

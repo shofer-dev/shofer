@@ -50,6 +50,17 @@ export enum TaskCommandName {
 	GetModes = "GetModes",
 	GetModels = "GetModels",
 	DeleteQueuedMessage = "DeleteQueuedMessage",
+	ShowTaskWithId = "ShowTaskWithId",
+	RenameTask = "RenameTask",
+	ArchiveTask = "ArchiveTask",
+	UnarchiveTask = "UnarchiveTask",
+	PinTask = "PinTask",
+	UnpinTask = "UnpinTask",
+	DeleteTask = "DeleteTask",
+	GetTaskMarkdownExport = "GetTaskMarkdownExport",
+	GetTaskJsonExport = "GetTaskJsonExport",
+	ExportConfiguration = "ExportConfiguration",
+	ImportConfiguration = "ImportConfiguration",
 }
 
 /**
@@ -95,6 +106,58 @@ export const taskCommandSchema = z.discriminatedUnion("commandName", [
 	z.object({
 		commandName: z.literal(TaskCommandName.DeleteQueuedMessage),
 		data: z.string(), // messageId
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.ShowTaskWithId),
+		data: z.object({
+			taskId: z.string(),
+			keepCurrentTask: z.boolean().optional(),
+		}),
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.RenameTask),
+		data: z.object({
+			taskId: z.string(),
+			name: z.string(),
+		}),
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.ArchiveTask),
+		data: z.string(), // taskId
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.UnarchiveTask),
+		data: z.string(), // taskId
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.PinTask),
+		data: z.string(), // taskId
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.UnpinTask),
+		data: z.string(), // taskId
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.DeleteTask),
+		data: z.object({
+			taskId: z.string(),
+			cascadeSubtasks: z.boolean().optional(),
+		}),
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.GetTaskMarkdownExport),
+		data: z.string(), // taskId
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.GetTaskJsonExport),
+		data: z.string(), // taskId
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.ExportConfiguration),
+	}),
+	z.object({
+		commandName: z.literal(TaskCommandName.ImportConfiguration),
+		data: z.string(), // JSON string
 	}),
 ])
 

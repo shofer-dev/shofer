@@ -14,6 +14,7 @@ import {
 	type ProviderSettingsEntry,
 	type TaskEvent,
 	type CreateTaskOptions,
+	type HistoryItem,
 	ShoferEventName,
 	TaskCommandName,
 	isSecretStateKey,
@@ -28,6 +29,10 @@ import { openShoferInNewTab } from "../activate/registerCommands"
 import { getCommands } from "../services/command/commands"
 import { getModels } from "../api/providers/fetchers/modelCache"
 import { utilLog } from "../utils/logging/subsystems"
+import { getRecentLogs, getLogLevel, getLogKnownCategories } from "../utils/logging"
+import { buildJsonTrace } from "../integrations/misc/export-json"
+import { formatContentBlockToMarkdown, getTaskFileName } from "../integrations/misc/export-markdown"
+import { createWorkflowTask, discoverWorkflows } from "../core/workflow/index"
 
 export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	private readonly outputChannel: vscode.OutputChannel
@@ -150,6 +155,123 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 						} catch (error) {
 							const errorMessage = error instanceof Error ? error.message : String(error)
 							this.log(`[API] DeleteQueuedMessage failed for messageId ${command.data}: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.ShowTaskWithId:
+						this.log(`[API] ShowTaskWithId -> ${command.data.taskId}`)
+						try {
+							await this.showTaskWithId(command.data.taskId, {
+								keepCurrentTask: command.data.keepCurrentTask,
+							})
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] ShowTaskWithId failed: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.RenameTask:
+						this.log(`[API] RenameTask -> ${command.data.taskId}`)
+						try {
+							await this.renameTask(command.data.taskId, command.data.name)
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] RenameTask failed: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.ArchiveTask:
+						this.log(`[API] ArchiveTask -> ${command.data}`)
+						try {
+							await this.archiveTask(command.data)
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] ArchiveTask failed: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.UnarchiveTask:
+						this.log(`[API] UnarchiveTask -> ${command.data}`)
+						try {
+							await this.unarchiveTask(command.data)
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] UnarchiveTask failed: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.PinTask:
+						this.log(`[API] PinTask -> ${command.data}`)
+						try {
+							await this.pinTask(command.data)
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] PinTask failed: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.UnpinTask:
+						this.log(`[API] UnpinTask -> ${command.data}`)
+						try {
+							await this.unpinTask(command.data)
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] UnpinTask failed: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.DeleteTask:
+						this.log(`[API] DeleteTask -> ${command.data.taskId}`)
+						try {
+							await this.deleteTask(command.data.taskId, command.data.cascadeSubtasks)
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] DeleteTask failed: ${errorMessage}`)
+						}
+						break
+					case TaskCommandName.GetTaskMarkdownExport:
+						this.log(`[API] GetTaskMarkdownExport -> ${command.data}`)
+						try {
+							const markdown = await this.getTaskMarkdownExport(command.data)
+							sendResponse(ShoferEventName.TaskCompleted, [
+								command.data,
+								{ inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0 },
+								{ totalTools: 0, toolsCount: {} },
+								{ rating: "well", isSubtask: false, exportContent: markdown },
+							])
+						} catch (error) {
+							this.log(
+								`[API] GetTaskMarkdownExport failed: ${error instanceof Error ? error.message : String(error)}`,
+							)
+						}
+						break
+					case TaskCommandName.GetTaskJsonExport:
+						this.log(`[API] GetTaskJsonExport -> ${command.data}`)
+						try {
+							const jsonExport = await this.getTaskJsonExport(command.data)
+							sendResponse(ShoferEventName.TaskCompleted, [
+								command.data,
+								{ inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0 },
+								{ totalTools: 0, toolsCount: {} },
+								{ rating: "well", isSubtask: false, exportContent: JSON.stringify(jsonExport) },
+							])
+						} catch (error) {
+							this.log(
+								`[API] GetTaskJsonExport failed: ${error instanceof Error ? error.message : String(error)}`,
+							)
+						}
+						break
+					case TaskCommandName.ExportConfiguration:
+						this.log(`[API] ExportConfiguration`)
+						try {
+							const configJson = this.exportConfiguration()
+							sendResponse(ShoferEventName.ModelsResponse, [{ config: configJson }])
+						} catch (error) {
+							this.log(
+								`[API] ExportConfiguration failed: ${error instanceof Error ? error.message : String(error)}`,
+							)
+						}
+						break
+					case TaskCommandName.ImportConfiguration:
+						this.log(`[API] ImportConfiguration`)
+						try {
+							await this.importConfiguration(command.data)
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error)
+							this.log(`[API] ImportConfiguration failed: ${errorMessage}`)
 						}
 						break
 				}
@@ -558,5 +680,140 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 
 		await this.sidebarProvider.activateProviderProfile({ name })
 		return this.getActiveProfile()
+	}
+
+	// ─── Task History & Management (TaskSelector parity) ───────────
+
+	public getTaskHistoryItems(): HistoryItem[] {
+		return this.sidebarProvider.taskHistoryStore.getAll()
+	}
+
+	public async showTaskWithId(taskId: string, options?: { keepCurrentTask?: boolean }): Promise<void> {
+		await this.sidebarProvider.showTaskWithId(taskId, options)
+	}
+
+	public async renameTask(taskId: string, name: string): Promise<void> {
+		const { historyItem } = await this.sidebarProvider.getTaskWithId(taskId)
+		if (!historyItem) {
+			throw new Error(`Task not found: ${taskId}`)
+		}
+		await this.sidebarProvider.updateTaskHistory({ ...historyItem, name })
+		this.sidebarProvider.renameManagedTask(taskId, name)
+	}
+
+	public async archiveTask(taskId: string): Promise<void> {
+		await this.sidebarProvider.archiveManagedTask(taskId)
+	}
+
+	public async unarchiveTask(taskId: string): Promise<void> {
+		await this.sidebarProvider.unarchiveManagedTask(taskId)
+	}
+
+	public async pinTask(taskId: string): Promise<void> {
+		await this.sidebarProvider.pinManagedTask(taskId)
+	}
+
+	public async unpinTask(taskId: string): Promise<void> {
+		await this.sidebarProvider.unpinManagedTask(taskId)
+	}
+
+	public async deleteTask(taskId: string, cascadeSubtasks: boolean = true): Promise<void> {
+		await this.sidebarProvider.deleteTaskWithId(taskId, cascadeSubtasks)
+	}
+
+	// ─── Task Export (data-returning variants) ──────────────────────
+
+	public async getTaskMarkdownExport(taskId: string): Promise<string> {
+		const { historyItem, apiConversationHistory } = await this.sidebarProvider.getTaskWithId(taskId)
+
+		return apiConversationHistory
+			.map((message) => {
+				const role = message.role === "user" ? "**User:**" : "**Assistant:**"
+				const content = Array.isArray(message.content)
+					? message.content.map((block) => formatContentBlockToMarkdown(block as any)).join("\n")
+					: message.content
+				return `${role}\n\n${content}\n\n`
+			})
+			.join("---\n\n")
+	}
+
+	public async getTaskJsonExport(taskId: string): Promise<Record<string, unknown>> {
+		const { historyItem, apiConversationHistory } = await this.sidebarProvider.getTaskWithId(taskId)
+
+		// Read ui_messages for per-request metadata via the JSONL reader.
+		let uiMessages: Array<{ type: string; say?: string; ts: number; text?: string }> = []
+		try {
+			const { readTaskMessages } = await import("../core/task-persistence/taskMessages")
+			const globalStoragePath = this.sidebarProvider.contextProxy.globalStorageUri.fsPath
+			uiMessages = (await readTaskMessages({ taskId, globalStoragePath })) as typeof uiMessages
+		} catch {
+			// Fall through with empty uiMessages — the trace will lack per-call metadata.
+		}
+
+		const trace = buildJsonTrace(
+			taskId,
+			historyItem.task || historyItem.ts?.toString() || "",
+			historyItem.mode,
+			historyItem.ts ? new Date(historyItem.ts).toISOString() : new Date().toISOString(),
+			apiConversationHistory,
+			uiMessages,
+		)
+
+		return trace as unknown as Record<string, unknown>
+	}
+
+	// ─── Logging ────────────────────────────────────────────────────
+
+	public getOutputLogs(maxLines: number = 2000): string {
+		return getRecentLogs(maxLines)
+	}
+
+	// ─── Configuration Import/Export ─────────────────────────────────
+
+	public exportConfiguration(): string {
+		const config = this.getConfiguration()
+		return JSON.stringify(config, null, 2)
+	}
+
+	public async importConfiguration(json: string): Promise<void> {
+		let parsed: ShoferSettings
+		try {
+			parsed = JSON.parse(json) as ShoferSettings
+		} catch (err) {
+			throw new Error(`Invalid configuration JSON: ${err instanceof Error ? err.message : String(err)}`)
+		}
+		await this.setConfiguration(parsed)
+	}
+
+	// ─── Workflows ─────────────────────────────────────────────────
+
+	public async createWorkflow(slangSource: string, flowParams?: Record<string, unknown>): Promise<string> {
+		const task = await createWorkflowTask(this.sidebarProvider, slangSource, flowParams)
+
+		// Pop the current task to the background (same as the webview handler).
+		const poppedTask = this.sidebarProvider.popFromStackWithoutAborting()
+		if (poppedTask) {
+			this.sidebarProvider.taskManager.registerBackgroundTask(poppedTask)
+		}
+
+		await this.sidebarProvider.addShoferToStack(task)
+		this.sidebarProvider.taskManager.registerBackgroundTask(task)
+
+		try {
+			await this.sidebarProvider.taskManager.focusTask(task.taskId)
+		} catch {
+			this.log(`[createWorkflow] Failed to focus task ${task.taskId}`)
+		}
+
+		await task.seedHistory()
+		await this.sidebarProvider.postStateToWebview()
+
+		task.start()
+
+		return task.taskId
+	}
+
+	public async discoverWorkflows(): Promise<Map<string, string>> {
+		return discoverWorkflows(this.sidebarProvider.cwd)
 	}
 }

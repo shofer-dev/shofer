@@ -373,6 +373,113 @@ instead of VSCode Terminal. File edits go through the real filesystem via
 | [`packages/vscode-shim/src/api/create-vscode-api-mock.ts`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts) | vscode mock factory                                       |
 | [`src/core/tools/ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)                                     | Command execution (fallback to execa in CLI)              |
 
+## CLI via ShoferAPI — Extended Capabilities
+
+The CLI accesses the full [`ShoferAPI`](public_api.md) surface. Beyond the
+core task lifecycle (`startNewTask`, `sendMessage`, `cancelCurrentTask`),
+the following capabilities are available to CLI consumers:
+
+### Log Access
+
+```typescript
+// Read the most recent 500 lines from the extension's output channel
+const logs = api.getOutputLogs(500)
+console.log(logs)
+```
+
+The returned logs are sourced from the same in-memory ring buffer (capacity:
+5000 lines) that feeds the VSCode Output Channel. In headless mode this is the
+primary way to access runtime diagnostics.
+
+### Configuration Import/Export
+
+```typescript
+// Export full configuration (without secrets) as a JSON string
+const configJson = api.exportConfiguration()
+fs.writeFileSync("shofer-config.json", configJson)
+
+// Import a previously exported configuration
+const json = fs.readFileSync("shofer-config.json", "utf8")
+await api.importConfiguration(json)
+```
+
+This covers all Shofer settings: provider profiles, auto-approval toggles,
+mode configuration, experiments, code index settings, terminal settings,
+and logging configuration (`logLevel`, `logCategories`).
+
+### Task History Management (TaskSelector Parity)
+
+All actions available in the TaskSelector UI panel are programmatically
+accessible:
+
+```typescript
+// List all tasks
+const tasks = api.getTaskHistoryItems()
+
+// Switch to a specific task
+await api.showTaskWithId("task-uuid-here")
+
+// Rename a task
+await api.renameTask("task-uuid-here", "My Custom Task Name")
+
+// Archive / unarchive
+await api.archiveTask("task-uuid-here")
+await api.unarchiveTask("task-uuid-here")
+
+// Pin / unpin
+await api.pinTask("task-uuid-here")
+await api.unpinTask("task-uuid-here")
+
+// Delete (with optional cascade to subtasks)
+await api.deleteTask("task-uuid-here") // cascadeSubtasks: true (default)
+await api.deleteTask("task-uuid-here", false) // parent only
+```
+
+### Task Export (inline / data-returning)
+
+The CLI can fetch export content without file-system save dialogs:
+
+```typescript
+// Get markdown export as a string
+const markdown = await api.getTaskMarkdownExport("task-uuid-here")
+
+// Get JSON trace (structured: calls, cost, token usage, tool metadata)
+const jsonTrace = await api.getTaskJsonExport("task-uuid-here")
+```
+
+These return the same content that `exportTaskWithId` / `exportTaskWithIdJson`
+would write to disk, but inline for programmatic consumption.
+
+### Workflow Management
+
+The CLI can launch Slang workflows directly:
+
+```typescript
+// Discover available workflows
+const workflows = await api.discoverWorkflows()
+// Map { "implement-feature" => "flow implement-feature { ... }", ... }
+
+// Launch a workflow from a .slang source string
+const taskId = await api.createWorkflow(slangSource, { paramName: "value" })
+
+// The workflow runs its multi-agent slang loop asynchronously.
+// Monitor its progress via events:
+api.on("taskStarted", (taskId) => {
+	/* ... */
+})
+api.on("taskCompleted", (taskId, tokens, tools, info) => {
+	/* ... */
+})
+```
+
+Workflows are discovered from:
+
+- `<workspace>/.shofer/workflows/*.slang` (project-level)
+- `~/.shofer/workflows/*.slang` (global/user-level)
+
+Both `createWorkflow` and `discoverWorkflows` are available through the IPC
+protocol as well (via `TaskCommandName.CreateWorkflow` / `DiscoverWorkflows`).
+
 ## Known Gaps
 
 - **Terminal integration**: `execa` is used instead of VSCode Terminal; output
