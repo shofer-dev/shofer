@@ -163,6 +163,8 @@ export const toolParamNames = [
 	"timeout_sec",
 	// new_task peer_task_ids parameter
 	"peer_task_ids",
+	// list_background_tasks scope parameter
+	"scope",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
