@@ -405,7 +405,7 @@ export function tokenize(source: string): Token[] {
 		if (ch === "@") {
 			advance()
 			let name = ""
-			while (pos < source.length && /[a-zA-Z_0-9]/.test(peek())) {
+			while (pos < source.length && /[a-zA-Z_0-9*]/.test(peek())) {
 				name += advance()
 			}
 			if (name === "") {
