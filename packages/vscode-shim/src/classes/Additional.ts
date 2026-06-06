@@ -179,3 +179,23 @@ export class FileSystemError extends Error {
 		return new FileSystemError(message, "Unavailable")
 	}
 }
+
+/**
+ * Minimal TreeItem stub for CLI mode. The `HintItem extends vscode.TreeItem`
+ * class in ContextDropZoneProvider needs a class to extend from; it only
+ * uses the `description` and `tooltip` properties.
+ */
+export class TreeItem {
+	public label?: string
+	public description?: string | boolean
+	public tooltip?: string
+	public iconPath?: unknown
+	public collapsibleState?: number
+
+	constructor(labelOrResourceUri: string | IUri, collapsibleState?: number) {
+		if (typeof labelOrResourceUri === "string") {
+			this.label = labelOrResourceUri
+		}
+		this.collapsibleState = collapsibleState
+	}
+}

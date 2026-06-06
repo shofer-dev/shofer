@@ -34,6 +34,7 @@ import {
 	VercelAiGatewayHandler,
 	MiniMaxHandler,
 	BasetenHandler,
+	ShoferHandler,
 } from "./providers"
 import { NativeOllamaHandler } from "./providers/native-ollama"
 
@@ -178,6 +179,8 @@ export function buildApiHandler(
 				return new MiniMaxHandler(options)
 			case "baseten":
 				return new BasetenHandler(options)
+			case "shofer":
+				return new ShoferHandler(options)
 			case "poe":
 				return new PoeHandler(options)
 			default:

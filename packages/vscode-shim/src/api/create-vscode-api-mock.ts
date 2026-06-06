@@ -24,6 +24,7 @@ import {
 	LanguageModelToolCallPart,
 	LanguageModelToolResultPart,
 	FileSystemError,
+	TreeItem,
 } from "../classes/Additional.js"
 import { CancellationTokenSource } from "../classes/CancellationToken.js"
 import { StatusBarItem } from "../classes/StatusBarItem.js"
@@ -154,6 +155,7 @@ export function createVSCodeAPIMock(
 		DecorationRangeBehavior,
 		OverviewRulerLane,
 		StatusBarItem,
+		TreeItem,
 		CancellationToken: class CancellationTokenClass implements CancellationToken {
 			isCancellationRequested = false
 			onCancellationRequested = (_listener: (e: unknown) => void) => ({ dispose: () => {} })
