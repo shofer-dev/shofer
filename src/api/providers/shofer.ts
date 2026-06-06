@@ -51,36 +51,12 @@ export class ShoferHandler extends OpenRouterHandler {
 
 		// Patch the OpenAI client so every downstream call to
 		// `chat.completions.create` includes `conversation_id`.
-		// Also wrap the stream's async iterator to break the esbuild CJS
-		// async-generator delegation chain.  The OpenAI SDK Stream iterator is
-		// an esbuild-CJS async generator; when its next() is consumed from another
-		// CJS async generator (attemptApiRequest), the state-machine delegation
-		// silently hangs.  Capturing the raw iterator in a closure and wrapping
-		// it in a plain-object iterator breaks the chain.
-		// See todos/done/cli-print-stream-hang.md for full investigation.
 		const originalCreate = this["client"].chat.completions.create.bind(this["client"].chat.completions)
-		this["client"].chat.completions.create = (async (params: any, options?: any) => {
+		this["client"].chat.completions.create = ((params: any, options?: any) => {
 			const body = { conversation_id: conversationId, ...params }
-			const stream = (await originalCreate(body, options)) as any
-			// Replace Symbol.asyncIterator with a non-state-machine wrapper
-			const rawIter = stream[Symbol.asyncIterator]()
-			stream[Symbol.asyncIterator] = () => ({
-				next: () => rawIter.next(),
-				return: rawIter.return?.bind(rawIter),
-				[Symbol.asyncIterator]() {
-					return this
-				},
-			})
-			return stream
+			return originalCreate(body, options)
 		}) as any
 
-		// Use for-await-yield instead of yield* to break the esbuild CJS
-		// async-generator delegation chain. yield* between two esbuild-CJS
-		// async generators creates a delegation that silently hangs when the
-		// outermost iterator is consumed from yet another CJS async generator
-		// (attemptApiRequest). See todos/done/cli-print-stream-hang.md.
-		for await (const chunk of super.createMessage(systemPrompt, messages, metadata)) {
-			yield chunk
-		}
+		yield* super.createMessage(systemPrompt, messages, metadata)
 	}
 }

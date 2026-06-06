@@ -111,13 +111,8 @@ async function main() {
 		outfile: "dist/extension.js",
 		// global-agent must be external because it dynamically patches Node.js http/https modules
 		// which breaks when bundled. It needs access to the actual Node.js module instances.
-		// openai must be external because its ESM async iterator protocol (ReadableStreamToAsyncIterable)
-		// breaks when esbuild transforms it into CJS — the bundled response.body.getReader()
-		// wrapper never yields chunks, causing CLI --print to hang on iterator.next().
-		// undici must be external because bundling it causes its globalThis.fetch monkey-patch
-		// to replace Node.js's native fetch with an esbuild-CJS-broken implementation whose
-		// response.body reader never resolves (reads hang forever). See todos/cli_hang_bug.md.
-		external: ["vscode", "esbuild", "global-agent", "openai", "undici"],
+		// undici must be bundled because our VSIX is packaged with `--no-dependencies`.
+		external: ["vscode", "esbuild", "global-agent"],
 	}
 
 	/**
