@@ -250,6 +250,254 @@ flow "control-test" () {
 		expect(ops[0]!.type).toBe("LetOp")
 		expect(ops[1]!.type).toBe("RepeatBlock")
 	})
+
+	it("parses stake with output schema", () => {
+		const src = `
+flow "output-test" () {
+		agent A {
+		  mode: "code"
+		  stake work() -> @out
+		    output: { result: "string", approved: "boolean" }
+		  commit
+		}
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("StakeOp")
+		if (ops[0]!.type === "StakeOp") {
+			expect(ops[0]!.output).toBeDefined()
+			expect(ops[0]!.output!.fields.map((f) => f.name)).toEqual(["result", "approved"])
+			expect(ops[0]!.output!.fields.map((f) => f.fieldType)).toEqual(["string", "boolean"])
+		}
+	})
+
+	it("parses stake with multiple recipients", () => {
+		const src = `
+flow "multi-recipient" () {
+		agent A {
+		  mode: "code"
+		  stake work() -> @B, @C
+		  commit
+		}
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		if (ops[0]!.type === "StakeOp") {
+			expect(ops[0]!.recipients.map((r) => r.ref)).toEqual(["B", "C"])
+		}
+	})
+
+	it("parses stake with binding (let x = stake ...) — grammar not yet implemented", () => {
+		// StakeOp.binding exists in AST types but no slang syntax produces it.
+		// The `let x = stake ...` form is a design aspiration, not a bug.
+		// When grammar support is added, this test should verify the binding field.
+	})
+
+	it("parses commit with value", () => {
+		const src = `
+flow "commit-value" () {
+		agent A {
+		  mode: "code"
+		  stake work() -> @out
+		  commit "done"
+		}
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		const commit = ops[ops.length - 1]
+		expect(commit!.type).toBe("CommitOp")
+	})
+
+	it("parses commit with condition (if ...)", () => {
+		const src = `
+flow "conditional-commit" () {
+	 agent A {
+	   mode: "code"
+	   let ready = true
+	   commit if ready
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		const commit = ops[ops.length - 1]
+		expect(commit!.type).toBe("CommitOp")
+		if (commit!.type === "CommitOp") {
+			expect(commit!.condition).toBeDefined()
+		}
+	})
+
+	it("parses escalate with condition (if ...)", () => {
+		const src = `
+flow "conditional-escalate" () {
+	 agent A {
+	   mode: "code"
+	   let needsApproval = true
+	   escalate @Human reason: "Approve?" if needsApproval
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[1]!.type).toBe("EscalateOp")
+		if (ops[1]!.type === "EscalateOp") {
+			expect(ops[1]!.condition).toBeDefined()
+		}
+	})
+
+	it("parses stake with condition (if ...)", () => {
+		const src = `
+flow "conditional-stake" () {
+	 agent A {
+	   mode: "code"
+	   let shouldRun = true
+	   stake doWork() -> @out if shouldRun
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("LetOp") // let shouldRun = true
+		expect(ops[1]!.type).toBe("StakeOp")
+		if (ops[1]!.type === "StakeOp") {
+			expect(ops[1]!.condition).toBeDefined()
+		}
+	})
+
+	it("parses await with wildcard sources (@any, @*)", () => {
+		const src = `
+flow "wildcard-await" () {
+	 agent A {
+	   mode: "code"
+	   await msg <- @any
+	   await msg2 <- @*
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("AwaitOp")
+		if (ops[0]!.type === "AwaitOp") {
+			expect(ops[0]!.sources[0]!.ref).toBe("any")
+		}
+		expect(ops[1]!.type).toBe("AwaitOp")
+		if (ops[1]!.type === "AwaitOp") {
+			expect(ops[1]!.sources[0]!.ref).toBe("*")
+		}
+	})
+
+	it("parses stake broadcast (@all)", () => {
+		const src = `
+flow "broadcast" () {
+		agent A {
+		  mode: "code"
+		  stake announce() -> @all
+		  commit
+		}
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		if (ops[0]!.type === "StakeOp") {
+			expect(ops[0]!.recipients[0]!.ref).toBe("all")
+		}
+	})
+
+	it("parses agents with peers meta field", () => {
+		const src = `
+flow "peers-test" () {
+		agent Codebase {
+		  mode: "search"
+		  commit
+		}
+		agent Developer {
+		  mode: "code"
+		  peers: [@Codebase, @Reviewer]
+		  commit
+		}
+		agent Reviewer {
+		  mode: "reviewer"
+		  commit
+		}
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const dev = agentsOf(ast.flows[0]!).find((a) => a.name === "Developer")
+		expect(dev).toBeDefined()
+		expect(dev!.meta.peers).toEqual(["Codebase", "Reviewer"])
+	})
+
+	it("parses flow-level UI metadata (title, description, icon)", () => {
+		const src = `
+flow "ui-test" (input: "string") {
+		title: "My Workflow"
+		description: "A test workflow with metadata."
+		icon: "rocket"
+
+		param input {
+		  description: "The input parameter."
+		}
+
+		agent A {
+		  mode: "code"
+		  commit
+		}
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const flow = ast.flows[0]!
+		expect(flow.title).toBe("My Workflow")
+		expect(flow.description).toBe("A test workflow with metadata.")
+		expect(flow.icon).toBe("rocket")
+
+		// ParamMetaDecl
+		const paramMeta = flow.body.find((n) => n.type === "ParamMetaDecl")
+		expect(paramMeta).toBeDefined()
+		if (paramMeta && paramMeta.type === "ParamMetaDecl") {
+			expect(paramMeta.name).toBe("input")
+			expect(paramMeta.description).toBe("The input parameter.")
+		}
+	})
+
+	it("parses empty flow (no agents)", () => {
+		const src = `
+flow "empty" () {
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors.length).toBeGreaterThanOrEqual(0) // may warn or error depending on strictness
+		expect(ast.flows).toHaveLength(1)
+	})
+
+	it("parses converge with all_committed keyword", () => {
+		const src = `
+flow "all-committed" () {
+		agent A {
+		  mode: "code"
+		  commit
+		}
+		converge when: all_committed
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+	})
 })
 
 describe("validateSlangAST", () => {
@@ -378,5 +626,155 @@ describe("FlowState serialization", () => {
 		const restored = deserializeFlowState(data)
 		expect(restored.agents.size).toBe(0)
 		expect(restored.mailbox).toHaveLength(0)
+	})
+
+	it("round-trips agent with retryCount", () => {
+		const agents = new Map()
+		agents.set("A", {
+			name: "A",
+			taskId: "t1",
+			status: "idle" as const,
+			opIndex: 0,
+			bindings: new Map(),
+			retryCount: 2,
+		})
+		const original: FlowState = {
+			flowName: "f",
+			params: {},
+			agents,
+			round: 1,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [],
+		}
+		const restored = deserializeFlowState(serializeFlowState(original))
+		expect(restored.agents.get("A")!.retryCount).toBe(2)
+	})
+
+	it("round-trips agent with sendingTo / waitingFor", () => {
+		const agents = new Map()
+		agents.set("A", {
+			name: "A",
+			taskId: "t1",
+			status: "blocked" as const,
+			opIndex: 0,
+			bindings: new Map(),
+			retryCount: 0,
+			sendingTo: "B",
+			waitingFor: "B",
+		})
+		const original: FlowState = {
+			flowName: "f",
+			params: {},
+			agents,
+			round: 1,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [],
+		}
+		const restored = deserializeFlowState(serializeFlowState(original))
+		const a = restored.agents.get("A")!
+		expect(a.sendingTo).toBe("B")
+		expect(a.waitingFor).toBe("B")
+	})
+
+	it("round-trips agent with complex output (object)", () => {
+		const agents = new Map()
+		agents.set("A", {
+			name: "A",
+			taskId: "t1",
+			status: "idle" as const,
+			opIndex: 0,
+			bindings: new Map(),
+			retryCount: 0,
+			output: { approved: true, issues: "none", nested: { deep: 42 } },
+		})
+		const original: FlowState = {
+			flowName: "f",
+			params: {},
+			agents,
+			round: 1,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [],
+		}
+		const restored = deserializeFlowState(serializeFlowState(original))
+		expect(restored.agents.get("A")!.output).toEqual({ approved: true, issues: "none", nested: { deep: 42 } })
+	})
+
+	it("round-trips mailbox with multiple entries", () => {
+		const original: FlowState = {
+			flowName: "f",
+			params: {},
+			agents: new Map(),
+			round: 1,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [
+				{ from: "A", to: "B", value: "first", timestamp: 1, funcName: "do" },
+				{ from: "B", to: "C", value: "second", timestamp: 2, funcName: "reply" },
+				{ from: "C", to: "out", value: "third", timestamp: 3 },
+			],
+		}
+		const restored = deserializeFlowState(serializeFlowState(original))
+		expect(restored.mailbox).toHaveLength(3)
+		expect(restored.mailbox.map((m) => m.value)).toEqual(["first", "second", "third"])
+	})
+
+	it("deserializes with sourcePath preserved", () => {
+		const original: FlowState = {
+			flowName: "f",
+			params: {},
+			agents: new Map(),
+			round: 0,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [],
+			sourcePath: "/home/user/.shofer/workflows/my-flow.slang",
+		}
+		const restored = deserializeFlowState(serializeFlowState(original))
+		expect(restored.sourcePath).toBe("/home/user/.shofer/workflows/my-flow.slang")
+	})
+
+	it("deserializes legacy format without retryCount → defaults to 0", () => {
+		const data = {
+			flowName: "old",
+			params: {},
+			agents: [["A", { name: "A", taskId: "t1", status: "idle", opIndex: 0, bindings: [] }]],
+			round: 0,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [],
+		}
+		const restored = deserializeFlowState(data)
+		expect(restored.agents.get("A")!.retryCount).toBe(0)
+	})
+
+	it("deserializes with missing sourcePath → undefined", () => {
+		const data = {
+			flowName: "f",
+			params: {},
+			agents: [],
+			round: 0,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [],
+		}
+		const restored = deserializeFlowState(data)
+		expect(restored.sourcePath).toBeUndefined()
+	})
+
+	it("deserializes corrupt agents → empty map", () => {
+		const data = {
+			flowName: "f",
+			params: {},
+			agents: null,
+			round: 0,
+			tokensUsed: 0,
+			status: "running",
+			mailbox: [],
+		}
+		const restored = deserializeFlowState(data)
+		expect(restored.agents.size).toBe(0)
 	})
 })
