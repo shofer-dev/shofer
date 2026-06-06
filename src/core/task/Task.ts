@@ -3894,7 +3894,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Task Loop
 
 	private async initiateTaskLoop(userContent: Anthropic.Messages.ContentBlockParam[]): Promise<void> {
-		console.error(`[DEBUG initiateTaskLoop] START taskId=${this.taskId}`)
 		this.diagLog(
 			`[DIAG initiateTaskLoop] taskId=${this.taskId}.${this.instanceId}, userContent blocks=${userContent.length}, texts=${userContent
 				.filter((b) => b.type === "text")
@@ -3909,7 +3908,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.taskStartedEmitted = false
 
 		while (!this.abort) {
-			console.error(`[DEBUG initiateTaskLoop] LOOP ITER taskId=${this.taskId}`)
 			this.diagLog(
 				`[DIAG initiateTaskLoop] Loop iteration START taskId=${this.taskId}.${this.instanceId}, nextUserContent blocks=${nextUserContent.length}`,
 			)
@@ -3918,7 +3916,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// already calls this, but history may have been corrupted through other
 			// code paths (resumeTaskFromHistory, stored-history load, condensation).
 			this._cleanupOrphanedToolUses()
-			console.error(`[DEBUG initiateTaskLoop] calling recursivelyMakeShoferRequests taskId=${this.taskId}`)
 			const didEndLoop = await this.recursivelyMakeShoferRequests(nextUserContent, includeFileDetails)
 			console.error(
 				`[DEBUG initiateTaskLoop] recursivelyMakeShoferRequests returned didEndLoop=${didEndLoop} taskId=${this.taskId}`,
@@ -3940,7 +3937,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// as he can.
 
 			if (didEndLoop) {
-				console.error(`[DEBUG initiateTaskLoop] didEndLoop=true, breaking taskId=${this.taskId}`)
 				// For now a task never 'completes'. This will only happen if
 				// the user hits max requests and denies resetting the count.
 				break
@@ -3948,7 +3944,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				nextUserContent = [{ type: "text", text: formatResponse.noToolsUsed() }]
 			}
 		}
-		console.error(`[DEBUG initiateTaskLoop] EXITED LOOP (abort=${this.abort}) taskId=${this.taskId}`)
 	}
 
 	/**
@@ -4048,7 +4043,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			await this.maybeWaitForProviderRateLimit(currentItem.retryAttempt ?? 0)
 			Task.lastGlobalApiRequestTime = performance.now()
 
-			console.error(`[DEBUG rMSR] api_req_started say taskId=${this.taskId}`)
 			await this.say(
 				"api_req_started",
 				JSON.stringify({
@@ -4057,19 +4051,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					retryAttempt: currentItem.retryAttempt ?? 0,
 				}),
 			)
-			console.error(`[DEBUG rMSR] api_req_started say DONE taskId=${this.taskId}`)
 
 			const provider = this.providerRef.deref()
-			console.error(`[DEBUG rMSR] getState() about to call taskId=${this.taskId}`)
 			const state = provider ? await provider.getState() : undefined
-			console.error(`[DEBUG rMSR] getState() DONE taskId=${this.taskId}`)
 
 			const showShoferIgnoredFiles = state?.showShoferIgnoredFiles ?? false
 			const includeDiagnosticMessages = state?.includeDiagnosticMessages ?? true
 			const maxDiagnosticMessages = state?.maxDiagnosticMessages ?? 50
 			const currentMode = state?.mode ?? defaultModeSlug
 
-			console.error(`[DEBUG rMSR] processUserContentMentions starting taskId=${this.taskId}`)
 			const {
 				content: parsedUserContent,
 				mode: slashCommandMode,
@@ -4085,7 +4075,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				skillsManager: provider?.getSkillsManager(),
 				currentMode,
 			})
-			console.error(`[DEBUG rMSR] processUserContentMentions DONE taskId=${this.taskId}`)
 
 			// Track skills resolved via slash-style mentions (e.g. `/skill-name`)
 			// so the SkillsButton popover reflects them as loaded — mirroring the
@@ -4114,9 +4103,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 			}
 
-			console.error(`[DEBUG rMSR] getEnvironmentDetails starting taskId=${this.taskId}`)
 			const environmentDetails = await getEnvironmentDetails(this, currentIncludeFileDetails)
-			console.error(`[DEBUG rMSR] getEnvironmentDetails DONE taskId=${this.taskId}`)
 
 			// Remove any existing environment_details blocks before adding fresh ones.
 			// This prevents duplicate environment details when resuming tasks,
@@ -4175,9 +4162,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// Must flush synchronously — the API call that follows reads
 			// on-disk state and depends on this save being visible.
-			console.error(`[DEBUG rMSR] _flushSaveShoferMessages taskId=${this.taskId}`)
 			await this._flushSaveShoferMessages()
-			console.error(`[DEBUG rMSR] _flushSaveShoferMessages DONE taskId=${this.taskId}`)
 			// §4.2 + H9: Skinny push (omits shoferMessages + taskHistory). Per-message
 			// deltas (`shoferMessageAppended` / `messageUpdated`) keep the webview's
 			// shoferMessages array in sync; `taskHistoryItemUpdated` covers history.
@@ -4189,15 +4174,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					p &&
 					(p.taskManager?.getFocusedTaskId() === this.taskId || p.getCurrentTask()?.taskId === this.taskId)
 				) {
-					console.error(`[DEBUG rMSR] postStateToWebviewWithoutShoferMessages taskId=${this.taskId}`)
 					await p.postStateToWebviewWithoutShoferMessages()
-					console.error(`[DEBUG rMSR] postStateToWebviewWithoutShoferMessages DONE taskId=${this.taskId}`)
 				}
 			}
 
-			console.error(`[DEBUG rMSR] entering API call try block taskId=${this.taskId}`)
 			try {
-				console.error(`[DEBUG rMSR] inside try, before api.createMessage taskId=${this.taskId}`)
 				let cacheWriteTokens = 0
 				let cacheReadTokens = 0
 				let inputTokens = 0
@@ -6145,6 +6126,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			cleanConversationHistory as unknown as Anthropic.Messages.MessageParam[],
 		)
 		const stream = this.api.createMessage(systemPrompt, resolvedConversationHistory, metadata)
+
 		const iterator = stream[Symbol.asyncIterator]()
 
 		// Persist the wire request into the api_req_started entry so the

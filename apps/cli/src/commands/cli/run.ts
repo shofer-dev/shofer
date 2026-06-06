@@ -494,7 +494,9 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 		process.on("unhandledRejection", onUnhandledRejection)
 
 		try {
+			console.error("[DEBUG run.ts] starting host.activate()...")
 			await host.activate()
+			console.error("[DEBUG run.ts] host.activate() done")
 
 			if (jsonEmitter) {
 				jsonEmitter.attachToClient(host.client)
@@ -518,9 +520,12 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 				})
 			} else {
 				if (isResumeRequested) {
+					console.error("[DEBUG run.ts] resuming task...")
 					await host.resumeTask(resolvedResumeSessionId!)
 				} else {
+					console.error("[DEBUG run.ts] running new task...")
 					await host.runTask(prompt!, requestedCreateSessionId)
+					console.error("[DEBUG run.ts] runTask() returned")
 				}
 			}
 
