@@ -61,6 +61,47 @@ const shoferApi = shoferExtension.exports as ShoferAPI
 | [`isTaskInHistory`](../packages/types/src/api.ts:40)     | `(taskId: string) => Promise<boolean>` | Checks whether a task with the given ID exists in the task history. |
 | [`getCurrentTaskStack`](../packages/types/src/api.ts:45) | `() => string[]`                       | Returns the current task stack as an array of task IDs.             |
 
+### Task History & Management (TaskSelector parity)
+
+The following methods provide programmatic access to every action available in the
+TaskSelector UI panel — listing, switching, renaming, archiving, pinning, and
+deleting tasks.
+
+| Method                                                | Signature                                     | Description                                                                                              |
+| ----------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [`getTaskHistoryItems`](../packages/types/src/api.ts) | `() => HistoryItem[]`                         | Returns all task history items as a flat array (backing data for the TaskSelector panel).                |
+| [`showTaskWithId`](../packages/types/src/api.ts)      | `(taskId, opts?) => Promise<void>`            | Switches the active task. In VSCode loads into the chat view; in headless creates on the internal stack. |
+| [`renameTask`](../packages/types/src/api.ts)          | `(taskId, name) => Promise<void>`             | Renames a task by ID (updates the display name in TaskSelector and HistoryView).                         |
+| [`archiveTask`](../packages/types/src/api.ts)         | `(taskId) => Promise<void>`                   | Archives a task (moves to the "Archived" collapsible section).                                           |
+| [`unarchiveTask`](../packages/types/src/api.ts)       | `(taskId) => Promise<void>`                   | Unarchives a previously archived task.                                                                   |
+| [`pinTask`](../packages/types/src/api.ts)             | `(taskId) => Promise<void>`                   | Pins a task (shows at the top of the task list).                                                         |
+| [`unpinTask`](../packages/types/src/api.ts)           | `(taskId) => Promise<void>`                   | Unpins a previously pinned task.                                                                         |
+| [`deleteTask`](../packages/types/src/api.ts)          | `(taskId, cascadeSubtasks?) => Promise<void>` | Deletes a task and (optionally) all its subtasks from history, disk, and memory.                         |
+
+### Task Export (inline / data-returning)
+
+These methods return the export content inline instead of saving to a file,
+enabling programmatic consumption from CLI, companion extensions, and
+orchestration workflows.
+
+| Method                                                  | Signature                                      | Description                                                                                             |
+| ------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [`getTaskMarkdownExport`](../packages/types/src/api.ts) | `(taskId) => Promise<string>`                  | Returns the markdown-formatted task conversation as a string (same content as `exportTaskWithId` file). |
+| [`getTaskJsonExport`](../packages/types/src/api.ts)     | `(taskId) => Promise<Record<string, unknown>>` | Returns the structured JSON trace (calls, cost, token usage, tool metadata) as an object.               |
+
+### Logging
+
+| Method                                          | Signature                       | Description                                                                                  |
+| ----------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| [`getOutputLogs`](../packages/types/src/api.ts) | `(maxLines?: number) => string` | Returns the most recent lines from the extension's output channel buffer (up to 5000 lines). |
+
+### Configuration Import/Export
+
+| Method                                                | Signature                         | Description                                                                                                       |
+| ----------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [`exportConfiguration`](../packages/types/src/api.ts) | `() => string`                    | Exports the full Shofer configuration (except secrets) as a JSON string for transfer or backup.                   |
+| [`importConfiguration`](../packages/types/src/api.ts) | `(json: string) => Promise<void>` | Imports a configuration from a JSON string (previously obtained via `exportConfiguration`). Applies and persists. |
+
 ### Configuration
 
 | Method                                                | Signature                                   | Description                                                       |
@@ -196,6 +237,37 @@ acquire the same API via `vscode.extensions.getExtension('shoferdev.shofer').exp
 The ShoferAPI is the **single unified interface** for programmatically controlling
 Shofer — regardless of whether the consumer is a headless CLI process, a companion
 VSCode extension, or an external IPC client.
+
+### CLI Log Access
+
+The CLI (and any headless consumer) can read Shofer's runtime logs via
+`api.getOutputLogs()`. The logs are sourced from the same in-memory ring buffer
+that feeds the VSCode Output Channel panel, so the CLI sees the same diagnostics
+that a VSCode user would see. The ring buffer holds up to 5000 lines of
+human-readable log output.
+
+### CLI Configuration Management
+
+The CLI can export and import the full Shofer configuration:
+
+```typescript
+// Export current configuration (without secrets)
+const configJson = api.exportConfiguration()
+// → Save to file, transfer to another instance, etc.
+
+// Import configuration
+await api.importConfiguration(configJson)
+```
+
+The `importConfiguration` method validates the JSON and applies all settings
+via the same `ContextProxy.setValues()` path used by the Settings UI.
+
+### Workflow Management
+
+| Method                                              | Signature                                       | Description                                                                                                                                                         |
+| --------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`createWorkflow`](../packages/types/src/api.ts)    | `(slangSource, flowParams?) => Promise<string>` | Creates and starts a Slang workflow from a `.slang` source string. Parses, validates, and launches the WorkflowTask.                                                |
+| [`discoverWorkflows`](../packages/types/src/api.ts) | `() => Promise<Map<string, string>>`            | Discovers available Slang workflows from the project's `.shofer/workflows/` and the user's `~/.shofer/workflows/` directories. Returns a map of flow name → source. |
 
 ### Consumer SDK
 

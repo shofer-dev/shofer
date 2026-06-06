@@ -148,3 +148,15 @@ export function getLogKnownCategories(): string[] {
 export function getLogLevel(): LogLevel {
 	return _transport?.getLevel() ?? "debug"
 }
+
+/**
+ * Return the most recent human-readable log lines from the in-memory ring
+ * buffer.  This gives headless/CLI consumers access to the same log output
+ * that appears in the VSCode Output Channel panel.
+ *
+ * @param maxLines Maximum number of lines to return (default: 2000).
+ * @returns Newline-joined log lines, most recent last.
+ */
+export function getRecentLogs(maxLines: number = 2000): string {
+	return _transport?.getRecentLogs(maxLines) ?? ""
+}
