@@ -203,17 +203,29 @@ shofer upgrade           # Update to latest version
 
 ## Environment Variables
 
-| Variable              | Purpose                                |
-| --------------------- | -------------------------------------- |
-| `OPENROUTER_API_KEY`  | Default for `--provider openrouter`    |
-| `ANTHROPIC_API_KEY`   | Default for `--provider anthropic`     |
-| `OPENAI_API_KEY`      | Default for `--provider openai-native` |
-| `GOOGLE_API_KEY`      | Default for `--provider gemini`        |
-| `SHOFER_API_KEY`      | Default for `--provider shofer`        |
-| `SHOFER_PROVIDER_URL` | Shofer Router proxy base URL           |
-| `SHOFER_API_URL`      | Shofer Cloud API base URL              |
-| `SHOFER_SDK_BASE_URL` | Shofer Cloud SDK base URL              |
-| `TELEMETRY_ENABLED`   | Set to `"true"` to enable telemetry    |
+| Variable                    | Purpose                                                                                                                                                                             | Used by CLI? |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `OPENROUTER_API_KEY`        | Default for `--provider openrouter`                                                                                                                                                 | ✅ yes       |
+| `ANTHROPIC_API_KEY`         | Default for `--provider anthropic`                                                                                                                                                  | ✅ yes       |
+| `OPENAI_API_KEY`            | Default for `--provider openai-native`                                                                                                                                              | ✅ yes       |
+| `GOOGLE_API_KEY`            | Default for `--provider gemini`                                                                                                                                                     | ✅ yes       |
+| `VERCEL_AI_GATEWAY_API_KEY` | Default for `--provider vercel-ai-gateway`                                                                                                                                          | ✅ yes       |
+| `SHOFER_API_KEY`            | Default for `--provider shofer` (passed as Bearer token to llm-router)                                                                                                              | ✅ yes       |
+| `SHOFER_PROVIDER_URL`       | Shofer cloud proxy URL. **Note:** consumed by the Go `llm-provider` companion extension, NOT the JS handler. The CLI does not use this. Use `--provider shofer --base-url` instead. | ❌ no        |
+| `SHOFER_API_URL`            | Marketplace API base URL. Used by `RemoteConfigLoader` to fetch modes and MCP catalog entries from Shofer Cloud. Has no effect on LLM calls.                                        | ❌ no        |
+| `SHOFER_SDK_BASE_URL`       | Shofer Cloud SDK base URL. Declared in `apps/cli/src/types/constants.ts` but **not consumed** by any CLI code. Reserved for future SDK integration.                                 | ❌ no        |
+| `TELEMETRY_ENABLED`         | Set to `"true"` to enable telemetry                                                                                                                                                 | ✅ yes       |
+| `SHOFER_NERD_FONT`          | Set to `"0"` to use ASCII fallback icons in TUI                                                                                                                                     | ✅ yes       |
+
+### Example `SHOFER_PROVIDER_URL`
+
+```bash
+SHOFER_PROVIDER_URL=https://api.shofer.dev/proxy
+```
+
+This is the default used by the `dev` script in `package.json`. It points to Shofer's cloud proxy
+which routes requests to upstream providers. It is **not** used when `--provider shofer` is
+selected — that provider uses `--base-url` directly.
 
 ## Provider Configuration
 
@@ -347,6 +359,7 @@ instead of VSCode Terminal. File edits go through the real filesystem via
   doesn't react to file changes
 - **Browser tools**: Browser automation (`mcp--browser-tools`) may work in CLI
   mode but hasn't been tested extensively
-- **`SHOFER_PROVIDER_URL`**: This environment variable is consumed by the Go
-  `llm-provider` companion extension, not the JS extension. The CLI doesn't use
-  it — use `--provider shofer --base-url` instead
+- **`SHOFER_PROVIDER_URL`**: This environment variable is set by the `dev`
+  script in `package.json` to `https://api.shofer.dev/proxy`. It is consumed by
+  the Go `llm-provider` companion extension, not the JS handler. The CLI does
+  not use it — use `--provider shofer --base-url` instead.
