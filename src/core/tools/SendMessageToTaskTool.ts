@@ -169,6 +169,13 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					return
 				}
 
+				// Mirror the webview queueMessage handler: if the recipient is idle
+				// (abort=true after attempt_completion), trigger cancelAndProcessQueuedMessages
+				// to restart the recipient's event loop, just like the user clicking "Send".
+				if (targetState && targetState.abort) {
+					targetState.cancelAndProcessQueuedMessages()
+				}
+
 				// 3. Register a sync resolver for this recipient.
 				const responsePromise = provider.registerPendingSyncResolver(task_id, task.taskId)
 
