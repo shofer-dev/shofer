@@ -671,6 +671,62 @@ describe("ExtensionHost", () => {
 		})
 	})
 
+	describe("cancelTask", () => {
+		it("should call extensionAPI.cancelCurrentTask", async () => {
+			const host = createTestHost()
+			host.markWebviewReady()
+
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			await host.cancelTask()
+
+			expect(api.cancelCurrentTask).toHaveBeenCalled()
+		})
+	})
+
+	describe("sendMessage", () => {
+		it("should call extensionAPI.sendMessage with text and images", async () => {
+			const host = createTestHost()
+			host.markWebviewReady()
+
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			await host.sendMessage("hello", ["img1"])
+
+			expect(api.sendMessage).toHaveBeenCalledWith("hello", ["img1"])
+		})
+
+		it("should call extensionAPI.sendMessage with just text", async () => {
+			const host = createTestHost()
+			host.markWebviewReady()
+
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			await host.sendMessage("hello")
+
+			expect(api.sendMessage).toHaveBeenCalledWith("hello", undefined)
+		})
+	})
+
+	describe("approveAction / rejectAction", () => {
+		it("should call extensionAPI.pressPrimaryButton for approveAction", async () => {
+			const host = createTestHost()
+			host.markWebviewReady()
+
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			await host.approveAction()
+
+			expect(api.pressPrimaryButton).toHaveBeenCalled()
+		})
+
+		it("should call extensionAPI.pressSecondaryButton for rejectAction", async () => {
+			const host = createTestHost()
+			host.markWebviewReady()
+
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
+			await host.rejectAction()
+
+			expect(api.pressSecondaryButton).toHaveBeenCalled()
+		})
+	})
+
 	describe("initial settings", () => {
 		it("should set mode from options", () => {
 			const host = createTestHost({ mode: "architect" })
