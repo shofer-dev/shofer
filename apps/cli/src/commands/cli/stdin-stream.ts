@@ -849,7 +849,7 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 					})
 
 					try {
-						host.client.cancelTask()
+						host.cancelTask()
 
 						jsonEmitter.emitControl({
 							subtype: "done",
@@ -956,7 +956,7 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 		}
 
 		if (shouldShutdown && host.client.hasActiveTask()) {
-			host.client.cancelTask()
+			host.cancelTask()
 		}
 
 		if (!shouldShutdown) {

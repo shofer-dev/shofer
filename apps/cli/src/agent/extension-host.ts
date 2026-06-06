@@ -571,6 +571,42 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		return this.waitForTaskCompletion()
 	}
 
+	public async cancelTask(): Promise<void> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+
+		console.error("[DEBUG extension-host] cancelTask() calling extensionAPI.cancelCurrentTask...")
+		await this.extensionAPI.cancelCurrentTask()
+	}
+
+	public async sendMessage(text?: string, images?: string[]): Promise<void> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+
+		console.error("[DEBUG extension-host] sendMessage() calling extensionAPI.sendMessage...")
+		await this.extensionAPI.sendMessage(text, images)
+	}
+
+	public async approveAction(): Promise<void> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+
+		console.error("[DEBUG extension-host] approveAction() calling extensionAPI.pressPrimaryButton...")
+		await this.extensionAPI.pressPrimaryButton()
+	}
+
+	public async rejectAction(): Promise<void> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+
+		console.error("[DEBUG extension-host] rejectAction() calling extensionAPI.pressSecondaryButton...")
+		await this.extensionAPI.pressSecondaryButton()
+	}
+
 	// ==========================================================================
 	// Public Agent State API
 	// ==========================================================================
