@@ -1,24 +1,23 @@
 - Is worktree inherrited? Auto-approvals?
 
-- Implement new abstraction: workflow
-
 - Revisit build-in modes
 
-- Improve README, walkthrough, and video  (update changelog)
+- Improve README, walkthrough, and video (update changelog)
 
 - Announce https://gemini.google.com/app/bc25f481142e4161
-https://www.reddit.com/r/opensource/comments/1rqryee/slang_a_declarative_language_for_multiagent/#:~:text=The%20syntax%20is%20simple%20enough,%2C%20OpenRouter%2C%20MCP%20Sampling).
+  https://www.reddit.com/r/opensource/comments/1rqryee/slang_a_declarative_language_for_multiagent/#:~:text=The%20syntax%20is%20simple%20enough,%2C%20OpenRouter%2C%20MCP%20Sampling).
 
 - make the dir name same as worktree & branch:
-alsterg@laptop:~/Projects/arkware.ai/.shofer/worktrees/arkware.ai-kom7c$ git branch
-+ master
-+ worktree/task_messaging
-+ worktree/test
+  alsterg@laptop:~/Projects/arkware.ai/.shofer/worktrees/arkware.ai-kom7c$ git branch
+
+* master
+* worktree/task_messaging
+* worktree/test
   worktree/w3
-* worktree/workflow_design
 
+- worktree/workflow_design
 
-- DEV default system prompt update to let the model know all these (native tools, capabilities, conventions)
+* DEV default system prompt update to let the model know all these (native tools, capabilities, conventions)
     - project documentation standarization/structure
     - Do not double answer: both with a regular message and with attempt_completion. The latter is the way you should provide your final answer/conclusion.
     - submodule structure
