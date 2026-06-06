@@ -310,6 +310,30 @@ export class WindowAPI {
 		}
 	}
 
+	registerCustomEditorProvider(
+		_viewType: string,
+		_provider: unknown,
+		_options?: { webviewOptions?: Record<string, unknown> },
+	): Disposable {
+		return { dispose: () => {} }
+	}
+
+	createWebviewPanel(
+		_viewType: string,
+		_title: string,
+		_showOptions: unknown,
+		_options?: { enableScripts?: boolean; retainContextWhenHidden?: boolean },
+	): unknown {
+		return {
+			dispose: () => {},
+			webview: { onDidReceiveMessage: () => ({ dispose: () => {} }), postMessage: () => {} },
+		}
+	}
+
+	createTreeView(_viewId: string, _options: { treeDataProvider: unknown }): Disposable {
+		return { dispose: () => {} }
+	}
+
 	registerUriHandler(_handler: UriHandler): Disposable {
 		// Store the URI handler for later use
 		return {

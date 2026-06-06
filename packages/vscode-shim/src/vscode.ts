@@ -26,6 +26,7 @@ export {
 	LanguageModelToolCallPart,
 	LanguageModelToolResultPart,
 	FileSystemError,
+	TreeItem,
 } from "./classes/Additional.js"
 export { CancellationTokenSource, type CancellationToken } from "./classes/CancellationToken.js"
 export { OutputChannel } from "./classes/OutputChannel.js"

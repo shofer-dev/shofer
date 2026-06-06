@@ -34,7 +34,15 @@ export const DEFAULT_CONSECUTIVE_MISTAKE_LIMIT = 3
  * Dynamic provider requires external API calls in order to get the model list.
  */
 
-export const dynamicProviders = ["openrouter", "vercel-ai-gateway", "litellm", "requesty", "unbound", "poe"] as const
+export const dynamicProviders = [
+	"openrouter",
+	"vercel-ai-gateway",
+	"litellm",
+	"requesty",
+	"unbound",
+	"poe",
+	"shofer",
+] as const
 
 export type DynamicProvider = (typeof dynamicProviders)[number]
 
@@ -653,6 +661,7 @@ export const MODELS_BY_PROVIDER: Record<
 	litellm: { id: "litellm", label: "LiteLLM", models: [] },
 	openrouter: { id: "openrouter", label: "OpenRouter", models: [] },
 	requesty: { id: "requesty", label: "Requesty", models: [] },
+	shofer: { id: "shofer", label: "Shofer Router", models: [] },
 	unbound: { id: "unbound", label: "Unbound", models: [] },
 	"vercel-ai-gateway": { id: "vercel-ai-gateway", label: "Vercel AI Gateway", models: [] },
 
