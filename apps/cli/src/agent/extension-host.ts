@@ -607,6 +607,111 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		await this.extensionAPI.pressSecondaryButton()
 	}
 
+	public getConfiguration() {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.getConfiguration()
+	}
+
+	public async setConfiguration(values: ShoferSettings): Promise<void> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		await this.extensionAPI.setConfiguration(values)
+	}
+
+	public getProfiles(): string[] {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.getProfiles()
+	}
+
+	public getProfileEntry(name: string) {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.getProfileEntry(name)
+	}
+
+	public async createProfile(name: string, profile?: Parameters<ShoferAPI["createProfile"]>[1], activate?: boolean) {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.createProfile(name, profile, activate)
+	}
+
+	public async updateProfile(name: string, profile: Parameters<ShoferAPI["updateProfile"]>[1], activate?: boolean) {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.updateProfile(name, profile, activate)
+	}
+
+	public async upsertProfile(name: string, profile: Parameters<ShoferAPI["upsertProfile"]>[1], activate?: boolean) {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.upsertProfile(name, profile, activate)
+	}
+
+	public async deleteProfile(name: string): Promise<void> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		await this.extensionAPI.deleteProfile(name)
+	}
+
+	public getActiveProfile() {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.getActiveProfile()
+	}
+
+	public async setActiveProfile(name: string) {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.setActiveProfile(name)
+	}
+
+	public async isTaskInHistory(taskId: string): Promise<boolean> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.isTaskInHistory(taskId)
+	}
+
+	public getCurrentTaskStack(): string[] {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.getCurrentTaskStack()
+	}
+
+	public async clearCurrentTask(lastMessage?: string): Promise<void> {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		await this.extensionAPI.clearCurrentTask(lastMessage)
+	}
+
+	public isReady(): boolean {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		return this.extensionAPI.isReady()
+	}
+
+	public deleteQueuedMessage(messageId: string): void {
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+		this.extensionAPI.deleteQueuedMessage(messageId)
+	}
+
 	// ==========================================================================
 	// Public Agent State API
 	// ==========================================================================
