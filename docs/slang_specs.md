@@ -73,17 +73,16 @@ flow "my-flow" (param: "string") {
 
 ## Lexical Elements
 
-| Element    | Form                                           | Notes                                                    |
-| ---------- | ---------------------------------------------- | -------------------------------------------------------- |
-| Comment    | `-- text to end of line`                       | Single-line only. No block comments.                     |
-| String     | `"double quoted"`                              | The only string form. Used for params, roles, args, etc. |
-| Number     | `42`, `3.14`                                   | Integer or float.                                        |
-| Boolean    | `true`, `false`                                | Keywords.                                                |
-| Identifier | `myVar`, `do_work`, `Agent1`                   | Agent names, bindings, function names, variables.        |
-| Agent ref  | `@Architect`, `@out`, `@all`, `@any`, `@Human` | `@` prefix.                                              |
-| Wildcard   | `*`                                            | `await` source only.                                     |
-| Arrow      | `->`                                           | Stake recipient.                                         |
-| Back-arrow | `<-`                                           | Await source.                                            |
+| Element    | Form                                                 | Notes                                                         |
+| ---------- | ---------------------------------------------------- | ------------------------------------------------------------- |
+| Comment    | `-- text to end of line`                             | Single-line only. No block comments.                          |
+| String     | `"double quoted"`                                    | The only string form. Used for params, roles, args, etc.      |
+| Number     | `42`, `3.14`                                         | Integer or float.                                             |
+| Boolean    | `true`, `false`                                      | Keywords.                                                     |
+| Identifier | `myVar`, `do_work`, `Agent1`                         | Agent names, bindings, function names, variables.             |
+| Agent ref  | `@Architect`, `@out`, `@all`, `@any`, `@*`, `@Human` | `@` prefix. `@*` is a wildcard agent ref for `await` sources. |
+| Arrow      | `->`                                                 | Stake recipient.                                              |
+| Back-arrow | `<-`                                                 | Await source.                                                 |
 
 There are **no arithmetic operators** (`+`, `-`, `*`, `/`). Counters and loop
 state are expressed with boolean flags and the built-in `round` / `committed_count`.
