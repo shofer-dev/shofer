@@ -22,6 +22,7 @@ import type {
 	ReasoningEffortExtended,
 	ShoferSettings,
 	WebviewMessage,
+	ShoferAPI,
 } from "@shofer/types"
 import { createVSCodeAPI, IExtensionHost, ExtensionHostEventMap, setRuntimeConfigValues } from "@shofer/vscode-shim"
 import { DebugLogger, setDebugLogEnabled } from "@shofer/core/cli"
@@ -120,7 +121,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	// Extension lifecycle.
 	private vscode: ReturnType<typeof createVSCodeAPI> | null = null
 	private extensionModule: ExtensionModule | null = null
-	private extensionAPI: unknown = null
+	private extensionAPI: ShoferAPI | null = null
 	private options: ExtensionHostOptions
 	private isReady = false
 	private messageListener: ((message: ExtensionMessage) => void) | null = null
@@ -440,7 +441,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 		try {
 			console.error("[DEBUG extension-host] activating extension...")
-			this.extensionAPI = await this.extensionModule.activate(this.vscode.context)
+			this.extensionAPI = (await this.extensionModule.activate(this.vscode.context)) as ShoferAPI
 			console.error("[DEBUG extension-host] extension activated")
 		} catch (error) {
 			throw new Error(`Failed to activate extension: ${error instanceof Error ? error.message : String(error)}`)
@@ -545,20 +546,28 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		configuration?: ShoferSettings,
 		images?: string[],
 	): Promise<void> {
-		console.error("[DEBUG extension-host] runTask() sending newTask message...")
-		this.sendToExtension({
-			type: "newTask",
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+
+		console.error("[DEBUG extension-host] runTask() calling extensionAPI.startNewTask...")
+		await this.extensionAPI.startNewTask({
+			configuration: configuration ?? {},
 			text: prompt,
-			taskId,
-			taskConfiguration: configuration,
-			...(images !== undefined ? { images } : {}),
+			images,
 		})
-		console.error("[DEBUG extension-host] newTask sent, waiting for completion...")
+		console.error("[DEBUG extension-host] startNewTask done, waiting for completion...")
 		return this.waitForTaskCompletion()
 	}
 
 	public async resumeTask(taskId: string): Promise<void> {
-		this.sendToExtension({ type: "showTaskWithId", text: taskId })
+		if (!this.extensionAPI) {
+			throw new Error("extensionAPI not initialized")
+		}
+
+		console.error("[DEBUG extension-host] resumeTask() calling extensionAPI.resumeTask...")
+		await this.extensionAPI.resumeTask(taskId)
+		console.error("[DEBUG extension-host] resumeTask done, waiting for completion...")
 		return this.waitForTaskCompletion()
 	}
 

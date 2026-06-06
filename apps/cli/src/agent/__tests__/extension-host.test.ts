@@ -3,7 +3,7 @@
 import { EventEmitter } from "events"
 import fs from "fs"
 
-import type { ExtensionMessage, WebviewMessage } from "@shofer/types"
+import type { ExtensionMessage, WebviewMessage, ShoferAPI } from "@shofer/types"
 
 import { DEFAULT_FLAGS } from "@/types/index.js"
 
@@ -23,6 +23,46 @@ vi.mock("@/lib/storage/index.js", () => ({
 }))
 
 /**
+ * Create a mock ShoferAPI for testing.
+ */
+function createMockShoferAPI(): ShoferAPI {
+	const emitter = new EventEmitter() as ShoferAPI
+	const startNewTask = vi.fn().mockResolvedValue("test-task-id")
+	const resumeTask = vi.fn().mockResolvedValue(undefined)
+
+	return Object.assign(emitter, {
+		startNewTask,
+		resumeTask,
+		cancelCurrentTask: vi.fn().mockResolvedValue(undefined),
+		clearCurrentTask: vi.fn().mockResolvedValue(undefined),
+		sendMessage: vi.fn().mockResolvedValue(undefined),
+		deleteQueuedMessage: vi.fn(),
+		pressPrimaryButton: vi.fn().mockResolvedValue(undefined),
+		pressSecondaryButton: vi.fn().mockResolvedValue(undefined),
+		isReady: vi.fn().mockReturnValue(true),
+		isTaskInHistory: vi.fn().mockResolvedValue(false),
+		getCurrentTaskStack: vi.fn().mockReturnValue([]),
+		getConfiguration: vi.fn().mockReturnValue({}),
+		setConfiguration: vi.fn().mockResolvedValue(undefined),
+		getProfiles: vi.fn().mockReturnValue([]),
+		getProfileEntry: vi.fn().mockReturnValue(undefined),
+		createProfile: vi.fn().mockResolvedValue("profile-id"),
+		updateProfile: vi.fn().mockResolvedValue("profile-id"),
+		upsertProfile: vi.fn().mockResolvedValue("profile-id"),
+		deleteProfile: vi.fn().mockResolvedValue(undefined),
+		getActiveProfile: vi.fn().mockReturnValue(undefined),
+		setActiveProfile: vi.fn().mockResolvedValue(undefined),
+	})
+}
+
+/**
+ * Set the private extensionAPI field on an ExtensionHost.
+ */
+function setExtensionAPI(host: ExtensionHost, api: ShoferAPI): void {
+	;(host as Record<string, unknown>)["extensionAPI"] = api
+}
+
+/**
  * Create a test ExtensionHost with default options.
  */
 function createTestHost({
@@ -31,7 +71,7 @@ function createTestHost({
 	model = "test-model",
 	...options
 }: Partial<ExtensionHostOptions> = {}): ExtensionHost {
-	return new ExtensionHost({
+	const host = new ExtensionHost({
 		mode,
 		user: null,
 		provider,
@@ -43,6 +83,9 @@ function createTestHost({
 		exitOnComplete: false,
 		...options,
 	})
+	// Inject a mock ShoferAPI so runTask/resumeTask don't throw.
+	setExtensionAPI(host, createMockShoferAPI())
+	return host
 }
 
 // Type for accessing private members
@@ -511,11 +554,11 @@ describe("ExtensionHost", () => {
 	})
 
 	describe("runTask", () => {
-		it("should send newTask message when called", async () => {
+		it("should call extensionAPI.startNewTask with prompt and configuration", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const emitSpy = vi.spyOn(host, "emit")
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			const client = getPrivate(host, "client") as ExtensionClient
 
 			// Start the task (will hang waiting for completion)
@@ -537,17 +580,22 @@ describe("ExtensionHost", () => {
 
 			await taskPromise
 
-			expect(emitSpy).toHaveBeenCalledWith("webviewMessage", { type: "newTask", text: "test prompt" })
+			expect(api.startNewTask).toHaveBeenCalledWith({
+				configuration: {},
+				text: "test prompt",
+				images: undefined,
+			})
 		})
 
-		it("should include taskId when provided", async () => {
+		it("should pass configuration to extensionAPI.startNewTask", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const emitSpy = vi.spyOn(host, "emit")
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			const client = getPrivate(host, "client") as ExtensionClient
 
-			const taskPromise = host.runTask("test prompt", "task-123")
+			const config = { customInstructions: "test instructions" }
+			const taskPromise = host.runTask("test prompt", undefined, config)
 
 			const taskCompletedEvent = {
 				success: true,
@@ -564,10 +612,10 @@ describe("ExtensionHost", () => {
 
 			await taskPromise
 
-			expect(emitSpy).toHaveBeenCalledWith("webviewMessage", {
-				type: "newTask",
+			expect(api.startNewTask).toHaveBeenCalledWith({
+				configuration: config,
 				text: "test prompt",
-				taskId: "task-123",
+				images: undefined,
 			})
 		})
 
@@ -595,11 +643,11 @@ describe("ExtensionHost", () => {
 			await expect(taskPromise).resolves.toBeUndefined()
 		})
 
-		it("should send showTaskWithId for resumeTask and resolve on completion", async () => {
+		it("should call extensionAPI.resumeTask for resumeTask and resolve on completion", async () => {
 			const host = createTestHost()
 			host.markWebviewReady()
 
-			const emitSpy = vi.spyOn(host, "emit")
+			const api = getPrivate(host, "extensionAPI") as ShoferAPI
 			const client = getPrivate(host, "client") as ExtensionClient
 
 			const taskPromise = host.resumeTask("task-abc")
@@ -619,7 +667,7 @@ describe("ExtensionHost", () => {
 
 			await taskPromise
 
-			expect(emitSpy).toHaveBeenCalledWith("webviewMessage", { type: "showTaskWithId", text: "task-abc" })
+			expect(api.resumeTask).toHaveBeenCalledWith("task-abc")
 		})
 	})
 

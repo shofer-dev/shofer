@@ -58,6 +58,11 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 */
 	sendMessage(message?: string, images?: string[]): Promise<void>
 	/**
+	 * Removes a queued message by ID from the current task's message queue.
+	 * @param messageId The ID of the queued message to remove.
+	 */
+	deleteQueuedMessage(messageId: string): void
+	/**
 	 * Simulates pressing the primary button in the chat interface.
 	 */
 	pressPrimaryButton(): Promise<void>
