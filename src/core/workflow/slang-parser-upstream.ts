@@ -106,7 +106,16 @@ class Parser {
 	private expect(type: TokenType, message?: string): Token {
 		const t = this.peek()
 		if (t.type !== type) {
-			const msg = message ?? formatErrorMessage(SlangErrorCode.P201, { expected: type, got: t.value })
+			// Produce a friendlier message when a reserved keyword is used where an
+			// identifier / name was expected.  The generic message "Expected Ident
+			// but got count" is confusing because "count" looks like a valid name.
+			const isKeywordAsIdent =
+				type === TokenType.Ident && t.type !== TokenType.EOF && /^[a-zA-Z_][a-zA-Z_0-9]*$/.test(t.value)
+			const msg =
+				message ??
+				(isKeywordAsIdent
+					? `Expected an identifier (name) but got '${t.value}' — '${t.value}' is a reserved keyword and cannot be used as a name, variable, or parameter.`
+					: formatErrorMessage(SlangErrorCode.P201, { expected: type, got: t.value }))
 			const err = new ParseError(SlangErrorCode.P201, msg, t, this.source)
 			if (!this.recovering) throw err
 			this.errors.push(err)
