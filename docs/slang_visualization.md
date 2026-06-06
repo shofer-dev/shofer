@@ -91,18 +91,19 @@ The user switches between views via tab buttons rendered by the JS. The active v
 
 The **default view** — a directed graph showing agent relationships and data routing.
 
-| Feature           | Implementation                                                                            |
-| ----------------- | ----------------------------------------------------------------------------------------- |
-| **Nodes**         | Agent cards (name + mode badge + role) rendered as SVG `<g>` groups                       |
-| **Edges**         | `stake → @Recipient` as orange arrows, `await ← @Source` as purple arrows                 |
-| **Layout**        | dagre layered layout (LR rankdir) from sources (agents with no incoming edges)            |
-| **Drag**          | `mousedown`/`mousemove`/`mouseup` handlers on `.node-group` elements                      |
-| **Edge updates**  | `updateConnectedEdges()` redispatches `edgePathData()` with current `_layout` coordinates |
-| **Edge labels**   | Text at bezier midpoints with background rects, repositioned during drag                  |
-| **Arrow markers** | SVG `<marker>` defs (`ah-stake`, `ah-await`) with distinct colors                         |
-| **Multi-edges**   | Parallel edges between same agent pair get vertical offset                                |
-| **Back-edges**    | Reversed or same-layer edges arc above nodes instead of through them                      |
-| **Merge**         | Multiple edges with identical `(from, to, kind)` are merged into one labeled edge         |
+| Feature           | Implementation                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| **Nodes**         | Agent cards (name + mode badge + role) rendered as SVG `<g>` groups                                     |
+| **Edges**         | `stake → @Recipient` as orange arrows, `await ← @Source` as purple arrows, `peer` as dashed cyan arrows |
+| **Layout**        | dagre layered layout (LR rankdir) from sources (agents with no incoming edges)                          |
+| **Drag**          | `mousedown`/`mousemove`/`mouseup` handlers on `.node-group` elements                                    |
+| **Edge updates**  | `updateConnectedEdges()` redispatches `edgePathData()` with current `_layout` coordinates               |
+| **Edge labels**   | Text at bezier midpoints with background rects, repositioned during drag                                |
+| **Arrow markers** | SVG `<marker>` defs (`ah-stake`, `ah-await`, `ah-peer`) with distinct colors                            |
+| **Multi-edges**   | Parallel edges between same agent pair get vertical offset                                              |
+| **Back-edges**    | Reversed or same-layer edges arc above nodes instead of through them                                    |
+| **Peer edges**    | Dashed cyan arrows sourced from `agent.meta.peers` — represents `send_message_to_task` grants           |
+| **Merge**         | Multiple edges with identical `(from, to, kind)` are merged into one labeled edge                       |
 
 ### 2. Sequence Timeline
 
@@ -178,6 +179,7 @@ The visualization adapts to VS Code themes via CSS variables.
 | `--z-agent`       | `vscode-charts-green`            | Agent node strokes, commit blocks             |
 | `--z-stake`       | `vscode-charts-orange`           | Stake edges, stake blocks                     |
 | `--z-await`       | `vscode-charts-purple`           | Await edges, await blocks                     |
+| `--z-peer`        | `vscode-charts-cyan`             | Peer (direct-message) edges                   |
 | `--z-meta`        | `vscode-descriptionForeground`   | Role text, param descriptions, let/set blocks |
 | `--z-bg`          | `vscode-editor-background`       | Page and SVG background                       |
 | `--z-fg`          | `vscode-foreground`              | Primary text                                  |
@@ -221,6 +223,7 @@ The visualization adapts to VS Code themes via CSS variables.
 - ✅ Parse error display with line-level diagnostics
 - ✅ Static analysis warnings (missing converge, orphan agents, unknown targets)
 - ✅ Drag-and-drop node repositioning in topology view
+- ✅ Declared `peers:` extracted as dashed cyan peer edges in topology view
 - ✅ Edge labels, multi-edge offset, back-edge arcs
 - ✅ Flow metadata display (title, description, icon, param descriptions)
 - ✅ Recursive swimlane rendering into `WhenBlock`/`RepeatBlock` bodies

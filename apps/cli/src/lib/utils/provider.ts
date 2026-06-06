@@ -7,6 +7,7 @@ const envVarMap: Record<SupportedProvider, string> = {
 	"openai-native": "OPENAI_API_KEY",
 	gemini: "GOOGLE_API_KEY",
 	openrouter: "OPENROUTER_API_KEY",
+	shofer: "SHOFER_API_KEY",
 	"vercel-ai-gateway": "VERCEL_AI_GATEWAY_API_KEY",
 }
 
@@ -23,6 +24,7 @@ export function getProviderSettings(
 	provider: SupportedProvider,
 	apiKey: string | undefined,
 	model: string | undefined,
+	baseUrl?: string,
 ): ShoferSettings {
 	const config: ShoferSettings = { apiProvider: provider }
 
@@ -34,6 +36,12 @@ export function getProviderSettings(
 		case "openai-native":
 			if (apiKey) config.openAiNativeApiKey = apiKey
 			if (model) config.apiModelId = model
+			if (baseUrl) config.openAiNativeBaseUrl = baseUrl
+			break
+		case "shofer":
+			if (apiKey) config.shoferApiKey = apiKey
+			if (model) config.shoferModelId = model
+			if (baseUrl) config.shoferBaseUrl = baseUrl
 			break
 		case "gemini":
 			if (apiKey) config.geminiApiKey = apiKey
