@@ -97,9 +97,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 
 			// Reject unreachable targets. Reject, don't drop — both async and sync
 			// fail loud so the sender can react instead of assuming silent delivery.
-			// Every lifecycle except "running" and "error" is non-busy/resumable.
-			// "running" and "error" are already short-circuited above.
-			let targetIsResumable = false
 			if (!targetState) {
 				// Check if resumable from persisted history.
 				try {
@@ -111,7 +108,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 						)
 						return
 					}
-					targetIsResumable = true
 				} catch {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable.`))
 					return
@@ -122,10 +118,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				if (lifecycle === "error") {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} has errored and cannot receive messages.`))
 					return
-				}
-				const isNonBusy = lifecycle !== "running"
-				if (isNonBusy) {
-					targetIsResumable = true
 				}
 			}
 
@@ -144,14 +136,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 			if (!didApprove) {
 				return
 			}
-
-			// Determine recipient delivery form.
-			// Use lifecycle from TaskManager, not taskStatus — taskStatus returns
-			// Running as a fallback for tasks merely between turns, which would cause
-			// Form A injection that may never be read. Only a lifecycle of "running"
-			// means mid-turn (Form A); anything else gets Form B.
-			const targetLifecycle = provider.taskManager.getManagedTask(task_id)?.state?.lifecycle
-			const isRecipientBusy = targetLifecycle === "running"
 
 			if (isSync) {
 				// --- Sync mode: blocking wait ---
@@ -262,42 +246,25 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				}
 			} else {
 				// --- Async mode: fire-and-forget ---
-				if (isRecipientBusy && targetState) {
-					// Form A: System-prompt injection for an in-flight turn.
-					targetState.pendingPeerMessages.push({
+				// All async peer messages go into the recipient's dedicated
+				// peerNotificationQueue FIFO, which is drained at the start of the
+				// next agent loop via system-prompt injection (see Task.getSystemPrompt).
+				// There is no Form A / Form B distinction — everything is delivered
+				// uniformly.  This queue is independent of the MessageQueueService,
+				// which is reserved for user messages and sync prompts.
+				if (targetState) {
+					targetState.peerNotificationQueue.push({
 						senderTaskId: task.taskId,
 						senderTitle,
 						message,
 						timestamp: Date.now(),
 					})
-				} else if (targetIsResumable && !isRecipientBusy) {
-					// Form B: Annotated user-turn for non-busy recipients.
-					const promptText =
-						`PEER MESSAGE from task ${task.taskId} ("${senderTitle}"):\n` +
-						`${message}\n\n` +
-						`You may respond using send_message_to_task(task_id="${task.taskId}", message=...).\n` +
-						`This is a notification — no response is required. If the message is not urgent,\n` +
-						`you may finish your current work first and respond later.`
-
-					if (targetState) {
-						targetState.messageQueueService.addMessage(promptText, [])
-						// Telemetry: peer message received (Form B — enqueue time).
-						try {
-							TelemetryService.instance.capturePeerMessageReceived(task_id, {
-								targetTaskId: task.taskId,
-								mode: "async",
-								form: "B",
-							})
-						} catch {
-							// non-fatal
-						}
-					}
 				}
-				// Note: if targetIsResumable is true but there's no live instance,
-				// we can't enqueue — the message would need to be persisted for
-				// rehydration. This is a documented gap (see task_messaging.md).
+				// Note: if there's no live instance (task is not running but is
+				// resumable from persisted history), the message cannot be delivered.
+				// This is a documented gap (see docs/task_messaging.md).
 
-				// Telemetry: message sent.
+				// Telemetry: message enqueued to peerNotificationQueue.
 				try {
 					TelemetryService.instance.capturePeerMessageSent(task.taskId, {
 						mode: "async",
