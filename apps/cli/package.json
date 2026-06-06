@@ -5,6 +5,11 @@
 	"private": true,
 	"type": "module",
 	"main": "dist/index.js",
+	"exports": {
+		".": "./dist/index.js",
+		"./client": "./src/agent/extension-client.ts",
+		"./client/*": "./src/agent/*"
+	},
 	"bin": {
 		"shofer": "dist/index.js"
 	},

@@ -729,10 +729,6 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 						await waitForPostCancelRecovery(host)
 					}
 
-					const wasResumable = isResumableState(host)
-					const currentAsk = host.client.getCurrentAsk()
-					const shouldSendAsAskResponse = shouldSendMessageAsAskResponse(host.isWaitingForInput(), currentAsk)
-
 					if (!host.client.hasActiveTask()) {
 						jsonEmitter.emitControl({
 							subtype: "error",
@@ -757,35 +753,11 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 						success: true,
 					})
 
-					if (shouldSendAsAskResponse) {
-						// Match webview behavior: if there is an active ask, route message directly as an ask response.
-						host.sendToExtension({
-							type: "askResponse",
-							askResponse: "messageResponse",
-							text: stdinCommand.prompt,
-							images: stdinCommand.images,
-						})
+					// Route through host.sendMessage() which delegates to the
+					// ShoferAPI.sendMessage() — handles headless fallback and
+					// ask-response routing automatically.
+					host.sendMessage(stdinCommand.prompt, stdinCommand.images)
 
-						setStreamRequestId(stdinCommand.requestId)
-						jsonEmitter.emitControl({
-							subtype: "done",
-							requestId: stdinCommand.requestId,
-							command: "message",
-							taskId: latestTaskId,
-							content: "message sent to current ask",
-							code: "responded",
-							success: true,
-						})
-						awaitingPostCancelRecovery = false
-						break
-					}
-
-					host.sendToExtension({
-						type: "queueMessage",
-						text: stdinCommand.prompt,
-						images: stdinCommand.images,
-					})
-					pendingQueuedMessageRequestIds.push(stdinCommand.requestId)
 					if (host.isWaitingForInput()) {
 						setStreamRequestId(stdinCommand.requestId)
 					}
@@ -795,8 +767,8 @@ export async function runStdinStreamMode({ host, jsonEmitter, setStreamRequestId
 						requestId: stdinCommand.requestId,
 						command: "message",
 						taskId: latestTaskId,
-						content: wasResumable ? "resume message queued" : "message queued",
-						code: wasResumable ? "resumed" : "queued",
+						content: "message sent",
+						code: "accepted",
 						success: true,
 					})
 
