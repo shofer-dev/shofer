@@ -30,6 +30,20 @@ import {
 	deserializeFlowState,
 	serializeFlowState,
 } from "./slang-types"
+import {
+	advanceAgent as advanceAgentPure,
+	allAgentsCommitted as allAgentsCommittedPure,
+	checkConverge as checkConvergePure,
+	committedCount as committedCountPure,
+	compileAgentProgram,
+	consumeMail as consumeMailPure,
+	evalExpr as evalExprPure,
+	routeOutput as routeOutputPure,
+	toBool as toBoolPure,
+	type AdvanceResult,
+	type Instr,
+	MAX_CONTROL_FLOW_STEPS,
+} from "./slang-interpreter"
 import { parseSlang, validateSlangAST } from "./slang-parser"
 import type {
 	FlowDecl as UpstreamFlowDecl,
@@ -104,95 +118,8 @@ function coerceParam(raw: string, type: string): unknown {
 // counter a single integer, which makes both interpretation and checkpoint
 // persistence trivial.
 
-type Instr =
-	| { kind: "stake"; op: StakeOp }
-	| { kind: "await"; op: AwaitOp }
-	| { kind: "escalate"; op: EscalateOp }
-	| { kind: "commit"; op: CommitOp }
-	| { kind: "let"; op: LetOp }
-	| { kind: "set"; op: SetOp }
-	| { kind: "jump"; target: number }
-	| { kind: "branch"; cond: Expr; jumpWhen: boolean; target: number }
-
-/**
- * Compile an agent's operation tree into a flat instruction list.
- *
- * Lowering rules:
- *   when C { B } [otherwise { E }]:
- *     branch(C, jumpWhen=false) -> elseLabel   (skip body when C is false)
- *     B...
- *     jump endLabel
- *     elseLabel: E...
- *     endLabel:
- *   repeat until C { B }:
- *     loopStart: branch(C, jumpWhen=true) -> endLabel   (exit when C is true)
- *     B...
- *     jump loopStart
- *     endLabel:
- */
-function compileAgentProgram(agent: UpstreamAgentDecl): Instr[] {
-	const instrs: Instr[] = []
-
-	const emitOps = (ops: Operation[]): void => {
-		for (const op of ops) emitOp(op)
-	}
-
-	const emitOp = (op: Operation): void => {
-		switch (op.type) {
-			case "StakeOp":
-				instrs.push({ kind: "stake", op })
-				break
-			case "AwaitOp":
-				instrs.push({ kind: "await", op })
-				break
-			case "EscalateOp":
-				instrs.push({ kind: "escalate", op })
-				break
-			case "CommitOp":
-				instrs.push({ kind: "commit", op })
-				break
-			case "LetOp":
-				instrs.push({ kind: "let", op })
-				break
-			case "SetOp":
-				instrs.push({ kind: "set", op })
-				break
-			case "WhenBlock": {
-				const branch = { kind: "branch", cond: op.condition, jumpWhen: false, target: -1 } as Extract<
-					Instr,
-					{ kind: "branch" }
-				>
-				instrs.push(branch)
-				emitOps(op.body)
-				if (op.elseBlock) {
-					const jumpEnd = { kind: "jump", target: -1 } as Extract<Instr, { kind: "jump" }>
-					instrs.push(jumpEnd)
-					branch.target = instrs.length
-					emitOps(op.elseBlock.body)
-					jumpEnd.target = instrs.length
-				} else {
-					branch.target = instrs.length
-				}
-				break
-			}
-			case "RepeatBlock": {
-				const loopStart = instrs.length
-				const branch = { kind: "branch", cond: op.condition, jumpWhen: true, target: -1 } as Extract<
-					Instr,
-					{ kind: "branch" }
-				>
-				instrs.push(branch)
-				emitOps(op.body)
-				instrs.push({ kind: "jump", target: loopStart })
-				branch.target = instrs.length
-				break
-			}
-		}
-	}
-
-	emitOps(agent.operations)
-	return instrs
-}
+// Instr type, AdvanceResult, compileAgentProgram, and MAX_CONTROL_FLOW_STEPS are now
+// imported from ./slang-interpreter (pure-function extraction).
 
 /**
  * Best-effort extraction of a JSON value from an agent's completion result.
@@ -224,13 +151,7 @@ export interface WorkflowTaskOptions extends TaskOptions {
 	flowParams?: Record<string, unknown>
 }
 
-/** Result of advancing an agent's program counter over non-blocking instructions. */
-type AdvanceResult =
-	| { type: "stake"; op: StakeOp }
-	| { type: "escalate"; op: EscalateOp }
-	| { type: "await" }
-	| { type: "committed" }
-	| { type: "end" }
+// AdvanceResult type is now imported from ./slang-interpreter.
 
 // ── Constants ──
 
@@ -242,8 +163,6 @@ const MAX_RETRIES = 3
 const AGENT_RESULT_TIMEOUT_MS = 300_000
 /** Poll interval while waiting for agent tasks to reach a terminal lifecycle. */
 const POLL_INTERVAL_MS = 500
-/** Guard against compiler/eval bugs producing an infinite control-flow loop. */
-const MAX_CONTROL_FLOW_STEPS = 10_000
 
 // ── WorkflowTask ──
 
@@ -698,185 +617,25 @@ export class WorkflowTask extends Task {
 			)
 			return { type: "end" }
 		}
-
-		workflowLog.info(
-			`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' enter — opIndex=${state.opIndex}/${program.length} program=[${program.map((i) => i.kind).join(",")}]`,
-		)
-
-		let guard = 0
-		while (state.opIndex < program.length) {
-			if (++guard > MAX_CONTROL_FLOW_STEPS) {
-				workflowLog.error(
-					`[WorkflowTask#${this.taskId}] Agent '${state.name}' exceeded control-flow step limit`,
-				)
-				state.status = "error"
-				return { type: "end" }
-			}
-
-			const instr = program[state.opIndex]!
-			workflowLog.info(
-				`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' exec opIndex=${state.opIndex} instr=${instr.kind}`,
-			)
-			switch (instr.kind) {
-				case "let":
-				case "set":
-					state.bindings.set(instr.op.name, this.evalExpr(instr.op.value, state))
-					state.opIndex++
-					break
-				case "jump":
-					state.opIndex = instr.target
-					break
-				case "branch": {
-					const truthy = this.toBool(this.evalExpr(instr.cond, state))
-					state.opIndex = truthy === instr.jumpWhen ? instr.target : state.opIndex + 1
-					break
-				}
-				case "commit":
-					if (instr.op.condition && !this.toBool(this.evalExpr(instr.op.condition, state))) {
-						workflowLog.info(
-							`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' commit condition NOT met → skip (opIndex now ${state.opIndex + 1})`,
-						)
-						state.opIndex++
-						break
-					}
-					state.status = "committed"
-					if (instr.op.value) state.output = this.evalExpr(instr.op.value, state)
-					workflowLog.info(
-						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → committed (hasValue=${!!instr.op.value})`,
-					)
-					return { type: "committed" }
-				case "stake":
-					workflowLog.info(
-						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → stake call=${instr.op.call.name} recipients=[${instr.op.recipients.map((r) => r.ref).join(",")}] hasOutput=${!!instr.op.output}`,
-					)
-					return { type: "stake", op: instr.op }
-				case "escalate":
-					if (instr.op.condition && !this.toBool(this.evalExpr(instr.op.condition, state))) {
-						workflowLog.info(
-							`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' escalate condition NOT met → skip`,
-						)
-						state.opIndex++
-						break
-					}
-					workflowLog.info(
-						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → escalate target=${instr.op.target || "Human"}`,
-					)
-					return { type: "escalate", op: instr.op }
-				case "await": {
-					const sources = instr.op.sources.map((s) => s.ref)
-					const mail = this.consumeMail(state.name, sources)
-					if (mail) {
-						workflowLog.info(
-							`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' await satisfied — mail from=${mail.from} for binding=${instr.op.binding}`,
-						)
-						state.bindings.set(instr.op.binding, mail.value)
-						state.waitingFor = undefined
-						state.opIndex++
-						break
-					}
-					state.waitingFor = sources.join(",")
-					workflowLog.info(
-						`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}' → awaiting ${state.waitingFor} (mailbox has ${this.flowState.mailbox.length} entries)`,
-					)
-					return { type: "await" }
-				}
-			}
-		}
-		return { type: "end" }
+		return advanceAgentPure(program, state, this.flowState.mailbox, this.flowState, {
+			info: (msg) => workflowLog.info(`[WorkflowTask#${this.taskId}] #TRACE ${msg}`),
+			error: (msg) => workflowLog.error(`[WorkflowTask#${this.taskId}] ${msg}`),
+		})
 	}
 
 	/** Remove and return the first mailbox entry addressed to `recipient` from one of `sources`. */
 	private consumeMail(recipient: string, sources: string[]): MailboxEntry | undefined {
-		const wildcard = sources.includes("any") || sources.includes("*")
-		const idx = this.flowState.mailbox.findIndex(
-			(e) => e.to === recipient && (wildcard || sources.includes(e.from)),
-		)
-		if (idx === -1) return undefined
-		const [entry] = this.flowState.mailbox.splice(idx, 1)
-		return entry
+		return consumeMailPure(this.flowState.mailbox, recipient, sources)
 	}
 
 	/** Evaluate a slang expression against an agent's local bindings + flow globals. */
 	private evalExpr(expr: Expr, state: AgentState): unknown {
-		switch (expr.type) {
-			case "StringLit":
-			case "NumberLit":
-			case "BoolLit":
-				return expr.value
-			case "Ident":
-				if (state.bindings.has(expr.name)) return state.bindings.get(expr.name)
-				if (expr.name in this.flowState.params) return this.flowState.params[expr.name]
-				switch (expr.name) {
-					case "all_committed":
-						return this.allAgentsCommitted()
-					case "committed_count":
-						return this.committedCount()
-					case "round":
-						return this.flowState.round
-					default:
-						return undefined
-				}
-			case "AgentRef":
-				return this.flowState.agents.get(expr.name)
-			case "ListLit":
-				return expr.elements.map((e) => this.evalExpr(e, state))
-			case "DotAccess": {
-				if (expr.object.type === "AgentRef") {
-					const target = this.flowState.agents.get(expr.object.name)
-					if (!target) return undefined
-					switch (expr.property) {
-						case "committed":
-							return target.status === "committed"
-						case "status":
-							return target.status
-						case "output":
-							return target.output
-						default:
-							return undefined
-					}
-				}
-				const base = this.evalExpr(expr.object, state)
-				if (base && typeof base === "object") {
-					return (base as Record<string, unknown>)[expr.property]
-				}
-				return undefined
-			}
-			case "BinaryExpr": {
-				if (expr.op === "&&")
-					return this.toBool(this.evalExpr(expr.left, state)) && this.toBool(this.evalExpr(expr.right, state))
-				if (expr.op === "||")
-					return this.toBool(this.evalExpr(expr.left, state)) || this.toBool(this.evalExpr(expr.right, state))
-				const l = this.evalExpr(expr.left, state)
-				const r = this.evalExpr(expr.right, state)
-				switch (expr.op) {
-					case "==":
-						return l === r
-					case "!=":
-						return l !== r
-					case ">":
-						return Number(l) > Number(r)
-					case ">=":
-						return Number(l) >= Number(r)
-					case "<":
-						return Number(l) < Number(r)
-					case "<=":
-						return Number(l) <= Number(r)
-					case "contains":
-						if (typeof l === "string") return l.includes(String(r))
-						if (Array.isArray(l)) return l.includes(r)
-						return false
-					default:
-						return false
-				}
-			}
-			default:
-				return undefined
-		}
+		return evalExprPure(expr, state, this.flowState)
 	}
 
 	/** JS-style truthiness over evaluated expression values. */
 	private toBool(value: unknown): boolean {
-		return Boolean(value)
+		return toBoolPure(value)
 	}
 
 	/** A throwaway agent state for evaluating flow-global converge/budget expressions. */
@@ -1333,25 +1092,7 @@ export class WorkflowTask extends Task {
 
 	/** Deliver a stake's output to all of its recipients (@Agent / @all / @out). */
 	private routeOutput(from: string, op: StakeOp, value: unknown): void {
-		for (const recipient of op.recipients) {
-			const ref = recipient.ref
-			if (ref === "out") {
-				this.flowState.mailbox.push({ from, to: "out", value, timestamp: Date.now(), funcName: op.call.name })
-			} else if (ref === "all") {
-				for (const [otherName] of this.flowState.agents) {
-					if (otherName === from) continue
-					this.flowState.mailbox.push({
-						from,
-						to: otherName,
-						value,
-						timestamp: Date.now(),
-						funcName: op.call.name,
-					})
-				}
-			} else {
-				this.flowState.mailbox.push({ from, to: ref, value, timestamp: Date.now(), funcName: op.call.name })
-			}
-		}
+		routeOutputPure(this.flowState.mailbox, this.flowState.agents, from, op, value)
 	}
 
 	// ── Escalate ──
@@ -1389,10 +1130,8 @@ export class WorkflowTask extends Task {
 	// ── Converge ──
 
 	private checkConverge(): boolean {
+		const result = checkConvergePure(this.flowDecl, this.flowState)
 		const convergeExpr = getConvergeExpr(this.flowDecl)
-		const result = convergeExpr
-			? this.toBool(this.evalExpr(convergeExpr, this.globalEvalState()))
-			: this.allAgentsCommitted()
 		workflowLog.info(
 			`[WorkflowTask#${this.taskId}] #TRACE checkConverge result=${result} hasExpr=${!!convergeExpr} allCommitted=${this.allAgentsCommitted()} committed=${this.committedCount()}/${this.flowState.agents.size}`,
 		)
@@ -1400,18 +1139,11 @@ export class WorkflowTask extends Task {
 	}
 
 	private allAgentsCommitted(): boolean {
-		for (const [, s] of this.flowState.agents) {
-			if (s.status !== "committed") return false
-		}
-		return true
+		return allAgentsCommittedPure(this.flowState.agents)
 	}
 
 	private committedCount(): number {
-		let count = 0
-		for (const [, s] of this.flowState.agents) {
-			if (s.status === "committed") count++
-		}
-		return count
+		return committedCountPure(this.flowState.agents)
 	}
 
 	private async handleConverge(): Promise<void> {
