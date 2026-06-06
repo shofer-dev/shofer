@@ -485,6 +485,24 @@ flow "empty" () {
 		expect(ast.flows).toHaveLength(1)
 	})
 
+	it("parses tools meta field on agent", () => {
+		const src = `
+flow "tools-meta" () {
+	 agent Worker {
+	   mode: "code"
+	   tools: [read, execute, mcp]
+	   role: "Agent with tool restrictions."
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")
+		expect(worker).toBeDefined()
+		expect(worker!.meta.tools).toEqual(["read", "execute", "mcp"])
+	})
+
 	it("parses converge with all_committed keyword", () => {
 		const src = `
 flow "all-committed" () {
