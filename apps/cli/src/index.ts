@@ -50,6 +50,7 @@ program
 		(value) => Number.parseInt(value, 10),
 	)
 	.option("--exit-on-error", "Exit on API request errors instead of retrying", false)
+	.option("--base-url <url>", "Base URL for the API provider (e.g., http://localhost:30081/v1 for llm-router)")
 	.option("--ephemeral", "Run without persisting state (uses temporary storage)", false)
 	.option("--oneshot", "Exit upon task completion", false)
 	.option(

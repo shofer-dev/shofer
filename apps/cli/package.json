@@ -1,6 +1,6 @@
 {
 	"name": "@shofer/cli",
-	"version": "0.1.17",
+	"version": "0.1.18",
 	"description": "Shofer CLI - Run the Shofer agent from the command line",
 	"private": true,
 	"type": "module",
@@ -18,6 +18,7 @@
 		"build:extension": "pnpm --filter shofer bundle",
 		"dev": "SHOFER_AUTH_BASE_URL=https://app.shofer.dev SHOFER_SDK_BASE_URL=https://cloud-api.shofer.dev SHOFER_PROVIDER_URL=https://api.shofer.dev/proxy tsx src/index.ts",
 		"dev:local": "SHOFER_AUTH_BASE_URL=http://localhost:3000 SHOFER_SDK_BASE_URL=http://localhost:3001 SHOFER_PROVIDER_URL=http://localhost:8080/proxy tsx src/index.ts",
+		"dev:local-router": "tsx src/index.ts --provider shofer --api-key x --base-url http://localhost:30081/v1 --model arkware/deepseek_deepseek-v4-pro",
 		"clean": "rimraf dist .turbo"
 	},
 	"dependencies": {

@@ -6,6 +6,7 @@ export const supportedProviders = [
 	"openai-native",
 	"gemini",
 	"openrouter",
+	"shofer",
 	"vercel-ai-gateway",
 ] as const satisfies ProviderName[]
 
@@ -34,6 +35,7 @@ export type FlagOptions = {
 	provider?: SupportedProvider
 	model?: string
 	mode?: string
+	baseUrl?: string
 	terminalShell?: string
 	reasoningEffort?: ReasoningEffortFlagOptions
 	consecutiveMistakeLimit?: number

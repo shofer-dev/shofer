@@ -71,6 +71,7 @@ export interface ExtensionHostOptions {
 	provider: SupportedProvider
 	apiKey?: string
 	model: string
+	baseUrl?: string
 	workspacePath: string
 	extensionPath: string
 	nonInteractive?: boolean
@@ -227,7 +228,12 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			experiments: {
 				customTools: true,
 			},
-			...getProviderSettings(this.options.provider, this.options.apiKey, this.options.model),
+			...getProviderSettings(
+				this.options.provider,
+				this.options.apiKey,
+				this.options.model,
+				this.options.baseUrl,
+			),
 		}
 
 		this.initialSettings = this.options.nonInteractive
@@ -388,39 +394,46 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		;(global as Record<string, unknown>).vscode = this.vscode
 		;(global as Record<string, unknown>).__extensionHost = this
 
-		// Set up module resolution.
+		// Write a real vscode-mock.js file to a temp directory so Node can
+		// physically resolve it. In-memory cache entries and _load monkey-patches
+		// do not survive the ESM loader used by tsx — only a real on-disk file
+		// works reliably across both CJS and ESM module resolution paths.
+		const mockDir = this.ephemeralStorageDir ?? path.join(this.options.workspacePath, ".shofer", "tmp")
+		fs.mkdirSync(mockDir, { recursive: true })
+		const mockFilePath = path.join(mockDir, "vscode-mock.js")
+
+		// The mock file re-exports the full vscode API object from global.vscode.
+		fs.writeFileSync(
+			mockFilePath,
+			[
+				`"use strict";`,
+				`var g = globalThis;`,
+				`if (!g.vscode) { throw new Error("global.vscode not set before vscode-mock load"); }`,
+				`module.exports = g.vscode;`,
+				``,
+			].join("\n"),
+			"utf-8",
+		)
+
+		// Redirect require("vscode") → the real mock file on disk.
 		const require = createRequire(import.meta.url)
 		const Module = require("module")
 		const originalResolve = Module._resolveFilename
-
 		Module._resolveFilename = function (request: string, parent: unknown, isMain: boolean, options: unknown) {
-			if (request === "vscode") return "vscode-mock"
+			if (request === "vscode") return mockFilePath
 			return originalResolve.call(this, request, parent, isMain, options)
 		}
-
-		require.cache["vscode-mock"] = {
-			id: "vscode-mock",
-			filename: "vscode-mock",
-			loaded: true,
-			exports: this.vscode,
-			children: [],
-			paths: [],
-			path: "",
-			isPreloading: false,
-			parent: null,
-			require: require,
-		} as unknown as NodeJS.Module
 
 		try {
 			this.extensionModule = require(bundlePath) as ExtensionModule
 		} catch (error) {
 			Module._resolveFilename = originalResolve
-
 			throw new Error(
 				`Failed to load extension bundle: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 
+		// Restore resolution immediately — the bundle has loaded.
 		Module._resolveFilename = originalResolve
 
 		try {
