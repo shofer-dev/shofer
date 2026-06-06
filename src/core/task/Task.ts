@@ -4331,17 +4331,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					this.taskStartedEmitted = true
 					this.emit(ShoferEventName.TaskStarted)
 				}
-				console.error("[DIAG] calling attemptApiRequest...")
-				console.error("[DIAG] attemptApiRequest returned stream")
 				const stream = this.attemptApiRequest(currentItem.retryAttempt ?? 0, { skipProviderRateLimit: true })
 				let assistantMessage = ""
 				let reasoningMessage = ""
 				let pendingGroundingSources: GroundingSource[] = []
 				this.isStreaming = true
-				console.error("[DIAG] calling stream[Symbol.asyncIterator]()")
 
 				try {
-					console.error("[DIAG] first iterator.next() called")
 					const iterator = stream[Symbol.asyncIterator]()
 
 					// Helper to race iterator.next() with abort signal
