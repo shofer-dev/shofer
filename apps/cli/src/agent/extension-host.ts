@@ -425,7 +425,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		}
 
 		try {
+			console.error("[DEBUG extension-host] loading extension bundle...")
 			this.extensionModule = require(bundlePath) as ExtensionModule
+			console.error("[DEBUG extension-host] bundle loaded")
 		} catch (error) {
 			Module._resolveFilename = originalResolve
 			throw new Error(
@@ -437,7 +439,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		Module._resolveFilename = originalResolve
 
 		try {
+			console.error("[DEBUG extension-host] activating extension...")
 			this.extensionAPI = await this.extensionModule.activate(this.vscode.context)
+			console.error("[DEBUG extension-host] extension activated")
 		} catch (error) {
 			throw new Error(`Failed to activate extension: ${error instanceof Error ? error.message : String(error)}`)
 		}
@@ -446,7 +450,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		this.messageListener = (message: ExtensionMessage) => this.client.handleMessage(message)
 		this.on("extensionWebviewMessage", this.messageListener)
 
+		console.error("[DEBUG extension-host] waiting for isReady...")
 		await pWaitFor(() => this.isReady, { interval: 100, timeout: 10_000 })
+		console.error("[DEBUG extension-host] isReady=true")
 	}
 
 	public registerWebviewProvider(_viewId: string, _provider: WebviewViewProvider): void {}
@@ -481,6 +487,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			throw new Error("You cannot send messages to the extension before it is ready")
 		}
 
+		console.error(`[DEBUG extension-host] sendToExtension: type=${message.type}`)
 		this.emit("webviewMessage", message)
 	}
 
@@ -489,13 +496,16 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	// ==========================================================================
 
 	private waitForTaskCompletion(): Promise<void> {
+		console.error("[DEBUG extension-host] waitForTaskCompletion() entered")
 		return new Promise((resolve, reject) => {
 			const completeHandler = () => {
+				console.error("[DEBUG extension-host] taskCompleted event fired")
 				cleanup()
 				resolve()
 			}
 
 			const errorHandler = (error: Error) => {
+				console.error("[DEBUG extension-host] error event fired:", error.message)
 				cleanup()
 				reject(error)
 			}
@@ -535,6 +545,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		configuration?: ShoferSettings,
 		images?: string[],
 	): Promise<void> {
+		console.error("[DEBUG extension-host] runTask() sending newTask message...")
 		this.sendToExtension({
 			type: "newTask",
 			text: prompt,
@@ -542,6 +553,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			taskConfiguration: configuration,
 			...(images !== undefined ? { images } : {}),
 		})
+		console.error("[DEBUG extension-host] newTask sent, waiting for completion...")
 		return this.waitForTaskCompletion()
 	}
 

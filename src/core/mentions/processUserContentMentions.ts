@@ -76,6 +76,7 @@ export async function processUserContentMentions({
 
 				if (block.type === "text") {
 					if (shouldProcessMentions(block.text)) {
+						console.error("[DEBUG processUserContentMentions] about to parseMentions...")
 						const result = await parseMentions(
 							block.text,
 							cwd,

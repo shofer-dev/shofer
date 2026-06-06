@@ -121,8 +121,10 @@ export async function parseMentions(
 	const contentBlocks: MentionContentBlock[] = []
 	let commandMode: string | undefined // Track mode from the first slash command that has one
 
+	console.error("[DEBUG parseMentions] start")
 	// First pass: check which command mentions exist and cache the results
 	const commandMatches = Array.from(text.matchAll(commandRegexGlobal))
+	console.error(`[DEBUG parseMentions] commandMatches=${commandMatches.length}`)
 	const uniqueCommandNames = new Set(commandMatches.map(([, commandName]) => commandName))
 
 	const commandExistenceChecks = await Promise.all(
@@ -163,6 +165,7 @@ export async function parseMentions(
 	}
 
 	// Only replace text for commands that actually exist (keep "see below" for commands)
+	console.error("[DEBUG parseMentions] about to replace command text")
 	let parsedText = text
 	for (const [match, commandName] of commandMatches) {
 		if (validCommands.has(commandName) || validSkills.has(commandName)) {
@@ -172,6 +175,7 @@ export async function parseMentions(
 
 	// Second pass: handle regular mentions - replace with clean references
 	// Content will be provided as separate blocks that look like read_file results
+	console.error("[DEBUG parseMentions] about to replace mentions in text")
 	parsedText = parsedText.replace(mentionRegexGlobal, (match, mention) => {
 		mentions.add(mention)
 		if (mention.startsWith("http")) {
@@ -191,8 +195,10 @@ export async function parseMentions(
 		}
 		return match
 	})
+	console.error(`[DEBUG parseMentions] mentions count=${mentions.size}`)
 
 	for (const mention of mentions) {
+		console.error(`[DEBUG parseMentions] processing mention="${mention}"`)
 		if (mention.startsWith("/")) {
 			const mentionPath = mention.slice(1)
 			try {
