@@ -3,6 +3,7 @@
 	--z-agent: var(--vscode-charts-green, #22c55e);
 	--z-stake: var(--vscode-charts-orange, #f59e0b);
 	--z-await: var(--vscode-charts-purple, #a855f7);
+	--z-peer: var(--vscode-charts-cyan, #06b6d4);
 	--z-meta: var(--vscode-descriptionForeground, #888);
 	--z-err: var(--vscode-errorForeground, #f87171);
 	--z-warn: var(--vscode-charts-yellow, #eab308);

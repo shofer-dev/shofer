@@ -129,6 +129,7 @@ function scanForLoops(ops) {
 var COLORS = {
 	stake: "var(--z-stake,#f59e0b)",
 	await: "var(--z-await,#a855f7)",
+	peer: "var(--z-peer,#06b6d4)",
 	agent: "var(--z-agent,#22c55e)",
 	flow: "var(--z-flow,#3b82f6)",
 	meta: "var(--z-meta,#888)",
@@ -186,6 +187,30 @@ function buildGraphEdges(flow) {
 			}
 		}
 		scan(agent.operations)
+	}
+	return edges
+}
+
+/** Extract declared peers edges from agent.meta.peers — directional dashed lines
+ *  representing the direct-message (send_message_to_task) permission grant. */
+function buildPeerEdges(flow) {
+	var agentNames = {}
+	for (var i = 0; i < (flow.body || []).length; i++) {
+		var item = flow.body[i]
+		if (item.type === "AgentDecl") agentNames[item.name] = true
+	}
+	var edges = []
+	for (var ai = 0; ai < (flow.body || []).length; ai++) {
+		var agent = flow.body[ai]
+		if (agent.type !== "AgentDecl") continue
+		if (!agent.meta || !agent.meta.peers) continue
+		var from = agent.name
+		for (var pi = 0; pi < agent.meta.peers.length; pi++) {
+			var peerName = agent.meta.peers[pi]
+			if (agentNames[peerName]) {
+				edges.push({ from: from, to: peerName, label: "peer", kind: "peer" })
+			}
+		}
 	}
 	return edges
 }
@@ -298,6 +323,10 @@ function defs() {
 		'<polygon points="11 0, 0 4, 11 8" fill="' +
 		COLORS.await +
 		'"/></marker>' +
+		'<marker id="ah-peer" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto">' +
+		'<polygon points="0 0, 11 4, 0 8" fill="' +
+		COLORS.peer +
+		'"/></marker>' +
 		'<marker id="ah-seq-stake" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">' +
 		'<polygon points="0 0, 8 3, 0 6" fill="' +
 		COLORS.stake +
@@ -403,8 +432,9 @@ function renderEdge(e, layout, layers) {
 		tn = layout[e.to]
 	if (!fn || !tn) return ""
 	var d = edgePathData(fn.x, fn.y, tn.x, tn.y, e.sections, layers[e.from], layers[e.to])
-	var color = e.kind === "stake" ? COLORS.stake : COLORS.await
-	var marker = e.kind === "stake" ? "url(#ah-stake)" : "url(#ah-await)"
+	var color = e.kind === "stake" ? COLORS.stake : e.kind === "await" ? COLORS.await : COLORS.peer
+	var marker = e.kind === "stake" ? "url(#ah-stake)" : e.kind === "await" ? "url(#ah-await)" : "url(#ah-peer)"
+	var dashAttr = e.kind === "peer" ? ' stroke-dasharray="8 4"' : ""
 	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx
 	var s =
 		'<g class="edge-group" data-edge="' +
@@ -429,7 +459,9 @@ function renderEdge(e, layout, layers) {
 		color +
 		'" fill="none" stroke-width="2.2" marker-end="' +
 		marker +
-		'" />'
+		'"' +
+		dashAttr +
+		" />"
 	if (e.label) {
 		var cx,
 			cy,
@@ -471,7 +503,7 @@ function renderEdge(e, layout, layers) {
 
 // ── view compiler 1: network topology graphics ──
 function compileTopologySVG(flow, agentNames, agentMeta) {
-	var rawEdges = buildGraphEdges(flow)
+	var rawEdges = buildGraphEdges(flow).concat(buildPeerEdges(flow))
 	var dagreResult = applyDagreLayout(agentNames, rawEdges)
 	_layout = dagreResult.layout
 	_layers = dagreResult.layers
