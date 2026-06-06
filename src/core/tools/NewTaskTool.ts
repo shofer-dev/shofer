@@ -261,10 +261,13 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 				// Extend with peer_task_ids if explicitly granted.
 				if (params.peer_task_ids && params.peer_task_ids.length > 0) {
+					// Validate all peer_task_ids share the spawner's rootTaskId.
+					// When the spawner is the root (no rootTaskId), use its own
+					// taskId; children inherit rootTaskId from the root.
+					const spawnerRoot = task.rootTaskId ?? task.taskId
 					for (const peerId of params.peer_task_ids) {
-						// Validate all peer_task_ids share the spawner's rootTaskId.
 						const peerLive = provider.taskManager.getManagedTaskInstance(peerId)
-						if (peerLive && peerLive.rootTaskId !== task.rootTaskId) {
+						if (peerLive && peerLive.rootTaskId !== spawnerRoot) {
 							pushToolResult(
 								formatResponse.toolError(
 									`peer_task_ids validation: task ${peerId} does not share your root task.`,
