@@ -1056,6 +1056,33 @@ export const ChatRowContent = ({
 						</div>
 						<div className="border-l border-muted-foreground/80 ml-2 pl-4 pb-1">
 							<MarkdownBlock markdown={tool.content} />
+							{tool.todos && typeof tool.todos === "string" && (
+								<div className="text-xs text-vscode-descriptionForeground mt-1">
+									<span className="font-medium">{t("chat:subtasks.todos")}:</span>{" "}
+									{tool.todos.slice(0, 120)}
+									{tool.todos.length > 120 && "…"}
+								</div>
+							)}
+							{tool.softResultLength !== undefined && tool.softResultLength !== null && (
+								<div className="text-xs text-vscode-descriptionForeground mt-1">
+									{t("chat:subtasks.softResultLength")}: {String(tool.softResultLength)}
+								</div>
+							)}
+							{tool.softTimeoutSec !== undefined && tool.softTimeoutSec !== null && (
+								<div className="text-xs text-vscode-descriptionForeground mt-1">
+									{t("chat:subtasks.softTimeoutSec")}: {String(tool.softTimeoutSec)}s
+								</div>
+							)}
+							{tool.peer_task_ids && tool.peer_task_ids.length > 0 && (
+								<div className="text-xs text-vscode-descriptionForeground mt-1">
+									{t("chat:subtasks.peerTaskIds")}: {tool.peer_task_ids.join(", ")}
+								</div>
+							)}
+							{tool.is_background && (
+								<div className="text-xs text-vscode-descriptionForeground mt-1">
+									{t("chat:subtasks.background")}
+								</div>
+							)}
 							<div>
 								{childTaskId && !isFollowedBySubtaskResult && (
 									<button

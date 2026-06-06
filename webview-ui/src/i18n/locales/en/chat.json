@@ -326,7 +326,12 @@
 		"resultContent": "Subtask completed",
 		"defaultResult": "Please continue to the next task.",
 		"completionInstructions": "You can review the results and suggest any corrections or next steps. If everything looks good, confirm to return the result to the parent task.",
-		"goToSubtask": "View task"
+		"goToSubtask": "View task",
+		"todos": "Initial todos",
+		"softResultLength": "Result length",
+		"softTimeoutSec": "Timeout",
+		"peerTaskIds": "Peer task IDs",
+		"background": "Background task"
 	},
 	"backgroundTasks": {
 		"waitForTask": "Shofer is waiting for background task",

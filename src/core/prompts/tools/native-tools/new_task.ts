@@ -20,6 +20,8 @@ const SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION = `Soft suggestion for how many c
 
 const SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION = `Soft guidance (in seconds) for how long the parent expects to wait for this subtask. Not a hard deadline; the parent may wait longer and the child may take longer. Defaults to 300 (5 minutes). Use this to pace your work accordingly.`
 
+const PEER_TASK_IDS_PARAMETER_DESCRIPTION = `Least-privilege peer scope: the spawned child's baseline knownPeers is parent-only. If provided, these task IDs are added (must share rootTaskId). If omitted/null, the child can only communicate with its parent and its own children — sibling access is denied. Validated against rootTaskId at spawn time — unknown IDs are rejected.`
+
 export default {
 	type: "function",
 	function: {
@@ -52,6 +54,11 @@ export default {
 				softTimeoutSec: {
 					type: "number",
 					description: SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION,
+				},
+				peer_task_ids: {
+					type: ["array", "null"],
+					items: { type: "string" },
+					description: PEER_TASK_IDS_PARAMETER_DESCRIPTION,
 				},
 			},
 			required: ["mode", "message", "todos", "is_background"],
