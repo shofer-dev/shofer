@@ -1129,6 +1129,15 @@ export interface ShoferSayTool {
 		status: string
 		created_at?: number
 	}>
+	// Properties for new_task tool. `peer_task_ids` carries the list of sibling
+	// task IDs explicitly granted peer access at spawn time.
+	// `is_background` flags background (async) subtasks.
+	// `todos` carries the initial todo list for the subtask.
+	todos?: string
+	peer_task_ids?: string[]
+	is_background?: boolean
+	softResultLength?: number
+	softTimeoutSec?: number
 	// Properties for ask_assistant_agent. The `question` field above carries the
 	// prompt sent to the assistant agent; these carry the answer + metadata that
 	// only become known after the assistant agent responds (emitted via a follow-up

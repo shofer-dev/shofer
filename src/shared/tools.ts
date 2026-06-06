@@ -161,6 +161,8 @@ export const toolParamNames = [
 	"until",
 	// send_message_to_task parameter
 	"timeout_sec",
+	// new_task peer_task_ids parameter
+	"peer_task_ids",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -193,6 +195,7 @@ export type NativeToolArgs = {
 		is_background?: boolean | string | number | null
 		softResultLength?: number
 		softTimeoutSec?: number
+		peer_task_ids?: string[] | null
 	}
 	check_task_status: { task_id: string; include_activity?: boolean | null }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }

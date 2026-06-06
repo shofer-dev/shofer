@@ -743,6 +743,7 @@ export class NativeToolCallParser {
 						is_background: this.coerceOptionalBoolean(partialArgs.is_background),
 						softResultLength: this.coerceOptionalNumber(partialArgs.softResultLength),
 						softTimeoutSec: this.coerceOptionalNumber(partialArgs.softTimeoutSec),
+						peer_task_ids: Array.isArray(partialArgs.peer_task_ids) ? partialArgs.peer_task_ids : undefined,
 					}
 				}
 				break
@@ -941,6 +942,17 @@ export class NativeToolCallParser {
 				if (partialArgs.seconds !== undefined) {
 					nativeArgs = {
 						seconds: this.coerceOptionalNumber(partialArgs.seconds)!,
+					}
+				}
+				break
+
+			case "send_message_to_task":
+				if (partialArgs.task_id !== undefined || partialArgs.message !== undefined) {
+					nativeArgs = {
+						task_id: partialArgs.task_id,
+						message: partialArgs.message,
+						wait: this.coerceOptionalBoolean(partialArgs.wait),
+						timeout_sec: this.coerceOptionalNumber(partialArgs.timeout_sec),
 					}
 				}
 				break
@@ -1390,6 +1402,7 @@ export class NativeToolCallParser {
 							is_background: this.coerceOptionalBoolean(args.is_background),
 							softResultLength: this.coerceOptionalNumber(args.softResultLength),
 							softTimeoutSec: this.coerceOptionalNumber(args.softTimeoutSec),
+							peer_task_ids: Array.isArray(args.peer_task_ids) ? args.peer_task_ids : undefined,
 						} as NativeArgsFor<TName>
 					}
 					break
@@ -1431,7 +1444,9 @@ export class NativeToolCallParser {
 					break
 
 				case "list_background_tasks":
-					nativeArgs = {} as NativeArgsFor<TName>
+					nativeArgs = {
+						scope: args.scope === "peers" ? "peers" : "children",
+					} as NativeArgsFor<TName>
 					break
 
 				case "create_directory":
@@ -1575,6 +1590,17 @@ export class NativeToolCallParser {
 					if (args.seconds !== undefined) {
 						nativeArgs = {
 							seconds: this.coerceOptionalNumber(args.seconds)!,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "send_message_to_task":
+					if (args.task_id !== undefined && args.message !== undefined) {
+						nativeArgs = {
+							task_id: args.task_id,
+							message: args.message,
+							wait: this.coerceOptionalBoolean(args.wait),
+							timeout_sec: this.coerceOptionalNumber(args.timeout_sec),
 						} as NativeArgsFor<TName>
 					}
 					break

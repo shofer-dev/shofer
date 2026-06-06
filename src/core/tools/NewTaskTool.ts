@@ -110,14 +110,13 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				return
 			}
 
-			// Parse todos for validation (if required by workspace setting),
-			// but always start child tasks with an empty todo list.
-			// Subtasks must NOT inherit the parent's todo list — each child
-			// manages its own work tracking independently.
+			// Parse todos for validation and display in the ChatRow approval
+			// block. The child task starts with these todos as its initial
+			// checklist — each child manages its own work tracking independently.
 			let todoItems: TodoItem[] = []
 			if (todos) {
 				try {
-					parseMarkdownChecklist(todos) // validate format only
+					todoItems = parseMarkdownChecklist(todos)
 				} catch (error) {
 					task.consecutiveMistakeCount++
 					task.recordToolError("new_task")
@@ -175,6 +174,11 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				content: message,
 				todos: todoItems,
 				is_background: is_background ?? false,
+				softResultLength: effectiveSoftResultLength,
+				softTimeoutSec: effectiveSoftTimeoutSec,
+				...(params.peer_task_ids && params.peer_task_ids.length > 0
+					? { peer_task_ids: params.peer_task_ids }
+					: {}),
 			})
 
 			const didApprove = await askApproval("tool", toolMessage)
@@ -337,6 +341,11 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 		const is_background: boolean | undefined =
 			block.params.is_background === "true" ? true : block.params.is_background === "false" ? false : undefined
 		const task_id: string | undefined = block.params.task_id
+		const softResultLength: number | undefined =
+			block.params.softResultLength !== undefined ? Number(block.params.softResultLength) : undefined
+		const softTimeoutSec: number | undefined =
+			block.params.softTimeoutSec !== undefined ? Number(block.params.softTimeoutSec) : undefined
+		const peer_task_ids: string | undefined = block.params.peer_task_ids
 
 		const partialMessage = JSON.stringify({
 			tool: "newTask",
@@ -345,6 +354,9 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			todos: todos,
 			is_background: is_background,
 			task_id: task_id,
+			softResultLength: softResultLength,
+			softTimeoutSec: softTimeoutSec,
+			peer_task_ids: peer_task_ids,
 		})
 
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
