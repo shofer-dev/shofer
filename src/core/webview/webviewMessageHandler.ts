@@ -568,6 +568,7 @@ export const webviewMessageHandler = async (
 		}
 	}
 
+	console.error("[DEBUG webviewMessageHandler] received message type:", message.type)
 	switch (message.type) {
 		case "webviewLog": {
 			const text = message.text ?? ""
@@ -775,11 +776,14 @@ export const webviewMessageHandler = async (
 			// Use createManagedTask to preserve current task in background (parallel execution).
 			// The old task continues running while the new task is focused in the UI.
 			try {
+				console.error("[DEBUG webviewMessageHandler:newTask] resolving images...")
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
+				console.error("[DEBUG webviewMessageHandler:newTask] resolved, creating managed task...")
 
 				const messageText = resolved.text
 
 				await provider.createManagedTask(undefined, messageText, resolved.images, message.worktreeDir)
+				console.error("[DEBUG webviewMessageHandler:newTask] createManagedTask completed")
 				// Task created successfully - notify the UI to reset
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 			} catch (error) {
@@ -1142,6 +1146,7 @@ export const webviewMessageHandler = async (
 						ollama: {},
 						lmstudio: {},
 						poe: {},
+						shofer: {},
 					}
 
 			const safeGetModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
