@@ -43,10 +43,11 @@ export class ShoferHandler extends OpenRouterHandler {
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
-		// Derive conversation_id from the per-task metadata.  Falls back to a
-		// UUID v7 if metadata is missing (e.g. internal calls), ensuring llm-router
-		// never receives a request without a conversation_id.
-		const conversationId = metadata?.taskId ?? crypto.randomUUID()
+		// Derive conversation_id from the per-task metadata.  Every regular
+		// code path passes metadata with taskId; this will not be undefined
+		// in practice.  If it were missing, llm-router would reject the request
+		// with HTTP 400, which is the correct behaviour — we want to know.
+		const conversationId = metadata!.taskId
 
 		// Patch the OpenAI client so every downstream call to
 		// `chat.completions.create` includes `conversation_id`.
