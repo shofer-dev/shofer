@@ -187,11 +187,42 @@ demonstrates:
 
 ## Relationship to CLI
 
-The [CLI (`apps/cli/`)](headless.md) does **not** use the public extension API.
-It loads the entire Shofer extension bundle headlessly via a vscode-shim mock
-layer and calls `activate()` directly. Companion extensions (like the
-orchestrator) use `vscode.extensions.getExtension('shoferdev.shofer').exports`
-and the `ShoferAPI` interface documented here.
+The [CLI (`apps/cli/`)](headless.md) and companion extensions **both use the same
+`ShoferAPI` interface** as their control plane. The CLI calls `activate()` which
+returns a `ShoferAPI` instance, then delegates all task management, configuration,
+profile operations, and event subscriptions through it. Companion extensions
+acquire the same API via `vscode.extensions.getExtension('shoferdev.shofer').exports`.
+
+The ShoferAPI is the **single unified interface** for programmatically controlling
+Shofer — regardless of whether the consumer is a headless CLI process, a companion
+VSCode extension, or an external IPC client.
+
+### Consumer SDK
+
+The CLI's [`ExtensionClient`](../apps/cli/src/agent/extension-client.ts) is
+importable by other workspace packages as:
+
+```typescript
+import { ExtensionClient } from "@shofer/cli/client"
+```
+
+It provides a high-level state machine (`AgentLoopState`) over ShoferEvents and
+WebviewMessage protocols. Companion extensions can use it instead of wiring
+`api.on(event, ...)` listeners directly.
+
+## Key Files
+
+| File                                                                                    | Role                                                 |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [`packages/types/src/api.ts`](../packages/types/src/api.ts)                             | `ShoferAPI` interface definition                     |
+| [`packages/types/src/events.ts`](../packages/types/src/events.ts)                       | `ShoferEventName` enum + `ShoferEvents` type schemas |
+| [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)     | `ShoferSettings` type                                |
+| [`packages/types/src/provider-settings.ts`](../packages/types/src/provider-settings.ts) | `ProviderSettings` / `ProviderSettingsEntry` types   |
+| [`src/extension/api.ts`](../src/extension/api.ts)                                       | `API` class — implementation of `ShoferAPI`          |
+| [`src/extension.ts`](../src/extension.ts:457)                                           | Returns `new API(...)` from `activate()`             |
+| [`apps/cli/src/agent/extension-host.ts`](../apps/cli/src/agent/extension-host.ts)       | CLI consumer of `ShoferAPI`                          |
+| [`apps/cli/src/agent/extension-client.ts`](../apps/cli/src/agent/extension-client.ts)   | Reusable state-machine SDK over ShoferEvents         |
+| [`extensions/orchestrator/src/main.ts`](../../orchestrator/src/main.ts)                 | Reference consumer of the public API                 |
 
 ## Key Files
 

@@ -298,6 +298,28 @@ pnpm --filter @shofer/cli dev:local-router -w . --print "Hello"
 
 ## Architecture Details
 
+### CLI Uses `ShoferAPI` as the Control Plane
+
+The CLI's [`ExtensionHost`](../apps/cli/src/agent/extension-host.ts) calls `activate()`
+which returns a `ShoferAPI` instance. This is the **same `ShoferAPI`** used by companion
+extensions (see [`public_api.md`](public_api.md)). All task management, configuration,
+profile operations, and events route through it:
+
+| CLI Method             | Delegates To   | ShoferAPI Method                                |
+| ---------------------- | -------------- | ----------------------------------------------- |
+| `runTask(prompt, …)`   | `extensionAPI` | `startNewTask({ configuration, text, images })` |
+| `resumeTask(taskId)`   | `extensionAPI` | `resumeTask(taskId)`                            |
+| `cancelTask()`         | `extensionAPI` | `cancelCurrentTask()`                           |
+| `sendMessage(text, …)` | `extensionAPI` | `sendMessage(text, images)`                     |
+| `approveAction()`      | `extensionAPI` | `pressPrimaryButton()`                          |
+| `rejectAction()`       | `extensionAPI` | `pressSecondaryButton()`                        |
+| `getConfiguration()`   | `extensionAPI` | `getConfiguration()`                            |
+| `getProfiles()`        | `extensionAPI` | `getProfiles()`                                 |
+| … (all 22 methods)     | `extensionAPI` | full `ShoferAPI` surface                        |
+
+Events from `ShoferAPI` (`taskStarted`, `taskCompleted`, `message`, `modeChanged`,
+etc.) are bridged into the CLI's `ExtensionClient` event system via `forwardShoferEvents()`.
+
 ### VSCode Shim Layer
 
 Located in [`packages/vscode-shim/src/`](../packages/vscode-shim/src/). Files of note:
