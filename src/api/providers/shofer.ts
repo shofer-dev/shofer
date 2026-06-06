@@ -74,6 +74,13 @@ export class ShoferHandler extends OpenRouterHandler {
 			return stream
 		}) as any
 
-		yield* super.createMessage(systemPrompt, messages, metadata)
+		// Use for-await-yield instead of yield* to break the esbuild CJS
+		// async-generator delegation chain. yield* between two esbuild-CJS
+		// async generators creates a delegation that silently hangs when the
+		// outermost iterator is consumed from yet another CJS async generator
+		// (attemptApiRequest). See todos/done/cli-print-stream-hang.md.
+		for await (const chunk of super.createMessage(systemPrompt, messages, metadata)) {
+			yield chunk
+		}
 	}
 }
