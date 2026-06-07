@@ -15,11 +15,7 @@
  */
 
 import type { IExtensionHost, ExtensionHostEventMap } from "@shofer/vscode-shim"
-
-/** Minimal provider interface matching the vscode-shim WebviewViewProvider. */
-interface WebviewViewProvider {
-	resolveWebviewView?: (webviewView: unknown, context: unknown, token: unknown) => void | Promise<void>
-}
+import type { WebviewViewProvider } from "@shofer/vscode-shim/src/interfaces/webview.js"
 
 /**
  * Minimal IPC port interface matching the subset of `worker_threads.MessagePort`
