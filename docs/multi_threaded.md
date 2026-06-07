@@ -481,29 +481,67 @@ functional** — all tools, all modes, all existing tests passing. Phases are
 ordered so that infrastructure is built and verified **before** any traffic
 moves onto it.
 
-### Phase 0: vscode-shim Augmentation (no traffic moved)
+### Phase 0: vscode-shim Augmentation (no traffic moved) ✅ DONE
 
 **Goal**: Add the IPC routing hooks to the vscode-shim without changing any
 behavior. The extension still runs entirely on the main thread.
 
-1.  **Add optional `"vscodeApi"` forwarding to `WindowAPI` and `CommandsAPI`.**
-    When a `parentPort` is provided at shim-creation time, methods that need
-    the real VS Code API (`createTerminal`, `showTextDocument`,
-    `executeCommand`) forward the call through `parentPort.postMessage()`.
-    When no `parentPort` is provided (current code paths), they behave exactly
-    as they do today.
+**Status**: Completed in commit `3309cfb34`. All 434 tests pass (407 existing
 
-2.  **Add `workerData`-based shim injection to `createVSCodeAPI`.**
-    Currently `global.__extensionHost` is the only way to pass an
-    `IExtensionHost`. Add a `workerData` path so a worker bootstrap can pass
-    the host without touching globals.
+- 27 new). Zero runtime behavior change — the new code paths are dormant.
 
-3.  **Add unit tests for the new code paths.** Verify that with `parentPort`
-    wired, `WindowAPI.createTerminal` emits the expected IPC message, and
-    without it, the existing mock behavior is preserved.
+#### What was built
 
-    **✅ Functional check**: All existing tests pass. No runtime behavior
-    change — the new code paths are dormant.
+1.  **IPC message protocol and `IpcDemuxer`.**
+    New [`packages/vscode-shim/src/interfaces/ipc.ts`](../packages/vscode-shim/src/interfaces/ipc.ts)
+    defines:
+
+    - [`IpcPort`](../packages/vscode-shim/src/interfaces/ipc.ts:58) — minimal interface
+      (`postMessage` + `on("message")`) compatible with `worker_threads.MessagePort`.
+    - `VscodeApiRequest` / `VscodeApiResponse` — typed request/response protocol
+      with `requestId` correlation.
+    - [`IpcDemuxer`](../packages/vscode-shim/src/interfaces/ipc.ts:101) — single-owner
+      dispatcher that registers **one** listener on the shared port and routes
+      responses by `requestId`. Prevents duplicate-delivery warnings when multiple
+      APIs (`WindowAPI`, `CommandsAPI`) share the same port. Enforces a configurable
+      timeout (default 30s) on every request; `dispose()` rejects all pending entries.
+
+2.  **Optional IPC forwarding in `WindowAPI` and `CommandsAPI`.**
+    Both constructors accept an optional [`IpcDemuxer`](../packages/vscode-shim/src/interfaces/ipc.ts:101):
+
+    - [`WindowAPI`](../packages/vscode-shim/src/api/WindowAPI.ts:69) — `createTerminal`
+      and `showTextDocument` fire-and-forget dispatch through the demuxer. Returns
+      local mock objects (not true proxies — Phase 2 will add real terminal/editor
+      proxy that forwards `sendText`/`dispose`/etc. to the main-thread instance).
+    - [`CommandsAPI`](../packages/vscode-shim/src/api/CommandsAPI.ts:34) — unknown
+      commands forward through the demuxer; registered commands always run locally.
+      When no demuxer is provided, all code paths behave identically to before.
+
+3.  **Shim injection via `VSCodeAPIMockOptions`.**
+    [`VSCodeAPIMockOptions`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts:74)
+    extended with two new fields:
+
+    - `parentPort?: IpcPort` — creates a single `IpcDemuxer` shared across all APIs.
+    - `extensionHost?: IExtensionHost` — sets `global.__extensionHost` (still
+      load-bearing because `WindowAPI.registerWebviewViewProvider` reads it directly).
+      Each worker is a separate V8 isolate so the global is safe.
+
+4.  **Unit tests.** New
+    [`IPC.test.ts`](../packages/vscode-shim/src/__tests__/IPC.test.ts) with 27 tests:
+    message types, demuxer round-trips (resolve, reject, timeout, dispose),
+    `WindowAPI`/`CommandsAPI` IPC dispatch, cross-API shared-port safety (no
+    spurious warnings), and backward compatibility.
+
+#### Post-implementation review fixes
+
+| Issue                                   | Fix                                                              |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| Shared port → duplicate listeners       | `IpcDemuxer` single-owner design; silent on unknown `requestId`s |
+| Pending request leak on fire-and-forget | 30s timeout enforcement; `dispose()` rejects all pending         |
+| Mock terminal/editor not a real proxy   | Documented as Phase 2 concern in code comments                   |
+| `global.__extensionHost` still touched  | Documented as load-bearing (per-isolate safety)                  |
+| No round-trip resolution test           | Added resolve, reject, timeout, cross-API tests                  |
+| `apps/cli/.shofer/` untracked           | Added to `.gitignore`                                            |
 
 ### Phase 1: Server Worker + Agent Worker bootstrap (infrastructure, no traffic moved)
 
@@ -725,13 +763,20 @@ notifies the main thread, which can trigger `_resetWebview()`.
 | [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts)                               | MCP tool execution                               |
 | [`src/services/code-index/manager.ts`](../src/services/code-index/manager.ts)               | Code indexing (query path)                       |
 
-### New Worker Files
+### New Worker Files (Phase 1)
 
 | File                                   | Role                                                                 |
 | -------------------------------------- | -------------------------------------------------------------------- |
 | `src/workers/worker-extension-host.ts` | `IExtensionHost` for Agent Workers (routes through `MessageChannel`) |
 | `src/workers/agent-worker.ts`          | Agent Worker bootstrap: loads extension bundle, calls `activate()`   |
 | `src/workers/server-worker.ts`         | Server Worker: WebSocket server + `MessageChannel` router            |
+
+### Phase 0 Deliverables
+
+| File                                                                                                  | Role                                                                                 |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [`packages/vscode-shim/src/interfaces/ipc.ts`](../packages/vscode-shim/src/interfaces/ipc.ts)         | `IpcPort`, `IpcDemuxer`, `VscodeApiRequest`/`VscodeApiResponse`, timeout enforcement |
+| [`packages/vscode-shim/src/__tests__/IPC.test.ts`](../packages/vscode-shim/src/__tests__/IPC.test.ts) | 27 unit tests: demuxer round-trips, API dispatch, cross-API safety, backward compat  |
 
 ### Existing Precedent
 
