@@ -1,5 +1,9 @@
 /**
  * CommandsAPI class for VSCode API
+ *
+ * Provides a mock implementation of `vscode.commands.*` for headless runtimes.
+ * When an `IpcPort` is provided, `executeCommand()` forwards through IPC to the
+ * main thread for commands that need the real VS Code environment.
  */
 
 import { logs } from "../utils/logger.js"
@@ -14,12 +18,32 @@ import type { TextDocument } from "../interfaces/document.js"
 import type { Disposable } from "../interfaces/workspace.js"
 import type { WorkspaceAPI } from "./WorkspaceAPI.js"
 import type { WindowAPI } from "./WindowAPI.js"
+import type { IpcDemuxer } from "../interfaces/ipc.js"
 
 /**
  * Commands API mock for CLI mode
  */
 export class CommandsAPI {
 	private commands: Map<string, (...args: unknown[]) => unknown> = new Map()
+
+	/**
+	 * When provided, unknown commands are forwarded through this demuxer to
+	 * the main thread. The demuxer owns the single `parentPort` listener,
+	 * preventing duplicate-delivery warnings from a shared port.
+	 *
+	 * When undefined (main-thread / CLI code paths), built-in command handling
+	 * runs locally.
+	 */
+	private _ipcDemuxer: IpcDemuxer | undefined
+
+	constructor(ipcDemuxer?: IpcDemuxer) {
+		this._ipcDemuxer = ipcDemuxer
+	}
+
+	/** Returns true when this CommandsAPI has IPC routing wired. */
+	public get hasParentPort(): boolean {
+		return this._ipcDemuxer !== undefined
+	}
 
 	registerCommand(command: string, callback: (...args: unknown[]) => unknown): Disposable {
 		this.commands.set(command, callback)
@@ -33,6 +57,8 @@ export class CommandsAPI {
 	executeCommand<T = unknown>(command: string, ...rest: unknown[]): Thenable<T> {
 		const handler = this.commands.get(command)
 		if (handler) {
+			// Registered commands always run locally — they were registered by the
+			// (worker-local) extension and do not need the main thread.
 			try {
 				const result = handler(...rest)
 				return Promise.resolve(result as T)
@@ -41,7 +67,13 @@ export class CommandsAPI {
 			}
 		}
 
-		// Handle built-in commands
+		// When running in a worker, forward unknown commands to the main thread
+		// so they resolve against the real vscode.commands registry.
+		if (this._ipcDemuxer) {
+			return this._forwardCommandToMainThread<T>(command, rest)
+		}
+
+		// Handle built-in commands (main-thread / CLI code path)
 		switch (command) {
 			case "workbench.action.files.saveFiles":
 			case "workbench.action.closeWindow":
@@ -60,6 +92,15 @@ export class CommandsAPI {
 				logs.warn(`Unknown command: ${command}`, "VSCode.Commands")
 				return Promise.resolve(undefined as T)
 		}
+	}
+
+	/**
+	 * Forwards a command execution through the IPC demuxer to the main thread.
+	 * Used when running in a worker to reach the real `vscode.commands.executeCommand`.
+	 * The demuxer provides request/response correlation and timeout enforcement.
+	 */
+	private _forwardCommandToMainThread<T = unknown>(command: string, args: unknown[]): Thenable<T> {
+		return this._ipcDemuxer!.dispatchRequest("executeCommand", [command, ...args]) as Thenable<T>
 	}
 
 	private async handleDiffCommand(

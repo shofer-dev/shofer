@@ -1,5 +1,11 @@
 /**
  * WindowAPI class for VSCode API
+ *
+ * Provides a mock implementation of `vscode.window.*` for headless runtimes.
+ * When an `IpcPort` (e.g. `worker_threads.parentPort`) is provided, operations
+ * that require the real VS Code editor surface (`createTerminal`,
+ * `showTextDocument`) forward the call through IPC to the main thread instead
+ * of using the local mock.
  */
 
 import { logs } from "../utils/logger.js"
@@ -34,6 +40,7 @@ import type {
 } from "../interfaces/webview.js"
 import type { QuickPickOptions, InputBoxOptions, OpenDialogOptions, Disposable } from "../interfaces/workspace.js"
 import type { CancellationToken } from "../interfaces/document.js"
+import type { IpcDemuxer } from "../interfaces/ipc.js"
 
 /**
  * Window API mock for CLI mode
@@ -45,8 +52,24 @@ export class WindowAPI {
 	private _workspace?: WorkspaceAPI
 	private static _decorationCounter = 0
 
-	constructor() {
+	/**
+	 * When provided, vscode API calls that need the real editor surface
+	 * (`createTerminal`, `showTextDocument`) are dispatched through this
+	 * demuxer to the main thread. The demuxer owns the single `parentPort`
+	 * listener, preventing duplicate-delivery warnings from a shared port.
+	 *
+	 * When undefined (main-thread / CLI code paths), local mocks are used.
+	 */
+	private _ipcDemuxer: IpcDemuxer | undefined
+
+	constructor(ipcDemuxer?: IpcDemuxer) {
 		this.tabGroups = new TabGroupsAPI()
+		this._ipcDemuxer = ipcDemuxer
+	}
+
+	/** Returns true when this WindowAPI has IPC routing wired. */
+	public get hasParentPort(): boolean {
+		return this._ipcDemuxer !== undefined
 	}
 
 	setWorkspace(workspace: WorkspaceAPI) {
@@ -96,7 +119,18 @@ export class WindowAPI {
 		message?: string
 		strictEnv?: boolean
 	}): Terminal {
-		// Return a mock terminal object
+		if (this._ipcDemuxer) {
+			// Forward to main thread for real terminal creation.
+			// NOTE: The returned mock terminal is NOT a real proxy — its
+			// sendText/dispose are local stubs. Phase 2 will replace this with
+			// a true proxy that forwards to the real terminal on the main thread.
+			this._ipcDemuxer.dispatchRequest("createTerminal", [options]).catch((err) => {
+				logs.error(`createTerminal IPC error: ${err.message}`, "VSCode.Window")
+			})
+		}
+
+		// Return a mock terminal object (works for both code paths;
+		// the IPC path additionally creates the real terminal on the main thread)
 		return {
 			name: options?.name || "Terminal",
 			processId: Promise.resolve(undefined),
@@ -153,6 +187,18 @@ export class WindowAPI {
 		columnOrOptions?: ViewColumn | TextDocumentShowOptions,
 		_preserveFocus?: boolean,
 	): Promise<TextEditor> {
+		// Forward through IPC when running in a worker.
+		// NOTE: The returned editor is NOT a real proxy — its edit methods are
+		// local stubs. Phase 2 will replace with a true proxy that delegates to
+		// the real editor on the main thread.
+		if (this._ipcDemuxer) {
+			this._ipcDemuxer
+				.dispatchRequest("showTextDocument", [documentOrUri, columnOrOptions, _preserveFocus])
+				.catch((err) => {
+					logs.error(`showTextDocument IPC error: ${err.message}`, "VSCode.Window")
+				})
+		}
+
 		// Mock implementation for CLI
 		// In a real VSCode environment, this would open the document in an editor
 		const uri = documentOrUri instanceof Uri ? documentOrUri : documentOrUri.uri

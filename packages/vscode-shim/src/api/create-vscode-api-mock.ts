@@ -1,5 +1,10 @@
 /**
  * Main factory function for creating VSCode API mock
+ *
+ * Supports two modes:
+ * - **Default (no options)**: full mock — all APIs are stubbed locally (CLI / main thread).
+ * - **Worker mode (parentPort provided)**: vscode API calls that need the real editor
+ *   surface are forwarded through IPC to the main thread.
  */
 
 import { machineIdSync } from "../utils/machine-id.js"
@@ -34,6 +39,10 @@ import { ExtensionContextImpl } from "../context/ExtensionContext.js"
 import { WorkspaceAPI } from "./WorkspaceAPI.js"
 import { WindowAPI } from "./WindowAPI.js"
 import { CommandsAPI } from "./CommandsAPI.js"
+
+import type { IpcPort } from "../interfaces/ipc.js"
+import { IpcDemuxer } from "../interfaces/ipc.js"
+import type { IExtensionHost } from "../interfaces/extension-host.js"
 
 // Import types and enums
 import {
@@ -76,6 +85,30 @@ export interface VSCodeAPIMockOptions {
 	 * Set to a temp directory for ephemeral/no-persist mode.
 	 */
 	storageDir?: string
+
+	/**
+	 * When provided, vscode API calls that need the real editor surface
+	 * (createTerminal, showTextDocument, executeCommand) are forwarded
+	 * through this port to the main thread instead of using local mocks.
+	 *
+	 * Set by the Agent Worker bootstrap to bridge worker-shim to main thread.
+	 * When omitted, the shim uses local mocks (CLI / main-thread code paths).
+	 *
+	 * Internally a single `IpcDemuxer` is created from this port and shared
+	 * across all shim APIs. This ensures exactly one listener on the port,
+	 * preventing duplicate-delivery warnings from a shared MessagePort.
+	 */
+	parentPort?: IpcPort
+
+	/**
+	 * When provided, sets `global.__extensionHost` before the shim is constructed.
+	 * Used by the Agent Worker bootstrap to inject a `WorkerExtensionHost`.
+	 * The global remains load-bearing because `WindowAPI.registerWebviewViewProvider`
+	 * reads it directly (each worker is a separate V8 isolate, so this is safe).
+	 * When omitted, the existing `global.__extensionHost` code path is used
+	 * (backward-compatible with CLI).
+	 */
+	extensionHost?: IExtensionHost
 }
 
 /**
@@ -87,14 +120,26 @@ export function createVSCodeAPIMock(
 	identity?: IdentityInfo,
 	options?: VSCodeAPIMockOptions,
 ) {
+	// Wire the extension host before constructing the APIs so that
+	// WindowAPI.registerWebviewViewProvider sees it immediately.
+	// NOTE: global.__extensionHost remains load-bearing because
+	// WindowAPI.registerWebviewViewProvider reads it directly.
+	if (options?.extensionHost) {
+		;(global as Record<string, unknown>).__extensionHost = options.extensionHost
+	}
+
+	// Create a single IpcDemuxer from the parentPort so all shim APIs
+	// share one listener — no duplicate-delivery warnings.
+	const ipcDemuxer = options?.parentPort ? new IpcDemuxer(options.parentPort) : undefined
+
 	const context = new ExtensionContextImpl({
 		extensionPath: extensionRootPath,
 		workspacePath: workspacePath,
 		storageDir: options?.storageDir,
 	})
 	const workspace = new WorkspaceAPI(workspacePath, context)
-	const window = new WindowAPI()
-	const commands = new CommandsAPI()
+	const window = new WindowAPI(ipcDemuxer)
+	const commands = new CommandsAPI(ipcDemuxer)
 
 	// Link window and workspace for cross-API calls
 	window.setWorkspace(workspace)
