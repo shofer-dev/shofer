@@ -228,9 +228,11 @@ export async function createApiHarness(options: ApiHarnessOptions): Promise<ApiH
 			if (trace.followupQueue.length > 0) {
 				const reply = trace.followupQueue.shift()!
 				// Give the dispatcher a beat to finish emitting the event before
-				// we inject the response, so our sendMessage arrives after the
-				// ask is recorded in the task's message list.
-				setImmediate(() => client.sendMessage(reply))
+				// we inject the response, so our reply arrives after the
+				// ask is recorded in the task's message list. `respond()` posts
+				// a proper `askResponse: messageResponse` WebviewMessage that
+				// resolves the task's pending `ask("followup", …)`.
+				setImmediate(() => client.respond(reply))
 				break
 			}
 		}
