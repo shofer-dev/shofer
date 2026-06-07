@@ -64,7 +64,6 @@ describe("API — new ShoferAPI methods", () => {
 			deleteTaskWithId: vi.fn().mockResolvedValue(undefined),
 			popFromStackWithoutAborting: vi.fn().mockReturnValue(undefined),
 			addShoferToStack: vi.fn().mockResolvedValue(undefined),
-			getProviderProfileEntry: vi.fn(),
 			activateProviderProfile: vi.fn().mockResolvedValue(undefined),
 			deleteProviderProfile: vi.fn().mockResolvedValue(undefined),
 			upsertProviderProfile: vi.fn().mockResolvedValue("profile-id"),
