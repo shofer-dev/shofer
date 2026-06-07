@@ -259,9 +259,9 @@ companion extensions consume. The concrete steps:
 8. ~~**Unify event systems**~~ ✅ Done — `forwardShoferEvents()` now bridges all
    meaningful `ShoferAPI` events into `ClientEventMap`. Events already covered by
    the webview protocol are intentionally not double-emitted.
-9. **Expose `ExtensionClient` as a reusable library** — The
-   `ExtensionClient` + `MessageProcessor` + `StateStore` stack is the most
-   sophisticated consumer SDK Shofer has.
+9. ~~**Expose `ExtensionClient` as a reusable library**~~ ✅ Done — The
+   `ExtensionClient` + `MessageProcessor` + `StateStore` stack is exported via
+   `@shofer/cli/client` barrel file ([`client.ts`](../apps/cli/src/agent/client.ts)).
 10. ~~**Make stdin-stream a thin wrapper**~~ ✅ Done — stdin-stream routes
     `start` → `host.runTask()`, `message` → `host.sendMessage()`, `cancel` →
     `host.cancelTask()`. Approval/rejection is handled by the `AskDispatcher`
