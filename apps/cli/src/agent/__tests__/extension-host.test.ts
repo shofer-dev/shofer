@@ -581,7 +581,7 @@ describe("ExtensionHost", () => {
 			await taskPromise
 
 			expect(api.startNewTask).toHaveBeenCalledWith({
-				configuration: {},
+				configuration: undefined,
 				text: "test prompt",
 				images: undefined,
 			})

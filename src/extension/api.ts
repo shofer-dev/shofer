@@ -294,11 +294,12 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		images,
 		newTab,
 	}: {
-		configuration: ShoferSettings
+		configuration?: ShoferSettings
 		text?: string
 		images?: string[]
 		newTab?: boolean
 	}) {
+		const taskConfiguration = configuration ?? {}
 		let provider: ShoferProvider
 
 		if (newTab) {
@@ -322,7 +323,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			consecutiveMistakeLimit: Number.MAX_SAFE_INTEGER,
 		}
 
-		const task = await provider.createTask(text, images, undefined, options, configuration)
+		const task = await provider.createTask(text, images, undefined, options, taskConfiguration)
 
 		if (!task) {
 			throw new Error("Failed to create task due to policy restrictions")

@@ -8,7 +8,7 @@
 
 import { EventEmitter } from "events"
 
-import { ShoferMessage, ShoferAsk } from "@shofer/types"
+import { ShoferMessage, ShoferAsk, QueuedMessage } from "@shofer/types"
 
 import type { AgentStateInfo } from "./agent-state.js"
 
@@ -127,8 +127,10 @@ export interface ClientEventMap {
 
 	/**
 	 * Emitted when queued messages are updated (bridged from ShoferAPI).
+	 * Carries the full current queue so consumers (stream-json `queue` events,
+	 * TUI queue view) can render its contents, not just react to the change.
 	 */
-	queuedMessagesUpdated: { taskId: string }
+	queuedMessagesUpdated: { taskId: string; queuedMessages: QueuedMessage[] }
 }
 
 /**
