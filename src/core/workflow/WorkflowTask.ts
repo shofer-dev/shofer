@@ -1182,11 +1182,32 @@ export class WorkflowTask extends Task {
 		const provider = this.providerRef.deref()
 		if (!provider) return
 		try {
+			// Persist the terminal flow checkpoint first so any consumer that
+			// reads the HistoryItem in response to the event below sees the
+			// converged/budget_exceeded/deadlock flowState.
+			await this.persistCheckpoint()
+
+			// Emit the canonical Task lifecycle event — the same contract every
+			// Task uses to signal terminal state (cf. AttemptCompletionTool.
+			// emitTaskCompleted). This is what TaskManager.onComplete listens on
+			// to write `taskState`, what the public ShoferAPI re-emits to external
+			// consumers (e.g. integration harness `waitForCompletion`), and what
+			// the webview observes to leave the running state. The WorkflowTask
+			// root has no parentTaskId, so `isSubtask` is false.
+			//
+			// We still pass through TaskManager.setState explicitly below as a
+			// fallback for the case where the root task is not registered with
+			// the TaskManager event listeners; setState is idempotent (guarded
+			// by statesEqual) so the listener-driven write and this one collapse.
+			this.emit(ShoferEventName.TaskCompleted, this.taskId, this.getTokenUsage(), this.toolUsage, {
+				rating,
+				isSubtask: !!this.parentTaskId,
+			})
+
 			const taskManager = provider.taskManager
 			if (taskManager) {
-				await (taskManager as any).setState?.(this.taskId, { lifecycle: "completed", rating })
+				taskManager.setState(this.taskId, { lifecycle: "completed", rating })
 			}
-			await this.persistCheckpoint()
 		} catch (error) {
 			workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to emit completion:`, error)
 		}
@@ -1215,7 +1236,16 @@ export async function createWorkflowTask(
 	const apiConfiguration = state?.apiConfiguration
 	if (!apiConfiguration) throw new Error("No API configuration available")
 
-	return new WorkflowTask({ provider, apiConfiguration, slangSource, flowDecl, flowParams })
+	return new WorkflowTask({
+		provider,
+		apiConfiguration,
+		slangSource,
+		flowDecl,
+		flowParams,
+		// Wire the same provider-level event forwarding that createTask() gets,
+		// so the workflow root's TaskCompleted reaches the public ShoferAPI.
+		onCreated: provider.onTaskCreated,
+	})
 }
 
 /**
@@ -1255,6 +1285,9 @@ export async function createWorkflowTaskFromHistory(
 		flowDecl,
 		flowState,
 		historyItem,
+		// Wire the same provider-level event forwarding that createTask() gets,
+		// so the workflow root's TaskCompleted reaches the public ShoferAPI.
+		onCreated: provider.onTaskCreated,
 	})
 }
 

@@ -555,7 +555,15 @@ class Parser {
 
 	private parseArgument(): Argument {
 		// Check for named arg: name: expr
-		if (this.check(TokenType.Ident) && this.tokens[this.pos + 1]?.type === TokenType.Colon) {
+		//
+		// The name may be a reserved keyword (e.g. `contains`, `output`, `time`,
+		// `count`). The trailing colon disambiguates a keyword used as a parameter
+		// NAME from the same keyword used as an operator/expression — a positional
+		// expression argument is never immediately followed by a colon. Without
+		// this, an argument like `contains: contains_ok` fails to parse because
+		// `contains` tokenizes as TokenType.Contains rather than TokenType.Ident.
+		const isNamePosition = this.check(TokenType.Ident) || isKeywordToken(this.peek().type)
+		if (isNamePosition && this.tokens[this.pos + 1]?.type === TokenType.Colon) {
 			const name = this.advance().value
 			this.advance() // :
 			return { name, value: this.parseExpr() }
@@ -581,7 +589,12 @@ class Parser {
 	}
 
 	private parseOutputField(): OutputField {
-		const name = this.expect(TokenType.Ident).value
+		// Field names may be reserved keywords (e.g. `contains`, `output`); accept
+		// any keyword token in name position, mirroring parseArgument.
+		const name =
+			this.check(TokenType.Ident) || isKeywordToken(this.peek().type)
+				? this.advance().value
+				: this.expect(TokenType.Ident).value
 		this.expect(TokenType.Colon)
 		const fieldType = this.expect(TokenType.String).value
 		return { name, fieldType }
