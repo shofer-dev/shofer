@@ -16,6 +16,7 @@ export interface UseGlobalInputOptions {
 	currentMode: string | null
 	mode: string
 	sendToExtension: ((msg: WebviewMessage) => void) | null
+	cancelTask: (() => Promise<void>) | null
 	showInfo: (msg: string, duration?: number) => void
 	exit: () => void
 	cleanup: () => Promise<void>
@@ -41,6 +42,7 @@ export function useGlobalInput({
 	currentMode,
 	mode,
 	sendToExtension,
+	cancelTask,
 	showInfo,
 	exit,
 	cleanup,
@@ -127,13 +129,14 @@ export function useGlobalInput({
 		}
 
 		// Escape key to cancel/pause task when loading (streaming)
-		if (key.escape && isLoading && sendToExtension) {
+		if (key.escape && isLoading && cancelTask) {
 			// If picker is open, let the picker handle escape first
 			if (pickerIsOpen) {
 				return
 			}
-			// Send cancel message to extension (same as webview-ui Cancel button)
-			sendToExtension({ type: "cancelTask" })
+			// Route through host.cancelTask() → api.cancelCurrentTask() for
+			// consistency with stdin-stream and IPC protocol consumers.
+			void cancelTask()
 			return
 		}
 

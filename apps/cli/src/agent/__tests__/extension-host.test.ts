@@ -181,7 +181,7 @@ describe("ExtensionHost", () => {
 		it("should initialize with default state values", () => {
 			const host = createTestHost()
 
-			expect(getPrivate(host, "isReady")).toBe(false)
+			expect(getPrivate(host, "_isReady")).toBe(false)
 			expect(getPrivate(host, "vscode")).toBeNull()
 			expect(getPrivate(host, "extensionModule")).toBeNull()
 		})
@@ -269,7 +269,7 @@ describe("ExtensionHost", () => {
 			it("should set isReady to true", () => {
 				const host = createTestHost()
 				host.markWebviewReady()
-				expect(getPrivate(host, "isReady")).toBe(true)
+				expect(getPrivate(host, "_isReady")).toBe(true)
 			})
 
 			it("should send webviewDidLaunch message", () => {

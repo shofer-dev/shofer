@@ -50,6 +50,7 @@ export interface UseExtensionHostReturn {
 	isReady: boolean
 	sendToExtension: ((msg: WebviewMessage) => void) | null
 	runTask: ((prompt: string) => Promise<void>) | null
+	cancelTask: (() => Promise<void>) | null
 	cleanup: () => Promise<void>
 }
 
@@ -231,9 +232,17 @@ export function useExtensionHost({
 		return hostRef.current.runTask(prompt, taskId)
 	}, [])
 
+	// Stable cancelTask - uses ref to always access current host.
+	const cancelTask = useCallback(() => {
+		if (!hostRef.current) {
+			return Promise.reject(new Error("Extension host not ready"))
+		}
+		return hostRef.current.cancelTask()
+	}, [])
+
 	// Memoized return object to prevent unnecessary re-renders in consumers.
 	return useMemo(
-		() => ({ isReady: isReadyRef.current, sendToExtension, runTask, cleanup }),
-		[sendToExtension, runTask, cleanup],
+		() => ({ isReady: isReadyRef.current, sendToExtension, runTask, cancelTask, cleanup }),
+		[sendToExtension, runTask, cancelTask, cleanup],
 	)
 }
