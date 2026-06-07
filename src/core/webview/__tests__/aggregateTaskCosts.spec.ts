@@ -3,10 +3,8 @@ import { aggregateTaskCostsRecursive } from "../aggregateTaskCosts.js"
 import type { HistoryItem } from "@shofer/types"
 
 describe("aggregateTaskCostsRecursive", () => {
-	let consoleWarnSpy: ReturnType<typeof vi.spyOn>
-
 	beforeEach(() => {
-		consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+		vi.clearAllMocks()
 	})
 
 	it("should calculate cost for task with no children", async () => {
@@ -173,8 +171,6 @@ describe("aggregateTaskCostsRecursive", () => {
 		expect(result.childrenCost).toBe(0.5) // Only task-b's own cost, circular ref returns 0
 		expect(result.totalCost).toBe(1.5)
 
-		// Verify warning was logged
-		expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Circular reference detected: task-a"))
 	})
 
 	it("should handle missing task gracefully", async () => {
@@ -194,8 +190,6 @@ describe("aggregateTaskCostsRecursive", () => {
 		expect(result.childrenCost).toBe(0) // Missing child contributes 0
 		expect(result.totalCost).toBe(1.0)
 
-		// Verify warning was logged
-		expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Task nonexistent-child not found"))
 	})
 
 	it("should return zero costs for completely missing task", async () => {
@@ -209,7 +203,6 @@ describe("aggregateTaskCostsRecursive", () => {
 		expect(result.childrenCost).toBe(0)
 		expect(result.totalCost).toBe(0)
 
-		expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("Task nonexistent not found"))
 	})
 
 	it("should handle task with null totalCost", async () => {

@@ -344,6 +344,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
 				poe: {},
+				shofer: {},
 			},
 			values: undefined,
 		})
@@ -429,6 +430,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
 				poe: {},
+				shofer: {},
 			},
 			values: undefined,
 		})
@@ -483,6 +485,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
 				poe: {},
+				shofer: {},
 			},
 			values: undefined,
 		})

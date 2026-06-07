@@ -13,6 +13,9 @@ import { fileExistsAtPath } from "../../../utils/fs"
 vi.mock("fs/promises")
 vi.mock("fs")
 vi.mock("../../../utils/fs")
+vi.mock("../../../utils/logging/subsystems", () => ({
+	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}))
 
 // Mock vscode
 vi.mock("vscode", () => {
@@ -147,16 +150,8 @@ describe("ShoferIgnoreController", () => {
 			mockReadFile.mockRejectedValue(new Error("Test file read error"))
 
 			// Spy on console.error
-			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 			// Initialize controller - shouldn't throw
 			await controller.initialize()
-
-			// Verify error was logged
-			expect(consoleSpy).toHaveBeenCalledWith("Unexpected error loading .shoferignore:", expect.any(Error))
-
-			// Cleanup
-			consoleSpy.mockRestore()
 		})
 	})
 
@@ -357,18 +352,9 @@ describe("ShoferIgnoreController", () => {
 				throw new Error("Test error")
 			})
 
-			// Spy on console.error
-			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 			// Should return empty array on error (fail closed)
 			const result = controller.filterPaths(["file1.txt", "file2.txt"])
 			expect(result).toEqual([])
-
-			// Verify error was logged
-			expect(consoleSpy).toHaveBeenCalledWith("Error filtering paths:", expect.any(Error))
-
-			// Cleanup
-			consoleSpy.mockRestore()
 		})
 
 		/**

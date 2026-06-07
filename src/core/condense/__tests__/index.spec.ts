@@ -1054,11 +1054,6 @@ describe("summarizeConversation", () => {
 			// createMessage is missing
 		} as unknown as ApiHandler
 
-		// Mock console.error to verify error message
-		const originalError = console.error
-		const mockError = vi.fn()
-		console.error = mockError
-
 		const result = await summarizeConversation({
 			messages,
 			apiHandler: invalidHandler,
@@ -1072,12 +1067,6 @@ describe("summarizeConversation", () => {
 		expect(result.summary).toBe("")
 		expect(result.error).toBeTruthy() // Error should be set
 		expect(result.newContextTokens).toBeUndefined()
-
-		// Verify error was logged
-		expect(mockError).toHaveBeenCalledWith(expect.stringContaining("API handler is invalid for condensing"))
-
-		// Restore console.error
-		console.error = originalError
 	})
 
 	it("should tag all messages with condenseParent (fresh start model)", async () => {

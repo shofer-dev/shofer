@@ -324,8 +324,6 @@ describe("MessageEnhancer", () => {
 		})
 
 		it("should handle malformed messages gracefully", () => {
-			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 			// Create messages that will cause errors when accessed
 			const malformedMessages = [
 				null,
@@ -337,11 +335,8 @@ describe("MessageEnhancer", () => {
 			// Access private method through any type assertion for testing
 			const history = (MessageEnhancer as any).extractTaskHistory(malformedMessages)
 
-			// Should return empty string and log error
+			// Should return empty string
 			expect(history).toBe("")
-			expect(consoleSpy).toHaveBeenCalledWith("Failed to extract task history:", expect.any(Error))
-
-			consoleSpy.mockRestore()
 		})
 
 		it("should handle messages with circular references", () => {

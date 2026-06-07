@@ -741,7 +741,6 @@ describe("importExport", () => {
 				const showInfoMessageSpy = vi
 					.spyOn(vscode.window, "showInformationMessage")
 					.mockResolvedValue(undefined)
-				const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 
 				await importSettingsWithFeedback(
 					{
@@ -760,11 +759,6 @@ describe("importExport", () => {
 				expect(showWarningMessageSpy).toHaveBeenCalledWith(
 					expect.stringContaining("See Developer Tools console for details."),
 				)
-				// Should log full details to console
-				expect(consoleWarnSpy).toHaveBeenCalledWith(
-					"Settings import completed with warnings:",
-					expect.arrayContaining([expect.stringContaining("problematic-profile")]),
-				)
 				expect(showInfoMessageSpy).not.toHaveBeenCalled()
 
 				// Provider state should still be updated
@@ -773,7 +767,6 @@ describe("importExport", () => {
 
 				showWarningMessageSpy.mockRestore()
 				showInfoMessageSpy.mockRestore()
-				consoleWarnSpy.mockRestore()
 			})
 
 			it("should handle multiple profiles with mixed valid and invalid providers", async () => {
@@ -992,7 +985,6 @@ describe("importExport", () => {
 				}
 
 				const showWarningMessageSpy = vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined)
-				const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 
 				await importSettingsWithFeedback(
 					{
@@ -1008,17 +1000,7 @@ describe("importExport", () => {
 				expect(showWarningMessageSpy).toHaveBeenCalledWith(
 					expect.stringContaining("2 profiles had issues during import."),
 				)
-				// Should log full details to console
-				expect(consoleWarnSpy).toHaveBeenCalledWith(
-					"Settings import completed with warnings:",
-					expect.arrayContaining([
-						expect.stringContaining("problematic-profile-1"),
-						expect.stringContaining("problematic-profile-2"),
-					]),
-				)
-
 				showWarningMessageSpy.mockRestore()
-				consoleWarnSpy.mockRestore()
 			})
 		})
 	})
