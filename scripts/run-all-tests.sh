@@ -4,6 +4,13 @@
 # Cap per-suite parallelism to avoid hanging the laptop (vitest defaults to all CPU cores).
 set -euo pipefail
 
+# Sanitize git environment variables that leak from husky-submodule context.
+# Without this, GIT_DIR points to the shofer submodule's git directory
+# (.git/modules/shofer), and test code that calls simpleGit(tempDir).init()
+# operates on the submodule repo instead of tempDir — corrupting the
+# submodule config (e.g. setting core.bare=true).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CEILING_DIRECTORIES
+
 # WS is the repo root (where this script is located, one level up from scripts/)
 WS="$(cd "$(dirname "$0")/.." && pwd)"
 
