@@ -388,7 +388,12 @@ export async function presentAssistantMessage(shofer: Task) {
 
 			// Fetch state early so it's available for toolDescription and validation
 			const state = await shofer.providerRef.deref()?.getState()
-			const { mode, customModes, experiments: stateExperiments, disabledTools } = state ?? {}
+			const { customModes, experiments: stateExperiments, disabledTools } = state ?? {}
+			// Use the task's own mode for tool validation, not the
+			// provider-global mode. This ensures a mode switch in Task A
+			// via switch_mode doesn't cause Task B's tools to be validated
+			// against the wrong mode.
+			const mode = (shofer as any)._taskMode || state?.mode || defaultModeSlug
 
 			const toolDescription = (): string => {
 				switch (block.name) {

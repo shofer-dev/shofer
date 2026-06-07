@@ -2613,7 +2613,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Get condensing configuration
 		const state = await this.providerRef.deref()?.getState()
 		const customCondensingPrompt = state?.customSupportPrompts?.CONDENSE
-		const { mode, apiConfiguration } = state ?? {}
+		const { apiConfiguration } = state ?? {}
+		// Use the task's own mode for tool building in condensing
+		// so a background task sees its own mode's tools, not the
+		// focused task's.
+		const mode = this._taskMode || state?.mode || defaultModeSlug
 
 		const { contextTokens: prevContextTokens } = this.getTokenUsage()
 
@@ -4058,7 +4062,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const showShoferIgnoredFiles = state?.showShoferIgnoredFiles ?? false
 			const includeDiagnosticMessages = state?.includeDiagnosticMessages ?? true
 			const maxDiagnosticMessages = state?.maxDiagnosticMessages ?? 50
-			const currentMode = state?.mode ?? defaultModeSlug
+			// Use the task's own mode, not the provider-global mode which
+			// reflects the currently focused task. Without this, a mode
+			// switch in Task A via switch_mode would affect the user-content
+			// processing for a background Task B.
+			const currentMode = this._taskMode || state?.mode || defaultModeSlug
 
 			const {
 				content: parsedUserContent,
@@ -5623,7 +5631,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async handleContextWindowExceededError(): Promise<void> {
 		const state = await this.providerRef.deref()?.getState()
-		const { profileThresholds = {}, mode, apiConfiguration } = state ?? {}
+		const { profileThresholds = {}, apiConfiguration } = state ?? {}
+		// Use the task's own mode for context-management tool building
+		// so a background task sees its own mode's tools.
+		const mode = this._taskMode || state?.mode || defaultModeSlug
 
 		const { contextTokens } = this.getTokenUsage()
 		const modelInfo = this.api.getModel().info
