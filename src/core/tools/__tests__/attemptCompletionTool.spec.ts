@@ -98,6 +98,7 @@ describe("attemptCompletionTool", () => {
 			taskId: "task_1",
 			apiConfiguration: { apiProvider: "test" } as any,
 			api: { getModel: vi.fn().mockReturnValue({ id: "test-model", info: {} }) } as any,
+			providerRef: { deref: vi.fn().mockReturnValue({}) },
 			messageQueueService: {
 				isEmpty: vi.fn().mockReturnValue(true),
 				dequeueMessage: vi.fn().mockReturnValue(null),

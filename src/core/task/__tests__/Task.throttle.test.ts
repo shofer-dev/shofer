@@ -3,6 +3,10 @@ import { ShoferEventName, ProviderSettings, TokenUsage, ToolUsage } from "@shofe
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
 import { hasToolUsageChanged, hasTokenUsageChanged } from "../../../shared/getApiMetrics"
+// Prevent the transitive import graph from loading extension.ts,
+// which pulls in WorkflowTask (which extends Task — circular).
+vi.mock("../../../extension", () => ({}))
+
 
 // Mock dependencies
 vi.mock("../../webview/ShoferProvider")
@@ -14,6 +18,11 @@ vi.mock("../../../integrations/terminal/TerminalRegistry", () => ({
 vi.mock("../../ignore/ShoferIgnoreController")
 vi.mock("../../protect/ShoferProtectedController")
 vi.mock("../../context-tracking/FileContextTracker")
+vi.mock("../../../utils/logging/subsystems", () => ({
+	taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}))
+
 vi.mock("../../../integrations/editor/DiffViewProvider")
 vi.mock("../../tools/ToolRepetitionDetector")
 vi.mock("../../../api", () => ({

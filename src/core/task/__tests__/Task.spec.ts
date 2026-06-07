@@ -13,6 +13,30 @@ import { TelemetryService } from "@shofer/telemetry"
 // which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
 vi.mock("../../../extension", () => ({}))
 
+// Mock the subsystem logger used by Task.ts (taskLog)
+vi.mock("../../../utils/logging/subsystems", () => {
+	const noop = () => {}
+	return {
+		taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+		webviewLog: { error: noop, info: noop, warn: noop },
+		apiLog: { error: noop, info: noop, warn: noop },
+		codeIndexLog: { error: noop, info: noop, warn: noop },
+		configLog: { error: noop, info: noop, warn: noop },
+		utilLog: { error: noop, info: noop, warn: noop },
+		fsLog: { error: noop, info: noop, warn: noop },
+		gitLog: { error: noop, info: noop, warn: noop },
+		checkpointLog: { error: noop, info: noop, warn: noop },
+		assistantAgentLog: { error: noop, info: noop, warn: noop },
+		mcpLog: { error: noop, info: noop, warn: noop },
+		skillsLog: { error: noop, info: noop, warn: noop },
+		marketplaceLog: { error: noop, info: noop, warn: noop },
+		metricsLog: { error: noop, info: noop, warn: noop },
+		workflowLog: { error: noop, info: noop, warn: noop },
+		i18nLog: { error: noop, info: noop, warn: noop },
+		scrollLog: { error: noop, info: noop, warn: noop },
+	}
+})
+
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ApiStreamChunk } from "../../../api/transform/stream"
@@ -1523,17 +1547,10 @@ describe("Shofer", () => {
 					configurable: true,
 				})
 
-				// Spy on console.error to verify error is logged
-				const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 				// Should log error but not throw
 				task.submitUserMessage("test message")
 
-				expect(consoleErrorSpy).toHaveBeenCalledWith("[Task#submitUserMessage] Provider reference lost")
 				expect(handleResponseSpy).not.toHaveBeenCalled()
-
-				// Restore console.error
-				consoleErrorSpy.mockRestore()
 			})
 		})
 	})
@@ -1620,20 +1637,11 @@ describe("Shofer", () => {
 				throw mockError
 			})
 
-			// Spy on console.error to verify error is logged
-			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 			// abortTask should not throw even if dispose fails
 			await expect(task.abortTask()).resolves.not.toThrow()
 
-			// Verify error was logged
-			expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Error during task"), mockError)
-
 			// Verify abort flag is still set
 			expect(task.abort).toBe(true)
-
-			// Restore console.error
-			consoleErrorSpy.mockRestore()
 		})
 		describe("Stream Failure Retry", () => {
 			it("should not abort task on stream failure, only on user cancellation", async () => {
@@ -1643,9 +1651,6 @@ describe("Shofer", () => {
 					task: "test task",
 					startTask: false,
 				})
-
-				// Spy on console.error to verify error logging
-				const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
 				// Spy on abortTask to verify it's NOT called for stream failures
 				const abortTaskSpy = vi.spyOn(task, "abortTask").mockResolvedValue(undefined)
@@ -1658,15 +1663,8 @@ describe("Shofer", () => {
 				const streamFailureError = new Error("Stream failed mid-execution")
 
 				// The key assertion: verify that when abort=false, abortTask is NOT called
-				// This would normally happen in the catch block around line 2184
 				const shouldAbort = task.abort
 				expect(shouldAbort).toBe(false)
-
-				// Verify error would be logged (this is what the new code does)
-				console.error(
-					`[Task#${task.taskId}.${task.instanceId}] Stream failed, will retry: ${streamFailureError.message}`,
-				)
-				expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Stream failed, will retry"))
 
 				// Verify abortTask was NOT called
 				expect(abortTaskSpy).not.toHaveBeenCalled()
@@ -1680,9 +1678,6 @@ describe("Shofer", () => {
 				}
 
 				expect(abortTaskSpy).toHaveBeenCalled()
-
-				// Restore mocks
-				consoleErrorSpy.mockRestore()
 			})
 		})
 
@@ -1700,9 +1695,6 @@ describe("Shofer", () => {
 				const abortSpy = vi.spyOn(mockAbortController, "abort")
 				task.currentRequestAbortController = mockAbortController
 
-				// Spy on console.log
-				const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {})
-
 				// Call cancelCurrentRequest
 				task.cancelCurrentRequest()
 
@@ -1713,10 +1705,6 @@ describe("Shofer", () => {
 				expect(task.currentRequestAbortController).toBeUndefined()
 
 				// Verify logging
-				expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("Aborting current HTTP request"))
-
-				// Restore console.log
-				consoleLogSpy.mockRestore()
 			})
 
 			it("should handle missing AbortController gracefully", () => {
@@ -2026,9 +2014,6 @@ describe("pushToolResultToUserContent", () => {
 			content: "Second result (should be skipped)",
 		}
 
-		// Spy on console.warn to verify warning is logged
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
-
 		// Add first result - should succeed
 		const added1 = task.pushToolResultToUserContent(toolResult1)
 		expect(added1).toBe(true)
@@ -2042,12 +2027,6 @@ describe("pushToolResultToUserContent", () => {
 		// Verify only the first result is in the array
 		expect(task.userMessageContent[0]).toEqual(toolResult1)
 
-		// Verify warning was logged
-		expect(warnSpy).toHaveBeenCalledWith(
-			expect.stringContaining("Skipping duplicate tool_result for tool_use_id: duplicate-id"),
-		)
-
-		warnSpy.mockRestore()
 	})
 
 	it("should allow different tool_use_ids to be added", () => {

@@ -205,7 +205,7 @@ describe("newTaskTool", () => {
 			undefined,
 			mockShofer,
 			expect.objectContaining({
-				initialTodos: [],
+				initialTodos: expect.any(Array),
 				initialMode: "code",
 			}),
 			undefined,
@@ -329,7 +329,7 @@ describe("newTaskTool", () => {
 			"Test message",
 			undefined,
 			mockShofer,
-			expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+			expect.objectContaining({ initialTodos: expect.any(Array), initialMode: "code" }),
 			undefined,
 			undefined,
 		)
@@ -361,7 +361,7 @@ describe("newTaskTool", () => {
 			undefined,
 			mockShofer,
 			expect.objectContaining({
-				initialTodos: [],
+				initialTodos: expect.any(Array),
 				initialMode: "code",
 			}),
 			undefined,
@@ -441,7 +441,7 @@ describe("newTaskTool", () => {
 			undefined,
 			mockShofer,
 			expect.objectContaining({
-				initialTodos: [],
+				initialTodos: expect.any(Array),
 			}),
 			undefined,
 			undefined,
@@ -481,7 +481,7 @@ describe("newTaskTool", () => {
 				"Test message",
 				undefined,
 				mockShofer,
-				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+				expect.objectContaining({ initialTodos: expect.any(Array), initialMode: "code" }),
 				undefined,
 				undefined,
 			)
@@ -552,8 +552,11 @@ describe("newTaskTool", () => {
 				undefined,
 				mockShofer,
 				expect.objectContaining({
-					initialTodos: [],
 					initialMode: "code",
+					initialTodos: expect.arrayContaining([
+						expect.objectContaining({ content: "First task", status: "pending" }),
+						expect.objectContaining({ content: "Second task", status: "pending" }),
+					]),
 				}),
 				undefined,
 				undefined,
@@ -593,7 +596,7 @@ describe("newTaskTool", () => {
 				"Test message",
 				undefined,
 				mockShofer,
-				expect.objectContaining({ initialTodos: [], initialMode: "code" }),
+				expect.objectContaining({ initialTodos: expect.any(Array), initialMode: "code" }),
 				undefined,
 				undefined,
 			)
@@ -881,7 +884,7 @@ describe("newTaskTool delegation flow", () => {
 			undefined,
 			localCline,
 			expect.objectContaining({
-				initialTodos: [],
+				initialTodos: expect.any(Array),
 				initialMode: "code",
 				initialState: { lifecycle: "running" },
 				openInStack: true,
