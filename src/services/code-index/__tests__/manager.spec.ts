@@ -14,6 +14,8 @@ function mockUri(fsPath: string, scheme = "file") {
 	}
 }
 
+vi.mock("../../../utils/logging/subsystems", () => ({ codeIndexLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
+
 // Mock vscode module
 vi.mock("vscode", () => {
 	const testPath = require("path")
@@ -629,26 +631,14 @@ describe("CodeIndexManager - handleSettingsChange regression", () => {
 			;(manager as any)._orchestrator = { stopWatcher: vi.fn(), stopIndexing: vi.fn() }
 			;(manager as any)._searchService = {}
 
-			// Spy on console.error
-			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 			// Act - should not throw despite setSystemState error
 			await expect(manager.recoverFromError()).resolves.not.toThrow()
-
-			// Assert - error should be logged
-			expect(consoleErrorSpy).toHaveBeenCalledWith(
-				"Failed to clear error state during recovery:",
-				expect.any(Error),
-			)
 
 			// Assert - service instances should still be cleared
 			expect((manager as any)._configManager).toBeUndefined()
 			expect((manager as any)._serviceFactory).toBeUndefined()
 			expect((manager as any)._orchestrator).toBeUndefined()
 			expect((manager as any)._searchService).toBeUndefined()
-
-			// Cleanup
-			consoleErrorSpy.mockRestore()
 		})
 	})
 

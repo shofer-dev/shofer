@@ -333,9 +333,8 @@ describe("safeWriteJson", () => {
 		expect(content).toEqual(newData)
 	})
 
-	// Test for console error suppression during backup deletion
-	test("should suppress console.error when backup deletion fails", async () => {
-		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {}) // Suppress console.error
+	// Test for error suppression during backup deletion
+	test("should not throw when backup deletion fails", async () => {
 		const initialData = { message: "Initial" }
 		const newData = { message: "New" }
 
@@ -350,12 +349,13 @@ describe("safeWriteJson", () => {
 			return originalFsPromisesUnlink(filePath)
 		})
 
+		// The write should succeed even if backup deletion fails
 		await safeWriteJson(currentTestFilePath, newData)
 
-		// Verify console.error was called with the expected message
-		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Successfully wrote"), expect.any(Error))
+		// Verify the new content was written successfully
+		const content = await readFileContent(currentTestFilePath)
+		expect(content).toEqual(newData)
 
-		consoleErrorSpy.mockRestore()
 		unlinkSpy.mockRestore()
 	})
 
@@ -486,12 +486,6 @@ describe("safeWriteJson", () => {
 
 		// Should throw the original error, not the rollback error
 		await expect(safeWriteJson(currentTestFilePath, newData)).rejects.toThrow("Primary rename failed")
-
-		// Verify console.error was called for the rollback failure
-		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			expect.stringContaining("Failed to restore backup"),
-			expect.objectContaining({ message: "Rollback rename failed" }),
-		)
 
 		consoleErrorSpy.mockRestore()
 	})

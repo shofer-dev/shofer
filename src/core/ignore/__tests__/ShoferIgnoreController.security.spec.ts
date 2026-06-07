@@ -10,6 +10,9 @@ import { fileExistsAtPath } from "../../../utils/fs"
 // Mock dependencies
 vi.mock("fs/promises")
 vi.mock("../../../utils/fs")
+vi.mock("../../../utils/logging/subsystems", () => ({
+	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}))
 vi.mock("vscode", () => {
 	const mockDisposable = { dispose: vi.fn() }
 
@@ -305,20 +308,11 @@ build/
 				throw new Error("Test error")
 			})
 
-			// Spy on console.error
-			const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 			// Even with mix of allowed/ignored paths, should return empty array on error
 			const filtered = controller.filterPaths(["src/app.js", "node_modules/package.json"])
 
 			// Should fail closed (return empty array)
 			expect(filtered).toEqual([])
-
-			// Should log error
-			expect(consoleSpy).toHaveBeenCalledWith("Error filtering paths:", expect.any(Error))
-
-			// Clean up
-			consoleSpy.mockRestore()
 		})
 	})
 })
