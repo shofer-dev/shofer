@@ -543,34 +543,57 @@ behavior. The extension still runs entirely on the main thread.
 | No round-trip resolution test           | Added resolve, reject, timeout, cross-API tests                  |
 | `apps/cli/.shofer/` untracked           | Added to `.gitignore`                                            |
 
-### Phase 1: Server Worker + Agent Worker bootstrap (infrastructure, no traffic moved)
+### Phase 1: Server Worker + Agent Worker bootstrap (infrastructure, no traffic moved) ✅ DONE
 
 **Goal**: Build the Server Worker, `WorkerExtensionHost`, and Agent Worker
 bootstrap — all compiled, tested, and ready — but route **zero** production
 traffic through them yet. The extension still runs entirely on the main thread.
 
-1.  **Create [`src/workers/server-worker.ts`](../src/workers/server-worker.ts)**
-    – `ws.Server` on a dynamic port. Accept one WebSocket connection. Expose
-    the port via `parentPort.postMessage`. Maintain a `Map<taskId, MessagePort>`
-    for future Agent Worker routing (unused at this stage).
+**Status**: 24 new unit tests pass. 5,682 existing tests pass (zero regressions).
+Zero runtime behavior change — auto-start guards keep all workers dormant.
 
-2.  **Create [`src/workers/worker-extension-host.ts`](../src/workers/worker-extension-host.ts)**
-    – `WorkerExtensionHost` implementing `IExtensionHost`. Wired to a
-    `MessagePort` (→ Server Worker) and `parentPort` (→ Main Thread).
+#### What was built
 
-3.  **Create [`src/workers/agent-worker.ts`](../src/workers/agent-worker.ts)**
-    – Bootstrap that receives `taskId`, `cwd`, `serverPort` (MessagePort),
-    and a settings snapshot. Intercepts `require("vscode")`, creates a
-    `vscode-shim` with `WorkerExtensionHost`, loads `dist/extension.js`,
-    calls `activate()`. Compiled and import-tested, not spawned yet.
+1.  **Server Worker** ([`src/workers/server-worker.ts`](../src/workers/server-worker.ts), 167 LOC).
+    `ws.Server` on a dynamic port (bound `127.0.0.1:0`), port reported to main
+    thread via `parentPort.postMessage`. Exports `registerAgent`/`unregisterAgent`
+    /`sendToAgent`/`sendToWebview`/`agentCount`/`isWebviewConnected`/
+    `shutdownServer`/`resetState` APIs. Maintains a `Map<taskId, MessagePort]`
+    for Agent Worker routing.
 
-4.  **Unit-test all three modules.** `ServerWorker` starts and accepts a
-    WebSocket. `WorkerExtensionHost` routes messages correctly through both
-    ports. `AgentWorker` bootstrap loads the extension bundle without errors.
+2.  **WorkerExtensionHost** ([`src/workers/worker-extension-host.ts`](../src/workers/worker-extension-host.ts), 107 LOC).
+    Implements `IExtensionHost` from `@shofer/vscode-shim`. Routes
+    `extensionWebviewMessage` (emit → `serverPort.postMessage`) and
+    `webviewMessage` (on → `serverPort.on("message")`) through a
+    `MessageChannel` port. Tracks ready state and registered providers.
+    `_parentPort` stored for Phase 2 vscode API forwarding.
 
-    **✅ Functional check**: All existing tests pass. New worker modules are
-    compiled and unit-tested. No runtime behavior change — the Server Worker
-    is not spawned, the Webview has no WebSocket connection yet.
+3.  **Agent Worker bootstrap** ([`src/workers/agent-worker.ts`](../src/workers/agent-worker.ts), 163 LOC).
+    Intercepts `require("vscode")` via `Module._resolveFilename` → on-disk
+    `vscode-mock.js` (mirrors CLI's proven pattern). Creates vscode-shim with
+    `WorkerExtensionHost` + `IpcDemuxer` on `parentPort`. Loads
+    `dist/extension.js` via `require()`, calls `activate()`, marks webview ready.
+    `serverPort` stubbed with no-op in Phase 1 (real `MessagePort` transfer
+    deferred to Phase 2).
+
+4.  **Unit tests** (3 test files, 24 tests, 398 LOC total):
+    - [`worker-extension-host.test.ts`](../src/workers/__tests__/worker-extension-host.test.ts) — 12 tests: message routing, lifecycle, provider registration, `IExtensionHost` contract.
+    - [`server-worker.test.ts`](../src/workers/__tests__/server-worker.test.ts) — 9 tests: server lifecycle, WebSocket accept/disconnect, `sendToWebview`, agent registry, `sendToAgent`, graceful shutdown.
+    - [`agent-worker.test.ts`](../src/workers/__tests__/agent-worker.test.ts) — 3 tests: `AgentWorkerData`/`AgentWorkerBootstrapResult` type shapes, compile-time verification.
+
+#### Post-implementation review fixes
+
+| Issue                                        | Fix                                                                     |
+| -------------------------------------------- | ----------------------------------------------------------------------- |
+| `emit("webviewMessage")` broken dead code    | Removed — unreachable in worker model (UI→extension arrives via `on()`) |
+| `on("extensionWebviewMessage")` silent no-op | Added comment explaining intentional bidirectional `serverPort` usage   |
+| `_parentPort` stored but unused              | Added `/** Reserved for Phase 2 */` comment                             |
+| esbuild entry points not yet added           | TODO comment in `esbuild.mjs`; tracked for Phase 2 step 2               |
+| `@types/ws` only transitive                  | Added `@types/ws@^8.18.1` as explicit `devDependency`                   |
+| `serverPort` hardcoded `null`                | Documented as Phase 2 concern (step 3: wire real `MessagePort`)         |
+| `console.error` in worker                    | Documented as Phase 2 concern (step 8: forward to output channel)       |
+| Single-connection overwrite                  | Documented as Phase 2 concern (step 9: multiple connections)            |
+| WebSocket lacks security token/auth          | Documented as Phase 2 concern (hard prerequisite step 0)                |
 
 ### Phase 2: First Agent Worker (single task)
 
@@ -578,26 +601,59 @@ traffic through them yet. The extension still runs entirely on the main thread.
 and move exactly **one** task into an Agent Worker. This is the first phase
 where production traffic enters the worker path.
 
+**🔒 Hard prerequisite (security gate)**: Before any traffic flows through the
+WebSocket, the Server Worker must enforce per-session random-token authentication
+and a strict `Origin` allow-list (bind `127.0.0.1` only, reject all other
+connections). See §7 (Risks) and §9.1 (Resolved Decisions).
+
+0.  **WebSocket security gate.**
+    Implement per-session random token in the WS upgrade handshake and strict
+    `Origin` allow-list in [`server-worker.ts`](../src/workers/server-worker.ts).
+    This is a **hard requirement** — any local process can currently connect.
+
 1.  **Spawn the Server Worker and wire the Webview.**
     [`ShoferProvider.resolveWebviewView()`](../src/core/webview/ShoferProvider.ts)
     spawns the Server Worker, receives the port, injects it into the webview
-    HTML. The Webview opens a WebSocket to the Server Worker.
+    HTML. The Webview opens a WebSocket to the Server Worker. Validate Webview
+    CSP `connect-src` allows `ws://localhost` from the `vscode-webview:` origin.
 
-2.  **Limit to 1 concurrent Agent Worker** so the blast radius is minimal.
+2.  **Add Phase 1 worker modules to esbuild.**
+    Add `server-worker.ts` and `agent-worker.ts` as esbuild entry points in
+    [`esbuild.mjs`](../src/esbuild.mjs) (currently only `countTokens.ts` is
+    bundled). Without this, `new Worker("dist/workers/agent-worker.js")` will
+    fail at runtime.
 
-3.  **Wire user input routing through the Server Worker.**
+3.  **Wire the real `serverPort` MessagePort.**
+    Transfer a `MessageChannel` port from the Server Worker into the Agent
+    Worker's `workerData`. Replace the Phase 1 no-op stub with the real port
+    in [`agent-worker.ts`](../src/workers/agent-worker.ts). The
+    `AgentWorkerData` type must include `serverPort`.
+
+4.  **Limit to 1 concurrent Agent Worker** so the blast radius is minimal.
+
+5.  **Wire user input routing through the Server Worker.**
     When the active task runs in a worker: Webview → WebSocket →
     Server Worker → MessageChannel → Agent Worker →
     `webviewMessage` event → `ShoferProvider.handleWebviewMessage`.
 
-4.  **Wire UI streaming through the Server Worker.**
+6.  **Wire UI streaming through the Server Worker.**
     `Task.say()` → `mockWebview.postMessage()` →
     `WorkerExtensionHost.emit("extensionWebviewMessage")` →
     `serverPort.postMessage()` → Server Worker → WebSocket → Webview.
 
-5.  **Wire vscode API calls through `parentPort`.**
+7.  **Wire vscode API calls through `parentPort`.**
     Agent Worker's `WindowAPI.createTerminal` → `parentPort.postMessage()` →
     Main Thread → `vscode.window.createTerminal()` → stream output back.
+
+8.  **Forward worker-side logging to the main-thread output channel.**
+    Replace `console.error` in `server-worker.ts` and `agent-worker.ts` with
+    messages routed over `parentPort` to the main-thread
+    `getOutputChannel()` logger (per the Output Channel Logging Rule).
+
+9.  **Handle WebSocket reconnect and multiple connections.**
+    Close/replace the previous socket when a second Webview connection arrives
+    (sidebar + editor webviews, reload-mid-stream) with state replay for
+    reconnects. Design §9.1.
 
     **✅ Functional check**: A single task executes in a worker. All tools
     work — file reads, grep, terminal commands, MCP calls, LLM streaming.
@@ -683,19 +739,20 @@ itself is not refactored:
 
 ## 6. What DOES Change
 
-| Change                                                                         | Location                                                            | Effort                                                                            |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| New `WorkerExtensionHost` (~80 LOC)                                            | `src/workers/worker-extension-host.ts`                              | Small                                                                             |
-| New `ServerWorker` (~300 LOC)                                                  | `src/workers/server-worker.ts`                                      | Medium                                                                            |
-| New `AgentWorker` bootstrap (~120 LOC)                                         | `src/workers/agent-worker.ts`                                       | Small                                                                             |
-| vscode-shim: support `workerData` injection                                    | `packages/vscode-shim/src/`                                         | Small                                                                             |
-| vscode-shim: add `"vscodeApi"` event routing in `WindowAPI`, `CommandsAPI`     | `packages/vscode-shim/src/api/`                                     | Medium (augment existing mock methods to optionally forward through `parentPort`) |
-| `ShoferProvider`: spawn workers instead of creating `Task` instances           | `src/core/webview/ShoferProvider.ts`                                | Large (but deletion-heavy — remove state serialization, add worker management)    |
-| `TaskManager`: track workers instead of in-process tasks                       | `src/services/task-manager/TaskManager.ts`                          | Medium                                                                            |
-| Incremental message protocol                                                   | `@shofer/types`, webview, extension                                 | Medium                                                                            |
-| Webview: WebSocket connection                                                  | `webview-ui/src/context/ExtensionStateContext.tsx`                  | Medium                                                                            |
-| New experimental setting `shofer.experimental.agentWorkerPoolSize` (default 4) | `packages/types/src/global-settings.ts`, Settings → Experimental UI | Small                                                                             |
-| Worker-side metric/telemetry forwarding shims (`parentPort`)                   | `src/workers/*`, `src/metrics/`, `packages/telemetry/`              | Medium                                                                            |
+| Change                                                                         | Location                                                            | Effort                                                                            | Status     |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------- |
+| New `WorkerExtensionHost` (107 LOC)                                            | `src/workers/worker-extension-host.ts`                              | Small                                                                             | ✅ Phase 1 |
+| New `ServerWorker` (167 LOC)                                                   | `src/workers/server-worker.ts`                                      | Small                                                                             | ✅ Phase 1 |
+| New `AgentWorker` bootstrap (163 LOC)                                          | `src/workers/agent-worker.ts`                                       | Small                                                                             | ✅ Phase 1 |
+| Unit tests for all three (398 LOC, 24 tests)                                   | `src/workers/__tests__/`                                            | Small                                                                             | ✅ Phase 1 |
+| vscode-shim: support `workerData` injection                                    | `packages/vscode-shim/src/`                                         | Small                                                                             | ✅ Phase 0 |
+| vscode-shim: add `"vscodeApi"` event routing in `WindowAPI`, `CommandsAPI`     | `packages/vscode-shim/src/api/`                                     | Medium (augment existing mock methods to optionally forward through `parentPort`) | ✅ Phase 0 |
+| `ShoferProvider`: spawn workers instead of creating `Task` instances           | `src/core/webview/ShoferProvider.ts`                                | Large (but deletion-heavy — remove state serialization, add worker management)    | Phase 2    |
+| `TaskManager`: track workers instead of in-process tasks                       | `src/services/task-manager/TaskManager.ts`                          | Medium                                                                            | Phase 2    |
+| Incremental message protocol                                                   | `@shofer/types`, webview, extension                                 | Medium                                                                            | Phase 3    |
+| Webview: WebSocket connection                                                  | `webview-ui/src/context/ExtensionStateContext.tsx`                  | Medium                                                                            | Phase 2    |
+| New experimental setting `shofer.experimental.agentWorkerPoolSize` (default 4) | `packages/types/src/global-settings.ts`, Settings → Experimental UI | Small                                                                             | Phase 4    |
+| Worker-side metric/telemetry forwarding shims (`parentPort`)                   | `src/workers/*`, `src/metrics/`, `packages/telemetry/`              | Medium                                                                            | Phase 2    |
 
 ---
 
@@ -765,11 +822,16 @@ notifies the main thread, which can trigger `_resetWebview()`.
 
 ### New Worker Files (Phase 1)
 
-| File                                   | Role                                                                 |
-| -------------------------------------- | -------------------------------------------------------------------- |
-| `src/workers/worker-extension-host.ts` | `IExtensionHost` for Agent Workers (routes through `MessageChannel`) |
-| `src/workers/agent-worker.ts`          | Agent Worker bootstrap: loads extension bundle, calls `activate()`   |
-| `src/workers/server-worker.ts`         | Server Worker: WebSocket server + `MessageChannel` router            |
+| File                                                                                                            | LOC | Role                                                                 |
+| --------------------------------------------------------------------------------------------------------------- | --- | -------------------------------------------------------------------- |
+| [`src/workers/worker-extension-host.ts`](../src/workers/worker-extension-host.ts)                               | 107 | `IExtensionHost` for Agent Workers (routes through `MessageChannel`) |
+| [`src/workers/server-worker.ts`](../src/workers/server-worker.ts)                                               | 167 | Server Worker: WebSocket server + `MessageChannel` router            |
+| [`src/workers/agent-worker.ts`](../src/workers/agent-worker.ts)                                                 | 163 | Agent Worker bootstrap: loads extension bundle, calls `activate()`   |
+| [`src/workers/__tests__/worker-extension-host.test.ts`](../src/workers/__tests__/worker-extension-host.test.ts) | 139 | 12 tests: message routing, lifecycle, provider registration          |
+| [`src/workers/__tests__/server-worker.test.ts`](../src/workers/__tests__/server-worker.test.ts)                 | 206 | 9 tests: WS server lifecycle, agent registry, shutdown               |
+| [`src/workers/__tests__/agent-worker.test.ts`](../src/workers/__tests__/agent-worker.test.ts)                   | 53  | 3 tests: type shapes, compile-time verification                      |
+| [`src/esbuild.mjs`](../src/esbuild.mjs) (modified)                                                              | —   | TODO comment for Phase 2 entry points                                |
+| [`src/package.json`](../src/package.json) (modified)                                                            | —   | Added `ws@^8.18.3` (dep), `@types/ws@^8.18.1` (devDep)               |
 
 ### Phase 0 Deliverables
 
@@ -820,11 +882,10 @@ notifies the main thread, which can trigger `_resetWebview()`.
   existing `TaskManager.persistVersions` (version-counter based latest-wins
   strategy) already handles concurrent writes.
 
-- **esbuild entry points**: The current esbuild config produces a single CJS
-  bundle. Workers need to `require()` the worker entry point separately. The
-  simplest approach: add separate esbuild entry points for `agent-worker.js`
-  and `server-worker.js`, or keep them as TypeScript files and use
-  `worker_threads` with `tsx` in development.
+- **esbuild entry points**: Phase 1 worker modules are compiled by vitest/tsc
+  for tests only — they are not yet bundled into `dist/`. [`esbuild.mjs`](../src/esbuild.mjs)
+  has a TODO comment; `server-worker.ts` and `agent-worker.ts` will be added as
+  entry points in Phase 2 step 2 before any `worker_thread` is spawned.
 
 - **Settings replication at spawn**: The Agent Worker needs a snapshot of
   current settings at spawn time (provider config, mode, auto-approval
