@@ -39,8 +39,8 @@ export function getProviderSettings(
 			if (baseUrl) config.openAiNativeBaseUrl = baseUrl
 			break
 		case "shofer":
-			if (apiKey) config.shoferApiKey = apiKey
-			if (model) config.shoferModelId = model
+			if (apiKey) config.apiKey = apiKey
+			if (model) config.apiModelId = model
 			if (baseUrl) config.shoferBaseUrl = baseUrl
 			break
 		case "gemini":
