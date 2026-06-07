@@ -2,11 +2,36 @@
 
 import { AwsBedrockHandler } from "../bedrock"
 import { BedrockRuntimeClient, ConverseStreamCommand } from "@aws-sdk/client-bedrock-runtime"
-import { apiLog as logger } from "../../../utils/logging/subsystems"
 
 // Mock the AWS SDK
 vi.mock("@aws-sdk/client-bedrock-runtime")
-vi.mock("../../../utils/logging")
+
+// Mock the subsystem logger with spies
+vi.mock("../../../utils/logging/subsystems", () => {
+	const noop = () => {}
+	return {
+		apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+		taskLog: { error: noop, info: noop, warn: noop },
+		webviewLog: { error: noop, info: noop, warn: noop },
+		utilLog: { error: noop, info: noop, warn: noop },
+		configLog: { error: noop, info: noop, warn: noop },
+		fsLog: { error: noop, info: noop, warn: noop },
+		codeIndexLog: { error: noop, info: noop, warn: noop },
+		gitLog: { error: noop, info: noop, warn: noop },
+		checkpointLog: { error: noop, info: noop, warn: noop },
+		assistantAgentLog: { error: noop, info: noop, warn: noop },
+		mcpLog: { error: noop, info: noop, warn: noop },
+		skillsLog: { error: noop, info: noop, warn: noop },
+		marketplaceLog: { error: noop, info: noop, warn: noop },
+		metricsLog: { error: noop, info: noop, warn: noop },
+		workflowLog: { error: noop, info: noop, warn: noop },
+		i18nLog: { error: noop, info: noop, warn: noop },
+		scrollLog: { error: noop, info: noop, warn: noop },
+	}
+})
+
+// Import the mocked logger for spy assertions
+import { apiLog } from "../../../utils/logging/subsystems"
 
 // Store the command payload for verification
 let capturedPayload: any = null
@@ -30,8 +55,6 @@ describe("AwsBedrockHandler - Extended Thinking", () => {
 			send: mockSend,
 			config: { region: "us-east-1" },
 		}))
-		;(logger.info as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => {})
-		;(logger.error as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => {})
 	})
 
 	afterEach(() => {
@@ -173,7 +196,7 @@ describe("AwsBedrockHandler - Extended Thinking", () => {
 			}
 
 			// Verify logging
-			expect(logger.info).toHaveBeenCalledWith(
+			expect(apiLog.info).toHaveBeenCalledWith(
 				expect.stringContaining("Extended thinking enabled"),
 				expect.objectContaining({
 					ctx: "bedrock",
