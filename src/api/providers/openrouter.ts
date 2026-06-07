@@ -139,6 +139,12 @@ interface CompletionUsage {
 	}
 }
 
+/** Tokens some models emit as trivial reasoning preamble before actual thinking begins. */
+const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "answer", "Answer"])
+function isTrivialReasoningToken(text: string): boolean {
+	return TRIVIAL_REASONING_TOKENS.has(text)
+}
+
 export class OpenRouterHandler extends BaseProvider implements SingleCompletionHandler {
 	protected options: ApiHandlerOptions
 	private client: OpenAI
@@ -337,10 +343,13 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 			? { headers: { "x-anthropic-beta": "fine-grained-tool-streaming-2025-05-14" } }
 			: undefined
 
+		console.error("[HANG] openrouter: calling this.client.chat.completions.create...")
 		let stream
 		try {
 			stream = await this.client.chat.completions.create(completionParams, requestOptions)
+			console.error("[HANG] openrouter: GOT STREAM, type=", typeof stream, "has[Symbol.asyncIterator]=", typeof stream[Symbol.asyncIterator])
 		} catch (error) {
+			console.error("[HANG] openrouter: create() THREW:", error?.constructor?.name, (error as any)?.message?.slice(0,80))
 			// Try to parse as OpenRouter error structure using Zod
 			const parseResult = OpenRouterErrorResponseSchema.safeParse(error)
 
@@ -395,9 +404,17 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		// Track whether we've yielded displayable text from reasoning_details.
 		// When reasoning_details has displayable content (reasoning.text or reasoning.summary),
 		// we skip yielding the top-level reasoning field to avoid duplicate display.
+		console.error("[HANG] openrouter: about to for-await on stream...")
 		let hasYieldedReasoningFromDetails = false
 
-		for await (const chunk of stream) {
+		// DO NOT use `for await (const chunk of stream)` here — esbuild-CJS
+		// compiles it into a broken async-generator state machine that hangs
+		// on the first iteration.  Use a raw `while (true) { await iter.next() }`
+		// loop instead; `await` compiles correctly in every esbuild version.
+		const iter = stream[Symbol.asyncIterator]()
+		while (true) {
+			const { done, value: chunk } = await iter.next()
+			if (done) break
 			// OpenRouter returns an error object instead of the OpenAI SDK throwing an error.
 			if ("error" in chunk) {
 				this.handleStreamingError(chunk.error as OpenRouterError, modelId, "createMessage")
@@ -468,6 +485,12 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 							reasoningText = detail.summary
 						}
 
+						// Filter out trivial model-generated preamble tokens that some
+						// models emit as the first reasoning token (e.g. "• response").
+						if (reasoningText && isTrivialReasoningToken(reasoningText)) {
+							reasoningText = undefined
+						}
+
 						if (reasoningText) {
 							hasYieldedReasoningFromDetails = true
 							yield { type: "reasoning", text: reasoningText }
@@ -477,8 +500,9 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 
 				// Handle top-level reasoning field for UI display.
 				// Skip if we've already yielded from reasoning_details to avoid duplicate display.
+				// Also skip trivial model-generated preamble tokens (e.g. "• response", "response").
 				if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
-					if (!hasYieldedReasoningFromDetails) {
+					if (!hasYieldedReasoningFromDetails && !isTrivialReasoningToken(delta.reasoning)) {
 						yield { type: "reasoning", text: delta.reasoning }
 					}
 				}
