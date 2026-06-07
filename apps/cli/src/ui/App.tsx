@@ -174,7 +174,7 @@ function AppInner({ createExtensionHost, ...extensionHostOptions }: TUIAppProps)
 		nonInteractive,
 	})
 
-	const { sendToExtension, runTask, cleanup } = useExtensionHost({
+	const { sendToExtension, runTask, cancelTask, cleanup } = useExtensionHost({
 		initialPrompt,
 		initialTaskId,
 		initialSessionId,
@@ -235,6 +235,7 @@ function AppInner({ createExtensionHost, ...extensionHostOptions }: TUIAppProps)
 		currentMode,
 		mode,
 		sendToExtension,
+		cancelTask,
 		showInfo,
 		exit,
 		cleanup,

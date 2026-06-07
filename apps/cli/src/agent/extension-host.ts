@@ -480,7 +480,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	}
 
 	public isInInitialSetup(): boolean {
-		return !this.isReady
+		return !this._isReady
 	}
 
 	// ==========================================================================
@@ -488,7 +488,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	// ==========================================================================
 
 	public sendToExtension(message: WebviewMessage): void {
-		if (!this.isReady) {
+		if (!this._isReady) {
 			throw new Error("You cannot send messages to the extension before it is ready")
 		}
 
@@ -504,6 +504,10 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	 * Subscribe to ShoferAPI events and forward them into the CLI event system.
 	 * This provides richer event data (token usage, tool usage, subtask lifecycle)
 	 * than the raw ExtensionMessage protocol alone.
+	 *
+	 * All forwarded events are emitted on `this.client.getEmitter()` so consumers
+	 * that subscribe via `host.client.on(...)` see them through the same interface
+	 * as native ExtensionMessage-derived events.
 	 */
 	private forwardShoferEvents(): void {
 		if (!this.extensionAPI) {
@@ -511,61 +515,87 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		}
 
 		const api = this.extensionAPI
+		const emitter = this.client.getEmitter()
 
-		// Task lifecycle
+		// ── Task lifecycle ────────────────────────────────────────
+
+		api.on(ShoferEventName.TaskCreated, (taskId: string) => {
+			emitter.emit("taskCreated", taskId)
+		})
+
 		api.on(ShoferEventName.TaskStarted, (taskId: string) => {
-			console.error(`[DEBUG extension-host] ShoferAPI event: taskStarted ${taskId}`)
+			emitter.emit("taskStarted", taskId)
 		})
 
 		api.on(
 			ShoferEventName.TaskCompleted,
-			(taskId: string, tokenUsage: unknown, _toolUsage: unknown, info: unknown) => {
-				console.error(
-					`[DEBUG extension-host] ShoferAPI event: taskCompleted ${taskId}`,
-					JSON.stringify({ tokenUsage, info }),
-				)
+			(_taskId: string, _tokenUsage: unknown, _toolUsage: unknown, _info: unknown) => {
+				// The webview-derived taskCompleted event already fires from the
+				// ExtensionMessage protocol; we intentionally do NOT double-emit.
 			},
 		)
 
-		api.on(ShoferEventName.TaskAborted, (taskId: string, info: unknown) => {
-			console.error(`[DEBUG extension-host] ShoferAPI event: taskAborted ${taskId}`, JSON.stringify({ info }))
+		api.on(ShoferEventName.TaskAborted, (taskId: string, _info: unknown) => {
+			emitter.emit("taskAborted", taskId)
 		})
 
-		// Message events — forward message content for richer diagnostics
+		// ── Subtask lifecycle ─────────────────────────────────────
+
+		api.on(ShoferEventName.TaskPaused, (taskId: string) => {
+			emitter.emit("taskPaused", taskId)
+		})
+
+		api.on(ShoferEventName.TaskUnpaused, (taskId: string) => {
+			emitter.emit("taskUnpaused", taskId)
+		})
+
+		api.on(ShoferEventName.TaskSpawned, (_parentTaskId: string, childTaskId: string) => {
+			emitter.emit("taskSpawned", childTaskId)
+		})
+
+		// ── Message events ────────────────────────────────────────
+
 		api.on(ShoferEventName.Message, (payload: { taskId: string; action: string; message: ShoferMessage }) => {
 			if (payload.message.partial) {
 				return // Skip partial updates — webview bridge handles streaming
 			}
 			if (payload.action === "created") {
-				this.client.getEmitter().emit("message", payload.message)
+				emitter.emit("message", payload.message)
 			}
 		})
 
-		// Task execution
-		api.on(ShoferEventName.TaskModeSwitched, (taskId: string, mode: string) => {
-			console.error(`[DEBUG extension-host] ShoferAPI event: taskModeSwitched ${taskId} -> ${mode}`)
+		api.on(ShoferEventName.QueuedMessagesUpdated, (taskId: string) => {
+			emitter.emit("queuedMessagesUpdated", { taskId })
 		})
 
-		// Configuration changes
+		// ── Task execution ────────────────────────────────────────
+
+		api.on(ShoferEventName.TaskModeSwitched, (_taskId: string, _mode: string) => {
+			// Mode changes already tracked via the webview protocol's modeChanged event.
+		})
+
+		// ── Configuration changes ──────────────────────────────────
+
 		api.on(ShoferEventName.ModeChanged, (newMode: string) => {
-			this.client.getEmitter().emit("modeChanged", {
+			emitter.emit("modeChanged", {
 				previousMode: this.client.getCurrentMode() ?? undefined,
 				currentMode: newMode,
 			})
 		})
 
-		api.on(ShoferEventName.ProviderProfileChanged, (payload: { name: string; provider: string }) => {
-			console.error(
-				`[DEBUG extension-host] ShoferAPI event: providerProfileChanged -> ${payload.name} (${payload.provider})`,
-			)
+		api.on(ShoferEventName.ProviderProfileChanged, (_payload: { name: string; provider: string }) => {
+			// Profile changes are informational; consumers can attach directly to
+			// the ShoferAPI instance if they need this level of detail.
 		})
 
-		// Task analytics
-		api.on(ShoferEventName.TaskTokenUsageUpdated, (taskId: string, tokenUsage: unknown, toolUsage: unknown) => {
-			console.error(
-				`[DEBUG extension-host] ShoferAPI event: taskTokenUsageUpdated ${taskId}`,
-				JSON.stringify({ tokenUsage, toolUsage }),
-			)
+		// ── Task analytics ────────────────────────────────────────
+
+		api.on(ShoferEventName.TaskTokenUsageUpdated, (taskId: string, _tokenUsage: unknown, _toolUsage: unknown) => {
+			emitter.emit("tokenUsageUpdated", { taskId })
+		})
+
+		api.on(ShoferEventName.TaskToolFailed, (taskId: string, tool: string, error: string) => {
+			emitter.emit("toolFailed", { taskId, tool, error })
 		})
 
 		console.error("[DEBUG extension-host] ShoferAPI event forwarding wired up")

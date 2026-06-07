@@ -80,6 +80,55 @@ export interface ClientEventMap {
 	 * Emitted on any error during message processing.
 	 */
 	error: Error
+
+	// ─── ShoferAPI-bridged events (forwarded from public API) ───────
+
+	/**
+	 * Emitted when a new task is created (bridged from ShoferAPI).
+	 */
+	taskCreated: string
+
+	/**
+	 * Emitted when a task starts executing (bridged from ShoferAPI).
+	 */
+	taskStarted: string
+
+	/**
+	 * Emitted when a task is aborted (bridged from ShoferAPI).
+	 */
+	taskAborted: string
+
+	/**
+	 * Emitted when a task is paused (e.g., parent waiting for subtask).
+	 * Bridged from ShoferAPI.
+	 */
+	taskPaused: string
+
+	/**
+	 * Emitted when a paused task resumes (bridged from ShoferAPI).
+	 */
+	taskUnpaused: string
+
+	/**
+	 * Emitted when a subtask is spawned (bridged from ShoferAPI).
+	 * Payload is the child task ID.
+	 */
+	taskSpawned: string
+
+	/**
+	 * Emitted when a tool fails in a task (bridged from ShoferAPI).
+	 */
+	toolFailed: { taskId: string; tool: string; error: string }
+
+	/**
+	 * Emitted when token usage is updated (bridged from ShoferAPI).
+	 */
+	tokenUsageUpdated: { taskId: string }
+
+	/**
+	 * Emitted when queued messages are updated (bridged from ShoferAPI).
+	 */
+	queuedMessagesUpdated: { taskId: string }
 }
 
 /**
