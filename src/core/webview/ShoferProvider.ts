@@ -151,6 +151,19 @@ export class ShoferProvider
 	protected skillsManager?: SkillsManager
 	private marketplaceManager: MarketplaceManager
 	private taskCreationCallback: (task: Task) => void
+	/**
+	 * Public accessor for the task-creation event-forwarding callback. Tasks
+	 * constructed out-of-band (e.g. {@link WorkflowTask}, which is built via
+	 * `new WorkflowTask(...)` rather than {@link createTask}) must pass this as
+	 * their `onCreated` option so they receive the same provider-level event
+	 * forwarding (`TaskCreated` announcement + per-task lifecycle listeners that
+	 * the public ShoferAPI re-emits). Without it, a WorkflowTask's own
+	 * `TaskCompleted` emission is never forwarded to the API and consumers that
+	 * await completion (integration harness, eval runner) hang forever.
+	 */
+	public get onTaskCreated(): (task: Task) => void {
+		return this.taskCreationCallback
+	}
 	private taskEventListeners: WeakMap<Task, Array<() => void>> = new WeakMap()
 	private currentWorkspacePath: string | undefined
 	private _disposed = false
