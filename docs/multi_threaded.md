@@ -43,15 +43,47 @@ Node.js process with a mock `vscode` API. Key design elements already in place:
     - `"webviewMessage"` — webview/CLI → extension messages
 
 - **Module resolution hook** — `Module._resolveFilename` redirects
-  `require("vscode")` to an on-disk `vscode-mock.js`. In a `worker_thread`
-  context, `require("vscode")` can be intercepted at worker bootstrap via
-  `workerData` injection, avoiding the on-disk file.
+  `require("vscode")` to an on-disk `vscode-mock.js`. The CLI carries an
+  explicit comment that this on-disk file was **not** optional: in-memory cache
+  entries and `_load` monkey-patches did not survive the ESM loader used by
+  `tsx`. In a production Agent Worker the **CJS** extension bundle is loaded via
+  `require`, so an in-memory `Module._resolveFilename` hook _should_ work
+  without the temp file — but this is exactly the kind of "settled fact" the
+  existing code already found painful, so **Phase 0 must spike it** rather than
+  assume it. Note also that `WindowAPI.registerWebviewViewProvider` reads
+  `global.__extensionHost` **directly**, so each worker must still set that
+  global on its own isolate before loading the bundle (safe — every worker is a
+  separate isolate; see §1.2).
 
 - **Zero `ROO_CLI_RUNTIME` gating** — the extension source has no runtime
   conditionals. Every tool runs identically regardless of environment.
 
 The only new piece is a **second `IExtensionHost` implementation** that bridges
 through `MessageChannel` + WebSocket instead of the CLI's `global.__extensionHost`.
+
+### 1.2 Worker Isolation Model — read this before every "runs unchanged" claim
+
+`worker_threads` are **separate V8 isolates**, not threads sharing a heap. Each
+Agent Worker has:
+
+- its **own copy of every `require`d module** (including `prom-client`,
+  `posthog-node`, the extension bundle, tiktoken encodings, tree-sitter WASM),
+- its **own module registry, globals, and `ContextProxy` singleton**,
+- **no shared JavaScript objects** with the main thread.
+
+The only things shared across the isolate boundary are `SharedArrayBuffer` and
+`MessagePort` (structured-clone message passing). Consequences the rest of this
+document obeys:
+
+1. A worker **cannot** write to a main-thread `prom-client` Counter/Gauge, call
+   a main-thread `McpHub` method, or read a main-thread `ContextProxy` value
+   in-process. Every such interaction is **explicit message passing**.
+2. "Runs unchanged in the worker" means _the source is not edited_ — it does
+   **not** mean it shares state with the main thread. Singletons are
+   **duplicated per worker** unless explicitly owned by one runtime and reached
+   via RPC (see §3.7 Ownership Table).
+3. Per-worker duplication has a **memory cost** (§7) that must be measured
+   before fixing a default pool size.
 
 ---
 
@@ -163,18 +195,18 @@ extension runs unchanged inside the worker.
 The agent worker's `IExtensionHost` routes messages differently depending on
 their destination:
 
-| `vscode-shim` operation                                | Routes to…                                      | Why                                                                  |
-| ------------------------------------------------------ | ----------------------------------------------- | -------------------------------------------------------------------- |
-| `FileSystemAPI` (readFile, writeFile, stat, delete, …) | **Direct `fs.*`**                               | Already works from any Node.js thread — no IPC needed. Same as CLI.  |
-| `WindowAPI.createTerminal`                             | **Main Thread** via `parentPort`                | Needs real `vscode.window.createTerminal` or PTY.                    |
-| `WindowAPI.showTextDocument`                           | **Main Thread** via `parentPort`                | Needs real `vscode.window.showTextDocument`.                         |
-| `CommandsAPI.executeCommand`                           | **Main Thread** via `parentPort`                | Most commands need the real `vscode.commands`.                       |
-| `mockWebview.postMessage` (extension → UI)             | **Server Worker** via `MessageChannel`          | Streaming tokens, tool results, state changes → WebSocket → Webview. |
-| `mockWebview.onDidReceiveMessage` (UI → extension)     | **Server Worker** via `MessageChannel`          | User input, button clicks ← WebSocket ← Webview.                     |
-| `WorkspaceAPI.applyEdit`                               | **Main Thread** via `parentPort`                | Needs real `vscode.workspace.applyEdit` for editor integration.      |
-| `WorkspaceAPI.findFiles`                               | **Main Thread** via `parentPort`                | Needs `vscode.workspace.findFiles` (or ripgrep — already works).     |
-| `WorkspaceConfiguration` (settings)                    | **Replicated at spawn** + **broadcast updates** | Static settings sent once; changes broadcast via Server Worker.      |
-| `ExtensionContext.globalState` / `workspaceState`      | **Direct filesystem**                           | Memento-based JSON persistence — same as CLI (`~/.vscode-mock/`).    |
+| `vscode-shim` operation                                | Routes to…                                      | Why                                                                                                                                                                                                                 |
+| ------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FileSystemAPI` (readFile, writeFile, stat, delete, …) | **Direct `fs.*`**                               | Works from any Node.js thread. VS Code auto-reloads open non-dirty editors via its own watcher; file-change tracking runs in-worker (§3.7). Keeps the hot path local for future remote agents on a shared FS layer. |
+| `WindowAPI.createTerminal`                             | **Main Thread** via `parentPort`                | Needs real `vscode.window.createTerminal` or PTY.                                                                                                                                                                   |
+| `WindowAPI.showTextDocument`                           | **Main Thread** via `parentPort`                | Needs real `vscode.window.showTextDocument`.                                                                                                                                                                        |
+| `CommandsAPI.executeCommand`                           | **Main Thread** via `parentPort`                | Most commands need the real `vscode.commands`.                                                                                                                                                                      |
+| `mockWebview.postMessage` (extension → UI)             | **Server Worker** via `MessageChannel`          | Streaming tokens, tool results, state changes → WebSocket → Webview.                                                                                                                                                |
+| `mockWebview.onDidReceiveMessage` (UI → extension)     | **Server Worker** via `MessageChannel`          | User input, button clicks ← WebSocket ← Webview.                                                                                                                                                                    |
+| `WorkspaceAPI.applyEdit`                               | **Main Thread** via `parentPort`                | Needs real `vscode.workspace.applyEdit` for editor integration.                                                                                                                                                     |
+| `WorkspaceAPI.findFiles`                               | **Main Thread** via `parentPort`                | Needs `vscode.workspace.findFiles` (or ripgrep — already works).                                                                                                                                                    |
+| `WorkspaceConfiguration` (settings)                    | **Replicated at spawn** + **broadcast updates** | Static settings sent once; changes broadcast via Server Worker.                                                                                                                                                     |
+| `ExtensionContext.globalState` / `workspaceState`      | **Direct filesystem**                           | Memento-based JSON persistence — same as CLI (`~/.vscode-mock/`).                                                                                                                                                   |
 
 ### 3.2 Architecture Diagram
 
@@ -264,6 +296,12 @@ their destination:
 └──────────────────┘
 ```
 
+> **Diagram caveat:** the per-worker boxes above list `McpHub` and
+> `CodeIndexManager` for illustration only. Per §3.7 these are **owned by a
+> single runtime** (the main thread) and reached via RPC — they are **not**
+> duplicated inside every Agent Worker. The §3.7 Ownership Table is
+> authoritative wherever it disagrees with this diagram.
+
 ### 3.3 Data Flow: Streaming LLM Tokens (Desired)
 
 ```
@@ -284,7 +322,12 @@ Webview:
   }
 ```
 
-**Main Thread: 0% involvement. Zero serialization on the main thread.**
+**Main Thread for token streaming: 0% involvement, zero serialization.** This
+0% applies _only_ to LLM token streaming and other pure-data updates. A
+tool-heavy task still hops the main thread for terminal output chunks (every
+chunk of `ExecuteCommandTool`), diff previews, `executeCommand`, and watcher
+events — see §3.6. The headline is "no serialization for streaming," not "no
+main-thread involvement for a whole task."
 
 ### 3.4 Data Flow: Tool Execution Needing vscode API (Desired)
 
@@ -371,36 +414,63 @@ already creates a `mockWebview` whose `postMessage` calls
 `WorkerExtensionHost`, the same code path transparently routes through
 `MessageChannel` → Server Worker → WebSocket → Webview.
 
+**`WorkerExtensionHost` must implement the full `IExtensionHost` interface, not
+just `emit`/`on`.** `WindowAPI.registerWebviewViewProvider` actively calls
+`isInInitialSetup()` and `markWebviewReady()` and registers the provider via
+`registerWebviewProvider()` — these are load-bearing, not optional stubs.
+Because that same method reads `global.__extensionHost` **directly**, the Agent
+Worker bootstrap must set `global.__extensionHost = workerHost` on its own
+isolate before loading the bundle. The per-isolate global is private to the
+worker, so there is no cross-worker contamination.
+
 ### 3.6 What Moves Where
 
 **The critical point: almost nothing moves.** The extension bundle runs
 unchanged in the Agent Worker. The vscode-shim transparently routes operations:
 
-| Operation                                     | Handled by…                                                              | Touches Main Thread?               |
-| --------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------- |
-| `workspace.fs.readFile/writeFile/stat/delete` | `FileSystemAPI` (direct `fs.*`)                                          | ❌ No                              |
-| `workspace.findFiles` (glob)                  | `GlobService` → ripgrep subprocess                                       | ❌ No (ripgrep is a child process) |
-| `workspace.applyEdit` (editor edits)          | **Main Thread** via `parentPort` → real `vscode.workspace.applyEdit`     | ✅ Yes                             |
-| `window.createTerminal`                       | **Main Thread** via `parentPort` → real `vscode.window.createTerminal`   | ✅ Yes                             |
-| `window.showTextDocument`                     | **Main Thread** via `parentPort` → real `vscode.window.showTextDocument` | ✅ Yes                             |
-| `commands.executeCommand`                     | **Main Thread** via `parentPort` → real `vscode.commands.executeCommand` | ✅ Yes                             |
-| `window.activeTextEditor`                     | **Main Thread** via `parentPort` → real `vscode.window.activeTextEditor` | ✅ Yes                             |
-| LLM API calls (`ApiHandler`)                  | Direct HTTP in Agent Worker                                              | ❌ No                              |
-| MCP tool calls (`McpHub.callTool`)            | Direct network in Agent Worker                                           | ❌ No                              |
-| Ripgrep / grep / git commands                 | `child_process` subprocess in Agent Worker                               | ❌ No                              |
-| Token counting                                | Direct in Agent Worker (no separate workerpool needed)                   | ❌ No                              |
-| Checkpoint git operations                     | Direct `execFile` in Agent Worker                                        | ❌ No                              |
-| File watchers                                 | **Main Thread** (needs `vscode.FileSystemWatcher`)                       | ✅ Yes                             |
-| UI streaming (webview)                        | `MessageChannel` → Server Worker → WebSocket                             | ❌ No                              |
-| Webview → Extension messages                  | WebSocket → Server Worker → `MessageChannel`                             | ❌ No                              |
-| Settings read                                 | Replicated at spawn + broadcast on change                                | ❌ No                              |
-| Skills metadata                               | Server Worker (single copy, broadcast)                                   | ❌ No                              |
-| Task history (read/write)                     | Direct filesystem (JSON files) in Agent Worker                           | ❌ No                              |
-| `ContextProxy` (globalState)                  | Direct filesystem (JSON files) in Agent Worker                           | ❌ No                              |
+| Operation                                     | Handled by…                                                                     | Touches Main Thread?                                        |
+| --------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `workspace.fs.readFile/writeFile/stat/delete` | `FileSystemAPI` (direct `fs.*`)                                                 | ❌ No (VS Code auto-reloads editors; tracking is in-worker) |
+| `workspace.findFiles` (glob)                  | `GlobService` → ripgrep subprocess                                              | ❌ No (ripgrep is a child process)                          |
+| `workspace.applyEdit` (diff preview only)     | **Main Thread** via `parentPort` → real `vscode.workspace.applyEdit`            | ✅ Yes (diff view only — actual writes go direct `fs.*`)    |
+| `window.createTerminal`                       | **Main Thread** via `parentPort` → real `vscode.window.createTerminal`          | ✅ Yes                                                      |
+| `window.showTextDocument`                     | **Main Thread** via `parentPort` → real `vscode.window.showTextDocument`        | ✅ Yes                                                      |
+| `commands.executeCommand`                     | **Main Thread** via `parentPort` → real `vscode.commands.executeCommand`        | ✅ Yes                                                      |
+| `window.activeTextEditor`                     | **Main Thread** via `parentPort` → real `vscode.window.activeTextEditor`        | ✅ Yes                                                      |
+| LLM API calls (`ApiHandler`)                  | Direct HTTP in Agent Worker                                                     | ❌ No                                                       |
+| MCP tool calls (`McpHub.callTool`)            | **Shared `McpHub` on main thread** via `parentPort` RPC (async)                 | ✅ Yes (lightweight async RPC — see §3.7)                   |
+| Ripgrep / grep / git commands                 | `child_process` subprocess in Agent Worker                                      | ❌ No                                                       |
+| Token counting                                | Direct in Agent Worker (no separate workerpool needed)                          | ❌ No                                                       |
+| Checkpoint git operations                     | Direct `execFile` in Agent Worker                                               | ❌ No                                                       |
+| File watchers                                 | **Main Thread** (needs `vscode.FileSystemWatcher`)                              | ✅ Yes                                                      |
+| UI streaming (webview)                        | `MessageChannel` → Server Worker → WebSocket                                    | ❌ No                                                       |
+| Webview → Extension messages                  | WebSocket → Server Worker → `MessageChannel`                                    | ❌ No                                                       |
+| Settings read                                 | Replicated at spawn + broadcast on change                                       | ❌ No                                                       |
+| Skills metadata                               | Server Worker (single copy, broadcast)                                          | ❌ No                                                       |
+| Task history (read/write)                     | Direct filesystem (JSON files) in Agent Worker                                  | ❌ No                                                       |
+| `ContextProxy` (settings/secrets)             | **Read replica** in worker (snapshot + broadcast); writes → main thread via RPC | ✅ Yes (writes only; reads are local)                       |
 
 **The main thread only handles operations that genuinely need the VS Code editor
-surface: terminals, editor manipulation, and commands.** Everything else —
-which is the vast majority of agent work — runs in the worker.
+surface: terminals, editor manipulation, commands, and reconciling worker-local
+file writes back into open editors.** Everything else — which is the vast
+majority of agent work — runs in the worker.
+
+### 3.7 Singleton Ownership Table
+
+Because singletons are duplicated per worker (§1.2), each one must have a
+declared **owner** and a declared **access path**. This table is authoritative;
+any "runs unchanged" row elsewhere is subject to it.
+
+| Singleton                                                            | Owner                                  | How workers reach it                                                                                                                                                                                                                   | Rationale                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `McpHub` / MCP server processes                                      | **Main thread (single instance)**      | Worker → `parentPort` RPC → `McpHub.callTool()` → result back                                                                                                                                                                          | MCP calls are async network/stdio I/O and the hub is a lightweight pass-through, so one instance avoids N duplicate stdio server processes and N SSE connections. **Revisit only if** a tool performs heavy CPU work _inside_ the hub thread — a blocking hub would argue for per-worker instances.                                    |
+| `CodeIndexManager` (build + watchers)                                | **Main thread**                        | n/a (owns indexing + `FileSystemWatcher`)                                                                                                                                                                                              | Index build and `.gitignore` watching need the editor surface and must not be duplicated.                                                                                                                                                                                                                                              |
+| `CodeIndexManager` (search/query)                                    | **Main thread, queried via RPC**       | Worker → `parentPort` RPC → `CodeIndexManager.search()`                                                                                                                                                                                | Single embedded vector store, queried by all workers.                                                                                                                                                                                                                                                                                  |
+| `ContextProxy` (settings + secrets)                                  | **Main thread = authoritative writer** | Read replica injected at spawn (`workerData`) + broadcast on change; worker-originated writes go via `parentPort` RPC to the main-thread `ContextProxy`                                                                                | Preserves the repo's single-source-of-truth / single-writer invariant for `globalState`/`secrets`; prevents settings split-brain.                                                                                                                                                                                                      |
+| `TelemetryService` (`posthog-node`)                                  | **Main thread**                        | Worker `captureEvent()` shim → `parentPort` fire-and-forget → `TelemetryService.instance`                                                                                                                                              | `machineId` + VS Code telemetry gate only resolvable on the main thread; no per-worker PostHog client.                                                                                                                                                                                                                                 |
+| `prom-client` registry                                               | **Main thread**                        | Worker shim → `parentPort` → main-thread registry write                                                                                                                                                                                | Separate isolates ⇒ **no shared registry**; all worker metrics are forwarded (corrects the earlier "in-process" assumption — see §9).                                                                                                                                                                                                  |
+| Workspace **file writes**                                            | **Worker-local `fs.*`**                | Worker writes directly; `Task.fileContextTracker` (which lives in the worker) issues the `captureOriginal`/`trackFileContext` calls and writes snapshots to disk, surfacing in `FileChangesPanel` via the normal worker→webview stream | Keeps the hot write path local — essential once agents run remotely against a shared FS layer, where per-write main-thread RPC is prohibitively expensive. **No custom editor reconciliation:** VS Code auto-reloads open non-dirty editors via its own watcher, and dirty-file conflicts are pre-existing (architecture-independent). |
+| `FileSystemWatcher` (incl. `FileContextTracker`'s user-edit watcher) | **Main thread**                        | Watch events broadcast to workers as needed                                                                                                                                                                                            | Needs real `vscode.FileSystemWatcher`. `FileContextTracker.setupFileWatcher` uses one to detect _user_ edits to tracked files; events route back into the owning worker.                                                                                                                                                               |
 
 ---
 
@@ -530,8 +600,10 @@ both the worker path and the main-thread path.
 
 **Goal**: Run multiple Agent Workers in parallel.
 
-1.  **Worker pool** — configurable limit (default: 4). On `startNewTask`,
-    spawn an Agent Worker if the pool has capacity.
+1.  **Worker pool** — limit configured by the experimental setting
+    `shofer.experimental.agentWorkerPoolSize` (default: **4**), read via
+    `ContextProxy` and surfaced in **Settings → Experimental**. On
+    `startNewTask`, spawn an Agent Worker if the pool has capacity.
 
 2.  **Shared state broadcast** — when skills, MCP servers, or settings
     change, the Server Worker broadcasts to all connected Agent Workers.
@@ -556,34 +628,36 @@ both the worker path and the main-thread path.
 This approach has a uniquely small blast radius because the extension code
 itself is not refactored:
 
-| Unchanged                              | Why                                                                                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Task.ts` (7040 LOC)                   | Runs unchanged in Agent Worker. `vscode-shim` transparently routes its API calls.                      |
-| `ShoferProvider.ts` (5187 LOC)         | Runs unchanged in Agent Worker. Mock webview routes through `WorkerExtensionHost`.                     |
-| `webviewMessageHandler.ts` (4447 LOC)  | Runs unchanged in Agent Worker. Messages arrive via `webviewMessage` event from `WorkerExtensionHost`. |
-| `McpHub.ts`, all providers             | Run unchanged. Network calls don't need main thread.                                                   |
-| All tools (`*Tool.ts`)                 | Run unchanged. Pure-data tools use direct `fs.*`; vscode-dependent tools route through `parentPort`.   |
-| `CodeIndexManager` (query path)        | Runs unchanged in Agent Worker. Index queries are pure data.                                           |
-| `ApiHandler`, all LLM providers        | Run unchanged. HTTP calls are network I/O.                                                             |
-| `buildTools()`, prompt generation      | Run unchanged. Pure data computation.                                                                  |
-| `webview-ui` React app                 | Mostly unchanged. Swaps `window.addEventListener("message")` for WebSocket.                            |
-| Extension bundle (`dist/extension.js`) | Identical. Zero runtime gating.                                                                        |
+| Unchanged                              | Why                                                                                                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Task.ts` (7040 LOC)                   | Runs unchanged in Agent Worker. `vscode-shim` transparently routes its API calls.                                                                       |
+| `ShoferProvider.ts` (5187 LOC)         | Runs unchanged in Agent Worker. Mock webview routes through `WorkerExtensionHost`.                                                                      |
+| `webviewMessageHandler.ts` (4447 LOC)  | Runs unchanged in Agent Worker. Messages arrive via `webviewMessage` event from `WorkerExtensionHost`.                                                  |
+| `McpHub.ts`, all providers             | LLM providers run unchanged in the worker. **`McpHub` is the exception** — a single shared instance on the main thread (§3.7); workers call it via RPC. |
+| All tools (`*Tool.ts`)                 | Run unchanged. Pure-data tools use direct `fs.*`; vscode-dependent tools route through `parentPort`.                                                    |
+| `CodeIndexManager` (query path)        | Single instance on the main thread (§3.7); workers query via `parentPort` RPC. Source unchanged, but not duplicated per worker.                         |
+| `ApiHandler`, all LLM providers        | Run unchanged. HTTP calls are network I/O.                                                                                                              |
+| `buildTools()`, prompt generation      | Run unchanged. Pure data computation.                                                                                                                   |
+| `webview-ui` React app                 | Mostly unchanged. Swaps `window.addEventListener("message")` for WebSocket.                                                                             |
+| Extension bundle (`dist/extension.js`) | Identical. Zero runtime gating.                                                                                                                         |
 
 ---
 
 ## 6. What DOES Change
 
-| Change                                                                     | Location                                           | Effort                                                                            |
-| -------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
-| New `WorkerExtensionHost` (~80 LOC)                                        | `src/workers/worker-extension-host.ts`             | Small                                                                             |
-| New `ServerWorker` (~300 LOC)                                              | `src/workers/server-worker.ts`                     | Medium                                                                            |
-| New `AgentWorker` bootstrap (~120 LOC)                                     | `src/workers/agent-worker.ts`                      | Small                                                                             |
-| vscode-shim: support `workerData` injection                                | `packages/vscode-shim/src/`                        | Small                                                                             |
-| vscode-shim: add `"vscodeApi"` event routing in `WindowAPI`, `CommandsAPI` | `packages/vscode-shim/src/api/`                    | Medium (augment existing mock methods to optionally forward through `parentPort`) |
-| `ShoferProvider`: spawn workers instead of creating `Task` instances       | `src/core/webview/ShoferProvider.ts`               | Large (but deletion-heavy — remove state serialization, add worker management)    |
-| `TaskManager`: track workers instead of in-process tasks                   | `src/services/task-manager/TaskManager.ts`         | Medium                                                                            |
-| Incremental message protocol                                               | `@shofer/types`, webview, extension                | Medium                                                                            |
-| Webview: WebSocket connection                                              | `webview-ui/src/context/ExtensionStateContext.tsx` | Medium                                                                            |
+| Change                                                                         | Location                                                            | Effort                                                                            |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| New `WorkerExtensionHost` (~80 LOC)                                            | `src/workers/worker-extension-host.ts`                              | Small                                                                             |
+| New `ServerWorker` (~300 LOC)                                                  | `src/workers/server-worker.ts`                                      | Medium                                                                            |
+| New `AgentWorker` bootstrap (~120 LOC)                                         | `src/workers/agent-worker.ts`                                       | Small                                                                             |
+| vscode-shim: support `workerData` injection                                    | `packages/vscode-shim/src/`                                         | Small                                                                             |
+| vscode-shim: add `"vscodeApi"` event routing in `WindowAPI`, `CommandsAPI`     | `packages/vscode-shim/src/api/`                                     | Medium (augment existing mock methods to optionally forward through `parentPort`) |
+| `ShoferProvider`: spawn workers instead of creating `Task` instances           | `src/core/webview/ShoferProvider.ts`                                | Large (but deletion-heavy — remove state serialization, add worker management)    |
+| `TaskManager`: track workers instead of in-process tasks                       | `src/services/task-manager/TaskManager.ts`                          | Medium                                                                            |
+| Incremental message protocol                                                   | `@shofer/types`, webview, extension                                 | Medium                                                                            |
+| Webview: WebSocket connection                                                  | `webview-ui/src/context/ExtensionStateContext.tsx`                  | Medium                                                                            |
+| New experimental setting `shofer.experimental.agentWorkerPoolSize` (default 4) | `packages/types/src/global-settings.ts`, Settings → Experimental UI | Small                                                                             |
+| Worker-side metric/telemetry forwarding shims (`parentPort`)                   | `src/workers/*`, `src/metrics/`, `packages/telemetry/`              | Medium                                                                            |
 
 ---
 
@@ -621,15 +695,19 @@ notifies the main thread, which can trigger `_resetWebview()`.
 
 ## 7. Risks and Trade-offs
 
-| Risk                                     | Mitigation                                                                                                                                                                                                    |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **vscode API calls have IPC overhead**   | Only ~7 tool types need vscode API. All others (files, grep, MCP, LLM, git) run directly in the worker. The IPC volume is tiny compared to token streaming.                                                   |
-| **Worker crash takes down one agent**    | Each agent is an isolated worker. Crash in Worker 1 doesn't affect Worker 2, the Server Worker, or the Main Thread.                                                                                           |
-| **State synchronization across workers** | Persistent state is on-disk (JSON files). Workers read/write independently. Runtime-only state (skills, MCP list, settings) is replicated at spawn and broadcast on change.                                   |
-| **WebSocket port conflicts**             | Dynamic port allocation. Port regenerated on each activation.                                                                                                                                                 |
-| **Module resolution in workers**         | `worker_threads` support `require()`. The extension bundle is CJS. No `tsx` needed — the esbuild bundle runs directly.                                                                                        |
-| **Webview reconnect**                    | Webview reconnects to WebSocket on iframe reload. Server Worker replays current state.                                                                                                                        |
-| **Service initialization order**         | Extension bundle's `activate()` creates singletons (`CodeIndexManager`, `McpHub`, etc.). Each Agent Worker gets its own instances. Global coordination (indexing, MCP server lifecycle) stays on Main Thread. |
+| Risk                                     | Mitigation                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **vscode API calls have IPC overhead**   | Only ~7 tool types need vscode API; MCP calls add one shared-hub RPC hop. All others (files, grep, LLM, git) run directly in the worker. The IPC volume is tiny compared to token streaming.                                                                                                                                                                          |
+| **Worker crash takes down one agent**    | Each agent is an isolated worker. Crash in Worker 1 doesn't affect Worker 2, the Server Worker, or the Main Thread.                                                                                                                                                                                                                                                   |
+| **State synchronization across workers** | Persistent state is on-disk (JSON files). Workers read/write independently. Runtime-only state (skills, MCP list, settings) is replicated at spawn and broadcast on change.                                                                                                                                                                                           |
+| **WebSocket port conflicts**             | Dynamic port allocation. Port regenerated on each activation.                                                                                                                                                                                                                                                                                                         |
+| **Unauthenticated local control plane**  | The `ws://127.0.0.1:<port>` socket can drive an agent that executes arbitrary commands and reads the workspace. **Hard requirement (not an open question):** bind `127.0.0.1` only, require a per-session random token in the WS handshake, enforce a strict `Origin` allow-list, reject everything else. Mitigates local-process hijack and DNS-rebinding. See §9.1. |
+| **Per-worker memory cost**               | Each worker heaps the full bundle + providers + tiktoken + tree-sitter WASM — potentially hundreds of MB at pool size 4. Measure the per-worker baseline in a Phase-1 spike before fixing the default `shofer.experimental.agentWorkerPoolSize`.                                                                                                                      |
+| **Unbounded streaming backpressure**     | No native flow control on Worker → Server Worker → WS → Webview. Multiple workers streaming tokens can grow `MessageChannel`/WS buffers without bound. Coalesce rapid updates and apply a bounded queue (drop-oldest for non-critical UI updates).                                                                                                                    |
+| **Webview CSP / `connect-src`**          | VS Code webviews run under strict CSP; connecting to `ws://localhost` from the `vscode-webview:` origin may be blocked. Validate `connect-src` in a Phase-1 spike before committing the Webview↔Server-Worker path. See §9.1.                                                                                                                                        |
+| **Module resolution in workers**         | `worker_threads` support `require()`. The extension bundle is CJS. No `tsx` needed — the esbuild bundle runs directly.                                                                                                                                                                                                                                                |
+| **Webview reconnect**                    | Webview reconnects to WebSocket on iframe reload. Server Worker replays current state.                                                                                                                                                                                                                                                                                |
+| **Service initialization order**         | Extension bundle's `activate()` creates singletons per worker. Shared-by-design singletons (`McpHub`, `CodeIndexManager`, authoritative `ContextProxy`) must be **suppressed in the worker** and proxied to the main thread via RPC (§3.7) rather than instantiated locally. Global coordination (indexing, MCP server lifecycle) stays on the Main Thread.           |
 
 ---
 
@@ -743,14 +821,17 @@ notifies the main thread, which can trigger `_resetWebview()`.
 - **Prometheus / operational metrics**: The `prom-client`-backed metrics
   registry ([`src/metrics/registry.ts`](../src/metrics/registry.ts)) and HTTP
   server ([`src/metrics/server.ts`](../src/metrics/server.ts)) run on the main
-  thread. Since `worker_threads` share the same Node.js process, the
-  `prom-client` registry (Gauges, Counters, Histograms) is accessible from
-  workers as in-process objects — no IPC needed for metric writes.
+  thread. **Correction:** although `worker_threads` live in the same OS
+  process, each is a **separate V8 isolate with its own `prom-client` module
+  instance** (§1.2) — a worker **cannot** write to the main-thread registry
+  in-process. All worker-side metric writes are forwarded over `parentPort` to
+  the main thread, which owns the single registry and the scrape endpoint.
 
     - **Counters and histograms**: `shofer_llm_calls_total`,
-      `shofer_tool_duration_ms`, etc. work unchanged. Workers call the same
-      `registry.incXxx()` / `time()` functions. `prom-client` is thread-safe for
-      concurrent writes from multiple workers.
+      `shofer_tool_duration_ms`, etc. are written via a thin worker-side shim
+      that posts `{ metric, op, value, labels }` over `parentPort`; the main
+      thread applies them to the single registry. There is no shared
+      `prom-client` instance and no cross-isolate "thread-safe" registry.
     - **Memory gauges**: `process.memoryUsage()` in a worker returns that
       worker's V8 isolate memory, not the main thread's. Add per-worker memory
       gauges (`shofer_worker_heap_used_bytes{workerId}`) pushed from workers
@@ -765,3 +846,50 @@ notifies the main thread, which can trigger `_resetWebview()`.
       `shofer_workers_total` (Counter, incremented on spawn).
 
     See [`docs/prometheus.md`](prometheus.md) for the full metrics specification.
+
+### 9.1 Resolved Decisions
+
+The following former open questions now have committed answers (reflected in
+§3.7 Ownership Table):
+
+- **MCP ownership → single shared `McpHub` on the main thread.** Workers call
+  tools via `parentPort` RPC. Justification: MCP calls are async I/O and the hub
+  is a lightweight pass-through, so one instance avoids N duplicate stdio server
+  processes. Revisit only if a tool performs heavy CPU work _inside_ the hub
+  thread (a blocking hub would favor per-worker instances).
+- **Code index → single instance on the main thread**, queried by workers via
+  RPC; index build + watchers stay on the main thread.
+- **Settings authority → main-thread `ContextProxy` is the single writer.**
+  Workers receive a read replica at spawn (`workerData`) plus broadcast updates;
+  worker-originated writes go back via `parentPort` RPC. Keeps the repo's
+  single-source-of-truth / single-writer invariant intact.
+- **File writes → worker-local `fs.*`, tracking in-worker.** Workers write
+  directly (keeping the hot path off the main thread — essential once agents run
+  remotely against a shared FS layer, where per-write RPC is too expensive).
+  `Task.fileContextTracker` runs in the same worker and performs the
+  `captureOriginal`/`trackFileContext` snapshotting that drives the
+  `FileChangesPanel` (surfaced via the normal worker→webview stream). **No
+  custom editor reconciliation is needed:** VS Code auto-reloads open non-dirty
+  editors through its own file watching, and dirty-file conflicts are a
+  pre-existing condition that exists identically in today's single-threaded
+  mode. The only write-related main-thread dependency is
+  `FileContextTracker`'s user-edit `createFileSystemWatcher` (covered by the
+  general watcher rule), whose events route back into the owning worker.
+- **Worker pool size → configurable.** New experimental setting
+  `shofer.experimental.agentWorkerPoolSize` (default **4**), added to
+  `globalSettingsSchema` and surfaced in **Settings → Experimental**. The Phase 4
+  pool limit reads this value via `ContextProxy` rather than a hard-coded constant.
+- **WebSocket security → hard requirement.** Bind `127.0.0.1`, per-session random
+  token in the handshake, strict `Origin` allow-list, reject all else. An
+  OWASP-class concern, not an optional hardening.
+- **Webview CSP feasibility → Phase-1 spike.** VS Code webviews run under a
+  strict CSP; connecting to `ws://localhost` from the `vscode-webview:` origin
+  must be validated (correct `connect-src`) before the Webview↔Server-Worker
+  path is committed — the whole UI path depends on it.
+- **Command registration in workers → no-op.** Each worker's `activate()` hits
+  the shim's `CommandsAPI.registerCommand`; worker-side registration must be a
+  no-op (or routed to the main thread) to avoid duplicate-registration
+  conflicts with the real `vscode.commands`.
+- **Multiple webview connections.** The Server Worker must handle sidebar +
+  editor webviews and reload-mid-stream reconnects with state replay — not a
+  single fixed connection.

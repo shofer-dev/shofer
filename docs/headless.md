@@ -265,7 +265,7 @@ The `shofer` provider maps CLI flags to settings:
 
 - `--base-url` → `shoferBaseUrl` → `openRouterBaseUrl`
 - `--api-key` → `shoferApiKey` → `openRouterApiKey`
-- `--model` → `shoferModelId` → `openRouterModelId`
+- `--model` → `apiModelId` → `openRouterModelId`
 
 ## Common Recipes
 
@@ -303,19 +303,22 @@ pnpm --filter @shofer/cli dev:local-router -w . --print "Hello"
 The CLI's [`ExtensionHost`](../apps/cli/src/agent/extension-host.ts) calls `activate()`
 which returns a `ShoferAPI` instance. This is the **same `ShoferAPI`** used by companion
 extensions (see [`public_api.md`](public_api.md)). All task management, configuration,
-profile operations, and events route through it:
+profile operations, and events route through it.
 
-| CLI Method             | Delegates To   | ShoferAPI Method                                |
-| ---------------------- | -------------- | ----------------------------------------------- |
-| `runTask(prompt, …)`   | `extensionAPI` | `startNewTask({ configuration, text, images })` |
-| `resumeTask(taskId)`   | `extensionAPI` | `resumeTask(taskId)`                            |
-| `cancelTask()`         | `extensionAPI` | `cancelCurrentTask()`                           |
-| `sendMessage(text, …)` | `extensionAPI` | `sendMessage(text, images)`                     |
-| `approveAction()`      | `extensionAPI` | `pressPrimaryButton()`                          |
-| `rejectAction()`       | `extensionAPI` | `pressSecondaryButton()`                        |
-| `getConfiguration()`   | `extensionAPI` | `getConfiguration()`                            |
-| `getProfiles()`        | `extensionAPI` | `getProfiles()`                                 |
-| … (all 22 methods)     | `extensionAPI` | full `ShoferAPI` surface                        |
+`ExtensionHost` keeps a small set of dedicated methods only where it adds
+CLI-specific behaviour on top of the API; everything else is reached directly
+through the `host.api` accessor (the activated `ShoferAPI`), so the CLI never
+drifts behind the interface:
+
+| CLI Method             | Behaviour                                                               |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `runTask(prompt, …)`   | `api.startNewTask(...)` then blocks on task completion                  |
+| `resumeTask(taskId)`   | `api.resumeTask(taskId)` then blocks on task completion                 |
+| `cancelTask()`         | `api.cancelCurrentTask()`                                               |
+| `sendMessage(text, …)` | `api.sendMessage(text, images)`                                         |
+| `approveAction()`      | `api.pressPrimaryButton()`                                              |
+| `rejectAction()`       | `api.pressSecondaryButton()`                                            |
+| `host.api.<method>()`  | Full `ShoferAPI` surface (config, profiles, history, export, workflows) |
 
 Events from `ShoferAPI` (`taskStarted`, `taskCompleted`, `message`, `modeChanged`,
 etc.) are bridged into the CLI's `ExtensionClient` event system via `forwardShoferEvents()`.
@@ -375,9 +378,15 @@ instead of VSCode Terminal. File edits go through the real filesystem via
 
 ## CLI via ShoferAPI — Extended Capabilities
 
-The CLI accesses the full [`ShoferAPI`](public_api.md) surface. Beyond the
-core task lifecycle (`startNewTask`, `sendMessage`, `cancelCurrentTask`),
-the following capabilities are available to CLI consumers:
+The CLI accesses the full [`ShoferAPI`](public_api.md) surface through the
+`host.api` accessor on [`ExtensionHost`](../apps/cli/src/agent/extension-host.ts).
+Beyond the core task lifecycle (`startNewTask`, `sendMessage`, `cancelCurrentTask`),
+the following capabilities are available to CLI consumers. In the examples below,
+`api` is `host.api` (the activated `ShoferAPI`).
+
+```typescript
+const api = host.api // throws if accessed before activation
+```
 
 ### Log Access
 
