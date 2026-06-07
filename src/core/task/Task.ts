@@ -1051,8 +1051,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			provider.off(ShoferEventName.ProviderProfileChanged, this.providerProfileChangeListener)
 		}
 
-		this.providerProfileChangeListener = async () => {
+		this.providerProfileChangeListener = async (event?: { name?: string; provider?: string }) => {
 			try {
+				// Respect sticky provider profiles: only update if this task's
+				// sticky profile matches the profile that changed. Tasks with a
+				// different taskApiConfigName must keep their own provider.
+				if (
+					event?.name !== undefined &&
+					this._taskApiConfigName !== undefined &&
+					this._taskApiConfigName !== event.name
+				) {
+					return
+				}
+
 				const newState = await provider.getState()
 				if (newState?.apiConfiguration) {
 					this.updateApiConfiguration(newState.apiConfiguration)
