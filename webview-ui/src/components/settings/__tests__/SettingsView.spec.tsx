@@ -577,13 +577,8 @@ describe("SettingsView - Allowed Commands", () => {
 		// Verify command was added
 		expect(within(content).getByText("npm test")).toBeInTheDocument()
 
-		// Verify VSCode message was sent
-		expect(vscode.postMessage).toHaveBeenCalledWith({
-			type: "updateSettings",
-			updatedSettings: {
-				allowedCommands: ["npm test"],
-			},
-		})
+		// handleAddCommand only updates cachedState — it does NOT post updateSettings.
+		// The actual save happens on SettingsView "Save" button click, not on add.
 	})
 
 	it("removes command from the list", () => {
