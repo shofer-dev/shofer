@@ -3,8 +3,6 @@ import { Text, Box } from "ink"
 
 import type { TokenUsage } from "@shofer/types"
 
-import { ASCII_ROO } from "@/types/constants.js"
-
 import { ExtensionHostOptions } from "@/agent/index.js"
 import { useTerminalSize } from "../hooks/TerminalSizeContext.js"
 import * as theme from "../theme.js"
@@ -41,24 +39,18 @@ function Header({
 				── <Text color={theme.titleColor}>{title}</Text> {"─".repeat(remainingDashes)}
 			</Text>
 			<Box width={columns}>
-				<Box flexDirection="row">
-					<Box marginY={1}>
-						<Text color="magenta">{ASCII_ROO}</Text>
-					</Box>
-					<Box flexDirection="column" marginLeft={1} marginTop={1}>
-						{user && <Text color={theme.dimText}>Welcome back, {user.name}</Text>}
-						<Text color={theme.dimText}>
-							cwd:{" "}
-							{workspacePath.startsWith(homeDir) ? workspacePath.replace(homeDir, "~") : workspacePath}
-						</Text>
-						<Text color={theme.dimText}>
-							{provider}: {model} [{reasoningEffort}]
-						</Text>
-						<Text color={theme.dimText}>
-							mode: {mode}
-							{nonInteractive && " (YOLO)"}
-						</Text>
-					</Box>
+				<Box flexDirection="column" marginY={1}>
+					{user && <Text color={theme.dimText}>Welcome back, {user.name}</Text>}
+					<Text color={theme.dimText}>
+						cwd: {workspacePath.startsWith(homeDir) ? workspacePath.replace(homeDir, "~") : workspacePath}
+					</Text>
+					<Text color={theme.dimText}>
+						{provider}: {model} [{reasoningEffort}]
+					</Text>
+					<Text color={theme.dimText}>
+						mode: {mode}
+						{nonInteractive && " (YOLO)"}
+					</Text>
 				</Box>
 			</Box>
 			{tokenUsage && contextWindow && contextWindow > 0 && (
