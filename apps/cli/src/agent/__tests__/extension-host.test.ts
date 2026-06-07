@@ -59,7 +59,7 @@ function createMockShoferAPI(): ShoferAPI {
  * Set the private extensionAPI field on an ExtensionHost.
  */
 function setExtensionAPI(host: ExtensionHost, api: ShoferAPI): void {
-	;(host as Record<string, unknown>)["extensionAPI"] = api
+	;(host as unknown as Record<string, unknown>)["extensionAPI"] = api
 }
 
 /**

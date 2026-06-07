@@ -124,7 +124,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	private extensionModule: ExtensionModule | null = null
 	private extensionAPI: ShoferAPI | null = null
 	private options: ExtensionHostOptions
-	private isReady = false
+	private _isReady = false
 	private messageListener: ((message: ExtensionMessage) => void) | null = null
 	private initialSettings: ShoferSettings
 
@@ -456,7 +456,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		this.forwardShoferEvents()
 
 		console.error("[DEBUG extension-host] waiting for isReady...")
-		await pWaitFor(() => this.isReady, { interval: 100, timeout: 10_000 })
+		await pWaitFor(() => this._isReady, { interval: 100, timeout: 10_000 })
 		console.error("[DEBUG extension-host] isReady=true")
 	}
 
@@ -465,7 +465,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	public unregisterWebviewProvider(_viewId: string): void {}
 
 	public markWebviewReady(): void {
-		this.isReady = true
+		this._isReady = true
 
 		// Apply CLI settings to the runtime config and context proxy BEFORE
 		// sending webviewDidLaunch. This prevents a race condition where the
@@ -519,13 +519,16 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 		api.on(
 			ShoferEventName.TaskCompleted,
-			(taskId: string, tokenUsage: unknown, toolUsage: unknown, info: unknown) => {
-				console.error(`[DEBUG extension-host] ShoferAPI event: taskCompleted ${taskId}`)
+			(taskId: string, tokenUsage: unknown, _toolUsage: unknown, info: unknown) => {
+				console.error(
+					`[DEBUG extension-host] ShoferAPI event: taskCompleted ${taskId}`,
+					JSON.stringify({ tokenUsage, info }),
+				)
 			},
 		)
 
 		api.on(ShoferEventName.TaskAborted, (taskId: string, info: unknown) => {
-			console.error(`[DEBUG extension-host] ShoferAPI event: taskAborted ${taskId}`)
+			console.error(`[DEBUG extension-host] ShoferAPI event: taskAborted ${taskId}`, JSON.stringify({ info }))
 		})
 
 		// Message events — forward message content for richer diagnostics
@@ -559,7 +562,10 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 		// Task analytics
 		api.on(ShoferEventName.TaskTokenUsageUpdated, (taskId: string, tokenUsage: unknown, toolUsage: unknown) => {
-			console.error(`[DEBUG extension-host] ShoferAPI event: taskTokenUsageUpdated ${taskId}`)
+			console.error(
+				`[DEBUG extension-host] ShoferAPI event: taskTokenUsageUpdated ${taskId}`,
+				JSON.stringify({ tokenUsage, toolUsage }),
+			)
 		})
 
 		console.error("[DEBUG extension-host] ShoferAPI event forwarding wired up")
