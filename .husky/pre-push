@@ -18,18 +18,22 @@ fi
 
 $pnpm_cmd run check-types
 
-# Use dotenvx to securely load .env.local and run commands that depend on it
-if [ -f ".env.local" ]; then
-  # Check if RUN_TESTS_ON_PUSH is set to true and run tests with dotenvx
-  if npx dotenvx get RUN_TESTS_ON_PUSH -f .env.local 2>/dev/null | grep -q "^true$"; then
-    npx dotenvx run -f .env.local -- $pnpm_cmd run test
-  fi
-else
-  # Fallback: run tests if RUN_TESTS_ON_PUSH is set in regular environment
-  if [ "$RUN_TESTS_ON_PUSH" = "true" ]; then
-    $pnpm_cmd run test
-  fi
-fi
+# Run all test suites sequentially with capped parallelism.
+# A single failure blocks the push.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+"$REPO_ROOT/scripts/run-all-tests.sh"
+
+# CI/CD path — use turbo for maximum parallelism (uncomment for production CI):
+# # Use dotenvx to securely load .env.local and run commands that depend on it
+# if [ -f ".env.local" ]; then
+#   if npx dotenvx get RUN_TESTS_ON_PUSH -f .env.local 2>/dev/null | grep -q "^true$"; then
+#     npx dotenvx run -f .env.local -- $pnpm_cmd run test
+#   fi
+# else
+#   if [ "$RUN_TESTS_ON_PUSH" = "true" ]; then
+#     $pnpm_cmd run test
+#   fi
+# fi
 
 # Check for new changesets.
 NEW_CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" | wc -l | tr -d ' ')
