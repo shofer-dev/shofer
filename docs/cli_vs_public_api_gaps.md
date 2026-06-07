@@ -74,7 +74,7 @@ See [`extension-host.ts`](../apps/cli/src/agent/extension-host.ts).
 ## Gap 2: Different Event Systems ✅ PARTIALLY RESOLVED
 
 The CLI and Public API have two event systems, but they are now **bridged** via
-[`ExtensionHost.forwardShoferEvents()`](../apps/cli/src/agent/extension-host.ts:508).
+[`ExtensionHost.forwardShoferEvents()`](../apps/cli/src/agent/extension-host.ts).
 The bridge subscribes to public `ShoferAPI` events and forwards them into the
 CLI's `ExtensionClient` emitter.
 
@@ -103,13 +103,13 @@ Defined in [`ClientEventMap`](../apps/cli/src/agent/events.ts:26):
 
 The CLI's `ExtensionClient` derives these events from the raw `ExtensionMessage`
 webview protocol messages AND from the forwarded `ShoferAPI` events via
-[`ExtensionHost.forwardShoferEvents()`](../apps/cli/src/agent/extension-host.ts:508).
+[`ExtensionHost.forwardShoferEvents()`](../apps/cli/src/agent/extension-host.ts:535).
 
 All meaningful public API events are now bridged into `ClientEventMap`:
 
 - `taskCreated`, `taskStarted`, `taskAborted`
 - `taskPaused`, `taskUnpaused`, `taskSpawned`
-- `message` (non-partial), `queuedMessagesUpdated`
+- `message` (non-partial), `queuedMessagesUpdated` (with the full queue payload)
 - `modeChanged` (via `ShoferEventName.ModeChanged`)
 - `tokenUsageUpdated`, `toolFailed`
 
@@ -155,9 +155,9 @@ this.extensionAPI.deleteQueuedMessage(messageId)
 | Routing         | Delegates to `ShoferAPI.sendMessage()`, which handles ask/queue routing | API always routes correctly — aware that webview may not be launched |
 | Offline webview | Handled by API's `submitUserMessage()` headless fallback                | API has explicit headless fallback via `submitUserMessage()`         |
 
-**Resolution:** [`ExtensionHost.sendMessage()`](../apps/cli/src/agent/extension-host.ts:656)
+**Resolution:** [`ExtensionHost.sendMessage()`](../apps/cli/src/agent/extension-host.ts:722)
 delegates to `this.extensionAPI.sendMessage(text, images)`. The `stdin-stream`
-calls `host.sendMessage()`. Note: the [`AskDispatcher`](../apps/cli/src/agent/ask-dispatcher.ts:632)
+calls `host.sendMessage()`. Note: the [`AskDispatcher`](../apps/cli/src/agent/ask-dispatcher.ts:633)
 still sends raw `askResponse` webview messages for approval/rejection — this is
 by design, as the ask-dispatcher handles interactive approval UI routing.
 
@@ -168,10 +168,10 @@ by design, as the ask-dispatcher handles interactive approval UI routing.
 | Method            | `host.cancelTask()` → `api.cancelCurrentTask()`         | `api.cancelCurrentTask()` → `provider.cancelTask()` |
 | Post-cancel state | CLI has complex `CANCEL_RECOVERY_WAIT_TIMEOUT_MS` logic | API is fire-and-forget                              |
 
-**Resolution:** [`ExtensionHost.cancelTask()`](../apps/cli/src/agent/extension-host.ts:647)
+**Resolution:** [`ExtensionHost.cancelTask()`](../apps/cli/src/agent/extension-host.ts:717)
 delegates to `this.extensionAPI.cancelCurrentTask()`. Both `stdin-stream` and the
 shutdown path use `host.cancelTask()`. The TUI escape-key handler
-([`useGlobalInput.ts`](../apps/cli/src/ui/hooks/useGlobalInput.ts:136)) still
+([`useGlobalInput.ts`](../apps/cli/src/ui/hooks/useGlobalInput.ts:132)) still
 sends raw `{ type: "cancelTask" }` via `sendToExtension` — a minor inconsistency
 that could be migrated to `host.cancelTask()`.
 
@@ -191,10 +191,10 @@ that could be migrated to `host.cancelTask()`.
 | Reject   | `host.rejectAction()` → `api.pressSecondaryButton()`      | `api.pressSecondaryButton()` → `postMessageToWebview({ invoke: "secondaryButtonClick" })` |
 | Headless | Works — `pressPrimaryButton()` / `pressSecondaryButton()` | Has explicit `viewLaunched` check                                                         |
 
-**Resolution:** [`ExtensionHost.approveAction()`](../apps/cli/src/agent/extension-host.ts:665)
-and [`rejectAction()`](../apps/cli/src/agent/extension-host.ts:674) delegate to
+**Resolution:** [`ExtensionHost.approveAction()`](../apps/cli/src/agent/extension-host.ts:727)
+and [`rejectAction()`](../apps/cli/src/agent/extension-host.ts:732) delegate to
 the corresponding `ShoferAPI` methods. Note: the
-[`AskDispatcher`](../apps/cli/src/agent/ask-dispatcher.ts:632-643) still sends
+[`AskDispatcher`](../apps/cli/src/agent/ask-dispatcher.ts:633-643) still sends
 raw `askResponse` webview messages for its internal approval routing — this is by
 design, as it handles the interactive approval UI flow.
 
@@ -212,21 +212,25 @@ design, as it handles the interactive approval UI flow.
 
 ## Gap 9: Public API-Only Features ✅ RESOLVED
 
-| Feature                   | CLI (now)                              | Public API                                                                                                                                   |
-| ------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Profile CRUD**          | 8 methods on `ExtensionHost`           | `getProfiles`, `getProfileEntry`, `createProfile`, `updateProfile`, `upsertProfile`, `deleteProfile`, `getActiveProfile`, `setActiveProfile` |
-| **Global configuration**  | `getConfiguration`, `setConfiguration` | `getConfiguration`, `setConfiguration`                                                                                                       |
-| **`clearCurrentTask`**    | `clearCurrentTask(lastMessage?)`       | `clearCurrentTask(lastMessage?)`                                                                                                             |
-| **`isTaskInHistory`**     | `isTaskInHistory(taskId)`              | `isTaskInHistory(taskId)`                                                                                                                    |
-| **`getCurrentTaskStack`** | `getCurrentTaskStack()`                | `getCurrentTaskStack()`                                                                                                                      |
-| **`isReady`**             | `isReady()`                            | `isReady()`                                                                                                                                  |
-| **`deleteQueuedMessage`** | `deleteQueuedMessage(messageId)`       | `deleteQueuedMessage(messageId)`                                                                                                             |
-| **`newTab` option**       | Not supported                          | Open task in a new VS Code tab                                                                                                               |
+| Feature                   | CLI (now)                                        | Public API                                                                                                                                   |
+| ------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Profile CRUD**          | `host.api.<method>()`                            | `getProfiles`, `getProfileEntry`, `createProfile`, `updateProfile`, `upsertProfile`, `deleteProfile`, `getActiveProfile`, `setActiveProfile` |
+| **Global configuration**  | `host.api.getConfiguration` / `setConfiguration` | `getConfiguration`, `setConfiguration`                                                                                                       |
+| **`clearCurrentTask`**    | `host.api.clearCurrentTask(lastMessage?)`        | `clearCurrentTask(lastMessage?)`                                                                                                             |
+| **`isTaskInHistory`**     | `host.api.isTaskInHistory(taskId)`               | `isTaskInHistory(taskId)`                                                                                                                    |
+| **`getCurrentTaskStack`** | `host.api.getCurrentTaskStack()`                 | `getCurrentTaskStack()`                                                                                                                      |
+| **`isReady`**             | `host.api.isReady()`                             | `isReady()`                                                                                                                                  |
+| **`deleteQueuedMessage`** | `host.api.deleteQueuedMessage(messageId)`        | `deleteQueuedMessage(messageId)`                                                                                                             |
+| **`newTab` option**       | Not supported                                    | Open task in a new VS Code tab                                                                                                               |
 
-**Resolution:** All profile CRUD, configuration management, task history queries,
-and `deleteQueuedMessage` are now exposed as thin wrappers on `ExtensionHost`
-that delegate directly to the corresponding `ShoferAPI` methods. See
-[`extension-host.ts`](../apps/cli/src/agent/extension-host.ts:683-786).
+**Resolution:** Rather than hand-mirroring each `ShoferAPI` method as a thin
+`ExtensionHost` wrapper (which drifted behind the ~40-method interface), the
+activated API is now exposed directly via the `host.api` accessor. `ExtensionHost`
+keeps dedicated methods only where it adds CLI-specific behaviour (`runTask` /
+`resumeTask` block on completion; `cancelTask` has recovery semantics). All
+profile CRUD, configuration management, task-history queries, export, and
+workflow operations are reached through `host.api.<method>()`. See
+[`extension-host.ts`](../apps/cli/src/agent/extension-host.ts) (`get api()`).
 
 ## Gap 10: The IPC Protocol Is Yet a Third API
 
@@ -255,7 +259,11 @@ companion extensions consume. The concrete steps:
 4. ~~**Unify `cancelCurrentTask`**~~ ✅ Done — `ExtensionHost.cancelTask()` delegates to `api.cancelCurrentTask()`.
 5. ~~**Unify approve/reject**~~ ✅ Done — `ExtensionHost.approveAction()`/`rejectAction()` delegate to `api.pressPrimaryButton()`/`pressSecondaryButton()`.
 6. ~~**Add `deleteQueuedMessage` to `ShoferAPI`**~~ ✅ Done.
-7. ~~**Add profile management and configuration to CLI**~~ ✅ Done — all 8 profile CRUD methods, `getConfiguration`, `setConfiguration`, `isTaskInHistory`, `getCurrentTaskStack`, `clearCurrentTask`, `isReady`, `deleteQueuedMessage` exposed on `ExtensionHost`.
+7. ~~**Add profile management and configuration to CLI**~~ ✅ Done — all profile
+   CRUD, `getConfiguration`/`setConfiguration`, `isTaskInHistory`,
+   `getCurrentTaskStack`, `clearCurrentTask`, `isReady`, and
+   `deleteQueuedMessage` are reachable via the `host.api` accessor (no
+   hand-mirrored wrappers).
 8. ~~**Unify event systems**~~ ✅ Done — `forwardShoferEvents()` now bridges all
    meaningful `ShoferAPI` events into `ClientEventMap`. Events already covered by
    the webview protocol are intentionally not double-emitted.
@@ -266,7 +274,7 @@ companion extensions consume. The concrete steps:
     `start` → `host.runTask()`, `message` → `host.sendMessage()`, `cancel` →
     `host.cancelTask()`. Approval/rejection is handled by the `AskDispatcher`
     (which correctly routes through ask-response protocol for interactive asks).
-11. ~~**Migrate TUI escape-key cancel**~~ ✅ Done — [`useGlobalInput.ts`](../apps/cli/src/ui/hooks/useGlobalInput.ts:136)
+11. ~~**Migrate TUI escape-key cancel**~~ ✅ Done — [`useGlobalInput.ts`](../apps/cli/src/ui/hooks/useGlobalInput.ts:132)
     now calls `cancelTask()` which delegates to `host.cancelTask()` →
     `api.cancelCurrentTask()`, consistent with stdin-stream and IPC consumers.
 
@@ -281,10 +289,10 @@ companion extensions consume. The concrete steps:
 | Approve               | `pressPrimaryButton()`                                                  | `host.approveAction()` → `api.pressPrimaryButton()`      | ✅ Resolved      |
 | Reject                | `pressSecondaryButton()`                                                | `host.rejectAction()` → `api.pressSecondaryButton()`     | ✅ Resolved      |
 | Events                | 27 typed `ShoferEventName` events                                       | `ClientEventMap` (11 native + 10 bridged events)         | ✅ Fully bridged |
-| Profiles              | 8 CRUD methods                                                          | 8 wrapper methods on `ExtensionHost`                     | ✅ Resolved      |
-| Config                | `getConfiguration`/`setConfiguration`                                   | 2 wrapper methods on `ExtensionHost`                     | ✅ Resolved      |
-| Task history queries  | `isTaskInHistory`, `getCurrentTaskStack`, `clearCurrentTask`, `isReady` | 4 wrapper methods on `ExtensionHost`                     | ✅ Resolved      |
-| `deleteQueuedMessage` | ✅ Declared in type interface                                           | Wrapper on `ExtensionHost`                               | ✅ Resolved      |
+| Profiles              | 8 CRUD methods                                                          | `host.api.*`                                             | ✅ Resolved      |
+| Config                | `getConfiguration`/`setConfiguration`                                   | `host.api.*`                                             | ✅ Resolved      |
+| Task history queries  | `isTaskInHistory`, `getCurrentTaskStack`, `clearCurrentTask`, `isReady` | `host.api.*`                                             | ✅ Resolved      |
+| `deleteQueuedMessage` | ✅ Declared in type interface                                           | `host.api.deleteQueuedMessage()`                         | ✅ Resolved      |
 | stdin-stream          | ❌ None                                                                 | `start`/`message`/`cancel`/`ping`/`shutdown` over NDJSON | N/A              |
 | Stream-JSON output    | ❌ None                                                                 | 10 event types over NDJSON                               | N/A              |
 | TUI                   | ❌ None                                                                 | Ink-based terminal UI                                    | N/A              |
