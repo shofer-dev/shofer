@@ -8,16 +8,54 @@ flows). Both share the same `ExtensionHost` / `ShoferAPI` infrastructure.
 
 ## Setup
 
+The harness can run against either a **real provider** (the llm-router) or the
+hermetic **mock provider**. The mock requires no network, no credentials, and no
+GPU — it replays canned responses keyed on prompt substrings and is the default
+for CI. Pick one of the two `PROVIDER` / `MODEL` pairs below.
+
 ```bash
 export CLI="pnpm --filter @shofer/cli exec tsx src/index.ts"
+export WS="-w /home/alsterg/Projects/arkware.ai"
+
+# Option A — real provider (llm-router must be reachable at :30081)
 export PROVIDER="--provider shofer --api-key x --base-url http://localhost:30081/v1"
 export MODEL="--model deepseek/deepseek-v4-pro"
-export WS="-w /home/alsterg/Projects/arkware.ai"
+
+# Option B — hermetic mock provider (no network, no credentials)
+export PROVIDER="--provider mock --api-key x"
+export MODEL="--model mock-model"
 
 # Convenience alias for CLI scenarios below
 alias shofer-local="$CLI $PROVIDER $MODEL $WS"
 
 cd /home/alsterg/Projects/arkware.ai/extensions/shofer/apps/cli
+```
+
+### Provider modes
+
+The mock ([`src/api/providers/mock.ts`](../src/api/providers/mock.ts)) ships
+built-in scenarios for every marker used by the CLI/API scenarios below
+(`DEEPSEEK_OK`, `STREAM_OK`, `API_OK`, `TASK_ONE`, `SELECTOR_TEST`, `BANANA`, …),
+so **scenarios 1, 3–9, 13, and 15–25 run unchanged against Option B**. Four
+categories need attention when running under the mock:
+
+| Scenario(s)                                                  | Why it differs under the mock                                                                                                        | What to do                                                                                                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **2** (missing model), **14** (connection refused)           | Provider-specific: they assert `shofer`-handler error paths the mock has no equivalent for.                                          | Run against Option A (real provider) only.                                                                                                                                   |
+| **10, 11, 12** (read_file / execute_command / write_to_file) | Built-in scenarios return the text marker via `attempt_completion` **without invoking the tool**, so the tool path is not exercised. | Either run under Option A, or force a single tool call with `MOCK_TOOL_NAME` / `MOCK_TOOL_ARGS`, or supply a multi-turn `MOCK_RESPONSES_PATH` (tool turn → completion turn). |
+| **20** (subtask via `new_task`)                              | The mock answers the parent prompt directly instead of spawning a subtask.                                                           | Run under Option A, or use a multi-turn `MOCK_RESPONSES_PATH` whose first turn emits a `new_task` tool call.                                                                 |
+
+Mock control knobs (highest priority first), all via env vars:
+
+```bash
+# 1. Force one specific tool call on every turn
+MOCK_TOOL_NAME=read_file MOCK_TOOL_ARGS='{"path":"package.json"}' shofer-local --print "…"
+
+# 2. Full multi-turn scenario file (tool turns + completion turn)
+MOCK_RESPONSES_PATH=/tmp/scenarios.json shofer-local --print "…"
+
+# 3. Simple canned text wrapped in attempt_completion
+MOCK_RESPONSE="hello" shofer-local --print "…"
 ```
 
 Rebuild the extension bundle after touching extension source:
@@ -30,10 +68,13 @@ cd /home/alsterg/Projects/arkware.ai/extensions/shofer && pnpm --filter shofer b
 
 ## Part 1 — CLI smoke tests (scenarios 1–25)
 
-All scenarios assume the llm-router is reachable at `http://localhost:30081/v1`
-and the `deepseek/deepseek-v4-pro` model is available. Scenarios 15–25 use
-`ExtensionHost` as a library; run them with
-`pnpm --filter @shofer/cli exec tsx <file>` from `extensions/shofer/apps/cli`.
+Run these against either provider mode from [Setup](#setup). Under Option A the
+llm-router must be reachable at `http://localhost:30081/v1` with
+`deepseek/deepseek-v4-pro` available; under Option B (mock) no network is needed
+— see the [Provider modes](#provider-modes) table for the handful of scenarios
+that behave differently or require Option A. Scenarios 15–25 use `ExtensionHost`
+as a library; run them with `pnpm --filter @shofer/cli exec tsx <file>` from
+`extensions/shofer/apps/cli`.
 
 ### 1. Basic print — roundtrip sanity
 
@@ -215,6 +256,9 @@ Verifies: using `ExtensionHost` and `ShoferAPI` programmatically.
 ```typescript
 // Save as /tmp/test_api.ts and run:
 // pnpm --filter @shofer/cli exec tsx /tmp/test_api.ts
+//
+// To run hermetically, swap the provider/model/baseUrl block below for:
+//   provider: "mock", apiKey: "x", model: "mock-model"  (drop baseUrl)
 
 import { ExtensionHost } from "./src/agent/extension-host.js"
 import { ShoferEventName } from "@shofer/types"
