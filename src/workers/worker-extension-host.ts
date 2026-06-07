@@ -14,8 +14,7 @@
  * `global.__extensionHost` in the worker bootstrap is safe.
  */
 
-import type { IExtensionHost, ExtensionHostEventMap } from "@shofer/vscode-shim"
-import type { WebviewViewProvider } from "@shofer/vscode-shim/src/interfaces/webview.js"
+import type { IExtensionHost, ExtensionHostEventMap, WebviewViewProvider } from "@shofer/vscode-shim"
 
 /**
  * Minimal IPC port interface matching the subset of `worker_threads.MessagePort`
@@ -82,7 +81,7 @@ export class WorkerExtensionHost implements IExtensionHost<ExtensionHostEventMap
 	on<K extends keyof ExtensionHostEventMap>(event: K, listener: (message: ExtensionHostEventMap[K]) => void): this {
 		if (event === "webviewMessage") {
 			// Messages from the Webview arrive on the serverPort.
-			this._serverPort.on("message", listener as (value: unknown) => void)
+			this._serverPort.on("message", listener as (value: unknown) => void) as unknown
 		}
 		// "extensionWebviewMessage" is intentionally a no-op here — the emit()
 		// side routes outbound messages directly to serverPort.postMessage(),

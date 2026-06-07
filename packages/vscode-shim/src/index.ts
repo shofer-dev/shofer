@@ -87,6 +87,7 @@ export {
 	type VscodeApiRequestId,
 	type VscodeApiRequest,
 	type VscodeApiResponse,
+	type WebviewViewProvider,
 } from "./vscode.js"
 
 // Export utilities
