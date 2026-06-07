@@ -1,8 +1,9 @@
-import type { MockedFunction } from "vitest"
+import type { MockedFunction, Mock } from "vitest"
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime"
 
 import { BedrockEmbedder } from "../bedrock"
 import { MAX_ITEM_TOKENS, INITIAL_RETRY_DELAY_MS } from "../../constants"
+import { codeIndexLog } from "../../../../utils/logging/subsystems"
 
 // Mock the AWS SDK
 vitest.mock("@aws-sdk/client-bedrock-runtime", () => {
@@ -53,20 +54,25 @@ vitest.mock("../../../../i18n", () => ({
 	},
 }))
 
-// Mock console methods
-const consoleMocks = {
-	error: vitest.spyOn(console, "error").mockImplementation(() => {}),
-	warn: vitest.spyOn(console, "warn").mockImplementation(() => {}),
-}
+// Mock the code-index logger (pino-based) — the embedder uses codeIndexLog.warn/error, not console.*
+// Path is relative to THIS test file (4 levels up: __tests__ → embedders → code-index → services → src).
+vitest.mock("../../../../utils/logging/subsystems", () => ({
+	codeIndexLog: {
+		error: vitest.fn(),
+		warn: vitest.fn(),
+		info: vitest.fn(),
+		debug: vitest.fn(),
+	},
+}))
 
 describe("BedrockEmbedder", () => {
 	let embedder: BedrockEmbedder
 	let mockSend: MockedFunction<any>
+	// Access the hoisted mock spies via the imported proxy (vitest.mock factories are hoisted)
+	const logMocks = codeIndexLog as unknown as { error: Mock; warn: Mock; info: Mock; debug: Mock }
 
 	beforeEach(() => {
 		vitest.clearAllMocks()
-		consoleMocks.error.mockClear()
-		consoleMocks.warn.mockClear()
 
 		mockSend = vitest.fn()
 
@@ -405,7 +411,7 @@ describe("BedrockEmbedder", () => {
 				const result = await embedder.createEmbeddings(testTexts)
 
 				// Verify warning was logged
-				expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("exceeds maximum token limit"))
+				expect(logMocks.warn).toHaveBeenCalledWith(expect.stringContaining("exceeds maximum token limit"))
 
 				// Verify only normal texts were processed
 				expect(mockSend).toHaveBeenCalledTimes(2)
@@ -418,7 +424,7 @@ describe("BedrockEmbedder", () => {
 
 				const result = await embedder.createEmbeddings(testTexts)
 
-				expect(console.warn).toHaveBeenCalledTimes(2)
+				expect(logMocks.warn).toHaveBeenCalledTimes(2)
 				expect(mockSend).not.toHaveBeenCalled()
 				expect(result).toEqual({
 					embeddings: [],
@@ -465,7 +471,7 @@ describe("BedrockEmbedder", () => {
 				const result = await resultPromise
 
 				expect(mockSend).toHaveBeenCalledTimes(3)
-				expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Rate limit hit, retrying in"))
+				expect(logMocks.warn).toHaveBeenCalledWith(expect.stringContaining("Rate limit hit, retrying in"))
 				expect(result).toEqual({
 					embeddings: [[0.1, 0.2, 0.3]],
 					usage: { promptTokens: 2, totalTokens: 2 },
@@ -484,7 +490,7 @@ describe("BedrockEmbedder", () => {
 				)
 
 				expect(mockSend).toHaveBeenCalledTimes(1)
-				expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("Rate limit hit"))
+				expect(logMocks.warn).not.toHaveBeenCalledWith(expect.stringContaining("Rate limit hit"))
 			})
 		})
 
@@ -502,7 +508,7 @@ describe("BedrockEmbedder", () => {
 					"Failed to create embeddings after 3 attempts: API connection failed",
 				)
 
-				expect(console.error).toHaveBeenCalledWith(
+				expect(logMocks.error).toHaveBeenCalledWith(
 					expect.stringContaining("Bedrock embedder error"),
 					expect.any(Error),
 				)
