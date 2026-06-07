@@ -23,6 +23,7 @@ import type {
 	ShoferSettings,
 	WebviewMessage,
 	ShoferAPI,
+	QueuedMessage,
 } from "@shofer/types"
 import { ShoferEventName } from "@shofer/types"
 import { createVSCodeAPI, IExtensionHost, ExtensionHostEventMap, setRuntimeConfigValues } from "@shofer/vscode-shim"
@@ -428,9 +429,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		}
 
 		try {
-			console.error("[DEBUG extension-host] loading extension bundle...")
+			cliLogger.debug("loading extension bundle...")
 			this.extensionModule = require(bundlePath) as ExtensionModule
-			console.error("[DEBUG extension-host] bundle loaded")
+			cliLogger.debug("bundle loaded")
 		} catch (error) {
 			Module._resolveFilename = originalResolve
 			throw new Error(
@@ -442,9 +443,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		Module._resolveFilename = originalResolve
 
 		try {
-			console.error("[DEBUG extension-host] activating extension...")
+			cliLogger.debug("activating extension...")
 			this.extensionAPI = (await this.extensionModule.activate(this.vscode.context)) as ShoferAPI
-			console.error("[DEBUG extension-host] extension activated")
+			cliLogger.debug("extension activated")
 		} catch (error) {
 			throw new Error(`Failed to activate extension: ${error instanceof Error ? error.message : String(error)}`)
 		}
@@ -456,9 +457,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		// Forward ShoferAPI events to complement the webview-message-based event stream.
 		this.forwardShoferEvents()
 
-		console.error("[DEBUG extension-host] waiting for isReady...")
+		cliLogger.debug("waiting for isReady...")
 		await pWaitFor(() => this._isReady, { interval: 100, timeout: 10_000 })
-		console.error("[DEBUG extension-host] isReady=true")
+		cliLogger.debug("isReady=true")
 	}
 
 	public registerWebviewProvider(_viewId: string, _provider: WebviewViewProvider): void {}
@@ -484,6 +485,27 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		return !this._isReady
 	}
 
+	/**
+	 * The activated `ShoferAPI` control plane.
+	 *
+	 * This is the single, drift-free surface for all task / configuration /
+	 * profile / history / workflow operations — the exact same object companion
+	 * extensions obtain from
+	 * `vscode.extensions.getExtension('shoferdev.shofer').exports`. Prefer
+	 * `host.api.<method>()` over adding bespoke pass-through wrappers on
+	 * `ExtensionHost`; only operations that add CLI-specific behaviour (e.g.
+	 * `runTask`/`resumeTask` blocking on completion) warrant a dedicated method.
+	 *
+	 * @throws Error if accessed before {@link activate} has resolved.
+	 */
+	public get api(): ShoferAPI {
+		if (!this.extensionAPI) {
+			throw new Error("ExtensionHost: ShoferAPI accessed before activation")
+		}
+
+		return this.extensionAPI
+	}
+
 	// ==========================================================================
 	// Message Handling
 	// ==========================================================================
@@ -493,7 +515,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			throw new Error("You cannot send messages to the extension before it is ready")
 		}
 
-		console.error(`[DEBUG extension-host] sendToExtension: type=${message.type}`)
+		cliLogger.debug(`sendToExtension: type=${message.type}`)
 		this.emit("webviewMessage", message)
 	}
 
@@ -530,9 +552,32 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 		api.on(
 			ShoferEventName.TaskCompleted,
-			(_taskId: string, _tokenUsage: unknown, _toolUsage: unknown, _info: unknown) => {
-				// The webview-derived taskCompleted event already fires from the
-				// ExtensionMessage protocol; we intentionally do NOT double-emit.
+			(
+				_taskId: string,
+				_tokenUsage: unknown,
+				_toolUsage: unknown,
+				info: { rating?: string; isSubtask?: boolean } | undefined,
+			) => {
+				// `attempt_completion` (and the other terminal paths) declare
+				// completion by emitting THIS lifecycle event plus a
+				// `say:completion_result` message — they no longer issue an
+				// `ask:completion_result` (see the Self-Declared Terminal State
+				// Rule in AGENTS.md). The ExtensionMessage-protocol `taskCompleted`
+				// guard in message-processor.ts only fires on that ask, so it never
+				// fires for a fresh top-level completion. This ShoferAPI event is
+				// therefore the authoritative signal that resolves
+				// waitForTaskCompletion(). Subtask completions are ignored here:
+				// only the root task ending should end the CLI run.
+				if (info?.isSubtask) {
+					return
+				}
+
+				const completedEvent: TaskCompletedEvent = {
+					success: true,
+					stateInfo: this.client.getAgentState(),
+					message: this.client.getLastMessage(),
+				}
+				emitter.emit("taskCompleted", completedEvent)
 			},
 		)
 
@@ -565,8 +610,8 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			}
 		})
 
-		api.on(ShoferEventName.QueuedMessagesUpdated, (taskId: string) => {
-			emitter.emit("queuedMessagesUpdated", { taskId })
+		api.on(ShoferEventName.QueuedMessagesUpdated, (taskId: string, queuedMessages: QueuedMessage[]) => {
+			emitter.emit("queuedMessagesUpdated", { taskId, queuedMessages })
 		})
 
 		// ── Task execution ────────────────────────────────────────
@@ -599,7 +644,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			emitter.emit("toolFailed", { taskId, tool, error })
 		})
 
-		console.error("[DEBUG extension-host] ShoferAPI event forwarding wired up")
+		cliLogger.debug("ShoferAPI event forwarding wired up")
 	}
 
 	// ==========================================================================
@@ -607,16 +652,16 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	// ==========================================================================
 
 	private waitForTaskCompletion(): Promise<void> {
-		console.error("[DEBUG extension-host] waitForTaskCompletion() entered")
+		cliLogger.debug("waitForTaskCompletion() entered")
 		return new Promise((resolve, reject) => {
 			const completeHandler = () => {
-				console.error("[DEBUG extension-host] taskCompleted event fired")
+				cliLogger.debug("taskCompleted event fired")
 				cleanup()
 				resolve()
 			}
 
 			const errorHandler = (error: Error) => {
-				console.error("[DEBUG extension-host] error event fired:", error.message)
+				cliLogger.debug("error event fired", { error: error.message })
 				cleanup()
 				reject(error)
 			}
@@ -656,170 +701,37 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		configuration?: ShoferSettings,
 		images?: string[],
 	): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-
-		console.error("[DEBUG extension-host] runTask() calling extensionAPI.startNewTask...")
-		await this.extensionAPI.startNewTask({
-			configuration: configuration ?? {},
-			text: prompt,
-			images,
-		})
-		console.error("[DEBUG extension-host] startNewTask done, waiting for completion...")
+		cliLogger.debug("runTask() calling api.startNewTask...")
+		await this.api.startNewTask({ configuration, text: prompt, images })
+		cliLogger.debug("startNewTask done, waiting for completion...")
 		return this.waitForTaskCompletion()
 	}
 
 	public async resumeTask(taskId: string): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-
-		console.error("[DEBUG extension-host] resumeTask() calling extensionAPI.resumeTask...")
-		await this.extensionAPI.resumeTask(taskId)
-		console.error("[DEBUG extension-host] resumeTask done, waiting for completion...")
+		cliLogger.debug("resumeTask() calling api.resumeTask...")
+		await this.api.resumeTask(taskId)
+		cliLogger.debug("resumeTask done, waiting for completion...")
 		return this.waitForTaskCompletion()
 	}
 
 	public async cancelTask(): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-
-		console.error("[DEBUG extension-host] cancelTask() calling extensionAPI.cancelCurrentTask...")
-		await this.extensionAPI.cancelCurrentTask()
+		cliLogger.debug("cancelTask() calling api.cancelCurrentTask...")
+		await this.api.cancelCurrentTask()
 	}
 
 	public async sendMessage(text?: string, images?: string[]): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-
-		console.error("[DEBUG extension-host] sendMessage() calling extensionAPI.sendMessage...")
-		await this.extensionAPI.sendMessage(text, images)
+		cliLogger.debug("sendMessage() calling api.sendMessage...")
+		await this.api.sendMessage(text, images)
 	}
 
 	public async approveAction(): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-
-		console.error("[DEBUG extension-host] approveAction() calling extensionAPI.pressPrimaryButton...")
-		await this.extensionAPI.pressPrimaryButton()
+		cliLogger.debug("approveAction() calling api.pressPrimaryButton...")
+		await this.api.pressPrimaryButton()
 	}
 
 	public async rejectAction(): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-
-		console.error("[DEBUG extension-host] rejectAction() calling extensionAPI.pressSecondaryButton...")
-		await this.extensionAPI.pressSecondaryButton()
-	}
-
-	public getConfiguration() {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.getConfiguration()
-	}
-
-	public async setConfiguration(values: ShoferSettings): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		await this.extensionAPI.setConfiguration(values)
-	}
-
-	public getProfiles(): string[] {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.getProfiles()
-	}
-
-	public getProfileEntry(name: string) {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.getProfileEntry(name)
-	}
-
-	public async createProfile(name: string, profile?: Parameters<ShoferAPI["createProfile"]>[1], activate?: boolean) {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.createProfile(name, profile, activate)
-	}
-
-	public async updateProfile(name: string, profile: Parameters<ShoferAPI["updateProfile"]>[1], activate?: boolean) {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.updateProfile(name, profile, activate)
-	}
-
-	public async upsertProfile(name: string, profile: Parameters<ShoferAPI["upsertProfile"]>[1], activate?: boolean) {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.upsertProfile(name, profile, activate)
-	}
-
-	public async deleteProfile(name: string): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		await this.extensionAPI.deleteProfile(name)
-	}
-
-	public getActiveProfile() {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.getActiveProfile()
-	}
-
-	public async setActiveProfile(name: string) {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.setActiveProfile(name)
-	}
-
-	public async isTaskInHistory(taskId: string): Promise<boolean> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.isTaskInHistory(taskId)
-	}
-
-	public getCurrentTaskStack(): string[] {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.getCurrentTaskStack()
-	}
-
-	public async clearCurrentTask(lastMessage?: string): Promise<void> {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		await this.extensionAPI.clearCurrentTask(lastMessage)
-	}
-
-	public isReady(): boolean {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		return this.extensionAPI.isReady()
-	}
-
-	public deleteQueuedMessage(messageId: string): void {
-		if (!this.extensionAPI) {
-			throw new Error("extensionAPI not initialized")
-		}
-		this.extensionAPI.deleteQueuedMessage(messageId)
+		cliLogger.debug("rejectAction() calling api.pressSecondaryButton...")
+		await this.api.pressSecondaryButton()
 	}
 
 	// ==========================================================================
