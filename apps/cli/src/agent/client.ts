@@ -17,7 +17,6 @@ export type { ExtensionClientConfig } from "./extension-client.js"
 
 // State management
 export { StateStore } from "./state-store.js"
-export type { StateStoreOptions } from "./state-store.js"
 
 // Message processing
 export { MessageProcessor, parseExtensionMessage } from "./message-processor.js"
@@ -45,5 +44,5 @@ export type {
 } from "./events.js"
 
 // Agent state
-export { AgentLoopState, getInitialState } from "./agent-state.js"
+export { AgentLoopState } from "./agent-state.js"
 export type { AgentStateInfo } from "./agent-state.js"
