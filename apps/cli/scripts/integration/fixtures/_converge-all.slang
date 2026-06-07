@@ -1,0 +1,23 @@
+-- converge-all: converge when all agents have committed.
+-- Most common converge form — the flow exits only when every agent is done.
+flow "converge-all" (task: "string") {
+  title: "Converge All Agents"
+  description: "Tests converge when: all_committed — two agents must both commit."
+
+  agent WorkerA {
+    mode: "code"
+    role: "Worker A."
+    stake do_a(task: task) -> @out
+    commit
+  }
+
+  agent WorkerB {
+    mode: "code"
+    role: "Worker B."
+    stake do_b(task: task) -> @out
+    commit
+  }
+
+  converge when: all_committed
+  budget: rounds(10), tokens(20000)
+}
