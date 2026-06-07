@@ -113,6 +113,7 @@ export interface ExtensionHostInterface extends IExtensionHost<ExtensionHostEven
 	client: ExtensionClient
 	activate(): Promise<void>
 	runTask(prompt: string, taskId?: string, configuration?: ShoferSettings, images?: string[]): Promise<void>
+	cancelTask(): Promise<void>
 	resumeTask(taskId: string): Promise<void>
 	sendToExtension(message: WebviewMessage): void
 	dispose(): Promise<void>
