@@ -17,6 +17,12 @@ import { convertToR1Format } from "../transform/r1-format"
 import { OpenAiHandler } from "./openai"
 import type { ApiHandlerCreateMessageMetadata } from "../index"
 
+/** Tokens some models emit as trivial reasoning preamble before actual thinking begins. */
+const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "answer", "Answer"])
+function isTrivialReasoningToken(text: string): boolean {
+	return TRIVIAL_REASONING_TOKENS.has(text)
+}
+
 // Custom interface for DeepSeek params to support thinking mode
 type DeepSeekChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParamsStreaming & {
 	thinking?: { type: "enabled" | "disabled" }
@@ -112,11 +118,12 @@ export class DeepSeekHandler extends OpenAiHandler {
 			}
 
 			// Handle reasoning_content from DeepSeek's interleaved thinking
-			// This is the proper way DeepSeek sends thinking content in streaming
+			// This is the proper way DeepSeek sends thinking content in streaming.
+			// Filter out trivial model-generated preamble tokens (e.g. "• response").
 			if ("reasoning_content" in delta && delta.reasoning_content) {
-				yield {
-					type: "reasoning",
-					text: (delta.reasoning_content as string) || "",
+				const text = (delta.reasoning_content as string) || ""
+				if (!isTrivialReasoningToken(text)) {
+					yield { type: "reasoning", text }
 				}
 			}
 
