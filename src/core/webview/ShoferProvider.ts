@@ -3326,7 +3326,7 @@ export class ShoferProvider
 			terminalZshP10k: terminalZshP10k ?? false,
 			terminalZdotdir: terminalZdotdir ?? false,
 			mcpEnabled: mcpEnabled ?? true,
-			currentApiConfigName: currentApiConfigName ?? "default",
+			currentApiConfigName: currentTask?.taskApiConfigName || currentApiConfigName || "default",
 			listApiConfigMeta: listApiConfigMeta ?? [],
 			pinnedApiConfigs: pinnedApiConfigs ?? {},
 			mode: (currentTask as any)?._taskMode || mode || defaultModeSlug,
@@ -3579,7 +3579,8 @@ export class ShoferProvider
 			language: stateValues.language ?? formatLanguage(vscode.env.language),
 			mcpEnabled: stateValues.mcpEnabled ?? true,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
-			currentApiConfigName: stateValues.currentApiConfigName ?? "default",
+			currentApiConfigName:
+				this.getCurrentTask()?.taskApiConfigName || stateValues.currentApiConfigName || "default",
 			listApiConfigMeta: stateValues.listApiConfigMeta ?? [],
 			pinnedApiConfigs: stateValues.pinnedApiConfigs ?? {},
 			modeApiConfigs: stateValues.modeApiConfigs ?? ({} as Record<Mode, string>),
