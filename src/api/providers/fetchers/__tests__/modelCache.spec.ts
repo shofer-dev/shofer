@@ -10,7 +10,7 @@ vi.mock("@shofer/telemetry", () => ({
 }))
 
 // Mock the subsystem logger
-vi.mock("../../../utils/logging/subsystems", () => ({
+vi.mock("../../../../utils/logging/subsystems", () => ({
 	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }))
 
@@ -48,7 +48,7 @@ vi.mock("../openrouter")
 vi.mock("../requesty")
 
 // Mock ContextProxy with a simple static instance
-vi.mock("../../../core/config/ContextProxy", () => ({
+vi.mock("../../../../core/config/ContextProxy", () => ({
 	ContextProxy: {
 		instance: {
 			globalStorageUri: {
@@ -201,10 +201,6 @@ describe("getModelsFromCache disk fallback", () => {
 	})
 
 	it("returns disk cache data when memory cache misses and context is available", () => {
-		// Note: This test validates the logic but the ContextProxy mock in test environment
-		// returns undefined for getCacheDirectoryPathSync, which is expected behavior
-		// when the context is not fully initialized. The actual disk cache loading
-		// is validated through integration tests.
 		const diskModels = {
 			"disk-model": {
 				maxTokens: 4096,
@@ -218,28 +214,34 @@ describe("getModelsFromCache disk fallback", () => {
 
 		const result = getModelsFromCache("openrouter")
 
-		// In the test environment, ContextProxy.instance may not be fully initialized,
-		// so getCacheDirectoryPathSync returns undefined and disk cache is not attempted
-		expect(result).toBeUndefined()
+		// With the corrected mock paths, ContextProxy.instance is now properly mocked
+		// and getCacheDirectoryPathSync returns the cache dir, so disk cache is loaded.
+		expect(result).toEqual(diskModels)
 	})
 
-	it("handles disk read errors gracefully", () => {
+	it("handles disk read errors gracefully", async () => {
 		vi.mocked(fsSync.existsSync).mockReturnValue(true)
 		vi.mocked(fsSync.readFileSync).mockImplementation(() => {
 			throw new Error("Disk read failed")
 		})
 
+		const { apiLog } = await import("../../../../utils/logging/subsystems")
+
 		const result = getModelsFromCache("openrouter")
 
+		expect(apiLog.error).toHaveBeenCalled()
 		expect(result).toBeUndefined()
 	})
 
-	it("handles invalid JSON in disk cache gracefully", () => {
+	it("handles invalid JSON in disk cache gracefully", async () => {
 		vi.mocked(fsSync.existsSync).mockReturnValue(true)
 		vi.mocked(fsSync.readFileSync).mockReturnValue("invalid json{")
 
+		const { apiLog } = await import("../../../../utils/logging/subsystems")
+
 		const result = getModelsFromCache("openrouter")
 
+		expect(apiLog.error).toHaveBeenCalled()
 		expect(result).toBeUndefined()
 	})
 })
