@@ -379,7 +379,7 @@ function getSelectedModel({
 		// case "fake-ai":
 		case "shofer":
 		default: {
-			provider satisfies "anthropic" | "gemini-cli" | "fake-ai" | "shofer"
+			provider satisfies "anthropic" | "gemini-cli" | "fake-ai" | "shofer" | "mock"
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const baseInfo = anthropicModels[id as keyof typeof anthropicModels]
 
