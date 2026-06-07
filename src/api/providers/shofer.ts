@@ -25,9 +25,13 @@ import { OpenRouterHandler } from "./openrouter"
 export class ShoferHandler extends OpenRouterHandler {
 	constructor(options: ApiHandlerOptions) {
 		// Map shofer-specific options onto the openrouter handler surface.
-		const shoferBaseUrl = (options as any).shoferBaseUrl as string | undefined
-		const shoferApiKey = (options as any).shoferApiKey as string | undefined
-		const shoferModelId = (options as any).shoferModelId as string | undefined
+		// The canonical model field for the shofer provider is `apiModelId`
+		// (the same field the webview's useSelectedModel and the CLI write to);
+		// base URL and API key use dedicated shofer-prefixed fields so they do
+		// not collide with the openrouter fields the parent handler also reads.
+		const shoferBaseUrl = options.shoferBaseUrl
+		const shoferApiKey = options.shoferApiKey
+		const shoferModelId = options.apiModelId
 		const resolvedOptions: ApiHandlerOptions = {
 			...options,
 			openRouterBaseUrl: shoferBaseUrl ?? options.openRouterBaseUrl ?? "http://localhost:30081/v1",
@@ -35,6 +39,26 @@ export class ShoferHandler extends OpenRouterHandler {
 			openRouterModelId: shoferModelId ?? options.openRouterModelId,
 		}
 		super(resolvedOptions)
+	}
+
+	/**
+	 * @inheritdoc
+	 *
+	 * Unlike OpenRouter, the Shofer provider has no default model. The model is
+	 * always supplied explicitly (via `--model` on the CLI or the model field in
+	 * settings). Falling back to OpenRouter's default (`anthropic/claude-sonnet-4.5`)
+	 * silently misroutes every request to a model the user never asked for, so we
+	 * fail loudly instead.
+	 */
+	override getModel() {
+		if (!this.options.openRouterModelId) {
+			throw new Error(
+				"No model configured for the Shofer provider. Specify a model explicitly " +
+					"(e.g. `--model deepseek/deepseek-v4-pro` on the CLI, or the model field in " +
+					"settings) — the Shofer provider has no default model.",
+			)
+		}
+		return super.getModel()
 	}
 
 	/** @inheritdoc */
