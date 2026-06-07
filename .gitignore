@@ -55,4 +55,7 @@ qdrant_storage/
 # Architect plans
 plans/
 
+# CLI build artifacts
+apps/cli/extension
+
 shofer-cli-*.tar.gz*
