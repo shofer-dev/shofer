@@ -788,6 +788,13 @@ export class McpHub {
 
 				// Set up stdio specific error handling
 				transport.onerror = async (error) => {
+					// AbortError during teardown is expected (hub disposed / process killed).
+					const isAbort =
+						error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"))
+					if (isAbort && this.isDisposed) {
+						mcpSysLog.debug(`Transport closed for "${name}" (expected on dispose):`, error.message)
+						return
+					}
 					mcpSysLog.error(`Transport error for "${name}":`, error)
 					const connection = this.findConnection(name, source)
 					if (connection) {
@@ -843,6 +850,16 @@ export class McpHub {
 
 				// Set up Streamable HTTP specific error handling
 				transport.onerror = async (error) => {
+					// AbortError during teardown is expected (hub disposed / SSE stream cancelled).
+					const isAbort =
+						error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"))
+					if (isAbort && this.isDisposed) {
+						mcpSysLog.debug(
+							`Transport closed for "${name}" (streamable-http, expected on dispose):`,
+							error.message,
+						)
+						return
+					}
 					mcpSysLog.error(`Transport error for "${name}" (streamable-http):`, error)
 					const connection = this.findConnection(name, source)
 					if (connection) {
@@ -886,6 +903,13 @@ export class McpHub {
 
 				// Set up SSE specific error handling
 				transport.onerror = async (error) => {
+					// AbortError during teardown is expected (hub disposed / SSE stream cancelled).
+					const isAbort =
+						error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"))
+					if (isAbort && this.isDisposed) {
+						mcpSysLog.debug(`Transport closed for "${name}" (expected on dispose):`, error.message)
+						return
+					}
 					mcpSysLog.error(`Transport error for "${name}":`, error)
 					const connection = this.findConnection(name, source)
 					if (connection) {
