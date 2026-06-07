@@ -34,10 +34,10 @@ import { fileURLToPath } from "url"
 import { ShoferEventName } from "@shofer/types"
 import type { ShoferMessage, HistoryItem } from "@shofer/types"
 
-import { ExtensionHost } from "../../src/agent/extension-host.js"
-import type { ExtensionHostOptions } from "../../src/agent/extension-host.js"
-import { getDefaultExtensionPath } from "../../src/lib/utils/extension.js"
-import type { WaitingForInputEvent } from "../../src/agent/events.js"
+import { ExtensionHost } from "../../../src/agent/extension-host.js"
+import type { ExtensionHostOptions } from "../../../src/agent/extension-host.js"
+import { getDefaultExtensionPath } from "../../../src/lib/utils/extension.js"
+import type { WaitingForInputEvent } from "../../../src/agent/events.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
