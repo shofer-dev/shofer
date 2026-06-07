@@ -94,7 +94,7 @@ export const isCustomProvider = (key: string): key is CustomProvider => customPr
  * model lists.
  */
 
-export const fauxProviders = ["fake-ai"] as const
+export const fauxProviders = ["fake-ai", "mock"] as const
 
 export type FauxProvider = (typeof fauxProviders)[number]
 
@@ -359,6 +359,10 @@ const fakeAiSchema = baseProviderSettingsSchema.extend({
 	fakeAi: z.unknown().optional(),
 })
 
+const mockSchema = baseProviderSettingsSchema.extend({
+	mock: z.unknown().optional(),
+})
+
 const xaiSchema = apiModelIdProviderModelSchema.extend({
 	xaiApiKey: z.string().optional(),
 })
@@ -435,6 +439,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	requestySchema.merge(z.object({ apiProvider: z.literal("requesty") })),
 	unboundSchema.merge(z.object({ apiProvider: z.literal("unbound") })),
 	fakeAiSchema.merge(z.object({ apiProvider: z.literal("fake-ai") })),
+	mockSchema.merge(z.object({ apiProvider: z.literal("mock") })),
 	xaiSchema.merge(z.object({ apiProvider: z.literal("xai") })),
 	basetenSchema.merge(z.object({ apiProvider: z.literal("baseten") })),
 	litellmSchema.merge(z.object({ apiProvider: z.literal("litellm") })),
@@ -470,6 +475,7 @@ export const providerSettingsSchema = z.object({
 	...requestySchema.shape,
 	...unboundSchema.shape,
 	...fakeAiSchema.shape,
+	...mockSchema.shape,
 	...xaiSchema.shape,
 	...basetenSchema.shape,
 	...litellmSchema.shape,
@@ -591,7 +597,7 @@ export const getApiProtocol = (provider: ProviderName | undefined, modelId?: str
  */
 
 export const MODELS_BY_PROVIDER: Record<
-	Exclude<ProviderName, "fake-ai" | "gemini-cli" | "openai">,
+	Exclude<ProviderName, "fake-ai" | "mock" | "gemini-cli" | "openai">,
 	{ id: ProviderName; label: string; models: string[] }
 > = {
 	anthropic: {

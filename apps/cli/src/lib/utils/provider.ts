@@ -9,6 +9,7 @@ const envVarMap: Record<SupportedProvider, string> = {
 	openrouter: "OPENROUTER_API_KEY",
 	shofer: "SHOFER_API_KEY",
 	"vercel-ai-gateway": "VERCEL_AI_GATEWAY_API_KEY",
+	mock: "MOCK_API_KEY",
 }
 
 export function getEnvVarName(provider: SupportedProvider): string {

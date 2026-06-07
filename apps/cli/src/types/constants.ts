@@ -3,7 +3,6 @@ import { reasoningEffortsExtended } from "@shofer/types"
 export const DEFAULT_FLAGS = {
 	mode: "code",
 	reasoningEffort: "medium" as const,
-	model: "anthropic/claude-opus-4.6",
 	consecutiveMistakeLimit: 10,
 }
 
