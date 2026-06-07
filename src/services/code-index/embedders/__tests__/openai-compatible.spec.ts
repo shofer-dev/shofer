@@ -2,6 +2,21 @@ import type { MockedClass, MockedFunction } from "vitest"
 import { OpenAI } from "openai"
 import { OpenAICompatibleEmbedder } from "../openai-compatible"
 import { MAX_ITEM_TOKENS, INITIAL_RETRY_DELAY_MS } from "../../constants"
+import { codeIndexLog } from "../../../../utils/logging/subsystems"
+
+// Mock logging subsystem
+vitest.mock("../../../../utils/logging/subsystems", () => ({
+	codeIndexLog: {
+		error: vitest.fn(),
+		info: vitest.fn(),
+		warn: vitest.fn(),
+	},
+	apiLog: {
+		error: vitest.fn(),
+		info: vitest.fn(),
+		warn: vitest.fn(),
+	},
+}))
 
 // Mock the OpenAI SDK
 vitest.mock("openai")
@@ -63,8 +78,6 @@ describe("OpenAICompatibleEmbedder", () => {
 
 	beforeEach(() => {
 		vitest.clearAllMocks()
-		vitest.spyOn(console, "warn").mockImplementation(() => {})
-		vitest.spyOn(console, "error").mockImplementation(() => {})
 
 		// Setup mock OpenAI instance
 		mockEmbeddingsCreate = vitest.fn()
@@ -373,7 +386,7 @@ describe("OpenAICompatibleEmbedder", () => {
 				await embedder.createEmbeddings(testTexts)
 
 				// Should warn about oversized text
-				expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("exceeds maximum token limit"))
+				expect(codeIndexLog.warn).toHaveBeenCalledWith(expect.stringContaining("exceeds maximum token limit"))
 
 				// Should only process normal texts (1 call for 2 normal texts batched together)
 				expect(mockEmbeddingsCreate).toHaveBeenCalledTimes(1)
@@ -441,7 +454,7 @@ describe("OpenAICompatibleEmbedder", () => {
 				const result = await resultPromise
 
 				expect(mockEmbeddingsCreate).toHaveBeenCalledTimes(3)
-				expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Rate limit hit, retrying in"))
+				expect(codeIndexLog.warn).toHaveBeenCalledWith(expect.stringContaining("Rate limit hit, retrying in"))
 				expect(result).toEqual({
 					embeddings: [[0.25, 0.5, 0.75]],
 					usage: { promptTokens: 10, totalTokens: 15 },
@@ -460,7 +473,7 @@ describe("OpenAICompatibleEmbedder", () => {
 				)
 
 				expect(mockEmbeddingsCreate).toHaveBeenCalledTimes(1)
-				expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("Rate limit hit"))
+				expect(codeIndexLog.warn).not.toHaveBeenCalledWith(expect.stringContaining("Rate limit hit"))
 			})
 
 			it("should throw error immediately on non-retryable errors", async () => {
@@ -492,7 +505,7 @@ describe("OpenAICompatibleEmbedder", () => {
 					"Failed to create embeddings after 3 attempts: API connection failed",
 				)
 
-				expect(console.error).toHaveBeenCalledWith(
+				expect(codeIndexLog.error).toHaveBeenCalledWith(
 					expect.stringContaining("OpenAI Compatible embedder error"),
 					apiError,
 				)
@@ -508,7 +521,7 @@ describe("OpenAICompatibleEmbedder", () => {
 					"Failed to create embeddings after 3 attempts: Batch processing failed",
 				)
 
-				expect(console.error).toHaveBeenCalledWith(
+				expect(codeIndexLog.error).toHaveBeenCalledWith(
 					expect.stringContaining("OpenAI Compatible embedder error"),
 					expect.any(Error),
 				)
@@ -857,7 +870,6 @@ describe("OpenAICompatibleEmbedder", () => {
 
 					expect(global.fetch).toHaveBeenCalledTimes(3)
 					// Check that rate limit warnings were logged
-					expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Rate limit hit"))
 					expectEmbeddingValues(result.embeddings[0], [0.1, 0.2, 0.3])
 					vitest.useRealTimers()
 				})
