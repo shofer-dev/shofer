@@ -113,6 +113,10 @@ export class MessageProcessor {
 					this.handleMessageUpdated(message)
 					break
 
+				case "shoferMessageAppended":
+					this.handleShoferMessageAppended(message)
+					break
+
 				case "action":
 					this.handleAction(message)
 					break
@@ -248,6 +252,38 @@ export class MessageProcessor {
 		this.emitter.emit("messageUpdated", shoferMessage)
 
 		// Emit state change events
+		this.emitStateChangeEvents(previousState, currentState)
+	}
+
+	/**
+	 * Handle a "shoferMessageAppended" message - a single new message appended
+	 * to the end of the conversation.
+	 *
+	 * The extension host ships these incremental deltas (paired with a skinny
+	 * `state` push that deliberately OMITS `shoferMessages`) instead of the full
+	 * message array — see `Task.addToShoferMessages`. Without handling this
+	 * variant, newly appended asks (e.g. a workflow root's `escalate @Human`
+	 * followup) never reach `detectAgentState`, so `waitingForInput` is never
+	 * emitted and the client blocks forever.
+	 */
+	private handleShoferMessageAppended(message: ExtensionMessage): void {
+		if (!message.shoferMessage) {
+			if (this.options.debug) {
+				debugLog("[MessageProcessor] shoferMessageAppended missing shoferMessage")
+			}
+			return
+		}
+
+		const shoferMessage = message.shoferMessage
+		const previousState = this.store.getAgentState()
+
+		// Append the message to the store (runs `detectAgentState`).
+		this.store.addMessage(shoferMessage)
+
+		const currentState = this.store.getAgentState()
+
+		// Surface the new message and any resulting state transition.
+		this.emitter.emit("message", shoferMessage)
 		this.emitStateChangeEvents(previousState, currentState)
 	}
 
