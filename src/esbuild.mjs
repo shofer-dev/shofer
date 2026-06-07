@@ -118,6 +118,10 @@ async function main() {
 	/**
 	 * @type {import('esbuild').BuildOptions}
 	 */
+	// Phase 1 worker modules (server-worker, agent-worker, worker-extension-host)
+	// are compiled by vitest/tsc for tests; they are NOT bundled into dist/ yet.
+	// They will be added as entry points before Phase 2 spawns actual worker_threads
+	// (see docs/multi_threaded.md §9 "esbuild entry points").
 	const workerConfig = {
 		...buildOptions,
 		entryPoints: ["workers/countTokens.ts"],
