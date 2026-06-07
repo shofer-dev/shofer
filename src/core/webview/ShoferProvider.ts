@@ -2408,9 +2408,9 @@ export class ShoferProvider
 	 */
 	private updateTaskApiHandlerIfNeeded(
 		providerSettings: ProviderSettings,
-		options: { forceRebuild?: boolean } = {},
+		options: { forceRebuild?: boolean; profileName?: string } = {},
 	): void {
-		const { forceRebuild = false } = options
+		const { forceRebuild = false, profileName } = options
 		const newProvider = providerSettings.apiProvider
 		const newModelId = getModelId(providerSettings)
 
@@ -2424,6 +2424,19 @@ export class ShoferProvider
 		]
 
 		for (const task of allTasks) {
+			// Respect sticky provider profiles: only update tasks whose sticky profile
+			// matches the profile being activated/saved. Tasks with a different
+			// taskApiConfigName must keep their own provider. Tasks without a
+			// taskApiConfigName (undefined) haven't been assigned yet and should
+			// receive the update.
+			if (
+				profileName !== undefined &&
+				task.taskApiConfigName !== undefined &&
+				task.taskApiConfigName !== profileName
+			) {
+				continue
+			}
+
 			const prevConfig = task.apiConfiguration
 			const prevProvider = prevConfig?.apiProvider
 			const prevModelId = prevConfig ? getModelId(prevConfig) : undefined
@@ -2490,12 +2503,14 @@ export class ShoferProvider
 				// Mirror the per-mode mapping into the custom-mode YAML so the two stay 1:1.
 				await this.syncCustomModeProviderToYaml(mode, name)
 
-				// Change the provider for the current task.
-				// TODO: We should rename `buildApiHandler` for clarity (e.g. `getProviderClient`).
-				this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true })
-
 				// Keep the current task's sticky provider profile in sync with the newly-activated profile.
+				// Must be called BEFORE updateTaskApiHandlerIfNeeded so the task's taskApiConfigName
+				// is set when the per-task sticky-profile filter runs.
 				await this.persistStickyProviderProfileToCurrentTask(name)
+
+				// Change the provider for tasks whose sticky profile matches.
+				// TODO: We should rename `buildApiHandler` for clarity (e.g. `getProviderClient`).
+				this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true, profileName: name })
 			} else {
 				await this.updateGlobalState("listApiConfigMeta", await this.providerSettingsManager.listConfig())
 			}
@@ -2587,14 +2602,16 @@ export class ShoferProvider
 			await this.syncCustomModeProviderToYaml(mode, name)
 		}
 
-		// Change the provider for the current task.
-		this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true })
-
 		// Update the current task's sticky provider profile, unless this activation is
 		// being used purely as a non-persisting restoration (e.g., reopening a task from history).
+		// Must be called BEFORE updateTaskApiHandlerIfNeeded so the task's taskApiConfigName
+		// is set when the per-task sticky-profile filter runs.
 		if (persistTaskHistory) {
 			await this.persistStickyProviderProfileToCurrentTask(name)
 		}
+
+		// Change the provider for tasks whose sticky profile matches.
+		this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true, profileName: name })
 
 		await this.postStateToWebviewWithoutTaskHistory()
 

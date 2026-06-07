@@ -111,6 +111,7 @@ vi.mock("../../../integrations/workspace/WorkspaceTracker", () => {
 
 vi.mock("../../task/Task", () => ({
 	Task: vi.fn().mockImplementation((options) => {
+		let _taskApiConfigName: string | undefined = undefined
 		const mockTask = {
 			api: undefined,
 			abortTask: vi.fn(),
@@ -123,6 +124,12 @@ vi.mock("../../task/Task", () => ({
 			emit: vi.fn(),
 			updateApiConfiguration: vi.fn().mockImplementation(function (this: any, newConfig: any) {
 				this.apiConfiguration = newConfig
+			}),
+			get taskApiConfigName() {
+				return _taskApiConfigName
+			},
+			setTaskApiConfigName: vi.fn().mockImplementation((name: string | undefined) => {
+				_taskApiConfigName = name
 			}),
 		}
 		// Define apiConfiguration as a property so tests can read it
@@ -574,6 +581,130 @@ describe("ShoferProvider - API Handler Rebuild Guard", () => {
 			expect(mockTask.updateApiConfiguration).toHaveBeenCalled()
 			expect((mockTask as any).apiConfiguration.apiProvider).toBe("openrouter")
 			expect((mockTask as any).apiConfiguration.openRouterModelId).toBe("openai/gpt-4")
+		})
+	})
+
+	describe("sticky profile isolation", () => {
+		test("does NOT update tasks with a different sticky profile when switching profiles", async () => {
+			// Task A has sticky profile "profile-a" (anthropic)
+			const taskA = new Task({
+				...defaultTaskOptions,
+				apiConfiguration: {
+					apiProvider: "anthropic",
+					apiModelId: "claude-3-5-sonnet-20241022",
+				},
+			})
+			taskA.setTaskApiConfigName("profile-a")
+			taskA.api = {
+				getModel: vi.fn().mockReturnValue({
+					id: "claude-3-5-sonnet-20241022",
+					info: { contextWindow: 200000 },
+				}),
+			} as any
+
+			// Task B has sticky profile "profile-b" (openrouter)
+			const taskB = new Task({
+				...defaultTaskOptions,
+				apiConfiguration: {
+					apiProvider: "openrouter",
+					openRouterModelId: "openai/gpt-4",
+				},
+			})
+			taskB.setTaskApiConfigName("profile-b")
+			taskB.api = {
+				getModel: vi.fn().mockReturnValue({
+					id: "openai/gpt-4",
+					info: { contextWindow: 128000 },
+				}),
+			} as any
+
+			await provider.addShoferToStack(taskA)
+			await provider.addShoferToStack(taskB)
+
+			// Activate profile-b (openrouter with gpt-4)
+			;(provider as any).providerSettingsManager.activateProfile = vi.fn().mockResolvedValue({
+				name: "profile-b",
+				id: "profile-b-id",
+				apiProvider: "openrouter",
+				openRouterModelId: "openai/gpt-4",
+			})
+			await provider.activateProviderProfile({ name: "profile-b" })
+
+			// Task A (profile-a, anthropic) should NOT have been updated
+			expect(taskA.updateApiConfiguration).not.toHaveBeenCalled()
+			expect((taskA as any).apiConfiguration.apiProvider).toBe("anthropic")
+
+			// Task B (profile-b, openrouter) SHOULD have been updated
+			expect(taskB.updateApiConfiguration).toHaveBeenCalled()
+		})
+
+		test("updates tasks whose sticky profile matches the activated profile", async () => {
+			const task = new Task({
+				...defaultTaskOptions,
+				apiConfiguration: {
+					apiProvider: "anthropic",
+					apiModelId: "claude-3-5-sonnet-20241022",
+				},
+			})
+			task.setTaskApiConfigName("profile-a")
+			task.api = {
+				getModel: vi.fn().mockReturnValue({
+					id: "claude-3-5-sonnet-20241022",
+					info: { contextWindow: 200000 },
+				}),
+			} as any
+
+			await provider.addShoferToStack(task)
+
+			// Activate profile-a (same as task's sticky profile) with different settings
+			;(provider as any).providerSettingsManager.activateProfile = vi.fn().mockResolvedValue({
+				name: "profile-a",
+				id: "profile-a-id",
+				apiProvider: "anthropic",
+				apiModelId: "claude-3-5-sonnet-20241022",
+				modelTemperature: 0.9,
+			})
+			await provider.activateProviderProfile({ name: "profile-a" })
+
+			// Task should be updated because its sticky profile matches
+			expect(task.updateApiConfiguration).toHaveBeenCalledWith(
+				expect.objectContaining({
+					apiProvider: "anthropic",
+					apiModelId: "claude-3-5-sonnet-20241022",
+					modelTemperature: 0.9,
+				}),
+			)
+		})
+
+		test("updates tasks with undefined sticky profile (backward compatible)", async () => {
+			const task = new Task({
+				...defaultTaskOptions,
+				apiConfiguration: {
+					apiProvider: "anthropic",
+					apiModelId: "claude-3-5-sonnet-20241022",
+				},
+			})
+			// No setTaskApiConfigName call — taskApiConfigName is undefined
+			task.api = {
+				getModel: vi.fn().mockReturnValue({
+					id: "claude-3-5-sonnet-20241022",
+					info: { contextWindow: 200000 },
+				}),
+			} as any
+
+			await provider.addShoferToStack(task)
+
+			// Activate a different profile
+			;(provider as any).providerSettingsManager.activateProfile = vi.fn().mockResolvedValue({
+				name: "other-profile",
+				id: "other-id",
+				apiProvider: "openrouter",
+				openRouterModelId: "openai/gpt-4",
+			})
+			await provider.activateProviderProfile({ name: "other-profile" })
+
+			// Task should be updated because its sticky profile is undefined (unassigned)
+			expect(task.updateApiConfiguration).toHaveBeenCalled()
 		})
 	})
 
