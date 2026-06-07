@@ -83,6 +83,10 @@ export {
 	type IExtensionHost,
 	type ExtensionHostEventMap,
 	type ExtensionHostEventName,
+	type IpcPort,
+	type VscodeApiRequestId,
+	type VscodeApiRequest,
+	type VscodeApiResponse,
 } from "./vscode.js"
 
 // Export utilities

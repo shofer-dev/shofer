@@ -57,5 +57,6 @@ plans/
 
 # CLI build artifacts
 apps/cli/extension
+apps/cli/.shofer/
 
 shofer-cli-*.tar.gz*

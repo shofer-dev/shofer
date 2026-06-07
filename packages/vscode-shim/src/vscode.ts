@@ -133,6 +133,16 @@ export type {
 // Extension host interface
 export type { IExtensionHost, ExtensionHostEventMap, ExtensionHostEventName } from "./interfaces/extension-host.js"
 
+// IPC interface (for worker ↔ main-thread vscode API forwarding)
+export type { IpcPort, VscodeApiRequestId, VscodeApiRequest, VscodeApiResponse } from "./interfaces/ipc.js"
+export {
+	generateRequestId,
+	isVscodeApiResponse,
+	IpcDemuxer,
+	VSCODE_API_IPC_TYPE,
+	VSCODE_API_RESULT_TYPE,
+} from "./interfaces/ipc.js"
+
 // Workspace interfaces
 export type {
 	WorkspaceConfiguration,
