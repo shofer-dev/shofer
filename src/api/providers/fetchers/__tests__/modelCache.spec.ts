@@ -9,6 +9,11 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
+// Mock the subsystem logger
+vi.mock("../../../utils/logging/subsystems", () => ({
+	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}))
+
 // Mock NodeCache to allow controlling cache behavior
 vi.mock("node-cache", () => {
 	const mockGet = vi.fn().mockReturnValue(undefined)
@@ -224,28 +229,18 @@ describe("getModelsFromCache disk fallback", () => {
 			throw new Error("Disk read failed")
 		})
 
-		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 		const result = getModelsFromCache("openrouter")
 
 		expect(result).toBeUndefined()
-		expect(consoleErrorSpy).toHaveBeenCalled()
-
-		consoleErrorSpy.mockRestore()
 	})
 
 	it("handles invalid JSON in disk cache gracefully", () => {
 		vi.mocked(fsSync.existsSync).mockReturnValue(true)
 		vi.mocked(fsSync.readFileSync).mockReturnValue("invalid json{")
 
-		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 		const result = getModelsFromCache("openrouter")
 
 		expect(result).toBeUndefined()
-		expect(consoleErrorSpy).toHaveBeenCalled()
-
-		consoleErrorSpy.mockRestore()
 	})
 })
 

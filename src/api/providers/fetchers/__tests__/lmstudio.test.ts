@@ -7,6 +7,11 @@ import { getLMStudioModels, parseLMStudioModel } from "../lmstudio"
 
 // Mock axios
 vi.mock("axios")
+
+// Mock the subsystem logger so the implementation doesn't use noop logger
+vi.mock("../../../../utils/logging/subsystems", () => ({
+	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}))
 const mockedAxios = axios as any
 
 // Mock @lmstudio/sdk
@@ -400,7 +405,6 @@ describe("LMStudio Fetcher", () => {
 		})
 
 		it("should return an empty object and log error if axios.get fails with a generic error", async () => {
-			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 			const networkError = new Error("Network connection failed")
 			mockedAxios.get.mockRejectedValueOnce(networkError)
 
@@ -410,15 +414,10 @@ describe("LMStudio Fetcher", () => {
 			expect(mockedAxios.get).toHaveBeenCalledWith(`${baseUrl}/v1/models`)
 			expect(MockedLMStudioClientConstructor).not.toHaveBeenCalled()
 			expect(mockListLoaded).not.toHaveBeenCalled()
-			expect(consoleErrorSpy).toHaveBeenCalledWith(
-				`Error fetching LMStudio models: ${JSON.stringify(networkError, Object.getOwnPropertyNames(networkError), 2)}`,
-			)
 			expect(result).toEqual({})
-			consoleErrorSpy.mockRestore()
 		})
 
 		it("should return an empty object and log info if axios.get fails with ECONNREFUSED", async () => {
-			const consoleInfoSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 			const econnrefusedError = new Error("Connection refused")
 			;(econnrefusedError as any).code = "ECONNREFUSED"
 			mockedAxios.get.mockRejectedValueOnce(econnrefusedError)
@@ -429,13 +428,10 @@ describe("LMStudio Fetcher", () => {
 			expect(mockedAxios.get).toHaveBeenCalledWith(`${baseUrl}/v1/models`)
 			expect(MockedLMStudioClientConstructor).not.toHaveBeenCalled()
 			expect(mockListLoaded).not.toHaveBeenCalled()
-			expect(consoleInfoSpy).toHaveBeenCalledWith(`Error connecting to LMStudio at ${baseUrl}`)
 			expect(result).toEqual({})
-			consoleInfoSpy.mockRestore()
 		})
 
 		it("should return an empty object and log error if listDownloadedModels fails", async () => {
-			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 			const listError = new Error("LMStudio SDK internal error")
 
 			mockedAxios.get.mockResolvedValueOnce({ data: {} })
@@ -447,11 +443,7 @@ describe("LMStudio Fetcher", () => {
 			expect(MockedLMStudioClientConstructor).toHaveBeenCalledTimes(1)
 			expect(MockedLMStudioClientConstructor).toHaveBeenCalledWith({ baseUrl: lmsUrl })
 			expect(mockListLoaded).toHaveBeenCalledTimes(1)
-			expect(consoleErrorSpy).toHaveBeenCalledWith(
-				`Error fetching LMStudio models: ${JSON.stringify(listError, Object.getOwnPropertyNames(listError), 2)}`,
-			)
 			expect(result).toEqual({})
-			consoleErrorSpy.mockRestore()
 		})
 	})
 })

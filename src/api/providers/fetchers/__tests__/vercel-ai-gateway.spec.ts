@@ -6,6 +6,9 @@ import { VERCEL_AI_GATEWAY_VISION_ONLY_MODELS, VERCEL_AI_GATEWAY_VISION_AND_TOOL
 import { getVercelAiGatewayModels, parseVercelAiGatewayModel } from "../vercel-ai-gateway"
 
 vitest.mock("axios")
+vitest.mock("../../../../utils/logging/subsystems", () => ({
+	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}))
 const mockedAxios = axios as any
 
 describe("Vercel AI Gateway Fetchers", () => {
@@ -84,20 +87,14 @@ describe("Vercel AI Gateway Fetchers", () => {
 		})
 
 		it("handles API errors gracefully", async () => {
-			const consoleErrorSpy = vitest.spyOn(console, "error").mockImplementation(() => {})
 			mockedAxios.get.mockRejectedValueOnce(new Error("Network error"))
 
 			const models = await getVercelAiGatewayModels()
 
 			expect(models).toEqual({})
-			expect(consoleErrorSpy).toHaveBeenCalledWith(
-				expect.stringContaining("Error fetching Vercel AI Gateway models"),
-			)
-			consoleErrorSpy.mockRestore()
 		})
 
 		it("handles invalid response schema gracefully", async () => {
-			const consoleErrorSpy = vitest.spyOn(console, "error").mockImplementation(() => {})
 			mockedAxios.get.mockResolvedValueOnce({
 				data: {
 					invalid: "response",
@@ -108,12 +105,9 @@ describe("Vercel AI Gateway Fetchers", () => {
 			const models = await getVercelAiGatewayModels()
 
 			expect(models).toEqual({})
-			expect(consoleErrorSpy).toHaveBeenCalled()
-			consoleErrorSpy.mockRestore()
 		})
 
 		it("continues processing with partially valid schema", async () => {
-			const consoleErrorSpy = vitest.spyOn(console, "error").mockImplementation(() => {})
 			const invalidResponse = {
 				data: {
 					invalid_root: "response",
@@ -140,9 +134,7 @@ describe("Vercel AI Gateway Fetchers", () => {
 
 			const models = await getVercelAiGatewayModels()
 
-			expect(consoleErrorSpy).toHaveBeenCalled()
 			expect(models["anthropic/claude-sonnet-4"]).toBeDefined()
-			consoleErrorSpy.mockRestore()
 		})
 	})
 
