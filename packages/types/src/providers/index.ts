@@ -116,6 +116,7 @@ export function getProviderDefaultModelId(
 		case "anthropic":
 		case "gemini-cli":
 		case "fake-ai":
+		case "mock":
 		default:
 			return anthropicDefaultModelId
 	}

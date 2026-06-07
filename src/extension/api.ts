@@ -293,11 +293,13 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		text,
 		images,
 		newTab,
+		taskId,
 	}: {
 		configuration?: ShoferSettings
 		text?: string
 		images?: string[]
 		newTab?: boolean
+		taskId?: string
 	}) {
 		const taskConfiguration = configuration ?? {}
 		let provider: ShoferProvider
@@ -321,6 +323,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 
 		const options: CreateTaskOptions = {
 			consecutiveMistakeLimit: Number.MAX_SAFE_INTEGER,
+			...(taskId ? { taskId } : {}),
 		}
 
 		const task = await provider.createTask(text, images, undefined, options, taskConfiguration)

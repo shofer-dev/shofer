@@ -702,7 +702,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		images?: string[],
 	): Promise<void> {
 		cliLogger.debug("runTask() calling api.startNewTask...")
-		await this.api.startNewTask({ configuration, text: prompt, images })
+		await this.api.startNewTask({ configuration, text: prompt, images, taskId })
 		cliLogger.debug("startNewTask done, waiting for completion...")
 		return this.waitForTaskCompletion()
 	}

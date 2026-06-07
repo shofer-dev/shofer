@@ -117,7 +117,7 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 
 	// Determine effective values: CLI flags > settings file > DEFAULT_FLAGS.
 	const effectiveMode = flagOptions.mode || settings.mode || DEFAULT_FLAGS.mode
-	const effectiveModel = flagOptions.model || settings.model || DEFAULT_FLAGS.model
+	const effectiveModel = flagOptions.model || settings.model
 	const effectiveReasoningEffort =
 		flagOptions.reasoningEffort || settings.reasoningEffort || DEFAULT_FLAGS.reasoningEffort
 	const effectiveProvider = flagOptions.provider ?? settings.provider ?? "openrouter"
@@ -151,6 +151,12 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 		}
 	}
 
+	if (!effectiveModel) {
+		console.error(`[CLI] Error: No model configured for the ${effectiveProvider} provider`)
+		console.error(`[CLI] Use --model <model> or set "model" in your settings file.`)
+		process.exit(1)
+	}
+
 	const extensionHostOptions: ExtensionHostOptions = {
 		mode: effectiveMode,
 		reasoningEffort: effectiveReasoningEffort === "unspecified" ? undefined : effectiveReasoningEffort,
@@ -171,7 +177,6 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 
 	// Validations
 	// TODO: Validate the API key for the chosen provider.
-	// TODO: Validate the model for the chosen provider.
 
 	if (!isSupportedProvider(extensionHostOptions.provider)) {
 		console.error(
@@ -183,10 +188,10 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 	extensionHostOptions.apiKey =
 		extensionHostOptions.apiKey || flagOptions.apiKey || getApiKeyFromEnv(extensionHostOptions.provider)
 
-	if (!extensionHostOptions.apiKey) {
+	// The mock provider is a faux provider used for functional testing and needs no credentials.
+	if (!extensionHostOptions.apiKey && extensionHostOptions.provider !== "mock") {
 		console.error(`[CLI] Error: No API key provided. Use --api-key or set the appropriate environment variable.`)
 		console.error(`[CLI] For ${extensionHostOptions.provider}, set ${getEnvVarName(extensionHostOptions.provider)}`)
-
 		process.exit(1)
 	}
 

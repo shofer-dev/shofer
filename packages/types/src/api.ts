@@ -21,11 +21,13 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 		text,
 		images,
 		newTab,
+		taskId,
 	}: {
 		configuration?: ShoferSettings
 		text?: string
 		images?: string[]
 		newTab?: boolean
+		taskId?: string
 	}): Promise<string>
 	/**
 	 * Resumes a task with the given ID.
