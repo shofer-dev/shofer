@@ -110,6 +110,73 @@ const BUILT_IN_SCENARIOS: MockScenario[] = [
 	{ match: "42", response: "42" },
 	{ match: "Hello", response: "Hello! Mock assistant here." },
 	{ match: "number", response: "42" },
+
+	// ── Workflow conformance scenarios ────────────────────────────────────────
+	//
+	// These cover all _* slang workflow test flows so they run against the mock
+	// provider with no real LLM. Matches are ordered most-specific first so a
+	// more generic pattern never shadows a specific one.
+	//
+	// All patterns match against the user-message content produced by
+	// buildStakePrompt: "Execute: <op>\nArguments: {...}\nOUTPUT CONTRACT:\n  - field: type\n..."
+
+	// _question-relay — Researcher must call ask_followup_question before
+	// producing findings. Multi-turn: turn 1 emits the tool call (the harness
+	// auto-answers from followupQueue), turn 2 emits attempt_completion.
+	{
+		match: "Before you do ANY research",
+		turns: [
+			{
+				tool: {
+					name: "ask_followup_question",
+					arguments: {
+						question: "What specific aspect of this topic should I focus on?",
+						follow_up: [
+							{ text: "Focus on basics", mode: null },
+							{ text: "Focus on advanced topics", mode: null },
+						],
+					},
+				},
+			},
+			{ response: '{"findings":"Key finding 1. Key finding 2. Key finding 3."}' },
+		],
+	},
+
+	// _output-schema — Worker must return JSON matching { summary, confidence, tags }.
+	{ match: "- summary: string", response: '{"summary":"Test summary of the topic.","confidence":0.9,"tags":"test"}' },
+
+	// _peer-messaging — Researcher produces findings JSON (send_message_to_task
+	// to the Writer is optional per the role; skipping it is valid).
+	{ match: "Execute: produce_findings", response: '{"findings":"Finding 1. Finding 2. Finding 3."}' },
+
+	// _peer-messaging / _question-relay — Writer produces article JSON.
+	{ match: "- article: string", response: '{"article":"A concise article about the requested topic."}' },
+
+	// _peer-messaging — Coordinator finalize stake (no output contract).
+	{ match: "Execute: finalize", response: "Combined result: research and article complete." },
+
+	// _expressions — match on unique output contract fields (eq/neq/gt/…/contains).
+	{
+		match: "- eq: boolean",
+		response: '{"eq":true,"neq":true,"gt":true,"gte":true,"lt":true,"lte":true,"and":true,"contains":true}',
+	},
+
+	// _let-set — match on unique output contract field { value: number, flag: boolean }.
+	{ match: "- value: number", response: '{"value":1,"flag":true}' },
+
+	// _when-otherwise — match on unique output contract field { approved: boolean, … }.
+	{ match: "- approved: boolean", response: '{"approved":true,"rejected":false}' },
+
+	// _repeat-until — match on unique output contract field { iteration: number }.
+	// The loop terminates in one iteration: `set counter = 1; when counter > 0 { set done = true }`.
+	{ match: "- iteration: number", response: '{"iteration":1}' },
+
+	// _list-arg — match on unique output contract field { result: string, tags_used: number }.
+	{ match: "- result: string", response: '{"result":"processed","tags_used":2}' },
+
+	// Catch-all for any Execute: stake with no output contract (all other flows).
+	// Placed last so specific patterns above always shadow it.
+	{ match: "Execute:", response: "step completed" },
 ]
 
 // ── Scenario loading ───────────────────────────────────────────────

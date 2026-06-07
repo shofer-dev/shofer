@@ -11,14 +11,26 @@
  * The full transcript (root + each child) is printed on failure so regressions
  * can be diagnosed without a debugger.
  *
+ * ## Mock-provider compatibility
+ *
+ * The Slang interpreter drives all flow control (commit, converge, budget,
+ * deadlock) in TypeScript — the LLM subtasks only call `attempt_completion`.
+ * The mock's built-in scenario table handles every stake, including structured
+ * JSON output contracts, multi-turn `ask_followup_question`, and peer messaging.
+ *
+ * NOTE: the harness has only been validated against single-task flows so far.
+ * Multi-agent WorkflowTask orchestration (spawned background agent tasks
+ * reaching a terminal lifecycle) is not yet wired through the harness — those
+ * flows currently hang. Gated behind SHOFER_INTEGRATION=1 in test_cli.sh.
+ *
  * Run from extensions/shofer/apps/cli:
  *   pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts
  *
- * Environment variables (override defaults):
- *   PROVIDER      provider name    (default: "shofer")
- *   API_KEY       api key          (default: "x")
- *   BASE_URL      llm-router base  (default: "http://localhost:30081/v1")
- *   MODEL         model id         (default: "deepseek/deepseek-v4-pro")
+ * Environment variables:
+ *   PROVIDER      provider name    (default: "mock" — hermetic, no network)
+ *   API_KEY       api key          (default: "x" — mock ignores it)
+ *   BASE_URL      llm-router base  (only relevant when PROVIDER != mock)
+ *   MODEL         model id         (default: "mock-model")
  *   WORKSPACE     workspace path   (default: monorepo root)
  *   MATCH         run only flows whose name contains this substring
  *   TIMEOUT_MS    per-flow timeout (default: 180000)
@@ -47,7 +59,7 @@ interface FlowExpectation {
 	expected: FlowStatus
 	/**
 	 * FIFO canned replies for any `followup` ask (escalate @Human,
-	 * await <- @Human, agent ask_followup_question).
+	 * await <- @Human, agent ask_followup_question relayed from a child task).
 	 */
 	humanReplies?: string[]
 }
@@ -69,8 +81,13 @@ const EXPECTATIONS: Record<string, FlowExpectation> = {
 	"_let-set": { params: { initial_count: 0 }, expected: "converged" },
 	"_list-arg": { params: { topic: "t", query: "q" }, expected: "converged" },
 	"_named-args": { params: { topic: "t", num_value: 5 }, expected: "converged" },
+	// Mock returns JSON matching the output contract ("- summary: string" built-in scenario).
 	"_output-schema": { params: { topic: "test" }, expected: "converged" },
+	// Mock skips send_message_to_task (optional per the role) and completes
+	// directly — flow still converges via the mailbox path.
 	"_peer-messaging": { params: { topic: "Rust" }, expected: "converged" },
+	// Mock emits ask_followup_question on the Researcher task; the harness
+	// auto-answers from humanReplies, then the mock emits attempt_completion.
 	"_question-relay": { params: { topic: "Rust" }, expected: "converged", humanReplies: ["Focus on basics"] },
 	"_repeat-until": { params: { topic: "test" }, expected: "converged" },
 	"_stake-all": { params: { message: "hello" }, expected: "converged" },
@@ -107,10 +124,10 @@ function formatTranscript(
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
-	const provider = process.env.PROVIDER ?? "shofer"
+	const provider = process.env.PROVIDER ?? "mock"
 	const apiKey = process.env.API_KEY ?? "x"
 	const baseUrl = process.env.BASE_URL ?? "http://localhost:30081/v1"
-	const model = process.env.MODEL ?? "deepseek/deepseek-v4-pro"
+	const model = process.env.MODEL ?? "mock-model"
 	const workspace = process.env.WORKSPACE ?? path.resolve(__dirname, "../../../../../..")
 	const matchFilter = process.env.MATCH
 	const timeoutMs = Number(process.env.TIMEOUT_MS ?? 180_000)
