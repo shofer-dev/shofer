@@ -1,8 +1,9 @@
-import type { MockedClass, MockedFunction } from "vitest"
+import type { MockedClass, MockedFunction, Mock } from "vitest"
 import { OpenAI } from "openai"
 
 import { OpenAiEmbedder } from "../openai"
 import { MAX_ITEM_TOKENS, INITIAL_RETRY_DELAY_MS } from "../../constants"
+import { codeIndexLog } from "../../../../utils/logging/subsystems"
 
 // Mock the OpenAI SDK
 vitest.mock("openai")
@@ -32,21 +33,27 @@ vitest.mock("../../../../i18n", () => ({
 	},
 }))
 
-// Mock console methods
-const consoleMocks = {
-	error: vitest.spyOn(console, "error").mockImplementation(() => {}),
-	warn: vitest.spyOn(console, "warn").mockImplementation(() => {}),
-}
+// Mock the code-index logger (pino-based) — the embedder uses codeIndexLog.warn/error, not console.*
+// vitest.mock factories are hoisted, so vitest.fn() must be called inline.
+// Path is relative to THIS test file (4 levels up: __tests__ → embedders → code-index → services → src).
+vitest.mock("../../../../utils/logging/subsystems", () => ({
+	codeIndexLog: {
+		error: vitest.fn(),
+		warn: vitest.fn(),
+		info: vitest.fn(),
+		debug: vitest.fn(),
+	},
+}))
 
 describe("OpenAiEmbedder", () => {
 	let embedder: OpenAiEmbedder
 	let mockEmbeddingsCreate: MockedFunction<any>
 	let MockedOpenAI: MockedClass<typeof OpenAI>
+	// Access the hoisted mock spies via the imported proxy (vitest.mock factories are hoisted)
+	const logMocks = codeIndexLog as unknown as { error: Mock; warn: Mock; info: Mock; debug: Mock }
 
 	beforeEach(() => {
 		vitest.clearAllMocks()
-		consoleMocks.error.mockClear()
-		consoleMocks.warn.mockClear()
 
 		MockedOpenAI = OpenAI as MockedClass<typeof OpenAI>
 		mockEmbeddingsCreate = vitest.fn()
@@ -201,7 +208,7 @@ describe("OpenAiEmbedder", () => {
 				const result = await embedder.createEmbeddings(testTexts)
 
 				// Verify warning was logged
-				expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(`exceeds maximum token limit`))
+				expect(logMocks.warn).toHaveBeenCalledWith(expect.stringContaining(`exceeds maximum token limit`))
 
 				// Verify only normal texts were processed
 				expect(mockEmbeddingsCreate).toHaveBeenCalledWith({
@@ -252,7 +259,7 @@ describe("OpenAiEmbedder", () => {
 
 				const result = await embedder.createEmbeddings(testTexts)
 
-				expect(console.warn).toHaveBeenCalledTimes(2)
+				expect(logMocks.warn).toHaveBeenCalledTimes(2)
 				expect(mockEmbeddingsCreate).not.toHaveBeenCalled()
 				expect(result).toEqual({
 					embeddings: [],
@@ -294,7 +301,7 @@ describe("OpenAiEmbedder", () => {
 				const result = await resultPromise
 
 				expect(mockEmbeddingsCreate).toHaveBeenCalledTimes(3)
-				expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("Rate limit hit, retrying in"))
+				expect(logMocks.warn).toHaveBeenCalledWith(expect.stringContaining("Rate limit hit, retrying in"))
 				expect(result).toEqual({
 					embeddings: [[0.1, 0.2, 0.3]],
 					usage: { promptTokens: 10, totalTokens: 15 },
@@ -313,7 +320,7 @@ describe("OpenAiEmbedder", () => {
 				)
 
 				expect(mockEmbeddingsCreate).toHaveBeenCalledTimes(1)
-				expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining("Rate limit hit"))
+				expect(logMocks.warn).not.toHaveBeenCalledWith(expect.stringContaining("Rate limit hit"))
 			})
 
 			it("should throw error immediately on non-retryable errors", async () => {
@@ -345,7 +352,7 @@ describe("OpenAiEmbedder", () => {
 					"Failed to create embeddings after 3 attempts: API connection failed",
 				)
 
-				expect(console.error).toHaveBeenCalledWith(
+				expect(logMocks.error).toHaveBeenCalledWith(
 					expect.stringContaining("OpenAI embedder error"),
 					expect.any(Error),
 				)
