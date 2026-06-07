@@ -1,3 +1,12 @@
+// Prevent the transitive import graph from loading extension.ts,
+// which pulls in WorkflowTask (which extends Task — circular).
+vi.mock("../../../extension", () => ({}))
+
+vi.mock("../../../utils/logging/subsystems", () => ({
+	taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}))
+
 import { Task } from "../Task"
 
 // Regression test: when handleWebviewAskResponse is invoked while no ask() is

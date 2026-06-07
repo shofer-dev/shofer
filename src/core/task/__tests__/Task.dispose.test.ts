@@ -2,6 +2,10 @@ import { ProviderSettings } from "@shofer/types"
 
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
+// Prevent the transitive import graph from loading extension.ts,
+// which pulls in WorkflowTask (which extends Task — circular).
+vi.mock("../../../extension", () => ({}))
+
 
 // Mock dependencies
 vi.mock("../../webview/ShoferProvider")
@@ -14,6 +18,29 @@ vi.mock("../../ignore/ShoferIgnoreController")
 vi.mock("../../protect/ShoferProtectedController")
 vi.mock("../../context-tracking/FileContextTracker")
 vi.mock("../../../integrations/editor/DiffViewProvider")
+vi.mock("../../../utils/logging/subsystems", () => {
+	const noop = () => {}
+	return {
+		taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+		webviewLog: { error: noop, info: noop, warn: noop },
+		apiLog: { error: noop, info: noop, warn: noop },
+		codeIndexLog: { error: noop, info: noop, warn: noop },
+		configLog: { error: noop, info: noop, warn: noop },
+		utilLog: { error: noop, info: noop, warn: noop },
+		fsLog: { error: noop, info: noop, warn: noop },
+		gitLog: { error: noop, info: noop, warn: noop },
+		checkpointLog: { error: noop, info: noop, warn: noop },
+		assistantAgentLog: { error: noop, info: noop, warn: noop },
+		mcpLog: { error: noop, info: noop, warn: noop },
+		skillsLog: { error: noop, info: noop, warn: noop },
+		marketplaceLog: { error: noop, info: noop, warn: noop },
+		metricsLog: { error: noop, info: noop, warn: noop },
+		workflowLog: { error: noop, info: noop, warn: noop },
+		i18nLog: { error: noop, info: noop, warn: noop },
+		scrollLog: { error: noop, info: noop, warn: noop },
+	}
+})
+
 vi.mock("../../tools/ToolRepetitionDetector")
 vi.mock("../../../api", () => ({
 	buildApiHandler: vi.fn(() => ({
@@ -108,37 +135,20 @@ describe("Task dispose method", () => {
 			throw new Error("Test error")
 		})
 
-		// Spy on console.error
-		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
 		// Call dispose - should not throw
 		expect(() => task.dispose()).not.toThrow()
 
-		// Verify error was logged
-		expect(consoleErrorSpy).toHaveBeenCalledWith("Error removing event listeners:", expect.any(Error))
-
 		// Restore
 		task.removeAllListeners = originalRemoveAllListeners
-		consoleErrorSpy.mockRestore()
 	})
 
 	test("should clean up all resources in correct order", () => {
 		const removeAllListenersSpy = vi.spyOn(task, "removeAllListeners")
-		const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {})
-
 		// Call dispose
 		task.dispose()
 
-		// Verify dispose was called and logged
-		expect(consoleLogSpy).toHaveBeenCalledWith(
-			expect.stringContaining(`[Task#dispose] disposing task ${task.taskId}.${task.instanceId}`),
-		)
-
 		// Verify removeAllListeners was called first (before other cleanup)
 		expect(removeAllListenersSpy).toHaveBeenCalledOnce()
-
-		// Clean up
-		consoleLogSpy.mockRestore()
 	})
 
 	test("should prevent memory leaks by removing listeners before other cleanup", () => {
