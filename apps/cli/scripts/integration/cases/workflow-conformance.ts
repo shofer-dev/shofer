@@ -36,6 +36,7 @@
  *   TIMEOUT_MS    per-flow timeout (default: 180000)
  */
 
+import fs from "node:fs/promises"
 import path from "path"
 import { fileURLToPath } from "url"
 
@@ -137,9 +138,17 @@ async function main() {
 	const harness = await createApiHarness({ provider, apiKey, baseUrl, model, workspacePath: workspace })
 	const api = harness.host.api
 
-	// Discover _-prefixed workflows.
-	const allFlows = await api.discoverWorkflows()
-	let names = [...allFlows.keys()].filter((n) => n.startsWith("_")).sort()
+	// Load conformance fixtures from the co-located fixtures/ directory.
+	// These are test-only flows and live with the harness, not in the workspace.
+	const fixturesDir = path.resolve(__dirname, "../fixtures")
+	const allFlows = new Map<string, string>()
+	for (const entry of await fs.readdir(fixturesDir, { withFileTypes: true })) {
+		if (entry.isFile() && entry.name.endsWith(".slang") && entry.name.startsWith("_")) {
+			const source = await fs.readFile(path.join(fixturesDir, entry.name), "utf-8")
+			allFlows.set(entry.name.replace(/\.slang$/, ""), source)
+		}
+	}
+	let names = [...allFlows.keys()].sort()
 
 	if (matchFilter) {
 		names = names.filter((n) => n.includes(matchFilter))
