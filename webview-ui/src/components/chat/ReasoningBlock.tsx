@@ -18,6 +18,12 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 	const { t } = useTranslation()
 	const { reasoningBlockCollapsed } = useExtensionState()
 
+	// When streaming, always show the header to indicate thinking is in progress.
+	// When not streaming and the content is empty (or whitespace-only), render nothing.
+	// Also filter out trivial model-generated preamble tokens like "• response".
+	const trimmedContent = content?.trim() ?? ""
+	const hasContent = trimmedContent.length > 0 && trimmedContent !== "• response"
+
 	const [isCollapsed, setIsCollapsed] = useState(reasoningBlockCollapsed)
 
 	const startTimeRef = useRef<number>(Date.now())
@@ -36,6 +42,10 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 			return () => clearInterval(id)
 		}
 	}, [isLast, isStreaming])
+
+	if (!isStreaming && !hasContent) {
+		return null
+	}
 
 	const seconds = Math.floor(elapsed / 1000)
 	const secondsLabel = t("chat:reasoning.seconds", { count: seconds })
@@ -65,7 +75,7 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 					/>
 				</div>
 			</div>
-			{(content?.trim()?.length ?? 0) > 0 && !isCollapsed && (
+			{hasContent && !isCollapsed && (
 				<div
 					ref={contentRef}
 					className="border-l border-vscode-descriptionForeground/20 ml-2 pl-4 pb-1 text-vscode-descriptionForeground break-words">
