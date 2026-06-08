@@ -90,6 +90,11 @@ export interface ExtensionHostOptions {
 	 */
 	exitOnError?: boolean
 	/**
+	 * Number of times to auto-resume an interrupted task in non-interactive
+	 * mode. Defaults to 0 (do not auto-resume; terminate the run instead).
+	 */
+	retry?: number
+	/**
 	 * When true, completely disables all direct stdout/stderr output.
 	 * Use this when running in TUI mode where Ink controls the terminal.
 	 */
@@ -173,6 +178,14 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	 */
 	private askDispatcher: AskDispatcher
 
+	/**
+	 * Set while {@link waitForTaskCompletion} is pending. Invoked by the
+	 * AskDispatcher when it declines to auto-resume an interrupted task (the
+	 * `--retry` budget is exhausted) so the pending task promise settles and the
+	 * run terminates cleanly instead of hanging on the unanswered resume ask.
+	 */
+	private onResumeDeclined?: () => void
+
 	// ==========================================================================
 	// Constructor
 	// ==========================================================================
@@ -217,6 +230,8 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			sendMessage: (msg) => this.sendToExtension(msg),
 			nonInteractive: options.nonInteractive,
 			exitOnError: options.exitOnError,
+			maxResumeRetries: options.retry ?? 0,
+			onResumeDeclined: () => this.onResumeDeclined?.(),
 			disabled: options.disableOutput, // TUI mode handles asks directly.
 		})
 
@@ -673,6 +688,18 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 				if (messageHandler) {
 					this.client.off("message", messageHandler)
 				}
+
+				this.onResumeDeclined = undefined
+			}
+
+			// When the AskDispatcher declines to auto-resume an interrupted task
+			// (the `--retry` budget is exhausted), settle this promise as a failure
+			// so the run terminates cleanly via run.ts' catch path instead of
+			// hanging on the unanswered resume_task ask.
+			this.onResumeDeclined = () => {
+				cliLogger.debug("resume declined; auto-resume budget exhausted")
+				cleanup()
+				reject(new Error("Task interrupted; not auto-resuming (use --retry <n> to enable)"))
 			}
 
 			// When exitOnError is enabled, listen for api_req_retry_delayed messages
@@ -709,6 +736,10 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 	public async resumeTask(taskId: string): Promise<void> {
 		cliLogger.debug("resumeTask() calling api.resumeTask...")
+		// An explicit resume (e.g. `--resume <session>`) must always be honored
+		// once, independent of the `--retry` auto-resume budget which governs only
+		// the repeated resumes that would otherwise loop on a recurring interrupt.
+		this.askDispatcher.grantResume()
 		await this.api.resumeTask(taskId)
 		cliLogger.debug("resumeTask done, waiting for completion...")
 		return this.waitForTaskCompletion()

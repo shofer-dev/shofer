@@ -32,6 +32,11 @@ export type FlagOptions = {
 	debug: boolean
 	requireApproval: boolean
 	exitOnError: boolean
+	/**
+	 * Number of times to auto-resume an interrupted task in non-interactive
+	 * mode. Defaults to 0 (do not auto-resume; terminate instead).
+	 */
+	retry?: number
 	apiKey?: string
 	provider?: SupportedProvider
 	model?: string

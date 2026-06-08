@@ -169,6 +169,7 @@ export async function run(promptArg: string | undefined, flagOptions: FlagOption
 		extensionPath: path.resolve(flagOptions.extension || getDefaultExtensionPath(__dirname)),
 		nonInteractive: !effectiveRequireApproval,
 		exitOnError: flagOptions.exitOnError,
+		retry: flagOptions.retry ?? 0,
 		ephemeral: flagOptions.ephemeral,
 		debug: flagOptions.debug,
 		exitOnComplete: effectiveExitOnComplete,

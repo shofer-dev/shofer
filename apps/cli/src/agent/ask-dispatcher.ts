@@ -69,6 +69,22 @@ export interface AskDispatcherOptions {
 	 * In TUI mode, the TUI handles asks directly.
 	 */
 	disabled?: boolean
+
+	/**
+	 * Maximum number of times an interrupted task may be auto-resumed in
+	 * non-interactive mode. Defaults to 0 (do not auto-resume). Each auto-resume
+	 * consumes one unit of this budget; when exhausted the dispatcher declines
+	 * the resume and invokes {@link onResumeDeclined} instead of looping.
+	 */
+	maxResumeRetries?: number
+
+	/**
+	 * Invoked when a non-interactive resume prompt is declined because the
+	 * auto-resume budget is exhausted. The host uses this to settle the pending
+	 * task promise and terminate the run cleanly instead of hanging on the
+	 * unanswered resume ask.
+	 */
+	onResumeDeclined?: () => void
 }
 
 /**
@@ -94,6 +110,14 @@ export class AskDispatcher {
 	private nonInteractive: boolean
 	private exitOnError: boolean
 	private disabled: boolean
+	private maxResumeRetries: number
+	private onResumeDeclined?: () => void
+
+	/**
+	 * Remaining auto-resume budget for the current task (counts down from
+	 * {@link maxResumeRetries}). Reset by {@link clear} when a new task starts.
+	 */
+	private resumeRetriesRemaining: number
 
 	/**
 	 * Track which asks have been handled to avoid duplicates.
@@ -108,6 +132,9 @@ export class AskDispatcher {
 		this.nonInteractive = options.nonInteractive ?? false
 		this.exitOnError = options.exitOnError ?? false
 		this.disabled = options.disabled ?? false
+		this.maxResumeRetries = options.maxResumeRetries ?? 0
+		this.onResumeDeclined = options.onResumeDeclined
+		this.resumeRetriesRemaining = this.maxResumeRetries
 	}
 
 	// ===========================================================================
@@ -192,6 +219,19 @@ export class AskDispatcher {
 	 */
 	clear(): void {
 		this.handledAsks.clear()
+		this.resumeRetriesRemaining = this.maxResumeRetries
+	}
+
+	/**
+	 * Grant one additional auto-resume to the current budget.
+	 *
+	 * Used by the host for an *explicit* resume (e.g. `--resume <session>`),
+	 * which must always be honored once regardless of the `--retry` budget. The
+	 * `--retry` budget governs only the *repeated* auto-resumes that would
+	 * otherwise loop when a task keeps getting interrupted.
+	 */
+	grantResume(): void {
+		this.resumeRetriesRemaining += 1
 	}
 
 	// ===========================================================================
@@ -584,10 +624,22 @@ export class AskDispatcher {
 		this.outputManager.markDisplayed(ts, text || "", false)
 
 		if (this.nonInteractive) {
-			this.outputManager.output("\n[continuing task]")
-			// Auto-resume in non-interactive mode
-			this.sendApprovalResponse(true)
-			return { handled: true, response: "yesButtonClicked" }
+			// In non-interactive mode we only auto-resume an interrupted task while
+			// the resume budget (`--retry <n>`) allows it. Without this bound a task
+			// that keeps getting interrupted (e.g. a permanent auth failure) would
+			// loop forever: abort -> resume_task -> abort -> resume_task. When the
+			// budget is exhausted we decline and hand control back to the host so it
+			// can terminate the run cleanly instead of hanging on this ask.
+			if (this.resumeRetriesRemaining > 0) {
+				this.resumeRetriesRemaining -= 1
+				this.outputManager.output("\n[continuing task]")
+				this.sendApprovalResponse(true)
+				return { handled: true, response: "yesButtonClicked" }
+			}
+
+			this.outputManager.output("\n[task interrupted; not auto-resuming (use --retry <n> to enable)]")
+			this.onResumeDeclined?.()
+			return { handled: true }
 		}
 
 		try {

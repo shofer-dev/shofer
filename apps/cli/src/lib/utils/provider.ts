@@ -40,7 +40,11 @@ export function getProviderSettings(
 			if (baseUrl) config.openAiNativeBaseUrl = baseUrl
 			break
 		case "shofer":
-			if (apiKey) config.apiKey = apiKey
+			// ShoferHandler reads the key from `shoferApiKey` and the model from
+			// `apiModelId` (see src/api/providers/shofer.ts). Writing the key to
+			// the generic `apiKey` field silently drops it, so a CLI --api-key can
+			// never override a stale persisted `shoferApiKey`.
+			if (apiKey) config.shoferApiKey = apiKey
 			if (model) config.apiModelId = model
 			if (baseUrl) config.shoferBaseUrl = baseUrl
 			break
