@@ -1565,7 +1565,7 @@ function render(payload) {
 		}
 	}
 	if (!hasCon) h += '<span style="opacity:0.5">No converge statement</span>'
-	if (!hasBud) h += '<span style="opacity:0.5">Default budget (30 rounds, 300k tokens)</span>'
+	if (!hasBud) h += '<span style="opacity:0.5">No budget (unlimited)</span>'
 	h += "</div></div>"
 
 	// Dynamic tab rendering interface block — data-view attributes (not onclick)
