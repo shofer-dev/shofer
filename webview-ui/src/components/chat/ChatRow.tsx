@@ -67,7 +67,6 @@ import {
 	PocketKnife,
 	FolderTree,
 	TerminalSquare,
-	MessageCircle,
 	Repeat2,
 	Split,
 	ArrowRight,
@@ -1627,23 +1626,15 @@ export const ChatRowContent = ({
 					return null // we should never see this message type
 				case "text":
 					return (
-						<div className="group">
-							<div style={headerStyle}>
-								<MessageCircle className="w-4 shrink-0" aria-label="Speech bubble icon" />
-								<span style={{ fontWeight: "bold" }}>{t("chat:text.rooSaid")}</span>
-								<div style={{ flexGrow: 1 }} />
-								<OpenMarkdownPreviewButton markdown={message.text} />
-							</div>
-							<div className="pl-6">
-								<Markdown markdown={message.text} partial={message.partial} />
-								{message.images && message.images.length > 0 && (
-									<div style={{ marginTop: "10px" }}>
-										{message.images.map((image, index) => (
-											<ImageBlock key={index} imageData={image} />
-										))}
-									</div>
-								)}
-							</div>
+						<div>
+							<Markdown markdown={message.text} partial={message.partial} />
+							{message.images && message.images.length > 0 && (
+								<div style={{ marginTop: "10px" }}>
+									{message.images.map((image, index) => (
+										<ImageBlock key={index} imageData={image} />
+									))}
+								</div>
+							)}
 						</div>
 					)
 				case "user_feedback":
