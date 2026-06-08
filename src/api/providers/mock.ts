@@ -4,8 +4,7 @@
  * Registered as provider "mock". Returns canned responses so the agent loop
  * runs to completion without a real LLM. It is a faux provider (no external
  * inference, no credentials required) used to drive the scenarios in
- * `todos/test_cli.md` and `todos/test_workflows.md` as automated functional
- * tests.
+ * `docs/test_harness.md` as automated functional tests.
  *
  * Control mechanisms (highest priority first):
  *
@@ -110,6 +109,61 @@ const BUILT_IN_SCENARIOS: MockScenario[] = [
 	{ match: "42", response: "42" },
 	{ match: "Hello", response: "Hello! Mock assistant here." },
 	{ match: "number", response: "42" },
+
+	// ── CLI tool-exercising scenarios ─────────────────────────────────────────
+	//
+	// Multi-turn scenarios for the tool-use CLI cases (test_harness.md scenarios
+	// 10/11/12/20). Turn 1 emits the real `tool_call_partial` contract so the
+	// agent actually executes the tool; the final turn emits attempt_completion.
+	// Tool arguments are static, so the prompts in test_harness.md use fixed
+	// paths/commands that match the values below verbatim. Each `match` is the
+	// most-specific prefix of its prompt so it always shadows the bare marker
+	// scenarios above (e.g. "WRITE_OK", "SHELL_OK", "SUBTASK_OK").
+
+	// Scenario 10 — read_file: read the extension package.json, report `name`.
+	{
+		match: "Read the file extensions/shofer/package.json",
+		turns: [
+			{ tool: { name: "read_file", arguments: { path: "extensions/shofer/package.json" } } },
+			{ response: "shofer-code" },
+		],
+	},
+
+	// Scenario 11 — execute_command: run a shell command and report its output.
+	{
+		match: "Run the shell command 'echo SHELL_OK'",
+		turns: [
+			{ tool: { name: "execute_command", arguments: { command: "echo SHELL_OK" } } },
+			{ response: "SHELL_OK" },
+		],
+	},
+
+	// Scenario 12 — write_to_file then read it back. Fixed path so the static
+	// tool arguments below match the path baked into the prompt.
+	{
+		match: "Write the text 'WRITE_OK' to the file",
+		turns: [
+			{ tool: { name: "write_to_file", arguments: { path: "/tmp/shofer_write_test.txt", content: "WRITE_OK" } } },
+			{ tool: { name: "read_file", arguments: { path: "/tmp/shofer_write_test.txt" } } },
+			{ response: "confirmed=WRITE_OK" },
+		],
+	},
+
+	// Scenario 20 — new_task: spawn a blocking foreground subtask. The subtask's
+	// own MockHandler pins to the "SUBTASK_OK" scenario above and completes; the
+	// parent then reports the result.
+	{
+		match: "Spawn a subtask",
+		turns: [
+			{
+				tool: {
+					name: "new_task",
+					arguments: { mode: "code", message: "Reply with: SUBTASK_OK", is_background: "false" },
+				},
+			},
+			{ response: "PARENT_GOT: SUBTASK_OK" },
+		],
+	},
 
 	// ── Workflow conformance scenarios ────────────────────────────────────────
 	//

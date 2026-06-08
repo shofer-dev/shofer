@@ -8,22 +8,25 @@ flows). Both share the same `ExtensionHost` / `ShoferAPI` infrastructure.
 
 ## Setup
 
-The harness can run against either a **real provider** (the llm-router) or the
-hermetic **mock provider**. The mock requires no network, no credentials, and no
-GPU — it replays canned responses keyed on prompt substrings and is the default
-for CI. Pick one of the two `PROVIDER` / `MODEL` pairs below.
+The harness runs against the hermetic **mock provider by default** — it requires
+no network, no credentials, and no GPU, replaying canned responses keyed on
+prompt substrings. Switching to a **real provider** (the llm-router, or any
+other) is just a matter of changing the `PROVIDER` / `MODEL` pair below; nothing
+else in the scenarios changes.
 
 ```bash
 export CLI="pnpm --filter @shofer/cli exec tsx src/index.ts"
 export WS="-w /home/alsterg/Projects/arkware.ai"
 
-# Option A — real provider (llm-router must be reachable at :30081)
-export PROVIDER="--provider shofer --api-key x --base-url http://localhost:30081/v1"
-export MODEL="--model deepseek/deepseek-v4-pro"
-
-# Option B — hermetic mock provider (no network, no credentials)
+# Default — hermetic mock provider (no network, no credentials)
 export PROVIDER="--provider mock --api-key x"
 export MODEL="--model mock-model"
+
+# To use a real provider instead, override the two lines above, e.g.:
+#   export PROVIDER="--provider shofer --api-key x --base-url http://localhost:30081/v1"
+#   export MODEL="--model deepseek/deepseek-v4-pro"
+# (any provider/model the CLI supports works — only scenarios 2 and 14 below
+#  require a real provider; everything else runs on either.)
 
 # Convenience alias for CLI scenarios below
 alias shofer-local="$CLI $PROVIDER $MODEL $WS"
@@ -36,14 +39,20 @@ cd /home/alsterg/Projects/arkware.ai/extensions/shofer/apps/cli
 The mock ([`src/api/providers/mock.ts`](../src/api/providers/mock.ts)) ships
 built-in scenarios for every marker used by the CLI/API scenarios below
 (`DEEPSEEK_OK`, `STREAM_OK`, `API_OK`, `TASK_ONE`, `SELECTOR_TEST`, `BANANA`, …),
-so **scenarios 1, 3–9, 13, and 15–25 run unchanged against Option B**. Four
-categories need attention when running under the mock:
+including multi-turn scenarios that emit real tool calls for the tool-use cases
+(`read_file`, `execute_command`, `write_to_file`, `new_task`). So **every
+scenario except 2 and 14 runs unchanged against the mock**:
 
-| Scenario(s)                                                  | Why it differs under the mock                                                                                                        | What to do                                                                                                                                                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **2** (missing model), **14** (connection refused)           | Provider-specific: they assert `shofer`-handler error paths the mock has no equivalent for.                                          | Run against Option A (real provider) only.                                                                                                                                   |
-| **10, 11, 12** (read_file / execute_command / write_to_file) | Built-in scenarios return the text marker via `attempt_completion` **without invoking the tool**, so the tool path is not exercised. | Either run under Option A, or force a single tool call with `MOCK_TOOL_NAME` / `MOCK_TOOL_ARGS`, or supply a multi-turn `MOCK_RESPONSES_PATH` (tool turn → completion turn). |
-| **20** (subtask via `new_task`)                              | The mock answers the parent prompt directly instead of spawning a subtask.                                                           | Run under Option A, or use a multi-turn `MOCK_RESPONSES_PATH` whose first turn emits a `new_task` tool call.                                                                 |
+| Scenario(s)                                        | Why it differs under the mock                                                               | What to do                        |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------- |
+| **2** (missing model), **14** (connection refused) | Provider-specific: they assert `shofer`-handler error paths the mock has no equivalent for. | Run against a real provider only. |
+
+The tool-use scenarios (**10, 11, 12, 20**) run on the mock via built-in
+multi-turn scenarios that emit the real `tool_call_partial` streaming contract,
+so the tool dispatch path is genuinely exercised (the tool runs; only the final
+`attempt_completion` text is canned). Their prompts use fixed paths/commands
+that the static mock tool arguments match verbatim — do not parameterize them
+(e.g. keep the fixed temp path in scenario 12) or the mock match will drift.
 
 Mock control knobs (highest priority first), all via env vars:
 
@@ -68,13 +77,12 @@ cd /home/alsterg/Projects/arkware.ai/extensions/shofer && pnpm --filter shofer b
 
 ## Part 1 — CLI smoke tests (scenarios 1–25)
 
-Run these against either provider mode from [Setup](#setup). Under Option A the
-llm-router must be reachable at `http://localhost:30081/v1` with
-`deepseek/deepseek-v4-pro` available; under Option B (mock) no network is needed
-— see the [Provider modes](#provider-modes) table for the handful of scenarios
-that behave differently or require Option A. Scenarios 15–25 use `ExtensionHost`
-as a library; run them with `pnpm --filter @shofer/cli exec tsx <file>` from
-`extensions/shofer/apps/cli`.
+Run these against the mock (default) or any real provider configured in
+[Setup](#setup). With a real provider the llm-router (or equivalent) must be
+reachable; under the mock no network is needed. Only scenarios 2 and 14 require
+a real provider — see the [Provider modes](#provider-modes) table. Scenarios
+15–25 use `ExtensionHost` as a library; run them with
+`pnpm --filter @shofer/cli exec tsx <file>` from `extensions/shofer/apps/cli`.
 
 ### 1. Basic print — roundtrip sanity
 
@@ -202,7 +210,7 @@ Verifies: the agent can invoke the `read_file` tool to read a workspace file.
 ```bash
 shofer-local --print \
   "Read the file extensions/shofer/package.json and tell me the value of the 'name' field. Reply with just the value."
-# expect: @shofer/shofer or similar package name
+# expect: shofer-code (under the mock; the real package name otherwise)
 ```
 
 ### 11. Tool use — execute_command
@@ -217,10 +225,13 @@ shofer-local --print \
 
 ### 12. Tool use — write_to_file + read back
 
-Verifies: file write and subsequent read within a single task.
+Verifies: file write and subsequent read within a single task. The path is
+fixed (not timestamped) so the mock's static `write_to_file` / `read_file`
+arguments match it verbatim; against a real provider any path works.
 
 ```bash
-TMP_FILE="/tmp/shofer_test_$(date +%s).txt"
+TMP_FILE="/tmp/shofer_write_test.txt"
+rm -f "$TMP_FILE"
 shofer-local --print \
   "Write the text 'WRITE_OK' to the file $TMP_FILE, then read it back and confirm the content. Reply with: confirmed=<content>"
 cat "$TMP_FILE" 2>/dev/null && echo "(file exists)" || echo "(file not created)"
@@ -257,17 +268,18 @@ Verifies: using `ExtensionHost` and `ShoferAPI` programmatically.
 // Save as /tmp/test_api.ts and run:
 // pnpm --filter @shofer/cli exec tsx /tmp/test_api.ts
 //
-// To run hermetically, swap the provider/model/baseUrl block below for:
-//   provider: "mock", apiKey: "x", model: "mock-model"  (drop baseUrl)
+// Defaults to the hermetic mock provider. To use a real provider, swap the
+// provider/model block for e.g.:
+//   provider: "shofer", apiKey: "x", baseUrl: "http://localhost:30081/v1",
+//   model: "deepseek/deepseek-v4-pro"
 
 import { ExtensionHost } from "./src/agent/extension-host.js"
 import { ShoferEventName } from "@shofer/types"
 
 const host = new ExtensionHost({
-	provider: "shofer",
+	provider: "mock",
 	apiKey: "x",
-	baseUrl: "http://localhost:30081/v1",
-	model: "deepseek/deepseek-v4-pro",
+	model: "mock-model",
 	workspacePath: "/home/alsterg/Projects/arkware.ai",
 	exitOnComplete: true,
 	autoApprove: true,
