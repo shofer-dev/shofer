@@ -155,8 +155,9 @@ export interface WorkflowTaskOptions extends TaskOptions {
 
 // ── Constants ──
 
-const DEFAULT_BUDGET_TOKENS = 300000
-const DEFAULT_BUDGET_ROUNDS = 30
+/** Default workflow budgets — 0 means unlimited (no enforcement). */
+const DEFAULT_BUDGET_TOKENS = 0
+const DEFAULT_BUDGET_ROUNDS = 0
 /** Maximum consecutive output-validation failures before marking the agent as error. */
 const MAX_RETRIES = 3
 /** Max wall-clock time to wait for a round's spawned agent tasks to complete. */
@@ -180,6 +181,16 @@ export class WorkflowTask extends Task {
 	 * there is nothing to resume and the user should just see a stop
 	 * confirmation.
 	 */
+
+	/**
+	 * Resolved token budget for the current slang loop execution.
+	 * 0 means unlimited. Set at the start of {@link slangLoop} so
+	 * helper methods (e.g. {@link collectStakeResults}) can enforce
+	 * per-agent without threading the budget through every call site.
+	 * Not serialized — a restored flow re-evaluates the budget from
+	 * the slang source on restart.
+	 */
+	private loopBudgetTokens = 0
 	private slangLoopEntered = false
 
 	/**
@@ -462,14 +473,15 @@ export class WorkflowTask extends Task {
 		const budget = getBudget(this.flowDecl)
 		const budgetRounds = budget.bRounds || DEFAULT_BUDGET_ROUNDS
 		const budgetTokens = budget.bTokens || DEFAULT_BUDGET_TOKENS
+		this.loopBudgetTokens = budgetTokens
 
 		workflowLog.info(
 			`[WorkflowTask#${this.taskId}] #TRACE slangLoop start — flow='${this.flowState.flowName}' budgetRounds=${budgetRounds} budgetTokens=${budgetTokens}`,
 		)
 
 		while (
-			this.flowState.round < budgetRounds &&
-			this.flowState.tokensUsed < budgetTokens &&
+			(budgetRounds === 0 || this.flowState.round < budgetRounds) &&
+			(budgetTokens === 0 || this.flowState.tokensUsed < budgetTokens) &&
 			!this.abort &&
 			this.flowState.status === "running"
 		) {
@@ -561,8 +573,8 @@ export class WorkflowTask extends Task {
 
 			// 6. Budget check — exit immediately when a single stake blows
 			//    the budget, rather than waiting for the next while-guard
-			//    evaluation at the top of the loop.
-			if (this.flowState.tokensUsed >= budgetTokens) {
+			//    evaluation at the top of the loop. 0 means unlimited.
+			if (budgetTokens > 0 && this.flowState.tokensUsed >= budgetTokens) {
 				this.flowState.status = "budget_exceeded"
 				workflowLog.info(
 					`[WorkflowTask#${this.taskId}] Budget exceeded mid-round: ${this.flowState.tokensUsed} >= ${budgetTokens}`,
@@ -1010,7 +1022,25 @@ export class WorkflowTask extends Task {
 
 			try {
 				const { historyItem } = await provider.getTaskWithId(state.taskId)
-				this.flowState.tokensUsed += (historyItem.tokensIn || 0) + (historyItem.tokensOut || 0)
+				const agentTokens = (historyItem.tokensIn || 0) + (historyItem.tokensOut || 0)
+				this.flowState.tokensUsed += agentTokens
+
+				// Per-agent budget check — if an agent alone blows the
+				// token budget, abort immediately rather than waiting for
+				// all stakes to complete. 0 means unlimited.
+				if (this.loopBudgetTokens > 0 && this.flowState.tokensUsed >= this.loopBudgetTokens) {
+					this.flowState.status = "budget_exceeded"
+					workflowLog.info(
+						`[WorkflowTask#${this.taskId}] Budget exceeded mid-round after collecting agent '${name}' result: ${this.flowState.tokensUsed} >= ${this.loopBudgetTokens}`,
+					)
+					await this.sayProgress(
+						`⚠️ Budget exhausted (${this.flowState.tokensUsed} tokens used, limit ${this.loopBudgetTokens}). Stopping.`,
+					)
+					await super.abortBackgroundChildren()
+					await this.persistCheckpoint()
+					await this.emitTaskCompleted("poor")
+					return
+				}
 
 				let result: unknown = historyItem.completionResultSummary
 				// Use in-memory TaskManager state for the lifecycle trace (set

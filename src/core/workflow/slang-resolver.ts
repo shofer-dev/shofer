@@ -154,7 +154,7 @@ export function analyzeFlow(flow: FlowDecl): FlowDiagnostic[] {
 	if (!hasBudget) {
 		diagnostics.push({
 			level: "warning",
-			message: "Flow has no budget statement — default limits apply (30 rounds, 300k tokens)",
+			message: "Flow has no budget statement — default is unlimited (no enforcement)",
 		})
 	}
 

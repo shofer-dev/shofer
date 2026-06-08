@@ -56,7 +56,7 @@ const ERROR_MESSAGES: Record<SlangErrorCode, string> = {
 	[SlangErrorCode.R303]: "Agent `{agent}` produces output but no agent awaits from it",
 	[SlangErrorCode.R304]:
 		"Flow has no `converge` statement — will stop only when all agents commit or budget is exceeded",
-	[SlangErrorCode.R305]: "Flow has no `budget` statement — default limits apply (10 rounds)",
+	[SlangErrorCode.R305]: "Flow has no `budget` statement — default is unlimited (no enforcement)",
 	[SlangErrorCode.E400]: 'No flow found in source — define at least one `flow "name" { ... }`',
 	[SlangErrorCode.E401]: "LLM adapter call failed: {message}",
 	[SlangErrorCode.E402]: "Budget exceeded at round {round} — increase `budget:` limits or simplify the flow",

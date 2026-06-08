@@ -417,14 +417,14 @@ The flow terminates **successfully** when the condition becomes truthy. Common f
 
 ### `budget`
 
-| Item        | Enforced?      | Meaning                                            | Default  |
-| ----------- | -------------- | -------------------------------------------------- | -------- |
-| `tokens(N)` | ✅ yes         | Max aggregate tokens across all agent LLM calls.   | `300000` |
-| `rounds(N)` | ✅ yes         | Max execution rounds.                              | `30`     |
-| `time(N)`   | ⚠️ parsed only | Wall-clock budget — accepted but not yet enforced. | —        |
+| Item        | Enforced?      | Meaning                                            | Default         |
+| ----------- | -------------- | -------------------------------------------------- | --------------- |
+| `tokens(N)` | ✅ yes         | Max aggregate tokens across all agent LLM calls.   | `0` (unlimited) |
+| `rounds(N)` | ✅ yes         | Max execution rounds.                              | `0` (unlimited) |
+| `time(N)`   | ⚠️ parsed only | Wall-clock budget — accepted but not yet enforced. | —               |
 
-If no `budget` statement is present, the defaults above apply. Exceeding an
-enforced budget terminates the flow with `budget_exceeded`.
+If no `budget` statement is present, both limits default to **unlimited** (0).
+Exceeding an enforced budget terminates the flow with `budget_exceeded`.
 
 ---
 
@@ -482,14 +482,14 @@ On success:
 returns human-readable diagnostics. None block execution, but a well-formed flow
 should produce **zero** warnings. Checks:
 
-| Diagnostic                                                                     | Level   | Trigger                                                                            |
-| ------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------------------------------- |
-| `Flow has no converge statement …`                                             | warning | No `converge` in the flow body.                                                    |
-| `Flow has no budget statement — default limits apply (30 rounds, 300k tokens)` | warning | No `budget` in the flow body.                                                      |
-| `Agent "X" has no commit — it will never signal completion`                    | warning | An agent with operations never commits.                                            |
-| `Agent "X" stakes to unknown agent "@Y"`                                       | error   | Stake recipient is not a declared agent (and not `@out`/`@all`).                   |
-| `Agent "X" awaits from unknown agent "@Y"`                                     | error   | Await source is not a declared agent (and not `@any`/`*`/`@Human`).                |
-| `Agent "X" produces output but no agent awaits from it`                        | warning | An agent stakes to peers that nobody awaits — including nested in `when`/`repeat`. |
+| Diagnostic                                                             | Level   | Trigger                                                                            |
+| ---------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `Flow has no converge statement …`                                     | warning | No `converge` in the flow body.                                                    |
+| `Flow has no budget statement — default is unlimited (no enforcement)` | warning | No `budget` in the flow body.                                                      |
+| `Agent "X" has no commit — it will never signal completion`            | warning | An agent with operations never commits.                                            |
+| `Agent "X" stakes to unknown agent "@Y"`                               | error   | Stake recipient is not a declared agent (and not `@out`/`@all`).                   |
+| `Agent "X" awaits from unknown agent "@Y"`                             | error   | Await source is not a declared agent (and not `@any`/`*`/`@Human`).                |
+| `Agent "X" produces output but no agent awaits from it`                | warning | An agent stakes to peers that nobody awaits — including nested in `when`/`repeat`. |
 
 The orphan/await scan recurses into `when`/`repeat`/`otherwise` blocks, and
 `@Human` is recognized as a valid await source (the escalation pseudo-agent).
@@ -514,7 +514,9 @@ loop. Per round:
    the agent's token usage to the running total.
 6. **Re-check converge** and **persist a checkpoint** to the `HistoryItem`.
 
-Budgets (`rounds`, `tokens`) are enforced at the top of each round. An agent maps
+Budgets (`rounds`, `tokens`) are enforced at the top of each round
+and per-agent after stake collection. A value of `0` means unlimited.
+An agent maps
 to exactly one Shofer Task for its lifetime — resumed (not recreated) across
 stakes, preserving conversation history.
 
