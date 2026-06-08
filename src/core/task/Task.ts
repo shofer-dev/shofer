@@ -127,6 +127,7 @@ import {
 } from "../task-persistence"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
 import { checkContextWindowExceededError } from "../context/context-management/context-error-handling"
+import { isNonRetryableApiError } from "../../api/providers/utils/retryable-error"
 import {
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,
@@ -4918,6 +4919,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							this.abortReason = cancelReason
 							await this.abortTask()
 						} else {
+							// Permanent authentication/authorization failures
+							// (HTTP 401/403) will never succeed on retry. Abort the
+							// task instead of looping the auto-resubmit forever (which
+							// presents to the user as a hang). This also catches the
+							// non-retryable error re-thrown from the first-chunk
+							// handler in attemptApiRequest().
+							if (isNonRetryableApiError(error)) {
+								taskLog.error(
+									`[Task#${this.taskId}.${this.instanceId}] Non-retryable API error (authentication/authorization); aborting task: ${streamingFailedMessage}`,
+								)
+								this.abortReason = "streaming_failed"
+								await this.abortTask()
+								break
+							}
+
 							// Stream failed - log the error and retry with the same content
 							// The existing rate limiting will prevent rapid retries
 							taskLog.error(
@@ -6218,6 +6234,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// note that this api_req_failed ask is unique in that we only present this option if the api hasn't streamed any content yet (ie it fails on the first chunk due), as it would allow them to hit a retry button. However if the api failed mid-stream, it could be in any arbitrary state where some tools may have executed, so that error is handled differently and requires cancelling the task entirely.
 			if (autoApprovalEnabled) {
+				// Permanent authentication/authorization failures (HTTP 401/403)
+				// will never succeed on retry. Re-throw the original error (which
+				// carries the HTTP status) so the streaming consumer's
+				// non-retryable guard aborts the task, instead of spinning the
+				// backoff loop forever — which presents to the user as a hang.
+				if (isNonRetryableApiError(error)) {
+					throw error
+				}
+
 				// Apply shared exponential backoff and countdown UX
 				await this.backoffAndAnnounce(retryAttempt, error)
 
