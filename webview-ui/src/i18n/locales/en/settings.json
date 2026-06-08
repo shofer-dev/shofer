@@ -1018,6 +1018,10 @@
 		"WEBVIEW_LIVENESS_MONITOR": {
 			"name": "Webview liveness monitor & recovery",
 			"description": "When enabled, Shofer monitors webview health with a heartbeat ping/pong loop, auto-recovers from webview crashes via HTML re-assignment, and surfaces the Refresh Webview / Reload Window recovery buttons in the toolbar overflow menu."
+		},
+		"DISABLE_MISTAKE_LIMIT_CHECKS": {
+			"name": "Disable mistake limit checks",
+			"description": "When enabled, all consecutive mistake limit guards are bypassed — the 'Shofer is having trouble' dialog, tool repetition detection, and mode/tool-validation mistake counting are all disabled. The mistake counters still run for telemetry. Use with caution: this can lead to infinite loops consuming API credits."
 		}
 	},
 	"promptCaching": {

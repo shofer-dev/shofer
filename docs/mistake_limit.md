@@ -94,13 +94,29 @@ The main tool dispatch switch in `presentAssistantMessage` also increments the c
 
 ## Configuration
 
+### Per-Profile Limit
+
 | Setting                   | Default | Constant                                                                          |
 | ------------------------- | ------- | --------------------------------------------------------------------------------- |
 | `consecutiveMistakeLimit` | `3`     | [`DEFAULT_CONSECUTIVE_MISTAKE_LIMIT`](packages/types/src/provider-settings.ts:29) |
 
-Set per API configuration profile. A value of `0` disables the "Shofer is having trouble" dialog entirely — the guard at [`Task.ts:4001`](src/core/task/Task.ts:4001) becomes a no-op.
+Set per API configuration profile. A value of `0` disables the "Shofer is having trouble" dialog entirely — the guard at [`Task.ts`](src/core/task/Task.ts) becomes a no-op.
+
+### Experimental Flag: Disable All Mistake Limit Checks
+
+| Setting                     | Default | Constant                                                                      |
+| --------------------------- | ------- | ----------------------------------------------------------------------------- |
+| `disableMistakeLimitChecks` | `false` | [`EXPERIMENT_IDS.DISABLE_MISTAKE_LIMIT_CHECKS`](src/shared/experiments.ts:11) |
+
+Located in **Settings → Experimental → "Disable mistake limit checks"**. When enabled, **all** mistake limit gating is bypassed:
+
+- The `recursivelyMakeShoferRequests` guard (mechanisms 1, 3, 4, 5) no longer blocks on `consecutiveMistakeCount >= consecutiveMistakeLimit` — the counter still increments for telemetry, but the dialog and loop interruption never fire.
+- [`ToolRepetitionDetector`](src/core/tools/ToolRepetitionDetector.ts) is completely skipped (mechanism 2).
+- Mode/tool-validation failure increments (mechanism 3 in [`presentAssistantMessage.ts:812`](src/core/assistant-message/presentAssistantMessage.ts:812)) are suppressed so the counter doesn't accumulate from blocked calls.
+
+⚠️ **Use with caution**: this can lead to infinite loops consuming API credits.
 
 ## Known Issues
 
-- **Mode-filtering failures (mechanism 3) share the same counter as real model errors.** A model calling two mode-blocked tools per turn will hit the limit in just two turns, even if it's trying _different_ tools each time (demonstrating adaptation). The counter increments per blocked tool, not per blocked turn.
+- **Mode-filtering failures (mechanism 3) share the same counter as real model errors.** A model calling two mode-blocked tools per turn will hit the limit in just two turns, even if it's trying _different_ tools each time (demonstrating adaptation). The counter increments per blocked tool, not per blocked turn. The experimental `disableMistakeLimitChecks` flag works around this by suppressing the counter increment entirely in the `presentAssistantMessage` validation catch block.
 - **ToolRepetitionDetector (mechanism 2) uses its own counter** (`consecutiveIdenticalToolCallCount`), not `consecutiveMistakeCount`. It fires an independent ask without going through the `recursivelyMakeShoferRequests` guard.

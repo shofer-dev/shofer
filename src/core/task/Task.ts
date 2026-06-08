@@ -591,6 +591,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// askResponse* slots that the next ask() call would clear.
 	private isAwaitingAskResponse: boolean = false
 
+	// Experiments
+	experimentsConfig?: Record<string, boolean>
+
 	// Tool Use
 	consecutiveMistakeCount: number = 0
 	consecutiveMistakeLimit: number
@@ -809,6 +812,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.autoApprovalHandler = new AutoApprovalHandler()
 
 		this.consecutiveMistakeLimit = consecutiveMistakeLimit ?? DEFAULT_CONSECUTIVE_MISTAKE_LIMIT
+		this.experimentsConfig = experimentsConfig
 		this.providerRef = new WeakRef(provider)
 		this.globalStoragePath = provider.context.globalStorageUri.fsPath
 		this.diffViewProvider = new DiffViewProvider(this.cwd, this)
@@ -2261,13 +2265,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Keep queued user messages intact for asks that require explicit
 		// user input — the queued message should not be silently drained as
 		// the answer. These ask types are either terminal flow-control
-		// (command_output), user-facing questions (followup), or task-state
-		// transitions (resume_task / resume_completed_task).
-		const shouldDrainQueuedMessageForAsk =
-			type !== "command_output" &&
-			type !== "followup" &&
-			type !== "resume_task" &&
-			type !== "resume_completed_task"
+		// (command_output) or user-facing questions (followup). resume_task
+		// and resume_completed_task are NOT excluded: when the user sends a
+		// message while a resume ask is pending, the message should answer
+		// that ask directly (this is the expected behaviour in CLI headless
+		// and stdin-stream modes).
+		const shouldDrainQueuedMessageForAsk = type !== "command_output" && type !== "followup"
 		// State is mutable when the task will actually wait for user input.
 		// Both "ask" and "timeout" decisions block waiting for input (timeout may auto-approve after delay).
 		const isWaitingForInput = approval.decision === "ask" || approval.decision === "timeout"
@@ -4006,7 +4009,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				throw new Error(`[Shofer#recursivelyMakeRooRequests] task ${this.taskId}.${this.instanceId} aborted`)
 			}
 
-			if (this.consecutiveMistakeLimit > 0 && this.consecutiveMistakeCount >= this.consecutiveMistakeLimit) {
+			// When the "Disable mistake limit checks" experimental flag is enabled,
+			// skip all mistake-limit gating — the counter is still incremented for
+			// telemetry but the dialog never fires and the loop never blocks.
+			const loopState = await this.providerRef.deref()?.getState()
+			const loopExperiments = loopState?.experiments
+			const mistakeLimitChecksDisabled = loopExperiments?.disableMistakeLimitChecks === true
+
+			if (
+				!mistakeLimitChecksDisabled &&
+				this.consecutiveMistakeLimit > 0 &&
+				this.consecutiveMistakeCount >= this.consecutiveMistakeLimit
+			) {
 				// Track consecutive mistake errors in telemetry via event and PostHog exception tracking.
 				// The reason is "no_tools_used" because this limit is reached via initiateTaskLoop
 				// which increments consecutiveMistakeCount when the model doesn't use any tools.

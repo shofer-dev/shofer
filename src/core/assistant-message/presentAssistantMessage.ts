@@ -809,7 +809,11 @@ export async function presentAssistantMessage(shofer: Task) {
 						includedTools,
 					)
 				} catch (error) {
-					shofer.consecutiveMistakeCount++
+					// When the "Disable mistake limit checks" experimental flag is enabled,
+					// skip incrementing the mistake counter for mode/tool-validation failures.
+					if (stateExperiments?.disableMistakeLimitChecks !== true) {
+						shofer.consecutiveMistakeCount++
+					}
 					// For validation errors (unknown tool, tool not allowed for mode), we need to:
 					// 1. Send a tool_result with the error (required for native tool calling)
 					// 2. NOT set didAlreadyUseTool = true (the tool was never executed, just failed validation)
@@ -832,7 +836,9 @@ export async function presentAssistantMessage(shofer: Task) {
 			// Check for identical consecutive tool calls.
 			// new_task is exempt: calling it multiple times in one turn is legitimate fan-out
 			// parallelism (models like Claude 3.5+ emit several tool-use blocks simultaneously).
-			if (!block.partial && block.name !== "new_task") {
+			// When the "Disable mistake limit checks" experimental flag is enabled,
+			// skip tool repetition detection entirely — the LLM can loop freely.
+			if (stateExperiments?.disableMistakeLimitChecks !== true && !block.partial && block.name !== "new_task") {
 				// Use the detector to check for repetition, passing the ToolUse
 				// block directly.
 				const repetitionCheck = shofer.toolRepetitionDetector.check(block)

@@ -14,6 +14,15 @@ describe("experiments", () => {
 		})
 	})
 
+	describe("DISABLE_MISTAKE_LIMIT_CHECKS", () => {
+		it("is configured correctly", () => {
+			expect(EXPERIMENT_IDS.DISABLE_MISTAKE_LIMIT_CHECKS).toBe("disableMistakeLimitChecks")
+			expect(experimentConfigsMap.DISABLE_MISTAKE_LIMIT_CHECKS).toMatchObject({
+				enabled: false,
+			})
+		})
+	})
+
 	describe("isEnabled", () => {
 		it("returns false when experiment is not enabled", () => {
 			const experiments: Record<ExperimentId, boolean> = {
@@ -24,6 +33,7 @@ describe("experiments", () => {
 				showToolInputOutput: false,
 				prometheusMetrics: false,
 				webviewLivenessMonitor: false,
+				disableMistakeLimitChecks: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -37,6 +47,7 @@ describe("experiments", () => {
 				showToolInputOutput: false,
 				prometheusMetrics: false,
 				webviewLivenessMonitor: false,
+				disableMistakeLimitChecks: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(true)
 		})
@@ -50,6 +61,7 @@ describe("experiments", () => {
 				showToolInputOutput: false,
 				prometheusMetrics: false,
 				webviewLivenessMonitor: false,
+				disableMistakeLimitChecks: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
