@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react"
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 
 import {
 	type ProviderSettings,
@@ -330,6 +330,11 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	})
 
 	const [didHydrateState, setDidHydrateState] = useState(false)
+	// Tracks whether at least one host state push has been applied. Used by the
+	// pre-task mode/API-config stomp-guard below: the very first push seeds the
+	// webview-owned tier-1 draft from the global defaults; subsequent pushes that
+	// carry no focused task must NOT clobber the user's dropdown selection.
+	const hasHydratedRef = useRef(false)
 	const [showWelcome, setShowWelcome] = useState(false)
 	const [theme, setTheme] = useState<any>(undefined)
 	const [filePaths, setFilePaths] = useState<string[]>([])
@@ -375,6 +380,10 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			switch (message.type) {
 				case "state": {
 					const newState = message.state ?? {}
+					// Snapshot-and-set the hydration flag synchronously so the merge
+					// updater (which may be batched/deferred) reads a stable value.
+					const alreadyHydrated = hasHydratedRef.current
+					hasHydratedRef.current = true
 					if (newState.apiConfiguration !== undefined) {
 						const prevProvider = state.apiConfiguration?.apiProvider
 						const nextProvider = newState.apiConfiguration?.apiProvider
@@ -384,7 +393,19 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 							)
 						}
 					}
-					setState((prevState) => mergeExtensionState(prevState, newState))
+					setState((prevState) => {
+						const merged = mergeExtensionState(prevState, newState)
+						// Pre-task tier-1 ownership: when no task is focused, the chat
+						// dropdown owns `mode`/`currentApiConfigName`. Seed them from the
+						// host on the first push, then preserve the local draft against
+						// routine state pushes so the selection survives until the user
+						// sends the first message (which forwards them via `newTask`).
+						if (alreadyHydrated && !merged.currentTaskItem) {
+							merged.mode = prevState.mode
+							merged.currentApiConfigName = prevState.currentApiConfigName
+						}
+						return merged
+					})
 					setShowWelcome(!checkExistKey(newState.apiConfiguration))
 					setDidHydrateState(true)
 					// Update alwaysAllowFollowupQuestions if present in state message

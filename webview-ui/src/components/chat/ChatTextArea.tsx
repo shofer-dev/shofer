@@ -52,6 +52,13 @@ interface ChatTextAreaProps {
 	onHeightChange?: (height: number) => void
 	mode: Mode
 	setMode: (value: Mode) => void
+	/**
+	 * True when a task is currently focused. When false (home screen), the mode
+	 * and API-config dropdowns act as pure tier-1 drafts owned by the webview:
+	 * selecting a value updates local state only and is forwarded to the host on
+	 * the next `newTask`, instead of mutating the global active profile/mode.
+	 */
+	hasActiveTask?: boolean
 	modeShortcutText: string
 	// Edit mode props
 	isEditMode?: boolean
@@ -111,6 +118,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			onHeightChange,
 			mode,
 			setMode,
+			hasActiveTask = false,
 			modeShortcutText,
 			isEditMode = false,
 			onCancel,
@@ -130,6 +138,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			filePaths,
 			openedTabs,
 			currentApiConfigName,
+			setCurrentApiConfigName,
 			listApiConfigMeta,
 			customModes,
 			customModePrompts,
@@ -384,7 +393,11 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					setMode(value)
 					setInputValue("")
 					setShowContextMenu(false)
-					vscode.postMessage({ type: "mode", text: value })
+					// Scope to the focused task when present; on the home screen the
+					// selection is a pure tier-1 draft (forwarded via `newTask`).
+					if (hasActiveTask) {
+						vscode.postMessage({ type: "mode", text: value })
+					}
 					return
 				}
 
@@ -467,7 +480,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				}
 			},
 			// eslint-disable-next-line react-hooks/exhaustive-deps
-			[setInputValue, cursorPosition],
+			[setInputValue, cursorPosition, hasActiveTask],
 		)
 
 		const handleKeyDown = useCallback(
@@ -1028,15 +1041,34 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const handleModeChange = useCallback(
 			(value: Mode) => {
 				setMode(value)
-				vscode.postMessage({ type: "mode", text: value })
+				// With a focused task, the mode switch is scoped to that task on the
+				// host. On the home screen the selection is a pure tier-1 draft that
+				// rides along with the next `newTask`, so no host round-trip.
+				if (hasActiveTask) {
+					vscode.postMessage({ type: "mode", text: value })
+				}
 			},
-			[setMode],
+			[setMode, hasActiveTask],
 		)
 
 		// Helper function to handle API config change
-		const handleApiConfigChange = useCallback((value: string) => {
-			vscode.postMessage({ type: "loadApiConfigurationById", text: value })
-		}, [])
+		const handleApiConfigChange = useCallback(
+			(value: string) => {
+				if (hasActiveTask) {
+					// Active task: activate the selected profile on the host as before.
+					vscode.postMessage({ type: "loadApiConfigurationById", text: value })
+					return
+				}
+				// Home screen: pure tier-1 draft. Map the selected config id back to
+				// its name and update local state only; the global active profile is
+				// untouched and the choice is forwarded with the next `newTask`.
+				const selected = listApiConfigMeta?.find((config) => config.id === value)
+				if (selected?.name) {
+					setCurrentApiConfigName(selected.name)
+				}
+			},
+			[hasActiveTask, listApiConfigMeta, setCurrentApiConfigName],
+		)
 
 		const handleToggleLockApiConfig = useCallback(() => {
 			const newValue = !lockApiConfigAcrossModes

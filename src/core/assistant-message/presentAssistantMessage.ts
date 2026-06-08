@@ -393,7 +393,7 @@ export async function presentAssistantMessage(shofer: Task) {
 			// provider-global mode. This ensures a mode switch in Task A
 			// via switch_mode doesn't cause Task B's tools to be validated
 			// against the wrong mode.
-			const mode = (shofer as any)._taskMode || state?.mode || defaultModeSlug
+			const mode = (shofer as any)._taskMode || defaultModeSlug
 
 			const toolDescription = (): string => {
 				switch (block.name) {

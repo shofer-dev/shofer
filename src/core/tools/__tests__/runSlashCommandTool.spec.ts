@@ -26,6 +26,7 @@ describe("runSlashCommandTool", () => {
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("Missing parameter error"),
 			ask: vi.fn().mockResolvedValue({}),
 			cwd: "/test/project",
+			getTaskMode: vi.fn().mockResolvedValue("code"),
 			providerRef: {
 				deref: vi.fn().mockReturnValue({
 					getState: vi.fn().mockResolvedValue({

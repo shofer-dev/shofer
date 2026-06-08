@@ -116,6 +116,13 @@ export interface CreateTaskOptions {
 	 * Useful when creating delegated/background tasks without mutating global mode.
 	 */
 	initialMode?: string
+	/**
+	 * Override the initial API configuration profile (by name) for this task only.
+	 * The profile's full settings are loaded and used to build the task's API
+	 * handler without mutating the global active profile. Useful for seeding a
+	 * new task from a pre-task dropdown selection.
+	 */
+	initialApiConfigName?: string
 	/** Initial execution state for the task's history item. */
 	initialState?: TaskState
 	/**

@@ -777,6 +777,13 @@ export interface WebviewMessage {
 	toolName?: string
 	isEnabled?: boolean
 	mode?: string
+	/**
+	 * Pre-task API configuration profile name selected in the chat dropdown,
+	 * forwarded with `newTask` so the new task is seeded with this profile
+	 * without mutating the global default. Optional — absent means "use the
+	 * global Settings default".
+	 */
+	apiConfigName?: string
 	promptMode?: string | "enhance"
 	customPrompt?: PromptComponent
 	dataUrls?: string[]

@@ -146,4 +146,44 @@ describe("Task - sticky provider profile init race", () => {
 
 		expect(task.taskApiConfigName).toBe("new-profile")
 	})
+
+	it("seeds task mode and apiConfigName from initialMode/initialApiConfigName without consulting global state", async () => {
+		const apiConfig: ProviderSettings = {
+			apiProvider: "anthropic",
+			apiModelId: "claude-3-5-sonnet-20241022",
+			apiKey: "test-api-key",
+		} as any
+
+		const getState = vi.fn().mockResolvedValue({ currentApiConfigName: "global-profile", mode: "code" })
+
+		const mockProvider = {
+			context: {
+				globalStorageUri: { fsPath: "/test/storage" },
+			},
+			getState,
+			log: vi.fn(),
+			on: vi.fn(),
+			off: vi.fn(),
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
+			postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
+			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
+		} as unknown as ShoferProvider
+
+		const task = new Task({
+			provider: mockProvider,
+			apiConfiguration: apiConfig,
+			task: "test task",
+			startTask: false,
+			initialMode: "architect",
+			initialApiConfigName: "my-profile",
+		})
+
+		await task.waitForApiConfigInitialization()
+
+		expect(task.taskApiConfigName).toBe("my-profile")
+		await expect(task.getTaskMode()).resolves.toBe("architect")
+		// Explicit seeds must NOT fall back to the global defaults.
+		expect(getState).not.toHaveBeenCalled()
+	})
 })

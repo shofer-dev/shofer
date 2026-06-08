@@ -24,6 +24,7 @@ describe("skillsTool", () => {
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("Missing parameter error"),
 			ask: vi.fn().mockResolvedValue({}),
 			loadedSkills: new Map<string, string>(),
+			getTaskMode: vi.fn().mockResolvedValue("code"),
 			providerRef: {
 				deref: vi.fn().mockReturnValue({
 					getState: vi.fn().mockResolvedValue({ mode: "code" }),

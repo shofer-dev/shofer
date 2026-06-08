@@ -743,6 +743,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		cwd,
 		initialState,
 		initialMode,
+		initialApiConfigName,
 		isBackground,
 		softResultLength,
 		softTimeoutSec,
@@ -844,12 +845,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 			this.taskApiConfigReady = Promise.resolve()
 			TelemetryService.instance.captureTaskRestarted(this.taskId)
-		} else if (initialMode) {
-			// Allow callers to set task mode without mutating provider global mode.
+		} else if (initialMode || initialApiConfigName) {
+			// Allow callers to seed task mode / API config without mutating provider globals.
 			this._taskMode = initialMode
-			this._taskApiConfigName = undefined
-			this.taskModeReady = Promise.resolve()
-			this.taskApiConfigReady = this.initializeTaskApiConfigName(provider)
+			this._taskApiConfigName = initialApiConfigName
+			this.taskModeReady = initialMode ? Promise.resolve() : this.initializeTaskMode(provider)
+			this.taskApiConfigReady = initialApiConfigName
+				? Promise.resolve()
+				: this.initializeTaskApiConfigName(provider)
 			TelemetryService.instance.captureTaskCreated(this.taskId)
 		} else {
 			// For new tasks, don't set the mode/apiConfigName yet - wait for async initialization.
@@ -982,6 +985,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private async initializeTaskMode(provider: ShoferProvider): Promise<void> {
 		try {
 			const state = await provider.getState()
+			// The global `mode` is the tier-3 cold-start default for a new task that
+			// was not seeded with an explicit `initialMode`.
 			this._taskMode = state?.mode || defaultModeSlug
 		} catch (error) {
 			// If there's an error getting state, use the default mode
@@ -2569,7 +2574,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			if (provider) {
 				if (mode) {
-					await provider.setMode(mode)
+					// Scope the mode switch to THIS task (not the focused task), so a
+					// background task switching its own mode never retargets another.
+					await provider.handleModeSwitch(mode, this)
 				}
 
 				if (providerProfile) {
@@ -2628,7 +2635,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Use the task's own mode for tool building in condensing
 		// so a background task sees its own mode's tools, not the
 		// focused task's.
-		const mode = this._taskMode || state?.mode || defaultModeSlug
+		const mode = this._taskMode || defaultModeSlug
 
 		const { contextTokens: prevContextTokens } = this.getTokenUsage()
 
@@ -4077,7 +4084,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// reflects the currently focused task. Without this, a mode
 			// switch in Task A via switch_mode would affect the user-content
 			// processing for a background Task B.
-			const currentMode = this._taskMode || state?.mode || defaultModeSlug
+			const currentMode = this._taskMode || defaultModeSlug
 
 			const {
 				content: parsedUserContent,
@@ -5645,7 +5652,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const { profileThresholds = {}, apiConfiguration } = state ?? {}
 		// Use the task's own mode for context-management tool building
 		// so a background task sees its own mode's tools.
-		const mode = this._taskMode || state?.mode || defaultModeSlug
+		const mode = this._taskMode || defaultModeSlug
 
 		const { contextTokens } = this.getTokenUsage()
 		const modelInfo = this.api.getModel().info

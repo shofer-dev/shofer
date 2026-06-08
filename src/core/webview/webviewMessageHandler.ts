@@ -150,18 +150,11 @@ export const webviewMessageHandler = async (
 			}
 		}
 
-		try {
-			const state = await provider.getState()
-			if (typeof state.mode === "string" && state.mode.length > 0) {
-				return state.mode
-			}
-		} catch (error) {
-			provider.log(
-				`Error resolving global mode for command discovery: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-			)
-		}
-
-		return defaultModeSlug
+		// No focused task: fall back to the global default mode (tier-3). The
+		// pre-task mode selection is owned by the webview dropdown and is not
+		// visible here, so command discovery uses the persistent default.
+		const state = await provider.getState()
+		return state?.mode ?? defaultModeSlug
 	}
 
 	const getDiscoveredCommands = async (): Promise<SlashCommand[]> => {
@@ -782,7 +775,12 @@ export const webviewMessageHandler = async (
 
 				const messageText = resolved.text
 
-				await provider.createManagedTask(undefined, messageText, resolved.images, message.worktreeDir)
+				// Pre-task mode / API-config seeds chosen in the chat dropdown.
+				// When absent, createTask falls back to the global Settings defaults.
+				await provider.createManagedTask(undefined, messageText, resolved.images, message.worktreeDir, {
+					mode: message.mode,
+					apiConfigName: message.apiConfigName,
+				})
 				console.error("[DEBUG webviewMessageHandler:newTask] createManagedTask completed")
 				// Task created successfully - notify the UI to reset
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
@@ -2158,7 +2156,12 @@ export const webviewMessageHandler = async (
 		case "loadApiConfiguration":
 			if (message.text) {
 				try {
-					await provider.activateProviderProfile({ name: message.text })
+					// This is a global default change (from Settings → Providers →
+					// Configuration Profile dropdown) — it must NOT retroactively
+					// overwrite existing tasks' sticky provider profiles.
+					// Pass persistTaskHistory: false so running/history tasks keep
+					// whatever profile they were created with.
+					await provider.activateProviderProfile({ name: message.text }, { persistTaskHistory: false })
 					await reinitializeAssistantAgent(provider)
 				} catch (error) {
 					provider.log(
@@ -2283,7 +2286,6 @@ export const webviewMessageHandler = async (
 					// Update state after saving the mode
 					const customModes = await provider.customModesManager.getCustomModes()
 					await updateGlobalState("customModes", customModes)
-					await updateGlobalState("mode", message.modeConfig.slug)
 					await provider.postStateToWebview()
 
 					// Track telemetry for custom mode creation or update
@@ -2378,9 +2380,8 @@ export const webviewMessageHandler = async (
 					}
 				}
 
-				// Switch back to default mode after deletion
-				await updateGlobalState("mode", defaultModeSlug)
-				await provider.postStateToWebview()
+				// Reset the launcher handoff and/or focused task off the deleted mode.
+				await provider.handleModeDeleted(message.slug as Mode)
 			}
 			break
 		case "exportMode":
@@ -4212,19 +4213,17 @@ export const webviewMessageHandler = async (
 
 		case "launchTask": {
 			// Launcher "New Task" path: pop the current task to the background
-			// (parallel execution, without aborting it), switch to the chosen
-			// mode, and reset the webview to a fresh chat surface. The user then
-			// types their request as usual.
+			// (parallel execution, without aborting it) and reset the webview to a
+			// fresh chat surface. The pre-task mode/API-config selection is owned by
+			// the webview dropdown (the launcher sets it locally before posting this
+			// message), so no backend mode switch happens here.
 			try {
-				const mode = (message.mode as Mode) || defaultModeSlug
-
 				const poppedTask = provider.popFromStackWithoutAborting()
 				if (poppedTask) {
 					provider.taskManager.registerBackgroundTask(poppedTask)
 					provider.log(`[launchTask] Task ${poppedTask.taskId} moved to background (parallel execution)`)
 				}
 
-				await provider.handleUserModeSwitch(mode)
 				await provider.refreshWorkspace()
 				await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })

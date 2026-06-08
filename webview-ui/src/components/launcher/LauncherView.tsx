@@ -3,6 +3,8 @@ import { ListChecks, Rocket, X } from "lucide-react"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
+import { useExtensionState } from "@src/context/ExtensionStateContext"
+import type { Mode } from "@shofer/shared/modes"
 import { Tab, TabContent, TabHeader } from "../common/Tab"
 
 /**
@@ -78,6 +80,7 @@ const LauncherCard = ({
 
 export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps) => {
 	const { t } = useAppTranslation()
+	const { setMode } = useExtensionState()
 	const [workflows, setWorkflows] = useState<LauncherWorkflow[]>([])
 	const [workflowsLoaded, setWorkflowsLoaded] = useState(false)
 
@@ -97,10 +100,14 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 
 	const handlePickMode = useCallback(
 		(slug: string) => {
-			vscode.postMessage({ type: "launchTask", mode: slug })
+			// The pre-task mode is a webview-owned tier-1 draft: set it locally so
+			// the chat dropdown reflects the pick, then ask the host to reset to a
+			// fresh chat surface. The draft is forwarded with `newTask` on send.
+			setMode(slug as Mode)
+			vscode.postMessage({ type: "launchTask" })
 			onClose()
 		},
-		[onClose],
+		[onClose, setMode],
 	)
 
 	const handlePickWorkflow = useCallback(

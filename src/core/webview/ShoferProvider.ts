@@ -2225,28 +2225,30 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Sticky per-task mode restore. Updates the global `mode` state to match
-	 * the focused task's `_taskMode` (set on construction from the history item
-	 * or `defaultModeSlug`, and kept in sync by `handleModeSwitch`).
-	 *
-	 * Called from `focusTask` when swapping a live Task into the stack — without
-	 * this, switching focus would leave the mode picker showing whatever the
-	 * previously focused task last selected. The history-rehydration path
-	 * (`showTaskWithId`) already restores mode itself, so we don't call this
-	 * there.
+	 * Handle deletion of a custom mode. Resets the global default mode if it
+	 * referenced the deleted mode, and resets the focused task to the default
+	 * mode if it was running the deleted one, then refreshes the webview.
 	 */
-	private async restoreTaskMode(task: Task): Promise<void> {
-		try {
-			const taskMode = await task.getTaskMode()
-			if (this.getGlobalState("mode") !== taskMode) {
-				await this.updateGlobalState("mode", taskMode)
-				this.emit(ShoferEventName.ModeChanged, taskMode as Mode)
-			}
-		} catch (error) {
-			this.log(
-				`[restoreTaskMode] Failed to restore mode for task ${task.taskId}: ${error instanceof Error ? error.message : String(error)}`,
-			)
+	public async handleModeDeleted(deletedSlug: Mode): Promise<void> {
+		if (this.getGlobalState("mode") === deletedSlug) {
+			await this.updateGlobalState("mode", defaultModeSlug)
 		}
+
+		const currentTask = this.getCurrentTask()
+		if (currentTask) {
+			try {
+				const taskMode = await currentTask.getTaskMode()
+				if (taskMode === deletedSlug) {
+					await this.handleUserModeSwitch(defaultModeSlug)
+				}
+			} catch (error) {
+				this.log(
+					`[handleModeDeleted] Failed to resolve focused task mode: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}
+
+		await this.postStateToWebview()
 	}
 
 	/**
@@ -2303,7 +2305,10 @@ export class ShoferProvider
 				throw error
 			}
 		} else {
-			await this.updateGlobalState("mode", newMode)
+			// No focused task: the pre-task mode selection is owned by the webview
+			// dropdown (tier-1 draft) and forwarded with `newTask`. There is no
+			// backend state to mutate here, so this branch only drives the
+			// per-mode API-config side effects below.
 		}
 
 		this.emit(ShoferEventName.ModeChanged, newMode)
@@ -3194,10 +3199,10 @@ export class ShoferProvider
 			terminalZshP10k,
 			terminalZdotdir,
 			mcpEnabled,
+			mode,
 			currentApiConfigName,
 			listApiConfigMeta,
 			pinnedApiConfigs,
-			mode,
 			customModePrompts,
 			customSupportPrompts,
 			enhancementApiConfigId,
@@ -4206,6 +4211,28 @@ export class ShoferProvider
 		const { apiConfiguration, organizationAllowList, enableCheckpoints, checkpointTimeout, experiments } =
 			await this.getState()
 
+		// Per-task API profile seed: when the caller passed an explicit
+		// `initialApiConfigName`, load that profile's full settings and use them to
+		// build this task's API handler WITHOUT activating the profile globally
+		// (the global active profile remains the tier-3 default). Falls back to the
+		// global `apiConfiguration` on any lookup failure.
+		let taskApiConfiguration = apiConfiguration
+		if (options.initialApiConfigName) {
+			try {
+				const profile = await this.providerSettingsManager.getProfile({
+					name: options.initialApiConfigName,
+				})
+				if (profile?.apiProvider) {
+					taskApiConfiguration = profile
+				}
+			} catch (error) {
+				this.log(
+					`[createTask] Failed to load API profile "${options.initialApiConfigName}"; ` +
+						`using global default: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}
+
 		// Single-open-task invariant: enforce for user-initiated top-level tasks
 		// unless keepCurrentTask is specified (for parallel task creation)
 		if (!parentTask && !options.keepCurrentTask) {
@@ -4222,7 +4249,7 @@ export class ShoferProvider
 
 		const task = new Task({
 			provider: this,
-			apiConfiguration,
+			apiConfiguration: taskApiConfiguration,
 			enableCheckpoints,
 			checkpointTimeout,
 			consecutiveMistakeLimit: apiConfiguration.consecutiveMistakeLimit,
@@ -4751,17 +4778,22 @@ export class ShoferProvider
 	 * @param name Optional task name (auto-generated from text if not provided)
 	 * @param text Initial task text
 	 * @param images Optional images
+	 * @param worktreeDir Optional embedded worktree directory used as the task cwd
+	 * @param seeds Optional per-task mode / API-config profile seeds (from the
+	 *   pre-task chat dropdown). Absent values fall back to the global defaults.
 	 */
 	public async createManagedTask(
 		name?: string,
 		text?: string,
 		images?: string[],
 		worktreeDir?: string,
+		seeds?: { mode?: string; apiConfigName?: string },
 	): Promise<void> {
 		this.log(
 			`[createManagedTask] Called — name=${name || "(auto)"} ` +
 				`textLen=${text?.length ?? 0} images=${images?.length ?? 0} ` +
 				`worktreeDir=${worktreeDir ?? "(none)"} ` +
+				`mode=${seeds?.mode ?? "(global)"} apiConfig=${seeds?.apiConfigName ?? "(global)"} ` +
 				`stackDepth=${this.shoferStack.length}`,
 		)
 
@@ -4783,8 +4815,20 @@ export class ShoferProvider
 			const taskName = name || (text ? this.generateTaskNameFromText(text) : "New Task")
 
 			// Create a new task with keepCurrentTask=true so createTask won't abort any remaining tasks.
-			// Pass worktreeDir as the task's cwd for embedded worktree tasks.
-			const task = await this.createTask(text, images, undefined, { keepCurrentTask: true }, {}, worktreeDir)
+			// Pass worktreeDir as the task's cwd for embedded worktree tasks, and the optional
+			// per-task mode / API-config seeds from the pre-task chat dropdown.
+			const task = await this.createTask(
+				text,
+				images,
+				undefined,
+				{
+					keepCurrentTask: true,
+					initialMode: seeds?.mode,
+					initialApiConfigName: seeds?.apiConfigName,
+				},
+				{},
+				worktreeDir,
+			)
 
 			if (!task) {
 				throw new Error("Failed to create task")
@@ -4872,18 +4916,13 @@ export class ShoferProvider
 					// Replace in stack
 					this.shoferStack[stackIndex] = liveTask
 					liveTask.emit(ShoferEventName.TaskFocused)
-					// Sticky-mode: restore the focused task's mode as the active provider
-					// mode so the mode picker in the UI reflects what this task was last
-					// using. The mode is stored per-task on `_taskMode`; new tasks
-					// initialize it from `defaultModeSlug`, switches via
-					// `handleModeSwitch` keep it in sync.
-					await this.restoreTaskMode(liveTask)
-					// Post state update
+					// Sticky-mode is per-task: the mode picker reads the focused
+					// task's `_taskMode` directly in the state push below, so no
+					// global mirror write is needed on focus.
 					await this.postStateToWebview()
 				} else {
 					// Stack is empty — just push the task
 					await this.addShoferToStack(liveTask)
-					await this.restoreTaskMode(liveTask)
 					await this.postStateToWebview()
 				}
 			} else {

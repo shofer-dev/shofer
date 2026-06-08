@@ -75,6 +75,7 @@ const mockShoferProvider = {
 	log: vi.fn(),
 	postStateToWebview: vi.fn(),
 	getCurrentTask: vi.fn(),
+	handleModeDeleted: vi.fn(),
 	getTaskWithId: vi.fn(),
 	createTaskWithHistoryItem: vi.fn(),
 	getSkillsManager: vi.fn(),
@@ -237,6 +238,52 @@ describe("webviewMessageHandler - image mentions", () => {
 		expect(mockHandleWebviewAskResponse).toHaveBeenCalledWith("messageResponse", "See @/img.png", [
 			"data:image/png;base64,from-mention",
 		])
+	})
+})
+
+describe("webviewMessageHandler - newTask seeds", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mockShoferProvider.getState = vi.fn().mockResolvedValue({
+			maxImageFileSize: 5,
+			maxTotalImageSize: 20,
+		})
+		vi.mocked(mockShoferProvider.getCurrentTask).mockReturnValue(undefined as any)
+		;(mockShoferProvider as any).createManagedTask = vi.fn().mockResolvedValue(undefined)
+	})
+
+	it("forwards the pre-task mode and apiConfigName drafts to createManagedTask", async () => {
+		await webviewMessageHandler(mockShoferProvider, {
+			type: "newTask",
+			text: "do the thing",
+			images: [],
+			mode: "architect",
+			apiConfigName: "my-profile",
+		})
+
+		expect((mockShoferProvider as any).createManagedTask).toHaveBeenCalledWith(
+			undefined,
+			"do the thing",
+			expect.any(Array),
+			undefined,
+			{ mode: "architect", apiConfigName: "my-profile" },
+		)
+	})
+
+	it("passes undefined seeds when the dropdown selections are absent (global defaults)", async () => {
+		await webviewMessageHandler(mockShoferProvider, {
+			type: "newTask",
+			text: "do the thing",
+			images: [],
+		})
+
+		expect((mockShoferProvider as any).createManagedTask).toHaveBeenCalledWith(
+			undefined,
+			"do the thing",
+			expect.any(Array),
+			undefined,
+			{ mode: undefined, apiConfigName: undefined },
+		)
 	})
 })
 

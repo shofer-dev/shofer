@@ -79,6 +79,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		organizationAllowList,
 		mode,
 		setMode,
+		currentApiConfigName,
 		alwaysAllowModeSwitch,
 		customModes,
 		soundEnabled,
@@ -965,6 +966,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						text,
 						images,
 						worktreeDir: pendingWorktreeDir ?? undefined,
+						// Pre-task tier-1 selections from the chat dropdown. The host
+						// seeds the new task with these and falls back to the global
+						// Settings defaults when absent.
+						mode,
+						apiConfigName: currentApiConfigName,
 					})
 					if (pendingWorktreeDir) setPendingWorktreeDir(null)
 				} else if (shoferAskRef.current) {
@@ -1041,6 +1047,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			apiConfiguration?.apiProvider,
 			pendingWorktreeDir,
 			setPendingWorktreeDir,
+			mode,
+			currentApiConfigName,
 		], // messagesRef and shoferAskRef are stable
 	)
 
@@ -2265,6 +2273,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				}}
 				mode={mode}
 				setMode={setMode}
+				hasActiveTask={task !== undefined}
 				modeShortcutText={modeShortcutText}
 				isStreaming={isStreaming}
 				canStop={canStop}
