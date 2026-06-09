@@ -14,12 +14,13 @@ Welcome to Shofer (from the French _chauffeur_ — driver). This manual covers t
 6. [MCP Servers](#6-mcp-servers)
 7. [Semantic Code Search (RAG)](#7-semantic-code-search-rag)
 8. [Skills](#8-skills)
-9. [Git Worktrees](#9-git-worktrees)
-10. [Per-Task Cost Limit](#10-per-task-cost-limit)
-11. [Slash Commands](#11-slash-commands)
-12. [Special Files](#12-special-files)
-13. [Assistant Agent](#13-assistant-agent)
-14. [Community](#14-community)
+9. [Workflows](#9-workflows)
+10. [Git Worktrees](#10-git-worktrees)
+11. [Per-Task Cost Limit](#11-per-task-cost-limit)
+12. [Slash Commands](#12-slash-commands)
+13. [Special Files](#13-special-files)
+14. [Assistant Agent](#14-assistant-agent)
+15. [Community](#15-community)
 
 ---
 
@@ -335,6 +336,109 @@ Full instructions Shofer will follow when this skill is loaded...
 ```
 
 Skills are discovered automatically. Use the 🎓 button in the chat input bar to browse and load them. Project-level skills override global skills with the same name.
+
+---
+
+## 9. Workflows
+
+Workflows are **formal, multi-agent specifications** that coordinate multiple AI agents
+through a deterministic, non-LLM execution engine. Unlike ad-hoc Orchestrator tasks
+(where the LLM decides what to do next), workflows are specified in `.slang` files
+that define exactly which agents run, in what order, with what control flow.
+
+Shofer ships with **two built-in workflows** available out of the box:
+
+### Built-in Workflows
+
+#### 🪲 Debug
+
+<img src="media/debug.png" alt="Debug Workflow" width="600" />
+
+A collaborative debugging workflow with three agents:
+
+- **How it works:** Two developer agents independently investigate the issue in parallel,
+  compare their findings, converge on a root cause through peer review, get your sign-off,
+  then one fixes while the other reviews — iterating until both are satisfied.
+- **Agents:** Orchestrator (`orchestrator` mode), Developer1 (`code` mode), Developer2 (`code` mode)
+- **Launch:** Click **New…** → **New Workflow** → pick "Collaborative Debug"
+
+#### 🔧 Implement a Feature
+
+<img src="media/implement feature.png" alt="Implement a Feature Workflow" width="600" />
+
+A feature implementation pipeline with three agents:
+
+- **How it works:** The Architect creates a design document, you review and approve it,
+  then a Developer implements the feature in slices while a Reviewer evaluates each slice.
+  The loop continues until both Developer and Reviewer are satisfied.
+- **Agents:** Architect (`orchestrator` mode), Developer (`code` mode), Reviewer (`reviewer` mode)
+- **Launch:** Click **New…** → **New Workflow** → pick "Implement a Feature"
+
+### Launching a Workflow
+
+1. Click the **+** button in the task header, then select **New Workflow**
+2. Choose a workflow from the launcher (built-in or custom)
+3. If the workflow has parameters (e.g., an issue description or feature name),
+   the executor prompts you for them
+4. The workflow starts — agents appear as child tasks in the Task Selector tree
+
+The Workflow Task itself has a dedicated chat view that shows parameter prompts,
+`escalate @Human` interactions, and agent question relays.
+
+### Creating Custom Workflows
+
+Define your own workflows as `.slang` files under `.shofer/workflows/` (project)
+or `~/.shofer/workflows/` (global). Each file defines one `flow` with named agents,
+their modes, and the control flow between them.
+
+A minimal single-agent workflow:
+
+```slang
+flow "my-workflow" (name: "string") {
+  title: "My Workflow"
+  description: "A simple custom workflow."
+  icon: "rocket"
+
+  agent Greeter {
+    mode: "code"
+    role: "You are a friendly greeter."
+
+    stake greet(name: name, task: "Say hello and give a warm greeting.")
+    commit
+  }
+
+  converge when: @Greeter.committed
+}
+```
+
+**Discovery priority** (lower-numbered sources are overridden by higher ones):
+
+| Priority | Source                            | Scope             |
+| -------- | --------------------------------- | ----------------- |
+| 1        | Built-in (shipped with extension) | All workspaces    |
+| 2        | `~/.shofer/workflows/*.slang`     | Global (per-user) |
+| 3        | `.shofer/workflows/*.slang`       | Project           |
+
+If you create a `.shofer/workflows/debug.slang` in your project, it **completely
+replaces** the built-in Debug workflow. There is no partial merging.
+
+### How it Works Under the Hood
+
+Workflows are executed by a **Workflow Task** — a deterministic state machine
+that makes zero LLM calls itself. It dispatches agent Tasks as background children
+using the mode slug declared in each agent's `.slang` block, waits for their
+`attempt_completion` results, routes outputs between agents via mailboxes, and
+evaluates control flow (`repeat until`, `when/otherwise`, `converge`).
+
+Agents in a workflow are regular Shofer Tasks with full tool access in their
+assigned mode. The Workflow Task coordinates them at the parent level — you can
+inspect each agent's chat, messages, and tool calls from the Task Selector tree.
+
+Learn more:
+
+- [Built-in Workflows SoT](https://github.com/shofer-dev/shofer/blob/master/docs/built-in-workflows.md) — the full pipeline from `.slang` → discovery → execution
+- [Slang Language Spec](https://github.com/shofer-dev/shofer/blob/master/docs/slang_specs.md) — grammar, operations, control flow, output contracts
+- [Workflow Design](https://github.com/shofer-dev/shofer/blob/master/docs/workflow_design.md) — architecture and design decisions
 
 ---
 

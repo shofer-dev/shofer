@@ -236,187 +236,33 @@ the built-in modes in `getAllModes()`.
 
 ## 11. Mode Details
 
-### 💻 Code (`code`)
+The six built-in modes are defined in [`DEFAULT_MODES`](../packages/types/src/mode.ts:199-270).
+This section summarizes their key structural properties; for the full
+definitions (role, group assignments, custom instructions) see the source.
 
-**Groups:** `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`
+| #   | Slug          | Name           | Groups                                                                              | Default |
+| --- | ------------- | -------------- | ----------------------------------------------------------------------------------- | ------- |
+| 1   | `code`        | 💻 Code        | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` | Yes     |
+| 2   | `architect`   | 🏗️ Architect   | `read`, `["write", { fileRegex: "\\.md$" }]`, `mcp`, `questions`                    | —       |
+| 3   | `debug`       | 🪲 Debug       | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`         | —       |
+| 4   | `code-search` | 🔎 Code Search | `read`, `execute`, `mcp`, `questions`                                               | —       |
+| 5   | `web-search`  | 🌐 Web Search  | `browser`, `questions`, `mcp`                                                       | —       |
+| 6   | `reviewer`    | 👀 Reviewer    | `read`, `execute`, `mcp`, `questions`                                               | —       |
 
-**Role Definition:**
+**Key structural notes:**
 
-> You are Shofer, a highly skilled software engineer with extensive knowledge in
-> many programming languages, frameworks, design patterns, and best practices.
-
-**When To Use:**
-
-> Use this mode when you need to write, modify, or refactor code. Ideal for
-> implementing features, fixing bugs, creating new files, or making code
-> improvements across any programming language or framework.
-
-**Tool Access:** Maximum access — all 8 non-empty tool groups. The only
-built-in mode with full `execute` (shell commands), `write` (file mutations),
-`mode` (mode switching), and `subtasks` (background task delegation) simultaneously.
-
-**Default Mode:** Yes — `code` is `modes[0]` and the ultimate fallback.
-
----
-
-### 🏗️ Architect (`architect`)
-
-**Groups:** `read`, `["write", { fileRegex: "\\.md$", description: "Markdown files only" }]`, `mcp`, `questions`
-
-**Role Definition:**
-
-> You are Shofer, an experienced technical leader who is inquisitive and an
-> excellent planner. Your goal is to gather information and get context to create
-> a detailed plan for accomplishing the user's task, which the user will review
-> and approve before they switch into another mode to implement the solution.
-
-**When To Use:**
-
-> Use this mode when you need to plan, design, or strategize before implementation.
-> Perfect for breaking down complex problems, creating technical specifications,
-> designing system architecture, or brainstorming solutions before coding.
-
-**Tool Access:**
-
-- **Write restricted to `.md` files** — `fileRegex: "\\.md$"` on the `write` group.
-  Any attempt to write to a non-`.md` file throws a `FileRestrictionError`.
-- **No `execute` group** — cannot run shell commands.
-- **No `subtasks` group** — cannot delegate work to sub-tasks.
-
-**Custom Instructions:** (abbreviated — see source for full text)
-A 7-step workflow guiding the LLM to: gather context, ask clarifying questions,
-create actionable todo lists (`update_todo_list`), iterate on the plan with the
-user, and use `switch_mode` to hand off to `code` mode for implementation.
-
-**Critical Constraints:**
-
-- Plans are saved to the `/plans` directory
-- Time estimates (hours, days, weeks) are explicitly forbidden
-- Todo lists are preferred over lengthy markdown documents
-
----
-
-### 🪲 Debug (`debug`)
-
-**Groups:** `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`
-
-**Role Definition:**
-
-> You are Shofer, an expert software debugger specializing in systematic problem
-> diagnosis and resolution.
-
-**When To Use:**
-
-> Use this mode when you're troubleshooting issues, investigating errors, or
-> diagnosing problems. Specialized in systematic debugging, adding logging,
-> analyzing stack traces, and identifying root causes before applying fixes.
-
-**Tool Access:** Near-full access — same as `code` except missing `mode`.
-Cannot switch modes autonomously.
-
-**Custom Instructions:**
-A structured debugging workflow:
-
-1. Reflect on 5–7 different possible sources of the problem
-2. Distill to 1–2 most likely sources
-3. Add logs to validate assumptions
-4. Explicitly ask the user to confirm the diagnosis **before** fixing
-
----
-
-### 🔎 Code Search (`code-search`)
-
-**Groups:** `read`, `execute`, `mcp`, `questions`
-
-**Role Definition:**
-
-> You are a fast, focused codebase search agent. Your purpose is to quickly find
-> relevant code, files, patterns, and context within the repository and return
-> concise, actionable results to the caller. You search broadly across the codebase
-> using all available tools — semantic search, text search, file listing, and
-> command-line utilities. You do not edit any files; you are purely a retrieval engine.
-
-**When To Use:**
-
-> Use this mode when you need to quickly search the codebase for specific
-> information — find where a function is defined, locate all usages of a symbol,
-> discover patterns, or gather context about how something works. Ideal for use
-> as a sub-task via `new_task` to parallelize codebase exploration.
-
-**Tool Access:**
-
-- **Read + Execute + MCP** — can read files, run grep/find commands, and query MCP tools.
-- **No `write` group** — cannot modify any workspace files.
-- **No `subtasks` group** — cannot delegate; focused purely on retrieval.
-
-**Custom Instructions:**
-A 9-step search workflow: semantic search first, then regex/text patterns,
-directory exploration, CLI tools (`grep`, `rg`, `fd`), symbol references, and a
-structured results summary. File editing is explicitly prohibited.
-
----
-
-### 🌐 Web Search (`web-search`)
-
-**Groups:** `browser`, `questions`, `mcp`
-
-**Role Definition:**
-
-> You are a web browsing agent. Your purpose is to use the browser to research,
-> extract, and interact with web content to accomplish tasks. You navigate to web
-> pages, search for information, extract text and structured data, fill forms,
-> take screenshots, and interact with web applications. You do not modify any
-> code or files in the workspace.
-
-**When To Use:**
-
-> Use this mode when you need to use a web browser to find information, research
-> topics, interact with web applications, extract data from websites, replay a
-> saved browser workflow, or capture a new repeatable browser skill.
-
-**Tool Access:**
-
-- **Browser group** — all `browser_*` tools from the `browser-tools` MCP server.
-- **Questions + MCP** — can ask the user clarifying questions and use MCP tools.
-- **No `read` group** — cannot read workspace files directly.
-- **No `write` group** — cannot modify any workspace files.
-
-**Custom Instructions:**
-Browser interaction primitives (tabs, navigation, page reading, screenshots,
-interactions) and guidance on asking the user when pages are ambiguous. Explicitly
-prohibits file modifications outside of the browser.
-
----
-
-### 👀 Reviewer (`reviewer`)
-
-**Groups:** `read`, `execute`, `mcp`, `questions`
-
-**Role Definition:**
-
-> You are a senior software engineer performing code review. You analyze existing
-> code for bugs, security vulnerabilities, design issues, performance problems,
-> and adherence to best practices. You propose specific, actionable fixes — but
-> you NEVER implement them. Your output is diagnostic and advisory only. You read
-> code, run analysis tools, and query observability data to inform your review.
-
-**When To Use:**
-
-> Use this mode when you need a thorough code review, want to identify potential
-> issues, or need recommendations for improvements without making changes to the
-> codebase.
-
-**Tool Access:**
-
-- **Read + Execute + MCP** — can read files, run lint/analysis tools, and query
-  observability data (Loki, Mimir, Tempo).
-- **No `write` group** — cannot modify any workspace files. Diagnostic only.
-- **No `subtasks` group** — focused on providing a single review report.
-
-**Custom Instructions:**
-A 5-step review process: read files thoroughly, run static analysis, query
-observability data, present findings with specific locations and proposed fixes,
-and never edit any files.
+- **`code`** is the default mode (`modes[0]`) and the ultimate fallback. It is
+  the only mode with all five write/execute/mode/subtasks groups simultaneously.
+- **`architect`** restricts the `write` group to `.md` files only via a
+  `fileRegex` tuple — any attempt to write to a non-`.md` file throws a
+  `FileRestrictionError`.
+- **`debug`** has near-full access (same as `code` minus `mode`).
+- **`code-search`**, **`reviewer`**, and **`architect`** have no `write`
+  (or `write` is restricted), no `mode`, and no `subtasks`.
+- **`web-search`** is the only mode with the `browser` group and has no `read`.
+- All tool group assignments and role text are in
+  [`DEFAULT_MODES`](../packages/types/src/mode.ts:199-270); this table is
+  a convenience summary that must stay in sync with the source.
 
 ---
 

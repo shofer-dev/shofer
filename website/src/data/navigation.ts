@@ -22,6 +22,7 @@ export interface NavItem {
 export const navigation: NavItem[] = [
 	{ label: "Demo", href: "#demo" },
 	{ label: "Features", href: "#features" },
+	{ label: "Workflows", href: "#workflows" },
 	{ label: "Modes", href: "#modes" },
 	{ label: "Migration", href: "#migration" },
 	{ label: "Community", href: "#community" },

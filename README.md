@@ -66,6 +66,22 @@ Create your own modes (Reviewer, Search, Opinion, Browser, and more) via [`.shof
 
 Learn more: [User Manual](src/USER_MANUAL.md) • [Custom Modes](src/USER_MANUAL.md#4-custom-modes)
 
+## Workflows
+
+Shofer ships with **two built-in multi-agent workflows** — formal, deterministic coordination of multiple AI agents specified in `.slang` files:
+
+| Workflow                   | Description                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| 🪲 **Collaborative Debug** | Two developers triage independently, converge on root cause, one fixes while the other reviews  |
+| 🔧 **Implement a Feature** | Architect designs → you approve → Developer implements → Reviewer inspects — iterate until done |
+
+<img src="media/debug.png" alt="Debug Workflow" width="440" />
+<img src="media/implement feature.png" alt="Implement a Feature Workflow" width="440" />
+
+Launch a workflow via **New… → New Workflow** in the chat toolbar. Create your own custom workflows as `.slang` files under `.shofer/workflows/` (project) or `~/.shofer/workflows/` (global).
+
+Learn more: [User Manual → Workflows](src/USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](docs/built-in-workflows.md) • [Slang Language Spec](docs/slang_specs.md)
+
 ## Parallel Tasks & Worktrees
 
 Shofer supports **true parallel tasks** organized in a tree hierarchy. Start multiple conversations simultaneously — each runs independently with its own mode, provider, and context.

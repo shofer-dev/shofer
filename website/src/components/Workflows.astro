@@ -1,0 +1,70 @@
+---
+import { workflows } from "../data/workflows";
+---
+
+<section id="workflows" class="py-24 sm:py-32 bg-white dark:bg-gray-950">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <span class="text-sm font-semibold text-accent-purple dark:text-accent-purple uppercase tracking-wider">Workflows</span>
+      <h2 class="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+        Built-in multi-agent workflows
+      </h2>
+      <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+        Deterministic coordination of multiple AI agents via <code class="px-1.5 py-0.5 rounded text-sm bg-gray-200 dark:bg-gray-800 font-mono">.slang</code> files.
+        Create your own custom workflows under <code class="px-1.5 py-0.5 rounded text-sm bg-gray-200 dark:bg-gray-800 font-mono">.shofer/workflows/</code>.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {workflows.map((workflow) => (
+        <div class="card-glow group relative bg-gray-50 dark:bg-gray-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 hover:border-shofer-200 dark:hover:border-shofer-800 transition-all duration-300">
+          <!-- Demo image -->
+          <div class="relative overflow-hidden bg-gray-100 dark:bg-gray-800">
+            <img
+              src={workflow.demoImage}
+              alt={`${workflow.name} workflow`}
+              class="w-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
+              loading="lazy"
+            />
+          </div>
+
+          <!-- Content -->
+          <div class="p-6">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="text-3xl">{workflow.icon}</span>
+              <h3 class="text-xl font-bold text-gray-900 dark:text-white">{workflow.name}</h3>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-4">
+              {workflow.description}
+            </p>
+            <div class="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+              <span class="text-xs font-mono text-gray-400 dark:text-gray-500">
+                Agents: {workflow.agents}
+              </span>
+              <a
+                href={`https://github.com/shofer-dev/shofer/blob/master/docs/built-in-workflows.md`}
+                class="inline-flex items-center gap-1 text-sm font-medium text-shofer-600 dark:text-shofer-400 hover:text-shofer-700 dark:hover:text-shofer-300 transition-colors"
+              >
+                Learn more
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div class="mt-12 text-center">
+      <p class="text-sm text-gray-400 dark:text-gray-500 mb-4">
+        Workflows are specified in <code class="px-1.5 py-0.5 rounded text-xs bg-gray-200 dark:bg-gray-800 font-mono">.slang</code> — a declarative language for multi-agent orchestration. Ship custom workflows with your project or install them globally.
+      </p>
+      <a
+        href="https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#9-workflows"
+        class="inline-flex items-center gap-1.5 text-sm font-medium text-shofer-600 dark:text-shofer-400 hover:text-shofer-700 dark:hover:text-shofer-300 transition-colors"
+      >
+        Read the Workflows user guide
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </a>
+    </div>
+  </div>
+</section>
