@@ -82,5 +82,5 @@ flow "peer_messaging" (topic: "string") {
   }
 
   converge when: @Coordinator.committed
-  budget: rounds(20), tokens(100000)
+  budget: rounds(20), time(60)
 }

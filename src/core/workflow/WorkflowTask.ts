@@ -73,14 +73,18 @@ function getConvergeExpr(flow: UpstreamFlowDecl): Expr | undefined {
 	return undefined
 }
 
-/** Get budget values: { tokens, rounds }. */
-function getBudget(flow: UpstreamFlowDecl): { bTokens?: number; bRounds?: number } {
+/** Get budget values: { tokens, rounds, timeMs } (time in seconds → milliseconds). */
+function getBudget(flow: UpstreamFlowDecl): { bTokens?: number; bRounds?: number; bTime?: number } {
 	const stmt = flow.body.find((n) => n.type === "BudgetStmt")
 	if (!stmt || stmt.type !== "BudgetStmt") return {}
-	const out: { bTokens?: number; bRounds?: number } = {}
+	const out: { bTokens?: number; bRounds?: number; bTime?: number } = {}
 	for (const item of stmt.items) {
 		if (item.kind === "tokens") out.bTokens = exprAsNumber(item.value)
 		else if (item.kind === "rounds") out.bRounds = exprAsNumber(item.value)
+		else if (item.kind === "time") {
+			const t = exprAsNumber(item.value)
+			if (t !== undefined) out.bTime = t * 1000
+		}
 	}
 	return out
 }
@@ -158,10 +162,11 @@ export interface WorkflowTaskOptions extends TaskOptions {
 /** Default workflow budgets — 0 means unlimited (no enforcement). */
 const DEFAULT_BUDGET_TOKENS = 0
 const DEFAULT_BUDGET_ROUNDS = 0
+const DEFAULT_BUDGET_TIME = 0
 /** Maximum consecutive output-validation failures before marking the agent as error. */
 const MAX_RETRIES = 3
 /** Max wall-clock time to wait for a round's spawned agent tasks to complete. */
-const AGENT_RESULT_TIMEOUT_MS = 300_000
+const AGENT_RESULT_TIMEOUT_MS = 120_000
 /** Poll interval while waiting for agent tasks to reach a terminal lifecycle. */
 const POLL_INTERVAL_MS = 500
 
@@ -191,6 +196,14 @@ export class WorkflowTask extends Task {
 	 * the slang source on restart.
 	 */
 	private loopBudgetTokens = 0
+	/**
+	 * Absolute deadline (ms since epoch) for wall-clock time budget.
+	 * 0 means unlimited. Computed once at slang-loop entry from
+	 * {@link getBudget} and checked at the top of every while iteration
+	 * and after every stake dispatch. Not serialized — a restored flow
+	 * re-evaluates the budget from the slang source on restart.
+	 */
+	private loopDeadline = 0
 	private slangLoopEntered = false
 
 	/**
@@ -473,15 +486,18 @@ export class WorkflowTask extends Task {
 		const budget = getBudget(this.flowDecl)
 		const budgetRounds = budget.bRounds || DEFAULT_BUDGET_ROUNDS
 		const budgetTokens = budget.bTokens || DEFAULT_BUDGET_TOKENS
+		const budgetTime = budget.bTime || DEFAULT_BUDGET_TIME
 		this.loopBudgetTokens = budgetTokens
+		this.loopDeadline = budgetTime > 0 ? Date.now() + budgetTime : 0
 
 		workflowLog.info(
-			`[WorkflowTask#${this.taskId}] #TRACE slangLoop start — flow='${this.flowState.flowName}' budgetRounds=${budgetRounds} budgetTokens=${budgetTokens}`,
+			`[WorkflowTask#${this.taskId}] #TRACE slangLoop start — flow='${this.flowState.flowName}' budgetRounds=${budgetRounds} budgetTokens=${budgetTokens} budgetTime=${budgetTime}`,
 		)
 
 		while (
 			(budgetRounds === 0 || this.flowState.round < budgetRounds) &&
 			(budgetTokens === 0 || this.flowState.tokensUsed < budgetTokens) &&
+			(this.loopDeadline === 0 || Date.now() < this.loopDeadline) &&
 			!this.abort &&
 			this.flowState.status === "running"
 		) {
@@ -571,17 +587,27 @@ export class WorkflowTask extends Task {
 			await this.waitForStakes(stakes)
 			await this.collectStakeResults(stakes)
 
-			// 6. Budget check — exit immediately when a single stake blows
+			// 6. Budget checks — exit immediately when a single stake blows
 			//    the budget, rather than waiting for the next while-guard
 			//    evaluation at the top of the loop. 0 means unlimited.
 			if (budgetTokens > 0 && this.flowState.tokensUsed >= budgetTokens) {
 				this.flowState.status = "budget_exceeded"
 				workflowLog.info(
-					`[WorkflowTask#${this.taskId}] Budget exceeded mid-round: ${this.flowState.tokensUsed} >= ${budgetTokens}`,
+					`[WorkflowTask#${this.taskId}] Token budget exceeded mid-round: ${this.flowState.tokensUsed} >= ${budgetTokens}`,
 				)
 				await this.sayProgress(
-					`⚠️ Budget exhausted (${this.flowState.tokensUsed} tokens used, limit ${budgetTokens}). Stopping.`,
+					`⚠️ Token budget exhausted (${this.flowState.tokensUsed} tokens used, limit ${budgetTokens}). Stopping.`,
 				)
+				await super.abortBackgroundChildren()
+				await this.persistCheckpoint()
+				await this.emitTaskCompleted("poor")
+				return
+			}
+			if (this.loopDeadline > 0 && Date.now() >= this.loopDeadline) {
+				this.flowState.status = "budget_exceeded"
+				const elapsed = budgetTime / 1000
+				workflowLog.info(`[WorkflowTask#${this.taskId}] Time budget exceeded mid-round: ${elapsed}s`)
+				await this.sayProgress(`⚠️ Time budget exhausted (${elapsed}s limit). Stopping.`)
 				await super.abortBackgroundChildren()
 				await this.persistCheckpoint()
 				await this.emitTaskCompleted("poor")
@@ -1026,16 +1052,27 @@ export class WorkflowTask extends Task {
 				this.flowState.tokensUsed += agentTokens
 
 				// Per-agent budget check — if an agent alone blows the
-				// token budget, abort immediately rather than waiting for
-				// all stakes to complete. 0 means unlimited.
+				// budget (token or time), abort immediately rather than
+				// waiting for all stakes to complete. 0 means unlimited.
 				if (this.loopBudgetTokens > 0 && this.flowState.tokensUsed >= this.loopBudgetTokens) {
 					this.flowState.status = "budget_exceeded"
 					workflowLog.info(
-						`[WorkflowTask#${this.taskId}] Budget exceeded mid-round after collecting agent '${name}' result: ${this.flowState.tokensUsed} >= ${this.loopBudgetTokens}`,
+						`[WorkflowTask#${this.taskId}] Token budget exceeded mid-round after collecting agent '${name}' result: ${this.flowState.tokensUsed} >= ${this.loopBudgetTokens}`,
 					)
 					await this.sayProgress(
-						`⚠️ Budget exhausted (${this.flowState.tokensUsed} tokens used, limit ${this.loopBudgetTokens}). Stopping.`,
+						`⚠️ Token budget exhausted (${this.flowState.tokensUsed} tokens used, limit ${this.loopBudgetTokens}). Stopping.`,
 					)
+					await super.abortBackgroundChildren()
+					await this.persistCheckpoint()
+					await this.emitTaskCompleted("poor")
+					return
+				}
+				if (this.loopDeadline > 0 && Date.now() >= this.loopDeadline) {
+					this.flowState.status = "budget_exceeded"
+					workflowLog.info(
+						`[WorkflowTask#${this.taskId}] Time budget exceeded mid-round after collecting agent '${name}' result`,
+					)
+					await this.sayProgress(`⚠️ Time budget exhausted. Stopping.`)
 					await super.abortBackgroundChildren()
 					await this.persistCheckpoint()
 					await this.emitTaskCompleted("poor")

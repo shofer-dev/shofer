@@ -9,12 +9,12 @@ flow "budget-rounds" (task: "string") {
     role: "Do some work."
 
     stake do_work(
-      instructions: "Do some work and report back."
+      instructions: "What is 1+1? Reply with just the number."
     ) -> @out
 
     commit
   }
 
   converge when: @Worker.committed
-  budget: rounds(1), tokens(100000)
+  budget: rounds(1), time(30)
 }

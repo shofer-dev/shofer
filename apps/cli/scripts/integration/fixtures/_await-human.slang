@@ -24,5 +24,5 @@ flow "await-human" (topic: "string") {
   }
 
   converge when: @Asker.committed
-  budget: rounds(5), tokens(10000)
+  budget: rounds(5), time(60)
 }

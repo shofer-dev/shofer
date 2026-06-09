@@ -29,5 +29,5 @@ flow "named-args" (topic: "string", num_value: "number") {
   }
 
   converge when: @Client.committed
-  budget: rounds(10), tokens(20000)
+  budget: rounds(10), time(60)
 }

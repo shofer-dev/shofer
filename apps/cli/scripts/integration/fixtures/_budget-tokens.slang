@@ -23,5 +23,5 @@ flow "budget-tokens" (task: "string") {
   }
 
   converge when: @Worker.committed
-  budget: rounds(50), tokens(50)
+  budget: rounds(50), tokens(50), time(120)
 }

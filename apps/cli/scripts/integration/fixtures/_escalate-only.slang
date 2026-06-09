@@ -17,5 +17,5 @@ flow "escalate-only" (question: "string") {
   }
 
   converge when: @Asker.committed
-  budget: rounds(5), tokens(5000)
+  budget: rounds(5), time(60)
 }

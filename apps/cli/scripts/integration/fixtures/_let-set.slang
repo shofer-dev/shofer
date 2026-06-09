@@ -25,5 +25,5 @@ flow "let-set" (initial_count: "number") {
   }
 
   converge when: @Vars.committed
-  budget: rounds(5), tokens(5000)
+  budget: rounds(5), time(60)
 }

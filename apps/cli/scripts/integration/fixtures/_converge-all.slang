@@ -19,5 +19,5 @@ flow "converge-all" (task: "string") {
   }
 
   converge when: all_committed
-  budget: rounds(10), tokens(20000)
+  budget: rounds(10), time(60)
 }

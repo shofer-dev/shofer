@@ -417,11 +417,11 @@ The flow terminates **successfully** when the condition becomes truthy. Common f
 
 ### `budget`
 
-| Item        | Enforced?      | Meaning                                            | Default         |
-| ----------- | -------------- | -------------------------------------------------- | --------------- |
-| `tokens(N)` | ✅ yes         | Max aggregate tokens across all agent LLM calls.   | `0` (unlimited) |
-| `rounds(N)` | ✅ yes         | Max execution rounds.                              | `0` (unlimited) |
-| `time(N)`   | ⚠️ parsed only | Wall-clock budget — accepted but not yet enforced. | —               |
+| Item        | Enforced? | Meaning                                          | Default         |
+| ----------- | --------- | ------------------------------------------------ | --------------- |
+| `tokens(N)` | ✅ yes    | Max aggregate tokens across all agent LLM calls. | `0` (unlimited) |
+| `rounds(N)` | ✅ yes    | Max execution rounds.                            | `0` (unlimited) |
+| `time(N)`   | ✅ yes    | Hard wall-clock seconds for the entire flow.     | `0` (unlimited) |
 
 If no `budget` statement is present, both limits default to **unlimited** (0).
 Exceeding an enforced budget terminates the flow with `budget_exceeded`.
@@ -536,7 +536,6 @@ or forward-compatibility, but do not rely on runtime behaviour:
 | `import "..." as alias`  | Parsed and recorded on the flow; no module resolution is performed.                                                                        |
 | `deliver func(args)`     | Flow-level statement; parsed, not executed.                                                                                                |
 | `expect <expr>`          | Flow-level statement; parsed, not executed.                                                                                                |
-| `budget: time(N)`        | Parsed; only `tokens`/`rounds` are enforced.                                                                                               |
 | `await` trailing options | `await x <- @A, key: expr` — options are parsed but unused (and fragile; prefer a bare source list).                                       |
 | `tools`                  | ⚙️ Parsed, stored on `AgentMeta.tools`, not yet consumed by `spawnAgentTask()`. Values are ToolGroup names.                                |
 | `model`                  | Parsed, stored on `AgentMeta.model`, not consumed by WorkflowTask.                                                                         |

@@ -28,5 +28,5 @@ flow "repeat-until" (topic: "string") {
   }
 
   converge when: @Looper.committed
-  budget: rounds(10), tokens(10000)
+  budget: rounds(10), time(60)
 }

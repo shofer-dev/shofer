@@ -41,5 +41,5 @@ flow "expressions" (val: "number", text: "string") {
   }
 
   converge when: @ExprTest.committed
-  budget: rounds(5), tokens(10000)
+  budget: rounds(5), time(60)
 }

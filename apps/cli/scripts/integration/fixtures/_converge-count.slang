@@ -19,5 +19,5 @@ flow "converge-count" (task: "string") {
   }
 
   converge when: committed_count >= 1
-  budget: rounds(10), tokens(20000)
+  budget: rounds(10), time(60)
 }

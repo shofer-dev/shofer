@@ -20,5 +20,5 @@ flow "if-condition" (flag: "boolean") {
   }
 
   converge when: @Conditional.committed
-  budget: rounds(5), tokens(5000)
+  budget: rounds(5), time(60)
 }
