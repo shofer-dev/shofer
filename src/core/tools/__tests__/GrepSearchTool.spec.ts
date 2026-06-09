@@ -504,7 +504,7 @@ describe("GrepSearchTool", () => {
 			const args = mockSpawn.mock.calls[0][1] as string[]
 			const ignoreFileIdx = args.indexOf("--ignore-file")
 			expect(ignoreFileIdx).toBeGreaterThan(-1)
-			expect(args[ignoreFileIdx + 1]).toBe("/workspace/.shoferignore")
+			expect(args[ignoreFileIdx + 1]).toBe("/workspace/.shofer/shoferignore")
 		})
 
 		it("does NOT pass --ignore-file when the ignore controller has no content (file absent)", async () => {

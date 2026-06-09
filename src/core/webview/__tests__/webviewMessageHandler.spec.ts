@@ -73,7 +73,7 @@ const mockShoferProvider = {
 		getValue: vi.fn(),
 	},
 	log: vi.fn(),
-	postInitState: vi.fn().mockResolvedValue(undefined),
+	postStateToWebview: vi.fn().mockResolvedValue(undefined),
 	getCurrentTask: vi.fn(),
 	handleModeDeleted: vi.fn(),
 	getTaskWithId: vi.fn(),

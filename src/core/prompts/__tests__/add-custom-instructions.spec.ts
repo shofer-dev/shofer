@@ -265,9 +265,9 @@ describe("addCustomInstructions", () => {
 		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/code-mode-rules.snap")
 	})
 
-	it("should prioritize mode-specific rules for ask mode", async () => {
+	it("should prioritize mode-specific rules for debug mode", async () => {
 		const instructions = await addCustomInstructions("", "", "/test/path", modes[2].slug)
-		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/code-mode-rules.snap")
+		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/debug-mode-rules.snap")
 	})
 
 	it("should prioritize mode-specific rules for architect mode", async () => {
