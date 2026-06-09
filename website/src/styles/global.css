@@ -16,6 +16,9 @@
 	.text-gradient {
 		@apply bg-gradient-to-r from-shofer-600 via-accent-purple to-shofer-400 bg-clip-text text-transparent;
 	}
+	.text-gradient-rose {
+		@apply bg-gradient-to-r from-accent-rose via-accent-amber to-accent-rose bg-clip-text text-transparent;
+	}
 	.text-gradient-warm {
 		@apply bg-gradient-to-r from-accent-amber via-accent-rose to-accent-purple bg-clip-text text-transparent;
 	}
