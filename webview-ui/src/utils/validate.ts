@@ -89,8 +89,14 @@ function validateModelsAndKeysProvided(apiConfiguration: ProviderSettings): stri
 			}
 			break
 		case "openai":
-			if (!apiConfiguration.openAiBaseUrl || !apiConfiguration.openAiApiKey || !apiConfiguration.openAiModelId) {
-				return i18next.t("settings:validation.openAi")
+			if (!apiConfiguration.openAiBaseUrl) {
+				return i18next.t("settings:validation.openAiBaseUrl")
+			}
+			if (!apiConfiguration.openAiApiKey) {
+				return i18next.t("settings:validation.apiKey")
+			}
+			if (!apiConfiguration.openAiModelId) {
+				return i18next.t("settings:validation.openAiModelId")
 			}
 			break
 		case "ollama":

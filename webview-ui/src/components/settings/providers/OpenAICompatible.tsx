@@ -17,6 +17,7 @@ import { convertHeadersToObject } from "../utils/headers"
 import { inputEventTransform, noTransform } from "../transforms"
 import { R1FormatSetting } from "../R1FormatSetting"
 import { ThinkingBudget } from "../ThinkingBudget"
+import { ApiErrorMessage } from "../ApiErrorMessage"
 
 type OpenAICompatibleProps = {
 	apiConfiguration: ProviderSettings
@@ -34,7 +35,7 @@ export const OpenAICompatible = ({
 	apiConfiguration,
 	setApiConfigurationField,
 	organizationAllowList: _organizationAllowList,
-	modelValidationError: _modelValidationError,
+	modelValidationError,
 	simplifySettings: _simplifySettings,
 }: OpenAICompatibleProps) => {
 	const { t } = useAppTranslation()
@@ -128,6 +129,7 @@ export const OpenAICompatible = ({
 				className="w-full">
 				<label className="block font-medium mb-1">{t("settings:providers.model")}</label>
 			</VSCodeTextField>
+			{modelValidationError && <ApiErrorMessage errorMessage={modelValidationError} />}
 			<R1FormatSetting
 				onChange={handleInputChange("openAiR1FormatEnabled", noTransform)}
 				openAiR1FormatEnabled={apiConfiguration?.openAiR1FormatEnabled ?? false}

@@ -1086,6 +1086,8 @@
 		"modelId": "You must provide a valid model ID.",
 		"modelSelector": "You must provide a valid model selector.",
 		"openAi": "You must provide a valid base URL, API key, and model ID.",
+		"openAiBaseUrl": "You must provide a valid base URL.",
+		"openAiModelId": "You must provide a valid model ID.",
 		"arn": {
 			"invalidFormat": "Invalid ARN format. Please check the format requirements.",
 			"regionMismatch": "Warning: The region in your ARN ({{arnRegion}}) does not match your selected region ({{region}}). This may cause access issues. The provider will use the region from the ARN."

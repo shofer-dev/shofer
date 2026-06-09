@@ -83,20 +83,6 @@ async function main() {
 						srcDir,
 						distDir,
 					)
-					// Copy built-in .slang workflows so discoverWorkflows() finds them at runtime.
-					// discoverWorkflows() resolves dist/media/workflows/ from the bundled extension
-					// root (__dirname/../../media/workflows). copyPaths does not create destination
-					// directories, so we ensure the target dir exists first.
-					const workflowsDest = path.join(distDir, "media", "workflows")
-					fs.mkdirSync(workflowsDest, { recursive: true })
-					fs.copyFileSync(
-						path.join(srcDir, "media", "workflows", "debug.slang"),
-						path.join(workflowsDest, "debug.slang"),
-					)
-					fs.copyFileSync(
-						path.join(srcDir, "media", "workflows", "implement-feature.slang"),
-						path.join(workflowsDest, "implement-feature.slang"),
-					)
 				})
 			},
 		},

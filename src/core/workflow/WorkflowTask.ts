@@ -1331,10 +1331,22 @@ export const TERMINAL_FLOW_STATUSES: ReadonlySet<FlowStatus> = new Set<FlowStatu
 
 // ── .slang File Discovery ──
 
+/**
+ * Priority order for workflow discovery (lowest to highest):
+ *   1. Built-in  — shipped with the extension under dist/media/workflows/
+ *   2. Global    — ~/.shofer/workflows/
+ *   3. Project   — .shofer/workflows/ (highest priority, overrides lower layers)
+ */
 export async function discoverWorkflows(workspacePath: string): Promise<Map<string, string>> {
 	const workflows = new Map<string, string>()
+	// Built-in workflows — lowest priority
+	const builtinDir = path.join(__dirname, "..", "..", "media", "workflows")
+	workflowLog.info(`[discoverWorkflows] __dirname=${__dirname} builtinDir=${builtinDir}`)
+	await loadFromDir(builtinDir, workflows, "builtin")
+	// Global user workflows — medium priority
 	const globalDir = path.join(os.homedir(), ".shofer", "workflows")
 	await loadFromDir(globalDir, workflows)
+	// Project workflows — highest priority
 	const projectDir = path.join(workspacePath, ".shofer", "workflows")
 	await loadFromDir(projectDir, workflows)
 	return workflows
