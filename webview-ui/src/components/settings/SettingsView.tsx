@@ -157,6 +157,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	// Changing the edit dropdown does NOT change the global default.
 	const [editingConfigName, setEditingConfigName] = useState<string>(currentApiConfigName || "default")
 
+	// pendingDefaultConfigName is a local buffer for the Default Configuration
+	// dropdown. Changes are staged here and only persisted when Save is clicked.
+	// This decouples the dropdown from the live host-side currentApiConfigName
+	// so the user can change the default without an immediate side-effect.
+	const [pendingDefaultConfigName, setPendingDefaultConfigName] = useState<string>(currentApiConfigName || "")
+
 	const _prevApiConfigName = useRef(currentApiConfigName)
 	const confirmDialogHandler = useRef<() => void>()
 	// Imperative handle to ModesView so the Save / Discard flow can commit or drop
@@ -476,7 +482,14 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 			// Save the edited configuration under the editing config name,
 			// NOT the global default. The Default dropdown controls currentApiConfigName.
-			vscode.postMessage({ type: "upsertApiConfiguration", text: editingConfigName, apiConfiguration })
+			vscode.postMessage({ type: "upsertApiConfiguration", text: editingConfigName, apiConfiguration, bool: false })
+
+			// Persist the pending default config name (if changed) so the Save
+			// button applies the Default Configuration dropdown selection.
+			// This is the ONLY writer of currentApiConfigName from the Settings view.
+			if (pendingDefaultConfigName && pendingDefaultConfigName !== currentApiConfigName) {
+				vscode.postMessage({ type: "setDefaultApiConfiguration", text: pendingDefaultConfigName })
+			}
 			vscode.postMessage({ type: "telemetrySetting", text: telemetrySetting })
 			vscode.postMessage({ type: "debugSetting", bool: cachedState.debug })
 
@@ -804,7 +817,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 								<Section>
 									<ApiConfigManager
-										currentApiConfigName={currentApiConfigName}
+										currentApiConfigName={pendingDefaultConfigName}
 										editingConfigName={editingConfigName}
 										listApiConfigMeta={listApiConfigMeta}
 										onSelectConfigForEdit={(configName: string) => {
@@ -817,12 +830,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 											)
 										}}
 										onSelectConfigAsDefault={(configName: string) => {
-											// Mark the change as dirty locally so the Save button
-											// enables immediately. The host-side handler only
-											// persists the default-name change; the form values
-											// (apiConfiguration) are left untouched.
+											// Buffer the selection locally — do NOT persist
+											// immediately.  The new default is applied when the
+											// user clicks the global Save button.
+											setPendingDefaultConfigName(configName)
 											setChangeDetected(true)
-											vscode.postMessage({ type: "setDefaultApiConfiguration", text: configName })
 										}}
 										onDeleteConfig={(configName: string) => {
 											setEditingConfigName(currentApiConfigName || "default")

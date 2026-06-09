@@ -2118,7 +2118,12 @@ export const webviewMessageHandler = async (
 			break
 		case "upsertApiConfiguration":
 			if (message.text && message.apiConfiguration) {
-				await provider.upsertProviderProfile(message.text, message.apiConfiguration)
+				// bool === false means "save without activating" — the Save path
+				// passes activate=false so editing a profile doesn't clobber
+				// the global default. Omitted bool (undefined) defaults to
+				// activate=true in upsertProviderProfile (backward-compatible).
+				const activate = message.bool !== false
+				await provider.upsertProviderProfile(message.text, message.apiConfiguration, activate)
 				await reinitializeAssistantAgent(provider)
 			}
 			break
@@ -2175,6 +2180,18 @@ export const webviewMessageHandler = async (
 			if (message.text) {
 				await provider.setDefaultApiConfiguration(message.text)
 				await reinitializeAssistantAgent(provider)
+			}
+			break
+		case "loadApiConfigurationForEdit":
+			if (message.text) {
+				try {
+					await provider.loadApiConfigurationForEdit(message.text)
+				} catch (error) {
+					provider.log(
+						`Error load api configuration for edit: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
+					)
+					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+				}
 			}
 			break
 		case "loadApiConfigurationById":
