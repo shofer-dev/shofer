@@ -581,6 +581,9 @@ export async function presentAssistantMessage(shofer: Task) {
 						// Best-effort only
 					}
 
+					// Surface the error in the chat UI so the user can see what went wrong.
+					await shofer.say("error", errorMessage)
+
 					// Push tool_result directly without setting didAlreadyUseTool so streaming can
 					// continue gracefully.
 					shofer.pushToolResultToUserContent({

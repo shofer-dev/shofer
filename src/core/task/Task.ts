@@ -3552,6 +3552,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._taskAbortController.abort()
 		}
 
+		// Abort any running terminal process (e.g., from execute_command)
+		// so the Global Stop button kills the process instead of leaving
+		// it orphaned after the task loop exits.
+		this.terminalProcess?.abort()
+
 		// Reset consecutive error counters on abort (manual intervention)
 		this.consecutiveNoToolUseCount = 0
 		this.consecutiveNoAssistantMessagesCount = 0
@@ -4632,7 +4637,31 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								})
 
 								if (!toolUse) {
+									const errorMessage =
+										`Tool call failed for "${chunk.name}": the parser could not produce a valid ` +
+										`tool invocation. This may be due to an unknown tool name, malformed JSON ` +
+										`arguments, or missing required parameters.`
+
 									taskLog.error(`Failed to parse tool call for task ${this.taskId}:`, chunk)
+
+									this.consecutiveMistakeCount++
+									try {
+										this.recordToolError(chunk.name as ToolName, errorMessage)
+									} catch {
+										// Best-effort only
+									}
+
+									await this.say("error", errorMessage)
+
+									// Push a matching tool_result so the provider doesn't see a
+									// dangling tool_use without a corresponding response.
+									this.pushToolResultToUserContent({
+										type: "tool_result",
+										tool_use_id: sanitizeToolUseId(chunk.id),
+										content: formatResponse.toolError(errorMessage),
+										is_error: true,
+									})
+
 									break
 								}
 
