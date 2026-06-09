@@ -705,6 +705,24 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		this.emit("tasks:updated", this.getManagedTasks())
 	}
 
+	/**
+		* Mark the manager as restored without loading any history items.
+		*
+		* This is the early-bird counterpart to `restoreManagedTasks`: called
+		* before the async `initializeTaskHistoryStore` settles so that early
+		* `registerBackgroundTask` calls (e.g. from WorkflowTask spawning an
+		* agent child in the hot constructor path) don't throw.
+		*
+		* `restoreManagedTasks` (which eventually calls this with real history
+		* items) is idempotent — the `this.restored` guard ensures it seeds
+		* exactly once — so calling this first is always safe.
+		*/
+	public ensureRestored(): void {
+		if (!this.restored) {
+			this.restored = true
+		}
+	}
+
 	private assertRestored(method: string): void {
 		if (!this.restored) {
 			throw new Error(

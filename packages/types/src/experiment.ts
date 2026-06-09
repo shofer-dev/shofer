@@ -14,6 +14,7 @@ export const experimentIds = [
 	"showToolInputOutput",
 	"prometheusMetrics",
 	"webviewLivenessMonitor",
+	"disableMistakeLimitChecks",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)
@@ -32,6 +33,7 @@ export const experimentsSchema = z.object({
 	showToolInputOutput: z.boolean().optional(),
 	prometheusMetrics: z.boolean().optional(),
 	webviewLivenessMonitor: z.boolean().optional(),
+	disableMistakeLimitChecks: z.boolean().optional(),
 })
 
 export type Experiments = z.infer<typeof experimentsSchema>
