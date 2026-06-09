@@ -53,7 +53,7 @@ Shofer ships with five built-in modes that control what tools and models the AI 
 
 <img src="src/media/walkthrough/images/ModeSelector.png" alt="Mode Selector Dropdown" width="280" />
 
-You can add any number of custom modes via [`.shofermodes`](#3-custom-modes). Common examples include a read-only **Reviewer**, a fast **Search** agent, or a **Browser** mode for web interaction.
+You can add any number of custom modes via [`.shofer/shofermodes`](#3-custom-modes). Common examples include a read-only **Reviewer**, a fast **Search** agent, or a **Browser** mode for web interaction.
 
 ### API Provider Profiles
 
@@ -124,7 +124,7 @@ Settings → About → **Export** saves your full configuration as `shofer-code-
 
 ## 3. Custom Modes
 
-Define custom modes in a `.shofermodes` file at your project root (or globally at `~/.shofer/.shofermodes`).
+Define custom modes in a `.shofer/shofermodes` file at your project root (or globally at `~/.shofer/.shofer/shofermodes`).
 
 ### Tool Access Fields
 
@@ -351,9 +351,9 @@ Shofer manages git worktrees for parallel tasks, letting multiple tasks run on d
 3. Confirm the branch and path (auto-generated).
 4. A new task spawns automatically in that worktree.
 
-### `.worktreeinclude`
+### `.shofer/worktreeinclude`
 
-By default, only tracked git files are present in a new worktree. Create a `.worktreeinclude` file to specify which gitignored files (e.g., `node_modules/`) to copy automatically. Only files matching **both** `.gitignore` and `.worktreeinclude` are copied.
+By default, only tracked git files are present in a new worktree. Create a `.shofer/worktreeinclude` file to specify which gitignored files (e.g., `node_modules/`) to copy automatically. Only files matching **both** `.gitignore` and `.shofer/worktreeinclude` are copied.
 
 Manage worktrees from Settings → Worktrees (view, delete, force-delete with uncommitted changes). Multi-root workspaces are not supported.
 
@@ -413,8 +413,8 @@ Shofer recognizes these files in your project:
 
 | File / Directory        | Purpose                                       | Location               |
 | ----------------------- | --------------------------------------------- | ---------------------- |
-| `.shoferignore`         | Hides files from the AI (`.gitignore` syntax) | Workspace root         |
-| `.shofermodes`          | Custom AI modes for this project              | Workspace root         |
+| `.shofer/shoferignore`  | Hides files from the AI (`.gitignore` syntax) | Workspace root         |
+| `.shofer/shofermodes`   | Custom AI modes for this project              | Workspace root         |
 | `AGENTS.md`             | Project rules injected into every task        | Workspace root         |
 | `.shofer/rules/`        | Mode-agnostic rules (always active)           | Project or `~/.shofer` |
 | `.shofer/rules-<mode>/` | Rules active only in a specific mode          | Project or `~/.shofer` |
@@ -424,9 +424,9 @@ Shofer recognizes these files in your project:
 
 ### Write-Protected Files
 
-The AI cannot modify these files without explicit approval: `.shoferignore`, `.shofermodes`, everything inside `.shofer/`, `.vscode/settings.json`, `*.code-workspace`, `AGENTS.md`.
+The AI cannot modify these files without explicit approval: `.shofer/shoferignore`, `.shofer/shofermodes`, everything inside `.shofer/`, `.vscode/settings.json`, `*.code-workspace`, `AGENTS.md`.
 
-### `.shoferignore`
+### `.shofer/shoferignore`
 
 Same syntax as `.gitignore`. Files matching the patterns are invisible to Shofer's tools. The "Show ignored files" setting (in Settings) controls whether ignored files appear in directory listings with a 🔒 badge.
 

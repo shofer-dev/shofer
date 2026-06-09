@@ -22,7 +22,7 @@ ${addCustomInstructions()}                 ← Mode-specific + user rules
 
 ### 1. `roleDefinition` (Mode Persona)
 
-**Source:** Mode configuration from [`src/shared/modes.ts`](../src/shared/modes.ts) (built-in) or `.shofermodes` (custom).
+**Source:** Mode configuration from [`src/shared/modes.ts`](../src/shared/modes.ts) (built-in) or `.shofer/shofermodes` (custom).
 
 - Defines the LLM's identity: e.g., `"You are Shofer, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices."`
 - Sets the tone and expertise level for the entire conversation.
@@ -68,7 +68,7 @@ ${addCustomInstructions()}                 ← Mode-specific + user rules
 
 - Lists all currently available modes with their slugs and descriptions.
 - Description source priority: `whenToUse` field → first sentence of `roleDefinition`.
-- Reads from extension state to include custom modes defined via `.shofermodes`.
+- Reads from extension state to include custom modes defined via `.shofer/shofermodes`.
 
 ### 7. [`sections/skills.ts`](../src/core/prompts/sections/skills.ts)
 
@@ -132,9 +132,9 @@ The largest section, containing operational constraints:
     - **`AGENTS.md` / `AGENT.md`** — from workspace root and optionally from subdirectories.
     - **`.shofer/rules-{mode}/`** — mode-specific rule directories (e.g., `.shofer/rules-code/`).
     - **Legacy fallback**: `.roorules` and `.clinerules` files.
-- Respects `.shoferignore` for file filtering.
+- Respects `.shofer/shoferignore` for file filtering.
 - Supports symlinks for all discovered files.
-- Includes language preference and `.shoferignore` instructions.
+- Includes language preference and `.shofer/shoferignore` instructions.
 
 ## Entry Point
 
@@ -146,7 +146,7 @@ The assembled prompt is exported as [`SYSTEM_PROMPT`](../src/core/prompts/system
 
 - `toolDenied` / `toolApprovedWithFeedback` — approval responses.
 - `toolError` — execution failure.
-- `shoferIgnoreError` — access blocked by `.shoferignore`.
+- `shoferIgnoreError` — access blocked by `.shofer/shoferignore`.
 - `noToolsUsed` — reminder when the model forgets to call a tool.
 - `tooManyMistakes` — guidance on mistakes/repetition.
 - `formatResponse.toolResult` — formats `read_file`, `list_files`, etc. results with path headers and content.

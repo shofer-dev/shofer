@@ -8,13 +8,13 @@ The key design principles:
 
 - **Persistent context** — the agent's conversation history survives task termination and VSCode restarts.
 - **Cheap + large context** — user selects a low-cost model optimized for large windows (e.g., Gemini Flash, GPT-4o-mini, Claude Haiku).
-- **File-aware** — notified of file changes (like the RAG indexer) so it can re-read changed files to keep its context fresh. File access respects `.shoferignore` — excluded files are never loaded into context.
+- **File-aware** — notified of file changes (like the RAG indexer) so it can re-read changed files to keep its context fresh. File access respects `.shofer/shoferignore` — excluded files are never loaded into context.
 - **Serialized access** — questions are queued; only one question is processed at a time.
 - **KV-cache preserving** — the context window is append-only during normal operation. Files are never evicted when modified by tasks; instead a "recently modified" notification is attached to the next question. This keeps the LLM provider's attention cache warm, minimizing token costs and latency.
 - **Cold start** — context window starts empty on first launch; fills organically as tasks ask questions.
 - **Truncation, not summarization** — when the context window fills up, oldest messages are simply dropped. No lossy compression or summarization is ever applied, keeping the remaining context pristine.
 - **Strictly read-only** — the assistant agent has **no access** to code-writing tools, CLI commands, or MCP tools. It can only use the "Read" category of native tools (file reading, search, LSP symbol lookup). This is a hard constraint enforced by tool filtering.
-- **Fixed system prompt** — the assistant agent's system prompt is internally defined and not user-configurable. It instructs the agent to be a concise, read-only codebase Q&A assistant. The prompt includes a snapshot of the workspace directory/file hierarchy (like `find .` output), capped at ~10% of the context window, with `.shoferignore`-excluded files omitted.
+- **Fixed system prompt** — the assistant agent's system prompt is internally defined and not user-configurable. It instructs the agent to be a concise, read-only codebase Q&A assistant. The prompt includes a snapshot of the workspace directory/file hierarchy (like `find .` output), capped at ~10% of the context window, with `.shofer/shoferignore`-excluded files omitted.
 
 ---
 
@@ -27,7 +27,7 @@ lifting lives in focused single-responsibility collaborators it composes:
 ```
 AssistantAgentManager (singleton per workspace, vscode.Disposable)
  │
- ├── ShoferIgnoreController       — .shoferignore pattern validation
+ ├── ShoferIgnoreController       — .shofer/shoferignore pattern validation
  │                                 (shared with rest of extension; filters all paths)
  ├── ConversationStore           — versioned JSON snapshot persistence
  │                                 (SHA-256 file-context validation, ENOENT-safe)
@@ -40,9 +40,9 @@ AssistantAgentManager (singleton per workspace, vscode.Disposable)
  ├── AssistantAgentToolExecutor   — read-only tool dispatcher (wraps ripgrep, glob,
  │                                 extract-text, CodeIndexManager; no Task dependency)
  ├── AssistantAgentDirectoryTree     — workspace scanner, ~10% context-window cap
- │                                 (.shoferignore-filtered via ShoferIgnoreController)
+ │                                 (.shofer/shoferignore-filtered via ShoferIgnoreController)
  ├── AssistantAgentFileWatcher       — VSCode FileSystemWatcher, 500ms debounce
- │                                 (.shoferignore-filtered via ShoferIgnoreController)
+ │                                 (.shofer/shoferignore-filtered via ShoferIgnoreController)
  └── pricing                       — per-model USD cost from ApiHandler.getModel()
 
 Configuration & secrets are read through `ContextProxy` so the helper
@@ -57,21 +57,21 @@ State machine:  Standby → Initializing → Ready ⇄ Busy → Stopping → Sta
 
 ### Key Source Files
 
-| File                                                 | Lines | Role                                                                                                                                                                                                                                                                                         |
-| ---------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/services/assistant-agent/manager.ts`            | ~910  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                                                                                                |
-| `src/services/assistant-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                                                                                                           |
-| `src/services/assistant-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                                                                                                |
-| `src/services/assistant-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                                                                                                 |
-| `src/services/assistant-agent/llm-client.ts`         | ~320  | Adapter onto the shared `buildApiHandler()`. Maps the assistant-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                                                                                                |
-| `src/services/assistant-agent/tool-executor.ts`      | ~380  | Read-only tool dispatcher wrapping ripgrep, glob, extract-text, and CodeIndexManager. No Task dependency — pure utility layer. Only `TOOL_GROUPS.read` tools (minus `ask_assistant_agent` itself).                                                                                           |
-| `src/services/assistant-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                                                                                                         |
-| `src/services/assistant-agent/directory-tree.ts`     | ~170  | Recursive workspace scan. `find .`-style tree generation. Filtered through `.shoferignore` (via `ShoferIgnoreController.validateAccess()`); hardcoded `SKIP_PARTS` set (exported, shared with file-watcher) as fast-path pre-filter. Capped at ~10% of context window.                       |
-| `src/services/assistant-agent/file-watcher.ts`       | ~110  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce. Filtered through `.shoferignore` (via `ShoferIgnoreController.validateAccess()`); `SKIP_PARTS` set (imported from `directory-tree.ts`) as fast-path pre-filter. Notifies the manager which invalidates `ContextWindow` entries. |
-| `src/services/assistant-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                                                                                                 |
-| `packages/types/src/assistant-agent.ts`              | ~230  | Zod schemas (`AgentMessage`, `FileContextEntry`, `AssistantAgentConfig`, `QuestionResult`, `AssistantAgentCostTracking`, `AssistantAgentConversationData`); the fixed `ASSISTANT_AGENT_SYSTEM_PROMPT`; 13 constants.                                                                         |
-| `packages/types/src/global-settings.ts`              |       | `assistantAgent{Enabled,ApiConfigId,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`. Credentials come from the linked API Configuration profile (no assistant-agent-specific `GLOBAL_SECRET_KEYS`).                                                                   |
-| `packages/types/src/vscode.ts`                       |       | Assistant-agent command ids on the typed `commandIds` array (`assistantAgent.{start,stop,clearContext,showChat,openSettings}`).                                                                                                                                                              |
+| File                                                 | Lines | Role                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/assistant-agent/manager.ts`            | ~910  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                                                                                                       |
+| `src/services/assistant-agent/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                                                                                                                  |
+| `src/services/assistant-agent/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                                                                                                       |
+| `src/services/assistant-agent/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                                                                                                        |
+| `src/services/assistant-agent/llm-client.ts`         | ~320  | Adapter onto the shared `buildApiHandler()`. Maps the assistant-agent's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                                                                                                       |
+| `src/services/assistant-agent/tool-executor.ts`      | ~380  | Read-only tool dispatcher wrapping ripgrep, glob, extract-text, and CodeIndexManager. No Task dependency — pure utility layer. Only `TOOL_GROUPS.read` tools (minus `ask_assistant_agent` itself).                                                                                                  |
+| `src/services/assistant-agent/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                                                                                                                |
+| `src/services/assistant-agent/directory-tree.ts`     | ~170  | Recursive workspace scan. `find .`-style tree generation. Filtered through `.shofer/shoferignore` (via `ShoferIgnoreController.validateAccess()`); hardcoded `SKIP_PARTS` set (exported, shared with file-watcher) as fast-path pre-filter. Capped at ~10% of context window.                       |
+| `src/services/assistant-agent/file-watcher.ts`       | ~110  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce. Filtered through `.shofer/shoferignore` (via `ShoferIgnoreController.validateAccess()`); `SKIP_PARTS` set (imported from `directory-tree.ts`) as fast-path pre-filter. Notifies the manager which invalidates `ContextWindow` entries. |
+| `src/services/assistant-agent/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                                                                                                        |
+| `packages/types/src/assistant-agent.ts`              | ~230  | Zod schemas (`AgentMessage`, `FileContextEntry`, `AssistantAgentConfig`, `QuestionResult`, `AssistantAgentCostTracking`, `AssistantAgentConversationData`); the fixed `ASSISTANT_AGENT_SYSTEM_PROMPT`; 13 constants.                                                                                |
+| `packages/types/src/global-settings.ts`              |       | `assistantAgent{Enabled,ApiConfigId,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`. Credentials come from the linked API Configuration profile (no assistant-agent-specific `GLOBAL_SECRET_KEYS`).                                                                          |
+| `packages/types/src/vscode.ts`                       |       | Assistant-agent command ids on the typed `commandIds` array (`assistantAgent.{start,stop,clearContext,showChat,openSettings}`).                                                                                                                                                                     |
 
 ### Module Contracts
 
@@ -311,7 +311,7 @@ Instead, the assistant agent accumulates a list of **recently modified file path
 Task tool modifies file (write_to_file, apply_diff, insert_edit, sed, file rm/mv, rename_symbol)
   → Tool execution completes successfully
   → AssistantAgentManager.onFileModifiedByTask(filePath)  // hook invoked
-  → Check against .shoferignore — skip if ignored
+  → Check against .shofer/shoferignore — skip if ignored
   → Check against .shofer/worktrees/ — skip worktree files
   → Add filePath to recentlyModifiedFiles set          // NO eviction — KV cache preserved
 ```
@@ -349,9 +349,9 @@ On agent startup (and after Clear Context), the assistant agent scans the worksp
 ```
 startAgent() or clearContext():
   → Scan workspace root with find/list_files equivalent
-  → Apply .shoferignore filter — skip excluded paths
+  → Apply .shofer/shoferignore filter — skip excluded paths
   → Apply .shofer/worktrees/ filter — skip worktree directories
-  → Generate tree output (similar to `find . -not -path './.shoferignore-patterns'`):
+  → Generate tree output (similar to `find . -not -path './.shofer/shoferignore-patterns'`):
       src/
         services/
           user-service.ts
@@ -378,7 +378,7 @@ The directory tree is:
 - **Generated once** at agent startup and regenerated on Clear Context
 - **Never truncated** by the normal truncation policy — it is part of the immutable system prompt prefix
 - **Capped at ~10%** of the context window to leave room for conversation and file contents
-- **Excludes** `.shoferignore`-listed paths and `.shofer/worktrees/` directories
+- **Excludes** `.shofer/shoferignore`-listed paths and `.shofer/worktrees/` directories
 - **Provides immediate orientation** — the agent knows the project layout without tool calls
 
 Integration point: `src/services/assistant-agent/directory-tree.ts` — generates and token-counts the tree.
@@ -688,7 +688,7 @@ Shofer uses **embedded worktrees** — per-task git worktrees created under `.sh
 
 The assistant agent interacts with worktrees as follows:
 
-- **Exclusion from context**: The assistant agent **never loads files from `.shofer/worktrees/`** directories. These represent ephemeral, task-scoped branches whose content is transient and would pollute the persistent context with unrelated branch state. This exclusion is enforced by `.shoferignore` patterns and additionally by a hardcoded path filter in the file watcher and lazy-load paths.
+- **Exclusion from context**: The assistant agent **never loads files from `.shofer/worktrees/`** directories. These represent ephemeral, task-scoped branches whose content is transient and would pollute the persistent context with unrelated branch state. This exclusion is enforced by `.shofer/shoferignore` patterns and additionally by a hardcoded path filter in the file watcher and lazy-load paths.
 
 - **File path disambiguation**: Since worktree files live at `.shofer/worktrees/<name>/src/foo.ts` while main-branch files live at `src/foo.ts`, they are naturally distinct paths. The assistant agent's context only ever contains main-workspace file paths.
 
@@ -891,7 +891,7 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 **Files to create/modify:**
 | File | Action | Notes |
 |------|--------|-------|
-| `src/services/assistant-agent/directory-tree.ts` | Create | Scan workspace, generate `find .`-style tree, exclude `.shoferignore` + worktree paths, cap at 10% of context window |
+| `src/services/assistant-agent/directory-tree.ts` | Create | Scan workspace, generate `find .`-style tree, exclude `.shofer/shoferignore` + worktree paths, cap at 10% of context window |
 | `src/services/assistant-agent/file-watcher.ts` | Create | VSCode FileSystemWatcher wrapper, 500ms debounce, notify ContextWindow |
 | `src/services/assistant-agent/manager.ts` | Modify | Integrate directory tree into system prompt on init + Clear Context, integrate file watcher, hook `notifyFileModified` from tool execution pipeline |
 | `src/core/webview/AssistantAgentChatProvider.ts` | Create | Webview panel provider for read-only chat view |
@@ -900,7 +900,7 @@ The feature is designed to be implemented in **5 incremental phases**, each prod
 
 **What works at end of Phase 5:**
 
-- Directory tree injected into system prompt (capped, `.shoferignore`-respecting)
+- Directory tree injected into system prompt (capped, `.shofer/shoferignore`-respecting)
 - File watcher detects external changes (lazy re-read on next reference)
 - Tool-based file modifications trigger `notifyFileModified()` → accumulated for next question
 - Chat view panel shows live conversation (read-only, agent-to-agent)
@@ -1044,11 +1044,11 @@ These items were inaccurate in the doc and have been corrected above:
 
 ### Resolved in This Review (cont'd)
 
-11. **`file-watcher.ts` now consults `.shoferignore`** — ✅ Resolved (2026-05-24). The file watcher accepts an optional `ShoferIgnoreController` and calls `validateAccess(filePath)` in `_shouldSkip()`. Files matching `.shoferignore` patterns are silently skipped.
+11. **`file-watcher.ts` now consults `.shofer/shoferignore`** — ✅ Resolved (2026-05-24). The file watcher accepts an optional `ShoferIgnoreController` and calls `validateAccess(filePath)` in `_shouldSkip()`. Files matching `.shofer/shoferignore` patterns are silently skipped.
 
-12. **`directory-tree.ts` now consults `.shoferignore`** — ✅ Resolved (2026-05-24). The directory tree generator accepts an optional `ShoferIgnoreController` and calls `validateAccess(relPath)` for each entry in `_scanDirectory()`. Ignored paths are excluded from the tree.
+12. **`directory-tree.ts` now consults `.shofer/shoferignore`** — ✅ Resolved (2026-05-24). The directory tree generator accepts an optional `ShoferIgnoreController` and calls `validateAccess(relPath)` for each entry in `_scanDirectory()`. Ignored paths are excluded from the tree.
 
-Additional fix: **`notifyFileModified()` now filters through `.shoferignore`** — The `AssistantAgentManager.notifyFileModified()` method previously only filtered `.shofer/` prefix paths. Now it also calls `validateAccess()` on the `ShoferIgnoreController`, preventing stale-file notifications for `.shoferignore`-ignored files.
+Additional fix: **`notifyFileModified()` now filters through `.shofer/shoferignore`** — The `AssistantAgentManager.notifyFileModified()` method previously only filtered `.shofer/` prefix paths. Now it also calls `validateAccess()` on the `ShoferIgnoreController`, preventing stale-file notifications for `.shofer/shoferignore`-ignored files.
 
 ### Open Issues (Not Yet Addressed in Source)
 

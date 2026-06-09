@@ -7,14 +7,14 @@ import { modes } from "../data/modes";
     <div class="text-center mb-16">
       <span class="text-sm font-semibold text-accent-purple dark:text-accent-purple uppercase tracking-wider">Modes</span>
       <h2 class="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-        5 built-in modes. Infinite customizations.
+        6 built-in modes. Infinite customizations.
       </h2>
       <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
         Each mode has scoped tool access. Create your own via <code class="px-1.5 py-0.5 rounded text-sm bg-gray-200 dark:bg-gray-800 font-mono">.shofermodes</code> files — project-level or global.
       </p>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {modes.map((mode, i) => (
         <div
           class="card-glow group relative bg-white dark:bg-gray-900 rounded-xl p-6 border border-gray-100 dark:border-gray-800 hover:border-shofer-200 dark:hover:border-shofer-800 transition-all duration-300 text-center"
@@ -32,7 +32,7 @@ import { modes } from "../data/modes";
 
     <div class="mt-12 text-center">
       <p class="text-sm text-gray-400 dark:text-gray-500 mb-4">
-        Common custom modes include Reviewer, Search, Opinion, and Browser.
+        Create custom modes for your specific workflows — project-level or global.
       </p>
       <a
         href="https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#3-custom-modes"

@@ -1,23 +1,23 @@
 # Shofer Special Files — Integration Test Scenarios
 
-Feature under test: Shofer's recognition of and behavior around special workspace files (`.shoferignore`, `.shofermodes`, `.shofer/rules/`, `.shofer/commands/`, `.shofer/skills/`, `AGENTS.md`, `.shoferprotected` patterns).  
+Feature under test: Shofer's recognition of and behavior around special workspace files (`.shofer/shoferignore`, `.shofer/shofermodes`, `.shofer/rules/`, `.shofer/commands/`, `.shofer/skills/`, `AGENTS.md`, `.shoferprotected` patterns).  
 Sources: [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts), [`ShoferProtectedController`](../src/core/protect/ShoferProtectedController.ts), [`CustomModesManager`](../src/core/config/CustomModesManager.ts), [`shofer_special_files.md`](../docs/shofer_special_files.md).
 
 ## Smoke Tests
 
 These should pass on every build.
 
-### S1 — `.shoferignore` blocks file reads
+### S1 — `.shofer/shoferignore` blocks file reads
 
-- Create a project with `.shoferignore` containing `secrets/**`.
+- Create a project with `.shofer/shoferignore` containing `secrets/**`.
 - Create `secrets/api.key` with dummy content.
 - Start a new task and ask the AI to `read_file secrets/api.key`.
 - **Assert**: The tool call fails with an error indicating the path is ignored. The error is surfaced in the chat UI.
 - **Assert**: `list_files` on the project root does not show `secrets/` entries (when "Show ignored files" is OFF), or shows them with a 🔒 badge (when ON).
 
-### S2 — `.shofermodes` defines a custom mode
+### S2 — `.shofer/shofermodes` defines a custom mode
 
-- Place a valid `.shofermodes` file in the workspace root with one custom mode (slug `"review"`).
+- Place a valid `.shofer/shofermodes` file in the workspace root with one custom mode (slug `"review"`).
 - Open/reload the project.
 - **Assert**: The custom mode appears in the ModeSelector dropdown.
 - **Assert**: Switching to the custom mode loads the mode's `roleDefinition`, `customInstructions`, and tool restrictions.
@@ -31,7 +31,7 @@ These should pass on every build.
 
 ### S4 — Protected files cannot be written without approval
 
-- With auto-approval disabled, ask the AI to `write_to_file .shoferignore` with new content.
+- With auto-approval disabled, ask the AI to `write_to_file .shofer/shoferignore` with new content.
 - **Assert**: An approval prompt appears in the chat UI asking the user to approve the write to a protected file.
 - **Assert**: The prompt references that the file is a Shofer configuration file and requires approval.
 
@@ -43,9 +43,9 @@ These should pass on every build.
 
 ## Functional Tests
 
-### F1 — `.shoferignore` blocks shell commands on ignored files
+### F1 — `.shofer/shoferignore` blocks shell commands on ignored files
 
-- Create `.shoferignore` with `data/**`.
+- Create `.shofer/shoferignore` with `data/**`.
 - Create `data/report.csv`.
 - Ask the AI to run `execute_command` with `cat data/report.csv`.
 - **Assert**: The command is blocked. Chat UI shows an error indicating the command tried to access an ignored file.
@@ -95,7 +95,7 @@ These should pass on every build.
 ### F9 — `.vscode/**` is readable but write-protected
 
 - Ask the AI to `read_file .vscode/settings.json`.
-- **Assert**: The read succeeds (`.vscode` is not blocked by `.shoferignore` by default).
+- **Assert**: The read succeeds (`.vscode` is not blocked by `.shofer/shoferignore` by default).
 - Ask the AI to `write_to_file .vscode/settings.json` with new content.
 - **Assert**: The write requires approval (write-protected pattern).
 
@@ -124,26 +124,26 @@ These should pass on every build.
 
 ## Edge Cases
 
-### E1 — Malformed `.shofermodes` does not crash the extension
+### E1 — Malformed `.shofer/shofermodes` does not crash the extension
 
-- Write invalid YAML in `.shofermodes` (e.g., unclosed quote).
+- Write invalid YAML in `.shofer/shofermodes` (e.g., unclosed quote).
 - **Assert**: Shofer loads without crashing. The mode selector shows only default modes. An error is logged to the output channel.
 
-### E2 — `.shoferignore` with broken symlinks
+### E2 — `.shofer/shoferignore` with broken symlinks
 
-- Add a pattern to `.shoferignore` that matches a broken symlink.
+- Add a pattern to `.shofer/shoferignore` that matches a broken symlink.
 - **Assert**: Shofer tools do not crash when encountering the broken symlink. The file is either allowed or denied gracefully.
 
 ### E3 — Protection check for paths outside workspace
 
-- Ask the AI to `write_to_file ../outside-workspace/.shoferignore`.
+- Ask the AI to `write_to_file ../outside-workspace/.shofer/shoferignore`.
 - **Assert**: `ShoferProtectedController.isWriteProtected()` returns `false` for paths starting with `..`. The path is not incorrectly flagged as protected.
 
-### E4 — `.vscode/` listed explicitly in `.shoferignore`
+### E4 — `.vscode/` listed explicitly in `.shofer/shoferignore`
 
-- Add `.vscode/` to `.shoferignore`.
+- Add `.vscode/` to `.shofer/shoferignore`.
 - Ask the AI to `read_file .vscode/settings.json`.
-- **Assert**: The file is blocked by `.shoferignore` (read blocked), even though `.vscode/**` is only write-protected by default.
+- **Assert**: The file is blocked by `.shofer/shoferignore` (read blocked), even though `.vscode/**` is only write-protected by default.
 
 ### E5 — Skills discovery from both `.shofer/skills/` and `.agents/skills/`
 

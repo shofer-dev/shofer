@@ -13,7 +13,7 @@
 
 ## Overview
 
-The Shofer Marketplace is an in-IDE catalog that lets users discover, browse, and install **Custom Modes** (`.shofermodes` entries) and **MCP Servers** (`mcp.json` entries) directly from the Shofer extension. It is backed by a remote API, caches results locally, and integrates deeply with VS Code's configuration files for both project-level and global installation scopes.
+The Shofer Marketplace is an in-IDE catalog that lets users discover, browse, and install **Custom Modes** (`.shofer/shofermodes` entries) and **MCP Servers** (`mcp.json` entries) directly from the Shofer extension. It is backed by a remote API, caches results locally, and integrates deeply with VS Code's configuration files for both project-level and global installation scopes.
 
 The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appears as a dedicated tab in the Shofer panel alongside Settings, History, Chat, and Cloud.
 
@@ -21,7 +21,7 @@ The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appe
 
 - Browse **public Modes and MCP servers** from the Shofer API
 - **Filter** by type (MCP/Mode), search text, tags, and installation status
-- **Install** items at project (`.shofermodes` / `.shofer/mcp.json`) or global (VS Code user settings) scope
+- **Install** items at project (`.shofer/shofermodes` / `.shofer/mcp.json`) or global (VS Code user settings) scope
 - **Remove** previously installed marketplace items
 - Support for **parameterized MCP installation** with user-provided values
 - Support for **multiple installation methods** per MCP item
@@ -76,7 +76,7 @@ The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appe
 │                                                          │
 │  SimpleInstaller                                         │
 │    ├── installMode() ─► CustomModesManager              │
-│    │                 ─► writes .shofermodes / global     │
+│    │                 ─► writes .shofer/shofermodes / global     │
 │    ├── installMcp()  ─► writes .shofer/mcp.json / global │
 │    ├── removeMode()  ─► CustomModesManager.delete()     │
 │    └── removeMcp()   ─► updates mcp.json                │
@@ -112,16 +112,16 @@ The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appe
 
 ### Extension Host (Backend)
 
-| File                                                                                                                         | Purpose                                                                                                                                                            |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`src/services/marketplace/index.ts`](extensions/shofer/src/services/marketplace/index.ts)                                   | Barrel export for the marketplace service module                                                                                                                   |
-| [`src/services/marketplace/MarketplaceManager.ts`](extensions/shofer/src/services/marketplace/MarketplaceManager.ts)         | Top-level coordinator: fetches items, filters, installs, removes, reads installation metadata                                                                      |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](extensions/shofer/src/services/marketplace/RemoteConfigLoader.ts)         | HTTP client that calls the Shofer API (`/api/marketplace/modes`, `/api/marketplace/mcps`), parses YAML, validates with Zod, caches results for 5 minutes           |
-| [`src/services/marketplace/SimpleInstaller.ts`](extensions/shofer/src/services/marketplace/SimpleInstaller.ts)               | Writes marketplace items to the correct config files (`.shofermodes`, `mcp.json`) at project or global scope; integrates with `CustomModesManager` for mode import |
-| [`src/core/webview/ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) (lines 2417-2448)               | Provides `fetchMarketplaceData()` method; `MarketplaceManager` is a class field                                                                                    |
-| [`src/core/webview/webviewMessageHandler.ts`](extensions/shofer/src/core/webview/webviewMessageHandler.ts) (lines 3065-3183) | Routes webview messages to `MarketplaceManager` methods                                                                                                            |
-| [`src/activate/registerCommands.ts`](extensions/shofer/src/activate/registerCommands.ts) (lines 155-159)                     | Registers `marketplaceButtonClicked` command                                                                                                                       |
-| [`src/core/config/CustomModesManager.ts`](extensions/shofer/src/core/config/CustomModesManager.ts) (lines 517-598)           | `deleteCustomMode()` accepts `fromMarketplace` flag for tailored error messages during marketplace removal                                                         |
+| File                                                                                                                         | Purpose                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`src/services/marketplace/index.ts`](extensions/shofer/src/services/marketplace/index.ts)                                   | Barrel export for the marketplace service module                                                                                                                          |
+| [`src/services/marketplace/MarketplaceManager.ts`](extensions/shofer/src/services/marketplace/MarketplaceManager.ts)         | Top-level coordinator: fetches items, filters, installs, removes, reads installation metadata                                                                             |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](extensions/shofer/src/services/marketplace/RemoteConfigLoader.ts)         | HTTP client that calls the Shofer API (`/api/marketplace/modes`, `/api/marketplace/mcps`), parses YAML, validates with Zod, caches results for 5 minutes                  |
+| [`src/services/marketplace/SimpleInstaller.ts`](extensions/shofer/src/services/marketplace/SimpleInstaller.ts)               | Writes marketplace items to the correct config files (`.shofer/shofermodes`, `mcp.json`) at project or global scope; integrates with `CustomModesManager` for mode import |
+| [`src/core/webview/ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) (lines 2417-2448)               | Provides `fetchMarketplaceData()` method; `MarketplaceManager` is a class field                                                                                           |
+| [`src/core/webview/webviewMessageHandler.ts`](extensions/shofer/src/core/webview/webviewMessageHandler.ts) (lines 3065-3183) | Routes webview messages to `MarketplaceManager` methods                                                                                                                   |
+| [`src/activate/registerCommands.ts`](extensions/shofer/src/activate/registerCommands.ts) (lines 155-159)                     | Registers `marketplaceButtonClicked` command                                                                                                                              |
+| [`src/core/config/CustomModesManager.ts`](extensions/shofer/src/core/config/CustomModesManager.ts) (lines 517-598)           | `deleteCustomMode()` accepts `fromMarketplace` flag for tailored error messages during marketplace removal                                                                |
 
 ### Webview UI (React)
 
@@ -171,7 +171,7 @@ User clicks "Marketplace" button (MCP view / Mode selector / Settings)
       2. Returns { organizationMcps: [], marketplaceItems, errors }
       (Note: Cloud org settings integration has been removed; all items come from the public API.)
   → MarketplaceManager.getInstallationMetadata():
-     1. Reads project .shofermodes and .shofer/mcp.json
+     1. Reads project .shofer/shofermodes and .shofer/mcp.json
      2. Reads global custom-modes.yaml and mcp-settings.json
      3. Returns { project: { [id]: { type } }, global: { [id]: { type } } }
   → Sends "marketplaceData" message to webview
@@ -194,7 +194,7 @@ User clicks "Install" on a card
         For modes:
           - Parses item.content as YAML
           - Calls CustomModesManager.importModeWithRules()
-          - Writes to .shofermodes (project) or custom-modes.yaml (global)
+          - Writes to .shofer/shofermodes (project) or custom-modes.yaml (global)
         For MCPs:
           - Handles single or multi-method content
           - Replaces {{paramName}} placeholders in config
@@ -291,7 +291,7 @@ interface MarketplaceInstalledMetadata {
 }
 ```
 
-This is computed at runtime by reading the actual config files (`.shofermodes`, `mcp.json`, etc.) rather than stored in a database.
+This is computed at runtime by reading the actual config files (`.shofer/shofermodes`, `mcp.json`, etc.) rather than stored in a database.
 
 ---
 
@@ -349,10 +349,10 @@ Filters are applied client-side in `filterItems()` which checks type, search, ta
 
 ### Project Scope
 
-| Item Type | File Path                      | Format                           |
-| --------- | ------------------------------ | -------------------------------- |
-| Mode      | `<workspace>/.shofermodes`     | YAML (`customModes: [...]`)      |
-| MCP       | `<workspace>/.shofer/mcp.json` | JSON (`{ mcpServers: { ... } }`) |
+| Item Type | File Path                         | Format                           |
+| --------- | --------------------------------- | -------------------------------- |
+| Mode      | `<workspace>/.shofer/shofermodes` | YAML (`customModes: [...]`)      |
+| MCP       | `<workspace>/.shofer/mcp.json`    | JSON (`{ mcpServers: { ... } }`) |
 
 ### Global Scope
 

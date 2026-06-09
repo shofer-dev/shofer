@@ -158,7 +158,7 @@ preserves tags per task across task switches.
   being added to context unconditionally. The
   [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
   (currently defined but not wired) would filter dropped files against
-  `.shoferignore` rules. The doc should note this pending integration.
+  `.shofer/shoferignore` rules. The doc should note this pending integration.
 
 - **No light/dark theme screenshot**: The UI section describes the
   drop-zone appearance in prose but lacks a screenshot showing what it

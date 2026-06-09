@@ -38,7 +38,7 @@ accent-rose    #f43f5e
 | Section titles | `text-3xl sm:text-4xl lg:text-5xl font-extrabold`                |
 | Card titles    | `text-xl font-bold`                                              |
 | Body           | `text-sm` to `text-lg` depending on context                      |
-| Code           | `font-mono` for `.shofermodes`, slash commands                   |
+| Code           | `font-mono` for `.shofer/shofermodes`, slash commands            |
 
 ### Dark Mode
 
@@ -78,13 +78,13 @@ website/
 │   │   ├── Footer.astro          # Link columns + disclaimer
 │   │   ├── Hero.astro            # Gradient hero with CTA buttons
 │   │   ├── Features.astro        # 6 feature cards with SVG icons
-│   │   ├── Modes.astro           # 5 mode cards (Code, Architect, Ask, Debug, Orchestrator)
+│   │   ├── Modes.astro           # 6 mode cards (Code, Architect, Debug, Code Search, Web Search, Reviewer)
 │   │   ├── Migration.astro       # Roo-Code + Copilot comparison tables
 │   │   └── Community.astro       # Discord/Reddit/GitHub links + CTA card
 │   ├── data/
 │   │   ├── navigation.ts         # Site config, nav items, social URLs
 │   │   ├── features.ts           # Feature cards (title, description, highlights, docs link)
-│   │   ├── modes.ts              # 5 built-in modes with icon, description, tool groups
+│   │   ├── modes.ts              # 6 built-in modes with icon, description, tool groups
 │   │   ├── migrations.ts         # Roo-Code comparison rows + migration info
 │   │   ├── copilot.ts            # Copilot comparison rows + migration info
 │   │   └── community.ts          # Community link cards (Discord, Reddit, GitHub, Issues)
@@ -99,14 +99,14 @@ All content lives in [`src/data/`](src/data/) as TypeScript modules. Astro compo
 
 ### Component Responsibilities
 
-| Component         | Reads From                    | Key Props                                |
-| ----------------- | ----------------------------- | ---------------------------------------- |
-| `Header.astro`    | `navigation.ts`               | Nav items with external link flags       |
-| `Hero.astro`      | `navigation.ts`               | Site config (name, tagline, description) |
-| `Features.astro`  | `features.ts`                 | Inline SVG icon map, docs URLs           |
-| `Modes.astro`     | `modes.ts`                    | Emoji icons, tool group strings          |
-| `Migration.astro` | `migrations.ts`, `copilot.ts` | Comparison table rows, slash commands    |
-| `Community.astro` | `community.ts`                | Inline SVG icon map, external URLs       |
+| Component         | Reads From                    | Key Props                                           |
+| ----------------- | ----------------------------- | --------------------------------------------------- |
+| `Header.astro`    | `navigation.ts`               | Nav items with external link flags                  |
+| `Hero.astro`      | `navigation.ts`               | Site config (name, tagline, description)            |
+| `Features.astro`  | `features.ts`                 | Inline SVG icon map, docs URLs                      |
+| `Modes.astro`     | `modes.ts`                    | Emoji icons, tool group strings, 3-col desktop grid |
+| `Migration.astro` | `migrations.ts`, `copilot.ts` | Comparison table rows, slash commands               |
+| `Community.astro` | `community.ts`                | Inline SVG icon map, external URLs                  |
 
 ## Responsive Design
 
@@ -118,7 +118,7 @@ All components use Tailwind's mobile-first breakpoints. See the table below for 
 | Hero badges      | `flex-wrap`, `gap-3` | `gap-6`          | —           | —                            |
 | CTA buttons      | stacked (`flex-col`) | side-by-side     | —           | —                            |
 | Features grid    | 1 col, `p-6`         | `p-8`            | 2 cols      | 3 cols                       |
-| Modes grid       | 1 col                | 2 cols           | —           | 5 cols                       |
+| Modes grid       | 1 col                | 2 cols           | —           | 3 cols                       |
 | Migration layout | stacked, no sticky   | —                | —           | side-by-side, sticky sidebar |
 | Community grid   | 1 col, `p-6`         | 2 cols, `p-8`    | —           | 4 cols                       |
 | Header nav       | hamburger menu       | hamburger        | —           | inline links                 |

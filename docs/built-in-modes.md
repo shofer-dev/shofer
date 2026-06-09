@@ -1,6 +1,6 @@
 # Built-in Modes — Source of Truth
 
-This document describes the Source-of-Truth (SoT) chain for the five built-in modes
+This document describes the Source-of-Truth (SoT) chain for the six built-in modes
 in the Shofer VS Code extension. It covers where each mode is defined, how tool
 access is resolved, and how custom modes override built-in modes at runtime.
 
@@ -29,7 +29,7 @@ The SoT chain for built-in modes is a clean, linear pipeline with well-defined
 override semantics at each stage:
 
 ```
-DEFAULT_MODES (packages/types/src/mode.ts:195)
+DEFAULT_MODES (packages/types/src/mode.ts:199)
     │
     └── modes = DEFAULT_MODES (src/shared/modes.ts:90)
             │
@@ -50,7 +50,7 @@ DEFAULT_MODES (packages/types/src/mode.ts:195)
 
 ## 2. Primary Definition: `DEFAULT_MODES`
 
-**File:** [`packages/types/src/mode.ts`](../packages/types/src/mode.ts:195-254)
+**File:** [`packages/types/src/mode.ts`](../packages/types/src/mode.ts:199-270)
 
 The single source of truth for all built-in modes. It is a `readonly ModeConfig[]`
 exported from the `@shofer/types` package. Each mode entry contains:
@@ -65,15 +65,16 @@ exported from the `@shofer/types` package. Each mode entry contains:
 | `groups`             | `GroupEntry[]` | Symbolic tool-group names with optional file-regex scoping |
 | `customInstructions` | `string`       | Default custom instructions for the mode                   |
 
-The five built-in modes:
+The six built-in modes:
 
-| #   | `slug`         | Name            | Role                                   |
-| --- | -------------- | --------------- | -------------------------------------- |
-| 1   | `code`         | 💻 Code         | Write, modify, and refactor code       |
-| 2   | `architect`    | 🏗️ Architect    | Plan and design before implementation  |
-| 3   | `ask`          | ❓ Ask          | Get answers and explanations           |
-| 4   | `debug`        | 🪲 Debug        | Diagnose and fix software issues       |
-| 5   | `orchestrator` | 🪃 Orchestrator | Coordinate tasks across multiple modes |
+| #   | `slug`        | Name           | Role                                  |
+| --- | ------------- | -------------- | ------------------------------------- |
+| 1   | `code`        | 💻 Code        | Write, modify, and refactor code      |
+| 2   | `architect`   | 🏗️ Architect   | Plan and design before implementation |
+| 3   | `debug`       | 🪲 Debug       | Diagnose and fix software issues      |
+| 4   | `code-search` | 🔎 Code Search | Search and explore the codebase       |
+| 5   | `web-search`  | 🌐 Web Search  | Browse and extract web content        |
+| 6   | `reviewer`    | 👀 Reviewer    | Review code and identify issues       |
 
 The first mode (`code`) is also the **default mode** — used as fallback when
 a mode slug cannot be resolved to any known mode.
@@ -94,7 +95,7 @@ is defined in `TOOL_GROUPS` — a `Record<ToolGroup, ToolGroupConfig>`:
 | `mode`          | Mode switching        | `switch_mode`                                                                                                                                                                                                                                                      |
 | `subtasks`      | Task orchestration    | `new_task`, `check_task_status`, `wait_for_task`, `list_background_tasks`, `cancel_tasks`, `answer_subtask_question`                                                                                                                                               |
 | `questions`     | User interaction      | `ask_followup_question`                                                                                                                                                                                                                                            |
-| `browser`       | Browser automation    | _(empty — browser functionality removed)_                                                                                                                                                                                                                          |
+| `browser`       | Browser automation    | _(empty — browser tools are provided by the `browser-tools` MCP server)_                                                                                                                                                                                           |
 | `uncategorized` | Fallback              | _(empty — for tools without explicit classification)_                                                                                                                                                                                                              |
 
 **Note:** The `customTools` array (currently only on `write`) lists tools that are
@@ -146,7 +147,7 @@ Assembles the final tool name set from a mode's `groups`, `tools_allowed`, and
 
 | File                                                              | What It Does                                                          |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [`packages/types/src/mode.ts`](../packages/types/src/mode.ts:195) | Defines `DEFAULT_MODES` — the canonical source                        |
+| [`packages/types/src/mode.ts`](../packages/types/src/mode.ts:199) | Defines `DEFAULT_MODES` — the canonical source                        |
 | [`src/shared/modes.ts`](../src/shared/modes.ts:90)                | `export const modes = DEFAULT_MODES` — pass-through re-export         |
 | [`src/shared/modes.ts`](../src/shared/modes.ts:93)                | `export const defaultModeSlug = modes[0].slug` — resolves to `"code"` |
 
@@ -215,14 +216,14 @@ execution-time validation provides a defense-in-depth layer. The validation chai
 
 ## 10. Custom Mode Override Precedence
 
-Custom modes from `.shofermodes` files (project-level) and
-`~/.shofer/.shofermodes` (global) override built-in modes with the same slug:
+Custom modes from `.shofer/shofermodes` files (project-level) and
+`~/.shofer/shofermodes` (global) override built-in modes with the same slug:
 
-| Priority    | Source                          | Scope                  |
-| ----------- | ------------------------------- | ---------------------- |
-| 1 (highest) | Project `.shofermodes`          | Current workspace      |
-| 2           | Global `~/.shofer/.shofermodes` | All workspaces         |
-| 3           | Built-in `DEFAULT_MODES`        | Shipped with extension |
+| Priority    | Source                         | Scope                  |
+| ----------- | ------------------------------ | ---------------------- |
+| 1 (highest) | Project `.shofer/shofermodes`  | Current workspace      |
+| 2           | Global `~/.shofer/shofermodes` | All workspaces         |
+| 3           | Built-in `DEFAULT_MODES`       | Shipped with extension |
 
 The override is **complete** — a custom mode with the same slug replaces every
 field of the built-in mode. There is no partial merging of `groups` or
@@ -252,7 +253,7 @@ the built-in modes in `getAllModes()`.
 
 **Tool Access:** Maximum access — all 8 non-empty tool groups. The only
 built-in mode with full `execute` (shell commands), `write` (file mutations),
-and `subtasks` (background task delegation) simultaneously.
+`mode` (mode switching), and `subtasks` (background task delegation) simultaneously.
 
 **Default Mode:** Yes — `code` is `modes[0]` and the ultimate fallback.
 
@@ -295,32 +296,6 @@ user, and use `switch_mode` to hand off to `code` mode for implementation.
 
 ---
 
-### ❓ Ask (`ask`)
-
-**Groups:** `read`, `mcp`
-
-**Role Definition:**
-
-> You are Shofer, a knowledgeable technical assistant focused on answering questions
-> and providing information about software development, technology, and related topics.
-
-**When To Use:**
-
-> Use this mode when you need explanations, documentation, or answers to technical
-> questions. Best for understanding concepts, analyzing existing code, getting
-> recommendations, or learning about technologies without making changes.
-
-**Tool Access:** Read-only plus MCP. No `write`, `execute`, or `subtasks`.
-
-**Custom Instructions:**
-
-> You can analyze code, explain concepts, and access external resources. Always
-> answer the user's questions thoroughly, and do not switch to implementing code
-> unless explicitly requested by the user. Include Mermaid diagrams when they
-> clarify your response.
-
----
-
 ### 🪲 Debug (`debug`)
 
 **Groups:** `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`
@@ -349,58 +324,99 @@ A structured debugging workflow:
 
 ---
 
-### 🪃 Orchestrator (`orchestrator`)
+### 🔎 Code Search (`code-search`)
 
-**Groups:** `[]` _(empty)_
+**Groups:** `read`, `execute`, `mcp`, `questions`
 
 **Role Definition:**
 
-> You are Shofer, a strategic workflow orchestrator who coordinates complex tasks
-> by delegating them to appropriate specialized modes. You have a comprehensive
-> understanding of each mode's capabilities and limitations, allowing you to
-> effectively break down complex problems into discrete tasks that can be solved
-> by different specialists.
+> You are a fast, focused codebase search agent. Your purpose is to quickly find
+> relevant code, files, patterns, and context within the repository and return
+> concise, actionable results to the caller. You search broadly across the codebase
+> using all available tools — semantic search, text search, file listing, and
+> command-line utilities. You do not edit any files; you are purely a retrieval engine.
 
 **When To Use:**
 
-> Use this mode for complex, multi-step projects that require coordination across
-> different specialties. Ideal when you need to break down large tasks into
-> subtasks, manage workflows, or coordinate work that spans multiple domains or
-> expertise areas.
+> Use this mode when you need to quickly search the codebase for specific
+> information — find where a function is defined, locate all usages of a symbol,
+> discover patterns, or gather context about how something works. Ideal for use
+> as a sub-task via `new_task` to parallelize codebase exploration.
 
-**Tool Access:** The `groups` array is empty `[]`, so no tools from any group
-are available. Only the `ALWAYS_AVAILABLE_TOOLS` are accessible:
+**Tool Access:**
 
-- `attempt_completion` — signal completion with rating
-- `update_todo_list` — manage the todo list
-- `run_slash_command` — execute slash commands
-- `skills` — load skill instructions
-- `set_task_title` — title the task
-- `give_feedback` — send feedback
+- **Read + Execute + MCP** — can read files, run grep/find commands, and query MCP tools.
+- **No `write` group** — cannot modify any workspace files.
+- **No `subtasks` group** — cannot delegate; focused purely on retrieval.
 
-**Important:** `new_task` is **NOT** in `ALWAYS_AVAILABLE_TOOLS` — it belongs to
-the `subtasks` group, which is NOT granted to the orchestrator. This is a known
-gap (see [`TODO.md`](../TODO.md:2) — "Implement new build-in modes, and a method
-to pass Tasks via new_task"). As a result, the orchestrator **cannot** currently
-delegate to subtasks despite its role definition instructing it to do so.
+**Custom Instructions:**
+A 9-step search workflow: semantic search first, then regex/text patterns,
+directory exploration, CLI tools (`grep`, `rg`, `fd`), symbol references, and a
+structured results summary. File editing is explicitly prohibited.
 
-The orchestrator can plan, manage todos, and complete — but cannot read files,
-run commands, modify the workspace, or create subtasks.
+---
 
-**Custom Instructions:** (abbreviated — see source for full text)
-A comprehensive 7-step delegation workflow:
+### 🌐 Web Search (`web-search`)
 
-1. Break complex tasks into logical subtasks
-2. For each subtask, use `new_task` with comprehensive instructions
-3. Track and manage subtask progress
-4. Help the user understand the workflow
-5. Synthesize results when all subtasks complete
-6. Ask clarifying questions as needed
-7. Suggest workflow improvements
+**Groups:** `browser`, `questions`, `mcp`
 
-**Design Intent:** The orchestrator is a "manager-only" mode. It thinks, plans,
-and delegates — but never touches code or files. All actual work happens in
-child tasks spawned via `new_task`.
+**Role Definition:**
+
+> You are a web browsing agent. Your purpose is to use the browser to research,
+> extract, and interact with web content to accomplish tasks. You navigate to web
+> pages, search for information, extract text and structured data, fill forms,
+> take screenshots, and interact with web applications. You do not modify any
+> code or files in the workspace.
+
+**When To Use:**
+
+> Use this mode when you need to use a web browser to find information, research
+> topics, interact with web applications, extract data from websites, replay a
+> saved browser workflow, or capture a new repeatable browser skill.
+
+**Tool Access:**
+
+- **Browser group** — all `browser_*` tools from the `browser-tools` MCP server.
+- **Questions + MCP** — can ask the user clarifying questions and use MCP tools.
+- **No `read` group** — cannot read workspace files directly.
+- **No `write` group** — cannot modify any workspace files.
+
+**Custom Instructions:**
+Browser interaction primitives (tabs, navigation, page reading, screenshots,
+interactions) and guidance on asking the user when pages are ambiguous. Explicitly
+prohibits file modifications outside of the browser.
+
+---
+
+### 👀 Reviewer (`reviewer`)
+
+**Groups:** `read`, `execute`, `mcp`, `questions`
+
+**Role Definition:**
+
+> You are a senior software engineer performing code review. You analyze existing
+> code for bugs, security vulnerabilities, design issues, performance problems,
+> and adherence to best practices. You propose specific, actionable fixes — but
+> you NEVER implement them. Your output is diagnostic and advisory only. You read
+> code, run analysis tools, and query observability data to inform your review.
+
+**When To Use:**
+
+> Use this mode when you need a thorough code review, want to identify potential
+> issues, or need recommendations for improvements without making changes to the
+> codebase.
+
+**Tool Access:**
+
+- **Read + Execute + MCP** — can read files, run lint/analysis tools, and query
+  observability data (Loki, Mimir, Tempo).
+- **No `write` group** — cannot modify any workspace files. Diagnostic only.
+- **No `subtasks` group** — focused on providing a single review report.
+
+**Custom Instructions:**
+A 5-step review process: read files thoroughly, run static analysis, query
+observability data, present findings with specific locations and proposed fixes,
+and never edit any files.
 
 ---
 

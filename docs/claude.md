@@ -152,7 +152,7 @@ Claude Code natively supports a repository-level configuration file called `.mcp
 
 ## 7. Execution Inclusions
 
-### `.worktreeinclude`
+### `.shofer/worktreeinclude`
 
 **Function:** Explicitly dictates to the agent which uncommitted files or dynamically generated structures inside the project root boundary are safe to crawl or include in its analysis maps, serving as an explicit opt-in mechanism.
 
@@ -169,4 +169,4 @@ Claude Code natively supports a repository-level configuration file called `.mcp
 | `.claude/subagents/*.json` / `.claude/subagents/*.md` | On-Demand        | Specialized profiles with bounded tool access and system prompts. |
 | `.claude/skills/*/SKILL.md`                           | Intent Matching  | Multi-step task automation scripts and templated instructions.    |
 | `.mcp.json`                                           | Project Tools    | Codebase-specific database or terminal protocol connections.      |
-| `.worktreeinclude`                                    | Working Tree     | Opts-in untracked files into Claude's discovery context.          |
+| `.shofer/worktreeinclude`                             | Working Tree     | Opts-in untracked files into Claude's discovery context.          |

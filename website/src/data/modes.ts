@@ -22,13 +22,6 @@ export const modes: Mode[] = [
 		slug: "architect",
 	},
 	{
-		name: "Ask",
-		icon: "❓",
-		description: "Getting explanations, answers, or recommendations. Read-only + MCP.",
-		groups: "read, mcp",
-		slug: "ask",
-	},
-	{
 		name: "Debug",
 		icon: "🪲",
 		description: "Troubleshooting errors and diagnosing root causes.",
@@ -36,10 +29,24 @@ export const modes: Mode[] = [
 		slug: "debug",
 	},
 	{
-		name: "Orchestrator",
-		icon: "🪃",
-		description: "Coordinating complex multi-step work by delegating to sub-tasks.",
-		groups: "delegates via new_task",
-		slug: "orchestrator",
+		name: "Code Search",
+		icon: "🔎",
+		description: "Searching the codebase for functions, patterns, and context. Read + execute only.",
+		groups: "read, execute, mcp, questions",
+		slug: "code-search",
+	},
+	{
+		name: "Web Search",
+		icon: "🌐",
+		description: "Browsing and extracting web content. Browser + MCP.",
+		groups: "browser, mcp, questions",
+		slug: "web-search",
+	},
+	{
+		name: "Reviewer",
+		icon: "👀",
+		description: "Reviewing code for bugs, security issues, and design problems. Diagnostic only.",
+		groups: "read, execute, mcp, questions",
+		slug: "reviewer",
 	},
 ]

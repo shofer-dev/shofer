@@ -12,7 +12,7 @@ LLM calls execute_command(command, cwd?, timeout?)
         ▼
 ┌─────────────────────────────────────────────────────┐
 │  ExecuteCommandTool.execute()                       │
-│  ├─ Validate command (non-empty, .shoferignore)     │
+│  ├─ Validate command (non-empty, .shofer/shoferignore)     │
 │  ├─ Ask user approval ("command" ask)               │
 │  ├─ Resolve working directory                       │
 │  └─ executeCommandInTerminal(task, options)         │

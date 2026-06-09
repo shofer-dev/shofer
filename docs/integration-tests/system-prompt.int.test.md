@@ -44,14 +44,14 @@ different mode selections.
 
 **Verification**: Grep the prompt for a distinctive sentence from the `AGENTS.md` file.
 
-### 5. `.shoferignore` instructions appear in prompt
+### 5. `.shofer/shoferignore` instructions appear in prompt
 
-**Given** a workspace with a `.shoferignore` file
+**Given** a workspace with a `.shofer/shoferignore` file
 **When** a new task starts
-**Then** the custom instructions section includes the `.shoferignore` instructions
-block (explaining what `.shoferignore` is and how the model should treat it)
+**Then** the custom instructions section includes the `.shofer/shoferignore` instructions
+block (explaining what `.shofer/shoferignore` is and how the model should treat it)
 
-**Verification**: Search the prompt for the `.shoferignore` explanatory text
+**Verification**: Search the prompt for the `.shofer/shoferignore` explanatory text
 produced by `shoferIgnoreInstructions`.
 
 ### 6. MCP server info appears only when mode has MCP group AND servers are configured

@@ -204,7 +204,7 @@ vectorStore.initialize() → create Qdrant collection if needed
         → else: fall through to Phase 1 incremental scan
   → if no data: full scan
   → scanner.scanDirectory():   (Layer A fallback)
-      listFiles() → filter by extensions, .gitignore, .shoferignore
+      listFiles() → filter by extensions, .gitignore, .shofer/shoferignore
       → for each file (parallel, concurrency=10):
           stat() → get mtimeMs + size
           Phase 1 fast-path: if cache entry has matching mtimeMs+size → skip

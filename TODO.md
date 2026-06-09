@@ -35,7 +35,7 @@
 
 - new logo
 
-- move all shofer special files under .shofer e.g. .shoferignore
+- move all shofer special files under .shofer e.g. .shofer/shoferignore
 
 - TEST RAG indexer for code changes
 

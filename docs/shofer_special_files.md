@@ -26,7 +26,7 @@ The `.agents/` directory (Agent Skills standard) is also discovered at both leve
 
 ## Workspace Root Files
 
-### `.shoferignore`
+### `.shofer/shoferignore`
 
 | Property            | Details                            |
 | ------------------- | ---------------------------------- |
@@ -40,17 +40,17 @@ Controls which files the LLM can access through its tools. Applies to:
 - **Read tools**: `read_file`, `grep_search`, `list_files`, `find_files`
 - **Write tools**: `write_to_file`, `edit_file`, `apply_diff`, `apply_patch`, `search_replace`, `sed`, `generate_image`
 - **Execute tools**: `execute_command` (blocks file-reading commands like `cat`, `grep`, `head`, `tail`, `sed`, `awk`, `Get-Content`, `Select-String`, `gc`, `sls`, `type`, `less`, `more` that reference ignored files)
-- **@-mentions**: Ignored files return `"(File is ignored by .shoferignore)"`; directory attachments filter or mark them with 🔒
+- **@-mentions**: Ignored files return `"(File is ignored by .shofer/shoferignore)"`; directory attachments filter or mark them with 🔒
 - **Environment details**: Ignored files are excluded from the file listing injected into each user message
 
-When a file is blocked by `.shoferignore`, read-tool results omit the file
+When a file is blocked by `.shofer/shoferignore`, read-tool results omit the file
 and write/execute tools return an error indicating the path is ignored.
 The exact wording varies by tool; the controller itself only exposes boolean
 access checks and a formatted instructions block via
 [`getInstructions()`](../src/core/ignore/ShoferIgnoreController.ts)
 (surfaces `🔒`-badged entries for blocked files).
 
-A UI setting ("Show .shoferignore'd files in lists and searches") controls
+A UI setting ("Show .shofer/shoferignore'd files in lists and searches") controls
 whether ignored files appear with a 🔒 badge or are hidden entirely from
 file listings.
 
@@ -58,7 +58,7 @@ Implementation: [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreContro
 
 ---
 
-### `.shofermodes`
+### `.shofer/shofermodes`
 
 | Property            | Details                                        |
 | ------------------- | ---------------------------------------------- |
@@ -110,10 +110,10 @@ Shofer supports `AGENTS.md` in:
 
 ### `.vscode/**`
 
-| Property            | Details                                                       |
-| ------------------- | ------------------------------------------------------------- |
-| **Write-protected** | Yes                                                           |
-| **Readable**        | Yes (not blocked by `.shoferignore` unless explicitly listed) |
+| Property            | Details                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| **Write-protected** | Yes                                                                  |
+| **Readable**        | Yes (not blocked by `.shofer/shoferignore` unless explicitly listed) |
 
 The `.vscode/` directory is write-protected — the LLM can read it but cannot
 modify `settings.json`, `tasks.json`, `launch.json`, etc. without explicit approval.
@@ -375,7 +375,7 @@ release. Users should migrate to the `.shofer/` equivalents.
 
 | Legacy File               | Modern Equivalent       | Type             |
 | ------------------------- | ----------------------- | ---------------- |
-| `.rooignore`              | `.shoferignore`         | File             |
+| `.rooignore`              | `.shofer/shoferignore`  | File             |
 | `.roorules`               | `.shofer/rules/`        | File → Directory |
 | `.roorules-<mode>`        | `.shofer/rules-<mode>/` | File → Directory |
 | `.clinerules`             | `.shofer/rules/`        | File → Directory |
@@ -411,14 +411,14 @@ import on extension startup.
 These files cannot be modified by the LLM without explicit user approval
 (even when auto-approve is enabled):
 
-| Pattern            | Examples                                                        |
-| ------------------ | --------------------------------------------------------------- |
-| `.shoferignore`    | `.shoferignore`                                                 |
-| `.shofermodes`     | `.shofermodes`                                                  |
-| `.shofer/**`       | `.shofer/rules/`, `.shofer/commands/`, `.shofer/mcp.json`, etc. |
-| `.vscode/**`       | `.vscode/settings.json`, `.vscode/tasks.json`                   |
-| `*.code-workspace` | `my-project.code-workspace`                                     |
-| `AGENTS.md`        | `AGENTS.md`, `AGENT.md`                                         |
+| Pattern                | Examples                                                        |
+| ---------------------- | --------------------------------------------------------------- |
+| `.shofer/shoferignore` | `.shofer/shoferignore`                                          |
+| `.shofer/shofermodes`  | `.shofer/shofermodes`                                           |
+| `.shofer/**`           | `.shofer/rules/`, `.shofer/commands/`, `.shofer/mcp.json`, etc. |
+| `.vscode/**`           | `.vscode/settings.json`, `.vscode/tasks.json`                   |
+| `*.code-workspace`     | `my-project.code-workspace`                                     |
+| `AGENTS.md`            | `AGENTS.md`, `AGENT.md`                                         |
 
 Implementation: [`ShoferProtectedController`](../src/core/protect/ShoferProtectedController.ts)
 
@@ -426,15 +426,15 @@ Implementation: [`ShoferProtectedController`](../src/core/protect/ShoferProtecte
 
 ## Summary: Files Read Into System Prompt
 
-| File/Directory           | Section in Prompt                    | When                        |
-| ------------------------ | ------------------------------------ | --------------------------- |
-| `AGENTS.md`              | `# Agent Rules Standard`             | Task start, mode switch     |
-| `.shofer/rules/`         | `# Rules from .shofer/rules/`        | Task start, mode switch     |
-| `.shofer/rules-<mode>/`  | `# Rules from .shofer/rules-<mode>/` | Mode-specific, task start   |
-| `.shofer/commands/`      | Slash command palette                | Task start                  |
-| `.shofer/skills/`        | `<available_skills>`                 | Task start                  |
-| `.shoferignore`          | `# .shoferignore` instructions       | Task start (if file exists) |
-| Custom instructions (UI) | `USER'S CUSTOM INSTRUCTIONS`         | Every system prompt         |
+| File/Directory           | Section in Prompt                     | When                        |
+| ------------------------ | ------------------------------------- | --------------------------- |
+| `AGENTS.md`              | `# Agent Rules Standard`              | Task start, mode switch     |
+| `.shofer/rules/`         | `# Rules from .shofer/rules/`         | Task start, mode switch     |
+| `.shofer/rules-<mode>/`  | `# Rules from .shofer/rules-<mode>/`  | Mode-specific, task start   |
+| `.shofer/commands/`      | Slash command palette                 | Task start                  |
+| `.shofer/skills/`        | `<available_skills>`                  | Task start                  |
+| `.shofer/shoferignore`   | `# .shofer/shoferignore` instructions | Task start (if file exists) |
+| Custom instructions (UI) | `USER'S CUSTOM INSTRUCTIONS`          | Every system prompt         |
 
 ---
 
@@ -444,7 +444,7 @@ This section documents inaccuracies and gaps discovered during a full audit
 of this document against the live codebase (2026-05-20). Issues are listed
 for transparency; some have been corrected inline above.
 
-### 1. Fabricated `.shoferignore` error message (corrected)
+### 1. Fabricated `.shofer/shoferignore` error message (corrected)
 
 The doc previously quoted a specific error message for blocked file access
 that did not exist anywhere in the source code. `ShoferIgnoreController`
@@ -455,7 +455,7 @@ wording. Replaced with a factual description of the controller's API.
 
 [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
 is defined but **never imported or instantiated** anywhere in the `extensions/`
-directory. The `.shoferignore` enforcement path is either implemented
+directory. The `.shofer/shoferignore` enforcement path is either implemented
 elsewhere (e.g., in the worktree extensions) or not yet wired. If the file
 is truly unused, it should be removed or integrated.
 

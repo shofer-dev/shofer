@@ -154,7 +154,7 @@ the ChatTextArea path (scenario 11) or the native TreeView path (scenario 1).
 
 ### 14. Wired but unused: ShoferIgnoreController integration
 
-**Given** a `.shoferignore` file exists excluding `**/*.generated.ts`
+**Given** a `.shofer/shoferignore` file exists excluding `**/*.generated.ts`
 **When** the user drops `src/models.generated.ts` onto the drop zone
 **Then** the file is accepted unconditionally (the `ShoferIgnoreController`
 is defined but not wired into the drop path)

@@ -8,7 +8,7 @@ Tests that verify the canonical terminology, naming, and concepts described in [
 
 ### M1 — Built-in Modes Load Correctly
 
-- **Setup**: Fresh workspace, no `.shofermodes` file.
+- **Setup**: Fresh workspace, no `.shofer/shofermodes` file.
 - **Action**: Open Shofer. Click the **Mode Selector**.
 - **Assert**: All 9 built-in modes appear with correct slugs, display names, and icons as listed in §11 of terminology.md: `code`, `architect`, `ask`, `debug`, `reviewer`, `search`, `opinion`, `browser`, `orchestrator`.
 
@@ -18,21 +18,21 @@ Tests that verify the canonical terminology, naming, and concepts described in [
 - **Action**: Switch from Task A → Task B → Task A.
 - **Assert**: Task A restores to **Code** mode, Task B restores to **Ask** mode.
 
-### M3 — Custom Mode from `.shofermodes` Overrides Built-In
+### M3 — Custom Mode from `.shofer/shofermodes` Overrides Built-In
 
-- **Setup**: Create a `.shofermodes` file defining a custom `code` mode with a different `roleDefinition` and `customInstructions`.
+- **Setup**: Create a `.shofer/shofermodes` file defining a custom `code` mode with a different `roleDefinition` and `customInstructions`.
 - **Action**: Open Shofer. Switch to **Code** mode. Send a message.
 - **Assert**: The system prompt includes the custom `roleDefinition` and `customInstructions`, not the built-in defaults.
 
 ### M4 — Custom Mode with Tool Group Restrictions
 
-- **Setup**: `.shofermodes` defines a mode `docs-only` with `groups: ["read"]` and `tools_allowed: ["write_to_file"]` with `fileRegex: "\\.md$"`.
+- **Setup**: `.shofer/shofermodes` defines a mode `docs-only` with `groups: ["read"]` and `tools_allowed: ["write_to_file"]` with `fileRegex: "\\.md$"`.
 - **Action**: Select **docs-only** mode. Ask Shofer to edit `src/app.ts`.
 - **Assert**: Shofer refuses or is blocked by `FileRestrictionError`. Ask Shofer to edit `docs/README.md` — it succeeds.
 
 ### M5 — Always-Available Tools Cannot Be Disabled
 
-- **Setup**: `.shofermodes` defines a mode with `tools_denied: ["attempt_completion", "update_todo_list"]`.
+- **Setup**: `.shofer/shofermodes` defines a mode with `tools_denied: ["attempt_completion", "update_todo_list"]`.
 - **Action**: Select that mode. Run a task to completion.
 - **Assert**: `attempt_completion` and `update_todo_list` are still available despite being denied (they are in `ALWAYS_AVAILABLE_TOOLS`).
 
@@ -106,9 +106,9 @@ Tests that verify the canonical terminology, naming, and concepts described in [
 
 ## Special Files
 
-### SF1 — `.shoferignore` Filters Files from Tools
+### SF1 — `.shofer/shoferignore` Filters Files from Tools
 
-- **Setup**: Create a `.shoferignore` with `*.secret` and a file `test.secret` in the workspace.
+- **Setup**: Create a `.shofer/shoferignore` with `*.secret` and a file `test.secret` in the workspace.
 - **Action**: Ask Shofer to `list_files` and `read_file test.secret`.
 - **Assert**: `test.secret` does not appear in `list_files`. `read_file` fails with a protected/ignored error.
 

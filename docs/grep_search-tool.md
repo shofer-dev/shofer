@@ -14,14 +14,14 @@ The tool previously used VS Code's [`workspace.findTextInFiles`](https://code.vi
 
 ### Trade-offs
 
-| Aspect               | `findTextInFiles`                     | ripgrep                                              |
-| -------------------- | ------------------------------------- | ---------------------------------------------------- |
-| Completeness         | Depends on VS Code index (incomplete) | Filesystem-level (complete)                          |
-| Regex syntax         | JavaScript regex                      | Rust regex (subtle differences)                      |
-| `.gitignore` respect | Yes (default)                         | Yes (default)                                        |
-| `.shoferignore`      | N/A                                   | Native `--ignore-file` flag + post-filter safety net |
-| Performance          | Fast (indexed)                        | Fast (native binary)                                 |
-| Submodule support    | Yes (VS Code handles boundaries)      | Yes (`--no-require-git` flag)                        |
+| Aspect                 | `findTextInFiles`                     | ripgrep                                              |
+| ---------------------- | ------------------------------------- | ---------------------------------------------------- |
+| Completeness           | Depends on VS Code index (incomplete) | Filesystem-level (complete)                          |
+| Regex syntax           | JavaScript regex                      | Rust regex (subtle differences)                      |
+| `.gitignore` respect   | Yes (default)                         | Yes (default)                                        |
+| `.shofer/shoferignore` | N/A                                   | Native `--ignore-file` flag + post-filter safety net |
+| Performance            | Fast (indexed)                        | Fast (native binary)                                 |
+| Submodule support      | Yes (VS Code handles boundaries)      | Yes (`--no-require-git` flag)                        |
 
 **Known difference:** When `isRegex: true`, the pattern is interpreted as a **Rust regex** (ripgrep's native syntax), not JavaScript regex. For most common patterns (literals, character classes, quantifiers, alternation) the syntax is identical. Edge cases like lookahead/lookbehind may differ.
 
@@ -189,9 +189,9 @@ Defaults: `isRegex=true`, `caseSensitive=false`, `wholeWord=false`, `fileTypes=n
 
 1. **Parser accepts `pattern` as a fallback for `query`.** Some models (notably when also using `sed`/`find_files`, which both use `pattern`) confabulate `pattern` as the parameter name for `grep_search`. The schema declares only `query` (keeping the API surface clean and consistent with `rag_search`/`lsp_search`/`git_search`), but the parser in [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) silently falls back to `pattern` when `query` is missing — the same pattern used for [`fileTypes ?? file_pattern`](../src/core/assistant-message/NativeToolCallParser.ts:567). This is a parser-level resilience measure, not a schema alias.
 
-2. **Trade-offs table `.shoferignore` row is stale.** The table says "Post-filter via `ShoferIgnoreController`" but the current implementation also passes `--ignore-file <path-to-.shoferignore>` to ripgrep natively (see [`buildRipgrepArgs`](../src/core/tools/GrepSearchTool.ts:220-222)), so ignored files are excluded at the search level — not solely via post-filter. The post-filter in `execute()` is retained as a safety net. The doc should reflect the dual `.shoferignore` exclusion strategy (native rg flag + post-filter safety net).
+2. **Trade-offs table `.shofer/shoferignore` row is stale.** The table says "Post-filter via `ShoferIgnoreController`" but the current implementation also passes `--ignore-file <path-to-.shofer/shoferignore>` to ripgrep natively (see [`buildRipgrepArgs`](../src/core/tools/GrepSearchTool.ts:220-222)), so ignored files are excluded at the search level — not solely via post-filter. The post-filter in `execute()` is retained as a safety net. The doc should reflect the dual `.shofer/shoferignore` exclusion strategy (native rg flag + post-filter safety net).
 
-3. **Ripgrep CLI Mapping code example is simplified.** The code block at §Ripgrep CLI Mapping omits the `--ignore-file` argument that `buildRipgrepArgs` adds when `.shoferignore` is loaded. It also omits the `directoryPath` → `resolvedPath` (absolute) conversion. These are acceptable simplifications for a conceptual mapping, but they differ from the actual source.
+3. **Ripgrep CLI Mapping code example is simplified.** The code block at §Ripgrep CLI Mapping omits the `--ignore-file` argument that `buildRipgrepArgs` adds when `.shofer/shoferignore` is loaded. It also omits the `directoryPath` → `resolvedPath` (absolute) conversion. These are acceptable simplifications for a conceptual mapping, but they differ from the actual source.
 
 4. **Output format example match-line padding off by one space.** The code at [`formatResults`](../src/core/tools/GrepSearchTool.ts:489-491) produces `${prefix} ${paddedNum}` where `paddedNum` is `String(lineNum).padStart(4, " ")`. For match lines this yields `>   42 |` (3 spaces between `>` and the number). The doc example shows `>  42 |` (2 spaces). The format spec says "4-digit padded" which is correct; the example drifted.
 

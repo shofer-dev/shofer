@@ -11,13 +11,13 @@ the import/export mechanics.
 
 ## Config Types at a Glance
 
-| Category                 | Backend                                                                   | Scope                        | Count         | Merge Priority                                  |
-| ------------------------ | ------------------------------------------------------------------------- | ---------------------------- | ------------- | ----------------------------------------------- |
-| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 18            | —                                               |
-| **API Provider Configs** | VS Code `SecretStorage` (profiles blob + individual keys) + `globalState` | Per-extension (machine-wide) | ~30 + 31 keys | Profile IDs resolve per-mode                    |
-| **Mode Definitions**     | `.shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS)        | Per-project + per-extension  | —             | `.shofermodes` > `custom_modes.yaml` > built-in |
-| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                           | Per-extension (machine-wide) | —             | Single file; no overlay                         |
-| **Global Settings**      | VS Code `globalState` (SQLite-backed)                                     | Per-extension (machine-wide) | ~96           | Flat key-value; no overlay                      |
+| Category                 | Backend                                                                   | Scope                        | Count         | Merge Priority                                         |
+| ------------------------ | ------------------------------------------------------------------------- | ---------------------------- | ------------- | ------------------------------------------------------ |
+| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 18            | —                                                      |
+| **API Provider Configs** | VS Code `SecretStorage` (profiles blob + individual keys) + `globalState` | Per-extension (machine-wide) | ~30 + 31 keys | Profile IDs resolve per-mode                           |
+| **Mode Definitions**     | `.shofer/shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | —             | `.shofer/shofermodes` > `custom_modes.yaml` > built-in |
+| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                           | Per-extension (machine-wide) | —             | Single file; no overlay                                |
+| **Global Settings**      | VS Code `globalState` (SQLite-backed)                                     | Per-extension (machine-wide) | ~96           | Flat key-value; no overlay                             |
 
 > **Planned simplification:** 14 of the 18 VS Code config keys are portable to
 > `globalState` (the other 4 are dead code or bootstrapping-only). The 31 individual
@@ -140,11 +140,11 @@ fast access and lazily syncs with the backing stores.
 Mode configurations (role definitions, groups, tool permissions) are stored across
 four layers, merged at runtime with a specific precedence order.
 
-### 2a. `.shofermodes` — Project-level overrides
+### 2a. `.shofer/shofermodes` — Project-level overrides
 
 | Property       | Value                                            |
 | -------------- | ------------------------------------------------ |
-| **Path**       | `<workspace_root>/.shofermodes`                  |
+| **Path**       | `<workspace_root>/.shofer/shofermodes`           |
 | **Format**     | YAML                                             |
 | **Scope**      | Per-project (workspace folder)                   |
 | **Priority**   | **Highest** (wins all conflicts)                 |
@@ -189,7 +189,7 @@ customModes:
 | **Path**       | `<globalStorage>/settings/custom_modes.yaml`                         |
 | **Format**     | YAML                                                                 |
 | **Scope**      | Per-extension install (shared across workspaces on the same machine) |
-| **Priority**   | Lower than `.shofermodes`, higher than built-in                      |
+| **Priority**   | Lower than `.shofer/shofermodes`, higher than built-in               |
 | **Purpose**    | User's personal modes and customizations via Settings UI             |
 | **Source tag** | `source: "global"`                                                   |
 | **In git?**    | **No** — runtime artifact, created fresh on each machine             |
@@ -235,7 +235,7 @@ Key globalState keys for modes:
 | Key                  | Contents                                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `customInstructions` | Global custom instructions (all modes)                                                                                         |
-| `customModes`        | Merged result of `.shofermodes` + settings file                                                                                |
+| `customModes`        | Merged result of `.shofer/shofermodes` + settings file                                                                         |
 | `customModePrompts`  | Per-mode prompt overrides (roleDefinition, customInstructions, whenToUse)                                                      |
 | `disabledTools`      | Global flat list of tool names hidden from the LLM (Settings → Tools) — applied across all modes by `filterNativeToolsForMode` |
 
@@ -309,7 +309,7 @@ MCP tools have their own visibility pipeline parallel to native tools, in
 
 The merge happens in **two stages**:
 
-### Stage 1: Merge `.shofermodes` + Global Storage → `customModes`
+### Stage 1: Merge `.shofer/shofermodes` + Global Storage → `customModes`
 
 From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManager.ts:364):
 
@@ -317,7 +317,7 @@ From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManag
 ┌────────────────────────────────────────────────┐
 │  Stage 1: CustomModesManager.getCustomModes()  │
 │                                                 │
-│  Read .shofermodes          → projectModes (map)   │
+│  Read .shofer/shofermodes          → projectModes (map)   │
 │  Read global storage     → globalModes (map)    │
 │                                                 │
 │  MERGE:                                         │
@@ -326,19 +326,19 @@ From [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManag
 │     in project modes (no conflict overwrite)    │
 │                                                 │
 │  Result: customModes[]                          │
-│   - source: "project" (from .shofermodes)          │
+│   - source: "project" (from .shofer/shofermodes)          │
 │   - source: "global"  (from global storage)     │
 └────────────────────────────────────────────────┘
 ```
 
 ```typescript
-// .shofermodes wins for same slug; global ignored if project mode exists
+// .shofer/shofermodes wins for same slug; global ignored if project mode exists
 for (const mode of shofermodesModes) {
 	projectModes.set(mode.slug, { ...mode, source: "project" })
 }
 for (const mode of settingsModes) {
 	if (!projectModes.has(mode.slug)) {
-		// ← only if not already in .shofermodes
+		// ← only if not already in .shofer/shofermodes
 		globalModes.set(mode.slug, { ...mode, source: "global" })
 	}
 }
@@ -391,7 +391,7 @@ active mode slug → modeApiConfigs[slug] → profile ID → apiConfigs[profileN
 ### Combined Flow
 
 ```
-.shofermodes ─────┐
+.shofer/shofermodes ─────┐
                ├── Stage 1 merge ──→ customModes[] ──┐
 global storage ┘                                      │
                                                       ├── Stage 2 overlay ──→ final ModeConfig[]
@@ -404,12 +404,12 @@ API profile assignments (modeApiConfigs) ──→ resolved at task creation (Se
 
 When the same slug exists in multiple sources:
 
-| Sources with same slug             | Winner                   |
-| ---------------------------------- | ------------------------ |
-| `.shofermodes` vs global storage   | `.shofermodes` (Stage 1) |
-| `customModes` (merged) vs built-in | `customModes` (Stage 2)  |
+| Sources with same slug                  | Winner                          |
+| --------------------------------------- | ------------------------------- |
+| `.shofer/shofermodes` vs global storage | `.shofer/shofermodes` (Stage 1) |
+| `customModes` (merged) vs built-in      | `customModes` (Stage 2)         |
 
-👉 **`.shofermodes` > global storage > built-in**
+👉 **`.shofer/shofermodes` > global storage > built-in**
 
 ---
 
@@ -436,10 +436,10 @@ Settings UI (API Provider tab)
             └── ContextProxy.setProviderSettings(config)  // sync cache
 ```
 
-### Via `.shofermodes` file edit
+### Via `.shofer/shofermodes` file edit
 
 ```
-User edits .shofermodes
+User edits .shofer/shofermodes
   └── File watcher triggers re-merge
        └── globalState.update("customModes", newMerged)
 ```
@@ -510,7 +510,7 @@ settingsWatcher.onDidChange(handleSettingsChange)
 settingsWatcher.onDidCreate(handleSettingsChange)
 settingsWatcher.onDidDelete(handleSettingsChange)
 
-// Watch .shofermodes file
+// Watch .shofer/shofermodes file
 const shofermodesWatcher = vscode.workspace.createFileSystemWatcher(shofermodesPath)
 shofermodesWatcher.onDidChange(handleShofermodesChange)
 shofermodesWatcher.onDidCreate(handleShofermodesChange)
@@ -562,7 +562,7 @@ restarting code-server or VS Code, and how changes are detected.
 | -------------------------------------------- | --------------- | -------------------------------------- | -------------- | --------------------------------------------------------------------------- |
 | **MCP servers** (global `mcp_settings.json`) | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | Servers restarted/reconnected automatically                                 |
 | **MCP servers** (project `.shofer/mcp.json`) | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | File deletion triggers cleanup of project servers                           |
-| **Mode definitions** (`.shofermodes`)        | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
+| **Mode definitions** (`.shofer/shofermodes`) | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
 | **Mode definitions** (`custom_modes.yaml`)   | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
 | **API profiles** (SecretStorage)             | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow; OS keychain changes undetected |
 | **API keys** (SecretStorage)                 | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow                                 |
@@ -596,12 +596,12 @@ On change:
 3. [`updateServerConnections()`](../src/services/mcp/McpHub.ts:364) reconnects affected servers
 4. WebView is notified of server changes
 
-#### Mode Definitions (`.shofermodes` + `custom_modes.yaml`)
+#### Mode Definitions (`.shofer/shofermodes` + `custom_modes.yaml`)
 
 Both files are watched by [`CustomModesManager.watchCustomModesFiles()`](../src/core/config/CustomModesManager.ts:269):
 
 ```typescript
-// .shofermodes watcher (per workspace folder)
+// .shofer/shofermodes watcher (per workspace folder)
 const shofermodesWatcher = vscode.workspace.createFileSystemWatcher(shofermodesPath)
 shofermodesWatcher.onDidChange(handleShofermodesChange)
 shofermodesWatcher.onDidCreate(handleShofermodesChange)
@@ -701,7 +701,7 @@ per-server `disabledTools` list in `mcp_settings.json`.
 
 | Layer                         | Storage                                        | Scope                | Edited via                                                        |
 | ----------------------------- | ---------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Per-mode `groups` / `tools_*` | `.shofermodes` / `custom_modes.yaml`           | Per mode             | Mode editor / file                                                |
+| Per-mode `groups` / `tools_*` | `.shofer/shofermodes` / `custom_modes.yaml`    | Per mode             | Mode editor / file                                                |
 | Global `disabledTools`        | `globalState["disabledTools"]: string[]`       | All modes            | Settings → Tools                                                  |
 | MCP per-tool visibility       | `mcp_settings.json` per-server `disabledTools` | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
 
@@ -811,7 +811,7 @@ Based on [`globalSettingsExportSchema`](../src/core/config/ContextProxy.ts:34) w
 Includes:
 
 - **Mode:** `mode` (default mode slug)
-- **Custom modes:** `customModes` — only `source: "global"` entries (project `.shofermodes` modes are excluded)
+- **Custom modes:** `customModes` — only `source: "global"` entries (project `.shofer/shofermodes` modes are excluded)
 - **Mode prompts:** `customModePrompts`, `customSupportPrompts`
 - **Custom instructions:** `customInstructions` (global, all modes)
 - **Auto-approval:** `autoApprovalEnabled`, all `alwaysAllow*` toggles, `followupAutoApproveTimeoutMs`
@@ -833,7 +833,7 @@ Includes:
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | **MCP server configs** (`mcp_settings.json`)     | Managed independently by `McpHub`; stored as a separate JSON file in `<globalStorage>/settings/` |
 | **Task history**                                 | Per-task data; explicitly excluded via `globalSettingsExportSchema.omit({ taskHistory: true })`  |
-| **Project `.shofermodes` modes**                 | File-based, per-workspace; only `source: "global"` custom modes are exported                     |
+| **Project `.shofer/shofermodes` modes**          | File-based, per-workspace; only `source: "global"` custom modes are exported                     |
 | **`currentApiConfigName` / `listApiConfigMeta`** | Derived from `providerProfiles` at import time                                                   |
 
 ### 10c. Import Flow
@@ -930,18 +930,18 @@ User clicks Reset
 
 **What Reset wipes:**
 
-| Layer                           | Wiped? | Notes                                                       |
-| ------------------------------- | ------ | ----------------------------------------------------------- |
-| API profiles & keys             | ✅     | All `SecretStorage` entries deleted                         |
-| Global settings (globalState)   | ✅     | All keys in the SQLite database cleared                     |
-| Custom modes                    | ✅     | Reset to built-in defaults; `custom_modes.yaml` overwritten |
-| Task history                    | ✅     | Part of globalState wipe                                    |
-| Auto-approval settings          | ✅     | Part of globalState wipe                                    |
-| Custom instructions (all modes) | ✅     | Part of globalState wipe                                    |
-| Mode-specific custom prompts    | ✅     | Part of globalState wipe                                    |
-| **MCP server configs**          | ❌     | `mcp_settings.json` is **untouched**                        |
-| **Project `.shofermodes`**      | ❌     | File on disk is **untouched**                               |
-| **VS Code `settings.json`**     | ❌     | Extension configuration in VS Code is **untouched**         |
+| Layer                             | Wiped? | Notes                                                       |
+| --------------------------------- | ------ | ----------------------------------------------------------- |
+| API profiles & keys               | ✅     | All `SecretStorage` entries deleted                         |
+| Global settings (globalState)     | ✅     | All keys in the SQLite database cleared                     |
+| Custom modes                      | ✅     | Reset to built-in defaults; `custom_modes.yaml` overwritten |
+| Task history                      | ✅     | Part of globalState wipe                                    |
+| Auto-approval settings            | ✅     | Part of globalState wipe                                    |
+| Custom instructions (all modes)   | ✅     | Part of globalState wipe                                    |
+| Mode-specific custom prompts      | ✅     | Part of globalState wipe                                    |
+| **MCP server configs**            | ❌     | `mcp_settings.json` is **untouched**                        |
+| **Project `.shofer/shofermodes`** | ❌     | File on disk is **untouched**                               |
+| **VS Code `settings.json`**       | ❌     | Extension configuration in VS Code is **untouched**         |
 
 > **Warning:** Reset is **destructive and irreversible**. There is no undo. Export your
 > settings first if you want to restore them later.
@@ -1004,7 +1004,7 @@ It opens a file dialog for YAML files and lets the user choose where to import:
 
 | Level       | File Written To                      | Effect                                           |
 | ----------- | ------------------------------------ | ------------------------------------------------ |
-| **Project** | `.shofermodes`                       | Mode available in this workspace only            |
+| **Project** | `.shofer/shofermodes`                | Mode available in this workspace only            |
 | **Global**  | `custom_modes.yaml` (global storage) | Mode available in all workspaces on this machine |
 
 The imported mode is merged into the target file. If a mode with the same slug already
@@ -1041,7 +1041,7 @@ Mitigations:
 
 | File                        | Path                                              | Contents                                             |
 | --------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
-| `.shofermodes`              | `<workspace>/.shofermodes`                        | Project-specific mode overrides (YAML)               |
+| `.shofer/shofermodes`       | `<workspace>/.shofer/shofermodes`                 | Project-specific mode overrides (YAML)               |
 | `custom_modes.yaml`         | `<globalStorage>/settings/custom_modes.yaml`      | Global user mode customizations (YAML)               |
 | `mcp_settings.json`         | `<globalStorage>/settings/mcp_settings.json`      | MCP server definitions (JSON)                        |
 | `shofer-code-settings.json` | Any path (referenced by `autoImportSettingsPath`) | Full export including API profiles + global settings |
@@ -1074,7 +1074,7 @@ Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
 | **API Profiles (SoT)**      | `SecretStorage` | `shofer_config_api_config`                                    | JSON blob          | Per-extension | —               | Settings UI        |
 | **API Keys**                | `SecretStorage` | `apiKey`, `openRouterApiKey`, … (30+ keys)                    | String             | Per-extension | —               | Settings UI        |
 | **Non-secret API settings** | `globalState`   | `apiProvider`, `apiModelId`, `anthropicBaseUrl`, …            | Key-value          | Per-extension | —               | Settings UI        |
-| **`.shofermodes`**          | File            | `<workspace>/.shofermodes`                                    | YAML               | Per-project   | Highest (modes) | Direct edit        |
+| **`.shofer/shofermodes`**   | File            | `<workspace>/.shofer/shofermodes`                             | YAML               | Per-project   | Highest (modes) | Direct edit        |
 | **Global modes**            | File            | `<globalStorage>/settings/custom_modes.yaml`                  | YAML               | Per-extension | Medium (modes)  | Settings UI        |
 | **MCP servers**             | File            | `<globalStorage>/settings/mcp_settings.json`                  | JSON               | Per-extension | —               | Settings UI / file |
 | **Global settings**         | `globalState`   | `mode`, `customInstructions`, `autoApprovalEnabled`, …        | Key-value (SQLite) | Per-extension | —               | Settings UI        |
@@ -1168,9 +1168,9 @@ groups by `(source, filePath)` key and that **programmatic updates**
 entirely. This is an important behavioral detail for anyone debugging
 double-reload issues.
 
-### 14i. `.shofermodes` Path Resolution Details
+### 14i. `.shofer/shofermodes` Path Resolution Details
 
-The doc uses the bare filename `.shofermodes` but the actual path is
+The doc uses the bare filename `.shofer/shofermodes` but the actual path is
 resolved by [`CustomModesManager.getWorkspaceRoomodes()`](../src/core/config/CustomModesManager.ts)
 which joins the workspace root with the `SHOFERMODES_FILENAME` constant.
 The filename constant is not separately documented; the watcher code in

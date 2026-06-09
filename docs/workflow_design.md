@@ -653,13 +653,13 @@ The mapping is:
 3. `role: "..."` → not yet wired; would override the mode's `roleDefinition`.
 4. `context: {...}` → (not yet wired) controls what context the agent receives from the project. Initial knob: `include_agents_md` (boolean) to inject AGENTS.md rules into the agent's system prompt.
 
-For simple agents (e.g., Reviewer: read-only tools), existing modes work directly. For specialized agents, the Workflow restricts the mode's tool groups via the `tools:` field at spawn time — no persisted `.shofermodes` entry needed.
+For simple agents (e.g., Reviewer: read-only tools), existing modes work directly. For specialized agents, the Workflow restricts the mode's tool groups via the `tools:` field at spawn time — no persisted `.shofer/shofermodes` entry needed.
 
 ---
 
 ## Shofer Extensions (Shofermodes Capabilities)
 
-The `.slang` `agent` block extends the vendored Slang specification with Shofer-specific capabilities. These map directly to Shofer mode features defined in `.shofermodes` and the mode schema at [`packages/types/src/mode.ts`](../packages/types/src/mode.ts).
+The `.slang` `agent` block extends the vendored Slang specification with Shofer-specific capabilities. These map directly to Shofer mode features defined in `.shofer/shofermodes` and the mode schema at [`packages/types/src/mode.ts`](../packages/types/src/mode.ts).
 
 ### Implemented (current execution)
 

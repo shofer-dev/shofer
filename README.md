@@ -62,7 +62,7 @@ Shofer ships with 5 built-in modes — choose from the Mode Selector dropdown in
 | 🪲 **Debug**        | Troubleshooting errors and diagnosing root causes.                       |
 | 🪃 **Orchestrator** | Coordinating complex multi-step work by delegating to sub-tasks.         |
 
-Create your own modes (Reviewer, Search, Opinion, Browser, and more) via [`.shofermodes`](src/USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
+Create your own modes (Reviewer, Search, Opinion, Browser, and more) via [`.shofer/shofermodes`](src/USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
 
 Learn more: [User Manual](src/USER_MANUAL.md) • [Custom Modes](src/USER_MANUAL.md#4-custom-modes)
 
@@ -124,8 +124,8 @@ Shofer recognizes several files in your workspace that control its behavior. The
 
 | File / Directory        | Purpose                                              |
 | ----------------------- | ---------------------------------------------------- |
-| `.shoferignore`         | Hide files from Shofer (same syntax as `.gitignore`) |
-| `.shofermodes`          | Define custom AI modes for your project              |
+| `.shofer/shoferignore`  | Hide files from Shofer (same syntax as `.gitignore`) |
+| `.shofer/shofermodes`   | Define custom AI modes for your project              |
 | `AGENTS.md`             | Project rules injected into every task               |
 | `.shofer/rules/`        | Mode-agnostic rules (always active)                  |
 | `.shofer/rules-<mode>/` | Rules for a specific mode (e.g., `rules-code/`)      |

@@ -5,7 +5,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 ## Prerequisites
 
 - Shofer extension running with at least one API profile configured.
-- A workspace with a `.shofermodes` file for custom mode tests.
+- A workspace with a `.shofer/shofermodes` file for custom mode tests.
 - An MCP server configured in `mcp.json` with tools assigned to different groups.
 
 ---
@@ -44,7 +44,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 
 **Goal:** Verify that file-regex scoping on a group restricts tools correctly.
 
-1. Create a `.shofermodes` file with a custom mode:
+1. Create a `.shofer/shofermodes` file with a custom mode:
     ```json
     {
     	"customModes": [
@@ -158,7 +158,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 
 **Goal:** Verify that deprecated group names are auto-translated.
 
-1. In a `.shofermodes` file, use the old group name `edit` instead of `write`.
+1. In a `.shofer/shofermodes` file, use the old group name `edit` instead of `write`.
 2. Start a task and confirm that `apply_diff` is available (the mode should treat `edit` as `write`).
 3. Similarly test `command` → `execute` and `modes` → `mode`.
 

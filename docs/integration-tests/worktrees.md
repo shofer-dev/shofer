@@ -16,20 +16,20 @@ Each scenario assumes a git repository with at least one commit and a clean work
 6. **Assert:** `git worktree list` shows both the main tree and the new worktree.
 7. **Assert:** The new task's `cwd` is the worktree subdirectory (verify via `execute_command pwd` in the new task).
 
-### 2. Copy `.worktreeinclude` files on creation
+### 2. Copy `.shofer/worktreeinclude` files on creation
 
-1. Create a `.worktreeinclude` file in the workspace root with `node_modules/`.
+1. Create a `.shofer/worktreeinclude` file in the workspace root with `node_modules/`.
 2. Ensure `node_modules/` is in `.gitignore`.
 3. Create a worktree via the UI.
 4. **Assert:** The creation modal shows a progress bar with bytes copied.
 5. **Assert:** `node_modules/` exists in the new worktree directory.
-6. **Assert:** Tracked source files are NOT duplicated (only ignored files matched by `.worktreeinclude`).
+6. **Assert:** Tracked source files are NOT duplicated (only ignored files matched by `.shofer/worktreeinclude`).
 
-### 3. `.worktreeinclude` intersection behavior
+### 3. `.shofer/worktreeinclude` intersection behavior
 
-1. Create `.worktreeinclude` with a pattern that is NOT in `.gitignore` (e.g., `src/`).
+1. Create `.shofer/worktreeinclude` with a pattern that is NOT in `.gitignore` (e.g., `src/`).
 2. Create a worktree.
-3. **Assert:** The pattern is NOT copied (only files matching BOTH `.gitignore` AND `.worktreeinclude` are copied).
+3. **Assert:** The pattern is NOT copied (only files matching BOTH `.gitignore` AND `.shofer/worktreeinclude` are copied).
 
 ### 4. Worktree path enforcement
 
@@ -41,7 +41,7 @@ Each scenario assumes a git repository with at least one commit and a clean work
 1. Open a single-folder git workspace.
 2. Open the Worktrees settings page.
 3. **Assert:** The worktree list appears with the main tree and any existing worktrees.
-4. **Assert:** The `.worktreeinclude` status footer shows correct status.
+4. **Assert:** The `.shofer/worktreeinclude` status footer shows correct status.
 5. Open a multi-root workspace.
 6. **Assert:** Worktrees view shows "not supported in multi-root workspaces".
 7. Open a subfolder of a git repo (not under `.shofer/worktrees/`).

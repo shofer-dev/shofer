@@ -56,11 +56,11 @@ These should pass on every build.
 
 ## Functional Tests
 
-### F1 — `.shofermodes` takes precedence over global `custom_modes.yaml`
+### F1 — `.shofer/shofermodes` takes precedence over global `custom_modes.yaml`
 
 **Given** a mode slug `"reviewer"` exists in both:
 
-- `.shofermodes` with `roleDefinition: "Project reviewer — strict"`
+- `.shofer/shofermodes` with `roleDefinition: "Project reviewer — strict"`
 - `custom_modes.yaml` with `roleDefinition: "Global reviewer — lenient"`
 
 **When** the workspace is active
@@ -68,20 +68,20 @@ These should pass on every build.
 **Then** the mode dropdown shows `roleDefinition: "Project reviewer — strict"`
 **And** editing the mode in Settings shows `source: "project"`
 
-**Cleanup**: Remove `"reviewer"` from `.shofermodes` or delete `.shofermodes`.
+**Cleanup**: Remove `"reviewer"` from `.shofer/shofermodes` or delete `.shofer/shofermodes`.
 
-### F2 — Deleting `.shofermodes` restores global version of same slug
+### F2 — Deleting `.shofer/shofermodes` restores global version of same slug
 
 **Given** the setup from F1 (project mode overrides global)
 
-**When** `.shofermodes` is deleted (or the `"reviewer"` slug is removed from it)
+**When** `.shofer/shofermodes` is deleted (or the `"reviewer"` slug is removed from it)
 
 **Then** the mode dropdown now shows `roleDefinition: "Global reviewer — lenient"`
 **And** editing the mode in Settings shows `source: "global"`
 
-### F3 — Mode merge updates within seconds of editing `.shofermodes`
+### F3 — Mode merge updates within seconds of editing `.shofer/shofermodes`
 
-- Open `.shofermodes` and change a built-in mode's `roleDefinition`.
+- Open `.shofer/shofermodes` and change a built-in mode's `roleDefinition`.
 - Save the file.
 - Wait up to 3 seconds.
 - **Assert**: The ModeSelector dropdown or Settings → Modes reflects the new
@@ -91,7 +91,7 @@ These should pass on every build.
 
 ### F4 — Export excludes project modes (only `source: "global"` custom modes)
 
-**Given** `.shofermodes` defines a custom mode `"my-project-mode"`
+**Given** `.shofer/shofermodes` defines a custom mode `"my-project-mode"`
 **And** `custom_modes.yaml` defines a custom mode `"my-global-mode"`
 
 **When** Settings → About → Export
@@ -139,11 +139,11 @@ These should pass on every build.
 - **Assert**: File contains `slug`, `name`, `roleDefinition` fields.
 - **Assert**: File parses as valid YAML.
 
-### F10 — Per-mode import into project level writes to `.shofermodes`
+### F10 — Per-mode import into project level writes to `.shofer/shofermodes`
 
 - Export a mode from a different workspace (or create a valid mode YAML manually).
 - Settings → Modes → Import → select the file → choose **Project** level.
-- **Assert**: The imported mode appears in `.shofermodes`.
+- **Assert**: The imported mode appears in `.shofer/shofermodes`.
 - **Assert**: The mode shows `source: "project"` in the Modes tab.
 
 ### F11 — Per-mode import into global level writes to `custom_modes.yaml`
@@ -168,12 +168,12 @@ These should pass on every build.
 
 ## Edge-Case Tests
 
-### E1 — Duplicate slug in `.shofermodes` and global: global is ignored
+### E1 — Duplicate slug in `.shofer/shofermodes` and global: global is ignored
 
 **Given** F1 setup (both sources define `"reviewer"`)
 **When** the global `"reviewer"` mode is edited via Settings → Modes
 **Then** the edit has no effect on the active mode (project version still wins)
-**And** if `.shofermodes` is deleted, the global edits become visible
+**And** if `.shofer/shofermodes` is deleted, the global edits become visible
 
 ### E2 — Export with zero API profiles still produces valid JSON
 

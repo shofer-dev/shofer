@@ -117,7 +117,7 @@ group membership. Use this when:
 
 A mode may declare access purely through `tools_allowed` and omit `groups`
 entirely — this is what project-level read-only modes such as `reviewer` and
-`search` in `.shofermodes` do.
+`search` in `.shofer/shofermodes` do.
 
 ### `tools_denied`
 
