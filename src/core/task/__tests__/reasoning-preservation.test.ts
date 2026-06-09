@@ -169,7 +169,6 @@ describe("Task reasoning preservation", () => {
 		mockProvider = {
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),
 			postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 			getState: vi.fn().mockResolvedValue({
 				mode: "code",
 				experiments: {},

@@ -452,8 +452,6 @@ describe("importExport", () => {
 			const mockProvider = {
 				settingsImportedAt: 0,
 				postStateToWebview: vi.fn().mockResolvedValue(undefined),
-				postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
-				postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 			}
 
 			// Mock the showErrorMessage to capture the error
@@ -763,7 +761,7 @@ describe("importExport", () => {
 
 				// Provider state should still be updated
 				expect(mockProvider.settingsImportedAt).toBeGreaterThan(0)
-				expect(mockProvider.postStateToWebview).toHaveBeenCalled()
+				expect(mockProvider.postInitState).toHaveBeenCalled()
 
 				showWarningMessageSpy.mockRestore()
 				showInfoMessageSpy.mockRestore()
