@@ -761,7 +761,7 @@ describe("importExport", () => {
 
 				// Provider state should still be updated
 				expect(mockProvider.settingsImportedAt).toBeGreaterThan(0)
-				expect(mockProvider.postInitState).toHaveBeenCalled()
+				expect(mockProvider.postStateToWebview).toHaveBeenCalled()
 
 				showWarningMessageSpy.mockRestore()
 				showInfoMessageSpy.mockRestore()
