@@ -140,9 +140,9 @@ interface CompletionUsage {
 }
 
 /** Tokens some models emit as trivial reasoning preamble before actual thinking begins. */
-const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "answer", "Answer"])
+const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "•response", "•", "answer", "Answer"])
 function isTrivialReasoningToken(text: string): boolean {
-	return TRIVIAL_REASONING_TOKENS.has(text)
+	return TRIVIAL_REASONING_TOKENS.has(text) || TRIVIAL_REASONING_TOKENS.has(text.trim())
 }
 
 export class OpenRouterHandler extends BaseProvider implements SingleCompletionHandler {

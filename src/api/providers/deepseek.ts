@@ -18,9 +18,9 @@ import { OpenAiHandler } from "./openai"
 import type { ApiHandlerCreateMessageMetadata } from "../index"
 
 /** Tokens some models emit as trivial reasoning preamble before actual thinking begins. */
-const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "answer", "Answer"])
+const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "•response", "•", "answer", "Answer"])
 function isTrivialReasoningToken(text: string): boolean {
-	return TRIVIAL_REASONING_TOKENS.has(text)
+	return TRIVIAL_REASONING_TOKENS.has(text) || TRIVIAL_REASONING_TOKENS.has(text.trim())
 }
 
 // Custom interface for DeepSeek params to support thinking mode

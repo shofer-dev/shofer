@@ -34,8 +34,28 @@ describe("ReasoningBlock", () => {
 		expect(container.querySelector(".group")).toBeNull()
 	})
 
+	it("renders nothing when not streaming and content is the trivial preamble '•response' (no space)", () => {
+		const { container } = render(<ReasoningBlock content="•response" isStreaming={false} isLast={false} ts={0} />)
+		expect(container.querySelector(".group")).toBeNull()
+	})
+
+	it("renders nothing when not streaming and content is just '•' (bullet only)", () => {
+		const { container } = render(<ReasoningBlock content="•" isStreaming={false} isLast={false} ts={0} />)
+		expect(container.querySelector(".group")).toBeNull()
+	})
+
 	it("renders the thinking header when streaming with trivial content '• response'", () => {
 		render(<ReasoningBlock content="• response" isStreaming={true} isLast={true} ts={0} />)
+		expect(screen.getByText("Thinking")).toBeInTheDocument()
+	})
+
+	it("renders the thinking header when streaming with trivial content '•response' (no space)", () => {
+		render(<ReasoningBlock content="•response" isStreaming={true} isLast={true} ts={0} />)
+		expect(screen.getByText("Thinking")).toBeInTheDocument()
+	})
+
+	it("renders the thinking header when streaming with trivial content '•' (bullet only)", () => {
+		render(<ReasoningBlock content="•" isStreaming={true} isLast={true} ts={0} />)
 		expect(screen.getByText("Thinking")).toBeInTheDocument()
 	})
 

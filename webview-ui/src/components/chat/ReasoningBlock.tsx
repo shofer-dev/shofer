@@ -22,7 +22,7 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 	// When not streaming and the content is empty (or whitespace-only), render nothing.
 	// Also filter out trivial model-generated preamble tokens like "• response".
 	const trimmedContent = content?.trim() ?? ""
-	const hasContent = trimmedContent.length > 0 && trimmedContent !== "• response"
+	const hasContent = trimmedContent.length > 0 && !/^•( ?response)?$/.test(trimmedContent)
 
 	const [isCollapsed, setIsCollapsed] = useState(reasoningBlockCollapsed)
 
