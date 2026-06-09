@@ -17,10 +17,17 @@ import {
 } from "@/components/ui"
 
 interface ApiConfigManagerProps {
+	/** The global default config name (read-only from host state). */
 	currentApiConfigName?: string
+	/** The config currently being edited. Drives the edit dropdown and what
+	 *  ApiOptions renders. Saved back under this name via the global Save button. */
+	editingConfigName: string
 	listApiConfigMeta?: ProviderSettingsEntry[]
 	organizationAllowList?: OrganizationAllowList
-	onSelectConfig: (configName: string) => void
+	/** Called when the edit dropdown changes — loads config settings for editing. */
+	onSelectConfigForEdit: (configName: string) => void
+	/** Called when the default dropdown changes — switches the global default. */
+	onSelectConfigAsDefault: (configName: string) => void
 	onDeleteConfig: (configName: string) => void
 	onRenameConfig: (oldName: string, newName: string) => void
 	onUpsertConfig: (configName: string) => void
@@ -28,9 +35,11 @@ interface ApiConfigManagerProps {
 
 const ApiConfigManager = ({
 	currentApiConfigName = "",
+	editingConfigName,
 	listApiConfigMeta = [],
 	organizationAllowList,
-	onSelectConfig,
+	onSelectConfigForEdit,
+	onSelectConfigAsDefault,
 	onDeleteConfig,
 	onRenameConfig,
 	onUpsertConfig,
@@ -47,23 +56,34 @@ const ApiConfigManager = ({
 
 	// Check if a profile is valid based on the organization allow list
 	const isProfileValid = (profile: ProviderSettingsEntry): boolean => {
-		// If no organization allow list or allowAll is true, all profiles are valid
 		if (!organizationAllowList || organizationAllowList.allowAll) {
 			return true
 		}
-
-		// Check if the provider is allowed
 		const provider = profile.apiProvider
 		if (!provider) return true
-
 		const providerConfig = organizationAllowList.providers[provider]
 		if (!providerConfig) {
 			return false
 		}
-
-		// If provider allows all models, profile is valid
 		return !!providerConfig.allowAll || !!(providerConfig.models && providerConfig.models.length > 0)
 	}
+
+	const buildSearchableOptions = () =>
+		listApiConfigMeta.map((config) => {
+			const valid = isProfileValid(config)
+			return {
+				value: config.name,
+				label: config.name,
+				disabled: !valid,
+				icon: !valid ? (
+					<StandardTooltip content={t("settings:validation.profileInvalid")}>
+						<span>
+							<AlertTriangle size={16} className="mr-2 text-vscode-errorForeground" />
+						</span>
+					</StandardTooltip>
+				) : undefined,
+			} as SearchableSelectOption
+		})
 
 	const validateName = (name: string, isNewProfile: boolean): string | null => {
 		const trimmed = name.trim()
@@ -71,13 +91,12 @@ const ApiConfigManager = ({
 
 		const nameExists = listApiConfigMeta?.some((config) => config.name.toLowerCase() === trimmed.toLowerCase())
 
-		// For new profiles, any existing name is invalid.
 		if (isNewProfile && nameExists) {
 			return t("settings:providers.nameExists")
 		}
 
 		// For rename, only block if trying to rename to a different existing profile.
-		if (!isNewProfile && nameExists && trimmed.toLowerCase() !== currentApiConfigName?.toLowerCase()) {
+		if (!isNewProfile && nameExists && trimmed.toLowerCase() !== editingConfigName?.toLowerCase()) {
 			return t("settings:providers.nameExists")
 		}
 
@@ -112,15 +131,20 @@ const ApiConfigManager = ({
 		}
 	}, [isCreating])
 
-	// Reset state when current profile changes.
+	// Reset state when editing config changes.
 	useEffect(() => {
 		resetCreateState()
 		resetRenameState()
-	}, [currentApiConfigName])
+	}, [editingConfigName])
 
-	const handleSelectConfig = (configName: string) => {
+	const handleSelectForEdit = (configName: string) => {
 		if (!configName) return
-		onSelectConfig(configName)
+		onSelectConfigForEdit(configName)
+	}
+
+	const handleSelectAsDefault = (configName: string) => {
+		if (!configName) return
+		onSelectConfigAsDefault(configName)
 	}
 
 	const handleAdd = () => {
@@ -130,7 +154,7 @@ const ApiConfigManager = ({
 
 	const handleStartRename = () => {
 		setIsRenaming(true)
-		setInputValue(currentApiConfigName || "")
+		setInputValue(editingConfigName || "")
 		setError(null)
 	}
 
@@ -140,19 +164,19 @@ const ApiConfigManager = ({
 
 	const handleSave = () => {
 		const trimmedValue = inputValue.trim()
-		const error = validateName(trimmedValue, false)
+		const err = validateName(trimmedValue, false)
 
-		if (error) {
-			setError(error)
+		if (err) {
+			setError(err)
 			return
 		}
 
-		if (isRenaming && currentApiConfigName) {
-			if (currentApiConfigName === trimmedValue) {
+		if (isRenaming && editingConfigName) {
+			if (editingConfigName === trimmedValue) {
 				resetRenameState()
 				return
 			}
-			onRenameConfig(currentApiConfigName, trimmedValue)
+			onRenameConfig(editingConfigName, trimmedValue)
 		}
 
 		resetRenameState()
@@ -160,10 +184,10 @@ const ApiConfigManager = ({
 
 	const handleNewProfileSave = () => {
 		const trimmedValue = newProfileName.trim()
-		const error = validateName(trimmedValue, true)
+		const err = validateName(trimmedValue, true)
 
-		if (error) {
-			setError(error)
+		if (err) {
+			setError(err)
 			return
 		}
 
@@ -172,20 +196,88 @@ const ApiConfigManager = ({
 	}
 
 	const handleDelete = () => {
-		if (!currentApiConfigName || !listApiConfigMeta || listApiConfigMeta.length <= 1) return
-
-		// Let the extension handle both deletion and selection.
-		onDeleteConfig(currentApiConfigName)
+		if (!editingConfigName || !listApiConfigMeta || listApiConfigMeta.length <= 1) return
+		onDeleteConfig(editingConfigName)
 	}
 
 	const isOnlyProfile = listApiConfigMeta?.length === 1
 
 	return (
-		<div className="flex flex-col gap-1">
-			<label className="block font-medium mb-1">{t("settings:providers.configProfile")}</label>
+		<div className="flex flex-col gap-3">
+			{/* Default dropdown — controls the global default config */}
+			<div>
+				<label className="block font-medium mb-1">{t("settings:providers.defaultConfigProfile")}</label>
+				<SearchableSelect
+					value={currentApiConfigName}
+					onValueChange={handleSelectAsDefault}
+					options={buildSearchableOptions()}
+					placeholder={t("settings:common.select")}
+					searchPlaceholder={t("settings:providers.searchPlaceholder")}
+					emptyMessage={t("settings:providers.noMatchFound")}
+					className="grow"
+					data-testid="default-config-select"
+				/>
+				<div className="text-vscode-descriptionForeground text-sm mt-1">
+					{t("settings:providers.defaultDescription")}
+				</div>
+			</div>
 
-			{isRenaming ? (
-				<div data-testid="rename-form">
+			{/* Edit dropdown — selects which config to edit, no side effects besides loading settings */}
+			<div>
+				<label className="block font-medium mb-1">{t("settings:providers.editConfigProfile")}</label>
+				<div className="flex items-center gap-1">
+					<SearchableSelect
+						value={editingConfigName}
+						onValueChange={handleSelectForEdit}
+						options={buildSearchableOptions()}
+						placeholder={t("settings:common.select")}
+						searchPlaceholder={t("settings:providers.searchPlaceholder")}
+						emptyMessage={t("settings:providers.noMatchFound")}
+						className="grow"
+						data-testid="edit-config-select"
+					/>
+					<StandardTooltip content={t("settings:providers.addProfile")}>
+						<Button variant="ghost" size="icon" onClick={handleAdd} data-testid="add-profile-button">
+							<span className="codicon codicon-add" />
+						</Button>
+					</StandardTooltip>
+					{editingConfigName && (
+						<>
+							<StandardTooltip content={t("settings:providers.renameProfile")}>
+								<Button
+									variant="ghost"
+									size="icon"
+									onClick={handleStartRename}
+									data-testid="rename-profile-button">
+									<span className="codicon codicon-edit" />
+								</Button>
+							</StandardTooltip>
+							<StandardTooltip
+								content={
+									isOnlyProfile
+										? t("settings:providers.cannotDeleteOnlyProfile")
+										: t("settings:providers.deleteProfile")
+								}>
+								<Button
+									variant="ghost"
+									size="icon"
+									onClick={handleDelete}
+									data-testid="delete-profile-button"
+									disabled={isOnlyProfile}>
+									<span className="codicon codicon-trash" />
+								</Button>
+							</StandardTooltip>
+						</>
+					)}
+				</div>
+				<div className="text-vscode-descriptionForeground text-sm mt-1">
+					{t("settings:providers.editDescription")}
+				</div>
+			</div>
+
+			{/* Rename form (overlays the edit dropdown when active) */}
+			{isRenaming && (
+				<div className="mt-1" data-testid="rename-form">
 					<div className="flex items-center gap-1">
 						<VSCodeTextField
 							ref={inputRef}
@@ -231,71 +323,6 @@ const ApiConfigManager = ({
 						</div>
 					)}
 				</div>
-			) : (
-				<>
-					<div className="flex items-center gap-1">
-						<SearchableSelect
-							value={currentApiConfigName}
-							onValueChange={handleSelectConfig}
-							options={listApiConfigMeta.map((config) => {
-								const valid = isProfileValid(config)
-								return {
-									value: config.name,
-									label: config.name,
-									disabled: !valid,
-									icon: !valid ? (
-										<StandardTooltip content={t("settings:validation.profileInvalid")}>
-											<span>
-												<AlertTriangle size={16} className="mr-2 text-vscode-errorForeground" />
-											</span>
-										</StandardTooltip>
-									) : undefined,
-								} as SearchableSelectOption
-							})}
-							placeholder={t("settings:common.select")}
-							searchPlaceholder={t("settings:providers.searchPlaceholder")}
-							emptyMessage={t("settings:providers.noMatchFound")}
-							className="grow"
-							data-testid="select-component"
-						/>
-						<StandardTooltip content={t("settings:providers.addProfile")}>
-							<Button variant="ghost" size="icon" onClick={handleAdd} data-testid="add-profile-button">
-								<span className="codicon codicon-add" />
-							</Button>
-						</StandardTooltip>
-						{currentApiConfigName && (
-							<>
-								<StandardTooltip content={t("settings:providers.renameProfile")}>
-									<Button
-										variant="ghost"
-										size="icon"
-										onClick={handleStartRename}
-										data-testid="rename-profile-button">
-										<span className="codicon codicon-edit" />
-									</Button>
-								</StandardTooltip>
-								<StandardTooltip
-									content={
-										isOnlyProfile
-											? t("settings:providers.cannotDeleteOnlyProfile")
-											: t("settings:providers.deleteProfile")
-									}>
-									<Button
-										variant="ghost"
-										size="icon"
-										onClick={handleDelete}
-										data-testid="delete-profile-button"
-										disabled={isOnlyProfile}>
-										<span className="codicon codicon-trash" />
-									</Button>
-								</StandardTooltip>
-							</>
-						)}
-					</div>
-					<div className="text-vscode-descriptionForeground text-sm mt-1">
-						{t("settings:providers.description")}
-					</div>
-				</>
 			)}
 
 			<Dialog
