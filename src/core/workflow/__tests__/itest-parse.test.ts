@@ -12,10 +12,11 @@ import { parseSlang, validateSlangAST } from "../slang-parser"
 
 describe("slang file parse smoke test", () => {
 	it("parses implement-feature.slang with zero parse errors", () => {
-		// __dirname is …/extensions/shofer/src/core/workflow/__tests__
-		// Going up 6 levels (../../../../../..) reaches the workspace root.
-		const workspaceRoot = resolve(__dirname, "..", "..", "..", "..", "..", "..")
-		const src = readFileSync(resolve(workspaceRoot, ".shofer/workflows/implement-feature.slang"), "utf-8")
+		// implement-feature.slang is shipped under src/media/workflows/
+		const src = readFileSync(
+			resolve(__dirname, "..", "..", "..", "media", "workflows", "implement-feature.slang"),
+			"utf-8",
+		)
 		const { ast, errors } = parseSlang(src)
 		expect(errors).toHaveLength(0)
 
