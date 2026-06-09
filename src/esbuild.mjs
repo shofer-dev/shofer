@@ -59,6 +59,21 @@ async function main() {
 						srcDir,
 						buildDir,
 					)
+					// Copy built-in .slang workflows so discoverWorkflows() finds them at runtime.
+					// discoverWorkflows() resolves __dirname/../../media/workflows/, which at runtime
+					// (where __dirname = dist/) maps to <repo-root>/media/workflows/ — the same level
+					// as README.md and CHANGELOG.md. copyPaths doesn't create destination dirs,
+					// so we create the target and copy manually.
+					const workflowsDest = path.join(buildDir, "..", "media", "workflows")
+					fs.mkdirSync(workflowsDest, { recursive: true })
+					fs.copyFileSync(
+						path.join(srcDir, "media", "workflows", "debug.slang"),
+						path.join(workflowsDest, "debug.slang"),
+					)
+					fs.copyFileSync(
+						path.join(srcDir, "media", "workflows", "implement-feature.slang"),
+						path.join(workflowsDest, "implement-feature.slang"),
+					)
 					copyPaths(
 						[
 							["core/webview/slang-render.js", "slang-render.js"],
