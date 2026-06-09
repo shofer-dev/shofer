@@ -152,7 +152,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	)
 	const contentRef = useRef<HTMLDivElement | null>(null)
 
-	const prevApiConfigName = useRef(currentApiConfigName)
+	// editingConfigName tracks which config the user is currently editing.
+	// It is separate from currentApiConfigName (the global default).
+	// Changing the edit dropdown does NOT change the global default.
+	const [editingConfigName, setEditingConfigName] = useState<string>(currentApiConfigName || "default")
+
+	const _prevApiConfigName = useRef(currentApiConfigName)
 	const confirmDialogHandler = useRef<() => void>()
 	// Imperative handle to ModesView so the Save / Discard flow can commit or drop
 	// the per-mode text buffers it holds internally (see ModesView.commitBuffers
@@ -235,17 +240,21 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
 
+	// Sync cachedState + editingConfigName when the host pushes a new
+	// apiConfiguration. The host can change apiConfiguration independently
+	// of currentApiConfigName (via loadApiConfigurationForEdit), so we
+	// track the incoming apiConfiguration shape as a fingerprint.
+	const apiConfigFingerprint = useRef<string>("")
+
 	useEffect(() => {
-		// Update only when currentApiConfigName is changed.
-		// Expected to be triggered by loadApiConfiguration/upsertApiConfiguration.
-		if (prevApiConfigName.current === currentApiConfigName) {
+		const fp = JSON.stringify(extensionState.apiConfiguration ?? {})
+		if (apiConfigFingerprint.current === fp) {
 			return
 		}
-
+		apiConfigFingerprint.current = fp
 		setCachedState((prevCachedState) => ({ ...prevCachedState, ...extensionState }))
-		prevApiConfigName.current = currentApiConfigName
 		setChangeDetected(false)
-	}, [currentApiConfigName, extensionState])
+	}, [extensionState])
 
 	// Bust the cache when settings are imported.
 	useEffect(() => {
@@ -465,9 +474,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 				},
 			})
 
-			// These have more complex logic so they aren't (yet) handled
-			// by the `updateSettings` message.
-			vscode.postMessage({ type: "upsertApiConfiguration", text: currentApiConfigName, apiConfiguration })
+			// Save the edited configuration under the editing config name,
+			// NOT the global default. The Default dropdown controls currentApiConfigName.
+			vscode.postMessage({ type: "upsertApiConfiguration", text: editingConfigName, apiConfiguration })
 			vscode.postMessage({ type: "telemetrySetting", text: telemetrySetting })
 			vscode.postMessage({ type: "debugSetting", bool: cachedState.debug })
 
@@ -796,30 +805,41 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								<Section>
 									<ApiConfigManager
 										currentApiConfigName={currentApiConfigName}
+										editingConfigName={editingConfigName}
 										listApiConfigMeta={listApiConfigMeta}
-										onSelectConfig={(configName: string) =>
+										onSelectConfigForEdit={(configName: string) => {
+											setEditingConfigName(configName)
 											checkUnsaveChanges(() =>
-												vscode.postMessage({ type: "loadApiConfiguration", text: configName }),
+												vscode.postMessage({
+													type: "loadApiConfigurationForEdit",
+													text: configName,
+												}),
 											)
+										}}
+										onSelectConfigAsDefault={(configName: string) =>
+											vscode.postMessage({ type: "loadApiConfiguration", text: configName })
 										}
-										onDeleteConfig={(configName: string) =>
+										onDeleteConfig={(configName: string) => {
+											setEditingConfigName(currentApiConfigName || "default")
 											vscode.postMessage({ type: "deleteApiConfiguration", text: configName })
-										}
+										}}
 										onRenameConfig={(oldName: string, newName: string) => {
+											setEditingConfigName(newName)
 											vscode.postMessage({
 												type: "renameApiConfiguration",
 												values: { oldName, newName },
 												apiConfiguration,
 											})
-											prevApiConfigName.current = newName
 										}}
-										onUpsertConfig={(configName: string) =>
+										onUpsertConfig={(configName: string) => {
+											setEditingConfigName(configName)
+											// upsertEditor backs this so settings stick before Save
 											vscode.postMessage({
 												type: "upsertApiConfiguration",
 												text: configName,
 												apiConfiguration,
 											})
-										}
+										}}
 									/>
 									<ApiOptions
 										uriScheme={uriScheme}

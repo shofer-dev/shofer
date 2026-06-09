@@ -397,7 +397,9 @@ export async function executeCommandInTerminal(
 	try {
 		const racers: Promise<void>[] = [process]
 
-		// Agent timeout: transition to background (command keeps running)
+		// Agent timeout: transition to background (command keeps running).
+		// This allows the agent to continue its turn and monitor the process
+		// output on subsequent execute_command calls.
 		if (agentTimeout > 0) {
 			racers.push(
 				new Promise<void>((resolve) => {
