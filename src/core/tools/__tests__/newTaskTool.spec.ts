@@ -24,7 +24,7 @@ vi.mock("../../../shared/package", () => ({
 // Mock other modules first - these are hoisted to the top
 vi.mock("../../../shared/modes", () => ({
 	getModeBySlug: vi.fn(),
-	defaultModeSlug: "ask",
+	defaultModeSlug: "code",
 }))
 
 vi.mock("../../prompts/responses", () => ({
@@ -93,7 +93,7 @@ const mockShofer = {
 	consecutiveMistakeCount: 0,
 	didToolFailInCurrentTurn: false,
 	isPaused: false,
-	pausedModeSlug: "ask",
+	pausedModeSlug: "code",
 	taskId: "mock-parent-task-id",
 	enableCheckpoints: false,
 	checkpointSave: mockCheckpointSave,
@@ -101,7 +101,7 @@ const mockShofer = {
 	backgroundChildren: new Map<string, any>(),
 	providerRef: {
 		deref: vi.fn(() => ({
-			getState: vi.fn().mockResolvedValue({ customModes: [], mode: "ask" }),
+			getState: vi.fn().mockResolvedValue({ customModes: [], mode: "code" }),
 			createTask: mockCreateTask,
 			registerBlockingChildResolver: mockRegisterBlockingChildResolver,
 			getTaskWithId: mockGetTaskWithId,
@@ -831,7 +831,7 @@ describe("newTaskTool delegation flow", () => {
 			consecutiveMistakeCount: 0,
 			didToolFailInCurrentTurn: false,
 			isPaused: false,
-			pausedModeSlug: "ask",
+			pausedModeSlug: "code",
 			taskId: "mock-parent-task-id",
 			enableCheckpoints: false,
 			checkpointSave: vi.fn(),
@@ -839,7 +839,7 @@ describe("newTaskTool delegation flow", () => {
 			backgroundChildren: new Map<string, any>(),
 			providerRef: {
 				deref: vi.fn(() => ({
-					getState: vi.fn().mockResolvedValue({ customModes: [], mode: "ask" }),
+					getState: vi.fn().mockResolvedValue({ customModes: [], mode: "code" }),
 					createTask: localCreateTask,
 					registerBlockingChildResolver: localRegisterBlockingChildResolver,
 					getTaskWithId: localGetTaskWithId,

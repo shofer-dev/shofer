@@ -135,8 +135,8 @@ vi.mock("../../../shared/modes", () => {
 			groups: ["read", "write"],
 		},
 		{
-			slug: "ask",
-			name: "Ask Mode",
+			slug: "custom-ask-override",
+			name: "Custom Ask Override Mode",
 			roleDefinition: "You are an assistant",
 			groups: ["read"],
 		},
@@ -147,8 +147,8 @@ vi.mock("../../../shared/modes", () => {
 			groups: ["read", "write"],
 		},
 		{
-			slug: "orchestrator",
-			name: "Orchestrator Mode",
+			slug: "custom-orchestrator",
+			name: "Custom Orchestrator Mode",
 			roleDefinition: "You are an orchestrator",
 			groups: [],
 		},

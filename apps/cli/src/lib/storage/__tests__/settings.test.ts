@@ -119,7 +119,7 @@ describe("Settings Storage", () => {
 		})
 
 		it("should create config directory if it doesn't exist", async () => {
-			await saveSettings({ mode: "ask" })
+			await saveSettings({ mode: "code" })
 
 			const dirStats = await fs.stat(actualTestConfigDir)
 			expect(dirStats.isDirectory()).toBe(true)

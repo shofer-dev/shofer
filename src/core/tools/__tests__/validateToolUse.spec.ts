@@ -10,7 +10,7 @@ import { validateToolUse, isToolAllowedForMode } from "../validateToolUse"
 
 const codeMode = modes.find((m) => m.slug === "code")?.slug || "code"
 const architectMode = modes.find((m) => m.slug === "architect")?.slug || "architect"
-const askMode = modes.find((m) => m.slug === "ask")?.slug || "ask"
+const debugMode = modes.find((m) => m.slug === "debug")?.slug || "debug"
 
 describe("mode-validator", () => {
 	describe("isToolAllowedForMode", () => {
@@ -39,12 +39,12 @@ describe("mode-validator", () => {
 			})
 		})
 
-		describe("ask mode", () => {
+		describe("debug mode", () => {
 			it("allows configured tools", () => {
-				// Ask mode has read and mcp groups
-				const askTools = [...TOOL_GROUPS.read.tools, ...TOOL_GROUPS.mcp.tools]
-				askTools.forEach((tool) => {
-					expect(isToolAllowedForMode(tool, askMode, [])).toBe(true)
+				// Debug mode has read and mcp groups
+				const debugTools = [...TOOL_GROUPS.read.tools, ...TOOL_GROUPS.mcp.tools]
+				debugTools.forEach((tool) => {
+					expect(isToolAllowedForMode(tool, debugMode, [])).toBe(true)
 				})
 			})
 		})

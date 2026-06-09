@@ -64,7 +64,7 @@ flow "test-flow" (input: "string") {
 const MULTI_AGENT_SLANG = `
 flow "multi-agent" () {
   agent Architect {
-    mode: "orchestrator"
+    mode: "architect"
     role: "Senior architect"
 
     stake explore() -> @Codebase

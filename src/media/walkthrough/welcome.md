@@ -7,7 +7,7 @@ Shofer is an open-source, complete replacement for GitHub Copilot that runs insi
 ## What You'll Learn
 
 - **Open Shofer** — Access the sidebar and chat interface
-- **Choose a Mode** — Pick the right mode for your task (Code, Architect, Ask, Debug, Orchestrator)
+- **Choose a Mode** — Pick the right mode for your task (Code, Architect, Debug, Code Search, Web Search, Reviewer)
 - **Configure a Provider** — Connect one of the many AI model providers that Shofer supports
 - **Start a Task** — Type a message and let Shofer work
 - **Explore Settings** — Customize auto-approval, cost limits, MCP servers, and more

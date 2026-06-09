@@ -217,14 +217,14 @@ describe("addCustomInstructions", () => {
 		expect(prompt).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/architect-mode-prompt.snap")
 	})
 
-	it("should generate correct prompt for ask mode", async () => {
+	it("should generate correct prompt for code mode", async () => {
 		const prompt = await SYSTEM_PROMPT(
 			mockContext,
 			"/test/path",
 			false, // supportsImages
 			undefined, // mcpHub
 			undefined, // diffStrategy
-			"ask", // mode
+			"code", // mode
 			undefined, // customModePrompts
 			undefined, // customModes
 			undefined, // globalCustomInstructions
@@ -234,7 +234,7 @@ describe("addCustomInstructions", () => {
 			undefined, // partialReadsEnabled
 		)
 
-		expect(prompt).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/ask-mode-prompt.snap")
+		expect(prompt).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/code-mode-prompt.snap")
 	})
 
 	it("should exclude MCP server creation info when disabled", async () => {
@@ -267,7 +267,7 @@ describe("addCustomInstructions", () => {
 
 	it("should prioritize mode-specific rules for ask mode", async () => {
 		const instructions = await addCustomInstructions("", "", "/test/path", modes[2].slug)
-		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/ask-mode-rules.snap")
+		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/code-mode-rules.snap")
 	})
 
 	it("should prioritize mode-specific rules for architect mode", async () => {

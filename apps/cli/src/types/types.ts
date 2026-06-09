@@ -63,7 +63,7 @@ export interface OnboardingResult {
 
 export interface CliSettings {
 	onboardingProviderChoice?: OnboardingProviderChoice
-	/** Default mode to use (e.g., "code", "architect", "ask", "debug") */
+	/** Default mode to use (e.g., "code", "architect", "debug", "code-search") */
 	mode?: string
 	/** Default provider to use */
 	provider?: SupportedProvider
