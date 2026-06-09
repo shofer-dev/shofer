@@ -549,6 +549,8 @@ export interface WebviewMessage {
 		| "upsertApiConfiguration"
 		| "deleteApiConfiguration"
 		| "loadApiConfiguration"
+		| "setDefaultApiConfiguration"
+		| "loadApiConfigurationForEdit"
 		| "loadApiConfigurationById"
 		| "renameApiConfiguration"
 		| "getListApiConfiguration"

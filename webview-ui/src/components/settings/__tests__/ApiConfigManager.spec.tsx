@@ -1,4 +1,4 @@
-// npx vitest src/components/settings/__tests__/ApiConfigManager.spec.tsx
+// npx vitest run src/components/settings/__tests__/ApiConfigManager.spec.tsx
 
 import { render, screen, fireEvent, within } from "@/utils/test-utils"
 
@@ -107,18 +107,21 @@ vitest.mock("@/components/ui", () => ({
 }))
 
 describe("ApiConfigManager", () => {
-	const mockOnSelectConfig = vitest.fn()
+	const mockOnSelectConfigForEdit = vitest.fn()
+	const mockOnSelectConfigAsDefault = vitest.fn()
 	const mockOnDeleteConfig = vitest.fn()
 	const mockOnRenameConfig = vitest.fn()
 	const mockOnUpsertConfig = vitest.fn()
 
 	const defaultProps = {
 		currentApiConfigName: "Default Config",
+		editingConfigName: "Default Config",
 		listApiConfigMeta: [
 			{ id: "default", name: "Default Config" },
 			{ id: "another", name: "Another Config" },
 		],
-		onSelectConfig: mockOnSelectConfig,
+		onSelectConfigForEdit: mockOnSelectConfigForEdit,
+		onSelectConfigAsDefault: mockOnSelectConfigAsDefault,
 		onDeleteConfig: mockOnDeleteConfig,
 		onRenameConfig: mockOnRenameConfig,
 		onUpsertConfig: mockOnUpsertConfig,
@@ -205,8 +208,9 @@ describe("ApiConfigManager", () => {
 		const renameButton = screen.getByTestId("rename-profile-button")
 		fireEvent.click(renameButton)
 
-		// Find input and enter new name
-		const input = screen.getByDisplayValue("Default Config")
+		// Find input inside rename form and enter new name
+		const renameForm = getRenameForm()
+		const input = within(renameForm).getByDisplayValue("Default Config")
 		fireEvent.input(input, { target: { value: "New Name" } })
 
 		// Save
@@ -223,8 +227,9 @@ describe("ApiConfigManager", () => {
 		const renameButton = screen.getByTestId("rename-profile-button")
 		fireEvent.click(renameButton)
 
-		// Find input and enter existing name
-		const input = screen.getByDisplayValue("Default Config")
+		// Find input inside rename form and enter existing name
+		const renameForm = getRenameForm()
+		const input = within(renameForm).getByDisplayValue("Default Config")
 		fireEvent.input(input, { target: { value: "Another Config" } })
 
 		// Save to trigger validation
@@ -232,7 +237,6 @@ describe("ApiConfigManager", () => {
 		fireEvent.click(saveButton)
 
 		// Verify error message
-		const renameForm = getRenameForm()
 		const errorMessage = within(renameForm).getByTestId("error-message")
 		expect(errorMessage).toHaveTextContent("settings:providers.nameExists")
 		expect(mockOnRenameConfig).not.toHaveBeenCalled()
@@ -245,8 +249,9 @@ describe("ApiConfigManager", () => {
 		const renameButton = screen.getByTestId("rename-profile-button")
 		fireEvent.click(renameButton)
 
-		// Find input and enter empty name
-		const input = screen.getByDisplayValue("Default Config")
+		// Find input inside rename form and enter empty name
+		const renameForm = getRenameForm()
+		const input = within(renameForm).getByDisplayValue("Default Config")
 		fireEvent.input(input, { target: { value: "   " } })
 
 		// Verify save button is disabled
@@ -255,16 +260,41 @@ describe("ApiConfigManager", () => {
 		expect(mockOnRenameConfig).not.toHaveBeenCalled()
 	})
 
-	it("allows selecting a different config", () => {
+	it("allows selecting a different config for edit", () => {
 		render(<ApiConfigManager {...defaultProps} />)
 
-		// The SearchableSelect mock renders as a simple select element
-		const selectElement = screen.getByTestId("select-component") as HTMLSelectElement
+		// The edit config Select renders with data-testid="edit-config-select"
+		const selectElement = screen.getByTestId("edit-config-select") as HTMLSelectElement
 
 		// Change the select value to "Another Config"
 		fireEvent.change(selectElement, { target: { value: "Another Config" } })
 
-		expect(mockOnSelectConfig).toHaveBeenCalledWith("Another Config")
+		expect(mockOnSelectConfigForEdit).toHaveBeenCalledWith("Another Config")
+		expect(mockOnSelectConfigAsDefault).not.toHaveBeenCalled()
+	})
+
+	it("allows selecting a different config as default", () => {
+		render(<ApiConfigManager {...defaultProps} />)
+
+		// The default config Select renders with data-testid="default-config-select"
+		const selectElement = screen.getByTestId("default-config-select") as HTMLSelectElement
+
+		// Change the select value to "Another Config"
+		fireEvent.change(selectElement, { target: { value: "Another Config" } })
+
+		expect(mockOnSelectConfigAsDefault).toHaveBeenCalledWith("Another Config")
+		expect(mockOnSelectConfigForEdit).not.toHaveBeenCalled()
+	})
+
+	it("does not populate form values when selecting default config", () => {
+		render(<ApiConfigManager {...defaultProps} editingConfigName="Default Config" />)
+
+		// Change default to "Another Config" — should NOT trigger an edit load
+		const selectElement = screen.getByTestId("default-config-select") as HTMLSelectElement
+		fireEvent.change(selectElement, { target: { value: "Another Config" } })
+
+		expect(mockOnSelectConfigAsDefault).toHaveBeenCalledWith("Another Config")
+		expect(mockOnSelectConfigForEdit).not.toHaveBeenCalled()
 	})
 
 	it("allows deleting the current config when not the only one", () => {
@@ -291,8 +321,9 @@ describe("ApiConfigManager", () => {
 		const renameButton = screen.getByTestId("rename-profile-button")
 		fireEvent.click(renameButton)
 
-		// Find input and enter new name
-		const input = screen.getByDisplayValue("Default Config")
+		// Find input inside rename form and enter new name
+		const renameForm = getRenameForm()
+		const input = within(renameForm).getByDisplayValue("Default Config")
 		fireEvent.input(input, { target: { value: "New Name" } })
 
 		// Cancel
@@ -302,8 +333,8 @@ describe("ApiConfigManager", () => {
 		// Verify rename was not called
 		expect(mockOnRenameConfig).not.toHaveBeenCalled()
 
-		// Verify we're back to normal view
-		expect(screen.queryByDisplayValue("New Name")).not.toBeInTheDocument()
+		// Verify we're back to normal view (rename form is gone)
+		expect(screen.queryByTestId("rename-form")).not.toBeInTheDocument()
 	})
 
 	it("handles keyboard events in new profile dialog", () => {
@@ -332,7 +363,8 @@ describe("ApiConfigManager", () => {
 		const renameButton = screen.getByTestId("rename-profile-button")
 		fireEvent.click(renameButton)
 
-		const input = screen.getByDisplayValue("Default Config")
+		const renameForm = getRenameForm()
+		const input = within(renameForm).getByDisplayValue("Default Config")
 
 		// Test Enter key
 		fireEvent.input(input, { target: { value: "New Name" } })
@@ -341,6 +373,6 @@ describe("ApiConfigManager", () => {
 
 		// Test Escape key
 		fireEvent.keyDown(input, { key: "Escape" })
-		expect(screen.queryByDisplayValue("New Name")).not.toBeInTheDocument()
+		expect(screen.queryByTestId("rename-form")).not.toBeInTheDocument()
 	})
 })

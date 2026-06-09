@@ -104,7 +104,7 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 			// the chat dropdown reflects the pick, then ask the host to reset to a
 			// fresh chat surface. The draft is forwarded with `newTask` on send.
 			setMode(slug as Mode)
-			vscode.postMessage({ type: "launchTask" })
+			vscode.postMessage({ type: "launchTask", text: slug })
 			onClose()
 		},
 		[onClose, setMode],

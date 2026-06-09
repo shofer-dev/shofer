@@ -816,9 +816,14 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 												}),
 											)
 										}}
-										onSelectConfigAsDefault={(configName: string) =>
-											vscode.postMessage({ type: "loadApiConfiguration", text: configName })
-										}
+										onSelectConfigAsDefault={(configName: string) => {
+											// Mark the change as dirty locally so the Save button
+											// enables immediately. The host-side handler only
+											// persists the default-name change; the form values
+											// (apiConfiguration) are left untouched.
+											setChangeDetected(true)
+											vscode.postMessage({ type: "setDefaultApiConfiguration", text: configName })
+										}}
 										onDeleteConfig={(configName: string) => {
 											setEditingConfigName(currentApiConfigName || "default")
 											vscode.postMessage({ type: "deleteApiConfiguration", text: configName })

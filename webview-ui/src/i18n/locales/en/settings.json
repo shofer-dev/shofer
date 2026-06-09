@@ -424,6 +424,10 @@
 	"providers": {
 		"providerDocumentation": "{{provider}} documentation",
 		"configProfile": "Configuration Profile",
+		"editConfigProfile": "Edit Configuration",
+		"editDescription": "Select a configuration to edit its settings. Changes take effect only after clicking Save at the top.",
+		"defaultConfigProfile": "Default Configuration",
+		"defaultDescription": "The default configuration used for new tasks and the global setting. Changing this does not affect the Edit dropdown.",
 		"description": "Save different API configurations to quickly switch between providers and settings.",
 		"apiProvider": "API Provider",
 		"apiProviderDocs": "Provider Docs",

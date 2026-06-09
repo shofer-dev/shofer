@@ -2171,6 +2171,12 @@ export const webviewMessageHandler = async (
 				}
 			}
 			break
+		case "setDefaultApiConfiguration":
+			if (message.text) {
+				await provider.setDefaultApiConfiguration(message.text)
+				await reinitializeAssistantAgent(provider)
+			}
+			break
 		case "loadApiConfigurationById":
 			if (message.text) {
 				try {
@@ -4226,7 +4232,6 @@ export const webviewMessageHandler = async (
 
 				await provider.refreshWorkspace()
 				await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
-				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 				await provider.postMessageToWebview({ type: "action", action: "focusInput" })
 			} catch (error) {
 				provider.log(`Error launching task: ${error}`)
