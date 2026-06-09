@@ -124,7 +124,7 @@ Settings → About → **Export** saves your full configuration as `shofer-code-
 
 ## 3. Custom Modes
 
-Define custom modes in a `.shofer/shofermodes` file at your project root (or globally at `~/.shofer/.shofer/shofermodes`).
+Define custom modes in a `.shofer/shofermodes` file at your project root (or globally at `~/.shofer/shofermodes`).
 
 ### Tool Access Fields
 
