@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "1.2.6",
+	"version": "1.3.0",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -647,7 +647,7 @@
 					{
 						"id": "specialFiles",
 						"title": "Special Files",
-						"description": "Learn about .shoferignore, AGENTS.md, .shofermodes, and the .shofer/ directory that control Shofer's behavior.",
+						"description": "Learn about shoferignore, AGENTS.md, shofermodes, and the .shofer/ directory that control Shofer's behavior.",
 						"media": {
 							"markdown": "media/walkthrough/special-files.md"
 						}

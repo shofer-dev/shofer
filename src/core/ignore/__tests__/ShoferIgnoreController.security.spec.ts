@@ -46,7 +46,7 @@ describe("ShoferIgnoreController Security Tests", () => {
 		mockFileExists = fileExistsAtPath as Mock<typeof fileExistsAtPath>
 		mockReadFile = fs.readFile as Mock<typeof fs.readFile>
 
-		// By default, setup .shoferignore to exist with some patterns
+		// By default, setup .shofer/shoferignore to exist with some patterns
 		mockFileExists.mockResolvedValue(true)
 		mockReadFile.mockResolvedValue("node_modules\n.git\nsecrets/**\n*.log\nprivate/")
 

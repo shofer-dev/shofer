@@ -14,10 +14,6 @@ export class ShoferProtectedController {
 
 	// Predefined list of protected Shofer configuration patterns
 	private static readonly PROTECTED_PATTERNS = [
-		".shoferignore",
-		".shofermodes",
-		".shoferrules*",
-		".shoferrules*",
 		".shofer/**",
 		".vscode/**",
 		"*.code-workspace",

@@ -314,6 +314,15 @@ export class ShoferProvider
 		// live Task instances (currently running in this session).
 		this.taskManager = new TaskManager(this)
 
+		// Ordering guarantee: `initializeTaskHistoryStore` is fire-and-forget
+		// in the constructor and may not settle before a WorkflowTask spawns
+		// its first agent child (which calls registerBackgroundTask). Mark the
+		// manager as restored now so the early-bird register doesn't throw.
+		// `restoreManagedTasks` is idempotent — when initializeTaskHistoryStore
+		// eventually calls it with real history, the `seeded` guard ensures it
+		// seeds exactly once.
+		this.taskManager.ensureRestored()
+
 		// H8: Subscribe to ContextProxy.onDidChange to invalidate the
 		// static-state cache.  When any global setting or secret changes,
 		// bump the generation counter so the next postStateToWebview
@@ -2363,7 +2372,7 @@ export class ShoferProvider
 	 * `provider:` field, so the YAML and the saved `modeApiConfigs` mapping stay 1:1.
 	 *
 	 * Targeting rule: if a workspace is open, the write always goes to the
-	 * project-scoped `.shofermodes` file, even when the mode is currently defined only
+	 * project-scoped `.shofer/shofermodes` file, even when the mode is currently defined only
 	 * globally. This keeps per-project API-profile preferences out of the global
 	 * `custom_modes.yaml` (which is shared across workspaces) and creates a project
 	 * override on demand. With no workspace open, the global file is updated.
@@ -2598,19 +2607,25 @@ export class ShoferProvider
 
 	async activateProviderProfile(
 		args: { name: string } | { id: string },
-		options?: { persistModeConfig?: boolean; persistTaskHistory?: boolean },
+		options?: { persistModeConfig?: boolean; persistTaskHistory?: boolean; setGlobalDefault?: boolean },
 	) {
 		const { name, id, ...providerSettings } = await this.providerSettingsManager.activateProfile(args)
 
 		const persistModeConfig = options?.persistModeConfig ?? true
 		const persistTaskHistory = options?.persistTaskHistory ?? true
+		const setGlobalDefault = options?.setGlobalDefault ?? true
 
 		// See `upsertProviderProfile` for a description of what this is doing.
-		await Promise.all([
+		const updates: Promise<any>[] = [
 			this.contextProxy.setValue("listApiConfigMeta", await this.providerSettingsManager.listConfig()),
-			this.contextProxy.setValue("currentApiConfigName", name),
 			this.contextProxy.setProviderSettings(providerSettings),
-		])
+		]
+		// Only change the global default when explicitly requested.
+		// The chat dropdown (loadApiConfigurationById) should NOT change it.
+		if (setGlobalDefault) {
+			updates.push(this.contextProxy.setValue("currentApiConfigName", name))
+		}
+		await Promise.all(updates)
 
 		const { mode } = await this.getState()
 
@@ -2636,6 +2651,36 @@ export class ShoferProvider
 		if (providerSettings.apiProvider) {
 			this.emit(ShoferEventName.ProviderProfileChanged, { name, provider: providerSettings.apiProvider })
 		}
+	}
+
+	/**
+	 * Load an API configuration for editing only — does NOT change the global
+	 * default profile. Used by the edit dropdown in Settings → Providers to
+	 * let the user inspect and modify any config without switching the default.
+	 */
+	async loadApiConfigurationForEdit(name: string) {
+		const { id, ...providerSettings } = await this.providerSettingsManager.getProfile({ name })
+
+		// Push the config's settings into the webview's apiConfiguration so the
+		// user can edit them, but do NOT change currentApiConfigName.
+		await this.contextProxy.setProviderSettings(providerSettings)
+		await this.postStateToWebviewWithoutTaskHistory()
+	}
+
+	/**
+	 * Set the global default API configuration by name WITHOUT loading its
+	 * settings into the edit form. Used by the Default Configuration dropdown
+	 * in Settings → Providers. The dropdown's job is to declare which config
+	 * is the default — it should NOT repopulate the form the user is editing.
+	 *
+	 * Only the global-default name is persisted; no side-effect touches
+	 * apiConfiguration (the currently-edited profile's provider settings),
+	 * so the Save button tracks the change as dirty and the form values are
+	 * left alone.
+	 */
+	async setDefaultApiConfiguration(name: string) {
+		await this.contextProxy.setValue("currentApiConfigName", name)
+		await this.postStateToWebviewWithoutTaskHistory()
 	}
 
 	async updateCustomInstructions(instructions?: string) {
@@ -4199,7 +4244,7 @@ export class ShoferProvider
 
 			// Register custom modes so the CustomModesManager knows about them.
 			// setValues writes to global state, but the manager overwrites that
-			// when it merges .shofermodes + global settings on refresh.  Persisting
+			// when it merges .shofer/shofermodes + global settings on refresh.  Persisting
 			// via updateCustomMode ensures modes survive the merge cycle.
 			if (configuration.customModes?.length) {
 				for (const mode of configuration.customModes) {

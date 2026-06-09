@@ -200,8 +200,8 @@
 	},
 	"customModes": {
 		"errors": {
-			"yamlParseError": "Nieprawidłowy YAML w pliku .shofermodes w linii {{line}}. Sprawdź:\n• Prawidłowe wcięcia (używaj spacji, nie tabulatorów)\n• Pasujące cudzysłowy i nawiasy\n• Prawidłową składnię YAML",
-			"schemaValidationError": "Nieprawidłowy format trybów niestandardowych w .shofermodes:\n{{issues}}",
+			"yamlParseError": "Nieprawidłowy YAML w pliku .shofer/shofermodes w linii {{line}}. Sprawdź:\n• Prawidłowe wcięcia (używaj spacji, nie tabulatorów)\n• Pasujące cudzysłowy i nawiasy\n• Prawidłową składnię YAML",
+			"schemaValidationError": "Nieprawidłowy format trybów niestandardowych w .shofer/shofermodes:\n{{issues}}",
 			"invalidFormat": "Nieprawidłowy format trybów niestandardowych. Upewnij się, że twoje ustawienia są zgodne z prawidłowym formatem YAML.",
 			"updateFailed": "Aktualizacja trybu niestandardowego nie powiodła się: {{error}}",
 			"deleteFailed": "Usunięcie trybu niestandardowego nie powiodło się: {{error}}",

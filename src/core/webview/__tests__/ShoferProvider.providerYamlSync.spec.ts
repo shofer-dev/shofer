@@ -11,7 +11,7 @@
  *   - `syncCustomModeProviderToYaml`:
  *       * skipped for built-in modes (no `source` ⇒ no YAML),
  *       * short-circuits when the YAML field already matches,
- *       * targets the project (`.shofermodes`) file when a workspace is open,
+ *       * targets the project (`.shofer/shofermodes`) file when a workspace is open,
  *       * targets the global file when no workspace is open.
  */
 
@@ -394,7 +394,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 			expect(updateSpy).not.toHaveBeenCalled()
 		})
 
-		it("writes to project (.shofermodes) when a workspace is open", async () => {
+		it("writes to project (.shofer/shofermodes) when a workspace is open", async () => {
 			const { getModeBySlug } = await import("../../../shared/modes")
 			vi.mocked(getModeBySlug).mockReturnValue({
 				slug: "reviewer",

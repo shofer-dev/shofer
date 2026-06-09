@@ -9,7 +9,7 @@ import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreContr
  *
  * The tree is:
  * - Capped at ~10% of the context window (token estimate)
- * - Excludes .shoferignore-listed paths and .shofer/worktrees/
+ * - Excludes shoferignore-listed paths and .shofer/worktrees/
  * - Truncated deepest nesting levels first when exceeding cap
  *
  * On agent startup and after Clear Context, the tree is regenerated
@@ -83,8 +83,8 @@ export class AssistantAgentDirectoryTree {
 
 				// Skip hidden directories and files
 				if (item.name.startsWith(".")) {
-					// But include .shoferignore and .gitignore
-					if (item.name !== ".shoferignore" && item.name !== ".gitignore") {
+					// But include shoferignore and .gitignore
+					if (item.name !== "shoferignore" && item.name !== ".gitignore") {
 						continue
 					}
 				}

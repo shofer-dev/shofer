@@ -49,7 +49,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 	const mockStoragePath = `${path.sep}mock${path.sep}settings`
 	const mockSettingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
 	const mockWorkspacePath = path.resolve("/mock/workspace")
-	const mockRoomodes = path.join(mockWorkspacePath, ".shofermodes")
+	const mockRoomodes = path.join(mockWorkspacePath, ".shofer/shofermodes")
 
 	beforeEach(() => {
 		mockOnUpdate = vi.fn()
@@ -250,10 +250,10 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 
 			// Verify files were written to the correct new slug folder
 			const rule1Path = Object.keys(writtenFiles).find(
-				(p) => p.includes("rule1.md") && !p.includes(".shofermodes"),
+				(p) => p.includes("rule1.md") && !p.includes(".shofer/shofermodes"),
 			)
 			const rule2Path = Object.keys(writtenFiles).find(
-				(p) => p.includes("rule2.md") && !p.includes(".shofermodes"),
+				(p) => p.includes("rule2.md") && !p.includes(".shofer/shofermodes"),
 			)
 
 			expect(rule1Path).toBeDefined()
@@ -309,10 +309,10 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 
 			// Verify files were written to the NEW slug folder, not the old one
 			const rule1Path = Object.keys(writtenFiles).find(
-				(p) => p.includes("rule1.md") && !p.includes(".shofermodes"),
+				(p) => p.includes("rule1.md") && !p.includes(".shofer/shofermodes"),
 			)
 			const rule2Path = Object.keys(writtenFiles).find(
-				(p) => p.includes("rule2.md") && !p.includes(".shofermodes"),
+				(p) => p.includes("rule2.md") && !p.includes(".shofer/shofermodes"),
 			)
 
 			expect(rule1Path).toBeDefined()
@@ -432,7 +432,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 
 			// Step 5: Verify the rule file was placed in the new slug folder
 			const ruleFilePath = Object.keys(writtenFiles).find(
-				(p) => p.includes("rule.md") && !p.includes(".shofermodes"),
+				(p) => p.includes("rule.md") && !p.includes(".shofer/shofermodes"),
 			)
 			expect(ruleFilePath).toBeDefined()
 			expect(ruleFilePath).toContain(path.join(".shofer", "rules-renamed-mode", "rule.md"))

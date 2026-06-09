@@ -80,7 +80,7 @@ describe("SimpleInstaller", () => {
 
 			const result = await installer.installItem(mockModeItem, { target: "project" })
 
-			expect(result.filePath).toBe(path.join("/test/workspace", ".shofermodes"))
+			expect(result.filePath).toBe(path.join("/test/workspace", ".shofer/shofermodes"))
 			expect(mockCustomModesManager.importModeWithRules).toHaveBeenCalled()
 
 			// Verify the import was called with correct YAML structure
@@ -133,7 +133,7 @@ describe("SimpleInstaller", () => {
 
 			const result = await installerWithoutManager.installItem(mockModeItem, { target: "project" })
 
-			expect(result.filePath).toBe(path.join("/test/workspace", ".shofermodes"))
+			expect(result.filePath).toBe(path.join("/test/workspace", ".shofer/shofermodes"))
 			expect(mockFs.writeFile).toHaveBeenCalled()
 		})
 	})

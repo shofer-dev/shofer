@@ -10,32 +10,22 @@ describe("ShoferProtectedController", () => {
 	})
 
 	describe("isWriteProtected", () => {
-		it("should protect .shoferignore file", () => {
-			expect(controller.isWriteProtected(".shoferignore")).toBe(true)
-		})
-
 		it("should protect files in .shofer directory", () => {
 			expect(controller.isWriteProtected(".shofer/config.json")).toBe(true)
 			expect(controller.isWriteProtected(".shofer/settings/user.json")).toBe(true)
 			expect(controller.isWriteProtected(".shofer/modes/custom.json")).toBe(true)
+			expect(controller.isWriteProtected(".shofer/shoferignore")).toBe(true)
+			expect(controller.isWriteProtected(".shofer/shofermodes")).toBe(true)
+			expect(controller.isWriteProtected(".shofer/worktreeinclude")).toBe(true)
 		})
 
 		it("should protect .shoferprotected file", () => {
 			expect(controller.isWriteProtected(".shoferprotected")).toBe(true)
 		})
 
-		it("should protect .shofermodes files", () => {
-			expect(controller.isWriteProtected(".shofermodes")).toBe(true)
-		})
-
-		it("should protect .shoferrules* files", () => {
-			expect(controller.isWriteProtected(".shoferrules")).toBe(true)
-			expect(controller.isWriteProtected(".shoferrules.md")).toBe(true)
-		})
-
-		it("should protect .clinerules* files (backward compat)", () => {
-			expect(controller.isWriteProtected(".clinerules")).toBe(false)
-			expect(controller.isWriteProtected(".clinerules.md")).toBe(false)
+		it("should protect .shoferrules* files under .shofer/", () => {
+			expect(controller.isWriteProtected(".shofer/shoferrules")).toBe(true)
+			expect(controller.isWriteProtected(".shofer/shoferrules.md")).toBe(true)
 		})
 
 		it("should protect files in .vscode directory", () => {
@@ -59,6 +49,14 @@ describe("ShoferProtectedController", () => {
 			expect(controller.isWriteProtected("AGENT.md")).toBe(true)
 		})
 
+		it("should not protect legacy root-level .shoferignore (now under .shofer/)", () => {
+			expect(controller.isWriteProtected(".shoferignore")).toBe(false)
+		})
+
+		it("should not protect legacy root-level .shofermodes (now under .shofer/)", () => {
+			expect(controller.isWriteProtected(".shofermodes")).toBe(false)
+		})
+
 		it("should not protect other files starting with .shofer", () => {
 			expect(controller.isWriteProtected(".roosettings")).toBe(false)
 			expect(controller.isWriteProtected(".rooconfig")).toBe(false)
@@ -76,14 +74,14 @@ describe("ShoferProtectedController", () => {
 		})
 
 		it("should handle nested paths correctly", () => {
-			expect(controller.isWriteProtected(".shofer/config.json")).toBe(true) // .shofer/** matches at root
-			expect(controller.isWriteProtected("nested/.shoferignore")).toBe(true) // .shoferignore matches anywhere by default
-			expect(controller.isWriteProtected("nested/.shofermodes")).toBe(true) // .shofermodes matches anywhere by default
-			expect(controller.isWriteProtected("nested/.shoferrules.md")).toBe(true) // .shoferrules* matches anywhere by default
+			expect(controller.isWriteProtected(".shofer/config.json")).toBe(true)
+			expect(controller.isWriteProtected(".shofer/shoferignore")).toBe(true)
+			expect(controller.isWriteProtected(".shofer/shofermodes")).toBe(true)
+			expect(controller.isWriteProtected(".shofer/shoferrules.md")).toBe(true)
 		})
 
 		it("should handle absolute paths by converting to relative", () => {
-			const absolutePath = path.join(TEST_CWD, ".shoferignore")
+			const absolutePath = path.join(TEST_CWD, ".shofer", "shoferignore")
 			expect(controller.isWriteProtected(absolutePath)).toBe(true)
 		})
 
@@ -100,11 +98,11 @@ describe("ShoferProtectedController", () => {
 
 	describe("getProtectedFiles", () => {
 		it("should return set of protected files from a list", () => {
-			const files = ["src/index.ts", ".shoferignore", "package.json", ".shofer/config.json", "README.md"]
+			const files = ["src/index.ts", ".shofer/shoferignore", "package.json", ".shofer/config.json", "README.md"]
 
 			const protectedFiles = controller.getProtectedFiles(files)
 
-			expect(protectedFiles).toEqual(new Set([".shoferignore", ".shofer/config.json"]))
+			expect(protectedFiles).toEqual(new Set([".shofer/shoferignore", ".shofer/config.json"]))
 		})
 
 		it("should return empty set when no files are protected", () => {
@@ -118,13 +116,13 @@ describe("ShoferProtectedController", () => {
 
 	describe("annotatePathsWithProtection", () => {
 		it("should annotate paths with protection status", () => {
-			const files = ["src/index.ts", ".shoferignore", ".shofer/config.json", "package.json"]
+			const files = ["src/index.ts", ".shofer/shoferignore", ".shofer/config.json", "package.json"]
 
 			const annotated = controller.annotatePathsWithProtection(files)
 
 			expect(annotated).toEqual([
 				{ path: "src/index.ts", isProtected: false },
-				{ path: ".shoferignore", isProtected: true },
+				{ path: ".shofer/shoferignore", isProtected: true },
 				{ path: ".shofer/config.json", isProtected: true },
 				{ path: "package.json", isProtected: false },
 			])
@@ -144,7 +142,6 @@ describe("ShoferProtectedController", () => {
 
 			expect(instructions).toContain("# Protected Files")
 			expect(instructions).toContain("write-protected")
-			expect(instructions).toContain(".shoferignore")
 			expect(instructions).toContain(".shofer/**")
 			expect(instructions).toContain("\u{1F6E1}") // Shield symbol
 		})
@@ -155,10 +152,6 @@ describe("ShoferProtectedController", () => {
 			const patterns = ShoferProtectedController.getProtectedPatterns()
 
 			expect(patterns).toEqual([
-				".shoferignore",
-				".shofermodes",
-				".shoferrules*",
-				".shoferrules*",
 				".shofer/**",
 				".vscode/**",
 				"*.code-workspace",

@@ -34,9 +34,9 @@ export const formatResponse = {
 		JSON.stringify({
 			status: "error",
 			type: "access_denied",
-			message: "Access blocked by .shoferignore",
+			message: "Access blocked by shoferignore",
 			path,
-			suggestion: "Try to continue without this file, or ask the user to update the .shoferignore file",
+			suggestion: "Try to continue without this file, or ask the user to update the shoferignore file",
 		}),
 
 	noToolsUsed: () => {

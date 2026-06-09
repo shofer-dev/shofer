@@ -1,14 +1,17 @@
 # Special Files
 
-Shofer recognizes several files in your workspace that control its behavior. These files are **write-protected** — Shofer cannot modify them without your explicit approval.
+Shofer recognizes several files that control its behavior. These files are **write-protected** — Shofer cannot modify them without your explicit approval.
+
+All Shofer-specific configuration files live under the `.shofer/` directory. `AGENTS.md` remains at the workspace root as it is an ecosystem convention shared across AI coding tools.
 
 ## Key Files
 
-| File            | Purpose                                              |
-| --------------- | ---------------------------------------------------- |
-| `.shoferignore` | Hide files from Shofer (same syntax as `.gitignore`) |
-| `.shofermodes`  | Define custom AI modes for your project              |
-| `AGENTS.md`     | Project rules injected into every task               |
+| File                      | Purpose                                              |
+| ------------------------- | ---------------------------------------------------- |
+| `.shofer/shoferignore`    | Hide files from Shofer (same syntax as `.gitignore`) |
+| `.shofer/shofermodes`     | Define custom AI modes for your project              |
+| `.shofer/worktreeinclude` | Files to copy into new worktrees                     |
+| `AGENTS.md`               | Project rules injected into every task               |
 
 ## The `.shofer/` Directory
 

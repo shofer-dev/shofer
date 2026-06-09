@@ -340,7 +340,9 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 			// files and their output could exhaust the maxLines budget before any
 			// legitimate results are captured.
 			const shoferIgnoreFile =
-				ignoreController?.shoferIgnoreContent !== undefined ? path.join(task.cwd, ".shoferignore") : undefined
+				ignoreController?.shoferIgnoreContent !== undefined
+					? path.join(task.cwd, ".shofer", "shoferignore")
+					: undefined
 
 			const rgArgs = buildRipgrepArgs({
 				query,

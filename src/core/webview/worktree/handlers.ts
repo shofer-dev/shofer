@@ -183,7 +183,7 @@ export async function handleCreateWorktree(
 
 	const result = await worktreeService.createWorktree(cwd, options)
 
-	// If successful and .worktreeinclude exists, copy the files.
+	// If successful and worktreeinclude exists, copy the files.
 	if (result.success && result.worktree) {
 		try {
 			const copiedItems = await worktreeIncludeService.copyWorktreeIncludeFiles(
@@ -192,11 +192,11 @@ export async function handleCreateWorktree(
 				onCopyProgress,
 			)
 			if (copiedItems.length > 0) {
-				result.message += ` (copied ${copiedItems.length} item(s) from .worktreeinclude)`
+				result.message += ` (copied ${copiedItems.length} item(s) from worktreeinclude)`
 			}
 		} catch (error) {
 			// Log but don't fail the worktree creation.
-			provider.log(`Warning: Failed to copy .worktreeinclude files: ${error}`)
+			provider.log(`Warning: Failed to copy worktreeinclude files: ${error}`)
 		}
 	}
 
@@ -255,7 +255,7 @@ export async function handleCreateWorktreeInclude(provider: ShoferProvider, cont
 
 		// Open the file in the editor for easy editing
 		try {
-			const filePath = path.join(cwd, ".worktreeinclude")
+			const filePath = path.join(cwd, ".shofer", "worktreeinclude")
 			const document = await vscode.workspace.openTextDocument(filePath)
 			await vscode.window.showTextDocument(document)
 		} catch {
@@ -264,13 +264,13 @@ export async function handleCreateWorktreeInclude(provider: ShoferProvider, cont
 
 		return {
 			success: true,
-			message: ".worktreeinclude file created",
+			message: "worktreeinclude file created",
 		}
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		return {
 			success: false,
-			message: `Failed to create .worktreeinclude: ${errorMessage}`,
+			message: `Failed to create worktreeinclude: ${errorMessage}`,
 		}
 	}
 }

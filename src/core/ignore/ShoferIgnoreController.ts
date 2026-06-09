@@ -11,7 +11,7 @@ export const LOCK_TEXT_SYMBOL = "\u{1F512}"
 /**
  * Controls LLM access to files by enforcing ignore patterns.
  * Designed to be instantiated once in Shofer.ts and passed to file manipulation services.
- * Uses the 'ignore' library to support standard .gitignore syntax in .shoferignore files.
+ * Uses the 'ignore' library to support standard .gitignore syntax in shoferignore files.
  */
 export class ShoferIgnoreController {
 	private cwd: string
@@ -23,7 +23,7 @@ export class ShoferIgnoreController {
 		this.cwd = cwd
 		this.ignoreInstance = ignore()
 		this.shoferIgnoreContent = undefined
-		// Set up file watcher for .shoferignore
+		// Set up file watcher for shoferignore
 		this.setupFileWatcher()
 	}
 
@@ -36,11 +36,11 @@ export class ShoferIgnoreController {
 	}
 
 	/**
-	 * Set up the file watcher for .shoferignore changes
+	 * Set up the file watcher for shoferignore changes
 	 */
 	private setupFileWatcher(): void {
-		const rooignorePattern = new vscode.RelativePattern(this.cwd, ".shoferignore")
-		const fileWatcher = vscode.workspace.createFileSystemWatcher(rooignorePattern)
+		const ignorePattern = new vscode.RelativePattern(path.join(this.cwd, ".shofer"), "shoferignore")
+		const fileWatcher = vscode.workspace.createFileSystemWatcher(ignorePattern)
 
 		// Watch for changes and updates
 		this.disposables.push(
@@ -60,24 +60,24 @@ export class ShoferIgnoreController {
 	}
 
 	/**
-	 * Load custom patterns from .shoferignore if it exists
+	 * Load custom patterns from shoferignore if it exists
 	 */
 	private async loadShoferIgnore(): Promise<void> {
 		try {
 			// Reset ignore instance to prevent duplicate patterns
 			this.ignoreInstance = ignore()
-			const ignorePath = path.join(this.cwd, ".shoferignore")
+			const ignorePath = path.join(this.cwd, ".shofer", "shoferignore")
 			if (await fileExistsAtPath(ignorePath)) {
 				const content = await fs.readFile(ignorePath, "utf8")
 				this.shoferIgnoreContent = content
 				this.ignoreInstance.add(content)
-				this.ignoreInstance.add(".shoferignore")
+				this.ignoreInstance.add(".shofer/shoferignore")
 			} else {
 				this.shoferIgnoreContent = undefined
 			}
 		} catch (error) {
 			// Should never happen: reading file failed even though it exists
-			webviewLog.error("Unexpected error loading .shoferignore:", error)
+			webviewLog.error("Unexpected error loading shoferignore:", error)
 		}
 	}
 
@@ -88,7 +88,7 @@ export class ShoferIgnoreController {
 	 * @returns true if file is accessible, false if ignored
 	 */
 	validateAccess(filePath: string): boolean {
-		// Always allow access if .shoferignore does not exist
+		// Always allow access if shoferignore does not exist
 		if (!this.shoferIgnoreContent) {
 			return true
 		}
@@ -105,7 +105,7 @@ export class ShoferIgnoreController {
 				realPath = absolutePath
 			}
 
-			// Convert real path to relative for .shoferignore checking
+			// Convert real path to relative for shoferignore checking
 			const relativePath = path.relative(this.cwd, realPath).toPosix()
 
 			// Check if the real path is ignored
@@ -122,7 +122,7 @@ export class ShoferIgnoreController {
 	 * @returns path of file that is being accessed if it is being accessed, undefined if command is allowed
 	 */
 	validateCommand(command: string): string | undefined {
-		// Always allow if no .shoferignore exists
+		// Always allow if no shoferignore exists
 		if (!this.shoferIgnoreContent) {
 			return undefined
 		}
@@ -201,14 +201,14 @@ export class ShoferIgnoreController {
 	}
 
 	/**
-	 * Get formatted instructions about the .shoferignore file for the LLM
-	 * @returns Formatted instructions or undefined if .shoferignore doesn't exist
+	 * Get formatted instructions about the shoferignore file for the LLM
+	 * @returns Formatted instructions or undefined if shoferignore doesn't exist
 	 */
 	getInstructions(): string | undefined {
 		if (!this.shoferIgnoreContent) {
 			return undefined
 		}
 
-		return `# .shoferignore\n\n(The following is provided by a root-level .shoferignore file where the user has specified files and directories that should not be accessed. When using list_files, you'll notice a ${LOCK_TEXT_SYMBOL} next to files that are blocked. Attempting to access the file's contents e.g. through read_file will result in an error.)\n\n${this.shoferIgnoreContent}\n.shoferignore`
+		return `# .shoferignore\n\n(The following is provided by a .shofer/shoferignore file where the user has specified files and directories that should not be accessed. When using list_files, you'll notice a ${LOCK_TEXT_SYMBOL} next to files that are blocked. Attempting to access the file's contents e.g. through read_file will result in an error.)\n\n${this.shoferIgnoreContent}\n.shofer/shoferignore`
 	}
 }

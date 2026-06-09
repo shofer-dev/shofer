@@ -49,7 +49,7 @@ describe("CustomModesManager", () => {
 	const mockStoragePath = `${path.sep}mock${path.sep}settings`
 	const mockSettingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
 	const mockWorkspacePath = path.resolve("/mock/workspace")
-	const mockRoomodes = path.join(mockWorkspacePath, ".shofermodes")
+	const mockRoomodes = path.join(mockWorkspacePath, ".shofer/shofermodes")
 
 	beforeEach(() => {
 		mockOnUpdate = vi.fn()
@@ -94,7 +94,7 @@ describe("CustomModesManager", () => {
 	})
 
 	describe("getCustomModes", () => {
-		it("should handle valid YAML in .shofermodes file and JSON for global customModes", async () => {
+		it("should handle valid YAML in .shofer/shofermodes file and JSON for global customModes", async () => {
 			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
 
 			const shofermodesModes = [{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", groups: ["read"] }]
@@ -114,7 +114,7 @@ describe("CustomModesManager", () => {
 			expect(modes).toHaveLength(2)
 		})
 
-		it("should merge modes with .shofermodes taking precedence", async () => {
+		it("should merge modes with .shofer/shofermodes taking precedence", async () => {
 			const settingsModes = [
 				{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] },
 				{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", groups: ["read"] },
@@ -141,13 +141,13 @@ describe("CustomModesManager", () => {
 			expect(modes).toHaveLength(3)
 			expect(modes.map((m) => m.slug)).toEqual(["mode2", "mode3", "mode1"])
 
-			// mode2 should come from .shofermodes since it takes precedence
+			// mode2 should come from .shofer/shofermodes since it takes precedence
 			const mode2 = modes.find((m) => m.slug === "mode2")
 			expect(mode2?.name).toBe("Mode 2 Override")
 			expect(mode2?.roleDefinition).toBe("Role 2 Override")
 		})
 
-		it("should handle missing .shofermodes file", async () => {
+		it("should handle missing .shofer/shofermodes file", async () => {
 			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
 
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
@@ -166,7 +166,7 @@ describe("CustomModesManager", () => {
 			expect(modes[0].slug).toBe("mode1")
 		})
 
-		it("should handle invalid YAML in .shofermodes", async () => {
+		it("should handle invalid YAML in .shofer/shofermodes", async () => {
 			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
 
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
@@ -181,7 +181,7 @@ describe("CustomModesManager", () => {
 
 			const modes = await manager.getCustomModes()
 
-			// Should fall back to settings modes when .shofermodes is invalid
+			// Should fall back to settings modes when .shofer/shofermodes is invalid
 			expect(modes).toHaveLength(1)
 			expect(modes[0].slug).toBe("mode1")
 		})
@@ -439,7 +439,7 @@ describe("CustomModesManager", () => {
 	})
 
 	describe("updateCustomMode", () => {
-		it("should update mode in settings file while preserving .shofermodes precedence", async () => {
+		it("should update mode in settings file while preserving .shofer/shofermodes precedence", async () => {
 			const newMode: ModeConfig = {
 				slug: "mode1",
 				name: "Updated Mode 1",
@@ -501,13 +501,13 @@ describe("CustomModesManager", () => {
 				}),
 			)
 
-			// Should update global state with merged modes where .shofermodes takes precedence
+			// Should update global state with merged modes where .shofer/shofermodes takes precedence
 			expect(mockContext.globalState.update).toHaveBeenCalledWith(
 				"customModes",
 				expect.arrayContaining([
 					expect.objectContaining({
 						slug: "mode1",
-						name: "Roomodes Mode 1", // .shofermodes version should take precedence
+						name: "Roomodes Mode 1", // .shofer/shofermodes version should take precedence
 						source: "project",
 					}),
 				]),
@@ -517,7 +517,7 @@ describe("CustomModesManager", () => {
 			expect(mockOnUpdate).toHaveBeenCalled()
 		})
 
-		it("creates .shofermodes file when adding project-specific mode", async () => {
+		it("creates .shofer/shofermodes file when adding project-specific mode", async () => {
 			const projectMode: ModeConfig = {
 				slug: "project-mode",
 				name: "Project Mode",
@@ -526,7 +526,7 @@ describe("CustomModesManager", () => {
 				source: "project",
 			}
 
-			// Mock .shofermodes to not exist initially
+			// Mock .shofer/shofermodes to not exist initially
 			let shofermodesContent: any = null
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
 				return path === mockSettingsPath
@@ -552,7 +552,7 @@ describe("CustomModesManager", () => {
 
 			await manager.updateCustomMode("project-mode", projectMode)
 
-			// Verify .shofermodes was created with the project mode
+			// Verify .shofer/shofermodes was created with the project mode
 			expect(fs.writeFile).toHaveBeenCalledWith(
 				expect.any(String), // Don't check exact path as it may have different separators on different platforms
 				expect.stringContaining("project-mode"),
@@ -563,7 +563,7 @@ describe("CustomModesManager", () => {
 			const writeCall = (fs.writeFile as Mock).mock.calls[0]
 			expect(path.normalize(writeCall[0])).toBe(path.normalize(mockRoomodes))
 
-			// Verify the content written to .shofermodes
+			// Verify the content written to .shofer/shofermodes
 			expect(shofermodesContent).toEqual({
 				customModes: [
 					expect.objectContaining({
@@ -871,7 +871,7 @@ describe("CustomModesManager", () => {
 
 				expect(result.success).toBe(true)
 				expect(fs.writeFile).toHaveBeenCalledWith(
-					expect.stringContaining(".shofermodes"),
+					expect.stringContaining(".shofer/shofermodes"),
 					expect.stringContaining("imported-mode"),
 					"utf-8",
 				)
@@ -926,7 +926,7 @@ describe("CustomModesManager", () => {
 
 				// Verify mode was imported
 				expect(fs.writeFile).toHaveBeenCalledWith(
-					expect.stringContaining(".shofermodes"),
+					expect.stringContaining(".shofer/shofermodes"),
 					expect.stringContaining("imported-mode"),
 					"utf-8",
 				)
@@ -1028,7 +1028,7 @@ describe("CustomModesManager", () => {
 				// Mock fs.mkdir to fail when creating rules directory
 				;(fs.mkdir as Mock).mockRejectedValue(new Error("Permission denied"))
 
-				// Mock fs.writeFile to work normally for .shofermodes but we won't get there
+				// Mock fs.writeFile to work normally for .shofer/shofermodes but we won't get there
 				;(fs.writeFile as Mock).mockResolvedValue(undefined)
 
 				const result = await manager.importModeWithRules(importYaml)
@@ -1082,7 +1082,7 @@ describe("CustomModesManager", () => {
 
 				// Verify that no files were written outside the .shofer directory
 				const mockWorkspacePath = path.resolve("/mock/workspace")
-				const writtenRuleFiles = writtenFiles.filter((p) => !p.includes(".shofermodes"))
+				const writtenRuleFiles = writtenFiles.filter((p) => !p.includes(".shofer/shofermodes"))
 				writtenRuleFiles.forEach((filePath) => {
 					const normalizedPath = path.normalize(filePath)
 					const expectedBasePath = path.normalize(path.join(mockWorkspacePath, ".shofer"))
@@ -1172,7 +1172,7 @@ describe("CustomModesManager", () => {
 
 				// Verify mode was imported
 				expect(fs.writeFile).toHaveBeenCalledWith(
-					expect.stringContaining(".shofermodes"),
+					expect.stringContaining(".shofer/shofermodes"),
 					expect.stringContaining("test-mode"),
 					"utf-8",
 				)
@@ -1247,7 +1247,7 @@ describe("CustomModesManager", () => {
 			expect(result).toBe(false)
 		})
 
-		it("should return false when mode is not in .shofermodes file", async () => {
+		it("should return false when mode is not in .shofer/shofermodes file", async () => {
 			const shofermodesContent = { customModes: [{ slug: "other-mode", name: "Other Mode" }] }
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
 				return path === mockRoomodes
@@ -1264,7 +1264,7 @@ describe("CustomModesManager", () => {
 			expect(result).toBe(false)
 		})
 
-		it("should return false when .shofermodes doesn't exist and mode is not a custom mode", async () => {
+		it("should return false when .shofer/shofermodes doesn't exist and mode is not a custom mode", async () => {
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
 				return path === mockSettingsPath
 			})
@@ -1341,7 +1341,7 @@ describe("CustomModesManager", () => {
 			expect(result).toBe(true)
 		})
 
-		it("should work with global custom modes when .shofermodes doesn't exist", async () => {
+		it("should work with global custom modes when .shofer/shofermodes doesn't exist", async () => {
 			const settingsContent = {
 				customModes: [{ slug: "test-mode", name: "Test Mode", groups: ["read"], roleDefinition: "Test Role" }],
 			}
@@ -1350,7 +1350,7 @@ describe("CustomModesManager", () => {
 			const freshManager = new CustomModesManager(mockContext, mockOnUpdate)
 
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
-				return path === mockSettingsPath // .shofermodes doesn't exist
+				return path === mockSettingsPath // .shofer/shofermodes doesn't exist
 			})
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
@@ -1455,7 +1455,7 @@ describe("CustomModesManager", () => {
 			expect(result.yaml).toContain("test-mode")
 		})
 
-		it("should successfully export mode with rules for a custom mode in .shofermodes", async () => {
+		it("should successfully export mode with rules for a custom mode in .shofer/shofermodes", async () => {
 			const shofermodesContent = {
 				customModes: [
 					{
@@ -1495,7 +1495,7 @@ describe("CustomModesManager", () => {
 			expect(fs.rm).not.toHaveBeenCalled()
 		})
 
-		it("should successfully export mode with rules for a built-in mode customized in .shofermodes", async () => {
+		it("should successfully export mode with rules for a built-in mode customized in .shofer/shofermodes", async () => {
 			const shofermodesContent = {
 				customModes: [
 					{

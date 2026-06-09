@@ -242,8 +242,8 @@ export class MarketplaceManager {
 				return // No workspace, no project installations
 			}
 
-			// Check modes in .shofermodes
-			const projectModesPath = path.join(workspaceFolder.uri.fsPath, ".shofermodes")
+			// Check modes in shofermodes
+			const projectModesPath = path.join(workspaceFolder.uri.fsPath, ".shofer", "shofermodes")
 			try {
 				const content = await fs.readFile(projectModesPath, "utf-8")
 				const data = yaml.parse(content)

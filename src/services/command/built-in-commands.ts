@@ -336,8 +336,8 @@ directories. Create parent directories as needed.
 
 	   | Legacy                    | Modern             | Notes                                          |
 	   |---------------------------|--------------------|------------------------------------------------|
-	   | \`.rooignore\`            | \`.shoferignore\`  | Ignore patterns for Shofer tools               |
-	   | \`.roomodes\`             | \`.shofermodes\`   | Custom mode definitions                        |
+	   | \`.rooignore\`            | \`shoferignore\`   | Ignore patterns for Shofer tools               |
+	   | \`.roomodes\`             | \`shofermodes\`    | Custom mode definitions                        |
 	 </workspace_root_renames>
 
 	 <file_to_directory_migrations>
@@ -445,7 +445,7 @@ directories. Create parent directories as needed.
 	    use only list_files, create_directory, and file(mv).
 
 	 7. **Stop after migration** — do not modify any file contents.
-	    Do not edit AGENTS.md, .shoferignore, .shofermodes, or the
+	    Do not edit AGENTS.md, .shofer/shoferignore, .shofer/shofermodes, or the
 	    migrated files.
 </execution_rules>
 
@@ -462,8 +462,8 @@ After migration, print a summary like:
 
 \`\`\`
 Migration complete:
-	 ✓ .rooignore → .shoferignore
-	 ✓ .roomodes → .shofermodes
+	 ✓ .rooignore → .shofer/shoferignore
+	 ✓ .roomodes → .shofer/shofermodes
 	 ✓ .roorules → .shofer/rules/roorules.md
 	 ✓ .roorules-code → .shofer/rules-code/roorules-code.md
 	 ⚠ cline_mcp_settings.json skipped — .shofer/mcp.json already exists
@@ -627,7 +627,8 @@ Migration complete:
 	"migrate-from-claude": {
 		name: "migrate-from-claude",
 		description: "Migrate Claude Code configuration files to Shofer equivalents",
-		content: `<task>
+		content:
+			`<task>
 Migrate Claude Code (and Claude Cowork) configuration files in this project to
 their Shofer equivalents. This involves merging instruction files, converting
 rules to Shofer rules, moving skills, converting subagent definitions to custom
@@ -808,9 +809,10 @@ modes, and relocating MCP configuration.
 	 <worktree_include>
 	   | Claude                 | Shofer Action                                      |
 	   |------------------------|----------------------------------------------------|
-	   | \`.worktreeinclude\`   | Already supported — NO action needed               |
+	   \`worktreeinclude\`   | Already supported — NO action needed               |
 
-	   Shofer natively supports .worktreeinclude files at the workspace root
+	   Shofer natively supports worktreeinclude files under `.shofer /
+			`
 	   with the same syntax. If the file already exists, it will be picked up
 	   automatically.
 	 </worktree_include>
@@ -861,9 +863,7 @@ Migration complete:
 	 ✓ .claude/subagents/security-auditor.json → .shofermodes (custom mode added)
 	 ✓ .claude/skills/generate-test/ → moved to .shofer/skills/generate-test/
 	 ✓ .mcp.json → renamed to .shofer/mcp.json
-	 ⚠ .claude/settings.json — manual review needed (hooks, permissions)
-	 ⚠ .claude/settings.local.json — manual review needed
-	 ℹ .worktreeinclude — already supported, no action needed
+	 ℹ worktreeinclude — already supported, no action needed
 \`\`\``,
 	},
 }

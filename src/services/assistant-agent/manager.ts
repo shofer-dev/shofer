@@ -805,7 +805,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 		softLimits: { softTimeoutSec?: number; softResultLength?: number } = {},
 	): string {
 		const treeContent = this._directoryTreeString
-			? `[Workspace structure:\n${this._directoryTreeString}\n\n.shoferignore and .gitignore patterns are respected.]`
+			? `[Workspace structure:\n${this._directoryTreeString}\n\nshoferignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
 
 		const parts = [ASSISTANT_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]

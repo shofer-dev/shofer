@@ -17,7 +17,7 @@ import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "../../i18n"
 import { configLog } from "../../utils/logging/subsystems"
 
-const SHOFERMODES_FILENAME = ".shofermodes"
+const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")
 
 // Type definitions for import/export functionality
 interface RuleFile {

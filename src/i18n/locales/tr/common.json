@@ -200,8 +200,8 @@
 	},
 	"customModes": {
 		"errors": {
-			"yamlParseError": ".shofermodes dosyasının {{line}}. satırında geçersiz YAML. Kontrol et:\n• Doğru girinti (tab değil boşluk kullan)\n• Eşleşen tırnak işaretleri ve parantezler\n• Geçerli YAML sözdizimi",
-			"schemaValidationError": ".shofermodes'ta geçersiz özel mod formatı:\n{{issues}}",
+			"yamlParseError": ".shofer/shofermodes dosyasının {{line}}. satırında geçersiz YAML. Kontrol et:\n• Doğru girinti (tab değil boşluk kullan)\n• Eşleşen tırnak işaretleri ve parantezler\n• Geçerli YAML sözdizimi",
+			"schemaValidationError": ".shofer/shofermodes'ta geçersiz özel mod formatı:\n{{issues}}",
 			"invalidFormat": "Geçersiz özel mod formatı. Ayarlarının doğru YAML formatını takip ettiğinden emin ol.",
 			"updateFailed": "Özel mod güncellemesi başarısız: {{error}}",
 			"deleteFailed": "Özel mod silme başarısız: {{error}}",

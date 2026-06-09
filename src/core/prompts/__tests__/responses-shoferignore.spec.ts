@@ -57,7 +57,7 @@ describe("ShoferIgnore Response Formatting", () => {
 			expect(parsed.type).toBe("access_denied")
 			expect(parsed.path).toBe("secrets/api-keys.json")
 			expect(parsed.suggestion).toContain("continue without this file")
-			expect(parsed.suggestion).toContain("update the .shoferignore file")
+			expect(parsed.suggestion).toContain("update the shoferignore file")
 		})
 
 		/**
@@ -213,7 +213,7 @@ describe("ShoferIgnore Response Formatting", () => {
 		/**
 		 * Tests the instructions format
 		 */
-		it("should format .shoferignore instructions for the LLM", async () => {
+		it("should format shoferignore instructions for the LLM", async () => {
 			// Create controller
 			const controller = new ShoferIgnoreController(TEST_CWD)
 			await controller.initialize()
@@ -237,11 +237,11 @@ describe("ShoferIgnore Response Formatting", () => {
 		/**
 		 * Tests null/undefined case
 		 */
-		it("should return undefined when no .shoferignore exists", async () => {
-			// Set up no .shoferignore
+		it("should return undefined when no shoferignore exists", async () => {
+			// Set up no shoferignore
 			mockFileExists.mockResolvedValue(false)
 
-			// Create controller without .shoferignore
+			// Create controller without shoferignore
 			const controller = new ShoferIgnoreController(TEST_CWD)
 			await controller.initialize()
 

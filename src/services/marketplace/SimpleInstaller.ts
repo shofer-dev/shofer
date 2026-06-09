@@ -102,7 +102,7 @@ export class SimpleInstaller {
 				existingData = { customModes: [] }
 			} else if (error.name === "YAMLParseError" || error.message?.includes("YAML")) {
 				// YAML parsing error - don't overwrite the file!
-				const fileName = target === "project" ? ".shofermodes" : "custom-modes.yaml"
+				const fileName = target === "project" ? ".shofer/shofermodes" : "custom-modes.yaml"
 				throw new Error(
 					`Cannot install mode: The ${fileName} file contains invalid YAML. ` +
 						`Please fix the syntax errors in the file before installing new modes.`,
@@ -362,7 +362,7 @@ export class SimpleInstaller {
 			if (!workspaceFolder) {
 				throw new Error("No workspace folder found")
 			}
-			return path.join(workspaceFolder.uri.fsPath, ".shofermodes")
+			return path.join(workspaceFolder.uri.fsPath, ".shofer", "shofermodes")
 		} else {
 			const globalSettingsPath = await ensureSettingsDirectoryExists(this.context)
 			return path.join(globalSettingsPath, GlobalFileNames.customModes)

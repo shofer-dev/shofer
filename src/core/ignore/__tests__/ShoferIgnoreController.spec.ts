@@ -81,10 +81,10 @@ describe("ShoferIgnoreController", () => {
 
 	describe("initialization", () => {
 		/**
-		 * Tests the controller initialization when .shoferignore exists
+		 * Tests the controller initialization when .shofer/shoferignore exists
 		 */
-		it("should load .shoferignore patterns on initialization when file exists", async () => {
-			// Setup mocks to simulate existing .shoferignore file
+		it("should load .shofer/shoferignore patterns on initialization when file exists", async () => {
+			// Setup mocks to simulate existing .shofer/shoferignore file
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules\n.git\nsecrets.json")
 
@@ -92,8 +92,8 @@ describe("ShoferIgnoreController", () => {
 			await controller.initialize()
 
 			// Verify file was checked and read
-			expect(mockFileExists).toHaveBeenCalledWith(path.join(TEST_CWD, ".shoferignore"))
-			expect(mockReadFile).toHaveBeenCalledWith(path.join(TEST_CWD, ".shoferignore"), "utf8")
+			expect(mockFileExists).toHaveBeenCalledWith(path.join(TEST_CWD, ".shofer/shoferignore"))
+			expect(mockReadFile).toHaveBeenCalledWith(path.join(TEST_CWD, ".shofer/shoferignore"), "utf8")
 
 			// Verify content was stored
 			expect(controller.shoferIgnoreContent).toBe("node_modules\n.git\nsecrets.json")
@@ -106,10 +106,10 @@ describe("ShoferIgnoreController", () => {
 		})
 
 		/**
-		 * Tests the controller behavior when .shoferignore doesn't exist
+		 * Tests the controller behavior when .shofer/shoferignore doesn't exist
 		 */
-		it("should allow all access when .shoferignore doesn't exist", async () => {
-			// Setup mocks to simulate missing .shoferignore file
+		it("should allow all access when .shofer/shoferignore doesn't exist", async () => {
+			// Setup mocks to simulate missing .shofer/shoferignore file
 			mockFileExists.mockResolvedValue(false)
 
 			// Initialize controller
@@ -126,12 +126,12 @@ describe("ShoferIgnoreController", () => {
 		/**
 		 * Tests the file watcher setup
 		 */
-		it("should set up file watcher for .shoferignore changes", async () => {
+		it("should set up file watcher for .shofer/shoferignore changes", async () => {
 			// Check that watcher was created with correct pattern
 			expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledWith(
 				expect.objectContaining({
-					base: TEST_CWD,
-					pattern: ".shoferignore",
+					base: `${TEST_CWD}/.shofer`,
+					pattern: "shoferignore",
 				}),
 			)
 
@@ -144,7 +144,7 @@ describe("ShoferIgnoreController", () => {
 		/**
 		 * Tests error handling during initialization
 		 */
-		it("should handle errors when loading .shoferignore", async () => {
+		it("should handle errors when loading .shofer/shoferignore", async () => {
 			// Setup mocks to simulate error
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockRejectedValue(new Error("Test file read error"))
@@ -157,7 +157,7 @@ describe("ShoferIgnoreController", () => {
 
 	describe("validateAccess", () => {
 		beforeEach(async () => {
-			// Setup .shoferignore content
+			// Setup .shofer/shoferignore content
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules\n.git\nsecrets/**\n*.log")
 			await controller.initialize()
@@ -205,10 +205,10 @@ describe("ShoferIgnoreController", () => {
 		})
 
 		/**
-		 * Tests the default behavior when no .shoferignore exists
+		 * Tests the default behavior when no .shofer/shoferignore exists
 		 */
-		it("should allow all access when no .shoferignore content", async () => {
-			// Create a new controller with no .shoferignore
+		it("should allow all access when no .shofer/shoferignore content", async () => {
+			// Create a new controller with no .shofer/shoferignore
 			mockFileExists.mockResolvedValue(false)
 			const emptyController = new ShoferIgnoreController(TEST_CWD)
 			await emptyController.initialize()
@@ -243,7 +243,7 @@ describe("ShoferIgnoreController", () => {
 
 	describe("validateCommand", () => {
 		beforeEach(async () => {
-			// Setup .shoferignore content
+			// Setup .shofer/shoferignore content
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules\n.git\nsecrets/**\n*.log")
 			await controller.initialize()
@@ -298,10 +298,10 @@ describe("ShoferIgnoreController", () => {
 		})
 
 		/**
-		 * Tests behavior when no .shoferignore exists
+		 * Tests behavior when no .shofer/shoferignore exists
 		 */
-		it("should allow all commands when no .shoferignore exists", async () => {
-			// Create a new controller with no .shoferignore
+		it("should allow all commands when no .shofer/shoferignore exists", async () => {
+			// Create a new controller with no .shofer/shoferignore
 			mockFileExists.mockResolvedValue(false)
 			const emptyController = new ShoferIgnoreController(TEST_CWD)
 			await emptyController.initialize()
@@ -314,7 +314,7 @@ describe("ShoferIgnoreController", () => {
 
 	describe("filterPaths", () => {
 		beforeEach(async () => {
-			// Setup .shoferignore content
+			// Setup .shofer/shoferignore content
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules\n.git\nsecrets/**\n*.log")
 			await controller.initialize()
@@ -368,10 +368,10 @@ describe("ShoferIgnoreController", () => {
 
 	describe("getInstructions", () => {
 		/**
-		 * Tests instructions generation with .shoferignore
+		 * Tests instructions generation with .shofer/shoferignore
 		 */
-		it("should generate formatted instructions when .shoferignore exists", async () => {
-			// Setup .shoferignore content
+		it("should generate formatted instructions when .shofer/shoferignore exists", async () => {
+			// Setup .shofer/shoferignore content
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules\n.git\nsecrets/**")
 			await controller.initialize()
@@ -387,10 +387,10 @@ describe("ShoferIgnoreController", () => {
 		})
 
 		/**
-		 * Tests behavior when no .shoferignore exists
+		 * Tests behavior when no .shofer/shoferignore exists
 		 */
-		it("should return undefined when no .shoferignore exists", async () => {
-			// Setup no .shoferignore
+		it("should return undefined when no .shofer/shoferignore exists", async () => {
+			// Setup no .shofer/shoferignore
 			mockFileExists.mockResolvedValue(false)
 			await controller.initialize()
 
@@ -423,10 +423,10 @@ describe("ShoferIgnoreController", () => {
 
 	describe("file watcher", () => {
 		/**
-		 * Tests behavior when .shoferignore is created
+		 * Tests behavior when .shofer/shoferignore is created
 		 */
-		it("should reload .shoferignore when file is created", async () => {
-			// Setup initial state without .shoferignore
+		it("should reload .shofer/shoferignore when file is created", async () => {
+			// Setup initial state without .shofer/shoferignore
 			mockFileExists.mockResolvedValue(false)
 			await controller.initialize()
 
@@ -437,7 +437,7 @@ describe("ShoferIgnoreController", () => {
 			// Setup for the test
 			mockFileExists.mockResolvedValue(false) // Initially no file exists
 
-			// Create and initialize controller with no .shoferignore
+			// Create and initialize controller with no .shofer/shoferignore
 			controller = new ShoferIgnoreController(TEST_CWD)
 			await controller.initialize()
 
@@ -448,7 +448,7 @@ describe("ShoferIgnoreController", () => {
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules")
 
-			// Force reload of .shoferignore content manually
+			// Force reload of .shofer/shoferignore content manually
 			await controller.initialize()
 
 			// Now verify content was updated
@@ -459,10 +459,10 @@ describe("ShoferIgnoreController", () => {
 		})
 
 		/**
-		 * Tests behavior when .shoferignore is changed
+		 * Tests behavior when .shofer/shoferignore is changed
 		 */
-		it("should reload .shoferignore when file is changed", async () => {
-			// Setup initial state with .shoferignore
+		it("should reload .shofer/shoferignore when file is changed", async () => {
+			// Setup initial state with .shofer/shoferignore
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules")
 			await controller.initialize()
@@ -487,10 +487,10 @@ describe("ShoferIgnoreController", () => {
 		})
 
 		/**
-		 * Tests behavior when .shoferignore is deleted
+		 * Tests behavior when .shofer/shoferignore is deleted
 		 */
-		it("should reset when .shoferignore is deleted", async () => {
-			// Setup initial state with .shoferignore
+		it("should reset when .shofer/shoferignore is deleted", async () => {
+			// Setup initial state with .shofer/shoferignore
 			mockFileExists.mockResolvedValue(true)
 			mockReadFile.mockResolvedValue("node_modules")
 			await controller.initialize()

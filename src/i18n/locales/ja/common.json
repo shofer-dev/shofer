@@ -200,8 +200,8 @@
 	},
 	"customModes": {
 		"errors": {
-			"yamlParseError": ".shofermodes ファイルの {{line}} 行目で無効な YAML です。以下を確認してください：\n• 正しいインデント（タブではなくスペースを使用）\n• 引用符と括弧の対応\n• 有効な YAML 構文",
-			"schemaValidationError": ".shofermodes のカスタムモード形式が無効です：\n{{issues}}",
+			"yamlParseError": ".shofer/shofermodes ファイルの {{line}} 行目で無効な YAML です。以下を確認してください：\n• 正しいインデント（タブではなくスペースを使用）\n• 引用符と括弧の対応\n• 有効な YAML 構文",
+			"schemaValidationError": ".shofer/shofermodes のカスタムモード形式が無効です：\n{{issues}}",
 			"invalidFormat": "カスタムモード形式が無効です。設定が正しい YAML 形式に従っていることを確認してください。",
 			"updateFailed": "カスタムモードの更新に失敗しました：{{error}}",
 			"deleteFailed": "カスタムモードの削除に失敗しました：{{error}}",

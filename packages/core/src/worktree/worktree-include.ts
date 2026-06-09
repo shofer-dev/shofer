@@ -1,7 +1,7 @@
 /**
  * WorktreeIncludeService
  *
- * Platform-agnostic service for handling .worktreeinclude files.
+ * Platform-agnostic service for handling worktreeinclude files.
  * Used to copy untracked files (like node_modules) when creating worktrees.
  */
 
@@ -33,16 +33,16 @@ export type CopyProgressCallback = (progress: CopyProgress) => void
 const execFileAsync = promisify(execFile)
 
 /**
- * Service for managing .worktreeinclude files and copying files to new worktrees.
+ * Service for managing worktreeinclude files and copying files to new worktrees.
  * All methods are platform-agnostic and don't depend on VSCode APIs.
  */
 export class WorktreeIncludeService {
 	/**
-	 * Check if .worktreeinclude exists in a directory
+	 * Check if worktreeinclude exists in a directory
 	 */
 	async hasWorktreeInclude(dir: string): Promise<boolean> {
 		try {
-			await fs.access(path.join(dir, ".worktreeinclude"))
+			await fs.access(path.join(dir, ".shofer", "worktreeinclude"))
 			return true
 		} catch {
 			return false
@@ -50,13 +50,13 @@ export class WorktreeIncludeService {
 	}
 
 	/**
-	 * Check if a specific branch has .worktreeinclude file (in git, not local filesystem)
+	 * Check if a specific branch has worktreeinclude file (in git, not local filesystem)
 	 * @param cwd - Current working directory (git repo)
 	 * @param branch - Branch name to check
 	 */
 	async branchHasWorktreeInclude(cwd: string, branch: string): Promise<boolean> {
 		try {
-			const ref = `${branch}:.worktreeinclude`
+			const ref = `${branch}:.shofer/worktreeinclude`
 			// Use git cat-file -e to check if the file exists on the branch (without printing contents)
 			await execFileAsync("git", ["cat-file", "-e", "--", ref], { cwd })
 			return true
@@ -67,10 +67,10 @@ export class WorktreeIncludeService {
 	}
 
 	/**
-	 * Get the status of .worktreeinclude and .gitignore
+	 * Get the status of worktreeinclude and .gitignore
 	 */
 	async getStatus(dir: string): Promise<WorktreeIncludeStatus> {
-		const worktreeIncludePath = path.join(dir, ".worktreeinclude")
+		const worktreeIncludePath = path.join(dir, ".shofer", "worktreeinclude")
 		const gitignorePath = path.join(dir, ".gitignore")
 
 		let exists = false
@@ -99,14 +99,16 @@ export class WorktreeIncludeService {
 	}
 
 	/**
-	 * Create a .worktreeinclude file with the specified content
+	 * Create a worktreeinclude file with the specified content
 	 */
 	async createWorktreeInclude(dir: string, content: string): Promise<void> {
-		await fs.writeFile(path.join(dir, ".worktreeinclude"), content, "utf-8")
+		const filePath = path.join(dir, ".shofer", "worktreeinclude")
+		await fs.mkdir(path.dirname(filePath), { recursive: true })
+		await fs.writeFile(filePath, content, "utf-8")
 	}
 
 	/**
-	 * Copy files matching .worktreeinclude patterns from source to target.
+	 * Copy files matching worktreeinclude patterns from source to target.
 	 * Only copies files that are ALSO in .gitignore (to avoid copying tracked files).
 	 *
 	 * @param sourceDir - The source directory containing the files to copy
@@ -119,7 +121,7 @@ export class WorktreeIncludeService {
 		targetDir: string,
 		onProgress?: CopyProgressCallback,
 	): Promise<string[]> {
-		const worktreeIncludePath = path.join(sourceDir, ".worktreeinclude")
+		const worktreeIncludePath = path.join(sourceDir, ".shofer", "worktreeinclude")
 		const gitignorePath = path.join(sourceDir, ".gitignore")
 
 		// Check if both files exist
@@ -407,7 +409,7 @@ export class WorktreeIncludeService {
 				if (relativePath === ".git") continue
 
 				// Check if this path matches both patterns
-				// For .worktreeinclude, we want items that are "ignored" (matched)
+				// For worktreeinclude, we want items that are "ignored" (matched)
 				// For .gitignore, we want items that are "ignored" (matched)
 				const matchesWorktreeInclude = includeMatcher.ignores(relativePath)
 				const matchesGitignore = gitignoreMatcher.ignores(relativePath)

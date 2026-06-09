@@ -40,7 +40,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 
 	const mockStoragePath = `${path.sep}mock${path.sep}settings`
 	const mockSettingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
-	const mockRoomodes = `${path.sep}mock${path.sep}workspace${path.sep}.shofermodes`
+	const mockRoomodes = `${path.sep}mock${path.sep}workspace${path.sep}.shofer/shofermodes`
 
 	// Helper function to reduce duplication in fs.readFile mocks
 	const mockFsReadFile = (files: Record<string, string>) => {
