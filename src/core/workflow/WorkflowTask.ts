@@ -1340,9 +1340,11 @@ export const TERMINAL_FLOW_STATUSES: ReadonlySet<FlowStatus> = new Set<FlowStatu
 export async function discoverWorkflows(workspacePath: string): Promise<Map<string, string>> {
 	const workflows = new Map<string, string>()
 	// Built-in workflows — lowest priority
-	const builtinDir = path.join(__dirname, "..", "..", "media", "workflows")
+	// In dev, __dirname = src/; in deployed VSIX, __dirname = dist/.
+	// Both contain media/workflows/ after build.
+	const builtinDir = path.join(__dirname, "media", "workflows")
 	workflowLog.info(`[discoverWorkflows] __dirname=${__dirname} builtinDir=${builtinDir}`)
-	await loadFromDir(builtinDir, workflows, "builtin")
+	await loadFromDir(builtinDir, workflows)
 	// Global user workflows — medium priority
 	const globalDir = path.join(os.homedir(), ".shofer", "workflows")
 	await loadFromDir(globalDir, workflows)
