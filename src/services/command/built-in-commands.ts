@@ -627,8 +627,7 @@ Migration complete:
 	"migrate-from-claude": {
 		name: "migrate-from-claude",
 		description: "Migrate Claude Code configuration files to Shofer equivalents",
-		content:
-			`<task>
+		content: `<task>
 Migrate Claude Code (and Claude Cowork) configuration files in this project to
 their Shofer equivalents. This involves merging instruction files, converting
 rules to Shofer rules, moving skills, converting subagent definitions to custom
@@ -811,8 +810,7 @@ modes, and relocating MCP configuration.
 	   |------------------------|----------------------------------------------------|
 	   \`worktreeinclude\`   | Already supported — NO action needed               |
 
-	   Shofer natively supports worktreeinclude files under `.shofer /
-			`
+	   Shofer natively supports worktreeinclude files under \`.shofer/\`
 	   with the same syntax. If the file already exists, it will be picked up
 	   automatically.
 	 </worktree_include>
