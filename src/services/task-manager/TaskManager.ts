@@ -693,6 +693,11 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 * Seed `managedTasks` from persisted history. MUST be called once before
 	 * any task is registered so the in-memory map can supply correct state for
 	 * rehydrated tasks. Calling more than once is a no-op after the first call.
+	 *
+	 * Already-registered tasks are never overwritten — a task that was
+	 * registerBackgroundTask'd before restoreManagedTasks settles (e.g. from
+	 * a WorkflowTask hot constructor path) keeps its live state and is not
+	 * clobbered by the on-disk snapshot.
 	 */
 	async restoreManagedTasks(historyItems: HistoryItem[]): Promise<void> {
 		if (this.seeded) return
@@ -701,6 +706,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 		for (const item of historyItems) {
 			if (!item.id) continue
+			// Guard: never overwrite a Task that was already registered via
+			// registerBackgroundTask() (which may carry a more-recent state).
+			if (this.managedTasks.has(item.id)) continue
 			const managedTask: ManagedTask = {
 				id: item.id,
 				name:
