@@ -157,21 +157,11 @@ describe("getWorktreeSandboxPrefix", () => {
 		expect(getWorktreeSandboxPrefix(task)).toBeNull()
 	})
 
-	it("returns sandbox prefix with binary and worktree on Linux", () => {
+	it("throws SandboxUnavailableError when binary is missing on Linux", () => {
 		Object.defineProperty(process, "platform", { value: "linux" })
 		const task = mockTask(WORKTREE, WORKSPACE)
-		const result = getWorktreeSandboxPrefix(task)
-
-		// The returned prefix is derived from __dirname at runtime; the
-		// binary existence check gates whether a prefix is returned at all.
-		// Validate the shape rather than hardcoding a specific path.
-		if (result) {
-			expect(result).toBeInstanceOf(Array)
-			expect(result).toHaveLength(2)
-			expect(result![0]).toMatch(/shofer-sandbox$/)
-			expect(result![1]).toBe(path.resolve(WORKTREE))
-		} else {
-			expect(result).toBeNull()
-		}
+		// The binary doesn't exist at the resolved path in tests,
+		// so getWorktreeSandboxPrefix should throw.
+		expect(() => getWorktreeSandboxPrefix(task)).toThrow("Worktree shell sandbox unavailable")
 	})
 })

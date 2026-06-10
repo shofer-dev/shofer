@@ -105,38 +105,98 @@ function isLinux(): boolean {
  * @param task - The task instance
  * @returns The sandbox prefix array, or null if sandboxing is unavailable
  */
+/**
+ * Error thrown when the sandbox binary is unavailable but required for a
+ * worktree-scoped task.  The caller (ExecuteCommandTool) catches this and
+ * surfaces it as a blocking error so the command never executes unsandboxed.
+ */
+export class SandboxUnavailableError extends Error {
+	constructor(
+		reason: string,
+		public readonly worktreeDir: string,
+	) {
+		super(
+			`Worktree shell sandbox unavailable at '${worktreeDir}': ${reason}. ` +
+				`Shell commands in worktree tasks cannot run without sandboxing. ` +
+				`Ensure the shofer-sandbox binary is built for the correct architecture.`,
+		)
+		this.name = "SandboxUnavailableError"
+	}
+}
+
+/**
+ * Returns the sandbox wrapper command prefix for worktree-scoped shell commands.
+ *
+ * On Linux, this returns the absolute path to the shofer-sandbox binary followed
+ * by the worktree directory.  On non-Linux platforms (macOS, Windows), it returns
+ * null — no kernel sandbox is available, so the advisory warning
+ * (getWorktreeCommandWarning) is the only guard.
+ *
+ * If the binary is missing for a worktree task on Linux, throws
+ * SandboxUnavailableError rather than silently degrading.
+ *
+ * @param task - The task instance
+ * @returns The sandbox prefix array, or null if sandboxing is unavailable
+ * @throws  SandboxUnavailableError if sandboxing is required but impossible
+ */
 export function getWorktreeSandboxPrefix(task: Task): string[] | null {
 	if (!isEmbeddedWorktreeTask(task) || !isLinux()) {
 		return null
 	}
 
 	const worktreeDir = path.resolve(task.cwd)
-	// The sandbox binary lives alongside the extension's source; at runtime,
-	// __dirname resolves to the compiled output directory. The binary is at
-	// <extension-root>/sandbox/shofer-sandbox.
-	const sandboxBinary = path.resolve(__dirname, "..", "..", "sandbox", "shofer-sandbox")
+	// The sandbox binary is shipped as src/sandbox/shofer-sandbox and
+	// copied into dist/sandbox/ by esbuild.  At runtime __dirname is
+	// <install>/dist/, so resolve to ./sandbox/shofer-sandbox.
+	const sandboxBinary = path.resolve(__dirname, "sandbox", "shofer-sandbox")
 
-	// If the binary is missing or non-executable, sandboxing is unavailable.
-	// Log a diagnostic so the misconfiguration is debuggable.
+	// Fail closed — for worktree tasks on Linux the sandbox must be present.
 	if (!fs.existsSync(sandboxBinary)) {
-		// Lazy dynamic import to avoid a circular require with extension.ts.
-		void import("../extension")
-			.then(({ getOutputChannel }) => {
-				const ch = getOutputChannel()
-				if (!ch) return
-				ch.appendLine(
-					`[worktreePathGuard] shofer-sandbox binary not found at ${sandboxBinary}. ` +
-						`Shell commands in worktree tasks will NOT be sandboxed. ` +
-						`Build the binary: cd sandbox && GOWORK=off CGO_ENABLED=0 go build -o shofer-sandbox .`,
-				)
-			})
-			.catch(() => {
-				// channel not yet wired; drop silently
-			})
-		return null
+		throw new SandboxUnavailableError("binary not found", worktreeDir)
+	}
+
+	// Verify the binary is executable for the current architecture.
+	try {
+		fs.accessSync(sandboxBinary, fs.constants.X_OK)
+	} catch {
+		throw new SandboxUnavailableError("binary not executable", worktreeDir)
+	}
+
+	// Check that it's an ELF binary matching the current arch (fail on
+	// wrong-arch, e.g. x86-64 binary on arm64).
+	const archOk = isBinaryCorrectArch(sandboxBinary)
+	if (!archOk) {
+		throw new SandboxUnavailableError(`binary architecture mismatch (expected ${process.arch})`, worktreeDir)
 	}
 
 	return [sandboxBinary, worktreeDir]
+}
+
+/**
+ * Reads the ELF header of the given file and checks that its machine type
+ * matches the current process architecture.  Returns true if the binary
+ * is for the correct arch, false otherwise.
+ */
+function isBinaryCorrectArch(filePath: string): boolean {
+	try {
+		const fd = fs.openSync(filePath, "r")
+		const header = Buffer.alloc(20)
+		const bytesRead = fs.readSync(fd, header, 0, 20, 0)
+		fs.closeSync(fd)
+		if (bytesRead < 20) return false
+
+		// ELF magic: 0x7f 'E' 'L' 'F'
+		if (header[0] !== 0x7f || header[1] !== 0x45 || header[2] !== 0x4c || header[3] !== 0x46) {
+			return false
+		}
+
+		// Machine type (offset 18, 2 bytes little-endian): 0x3e = x86-64, 0xb7 = aarch64
+		const machine = header.readUInt16LE(18)
+		const expectedMachine = process.arch === "arm64" ? 0xb7 : 0x3e
+		return machine === expectedMachine
+	} catch {
+		return false
+	}
 }
 
 /**

@@ -72,6 +72,23 @@ async function main() {
 						path.join(srcDir, "media", "workflows", "implement-feature.slang"),
 						path.join(workflowsDest, "implement-feature.slang"),
 					)
+					// Copy the sandbox wrapper binary so it is available
+					// alongside the extension bundle in dist/.  The binary is
+					// a prebuilt Go artifact at src/sandbox/shofer-sandbox.
+					const sandboxSrc = path.join(srcDir, "sandbox", "shofer-sandbox")
+					const sandboxDestDir = path.join(distDir, "sandbox")
+					if (fs.existsSync(sandboxSrc)) {
+						fs.mkdirSync(sandboxDestDir, { recursive: true })
+						fs.copyFileSync(sandboxSrc, path.join(sandboxDestDir, "shofer-sandbox"))
+						fs.chmodSync(path.join(sandboxDestDir, "shofer-sandbox"), 0o755)
+					} else {
+						console.warn(
+							`[esbuild] WARNING: shofer-sandbox binary not found at ${sandboxSrc}. ` +
+								`Worktree-scoped shell commands will fail at runtime — the extension will throw ` +
+								`SandboxUnavailableError for every worktree execute_command. ` +
+								`Build: cd src/sandbox && GOWORK=off CGO_ENABLED=0 go build -o shofer-sandbox .`,
+						)
+					}
 					copyPaths(
 						[
 							["core/webview/slang-render.js", "slang-render.js"],

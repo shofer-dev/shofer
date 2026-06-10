@@ -19,7 +19,11 @@ import { Package } from "../../shared/package"
 import { t } from "../../i18n"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { getWorktreeCommandWarning, getWorktreeSandboxPrefix } from "../../utils/worktreePathGuard"
+import {
+	getWorktreeCommandWarning,
+	getWorktreeSandboxPrefix,
+	SandboxUnavailableError,
+} from "../../utils/worktreePathGuard"
 import { taskLog } from "../../utils/logging/subsystems"
 
 /**
@@ -76,7 +80,19 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 			// prepend the sandbox wrapper so all shell commands are write-restricted
 			// to the worktree directory. On non-Linux platforms, fall back to the
 			// advisory warning since no kernel sandbox is available.
-			const sandboxPrefix = getWorktreeSandboxPrefix(task)
+			// getWorktreeSandboxPrefix throws SandboxUnavailableError if the
+			// binary is missing, non-executable, or wrong-arch on a Linux
+			// worktree task — fail closed instead of running unsandboxed.
+			let sandboxPrefix: string[] | null
+			try {
+				sandboxPrefix = getWorktreeSandboxPrefix(task)
+			} catch (err) {
+				if (err instanceof SandboxUnavailableError) {
+					pushToolResult(err.message)
+					return
+				}
+				throw err
+			}
 
 			let commandToApprove = command
 			if (sandboxPrefix) {
