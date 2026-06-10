@@ -1,125 +1,47 @@
 # Shofer Performance Optimizations
 
+> Updated 2026-06-09: Incremental messaging (IPC protocol refinement) landed.
+
 > Analysis performed 2026-05-20. Source code paths verified against HEAD.
-> Revised 2026-05-20 after code-level review (see "Revision notes" at bottom).
+> Revised 2026-06-09 after incremental messaging (IPC protocol refinement) landed.
 >
-> **Implementation status (2026-05-21):** the cheap, stability-positive slice
-> has landed — **H5.a, H1, H3, H6, metrics**.
+> **Implementation status (2026-06-09):** all H0–H10 items resolved.
 >
-> **H0 landed 2026-05-21:** `saveShoferMessages` is now debounced (250 ms
-> trailing, 1000 ms maxWait) during streaming. `addToShoferMessages` and
-> the streaming-loop save points (api_req_started, usage updates,
-> reasoning complete) use the debounced path. Turn boundaries (ask/say
-> completion, abort, overwrite) flush synchronously via
-> `_flushSaveShoferMessages`. See [`Task.ts`](extensions/shofer/src/core/task/Task.ts:654)
-> for the debounce constants and [`Task.ts`](extensions/shofer/src/core/task/Task.ts:858)
-> for the initializer.
+> **Incremental messaging landed 2026-06-09 (IPC protocol refinement):** > `postStateToWebview()` and its two `Without*` variants are replaced by three
+> targeted IPC methods: `postInitState()` (full-snapshot on task switch/webview
+> reset), `postConfigUpdate(key, value)` (single key/value pair for settings
+> mutations), and `postTaskStateUpdate(updates)` (task lifecycle fields only).
+> The webview-side `mergeExtensionState` no longer carries the `shoferMessagesSeq`
+> stale-overwrite guard — it's superseded by the protocol-level split into
+> distinct message types. Per-message deltas (`shoferMessageAppended`) are now
+> the **sole** streaming path — skinny `postStateToWebviewWithoutShoferMessages`
+> pushes at stream-start and stream-end are removed. The H8 static-state cache
+> (`_cachedMergedAllowed`, etc.) is removed because `postInitState` fires O(1)
+> per task lifetime (not per streaming chunk).
 >
-> **H4 landed 2026-05-21:** 8 additional `postStateToWebview()` call
-> sites converted to `postStateToWebviewWithoutTaskHistory()` —
-> settings updates, mode changes, API configuration mutations, custom
-> instruction updates, and workspace refreshes. These callers don't
-> change taskHistory so carrying the full array was pure waste. The
-> remaining 9 `postStateToWebview()` callers are task-switch or
-> webview-visibility events where taskHistory is genuinely needed.
-> The `taskHistoryItemUpdated` / `taskHistoryUpdated` delta channels
-> (already present) and `messageUpdated` (already present) remain the
-> canonical single-message update paths. See
-> [`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) for
-> the converted call sites.
->
-> **H2.bis landed 2026-05-21:** Incremental token-usage caching added to
-> [`saveShoferMessages`](extensions/shofer/src/core/task/Task.ts:1545).
-> The expensive O(n) `getApiMetrics(combineApiRequests(combineCommandSequences(…)))`
-> walk is now skipped when no token-bearing messages (`api_req_started`,
-> `condense_context`) have been added since the last computation. A
-> dirty-flag counter is tracked in `_tokenBearingMessageCount` and
-> compared on each save. [`taskMetadata`](extensions/shofer/src/core/task-persistence/taskMetadata.ts:39)
-> accepts an optional `tokenUsageOverride` to bypass the walk.
->
-> **H5.b dropped 2026-05-21 (after benchmark):** A wrapper that delegated
-> to `simdjson` for files ≥1 MiB was implemented, the native addon was
-> built locally, and a smoke test was run on a ~1.6 MB array-of-small-
-> objects payload (representative of `ui_messages.json`):
->
-> ```
-> len(bytes)= 1,608,891
-> simdjson_ms  = 22.91
-> JSON.parse_ms =  4.52
-> ```
->
-> On Node 22, V8's SIMD-accelerated `JSON.parse` is ~5× faster than
-> simdjson for our payload shape; the design-note assumption (2–4× faster
-> via the NAPI binding, plus V8-lock release) does not hold. Wrapper +
-> wiring reverted; `simdjson` removed from `optionalDependencies` and from
-> the build-allowlist. Use H5.c instead for off-main-thread parsing.
->
-> **H5.c implemented + dropped 2026-05-21 (after benchmark):** A
-> `workerpool`-based parse-in-worker was wired into
-> `readTaskMessages` / `readApiMessages` with a 1 MiB threshold. The worker
-> read the file AND parsed it (only the result crossed the postMessage
-> boundary). Benchmarked on a representative ~2.3 MB array-of-small-
-> objects payload:
->
-> ```
-> size_bytes      = 2,308,891
-> main_thread_ms  = 19.20
-> worker_ms       = 52.09   (2.7× slower than baseline)
-> ```
->
-> Same root cause as H5.b: V8 `JSON.parse` on Node 22 is fast enough that
-> the structuredClone cost of returning the parsed array dominates any
-> off-main-thread benefit, and the main thread only loses ~19 ms anyway
-> (well below perceptible-hitch territory). Wrapper, worker entry,
-> esbuild entry-point and deactivate hook reverted. The remaining
-> persistence-read path is plain `JSON.parse` again.
->
-> **Conclusion on H5.\* (parse path):** on Node 22 with realistic
-> `ui_messages.json` / `api_conversation_history.json` sizes, neither a
-> native NAPI parser (H5.b) nor a worker*threads off-load (H5.c) beats
-> V8's `JSON.parse`. Future work in this area should target the \_save*
-> path (H5.c-bis: stringify-in-worker under H6) or message volume itself
-> (H2 windowed loading), not the parse step.
->
-> **H8 landed 2026-05-21:** ContextProxy now exposes an
-> [`onDidChange`](extensions/shofer/src/core/config/ContextProxy.ts:51)
-> vscode.EventEmitter. [`ShoferProvider`](extensions/shofer/src/core/webview/ShoferProvider.ts:244)
-> subscribes — filtered to only `allowedCommands`/`deniedCommands` keys —
-> and also watches `vscode.workspace.onDidChangeConfiguration` for the same
-> sections. A generation counter invalidates `_cachedMergedAllowed` /
-> `_cachedMergedDenied`, avoiding redundant merge+dedup work on every
-> state push.
->
-> **H2 (windowed message loading), H5.c (worker_threads), H7** remain open.
->
-> **H10 landed 2026-05-30:** Webview-side message consolidation
-> (`combineApiRequests(combineCommandSequences(…))` + `getApiMetrics`) is now
-> incremental. A new
-> [`incrementalMessageProcessing.ts`](extensions/shofer/webview-ui/src/components/chat/incrementalMessageProcessing.ts)
-> module caches the consolidated prefix at a provably-safe split boundary and
-> re-consolidates only the changed tail per streamed chunk, eliminating the
-> O(n²) per-task webview slowdown. See the H10 section below for the safe-split
-> reach analysis and the open-group orphan bug fixed during implementation.
+> New log category `IPC` records every protocol message; enable `IPC` + `Webview`
+> in `shofer.logCategories` to monitor fallback paths.
 >
 > ### Status Table
 >
-> | #            | Item                                                        | Description                                                                                                                                                                                                                                                                                     | Risk       | Status                   | Implemented    |
-> | ------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ | -------------- |
-> | **H5.a**     | Raise `UV_THREADPOOL_SIZE`                                  | One-line env var in `extension.ts`; removes fs-ops serialization bottleneck                                                                                                                                                                                                                     | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
-> | **H1**       | Eliminate redundant re-read in `preloadShoferMessages()`    | Skip READ #2 after sanitized save; compose with H3                                                                                                                                                                                                                                              | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
-> | **H3**       | Parallelize `preloadShoferMessages()` I/O                   | `Promise.all` for independent `shoferMessages` + `apiConversationHistory` reads                                                                                                                                                                                                                 | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
-> | **H6**       | Sync `JSON.stringify` snapshot instead of `structuredClone` | Freeze string before async write; avoids O(n) deep copy per save                                                                                                                                                                                                                                | 🟡 Low–Med | ✅ Done                  | pre-2026-05-21 |
-> | **metrics**  | Instrumentation scaffolding                                 | Perf logging gated on `process.env.DEBUG`                                                                                                                                                                                                                                                       | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
-> | **H0**       | Debounce `saveShoferMessages` during streaming              | 250ms trailing debounce (1s maxWait); flush at turn boundaries                                                                                                                                                                                                                                  | 🟡 Medium  | ✅ Done                  | 2026-05-21     |
-> | **H4**       | Delta channel for `taskHistory`/`shoferMessages`            | Converted 8 `postStateToWebview()` callers to `withoutTaskHistory` variant                                                                                                                                                                                                                      | 🟡 Medium  | ✅ Done                  | 2026-05-21     |
-> | **H2.bis**   | Incremental `taskMetadata` token accounting                 | Dirty-flag cache skips O(n) token walk when no new token-bearing messages                                                                                                                                                                                                                       | 🟡 Medium  | ✅ Done                  | 2026-05-21     |
-> | ~~**H5.b**~~ | ~~Native `simdjson` addon for large-file parse~~            | Implemented + benchmarked 2026-05-21 — on Node 22, V8 `JSON.parse` was ~5× _faster_ than `simdjson` on the representative payload (4.5 ms vs 22.9 ms for 1.6 MB); wrapper and dep reverted. See H5.c instead.                                                                                   | —          | ❌ Dropped (empirically) | —              |
-> | **H5.c**     | `worker_threads` for parse of large files                   | Worker read file + `JSON.parse`d; only result crossed postMessage. 1 MiB threshold. Implemented + benchmarked 2026-05-21 — on Node 22, the worker path was 2.7× _slower_ than main-thread baseline (52 ms vs 19 ms for 2.3 MB) because structuredClone of the parsed array dominates. Reverted. | —          | ❌ Dropped (empirically) | —              |
-> | **H8**       | `ContextProxy.onDidChange` + memoize static state           | EventEmitter + generation counter cache for merged command lists                                                                                                                                                                                                                                | 🟢 Low     | ✅ Done                  | 2026-05-21     |
-> | **H2**       | Windowed message loading                                    | Load last K messages with Virtuoso scroll-to-load sentinel                                                                                                                                                                                                                                      | 🔴 High    | ❌ Open                  | —              |
-> | **H7**       | Paginate history index                                      | Split `_index.json` into pages at 1,000+ tasks                                                                                                                                                                                                                                                  | 🟢 Low     | ❌ Open                  | —              |
-> | **H9**       | Gate state pushes for background tasks                      | Add `isFocusedTask()` check to `addToShoferMessages` + stream start/end state pushes                                                                                                                                                                                                            | 🟢 Low     | ❌ Open                  | —              |
-> | **H10**      | Incremental webview message consolidation                   | Cache consolidated prefix at a safe split boundary; re-consolidate only the changed tail per streamed chunk — removes the webview-side O(n²) per-task slowdown                                                                                                                                  | 🟢 Low–Med | ✅ Done                  | 2026-05-30     |
+> | #             | Item                                                        | Description                                                                                                                                                                                                                                                                                     | Risk       | Status                   | Implemented    |
+> | ------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ | -------------- |
+> | **H5.a**      | Raise `UV_THREADPOOL_SIZE`                                  | One-line env var in `extension.ts`; removes fs-ops serialization bottleneck                                                                                                                                                                                                                     | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
+> | **H1**        | Eliminate redundant re-read in `preloadShoferMessages()`    | Skip READ #2 after sanitized save; compose with H3                                                                                                                                                                                                                                              | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
+> | **H3**        | Parallelize `preloadShoferMessages()` I/O                   | `Promise.all` for independent `shoferMessages` + `apiConversationHistory` reads                                                                                                                                                                                                                 | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
+> | **H6**        | Sync `JSON.stringify` snapshot instead of `structuredClone` | Freeze string before async write; avoids O(n) deep copy per save                                                                                                                                                                                                                                | 🟡 Low–Med | ✅ Done                  | pre-2026-05-21 |
+> | **metrics**   | Instrumentation scaffolding                                 | Perf logging gated on `process.env.DEBUG`                                                                                                                                                                                                                                                       | 🟢 Low     | ✅ Done                  | pre-2026-05-21 |
+> | **H0**        | Debounce `saveShoferMessages` during streaming              | 250ms trailing debounce (1s maxWait); flush at turn boundaries                                                                                                                                                                                                                                  | 🟡 Medium  | ✅ Done                  | 2026-05-21     |
+> | **H2.bis**    | Incremental `taskMetadata` token accounting                 | Dirty-flag cache skips O(n) token walk when no new token-bearing messages                                                                                                                                                                                                                       | 🟡 Medium  | ✅ Done                  | 2026-05-21     |
+> | **H8**        | `ContextProxy.onDidChange` + memoize static state           | EventEmitter + generation counter cache for merged command lists. **Removed 2026-06-09** — cache invalidated when `postInitState` became O(1) per task lifetime.                                                                                                                                | 🟢 Low     | ✅ Done → Removed        | 2026-06-09     |
+> | **H10**       | Incremental webview message consolidation                   | Cache consolidated prefix at a safe split boundary; re-consolidate only the changed tail per streamed chunk — removes the webview-side O(n²) per-task slowdown                                                                                                                                  | 🟢 Low–Med | ✅ Done                  | 2026-05-30     |
+> | **H9**        | Gate state pushes for background tasks                      | Add `isFocusedTask()` check to `addToShoferMessages` + stream start/end state pushes. **Superseded 2026-06-09** — the `shoferMessageAppended` path already gates; the skinny-push blocks removed by incremental messaging are the same ones H9 would have gated.                                | —          | ✅ Superseded            | 2026-06-09     |
+> | **H4**        | Delta channel for `taskHistory`/`shoferMessages`            | Converted `postStateToWebview()` callers to `withoutTaskHistory` variant. **Superseded 2026-06-09** — incremental messaging splits `postInitState` (full snapshot) from `postConfigUpdate`/`postTaskStateUpdate` (targeted deltas), achieving the same IPC payload reduction at the type level. | —          | ✅ Superseded            | 2026-06-09     |
+> | ~~**H5.b**~~  | ~~Native `simdjson` addon for large-file parse~~            | Implemented + benchmarked 2026-05-21 — on Node 22, V8 `JSON.parse` was ~5× _faster_ than `simdjson` on the representative payload (4.5 ms vs 22.9 ms for 1.6 MB); wrapper and dep reverted. See H5.c instead.                                                                                   | —          | ❌ Dropped (empirically) | —              |
+> | ~~**H5.c**~~  | ~~`worker_threads` for parse of large files~~               | Worker read file + `JSON.parse`d; only result crossed postMessage. 1 MiB threshold. Implemented + benchmarked 2026-05-21 — on Node 22, the worker path was 2.7× _slower_ than main-thread baseline (52 ms vs 19 ms for 2.3 MB) because structuredClone of the parsed array dominates. Reverted. | —          | ❌ Dropped (empirically) | —              |
+> | **H2**        | Windowed message loading                                    | Load last K messages with Virtuoso scroll-to-load sentinel                                                                                                                                                                                                                                      | 🔴 High    | ❌ Open                  | —              |
+> | **H7**        | Paginate history index                                      | Split `_index.json` into pages at 1,000+ tasks                                                                                                                                                                                                                                                  | 🟢 Low     | ❌ Open                  | —              |
+> | **IPC proto** | Incremental messaging (IPC protocol refinement)             | Replace three `postStateToWebview*` methods with `postInitState` (full snapshot), `postConfigUpdate(key,value)` (single-key delta), and `postTaskStateUpdate(updates)` (task lifecycle delta). Webview splits `"state"` handler into `stateInit`/`configUpdate`/`taskStateUpdate`.              | 🟡 Medium  | ✅ Done                  | 2026-06-09     |
 
 ## Root Causes Identified
 
