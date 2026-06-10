@@ -482,7 +482,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 			// Save the edited configuration under the editing config name,
 			// NOT the global default. The Default dropdown controls currentApiConfigName.
-			vscode.postMessage({ type: "upsertApiConfiguration", text: editingConfigName, apiConfiguration, bool: false })
+			// activate=true when saving the currently-active default profile so
+			// the live contextProxy settings and running task API handlers are
+			// refreshed. activate=false when saving a different profile so the
+			// global default is not clobbered.
+			const activate = editingConfigName === currentApiConfigName
+			vscode.postMessage({ type: "upsertApiConfiguration", text: editingConfigName, apiConfiguration, bool: activate })
 
 			// Persist the pending default config name (if changed) so the Save
 			// button applies the Default Configuration dropdown selection.
@@ -526,14 +531,26 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 				// Discard changes: Reset state and flag
 				setCachedState(extensionState) // Revert to original state
 				setChangeDetected(false) // Reset change flag
+				// Reset the buffered default config name so a previously-
+				// discarded dropdown selection doesn't leak into a later Save.
+				setPendingDefaultConfigName(currentApiConfigName || "")
 				// Also drop any per-mode text buffers held inside ModesView.
 				modesViewRef.current?.discardBuffers()
 				confirmDialogHandler.current?.() // Execute the pending action (e.g., tab switch)
 			}
 			// If confirm is false (Cancel), do nothing, dialog closes automatically
 		},
-		[extensionState], // Depend on extensionState to get the latest original state
+		[extensionState, currentApiConfigName], // Sync with live default name
 	)
+
+	// Re-sync the default-config buffer when the host pushes a new value
+	// (e.g. another window changed it). Only sync when the form is NOT dirty
+	// so we don't clobber a pending user selection.
+	useEffect(() => {
+		if (!isChangeDetected && currentApiConfigName && currentApiConfigName !== pendingDefaultConfigName) {
+			setPendingDefaultConfigName(currentApiConfigName)
+		}
+	}, [currentApiConfigName, isChangeDetected, pendingDefaultConfigName])
 
 	// Handle tab changes with unsaved changes check
 	const handleTabChange = useCallback(

@@ -76,8 +76,21 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	private notifications: ManagedTaskNotification[] = []
 	private managedTasks: Map<string, ManagedTask> = new Map()
 
-	/** Set to true once `restoreManagedTasks` (or an explicit empty restore) has run. */
+	/**
+	 * Set to true once `ensureRestored()` is called.  Gates
+	 * `assertRestored()` — early-bird code paths (WorkflowTask hot
+	 * constructor, etc.) must not throw before the async history store
+	 * settles.
+	 */
 	private restored = false
+
+	/**
+	 * Set to true once `restoreManagedTasks()` seeds `managedTasks` from
+	 * persisted history.  Kept separate from `restored` so
+	 * `ensureRestored()` (which flips `restored`) does NOT prevent the
+	 * later `restoreManagedTasks()` call from actually seeding.
+	 */
+	private seeded = false
 
 	private providerRef: WeakRef<ShoferProvider>
 
@@ -682,7 +695,8 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	 * rehydrated tasks. Calling more than once is a no-op after the first call.
 	 */
 	async restoreManagedTasks(historyItems: HistoryItem[]): Promise<void> {
-		if (this.restored) return
+		if (this.seeded) return
+		this.seeded = true
 		this.restored = true
 
 		for (const item of historyItems) {
@@ -706,21 +720,19 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	}
 
 	/**
-		* Mark the manager as restored without loading any history items.
-		*
-		* This is the early-bird counterpart to `restoreManagedTasks`: called
-		* before the async `initializeTaskHistoryStore` settles so that early
-		* `registerBackgroundTask` calls (e.g. from WorkflowTask spawning an
-		* agent child in the hot constructor path) don't throw.
-		*
-		* `restoreManagedTasks` (which eventually calls this with real history
-		* items) is idempotent — the `this.restored` guard ensures it seeds
-		* exactly once — so calling this first is always safe.
-		*/
+	 * Mark the manager as restored without loading any history items.
+	 *
+	 * This is the early-bird counterpart to `restoreManagedTasks`: called
+	 * before the async `initializeTaskHistoryStore` settles so that early
+	 * `registerBackgroundTask` calls (e.g. from WorkflowTask spawning an
+	 * agent child in the hot constructor path) don't throw.
+	 *
+	 * Uses the `restored` flag (gated by `assertRestored()`) only — does
+	 * NOT touch `seeded`, so the later `restoreManagedTasks()` call will
+	 * still seed `managedTasks` from persisted history.
+	 */
 	public ensureRestored(): void {
-		if (!this.restored) {
-			this.restored = true
-		}
+		this.restored = true
 	}
 
 	private assertRestored(method: string): void {
