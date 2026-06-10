@@ -486,7 +486,7 @@ List background tasks. With `scope="children"` (default), lists all background c
 
 ### `send_message_to_task`
 
-Send a message to a peer task sharing the same root task. Both participants must be background tasks (`is_background=true`). Discover the target's task ID via `list_background_tasks(scope="peers")`.
+Send a message to a peer task sharing the same root task. The caller and target must share a root task and have each other in their `knownPeers` set. Discover the target's task ID via `list_background_tasks(scope="peers")`.
 
 **Async mode (`wait=false`, default):**
 

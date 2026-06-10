@@ -1,6 +1,6 @@
 import type OpenAI from "openai"
 
-const SEND_MESSAGE_TO_TASK_DESCRIPTION = `Send a message to a peer task sharing the same root task. Two modes: async (fire-and-forget, wait=false) and sync (blocking with mandatory timeout, wait=true). Both the caller and the target must be background tasks (spawned with is_background=true). Discover the target's task ID via list_background_tasks(scope="peers").
+const SEND_MESSAGE_TO_TASK_DESCRIPTION = `Send a message to a peer task sharing the same root task. Two modes: async (fire-and-forget, wait=false) and sync (blocking with mandatory timeout, wait=true). The caller and the target must share a root task and have each other in their knownPeers set. Discover the target's task ID via list_background_tasks(scope="peers").
 
 ASYNC MODE (wait=false, default):
 - The tool returns immediately. No blocking.

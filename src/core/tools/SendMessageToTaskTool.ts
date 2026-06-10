@@ -41,16 +41,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				return
 			}
 
-			// Both participants must be background tasks.
-			if (!task.isBackgroundTask) {
-				pushToolResult(
-					formatResponse.toolError(
-						"Peer messaging requires the caller to be a background task (is_background=true).",
-					),
-				)
-				return
-			}
-
 			const provider = task.providerRef.deref()
 			if (!provider) {
 				pushToolResult(formatResponse.toolError("Provider reference lost"))
@@ -72,14 +62,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					return
 				}
 			} else {
-				if (!targetInstance.isBackgroundTask) {
-					pushToolResult(
-						formatResponse.toolError(
-							`Peer messaging requires the target task ${task_id} to be a background task.`,
-						),
-					)
-					return
-				}
 				if (targetInstance.rootTaskId !== task.rootTaskId) {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
 					return
