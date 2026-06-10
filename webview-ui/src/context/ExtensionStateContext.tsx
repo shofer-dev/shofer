@@ -218,21 +218,6 @@ export const mergeExtensionState = (prevState: ExtensionState, newState: Partial
 		currentTaskItem: newRest.currentTaskItem ?? undefined,
 	}
 
-	// Protect shoferMessages from stale state pushes using sequence numbering.
-	// Multiple async event sources (cloud auth, settings, task streaming) can trigger
-	// concurrent state pushes. If a stale push arrives after a newer one, its shoferMessages
-	// would overwrite the newer messages. The sequence number prevents this by only applying
-	// shoferMessages when the incoming seq is strictly greater than the last applied seq.
-	if (
-		newState.shoferMessagesSeq !== undefined &&
-		prevState.shoferMessagesSeq !== undefined &&
-		newState.shoferMessagesSeq <= prevState.shoferMessagesSeq &&
-		newState.shoferMessages !== undefined
-	) {
-		rest.shoferMessages = prevState.shoferMessages
-		rest.shoferMessagesSeq = prevState.shoferMessagesSeq
-	}
-
 	// Note that we completely replace the previous apiConfiguration and customSupportPrompts objects
 	// with new ones since the state that is broadcast is the entire objects so merging is not necessary.
 	return {
@@ -345,19 +330,14 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [extensionRouterModels, setExtensionRouterModels] = useState<RouterModels | undefined>(undefined)
 	const [vsCodeLmModels, setVsCodeLmModels] = useState<VsCodeLmChatInfo[]>([])
 	const [marketplaceItems, setMarketplaceItems] = useState<any[]>([])
-	const [alwaysAllowFollowupQuestions, setAlwaysAllowFollowupQuestions] = useState(false) // Add state for follow-up questions auto-approve
-	const [followupAutoApproveTimeoutMs, setFollowupAutoApproveTimeoutMs] = useState<number | undefined>(undefined) // Will be set from global settings
 	const [marketplaceInstalledMetadata, setMarketplaceInstalledMetadata] = useState<MarketplaceInstalledMetadata>({
 		project: {},
 		global: {},
 	})
 	const [skills, setSkills] = useState<SkillMetadata[]>([])
 	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
-	const [includeTaskHistoryInEnhance, setIncludeTaskHistoryInEnhance] = useState(true)
 	const [pendingWorktreeDir, setPendingWorktreeDir] = useState<string | null>(null)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
-	const [includeCurrentTime, setIncludeCurrentTime] = useState(true)
-	const [includeCurrentCost, setIncludeCurrentCost] = useState(true)
 
 	const setListApiConfigMeta = useCallback(
 		(value: ProviderSettingsEntry[]) => setState((prevState) => ({ ...prevState, listApiConfigMeta: value })),
@@ -378,8 +358,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		(event: MessageEvent) => {
 			const message: ExtensionMessage = event.data
 			switch (message.type) {
-				case "state": {
-					const newState = message.state ?? {}
+				case "stateInit": {
+					const newState = message.state ?? ({} as Partial<ExtensionState>)
 					// Snapshot-and-set the hydration flag synchronously so the merge
 					// updater (which may be batched/deferred) reads a stable value.
 					const alreadyHydrated = hasHydratedRef.current
@@ -388,9 +368,11 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 						const prevProvider = state.apiConfiguration?.apiProvider
 						const nextProvider = newState.apiConfiguration?.apiProvider
 						if (prevProvider !== nextProvider) {
-							console.log(
-								`[ExtensionStateContext] state push overwriting apiProvider: "${prevProvider}" -> "${nextProvider}"`,
-							)
+							vscode.postMessage({
+								type: "log",
+								level: "info",
+								message: `[ExtensionStateContext] stateInit apiProvider: "${prevProvider}" -> "${nextProvider}"`,
+							} as any)
 						}
 					}
 					setState((prevState) => {
@@ -408,33 +390,19 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					})
 					setShowWelcome(!checkExistKey(newState.apiConfiguration))
 					setDidHydrateState(true)
-					// Update alwaysAllowFollowupQuestions if present in state message
-					if ((newState as any).alwaysAllowFollowupQuestions !== undefined) {
-						setAlwaysAllowFollowupQuestions((newState as any).alwaysAllowFollowupQuestions)
+					break
+				}
+				case "configUpdate": {
+					const key = message.key as string
+					const value = message.value
+					if (key) {
+						setState((prevState) => ({ ...prevState, [key]: value }))
 					}
-					// Update followupAutoApproveTimeoutMs if present in state message
-					if ((newState as any).followupAutoApproveTimeoutMs !== undefined) {
-						setFollowupAutoApproveTimeoutMs((newState as any).followupAutoApproveTimeoutMs)
-					}
-					// Update includeTaskHistoryInEnhance if present in state message
-					if ((newState as any).includeTaskHistoryInEnhance !== undefined) {
-						setIncludeTaskHistoryInEnhance((newState as any).includeTaskHistoryInEnhance)
-					}
-					// Update includeCurrentTime if present in state message
-					if ((newState as any).includeCurrentTime !== undefined) {
-						setIncludeCurrentTime((newState as any).includeCurrentTime)
-					}
-					// Update includeCurrentCost if present in state message
-					if ((newState as any).includeCurrentCost !== undefined) {
-						setIncludeCurrentCost((newState as any).includeCurrentCost)
-					}
-					// Handle marketplace data if present in state message
-					if (newState.marketplaceItems !== undefined) {
-						setMarketplaceItems(newState.marketplaceItems)
-					}
-					if (newState.marketplaceInstalledMetadata !== undefined) {
-						setMarketplaceInstalledMetadata(newState.marketplaceInstalledMetadata)
-					}
+					break
+				}
+				case "taskStateUpdate": {
+					const ts = message.taskStateUpdates ?? {}
+					setState((prevState) => ({ ...prevState, ...ts }))
 					break
 				}
 				case "action": {
@@ -517,10 +485,12 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					break
 				}
 				case "skills": {
-					console.log(
-						"[ExtensionStateContext] received 'skills' message. loadedSkills:",
-						message.loadedSkills,
-					)
+					// Route diagnostic to extension host via IPC per Output Channel Logging Rule.
+					vscode.postMessage({
+						type: "log",
+						level: "info",
+						message: "[ExtensionStateContext] received 'skills' message. loadedSkills:",
+					} as any)
 					if (message.skills) {
 						setSkills(message.skills)
 					}
@@ -650,7 +620,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	}, [handleMessage])
 
 	// Only send webviewDidLaunch once on mount. Re-sending it causes the
-	// extension host to push a full state snapshot (postStateToWebview),
+	// extension host to push a full state snapshot (postInitState),
 	// which overwrites any unsaved local apiConfiguration edits — including
 	// provider selections made in the WelcomeView dropdown.
 	useEffect(() => {
@@ -696,8 +666,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		marketplaceItems,
 		marketplaceInstalledMetadata,
 		profileThresholds: state.profileThresholds ?? {},
-		alwaysAllowFollowupQuestions,
-		followupAutoApproveTimeoutMs,
+		alwaysAllowFollowupQuestions: state.alwaysAllowFollowupQuestions ?? false,
+		followupAutoApproveTimeoutMs: state.followupAutoApproveTimeoutMs,
 		taskSyncEnabled: state.taskSyncEnabled,
 		setExperimentEnabled: (id, enabled) =>
 			setState((prevState) => ({ ...prevState, experiments: { ...prevState.experiments, [id]: enabled } })),
@@ -716,7 +686,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			setState((prevState) => ({ ...prevState, alwaysAllowUncategorized: value })),
 		setAlwaysAllowModeSwitch: (value) => setState((prevState) => ({ ...prevState, alwaysAllowModeSwitch: value })),
 		setAlwaysAllowSubtasks: (value) => setState((prevState) => ({ ...prevState, alwaysAllowSubtasks: value })),
-		setAlwaysAllowFollowupQuestions,
+		setAlwaysAllowFollowupQuestions: (value) =>
+			setState((prevState) => ({ ...prevState, alwaysAllowFollowupQuestions: value })),
 		setFollowupAutoApproveTimeoutMs: (value) =>
 			setState((prevState) => ({ ...prevState, followupAutoApproveTimeoutMs: value })),
 		setShowAnnouncement: (value) => setState((prevState) => ({ ...prevState, shouldShowAnnouncement: value })),
@@ -793,14 +764,15 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setMaxDiagnosticMessages: (value) => {
 			setState((prevState) => ({ ...prevState, maxDiagnosticMessages: value }))
 		},
-		includeTaskHistoryInEnhance,
-		setIncludeTaskHistoryInEnhance,
+		includeTaskHistoryInEnhance: state.includeTaskHistoryInEnhance ?? true,
+		setIncludeTaskHistoryInEnhance: (value) =>
+			setState((prevState) => ({ ...prevState, includeTaskHistoryInEnhance: value })),
 		pendingWorktreeDir,
 		setPendingWorktreeDir,
-		includeCurrentTime,
-		setIncludeCurrentTime,
-		includeCurrentCost,
-		setIncludeCurrentCost,
+		includeCurrentTime: state.includeCurrentTime ?? true,
+		setIncludeCurrentTime: (value) => setState((prevState) => ({ ...prevState, includeCurrentTime: value })),
+		includeCurrentCost: state.includeCurrentCost ?? true,
+		setIncludeCurrentCost: (value) => setState((prevState) => ({ ...prevState, includeCurrentCost: value })),
 		skills,
 		loadedSkills,
 		// Parallel task management
