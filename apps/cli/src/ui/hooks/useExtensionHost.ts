@@ -12,7 +12,7 @@ import { useCLIStore } from "../store.js"
 const TASK_HISTORY_WAIT_TIMEOUT_MS = 2_000
 
 function extractTaskHistory(message: ExtensionMessage): HistoryItem[] | undefined {
-	if (message.type === "state" && Array.isArray(message.state?.taskHistory)) {
+	if (message.type === "stateInit" && Array.isArray(message.state?.taskHistory)) {
 		return message.state.taskHistory as HistoryItem[]
 	}
 

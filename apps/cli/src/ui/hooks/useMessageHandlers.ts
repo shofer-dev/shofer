@@ -301,7 +301,7 @@ export function useMessageHandlers({ nonInteractive }: UseMessageHandlersOptions
 	 */
 	const handleExtensionMessage = useCallback(
 		(msg: ExtensionMessage) => {
-			if (msg.type === "state") {
+			if (msg.type === "stateInit") {
 				const state = msg.state
 
 				if (!state) {

@@ -11,7 +11,7 @@
  * ```
  *
  * The processor handles different message types:
- * - "state": Full state update from extension
+ * - "stateInit": Full state snapshot from extension
  * - "messageUpdated": Single message update
  * - "action": UI action triggers
  * - "invoke": Command invocations
@@ -105,7 +105,7 @@ export class MessageProcessor {
 
 		try {
 			switch (message.type) {
-				case "state":
+				case "stateInit":
 					this.handleStateMessage(message)
 					break
 
@@ -152,7 +152,7 @@ export class MessageProcessor {
 	// ===========================================================================
 
 	/**
-	 * Handle a "state" message - full state update from extension.
+	 * Handle a "stateInit" message — full state snapshot from extension.
 	 *
 	 * This is the most important message type for state detection.
 	 * It contains the complete shoferMessages array which is the source of truth.

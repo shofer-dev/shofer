@@ -360,7 +360,7 @@ describe("ExtensionHost", () => {
 
 			// Simulate extension message.
 			host.emit("extensionWebviewMessage", {
-				type: "state",
+				type: "stateInit",
 				state: { shoferMessages: [] },
 			} as unknown as ExtensionMessage)
 

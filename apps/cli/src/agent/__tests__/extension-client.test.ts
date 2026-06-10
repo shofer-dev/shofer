@@ -15,8 +15,8 @@ function createMessage(overrides: Partial<ShoferMessage>): ShoferMessage {
 	return { ts: Date.now() + Math.random() * 1000, type: "say", ...overrides }
 }
 
-function createStateMessage(messages: ShoferMessage[], mode?: string): ExtensionMessage {
-	return { type: "state", state: { shoferMessages: messages, mode } } as ExtensionMessage
+function createStateMessage(messages: ShoferMessage[], mode = "code"): ExtensionMessage {
+	return { type: "stateInit", state: { shoferMessages: messages, mode } } as ExtensionMessage
 }
 
 describe("detectAgentState", () => {
@@ -792,18 +792,18 @@ describe("Edge Cases", () => {
 	})
 
 	describe("State message edge cases", () => {
-		it("should handle state message with empty shoferMessages", () => {
+		it("should handle stateInit message with empty shoferMessages", () => {
 			const { client } = createMockClient()
-			client.handleMessage({ type: "state", state: { shoferMessages: [] } } as unknown as ExtensionMessage)
+			client.handleMessage({ type: "stateInit", state: { shoferMessages: [] } } as unknown as ExtensionMessage)
 			expect(client.getCurrentState()).toBe(AgentLoopState.NO_TASK)
 			expect(client.isInitialized()).toBe(true)
 		})
 
-		it("should handle state message with missing shoferMessages", () => {
+		it("should handle stateInit message with missing shoferMessages", () => {
 			const { client } = createMockClient()
 
 			client.handleMessage({
-				type: "state",
+				type: "stateInit",
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				state: {} as any,
 			})
@@ -812,11 +812,11 @@ describe("Edge Cases", () => {
 			expect(client.getCurrentState()).toBe(AgentLoopState.NO_TASK)
 		})
 
-		it("should handle state message with missing state field", () => {
+		it("should handle stateInit message with missing state field", () => {
 			const { client } = createMockClient()
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			client.handleMessage({ type: "state" } as any)
+			client.handleMessage({ type: "stateInit" } as any)
 
 			// Should not crash
 			expect(client.getCurrentState()).toBe(AgentLoopState.NO_TASK)
