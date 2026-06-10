@@ -369,10 +369,9 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 						const nextProvider = newState.apiConfiguration?.apiProvider
 						if (prevProvider !== nextProvider) {
 							vscode.postMessage({
-								type: "log",
-								level: "info",
-								message: `[ExtensionStateContext] stateInit apiProvider: "${prevProvider}" -> "${nextProvider}"`,
-							} as any)
+								type: "webviewLog",
+								text: `[ExtensionStateContext] stateInit apiProvider: "${prevProvider}" -> "${nextProvider}"`,
+							})
 						}
 					}
 					setState((prevState) => {
@@ -446,9 +445,9 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 							return { ...prevState, shoferMessages: newShoferMessages }
 						}
 						// Log a warning if messageUpdated arrives for a timestamp not in the
-						// frontend's shoferMessages. With the seq guard and cloud event isolation
-						// (layers 1+2), this should not happen under normal conditions. If it
-						// does, it signals a state synchronization issue worth investigating.
+						// frontend's shoferMessages. This should not happen under normal
+						// conditions; if it does, it signals a state synchronization issue
+						// worth investigating.
 						console.warn(
 							`[messageUpdated] Received update for unknown message ts=${shoferMessage.ts}, dropping. ` +
 								`Frontend has ${prevState.shoferMessages.length} messages.`,
@@ -487,10 +486,9 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				case "skills": {
 					// Route diagnostic to extension host via IPC per Output Channel Logging Rule.
 					vscode.postMessage({
-						type: "log",
-						level: "info",
-						message: "[ExtensionStateContext] received 'skills' message. loadedSkills:",
-					} as any)
+						type: "webviewLog",
+						text: `[ExtensionStateContext] received 'skills' message. loadedSkills: ${JSON.stringify(message.loadedSkills)}`,
+					})
 					if (message.skills) {
 						setSkills(message.skills)
 					}

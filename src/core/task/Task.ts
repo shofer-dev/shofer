@@ -4215,10 +4215,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Must flush synchronously — the API call that follows reads
 			// on-disk state and depends on this save being visible.
 			await this._flushSaveShoferMessages()
-			// §4.2 + H9: Skinny push (omits shoferMessages + taskHistory). Per-message
-			// deltas (`shoferMessageAppended` / `messageUpdated`) keep the webview's
-			// shoferMessages array in sync; `taskHistoryItemUpdated` covers history.
-			// §4.2 + H9: Skinny push removed — per-message deltas
+			// Skinny push removed — per-message deltas
 			// (`shoferMessageAppended` / `messageUpdated`) keep the webview's
 			// shoferMessages array in sync; `taskHistoryItemUpdated` covers history.
 			try {
@@ -5116,10 +5113,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 
 				await this._debouncedSaveShoferMessages()
-				// §4.2 + H9: Skinny push (omits shoferMessages + taskHistory). Per-message
-				// deltas keep shoferMessages in sync; taskHistoryItemUpdated covers history.
-				// Only push when this task is the one the user sees (see
-				// addToShoferMessages for dual-check rationale).
+				// Skinny push removed — per-message deltas keep shoferMessages
+				// in sync; taskHistoryItemUpdated covers history.
 
 				// No legacy text-stream tool parser state to reset.
 
