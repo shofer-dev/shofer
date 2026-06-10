@@ -11,6 +11,7 @@ flow "escalate-if" (limit: "number") {
     stake do_work(
       value: limit
     ) -> @out
+      output: { result: "string" }
 
     escalate @Human reason: "Value exceeded the limit." if limit > 5
 

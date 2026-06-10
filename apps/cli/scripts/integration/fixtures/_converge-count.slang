@@ -8,6 +8,7 @@ flow "converge-count" (task: "string") {
     mode: "code"
     role: "Fast worker."
     stake do_fast(task: task) -> @out
+      output: { result: "string" }
     commit
   }
 

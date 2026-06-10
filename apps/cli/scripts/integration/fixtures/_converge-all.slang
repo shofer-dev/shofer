@@ -8,6 +8,7 @@ flow "converge-all" (task: "string") {
     mode: "code"
     role: "Worker A."
     stake do_a(task: task) -> @out
+      output: { result: "string" }
     commit
   }
 
@@ -15,6 +16,7 @@ flow "converge-all" (task: "string") {
     mode: "code"
     role: "Worker B."
     stake do_b(task: task) -> @out
+      output: { result: "string" }
     commit
   }
 

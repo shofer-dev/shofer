@@ -12,6 +12,7 @@ flow "tools-meta" (topic: "string") {
     role: "Agent with restricted tool groups (parsed, not yet wired)."
 
     stake analyze(topic: topic) -> @out
+      output: { result: "string" }
 
     commit
   }

@@ -11,10 +11,12 @@ flow "if-condition" (flag: "boolean") {
     stake do_work(
       instructions: "Always run — no guard."
     ) -> @out
+      output: { result: "string" }
 
     stake guarded_work(
       instructions: "Only run when flag_input is true."
     ) -> @out if flag
+      output: { result: "string" }
 
     commit if flag
   }

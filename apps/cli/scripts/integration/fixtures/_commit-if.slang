@@ -11,6 +11,7 @@ flow "commit-if" (flag: "boolean") {
     stake do_work(
       instructions: "Do the work."
     ) -> @out
+      output: { result: "string" }
 
     let result = true
 

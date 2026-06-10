@@ -11,6 +11,7 @@ flow "await-human" (topic: "string") {
     stake report(
       topic: topic
     ) -> @out
+      output: { result: "string" }
 
     escalate @Human reason: "Please review the report. Type 'ACK' to approve."
 

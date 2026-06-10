@@ -18,6 +18,7 @@ flow "budget-tokens" (task: "string") {
     stake do_work(
       instructions: "Do some work and report back."
     ) -> @out
+      output: { result: "string" }
 
     commit
   }

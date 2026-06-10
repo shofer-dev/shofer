@@ -235,9 +235,11 @@ const BUILT_IN_SCENARIOS: MockScenario[] = [
 	// _list-arg — match on unique output contract field { result: string, tags_used: number }.
 	{ match: "- result: string", response: '{"result":"processed","tags_used":2}' },
 
-	// Catch-all for any Execute: stake with no output contract (all other flows).
-	// Placed last so specific patterns above always shadow it.
-	{ match: "Execute:", response: "step completed" },
+	// Catch-all for any Execute: stake. Returns a generic JSON object
+	// matching the `output: { result: "string" }` contract used by most
+	// conformance fixtures. Specific patterns above shadow this for
+	// fixtures with unique field names.
+	{ match: "Execute:", response: '{"result":"step completed"}' },
 ]
 
 // ── Scenario loading ───────────────────────────────────────────────

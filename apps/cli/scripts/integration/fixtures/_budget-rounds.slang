@@ -11,6 +11,7 @@ flow "budget-rounds" (task: "string") {
     stake do_work(
       instructions: "What is 1+1? Reply with just the number."
     ) -> @out
+      output: { result: "string" }
 
     commit
   }
