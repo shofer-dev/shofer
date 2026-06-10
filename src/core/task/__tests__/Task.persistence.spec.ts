@@ -381,6 +381,8 @@ describe("Task persistence", () => {
 				task: "test task",
 				startTask: false,
 			})
+			// H12: force compaction so saveTaskMessages fires below threshold.
+			;(task as any)._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
 
 			const result = await (task as Record<string, any>).saveShoferMessages()
 			expect(result).toBe(true)
@@ -395,6 +397,8 @@ describe("Task persistence", () => {
 				task: "test task",
 				startTask: false,
 			})
+			// H12: force compaction so saveTaskMessages fires below threshold.
+			;(task as any)._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
 
 			const result = await (task as Record<string, any>).saveShoferMessages()
 			expect(result).toBe(false)
@@ -409,6 +413,8 @@ describe("Task persistence", () => {
 				task: "test task",
 				startTask: false,
 			})
+			// H12: force compaction so saveTaskMessages fires below threshold.
+			;(task as any)._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
 
 			task.shoferMessages.push({
 				type: "say",
