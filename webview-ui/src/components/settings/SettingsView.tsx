@@ -163,6 +163,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	// so the user can change the default without an immediate side-effect.
 	const [pendingDefaultConfigName, setPendingDefaultConfigName] = useState<string>(currentApiConfigName || "")
 
+	// Tracks whether a Save that includes a pendingDefaultConfigName change is
+	// in flight.  While true the re-sync useEffect below skips reverting the
+	// buffer to the stale currentApiConfigName, suppressing the new→old→new
+	// flicker between setChangeDetected(false) and the host round-trip.
+	const savingDefault = useRef(false)
+
 	const _prevApiConfigName = useRef(currentApiConfigName)
 	const confirmDialogHandler = useRef<() => void>()
 	// Imperative handle to ModesView so the Save / Discard flow can commit or drop
@@ -493,6 +499,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// button applies the Default Configuration dropdown selection.
 			// This is the ONLY writer of currentApiConfigName from the Settings view.
 			if (pendingDefaultConfigName && pendingDefaultConfigName !== currentApiConfigName) {
+				savingDefault.current = true
 				vscode.postMessage({ type: "setDefaultApiConfiguration", text: pendingDefaultConfigName })
 			}
 			vscode.postMessage({ type: "telemetrySetting", text: telemetrySetting })
@@ -544,9 +551,16 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	)
 
 	// Re-sync the default-config buffer when the host pushes a new value
-	// (e.g. another window changed it). Only sync when the form is NOT dirty
-	// so we don't clobber a pending user selection.
+	// (e.g. another window changed it, or the host confirmed our Save).
+	// Only sync when the form is NOT dirty so we don't clobber a pending
+	// user selection.  When a Save that changed the default is in flight
+	// (savingDefault ref) we skip the sync — the stale currentApiConfigName
+	// would flicker the dropdown before the host round-trip confirms it.
 	useEffect(() => {
+		if (savingDefault.current) {
+			savingDefault.current = false
+			return
+		}
 		if (!isChangeDetected && currentApiConfigName && currentApiConfigName !== pendingDefaultConfigName) {
 			setPendingDefaultConfigName(currentApiConfigName)
 		}

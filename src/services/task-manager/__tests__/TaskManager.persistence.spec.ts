@@ -205,4 +205,23 @@ describe("TaskManager persistence", () => {
 			await expect(manager.waitForPendingPersist("nonexistent")).resolves.toBeUndefined()
 		})
 	})
+	it("seeds managedTasks after ensureRestored (restored/seeded flag split)", async () => {
+		const { manager } = buildManager()
+
+		// Simulate the ShoferProvider constructor: ensureRestored() is called
+		// synchronously so early-bird registerBackgroundTask calls don't throw.
+		manager.ensureRestored()
+
+		// Later, initializeTaskHistoryStore settles and calls
+		// restoreManagedTasks with real persisted history.  This MUST
+		// actually seed — the seeded flag is separate from restored.
+		await manager.restoreManagedTasks([
+			makeHistoryItem({ id: "t-restored", taskState: { lifecycle: "completed", rating: "excellent" } }),
+		])
+
+		expect(manager.getTaskState("t-restored")).toEqual({
+			lifecycle: "completed",
+			rating: "excellent",
+		})
+	})
 })
