@@ -962,10 +962,17 @@ export class WorkflowTask extends Task {
 		}
 
 		const startTime = Date.now()
+		// Bound the per-stake wait by the remaining flow time budget so
+		// the flow's `time(N)` ceiling is authoritative — a hung agent
+		// fails fast instead of blocking for AGENT_RESULT_TIMEOUT_MS.
+		const timeoutMs =
+			this.loopDeadline > 0
+				? Math.max(0, Math.min(AGENT_RESULT_TIMEOUT_MS, this.loopDeadline - Date.now()))
+				: AGENT_RESULT_TIMEOUT_MS
 		await waitForTasksEventDriven(provider, {
 			handles,
 			conditionMet: () => [...handles.keys()].every((id) => isTerminal(id)),
-			timeoutMs: AGENT_RESULT_TIMEOUT_MS,
+			timeoutMs,
 			abortSignal: this.abortSignal,
 			onNeedsParentInput: async (childTaskId: string) => {
 				// WI4: Relay the child's question to the user, then deliver
