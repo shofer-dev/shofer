@@ -18,6 +18,7 @@ describe("webviewMessageHandler - lockApiConfigAcrossModes", () => {
 		}
 		postMessageToWebview: ReturnType<typeof vi.fn>
 		getCurrentTask: ReturnType<typeof vi.fn>
+		postConfigUpdate: ReturnType<typeof vi.fn>
 	}
 
 	beforeEach(() => {
@@ -41,6 +42,7 @@ describe("webviewMessageHandler - lockApiConfigAcrossModes", () => {
 			},
 			postMessageToWebview: vi.fn(),
 			getCurrentTask: vi.fn(),
+			postConfigUpdate: vi.fn(),
 		}
 	})
 
@@ -52,7 +54,7 @@ describe("webviewMessageHandler - lockApiConfigAcrossModes", () => {
 
 		expect(mockProvider.context.workspaceState.update).toHaveBeenCalledWith("lockApiConfigAcrossModes", true)
 		expect(mockProvider.providerSettingsManager.setModeConfig).not.toHaveBeenCalled()
-		expect(mockProvider.postInitState).toHaveBeenCalled()
+		expect(mockProvider.postConfigUpdate).toHaveBeenCalledWith("lockApiConfigAcrossModes", true)
 	})
 
 	it("sets lockApiConfigAcrossModes to false without applying to all modes", async () => {
@@ -63,6 +65,6 @@ describe("webviewMessageHandler - lockApiConfigAcrossModes", () => {
 
 		expect(mockProvider.context.workspaceState.update).toHaveBeenCalledWith("lockApiConfigAcrossModes", false)
 		expect(mockProvider.providerSettingsManager.setModeConfig).not.toHaveBeenCalled()
-		expect(mockProvider.postInitState).toHaveBeenCalled()
+		expect(mockProvider.postConfigUpdate).toHaveBeenCalledWith("lockApiConfigAcrossModes", false)
 	})
 })
