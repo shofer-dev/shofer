@@ -702,14 +702,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private static readonly SAVE_DEBOUNCE_INTERVAL_MS = 250
 	private _debouncedSaveShoferMessages: ReturnType<typeof debounce>
 
+	// H12 — Threshold-triggered JSONL compaction.
+	// Track how many messages have been appended (or updated, which
+	// re-appends) since the last full compaction. The debounced save path
+	// skips the O(n) serialize+write when the counter is below the
+	// threshold — appends already made the log durable; compaction is
+	// only a log-size bound, not a correctness requirement.
+	static readonly COMPACTION_APPEND_THRESHOLD = 100
+	private _appendedSinceCompaction = 0
+
 	// H2.bis — Incremental token-usage caching.
 	// tokenMetadata() re-walks the entire message array on every save to
 	// recompute token usage.  Most saves happen during streaming where only
 	// api_req_started / condense_context messages carry token data.  Track
 	// the count of those messages and reuse the cached TokenUsage when
 	// unchanged — avoids an O(n) walk per save.
+	// H11: _tokenBearingMessageCount is now maintained incrementally
+	// (updated at the few mutation sites) so the validity check in
+	// _refreshTaskMetadata is O(1) — no more O(n) walk per save.
 	private _cachedTokenUsage: import("@shofer/types").TokenUsage | undefined
-	private _tokenBearingMessageCount = -1
+	private _tokenBearingMessageCount = 0
 
 	// Initial execution state for the task's history item (set at creation time to avoid race conditions)
 	private readonly initialState?: TaskState
@@ -1787,6 +1799,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * Used at LLM request-build time: after sliding-window truncation has
 	 * decided which messages survive, expand only those. Messages dropped
 	 * by truncation pay neither the disk read nor the context-tokens cost.
+	 *
+	 * H14: BlobStore.resolveRefs maintains a cross-call sha256 → content
+	 * cache so repeated resolutions of the same blob are O(1) in-memory
+	 * lookups rather than repeated disk reads.
 	 */
 	public async prepareMessagesForApi(messages: Anthropic.MessageParam[]): Promise<Anthropic.MessageParam[]> {
 		let store: BlobStore
@@ -1857,6 +1873,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskId: this.taskId,
 				globalStoragePath: this.globalStoragePath,
 			})
+			// H12: track appended lines for threshold-triggered compaction.
+			this._appendedSinceCompaction++
 		} catch (error) {
 			taskLog.error("Failed to append Shofer message:", error)
 		}
@@ -1884,6 +1902,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		) {
 			await provider.postMessageToWebview({ type: "shoferMessageAppended", shoferMessage: message })
 		}
+		// H11: maintain the token-bearing count incrementally so
+		// _refreshTaskMetadata can skip the O(n) _countTokenBearingMessages walk.
+		if (this._isTokenBearingMessage(message)) {
+			this._tokenBearingMessageCount++
+		}
 		this.emit(ShoferEventName.Message, { action: "created", message })
 		await this._debouncedSaveShoferMessages()
 	}
@@ -1892,8 +1915,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.shoferMessages = newMessages
 		// H2.bis: Invalidate the token-usage cache since the entire
 		// message array has been replaced (preload / restore path).
+		// H11: recount from scratch (acceptable — overwrite is O(n) compaction).
 		this._cachedTokenUsage = undefined
-		this._tokenBearingMessageCount = -1
+		this._tokenBearingMessageCount = this._countTokenBearingMessages()
 		this._debouncedSaveShoferMessages.cancel() // prevent trailing fire of stale state
 		restoreTodoListForTask(this)
 		await this.saveShoferMessages()
@@ -1924,8 +1948,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskId: this.taskId,
 				globalStoragePath: this.globalStoragePath,
 			})
+			// H12: re-appending a mutated message counts as an append.
+			this._appendedSinceCompaction++
 		} catch (error) {
 			taskLog.error("Failed to append updated Shofer message:", error)
+		}
+		// H11: a partial→final api_req_started transition flips text from empty
+		// to non-empty — this is a new token-bearing message. Check the prior
+		// state by locating the existing message with the same ts.
+		if (this._isTokenBearingMessage(message)) {
+			const existing = this.shoferMessages.find((m) => m.ts === message.ts && m !== message)
+			if (!existing || !this._isTokenBearingMessage(existing)) {
+				this._tokenBearingMessageCount++
+			}
 		}
 		this.emit(ShoferEventName.Message, { action: "updated", message })
 	}
@@ -1936,19 +1971,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async _saveShoferMessagesImpl(): Promise<boolean> {
 		try {
-			// §4.1: serialize synchronously (H6 snapshot) and atomically replace
-			// the JSONL log. This is the compaction path — called at turn
-			// boundaries and from `overwriteShoferMessages`. Streaming updates
-			// do NOT go through here; they append via `appendTaskMessage` at
-			// the `addToShoferMessages` / `updateShoferMessage` call sites.
-			const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
-			const serialized = serializeJsonLines(this.shoferMessages)
-			await saveTaskMessages({
-				messages: this.shoferMessages,
-				serialized,
-				taskId: this.taskId,
-				globalStoragePath: this.globalStoragePath,
-			})
+			// §4.1 + H12: serialize synchronously (H6 snapshot) and atomically
+			// replace the JSONL log. The append log is already durable; full
+			// rewrites are only a log-size bound. Skip compaction when the
+			// append count is below threshold — the metadata refresh is still
+			// needed (debounced save fires for token-usage updates), but the
+			// O(n) serialize+write can be deferred.
+			const shouldCompact = this._appendedSinceCompaction >= Task.COMPACTION_APPEND_THRESHOLD
+			if (shouldCompact) {
+				const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
+				const serialized = serializeJsonLines(this.shoferMessages)
+				await saveTaskMessages({
+					messages: this.shoferMessages,
+					serialized,
+					taskId: this.taskId,
+					globalStoragePath: this.globalStoragePath,
+				})
+				this._appendedSinceCompaction = 0
+			}
 
 			return await this._refreshTaskMetadata()
 		} catch (error) {
@@ -1981,11 +2021,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await this.taskApiConfigReady
 			}
 
-			// H2.bis: Skip the O(n) token-usage walk when no token-bearing
-			// messages (api_req_started, condense_context) have been added
-			// since the last computation.  Pass the cached TokenUsage via
+			// H2.bis + H11: _tokenBearingMessageCount is maintained
+			// incrementally (O(1) to read). Pass the cached TokenUsage via
 			// tokenUsageOverride so taskMetadata reuses it.
-			const tokenBearingCount = this._countTokenBearingMessages()
+			const tokenBearingCount = this._tokenBearingMessageCount
 			const useCachedTokenUsage =
 				this._cachedTokenUsage !== undefined && tokenBearingCount === this._tokenBearingMessageCount
 
@@ -2032,17 +2071,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
-	 * Count messages that carry token-usage data.
-	 * Used by the H2.bis token-usage cache to detect when a recomputation
-	 * is actually needed vs. when the cached value is still valid.
+	 * Returns true when a message carries token-usage data.
+	 * Used by H11's incremental count maintenance and as a fallback oracle
+	 * for recount-on-overwrite.
+	 */
+	private _isTokenBearingMessage(m: ShoferMessage): boolean {
+		return (
+			(m.type === "say" && m.say === "api_req_started" && !!m.text) ||
+			(m.type === "say" && m.say === "condense_context")
+		)
+	}
+
+	/**
+	 * Count messages that carry token-usage data. O(n) — only called at
+	 * overwrite/restore boundaries. Hot-path refreshes use the incrementally
+	 * maintained `_tokenBearingMessageCount` field (H11).
 	 */
 	private _countTokenBearingMessages(): number {
 		let count = 0
 		for (const m of this.shoferMessages) {
-			if (
-				(m.type === "say" && m.say === "api_req_started" && m.text) ||
-				(m.type === "say" && m.say === "condense_context")
-			) {
+			if (this._isTokenBearingMessage(m)) {
 				count++
 			}
 		}
@@ -2060,6 +2108,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private async _flushSaveShoferMessages(): Promise<void> {
 		this._debouncedSaveShoferMessages.cancel()
+		// H12: at turn boundaries, always compact regardless of threshold.
+		// Force a full rewrite so on-disk state settles to compact form at
+		// every observable checkpoint.
+		this._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
 		await this.saveShoferMessages()
 	}
 
@@ -3926,6 +3978,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} catch (error) {
 			taskLog.error("Error reverting diff changes:", error)
 		}
+
+		// H13(b): release the long-lived append file handle for this task's
+		// JSONL log. Best-effort — the fd will be reclaimed by the kernel on
+		// process exit anyway.
+		void import("../task-persistence/taskMessages")
+			.then(({ disposeAppendHandleForTask }) =>
+				disposeAppendHandleForTask({
+					taskId: this.taskId,
+					globalStoragePath: this.globalStoragePath,
+				}),
+			)
+			.catch(() => {
+				// EACCES in test envs, missing task dir, etc. — harmless.
+			})
 	}
 
 	// Task Loop
