@@ -4,6 +4,7 @@ import {
 	validateWorktreePath,
 	getWorktreeCommandWarning,
 	getWorktreeSandboxPrefix,
+	isBinaryCorrectArch,
 } from "../worktreePathGuard"
 
 /**
@@ -163,5 +164,50 @@ describe("getWorktreeSandboxPrefix", () => {
 		// The binary doesn't exist at the resolved path in tests,
 		// so getWorktreeSandboxPrefix should throw.
 		expect(() => getWorktreeSandboxPrefix(task)).toThrow("Worktree shell sandbox unavailable")
+	})
+
+	it("detects valid x86-64 ELF binary", () => {
+		const tmp = require("os").tmpdir()
+		const elf = path.join(tmp, "test-x86.sandbox")
+		// Minimal ELF header: magic (4) + class=2 (64-bit) + padding + machine=0x3e (x86-64)
+		const buf = Buffer.alloc(20)
+		buf[0] = 0x7f
+		buf[1] = 0x45
+		buf[2] = 0x4c
+		buf[3] = 0x46
+		buf[4] = 2 // ELFCLASS64
+		buf.writeUInt16LE(0x3e, 18) // EM_X86_64
+		require("fs").writeFileSync(elf, buf)
+		require("fs").chmodSync(elf, 0o755)
+
+		expect(isBinaryCorrectArch(elf)).toBe(true)
+		require("fs").unlinkSync(elf)
+	})
+
+	it("detects wrong-arch ELF (arm64 on x86-64 host)", () => {
+		const tmp = require("os").tmpdir()
+		const elf = path.join(tmp, "test-arm64.sandbox")
+		const buf = Buffer.alloc(20)
+		buf[0] = 0x7f
+		buf[1] = 0x45
+		buf[2] = 0x4c
+		buf[3] = 0x46
+		buf[4] = 2
+		buf.writeUInt16LE(0xb7, 18) // EM_AARCH64
+		require("fs").writeFileSync(elf, buf)
+		require("fs").chmodSync(elf, 0o755)
+
+		expect(isBinaryCorrectArch(elf)).toBe(false)
+		require("fs").unlinkSync(elf)
+	})
+
+	it("detects non-ELF file", () => {
+		const tmp = require("os").tmpdir()
+		const nonElf = path.join(tmp, "test-not-elf.sandbox")
+		require("fs").writeFileSync(nonElf, "#!/bin/sh\necho hello")
+		require("fs").chmodSync(nonElf, 0o755)
+
+		expect(isBinaryCorrectArch(nonElf)).toBe(false)
+		require("fs").unlinkSync(nonElf)
 	})
 })

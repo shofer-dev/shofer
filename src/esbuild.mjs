@@ -75,20 +75,40 @@ async function main() {
 					// Copy the sandbox wrapper binary so it is available
 					// alongside the extension bundle in dist/.  The binary is
 					// a prebuilt Go artifact at src/sandbox/shofer-sandbox.
-					const sandboxSrc = path.join(srcDir, "sandbox", "shofer-sandbox")
+					// Build the sandbox wrapper from Go source (no prebuilt binary
+					// committed to git).  Requires `go` on $PATH; fails the build
+					// if compilation doesn't succeed so the packaging step never
+					// ships an extension without the binary.
+					const sandboxDir = path.join(srcDir, "sandbox")
+					const sandboxSrc = path.join(sandboxDir, "main.go")
+					const sandboxBin = path.join(sandboxDir, "shofer-sandbox")
 					const sandboxDestDir = path.join(distDir, "sandbox")
-					if (fs.existsSync(sandboxSrc)) {
-						fs.mkdirSync(sandboxDestDir, { recursive: true })
-						fs.copyFileSync(sandboxSrc, path.join(sandboxDestDir, "shofer-sandbox"))
-						fs.chmodSync(path.join(sandboxDestDir, "shofer-sandbox"), 0o755)
-					} else {
-						console.warn(
-							`[esbuild] WARNING: shofer-sandbox binary not found at ${sandboxSrc}. ` +
-								`Worktree-scoped shell commands will fail at runtime — the extension will throw ` +
-								`SandboxUnavailableError for every worktree execute_command. ` +
-								`Build: cd src/sandbox && GOWORK=off CGO_ENABLED=0 go build -o shofer-sandbox .`,
+					const sandboxDest = path.join(sandboxDestDir, "shofer-sandbox")
+
+					try {
+						const { execSync } = await import("node:child_process")
+						execSync("go build -o shofer-sandbox .", {
+							cwd: sandboxDir,
+							env: { ...process.env, GOWORK: "off", CGO_ENABLED: "0" },
+							stdio: "pipe",
+						})
+					} catch (err) {
+						console.error(
+							`[esbuild] ERROR: failed to build shofer-sandbox: ${err.message}`,
 						)
+						process.exit(1)
 					}
+
+					if (!fs.existsSync(sandboxBin)) {
+						console.error(
+							`[esbuild] ERROR: shofer-sandbox not found after build at ${sandboxBin}`,
+						)
+						process.exit(1)
+					}
+
+					fs.mkdirSync(sandboxDestDir, { recursive: true })
+					fs.copyFileSync(sandboxBin, sandboxDest)
+					fs.chmodSync(sandboxDest, 0o755)
 					copyPaths(
 						[
 							["core/webview/slang-render.js", "slang-render.js"],

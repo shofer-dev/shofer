@@ -177,7 +177,13 @@ export function getWorktreeSandboxPrefix(task: Task): string[] | null {
  * matches the current process architecture.  Returns true if the binary
  * is for the correct arch, false otherwise.
  */
-function isBinaryCorrectArch(filePath: string): boolean {
+/**
+ * Reads the ELF header (first 20 bytes) of the given file and checks that its
+ * machine type matches the current process architecture.
+ *
+ * Exported for testing.
+ */
+export function isBinaryCorrectArch(filePath: string): boolean {
 	try {
 		const fd = fs.openSync(filePath, "r")
 		const header = Buffer.alloc(20)
