@@ -136,7 +136,7 @@ export function getWorktreeSandboxPrefix(task: Task): string[] | null {
 		return null
 	}
 
-	return [sandboxBinary, worktreeDir, "--"]
+	return [sandboxBinary, worktreeDir]
 }
 
 /**

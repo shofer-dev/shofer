@@ -174,17 +174,15 @@ func applyLandlock(worktreeDir string) error {
 	}
 	defer unix.Close(int(rulesetFd))
 
-	// Allow writes to worktree + /tmp + /dev.
-	//
-	// Landlock LANDLOCK_RULE_PATH_BENEATH requires a directory fd, so
-	// we must grant /dev (the directory) rather than /dev/null alone.
-	// In containerized deployments DAC+capabilities prevent writes to
-	// block devices, and MAKE_BLOCK/MAKE_CHAR require CAP_MKNOD which
-	// is not granted.
+	// Scope: worktree + /tmp + /dev/null (the device node, not /dev).
+	// /dev/null is a character device — addWritePath detects non-directory
+	// fds and masks down to file-applicable rights (WRITE_FILE, TRUNCATE,
+	// IOCTL_DEV).  This keeps the write surface identical to bwrap
+	// (--dev-bind /dev/null /dev/null).
 	allowedPaths := []string{
 		worktreeDir,
 		"/tmp",
-		"/dev",
+		"/dev/null",
 	}
 
 	for _, p := range allowedPaths {
@@ -202,22 +200,42 @@ func applyLandlock(worktreeDir string) error {
 	return nil
 }
 
-// addWritePath adds a Landlock rule allowing writes to the filesystem subtree
-// rooted at the given path.
+// landlockWriteFileMask is the set of Landlock access rights applicable to
+// non-directory file descriptors (regular files, device nodes).  Directory-
+// only rights (MAKE_*, REMOVE_*, REFER) are excluded — the kernel rejects
+// them with EINVAL when parent_fd is not a directory.
+const landlockWriteFileMask = unix.LANDLOCK_ACCESS_FS_WRITE_FILE |
+	unix.LANDLOCK_ACCESS_FS_TRUNCATE |
+	unix.LANDLOCK_ACCESS_FS_IOCTL_DEV
+
+// addWritePath adds a Landlock rule allowing writes at the given path.
+// If the path is a directory the full writeMask is applied; for files and
+// device nodes the mask is narrowed to file-applicable rights only.
 func addWritePath(rulesetFd int, path string, writeMask uint64) error {
-	dirFd, err := unix.Open(path, unix.O_PATH|unix.O_CLOEXEC, 0)
+	fd, err := unix.Open(path, unix.O_PATH|unix.O_CLOEXEC, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Non-existent paths are silently skipped — they can't be written to anyway.
+			// Non-existent paths are silently skipped.
 			return nil
 		}
 		return err
 	}
-	defer unix.Close(dirFd)
+	defer unix.Close(fd)
+
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
+		return fmt.Errorf("fstat %s: %w", path, err)
+	}
+
+	mask := writeMask
+	if stat.Mode&unix.S_IFDIR == 0 {
+		// Not a directory — only file-applicable rights are valid.
+		mask &= landlockWriteFileMask
+	}
 
 	attr := unix.LandlockPathBeneathAttr{
-		Allowed_access: writeMask,
-		Parent_fd:      int32(dirFd),
+		Allowed_access: mask,
+		Parent_fd:      int32(fd),
 	}
 
 	_, _, errno := unix.Syscall6(
@@ -230,7 +248,7 @@ func addWritePath(rulesetFd int, path string, writeMask uint64) error {
 		0,
 	)
 	if errno != 0 {
-		return fmt.Errorf("landlock_add_rule: %w", errno)
+		return fmt.Errorf("landlock_add_rule(%s): %w", path, errno)
 	}
 
 	return nil
