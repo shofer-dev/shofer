@@ -100,6 +100,7 @@ export class DeepSeekHandler extends OpenAiHandler {
 		}
 
 		let lastUsage
+		let hasYieldedReasoning = false
 
 		for await (const chunk of stream) {
 			const delta = chunk.choices?.[0]?.delta ?? {}
@@ -114,15 +115,22 @@ export class DeepSeekHandler extends OpenAiHandler {
 
 			// Handle reasoning_content from DeepSeek's interleaved thinking
 			// This is the proper way DeepSeek sends thinking content in streaming.
-			// Filter out trivial model-generated preamble tokens (e.g. "• response").
+			// Preamble filtering is only applied until the first real reasoning
+			// chunk is yielded, so mid-stream whitespace deltas and legitimate
+			// markdown bullet lists pass through unchanged.
 			if ("reasoning_content" in delta && delta.reasoning_content) {
 				const text = (delta.reasoning_content as string) || ""
-				const cleaned = cleanReasoningChunk(text, (msg) => {
-					void import("../../extension").then(({ getOutputChannel }) =>
-						getOutputChannel()?.appendLine(msg),
-					)
-				})
+				const cleaned = cleanReasoningChunk(
+					text,
+					(msg) => {
+						void import("../../extension").then(({ getOutputChannel }) =>
+							getOutputChannel()?.appendLine(msg),
+						)
+					},
+					!hasYieldedReasoning,
+				)
 				if (cleaned) {
+					hasYieldedReasoning = true
 					yield { type: "reasoning", text: cleaned }
 				}
 			}

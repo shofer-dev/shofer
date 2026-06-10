@@ -398,6 +398,12 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		// we skip yielding the top-level reasoning field to avoid duplicate display.
 		let hasYieldedReasoningFromDetails = false
 
+		// Track whether ANY real reasoning content has been yielded (from either
+		// reasoning_details or top-level reasoning).  Preamble stripping is only
+		// applied until the first real chunk is emitted, so mid-stream whitespace
+		// deltas and legitimate markdown bullet lists pass through unchanged.
+		let hasYieldedReasoning = false
+
 		const iter = stream[Symbol.asyncIterator]()
 		while (true) {
 			const { done, value: chunk } = await iter.next()
@@ -473,15 +479,20 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 						}
 
 						if (reasoningText) {
-							reasoningText = cleanReasoningChunk(reasoningText, (msg) => {
-								void import("../../extension").then(({ getOutputChannel }) =>
-									getOutputChannel()?.appendLine(msg),
-								)
-							})
+							reasoningText = cleanReasoningChunk(
+								reasoningText,
+								(msg) => {
+									void import("../../extension").then(({ getOutputChannel }) =>
+										getOutputChannel()?.appendLine(msg),
+									)
+								},
+								!hasYieldedReasoning,
+							)
 						}
 
 						if (reasoningText) {
 							hasYieldedReasoningFromDetails = true
+							hasYieldedReasoning = true
 							yield { type: "reasoning", text: reasoningText }
 						}
 					}
@@ -492,13 +503,18 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 				// Also strip trivial model-generated preamble tokens (e.g. "• response", "response").
 				if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
 					const cleaned = !hasYieldedReasoningFromDetails
-						? cleanReasoningChunk(delta.reasoning, (msg) => {
-								void import("../../extension").then(({ getOutputChannel }) =>
-									getOutputChannel()?.appendLine(msg),
-								)
-							})
+						? cleanReasoningChunk(
+								delta.reasoning,
+								(msg) => {
+									void import("../../extension").then(({ getOutputChannel }) =>
+										getOutputChannel()?.appendLine(msg),
+									)
+								},
+								!hasYieldedReasoning,
+							)
 						: undefined
 					if (cleaned) {
+						hasYieldedReasoning = true
 						yield { type: "reasoning", text: cleaned }
 					}
 				}

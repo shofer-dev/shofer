@@ -20,10 +20,16 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 
 	// When streaming, always show the header to indicate thinking is in progress.
 	// When not streaming and the content is empty (or whitespace-only), render nothing.
-	// Also filter out trivial model-generated preamble tokens — same regex as
-	// src/api/transform/reasoning-preamble.ts (single source of truth).
 	const trimmedContent = content?.trim() ?? ""
-	const hasContent = trimmedContent.length > 0 && !/^•\s*(?:response\s*)?/i.test(trimmedContent)
+	const hasContent = trimmedContent.length > 0
+
+	// Strip trivial model-generated preamble prefix for display — same regex as
+	// src/api/transform/reasoning-preamble.ts (single source of truth).
+	// Unlike the provider-side filter (which drops the chunk entirely), the UI
+	// strips the prefix from the accumulated text so reasoning that genuinely
+	// begins with a • (U+2022) bullet from a non-filtering provider is still
+	// visible — it just loses the leading preamble artifact.
+	const displayContent = content ? content.replace(/^•\s*(?:response\s*)?/i, "") : ""
 
 	const [isCollapsed, setIsCollapsed] = useState(reasoningBlockCollapsed)
 
@@ -80,7 +86,7 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 				<div
 					ref={contentRef}
 					className="border-l border-vscode-descriptionForeground/20 ml-2 pl-4 pb-1 text-vscode-descriptionForeground break-words">
-					<MarkdownBlock markdown={content} />
+					<MarkdownBlock markdown={displayContent} />
 				</div>
 			)}
 		</div>

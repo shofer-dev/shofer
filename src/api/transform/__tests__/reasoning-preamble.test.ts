@@ -49,25 +49,51 @@ describe("isAtomicPreambleToken", () => {
 })
 
 describe("cleanReasoningChunk", () => {
-	test("atomic token → dropped", () => {
-		expect(cleanReasoningChunk("•")).toBeUndefined()
-		expect(cleanReasoningChunk("•response")).toBeUndefined()
-		expect(cleanReasoningChunk("• response")).toBeUndefined()
-		expect(cleanReasoningChunk("answer")).toBe("answer")
+	describe("preamble region (processPreamble = true, default)", () => {
+		test("atomic token → dropped", () => {
+			expect(cleanReasoningChunk("•")).toBeUndefined()
+			expect(cleanReasoningChunk("•response")).toBeUndefined()
+			expect(cleanReasoningChunk("• response")).toBeUndefined()
+			expect(cleanReasoningChunk("answer")).toBe("answer")
+		})
+
+		test("glued preamble → prefix stripped", () => {
+			expect(cleanReasoningChunk("•Okay, let's think")).toBe("Okay, let's think")
+			expect(cleanReasoningChunk("•response now let me…")).toBe("now let me…")
+		})
+
+		test("no preamble → pass through", () => {
+			expect(cleanReasoningChunk("Let me think")).toBe("Let me think")
+			expect(cleanReasoningChunk("response mid-sentence")).toBe("response mid-sentence")
+		})
+
+		test("empty / whitespace → dropped", () => {
+			expect(cleanReasoningChunk("")).toBeUndefined()
+			expect(cleanReasoningChunk("   ")).toBeUndefined()
+		})
 	})
 
-	test("glued preamble → prefix stripped", () => {
-		expect(cleanReasoningChunk("•Okay, let's think")).toBe("Okay, let's think")
-		expect(cleanReasoningChunk("•response now let me…")).toBe("now let me…")
-	})
+	describe("mid-stream (processPreamble = false)", () => {
+		test("leading • preserved (legitimate markdown bullet)", () => {
+			expect(cleanReasoningChunk("• Consider the edge cases", undefined, false)).toBe("• Consider the edge cases")
+		})
 
-	test("no preamble → pass through", () => {
-		expect(cleanReasoningChunk("Let me think")).toBe("Let me think")
-		expect(cleanReasoningChunk("response mid-sentence")).toBe("response mid-sentence")
-	})
+		test("leading •response preserved (not a preamble)", () => {
+			expect(cleanReasoningChunk("•response time analysis", undefined, false)).toBe("•response time analysis")
+		})
 
-	test("empty / whitespace → dropped", () => {
-		expect(cleanReasoningChunk("")).toBeUndefined()
-		expect(cleanReasoningChunk("   ")).toBeUndefined()
+		test("whitespace-only delta preserved", () => {
+			expect(cleanReasoningChunk(" ", undefined, false)).toBe(" ")
+		})
+
+		test("normal text passes through", () => {
+			expect(cleanReasoningChunk("The user wants to", undefined, false)).toBe("The user wants to")
+		})
+
+		test("empty string dropped (regardless of preamble flag)", () => {
+			// empty passes the `text || undefined` gate; technically the caller's
+			// `if (cleaned)` check would also skip it, but we also return undefined
+			expect(cleanReasoningChunk("", undefined, false)).toBeUndefined()
+		})
 	})
 })
