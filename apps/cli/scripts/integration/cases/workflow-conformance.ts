@@ -135,9 +135,6 @@ async function main() {
 
 	out(`[workflow-conformance] provider=${provider} model=${model} workspace=${workspace}`)
 
-	const harness = await createApiHarness({ provider, apiKey, baseUrl, model, workspacePath: workspace })
-	const api = harness.host.api
-
 	// Load conformance fixtures from the co-located fixtures/ directory.
 	// These are test-only flows and live with the harness, not in the workspace.
 	const fixturesDir = path.resolve(__dirname, "../fixtures")
@@ -182,21 +179,28 @@ async function main() {
 		const source = allFlows.get(name)!
 		out(`\n[workflow-conformance] ▶ ${name}  params=${JSON.stringify(exp.params)}`)
 
+		// Recreate the harness per flow to isolate memory (F2: OOM fix).
+		// The previous single-harness design accumulated ExtensionHost state
+		// across all 23 flows, eventually causing OOM-kill on real providers.
+		const flowHarness = await createApiHarness({ provider, apiKey, baseUrl, model, workspacePath: workspace })
+		const flowApi = flowHarness.host.api
+
 		// taskIdRef is a mutable box so traceFor() can be called before the
 		// createWorkflow promise resolves (which is the required usage order).
 		const taskIdRef: { taskId: string | undefined } = { taskId: undefined }
-		const trace = harness.traceFor(taskIdRef, exp.humanReplies)
+		const trace = flowHarness.traceFor(taskIdRef, exp.humanReplies)
 
 		const startMs = Date.now()
 
 		try {
-			taskIdRef.taskId = await api.createWorkflow(source, exp.params)
+			taskIdRef.taskId = await flowApi.createWorkflow(source, exp.params)
 			await trace.waitForCompletion(timeoutMs)
 		} catch (e) {
 			const durationMs = Date.now() - startMs
 			const msg = e instanceof Error ? e.message : String(e)
 			out(`[workflow-conformance] ✗ ${name}: ${msg}`)
 			results.push({ name, ok: false, got: "TIMEOUT", want: exp.expected, childCount: 0, durationMs })
+			await flowHarness.dispose()
 			continue
 		}
 
@@ -234,9 +238,10 @@ async function main() {
 		}
 
 		results.push({ name, ok, got: status, want: exp.expected, childCount, durationMs, failureTranscript })
-	}
 
-	await harness.dispose()
+		// Dispose the per-flow harness to release memory before the next iteration.
+		await flowHarness.dispose()
+	}
 
 	// ── Summary ────────────────────────────────────────────────────────────────
 	const passed = results.filter((r) => r.ok).length
