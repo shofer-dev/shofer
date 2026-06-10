@@ -1092,6 +1092,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								"flex",
 								"flex-col",
 								"outline-none",
+								canStop && "chat-textarea-shimmer",
 							)}
 							onDrop={handleDrop}
 							onDragOver={(e) => {
