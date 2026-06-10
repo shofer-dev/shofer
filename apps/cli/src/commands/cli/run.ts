@@ -3,9 +3,9 @@ import path from "path"
 import { fileURLToPath } from "url"
 
 import { createElement } from "react"
-import pWaitFor from "p-wait-for"
 
 import { setLogger } from "@shofer/vscode-shim"
+import { ShoferEventName } from "@shofer/types"
 
 import {
 	FlagOptions,
@@ -35,13 +35,45 @@ const SIGNAL_ONLY_EXIT_KEEPALIVE_MS = 60_000
 const STREAM_RESUME_WAIT_TIMEOUT_MS = 2_000
 
 async function bootstrapResumeForStdinStream(host: ExtensionHost, sessionId: string): Promise<void> {
-	host.sendToExtension({ type: "showTaskWithId", text: sessionId })
+	// AskDispatcher must not consume (auto-approve or decline) the
+	// resume_completed_task / resume_task ask that showTaskWithId's
+	// startFromHistory() fires — the subsequent stdin "message" command
+	// must answer it via submitUserMessage(). Disable the dispatcher
+	// BEFORE sending showTaskWithId so the ask is never handled.
+	host.setAskDispatcherEnabled(false)
 
-	// Best-effort wait so early stdin "message" commands can target the resumed task.
-	await pWaitFor(() => host.client.hasActiveTask() || host.isWaitingForInput(), {
-		interval: 25,
-		timeout: STREAM_RESUME_WAIT_TIMEOUT_MS,
-	}).catch(() => undefined)
+	// Wait for the task to be pushed onto the stack AND the pending ask to
+	// appear (isWaitingForInput) so the stdin "message" command finds an
+	// active task with a live ask to answer.
+	const taskReady = new Promise<void>((resolve) => {
+		let settled = false
+		const done = () => {
+			if (settled) return
+			settled = true
+			host.api.off(ShoferEventName.TaskStarted, onStarted)
+			clearInterval(pollTimer)
+			clearTimeout(fallback)
+		}
+		const maybeDone = () => {
+			if (host.client.hasActiveTask() && host.isWaitingForInput()) {
+				done()
+				resolve()
+			}
+		}
+		// showTaskWithId fires TaskStarted only (not TaskCreated, since the
+		// task already exists in history). Poll alongside the event to catch
+		// the ask landing after the event fires.
+		const onStarted = (_id: string) => maybeDone()
+		host.api.on(ShoferEventName.TaskStarted, onStarted)
+		const pollTimer = setInterval(maybeDone, 25)
+		const fallback = setTimeout(() => {
+			done()
+			resolve()
+		}, STREAM_RESUME_WAIT_TIMEOUT_MS)
+	})
+
+	host.sendToExtension({ type: "showTaskWithId", text: sessionId })
+	await taskReady
 }
 
 function normalizeError(error: unknown): Error {

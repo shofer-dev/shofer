@@ -121,6 +121,8 @@ export interface ExtensionHostInterface extends IExtensionHost<ExtensionHostEven
 	runTask(prompt: string, taskId?: string, configuration?: ShoferSettings, images?: string[]): Promise<void>
 	cancelTask(): Promise<void>
 	resumeTask(taskId: string): Promise<void>
+	grantResume(): void
+	setAskDispatcherEnabled(enabled: boolean): void
 	sendToExtension(message: WebviewMessage): void
 	dispose(): Promise<void>
 }
@@ -781,6 +783,14 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 	 */
 	public isWaitingForInput(): boolean {
 		return this.client.getAgentState().isWaitingForInput
+	}
+
+	public grantResume(): void {
+		this.askDispatcher.grantResume()
+	}
+
+	public setAskDispatcherEnabled(enabled: boolean): void {
+		this.askDispatcher.setDisabled(!enabled)
 	}
 
 	// ==========================================================================

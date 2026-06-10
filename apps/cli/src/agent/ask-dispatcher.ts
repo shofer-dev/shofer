@@ -222,6 +222,11 @@ export class AskDispatcher {
 		this.resumeRetriesRemaining = this.maxResumeRetries
 	}
 
+	/** Enable or disable ask handling (true = disabled, skip all asks). */
+	setDisabled(d: boolean): void {
+		this.disabled = d
+	}
+
 	/**
 	 * Grant one additional auto-resume to the current budget.
 	 *
