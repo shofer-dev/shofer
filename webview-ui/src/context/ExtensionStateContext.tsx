@@ -642,9 +642,11 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setPrevCloudIsAuthenticated(currentAuth)
 	}, [state.cloudIsAuthenticated, prevCloudIsAuthenticated, state.apiConfiguration?.apiProvider])
 
-	// H18: Memoize the context value to prevent identity churn on every render.
-	// Stabilizes the context object reference so consumers that read unchanged
-	// fields (the common case during streaming deltas) skip re-renders.
+	// H18: Memoize the context value to prevent identity churn on unrelated
+	// re-renders (e.g. provider re-renders where state is unchanged).  Note:
+	// during streaming deltas, state changes every token, so the memo still
+	// recomputes; splitting shoferMessages into its own context (or using
+	// use-context-selector) would be needed to truly stabilize streaming.
 	// Inline setters are stable closures — they close over setState which is
 	// referentially stable from useState.
 	const contextValue: ExtensionStateContextType = useMemo(() => ({

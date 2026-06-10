@@ -624,6 +624,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	} | null = null
 	_cachedToolsKey: string = ""
 
+	// H15: Snapshot of the MCP server-set ID captured when the system prompt
+	// is built on a cache miss.  Folded into the cache key so a server that
+	// finishes connecting mid-turn invalidates the stale prompt.
+	_mcpServerSetId: string = ""
+
 	// Checkpoints
 	enableCheckpoints: boolean
 	checkpointTimeout: number
@@ -5629,9 +5634,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const modelInfo = this.api.getModel().info
 		const taskMode = this._taskMode || (mode ?? defaultModeSlug)
 
-		// H15: Build a cache key covering every stable input to the system prompt.
-		// Peer notifications + subtask constraints are appended below; they don't
-		// participate in the cache key because they are always fresh per request.
+		// H15: Build a cache key covering every stable input to the system
+		// prompt.  Peer notifications + subtask constraints are appended
+		// below; they don't participate in the cache key because they are
+		// always fresh per request.
+		//
+		// Tradeoff: the MCP server-set ID is folded into the key so a server
+		// that finishes connecting mid-turn invalidates the cache.  Previously
+		// every request re-read MCP state; now we accept a bounded staleness
+		// window of one turn.  The cache is cleared at turn start and on
+		// context-management events.
 		const cacheKey = [
 			taskMode,
 			this.cwd,
@@ -5645,6 +5657,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false),
 			this.api.getModel().id,
 			mcpEnabled ?? true,
+			// Fold the MCP server-set ID so a connecting server mid-turn busts the cache.
+			this._mcpServerSetId ?? "",
 			// shoferIgnore instructions are derived from files; include as cache bust.
 			this.shoferIgnoreController?.getInstructions() ?? "",
 		].join("|")
@@ -5664,6 +5678,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await pWaitFor(() => !mcpHub!.isConnecting, { timeout: 10_000 }).catch(() => {
 					taskLog.error("MCP servers failed to connect in time")
 				})
+				// Capture the server-set ID for cache-key participation (see H15).
+				this._mcpServerSetId = mcpHub.getServers()
+					.map((s) => s.name)
+					.sort()
+					.join(",")
 			}
 
 			const shoferIgnoreInstructions = this.shoferIgnoreController?.getInstructions()
@@ -5810,6 +5829,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			JSON.stringify(state?.disabledTools ?? []),
 			JSON.stringify(apiConfiguration ?? {}),
 			supportsAllowedFunctionNames,
+			this.api.getModel().id,
 		].join("|")
 	}
 

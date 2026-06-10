@@ -1406,7 +1406,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			}
 
 			if (everVisibleMessagesTsRef.current.has(message.ts)) {
-				if (message.ask && (ALWAYS_HIDDEN_ONCE_PROCESSED_ASK as ShoferAsk[]).includes(message.ask)) return false
+				if (message.ask && ALWAYS_HIDDEN_ONCE_PROCESSED_ASK.includes(message.ask)) return false
 				if (message.say && ALWAYS_HIDDEN_ONCE_PROCESSED_SAY.includes(message.say)) return false
 				if (message.say === "text" && (message.text ?? "") === "" && (message.images?.length ?? 0) === 0) {
 					return false
