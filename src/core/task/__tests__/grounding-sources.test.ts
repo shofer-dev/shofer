@@ -110,6 +110,11 @@ vi.mock("fs/promises", () => ({
 	readFile: vi.fn().mockResolvedValue("[]"),
 	unlink: vi.fn().mockResolvedValue(undefined),
 	rmdir: vi.fn().mockResolvedValue(undefined),
+	// H13: jsonlLog.ts uses fs.open for long-lived append handles.
+	open: vi.fn().mockResolvedValue({
+		write: vi.fn().mockResolvedValue(undefined),
+		close: vi.fn().mockResolvedValue(undefined),
+	}),
 }))
 
 // Mock mentions
