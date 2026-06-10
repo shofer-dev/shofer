@@ -64,6 +64,18 @@ export class BlobStore {
 	/** Absolute path to `<taskDir>/blobs`. */
 	public readonly dir: string
 
+	/**
+	 * H14: Cross-call sha256 → content cache.
+	 *
+	 * `resolveRefs` was previously re-reading every blob from disk on each
+	 * LLM request — O(refs) `fs.readFile` calls per turn.  Blob content is
+	 * immutable (sha256-addressed), so caching read results in memory skips
+	 * repeated disk I/O across calls.  The cache lives for the lifetime of
+	 * the `BlobStore` instance (one per task, created on first use and
+	 * reused until dispose/abort).
+	 */
+	private readonly _readCache = new Map<string, string>()
+
 	constructor(taskDir: string) {
 		this.dir = path.join(taskDir, "blobs")
 	}
@@ -129,21 +141,34 @@ export class BlobStore {
 	 * content. Missing blobs are rendered as a visible banner so the
 	 * caller (LLM, UI) sees that bytes were lost rather than silently
 	 * dropping them.
+	 *
+	 * H14: resolved content is cached in `_readCache` (cross-call,
+	 * keyed by sha256). Blob content is immutable so the cache is valid
+	 * for the lifetime of the `BlobStore` instance.
 	 */
 	public async resolveRefs(text: string): Promise<string> {
 		if (!text || !text.includes("<shofer-blob ")) return text
 		const refs = extractBlobRefs(text)
 		if (refs.length === 0) return text
-		// Read once per unique sha256.
-		const cache = new Map<string, string | undefined>()
+		// Resolve unique sha256 values — check cross-call cache first,
+		// fall back to disk read, then populate the cache.
+		const perCall = new Map<string, string | undefined>()
 		for (const { sha256 } of refs) {
-			if (!cache.has(sha256)) {
-				cache.set(sha256, await this.read(sha256))
+			if (perCall.has(sha256)) continue
+			const cached = this._readCache.get(sha256)
+			if (cached !== undefined) {
+				perCall.set(sha256, cached)
+				continue
 			}
+			const content = await this.read(sha256)
+			if (content !== undefined) {
+				this._readCache.set(sha256, content)
+			}
+			perCall.set(sha256, content)
 		}
 		BLOB_REF_REGEX.lastIndex = 0
 		return text.replace(BLOB_REF_REGEX, (_match, sha256: string, bytes: string) => {
-			const content = cache.get(sha256)
+			const content = perCall.get(sha256)
 			if (content === undefined) {
 				return `[shofer-blob ${sha256.slice(0, 12)}… missing (${bytes} bytes)]`
 			}
