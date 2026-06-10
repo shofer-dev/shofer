@@ -3,7 +3,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
-import type { TaskState } from "@shofer/types"
+import type { TaskState, TaskLifecycle } from "@shofer/types"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 
@@ -26,15 +26,17 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
+			// Lifetimes where the target is actively doing work and cannot
+			// accept a peer message. Messages must fail fast instead of
+			// being queued behind in-progress work.
+			const BUSY_LIFECYCLES: TaskLifecycle[] = ["running", "waiting_input", "waiting"]
+
 			// --- Scope validation ---
-			if (!task.rootTaskId) {
-				pushToolResult(
-					formatResponse.toolError(
-						"send_message_to_task is only available to tasks spawned via new_task (rootTaskId required).",
-					),
-				)
-				return
-			}
+			// The root task (user-initiated, not spawned via new_task) has
+			// no rootTaskId because it IS the root. Use its own taskId as the
+			// effective root for peer scope validation, consistent with
+			// NewTaskTool and ListBackgroundTasksTool.
+			const effectiveRootId = task.rootTaskId ?? task.taskId
 
 			if (task_id === task.taskId) {
 				pushToolResult(formatResponse.toolError("Cannot send a message to yourself."))
@@ -53,7 +55,7 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				// Check persisted history for a resumable task.
 				try {
 					const { historyItem } = await provider.getTaskWithId(task_id)
-					if (!historyItem.rootTaskId || historyItem.rootTaskId !== task.rootTaskId) {
+					if (historyItem.rootTaskId !== effectiveRootId) {
 						pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
 						return
 					}
@@ -62,14 +64,16 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					return
 				}
 			} else {
-				if (targetInstance.rootTaskId !== task.rootTaskId) {
+				if (targetInstance.rootTaskId !== effectiveRootId) {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
 					return
 				}
 			}
 
-			// Check least-privilege peer scope: undefined ⇒ deny all.
-			if (!task.knownPeers || !task.knownPeers.has(task_id)) {
+			// Check least-privilege peer scope: undefined ⇒ deny all, except
+			// for the root task (no rootTaskId) which is omnipotent within its
+			// own tree — it has no knownPeers because it wasn't spawned.
+			if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(task_id))) {
 				pushToolResult(formatResponse.toolError(`Task ${task_id} is not in your allowed peer set.`))
 				return
 			}
@@ -101,6 +105,18 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} has errored and cannot receive messages.`))
 					return
 				}
+			}
+
+			// Reject messages to busy targets — fail fast instead of queueing.
+			const targetManagedForBusy = provider.taskManager.getManagedTask(task_id)
+			const targetLifecycle = targetManagedForBusy?.state?.lifecycle
+			if (targetLifecycle && BUSY_LIFECYCLES.includes(targetLifecycle)) {
+				pushToolResult(
+					formatResponse.toolError(
+						`Task ${task_id} is busy (${targetLifecycle}) and cannot accept messages until it finishes.`,
+					),
+				)
+				return
 			}
 
 			// Resolve sender title.

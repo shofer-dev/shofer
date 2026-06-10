@@ -1,22 +1,24 @@
 import type OpenAI from "openai"
 
-const SEND_MESSAGE_TO_TASK_DESCRIPTION = `Send a message to a peer task sharing the same root task. Two modes: async (fire-and-forget, wait=false) and sync (blocking with mandatory timeout, wait=true). The caller and the target must share a root task and have each other in their knownPeers set. Discover the target's task ID via list_background_tasks(scope="peers").
+const SEND_MESSAGE_TO_TASK_DESCRIPTION = `Send a message to a peer task sharing the same root task. Two modes: async (fire-and-forget, wait=false) and sync (blocking with mandatory timeout, wait=true). The caller and the target must share a root task (the root/parent task can message any task in its tree; sub-tasks require knownPeers). Discover the target's task ID via list_background_tasks(scope="peers").
+
+IMPORTANT — fail-fast busy check: Messages to a BUSY target (running, waiting, or waiting_input) are REJECTED immediately. Only idle, completed, or paused tasks can receive messages. This ensures messages never silently queue behind in-progress work.
 
 ASYNC MODE (wait=false, default):
 - The tool returns immediately. No blocking.
-- The message is injected into the recipient's SYSTEM PROMPT on its next agent loop iteration, formatted as "PEER MESSAGE from task <id>".
-- ASYNC DOES NOT WAKE UP idle or completed tasks. If the recipient's event loop is not running, the message will never be delivered.
-- Use async for non-urgent coordination — the recipient will see it when it gets to its next turn, but may miss it entirely if it is done working.
+- The message is pushed into the recipient's peerNotificationQueue and delivered on its next turn.
+- Use async for non-urgent coordination — the recipient will see it when it gets to its next turn.
 - The recipient may optionally respond using send_message_to_task.
+- BUSY TASKS REJECT: async messages to busy (running/waiting/waiting_input) targets fail immediately.
 
 SYNC MODE (wait=true):
 - The sender BLOCKS until the recipient calls attempt_completion or the timeout (default 120s) expires.
-- The message is delivered as a PEER PROMPT that wakes up / restarts the recipient's event loop, EVEN IF THE RECIPIENT IS IDLE OR COMPLETED. An idle (completed) recipient will be automatically restarted and will see the prompt immediately.
+- The message is enqueued as a PEER PROMPT that wakes up / restarts the recipient's event loop — works for idle, completed, or paused recipients. A completed/idle recipient is automatically restarted.
 - The recipient MUST respond by calling attempt_completion — its completion result is returned to the blocked sender.
-- WARNING: attempt_completion is TERMINAL — the recipient task ends after responding. Only use sync if you intend for the recipient to stop and answer you. Do NOT sync-message a peer that is doing independent work you don't want interrupted.
-- Sync works regardless of whether the recipient is running, idle, or completed. It is the ONLY way to wake up a completed peer.`
+- WARNING: attempt_completion is TERMINAL — the recipient task ends after responding. Only use sync if you intend for the recipient to stop and answer you.
+- BUSY TASKS REJECT: sync messages to busy (running/waiting/waiting_input) targets fail immediately.`
 
-const TASK_ID_PARAMETER_DESCRIPTION = `Target peer task ID. Must share the caller's rootTaskId. Discover via list_background_tasks(scope="peers").`
+const TASK_ID_PARAMETER_DESCRIPTION = `Target peer task ID. Must share the caller's root task (root/parent tasks can message any task in their tree; sub-tasks require knownPeers). Discover via list_background_tasks(scope="peers").`
 
 const MESSAGE_PARAMETER_DESCRIPTION = `The message to deliver. In async mode this appears as a PEER MESSAGE notification in the recipient's system prompt. In sync mode it appears as a PEER PROMPT that the recipient must answer via attempt_completion.`
 

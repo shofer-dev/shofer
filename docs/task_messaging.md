@@ -133,7 +133,7 @@ Unchanged — `timeout` parameter (default 120s) returns current statuses if the
 
 ## `send_message_to_task` — New
 
-Always-available tool. Sends a message to a peer task. Two modes: async (fire-and-forget) and sync (blocking with mandatory timeout).
+Always-available tool. Sends a message to a peer task. Two modes: async (fire-and-forget) and sync (blocking with mandatory timeout). Messages to BUSY targets (`running`, `waiting`, `waiting_input`) are REJECTED immediately — they never queue behind in-progress work. Only idle, completed, or paused tasks can receive messages.
 
 ### Parameters
 
@@ -146,10 +146,10 @@ Always-available tool. Sends a message to a peer task. Two modes: async (fire-an
 
 ### Scope validation
 
-1. `caller.rootTaskId` must be set (not a top-level task).
+1. `caller.rootTaskId` must be set (not a top-level task), unless the caller is the root task itself — the root can message any task in its tree.
 2. `target.rootTaskId === caller.rootTaskId`.
 3. `target.taskId !== caller.taskId`.
-4. `task_id` must be in the caller's `knownPeers` set. `knownPeers` is **always set** for background tasks participating in peer messaging; when the set does not contain `task_id`, the call is rejected regardless of same-root membership.
+4. `task_id` must be in the caller's `knownPeers` set — unless the caller is the root task (no `rootTaskId`), which is omnipotent within its tree. For sub-tasks, `knownPeers` is **always set**; when the set does not contain `task_id`, the call is rejected regardless of same-root membership.
 5. **Both `caller` and `target` must be background tasks** (`isBackgroundTask === true`). See [Background-task precondition](#background-task-precondition).
 
 #### Background-task precondition
@@ -223,7 +223,9 @@ The async/sync flag is a **sender-side** property (does the sender block?). The 
 | `error` (terminal, unrecoverable)                      | **Reject** for both modes — the tool returns `Error: Task <task_id> has errored.` An errored task cannot be meaningfully resumed, and the sender should know its recipient is broken rather than assume silent delivery.                           |
 | No live instance AND no resumable history              | **Reject** for both modes — `Error: Task <task_id> is not reachable.`                                                                                                                                                                              |
 
-> **Reject, don't drop:** when a recipient is unreachable (`error` or no resumable history), **both** async and sync `send_message_to_task` fail loud with an error result. Silently dropping an async message would leave the sender believing it was delivered; surfacing the error lets the sender react (retry a different peer, escalate to the parent, or adjust its plan).
+> \*\*Busy-target fail-fast:\*\* Messages to busy (`running`, `waiting`, `waiting_input`) recipients are REJECTED immediately — they never queue behind in-progress work. Only idle, completed, or paused tasks can receive messages.
+
+\*\*Reject, don't drop:\*\* when a recipient is unreachable (`error` or no resumable history), **both** async and sync `send_message_to_task` fail loud with an error result. Silently dropping an async message would leave the sender believing it was delivered; surfacing the error lets the sender react (retry a different peer, escalate to the parent, or adjust its plan).
 
 > **Wake mechanism:** For any non-busy recipient, do **not** rely on system-prompt injection (which only lands on a turn that may never happen). Enqueue through the recipient's existing `MessageQueueService` — the same machinery user messages use (see [`message_queue.md`](message_queue.md)) — so delivery triggers the well-tested queue-drain → wake/resume → new-turn path. A `completed`/`paused` peer is resumed; an `idle` peer starts a fresh turn.
 

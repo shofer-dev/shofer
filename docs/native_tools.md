@@ -486,30 +486,32 @@ List background tasks. With `scope="children"` (default), lists all background c
 
 ### `send_message_to_task`
 
-Send a message to a peer task sharing the same root task. The caller and target must share a root task and have each other in their `knownPeers` set. Discover the target's task ID via `list_background_tasks(scope="peers")`.
+Send a message to a peer task sharing the same root task. The caller and target must share a root task (the root/parent task can message any task in its tree; sub-tasks require `knownPeers`). Discover the target's task ID via `list_background_tasks(scope="peers")`.
+
+**Busy-target fail-fast:** Messages to BUSY targets (`running`, `waiting`, `waiting_input`) are REJECTED immediately with an error — they never queue behind in-progress work. Only idle, completed, or paused tasks can receive messages.
 
 **Async mode (`wait=false`, default):**
 
 - Returns immediately (fire-and-forget). No blocking.
-- Injected into the recipient's system prompt on its next agent loop iteration as a `PEER MESSAGE` block.
-- **Does NOT wake up idle/completed tasks.** If the recipient's event loop is not running, the message is never delivered.
-- Use for non-urgent coordination — the recipient sees it on its next turn but may miss it if done working.
+- Pushed into the recipient's `peerNotificationQueue` and delivered on its next turn.
+- Use for non-urgent coordination — the recipient sees it when it gets to its next turn.
 - The recipient may optionally respond via `send_message_to_task`.
+- BUSY TASKS REJECT: async messages to busy targets fail immediately.
 
 **Sync mode (`wait=true`):**
 
 - Sender blocks until the recipient calls `attempt_completion` or the timeout (default 120s) expires.
-- **Wakes up / restarts idle or completed recipients** automatically — they will see a `PEER PROMPT` immediately.
+- The message is enqueued as a `PEER PROMPT` that wakes up / restarts idle, completed, or paused recipients.
 - The recipient MUST respond via `attempt_completion`; its result is returned to the blocked sender.
 - WARNING: `attempt_completion` is TERMINAL — the recipient ends after responding. Only sync-message a peer you intend to stop and have answer you.
-- Sync works regardless of recipient state (running, idle, completed). It is the ONLY way to reach a completed peer.
+- BUSY TASKS REJECT: sync messages to busy targets fail immediately.
 
-| Param         | Type            | Required | Description                                                                                                      |
-| ------------- | --------------- | :------: | ---------------------------------------------------------------------------------------------------------------- |
-| `task_id`     | string          |    ✅    | Target peer task ID (must share the caller's `rootTaskId`). Discover via `list_background_tasks(scope="peers")`. |
-| `message`     | string          |    ✅    | The message to deliver (async: PEER MESSAGE notification; sync: PEER PROMPT to answer)                           |
-| `wait`        | boolean \| null |    –     | `true` = block until recipient responds or timeout. `false` (default) = async fire-and-forget.                   |
-| `timeout_sec` | number \| null  |    –     | Maximum seconds to wait when `wait=true`. Default: 120. Message is retracted on timeout.                         |
+| Param         | Type            | Required | Description                                                                                                                                       |
+| ------------- | --------------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task_id`     | string          |    ✅    | Target peer task ID (root/parent can message any tree task; sub-tasks require `knownPeers`). Discover via `list_background_tasks(scope="peers")`. |
+| `message`     | string          |    ✅    | The message to deliver (async: PEER MESSAGE notification; sync: PEER PROMPT to answer)                                                            |
+| `wait`        | boolean \| null |    –     | `true` = block until recipient responds or timeout. `false` (default) = async fire-and-forget.                                                    |
+| `timeout_sec` | number \| null  |    –     | Maximum seconds to wait when `wait=true`. Default: 120. Message is retracted on timeout.                                                          |
 
 ### `set_task_title`
 
