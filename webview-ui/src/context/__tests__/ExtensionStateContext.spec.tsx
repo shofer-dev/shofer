@@ -4,7 +4,6 @@ import {
 	type ProviderSettings,
 	type ExperimentId,
 	type ExtensionState,
-	type ShoferMessage,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 } from "@shofer/types"
 
@@ -256,151 +255,10 @@ describe("mergeExtensionState", () => {
 		})
 	})
 
-	describe("shoferMessagesSeq protection", () => {
-		const baseState: ExtensionState = {
-			version: "",
-			mcpEnabled: false,
-			shoferMessages: [],
-			taskHistory: [],
-			shouldShowAnnouncement: false,
-			enableCheckpoints: true,
-			writeDelayMs: 1000,
-			mode: "default",
-			experiments: {} as Record<ExperimentId, boolean>,
-			customModes: [],
-			maxOpenTabsContext: 20,
-			maxWorkspaceFiles: 100,
-			apiConfiguration: {},
-			telemetrySetting: "unset",
-			showShoferIgnoredFiles: true,
-			enableSubfolderRules: false,
-			renderContext: "sidebar",
-			cloudUserInfo: null,
-			organizationAllowList: { allowAll: true, providers: {} },
-			autoCondenseContext: true,
-			autoCondenseContextPercent: 100,
-			cloudIsAuthenticated: false,
-			sharingEnabled: false,
-			publicSharingEnabled: false,
-			profileThresholds: {},
-			hasOpenedModeSelector: false,
-			maxImageFileSize: 5,
-			maxTotalImageSize: 20,
-			taskSyncEnabled: false,
-			checkpointTimeout: DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-			maxReadFileLine: -1,
-			useAgentRules: false,
-		}
-
-		const makeMessage = (ts: number, text: string): ShoferMessage =>
-			({ ts, type: "say", say: "text", text }) as ShoferMessage
-
-		it("rejects stale shoferMessages when seq is not newer", () => {
-			const newerMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
-			const staleMessages = [makeMessage(1, "hello")]
-
-			const prevState: ExtensionState = {
-				...baseState,
-				shoferMessages: newerMessages,
-				shoferMessagesSeq: 5,
-			}
-
-			const result = mergeExtensionState(prevState, {
-				shoferMessages: staleMessages,
-				shoferMessagesSeq: 3, // stale seq
-			})
-
-			// Should keep the newer messages
-			expect(result.shoferMessages).toBe(newerMessages)
-			expect(result.shoferMessagesSeq).toBe(5)
-		})
-
-		it("rejects shoferMessages when seq equals current (not strictly greater)", () => {
-			const currentMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
-			const sameSeqMessages = [makeMessage(1, "hello")]
-
-			const prevState: ExtensionState = {
-				...baseState,
-				shoferMessages: currentMessages,
-				shoferMessagesSeq: 5,
-			}
-
-			const result = mergeExtensionState(prevState, {
-				shoferMessages: sameSeqMessages,
-				shoferMessagesSeq: 5, // same seq, not strictly greater
-			})
-
-			expect(result.shoferMessages).toBe(currentMessages)
-			expect(result.shoferMessagesSeq).toBe(5)
-		})
-
-		it("accepts shoferMessages when seq is strictly greater", () => {
-			const oldMessages = [makeMessage(1, "hello")]
-			const newMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
-
-			const prevState: ExtensionState = {
-				...baseState,
-				shoferMessages: oldMessages,
-				shoferMessagesSeq: 3,
-			}
-
-			const result = mergeExtensionState(prevState, {
-				shoferMessages: newMessages,
-				shoferMessagesSeq: 4, // newer seq
-			})
-
-			expect(result.shoferMessages).toBe(newMessages)
-			expect(result.shoferMessagesSeq).toBe(4)
-		})
-
-		it("preserves shoferMessages when newState does not include them (cloud event path)", () => {
-			const existingMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
-
-			const prevState: ExtensionState = {
-				...baseState,
-				shoferMessages: existingMessages,
-				shoferMessagesSeq: 5,
-			}
-
-			// Simulate a cloud event push that omits shoferMessages and shoferMessagesSeq
-			const result = mergeExtensionState(prevState, {
-				cloudIsAuthenticated: true,
-			})
-
-			expect(result.shoferMessages).toBe(existingMessages)
-			expect(result.shoferMessagesSeq).toBe(5)
-		})
-
-		it("applies shoferMessages normally when neither state has seq (backward compat)", () => {
-			const oldMessages = [makeMessage(1, "hello")]
-			const newMessages = [makeMessage(1, "hello"), makeMessage(2, "world")]
-
-			const prevState: ExtensionState = {
-				...baseState,
-				shoferMessages: oldMessages,
-			}
-
-			const result = mergeExtensionState(prevState, {
-				shoferMessages: newMessages,
-			})
-
-			expect(result.shoferMessages).toBe(newMessages)
-		})
-
-		it("applies shoferMessages when prevState has no seq but newState does (first push)", () => {
-			const prevState: ExtensionState = {
-				...baseState,
-				shoferMessages: [],
-			}
-
-			const newMessages = [makeMessage(1, "hello")]
-			const result = mergeExtensionState(prevState, {
-				shoferMessages: newMessages,
-				shoferMessagesSeq: 1,
-			})
-
-			expect(result.shoferMessages).toBe(newMessages)
-			expect(result.shoferMessagesSeq).toBe(1)
-		})
-	})
+	// shoferMessagesSeq protection tests removed — the seq-guard in
+	// mergeExtensionState was deleted because it was mechanically dead:
+	// postInitState() bumps the counter synchronously before the FIFO
+	// postMessage, so the guard condition (newSeq <= prevSeq) was never
+	// true. The real protection is the live currentTask.shoferMessages
+	// reference with no await before serialization.
 })

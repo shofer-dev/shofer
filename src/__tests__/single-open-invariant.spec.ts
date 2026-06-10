@@ -109,7 +109,8 @@ describe("Single-open-task invariant", () => {
 				setProviderSettings: vi.fn(),
 				getProviderSettings: vi.fn(() => ({})),
 			},
-			postStateToWebview: vi.fn(),
+			postInitState: vi.fn().mockResolvedValue(undefined),
+			postMessageToWebview: vi.fn().mockResolvedValue(undefined),
 			async _createTaskWithHistoryItemImpl(historyItem: any, _options?: any) {
 				await removeShoferFromStack()
 				const stub = { taskId: historyItem.id, instanceId: "inst" }
@@ -141,7 +142,7 @@ describe("Single-open-task invariant", () => {
 		const provider = {
 			context: {} as any,
 			removeShoferFromStack,
-			postStateToWebview: vi.fn(),
+			postInitState: vi.fn().mockResolvedValue(undefined),
 			postMessageToWebview: vi.fn(),
 			createTask,
 			getValues: vi.fn(() => ({})),

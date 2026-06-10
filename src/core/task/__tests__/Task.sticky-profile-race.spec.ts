@@ -125,9 +125,6 @@ describe("Task - sticky provider profile init race", () => {
 			log: vi.fn(),
 			on: vi.fn(),
 			off: vi.fn(),
-			postStateToWebview: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
 		} as unknown as ShoferProvider
 
@@ -164,9 +161,6 @@ describe("Task - sticky provider profile init race", () => {
 			log: vi.fn(),
 			on: vi.fn(),
 			off: vi.fn(),
-			postStateToWebview: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
 		} as unknown as ShoferProvider
 

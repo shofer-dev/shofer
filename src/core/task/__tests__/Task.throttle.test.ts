@@ -7,7 +7,6 @@ import { hasToolUsageChanged, hasTokenUsageChanged } from "../../../shared/getAp
 // which pulls in WorkflowTask (which extends Task — circular).
 vi.mock("../../../extension", () => ({}))
 
-
 // Mock dependencies
 vi.mock("../../webview/ShoferProvider")
 vi.mock("../../../integrations/terminal/TerminalRegistry", () => ({
@@ -87,9 +86,6 @@ describe("Task token usage throttling", () => {
 			},
 			getState: vi.fn().mockResolvedValue({ mode: "code" }),
 			log: vi.fn(),
-			postStateToWebview: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
 			getCurrentTask: vi.fn().mockReturnValue(undefined),
 			taskManager: {

@@ -38,7 +38,9 @@ describe("API — new ShoferAPI methods", () => {
 			providerSettingsManager: {
 				saveConfig: vi.fn().mockResolvedValue(undefined),
 			},
-			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+			postInitState: vi.fn().mockResolvedValue(undefined),
+			postConfigUpdate: vi.fn(),
+			postTaskStateUpdate: vi.fn(),
 			cwd: "/test/workspace",
 			taskHistoryStore: {
 				getAll: vi.fn(() => []),

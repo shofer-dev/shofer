@@ -96,7 +96,6 @@ const mockProvider = {
 		getValue: vi.fn(),
 	},
 	log: vi.fn(),
-	postStateToWebview: vi.fn(),
 	getCurrentTask: vi.fn().mockReturnValue({ cwd: MOCK_CWD }),
 	getTaskWithId: vi.fn(),
 	createTaskWithHistoryItem: vi.fn(),

@@ -5,7 +5,9 @@ import { webviewMessageHandler } from "../../../core/webview/webviewMessageHandl
 // Mock the provider and marketplace manager
 const mockProvider = {
 	getState: vi.fn(),
-	postStateToWebview: vi.fn(),
+	postInitState: vi.fn().mockResolvedValue(undefined),
+	postConfigUpdate: vi.fn(),
+	postTaskStateUpdate: vi.fn(),
 	postMessageToWebview: vi.fn(),
 } as any
 
@@ -37,7 +39,7 @@ describe("Marketplace General Availability", () => {
 			search: "",
 			tags: [],
 		})
-		expect(mockProvider.postStateToWebview).toHaveBeenCalled()
+		expect(mockProvider.postInitState).toHaveBeenCalled()
 	})
 
 	it("should allow marketplace installation (marketplace is generally available)", async () => {

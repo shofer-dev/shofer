@@ -73,7 +73,9 @@ const mockShoferProvider = {
 		getValue: vi.fn(),
 	},
 	log: vi.fn(),
-	postStateToWebview: vi.fn().mockResolvedValue(undefined),
+	postInitState: vi.fn().mockResolvedValue(undefined),
+	postConfigUpdate: vi.fn(),
+	postTaskStateUpdate: vi.fn(),
 	getCurrentTask: vi.fn(),
 	handleModeDeleted: vi.fn(),
 	getTaskWithId: vi.fn(),
@@ -840,7 +842,7 @@ describe("webviewMessageHandler - mcpEnabled", () => {
 		expect((mockShoferProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledWith(true)
-		expect(mockShoferProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+		expect(mockShoferProvider.postInitState).toHaveBeenCalledTimes(1)
 	})
 
 	it("delegates enable=false to McpHub and posts updated state", async () => {
@@ -852,7 +854,7 @@ describe("webviewMessageHandler - mcpEnabled", () => {
 		expect((mockShoferProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledTimes(1)
 		expect(mockMcpHub.handleMcpEnabledChange).toHaveBeenCalledWith(false)
-		expect(mockShoferProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+		expect(mockShoferProvider.postInitState).toHaveBeenCalledTimes(1)
 	})
 
 	it("handles missing McpHub instance gracefully and still posts state", async () => {
@@ -864,7 +866,7 @@ describe("webviewMessageHandler - mcpEnabled", () => {
 		})
 
 		expect((mockShoferProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
-		expect(mockShoferProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+		expect(mockShoferProvider.postInitState).toHaveBeenCalledTimes(1)
 	})
 })
 

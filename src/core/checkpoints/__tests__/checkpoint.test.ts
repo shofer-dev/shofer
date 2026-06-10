@@ -82,7 +82,6 @@ describe("Checkpoint functionality", () => {
 			},
 			log: vi.fn(),
 			postMessageToWebview: vi.fn(),
-			postStateToWebview: vi.fn(),
 			cancelTask: vi.fn(),
 		}
 

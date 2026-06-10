@@ -316,9 +316,6 @@ describe("Shofer", () => {
 
 		// Mock provider methods
 		mockProvider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebviewWithoutTaskHistory = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebviewWithoutShoferMessages = vi.fn().mockResolvedValue(undefined)
 		mockProvider.getTaskWithId = vi.fn().mockImplementation(async (id) => ({
 			historyItem: {
 				id,
@@ -936,9 +933,6 @@ describe("Shofer", () => {
 					getCurrentTask: vi.fn().mockReturnValue(undefined),
 					taskManager: { getFocusedTaskId: vi.fn().mockReturnValue(undefined) },
 					say: vi.fn(),
-					postStateToWebview: vi.fn().mockResolvedValue(undefined),
-					postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
-					postStateToWebviewWithoutShoferMessages: vi.fn().mockResolvedValue(undefined),
 					postMessageToWebview: vi.fn().mockResolvedValue(undefined),
 					updateTaskHistory: vi.fn().mockResolvedValue(undefined),
 				}
@@ -1828,9 +1822,6 @@ describe("Queued message processing after condense", () => {
 
 		const provider = new ShoferProvider(ctx, output as any, "sidebar", new ContextProxy(ctx)) as any
 		provider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
-		provider.postStateToWebview = vi.fn().mockResolvedValue(undefined)
-		provider.postStateToWebviewWithoutTaskHistory = vi.fn().mockResolvedValue(undefined)
-		provider.postStateToWebviewWithoutShoferMessages = vi.fn().mockResolvedValue(undefined)
 		provider.getState = vi.fn().mockResolvedValue({})
 		return provider
 	}
@@ -1968,9 +1959,6 @@ describe("pushToolResultToUserContent", () => {
 		) as any
 
 		mockProvider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebviewWithoutTaskHistory = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebviewWithoutShoferMessages = vi.fn().mockResolvedValue(undefined)
 	})
 
 	it("should add tool_result when not a duplicate", () => {
@@ -2026,7 +2014,6 @@ describe("pushToolResultToUserContent", () => {
 
 		// Verify only the first result is in the array
 		expect(task.userMessageContent[0]).toEqual(toolResult1)
-
 	})
 
 	it("should allow different tool_use_ids to be added", () => {

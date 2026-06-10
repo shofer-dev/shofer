@@ -263,9 +263,6 @@ describe("Task persistence", () => {
 		}
 
 		mockProvider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebviewWithoutTaskHistory = vi.fn().mockResolvedValue(undefined)
-		mockProvider.postStateToWebviewWithoutShoferMessages = vi.fn().mockResolvedValue(undefined)
 		mockProvider.updateTaskHistory = vi.fn().mockResolvedValue(undefined)
 	})
 

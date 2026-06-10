@@ -167,8 +167,9 @@ describe("Task grounding sources handling", () => {
 	beforeEach(() => {
 		// Mock provider with necessary methods
 		mockProvider = {
-			postStateToWebview: vi.fn().mockResolvedValue(undefined),
-			postStateToWebviewWithoutTaskHistory: vi.fn().mockResolvedValue(undefined),
+			postInitState: vi.fn().mockResolvedValue(undefined),
+			postConfigUpdate: vi.fn(),
+			postTaskStateUpdate: vi.fn(),
 			getState: vi.fn().mockResolvedValue({
 				mode: "code",
 				experiments: {},
