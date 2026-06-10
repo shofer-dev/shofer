@@ -112,6 +112,35 @@ export interface OutputField {
 	fieldType: string // "string" | "number" | "boolean"
 }
 
+/**
+ * Convert a WorkflowOutputStake's OutputSchema into a JSON Schema object
+ * suitable for the `attempt_completion` tool's `result` parameter.
+ *
+ * The mapping is a pure, total function because `fieldType` is a closed
+ * 3-value enum of flat scalars (no nesting, no recursion):
+ *   - "string"  → { "type": "string" }
+ *   - "number"  → { "type": "number" }
+ *   - "boolean" → { "type": "boolean" }
+ *
+ * The returned schema is within BOTH the universal structural subset (all
+ * providers accept it) AND the OpenAI strict-mode allowed subset (no
+ * `pattern`, `minLength`, `minimum`/`maximum`, `minItems`, `uniqueItems`).
+ * All fields are required and `additionalProperties: false` — matching
+ * the existing post-hoc validator in `collectStakeResults()`.
+ */
+export function contractToJsonSchema(o: OutputSchema): Record<string, unknown> {
+	const properties: Record<string, { type: string }> = {}
+	for (const f of o.fields) {
+		properties[f.name] = { type: f.fieldType }
+	}
+	return {
+		type: "object",
+		properties,
+		required: o.fields.map((f) => f.name),
+		additionalProperties: false,
+	}
+}
+
 export interface AwaitOp extends BaseNode {
 	type: "AwaitOp"
 	binding: string

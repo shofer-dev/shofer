@@ -371,6 +371,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	softTimeoutSec?: number
 
 	/**
+	 * Per-task JSON Schema override for the `attempt_completion` tool's
+	 * `result` parameter. When set, the generic `result: string` schema is
+	 * replaced with a structured object schema so providers with constrained
+	 * decoding enforce an output contract at decode time.
+	 *
+	 * Set by {@link WorkflowTask.spawnAgentTask} from the stake's `output:`
+	 * contract. When undefined, the default `result: string` schema applies.
+	 */
+	completionSchema?: Record<string, unknown>
+
+	/**
 	 * The mode associated with this task. Persisted across sessions
 	 * to maintain user context when reopening tasks from history.
 	 *
@@ -786,6 +797,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		isBackground,
 		softResultLength,
 		softTimeoutSec,
+		completionSchema,
 	}: TaskOptions) {
 		super()
 
@@ -859,6 +871,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.taskNumber = taskNumber
 		this.softResultLength = softResultLength
 		this.softTimeoutSec = softTimeoutSec
+		this.completionSchema = completionSchema
 		// Restore the cost limit from history ONLY for root tasks. Subtasks
 		// resolve their effective limit via resolveCostLimit() and never carry
 		// their own — keeping a single source of truth on the root.
@@ -2741,6 +2754,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				disabledTools: state?.disabledTools,
 				modelInfo,
 				includeAllToolsWithRestrictions: false,
+				completionSchema: this.completionSchema,
 			})
 			allTools = toolsResult.tools
 		}
@@ -5679,7 +5693,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					taskLog.error("MCP servers failed to connect in time")
 				})
 				// Capture the server-set ID for cache-key participation (see H15).
-				this._mcpServerSetId = mcpHub.getServers()
+				this._mcpServerSetId = mcpHub
+					.getServers()
 					.map((s) => s.name)
 					.sort()
 					.join(",")
@@ -5746,6 +5761,25 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				)
 				constraints.push(
 					"- Do not ask the user follow-up questions — the parent cannot answer them. If you need clarification, make your best judgment and proceed.",
+				)
+			}
+
+			// Peer messaging awareness — when knownPeers has more than just the parent,
+			// tell the subtask about its available peer communication tools.
+			const nonParentPeers = this.knownPeers ? [...this.knownPeers].filter((id) => id !== this.parentTaskId) : []
+			if (nonParentPeers.length > 0) {
+				constraints.push("")
+				constraints.push(
+					"- Peer messaging: you have access to `send_message_to_task` and `list_background_tasks` for inter-task communication.",
+				)
+				constraints.push(
+					`  Known peer task IDs: ${nonParentPeers.join(", ")}. Use list_background_tasks(scope="peers") to discover more.`,
+				)
+			} else if (this.knownPeers && this.parentTaskId && this.knownPeers.has(this.parentTaskId)) {
+				// Even with parent-only peers, let the child know it CAN message the parent.
+				constraints.push("")
+				constraints.push(
+					`- Peer messaging: you have access to send_message_to_task and can message your parent (task ID: ${this.parentTaskId}) if needed. Use list_background_tasks(scope="peers") to discover sibling tasks.`,
 				)
 			}
 
@@ -5830,6 +5864,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			JSON.stringify(apiConfiguration ?? {}),
 			supportsAllowedFunctionNames,
 			this.api.getModel().id,
+			JSON.stringify(this.completionSchema ?? null),
 		].join("|")
 	}
 
@@ -5861,6 +5896,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			disabledTools: state?.disabledTools,
 			modelInfo,
 			includeAllToolsWithRestrictions: false,
+			completionSchema: this.completionSchema,
 		})
 		this._cachedToolsResult = {
 			tools: toolsResult.tools,
@@ -5914,6 +5950,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				disabledTools: state?.disabledTools,
 				modelInfo,
 				includeAllToolsWithRestrictions: false,
+				completionSchema: this.completionSchema,
 			})
 			allTools = toolsResult.tools
 		}
@@ -6306,6 +6343,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				disabledTools: state?.disabledTools,
 				modelInfo: this.api.getModel().info,
 				includeAllToolsWithRestrictions: supportsAllowedFunctionNames,
+				completionSchema: this.completionSchema,
 			})
 			this._cachedToolsResult = {
 				tools: toolsResult.tools,

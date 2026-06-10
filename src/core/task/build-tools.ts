@@ -34,6 +34,13 @@ interface BuildToolsOptions {
 	 * to pass all tool definitions while restricting callable tools.
 	 */
 	includeAllToolsWithRestrictions?: boolean
+	/**
+	 * Per-task JSON Schema override for the `attempt_completion` tool's
+	 * `result` parameter. Threaded from {@link Task.completionSchema}.
+	 * When set, the generic `result: string` is replaced with a structured
+	 * object schema.
+	 */
+	completionSchema?: Record<string, unknown>
 }
 
 interface BuildToolsResult {
@@ -272,7 +279,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 
 	const supportsImages = modelInfo?.supportsImages ?? false
 
-	const nativeTools = getNativeTools({ supportsImages })
+	const nativeTools = getNativeTools({ supportsImages, completionSchema: options.completionSchema })
 
 	const filteredNativeTools = filterNativeToolsForMode(
 		nativeTools,

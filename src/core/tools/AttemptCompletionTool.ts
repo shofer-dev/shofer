@@ -14,7 +14,7 @@ import { getOutputChannel } from "../../extension"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
 interface AttemptCompletionParams {
-	result: string
+	result: string | Record<string, unknown>
 	rating: CompletionRating
 	feedback?: string
 	command?: string
@@ -87,8 +87,21 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const { result, rating, feedback } = params
 		const { handleError, pushToolResult } = callbacks
 
+		// When the task has a `completionSchema` (set by workflow output contracts),
+		// the LLM returns `result` as a structured object rather than a free-form
+		// string.  Normalise to a string for display + persistence so the rest of
+		// the pipeline — `say("completion_result", …)`, `completionResultSummary`,
+		// and the post-hoc validator in `collectStakeResults()` — sees a stable
+		// string representation.
+		const effectiveResult: string =
+			typeof result === "object" && result !== null
+				? JSON.stringify(result)
+				: typeof result === "string"
+					? result
+					: ""
+
 		taskLog.info(
-			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${rating}, result=${result?.substring(0, 100)}`,
+			`[AttemptCompletionTool.execute] START taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}, rating=${rating}, result=${effectiveResult?.substring(0, 100)}`,
 		)
 
 		// Prevent attempt_completion if any tool failed in the current turn
@@ -120,7 +133,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		}
 
 		try {
-			if (!result) {
+			// Check for missing result: empty string, null, undefined, or empty object.
+			if (!result || (typeof result === "object" && Object.keys(result).length === 0)) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("attempt_completion")
 				pushToolResult(await task.sayAndCreateMissingParamError("attempt_completion", "result"))
@@ -160,14 +174,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// the subtask should keep its result within budget but we don't
 			// hard-truncate here.  The MAX_SUBTASK_RESULT_LENGTH cap prevents
 			// runaway subtasks from blowing up the parent's context.
-			let effectiveResult = result
-			if (effectiveResult.length > MAX_SUBTASK_RESULT_LENGTH) {
-				effectiveResult =
-					effectiveResult.slice(0, MAX_SUBTASK_RESULT_LENGTH) +
+			let cappedResult = effectiveResult
+			if (cappedResult.length > MAX_SUBTASK_RESULT_LENGTH) {
+				cappedResult =
+					cappedResult.slice(0, MAX_SUBTASK_RESULT_LENGTH) +
 					`\n[...truncated to ${MAX_SUBTASK_RESULT_LENGTH} characters (hard safety cap)]`
 			}
 
-			await task.say("completion_result", effectiveResult, undefined, false)
+			await task.say("completion_result", cappedResult, undefined, false)
 
 			taskLog.info(
 				`[AttemptCompletionTool.execute] Checking delegation: taskId=${task.taskId}, parentTaskId=${task.parentTaskId ?? "none"}`,
@@ -181,7 +195,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				try {
 					const peerHandled = await provider2.resolvePendingSyncForRecipient({
 						recipientTaskId: task.taskId,
-						completionResult: effectiveResult,
+						completionResult: cappedResult,
 					})
 
 					if (peerHandled) {
@@ -215,7 +229,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						const blockingHandled = await provider.resumeBlockingParent({
 							parentTaskId: task.parentTaskId,
 							childTaskId: task.taskId,
-							completionResult: effectiveResult,
+							completionResult: cappedResult,
 						})
 						if (blockingHandled) {
 							taskLog.info(
@@ -255,7 +269,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								// "completed" state. Only pass the fields we intend to update.
 								await provider.updateTaskHistory({
 									id: task.taskId,
-									completionResultSummary: effectiveResult,
+									completionResultSummary: cappedResult,
 									insertions: fileStats.insertions,
 									deletions: fileStats.deletions,
 								} as HistoryItem)
@@ -333,7 +347,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						// that TaskManager.set/persistState() will set.
 						await provider.updateTaskHistory({
 							id: task.taskId,
-							completionResultSummary: effectiveResult,
+							completionResultSummary: cappedResult,
 							insertions: fileStats.insertions,
 							deletions: fileStats.deletions,
 						} as HistoryItem)
@@ -360,8 +374,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	override async handlePartial(task: Task, block: ToolUse<"attempt_completion">): Promise<void> {
-		const result: string | undefined = block.params.result
+		const raw: unknown = block.params.result
 		const command: string | undefined = block.params.command
+		// Normalize to string for display (object result from contract schema → JSON)
+		const result: string =
+			typeof raw === "object" && raw !== null ? JSON.stringify(raw) : typeof raw === "string" ? raw : ""
 
 		const lastMessage = task.shoferMessages.at(-1)
 
@@ -369,11 +386,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (lastMessage && lastMessage.ask === "command") {
 				await task.ask("command", command ?? "", block.partial).catch(() => {})
 			} else {
-				await task.say("completion_result", result ?? "", undefined, false)
+				await task.say("completion_result", result, undefined, false)
 				await task.ask("command", command ?? "", block.partial).catch(() => {})
 			}
 		} else {
-			await task.say("completion_result", result ?? "", undefined, block.partial)
+			await task.say("completion_result", result, undefined, block.partial)
 		}
 	}
 

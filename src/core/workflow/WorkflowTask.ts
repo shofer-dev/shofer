@@ -56,8 +56,9 @@ import type {
 	CommitOp,
 	LetOp,
 	SetOp,
+	OutputSchema,
 } from "./slang-ast"
-import { exprAsNumber } from "./slang-ast"
+import { exprAsNumber, contractToJsonSchema } from "./slang-ast"
 
 // ─── Adapter: upstream AST → WorkflowTask needs ───
 
@@ -753,13 +754,23 @@ export class WorkflowTask extends Task {
 			workflowLog.info(
 				`[WorkflowTask#${this.taskId}] #TRACE dispatchStakes '${name}' isNew=${isNew} taskId=${state.taskId || "none"} promptLen=${prompt.length}`,
 			)
-			if (isNew) await this.spawnAgentTask(name, prompt)
+			if (isNew) await this.spawnAgentTask(name, prompt, instr.op.output)
 			else await this.resumeAgentTask(name, prompt)
 			state.status = "running"
 		}
 	}
 
-	private async spawnAgentTask(agentName: string, prompt: string): Promise<void> {
+	/**
+	 * Spawn a background child Task for the given agent.
+	 *
+	 * @param agentName   Workflow agent name
+	 * @param prompt      System prompt for the agent task
+	 * @param outputSchema Optional stake output contract — when set, synthesizes
+	 *                     a JSON Schema override for `attempt_completion`'s
+	 *                     `result` parameter so providers with constrained
+	 *                     decoding enforce the contract at decode time.
+	 */
+	private async spawnAgentTask(agentName: string, prompt: string, outputSchema?: OutputSchema): Promise<void> {
 		const provider = this.providerRef.deref()
 		if (!provider) {
 			workflowLog.info(`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' FAIL: no provider`)
@@ -788,12 +799,14 @@ export class WorkflowTask extends Task {
 			workflowLog.info(
 				`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' creating task mode='${mode}' isBackground=true`,
 			)
+			const completionSchema = outputSchema ? contractToJsonSchema(outputSchema) : undefined
 			const task = await provider.createTask(prompt, undefined, this, {
 				isBackground: true,
 				initialMode: mode,
 				initialState: { lifecycle: "idle" },
 				openInStack: false,
 				keepCurrentTask: true,
+				completionSchema,
 			})
 			if (task) {
 				// Register with TaskManager so the ManagedTask event listeners

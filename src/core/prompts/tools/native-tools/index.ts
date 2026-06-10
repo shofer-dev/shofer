@@ -5,6 +5,47 @@ import applyPatch from "./apply_patch"
 import askFollowupQuestion from "./ask_followup_question"
 import attemptCompletion from "./attempt_completion"
 import ragSearch from "./rag_search"
+
+/**
+ * Return a deep copy of the standard `attempt_completion` tool definition
+ * with its `result` parameter schema replaced by the given JSON Schema
+ * contract.
+ *
+ * The contract schema is injected as `result.parameters` so providers with
+ * constrained decoding (OpenAI/Gemini) enforce it at decode time.
+ * Providers without (DeepSeek Cloud) treat it as a semantic hint.
+ */
+function applyCompletionSchema(
+	base: OpenAI.Chat.ChatCompletionFunctionTool,
+	schema: Record<string, unknown>,
+): OpenAI.Chat.ChatCompletionFunctionTool {
+	return {
+		...base,
+		function: {
+			...base.function,
+			parameters: {
+				type: "object",
+				properties: {
+					result: schema as OpenAI.FunctionParameters,
+					rating: {
+						type: "string",
+						description: "Self-assessment rating: 'poor', 'well', or 'excellent'",
+						enum: ["poor", "well", "excellent"],
+					},
+					feedback: {
+						type: "string",
+						description:
+							"Optional feedback for Shofer.Dev engineers to improve tooling, system prompt, etc. Only provide if you detected something that didn't work as expected or have a concrete improvement idea.",
+					},
+				},
+				required: ["result", "rating"],
+				additionalProperties: false,
+			},
+			// Keep the base strict flag — it's already true on attempt_completion
+			strict: true,
+		},
+	}
+}
 import gitSearch from "./git_search"
 import lspSearch from "./lsp_search"
 import createDirectory from "./create_directory"
@@ -61,6 +102,13 @@ export type { ReadFileToolOptions } from "./read_file"
 export interface NativeToolsOptions {
 	/** Whether the model supports image processing (default: false) */
 	supportsImages?: boolean
+	/**
+	 * Per-task JSON Schema override for the `attempt_completion` tool's
+	 * `result` parameter. When set, the generic `result: string` is
+	 * replaced with the contract schema so providers with constrained
+	 * decoding enforce it at decode time.
+	 */
+	completionSchema?: Record<string, unknown>
 }
 
 /**
@@ -70,19 +118,21 @@ export interface NativeToolsOptions {
  * @returns Array of native tool definitions
  */
 export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.ChatCompletionTool[] {
-	const { supportsImages = false } = options
+	const { supportsImages = false, completionSchema } = options
 
 	const readFileOptions: ReadFileToolOptions = {
 		supportsImages,
 	}
 
-	return [
+	const tools: OpenAI.Chat.ChatCompletionTool[] = [
 		askAssistantAgent,
 		accessMcpResource,
 		apply_diff,
 		applyPatch,
 		askFollowupQuestion,
-		attemptCompletion,
+		completionSchema
+			? applyCompletionSchema(attemptCompletion as OpenAI.Chat.ChatCompletionFunctionTool, completionSchema)
+			: attemptCompletion,
 		ragSearch,
 		gitSearch,
 		lspSearch,
@@ -128,7 +178,8 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		sleep,
 		viewImage,
 		writeToFile,
-	] satisfies OpenAI.Chat.ChatCompletionTool[]
+	]
+	return tools
 }
 
 // Backward compatibility: export default tools with line ranges enabled

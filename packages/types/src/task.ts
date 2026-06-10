@@ -175,6 +175,21 @@ export interface CreateTaskOptions {
 	 * Informational only — used to guide the subtask's pacing.
 	 */
 	softTimeoutSec?: number
+	/**
+	 * Per-task JSON Schema override for the `attempt_completion` tool's
+	 * `result` parameter. When set, the generic `result: string` schema is
+	 * replaced with a structured object schema (flat scalars, all-required,
+	 * `additionalProperties: false`) so providers with constrained decoding
+	 * enforce the contract at decode time.
+	 *
+	 * This is a workflow-layer concept — set by `WorkflowTask.spawnAgentTask()`
+	 * from the stake's `output:` contract AST. It is provider-agnostic: the
+	 * schema is safe to send everywhere (within the universal + strict-safe
+	 * subset), and providers without constrained decoding treat it as a strong
+	 * semantic hint. The existing post-hoc validator in `collectStakeResults()`
+	 * remains the universal floor.
+	 */
+	completionSchema?: Record<string, unknown>
 }
 
 export enum TaskStatus {
