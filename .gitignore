@@ -1,4 +1,5 @@
 src/tsconfig.tsbuildinfo
+.claude
 .pnpm-store
 dist
 out
