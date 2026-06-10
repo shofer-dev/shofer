@@ -1,5 +1,10 @@
 import * as path from "path"
-import { isEmbeddedWorktreeTask, validateWorktreePath, getWorktreeCommandWarning } from "../worktreePathGuard"
+import {
+	isEmbeddedWorktreeTask,
+	validateWorktreePath,
+	getWorktreeCommandWarning,
+	getWorktreeSandboxPrefix,
+} from "../worktreePathGuard"
 
 /**
  * Creates a minimal mock Task object sufficient for the guard functions.
@@ -125,5 +130,49 @@ describe("getWorktreeCommandWarning", () => {
 		const task = mockTask(WORKTREE, WORKSPACE)
 		const warning = getWorktreeCommandWarning(task)
 		expect(warning).toContain("repo-hl911")
+	})
+})
+
+describe("getWorktreeSandboxPrefix", () => {
+	const origPlatform = process.platform
+
+	afterEach(() => {
+		Object.defineProperty(process, "platform", { value: origPlatform })
+	})
+
+	it("returns null for non-worktree tasks", () => {
+		const task = mockTask(WORKSPACE, WORKSPACE)
+		expect(getWorktreeSandboxPrefix(task)).toBeNull()
+	})
+
+	it("returns null on non-Linux platforms", () => {
+		Object.defineProperty(process, "platform", { value: "darwin" })
+		const task = mockTask(WORKTREE, WORKSPACE)
+		expect(getWorktreeSandboxPrefix(task)).toBeNull()
+	})
+
+	it("returns null on Windows", () => {
+		Object.defineProperty(process, "platform", { value: "win32" })
+		const task = mockTask(WORKTREE, WORKSPACE)
+		expect(getWorktreeSandboxPrefix(task)).toBeNull()
+	})
+
+	it("returns an array on Linux worktree tasks (binary present)", () => {
+		Object.defineProperty(process, "platform", { value: "linux" })
+		const task = mockTask(WORKTREE, WORKSPACE)
+		const fs = require("fs") as typeof import("fs")
+		const sandboxBinary = path.resolve(__dirname, "..", "..", "..", "sandbox", "shofer-sandbox")
+		const result = getWorktreeSandboxPrefix(task)
+
+		if (fs.existsSync(sandboxBinary)) {
+			// Binary present: full sandbox prefix is returned.
+			expect(result).not.toBeNull()
+			expect(result![0]).toBe(sandboxBinary)
+			expect(result![1]).toBe(path.resolve(WORKTREE))
+			expect(result![2]).toBe("--")
+		} else {
+			// Binary not built: returns null with diagnostic log.
+			expect(result).toBeNull()
+		}
 	})
 })

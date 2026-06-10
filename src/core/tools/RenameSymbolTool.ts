@@ -136,6 +136,19 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 				return
 			}
 
+			// For worktree-scoped tasks, validate that the rename does not
+			// modify files outside the worktree boundary before applying edits.
+			for (const relPath of affectedRelPaths) {
+				const worktreeErr = validateWorktreePath(task, relPath)
+				if (worktreeErr) {
+					task.consecutiveMistakeCount++
+					task.recordToolError("rename_symbol")
+					task.didToolFailInCurrentTurn = true
+					pushToolResult(worktreeErr)
+					return
+				}
+			}
+
 			// Capture originals before mutation so the file-changes panel
 			// can show diffs and support revert/accept.
 			for (const relPath of affectedRelPaths) {

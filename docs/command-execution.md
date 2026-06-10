@@ -272,14 +272,28 @@ Total matches: 42 | Showing first 42
 
 ## 7. Terminal Backend Selection
 
-The terminal provider is chosen based on the `terminalShellIntegrationDisabled` setting:
+The terminal provider is chosen based on the `terminalShellIntegrationDisabled` setting, with an automatic override for worktree-scoped tasks:
 
-| Setting           | Backend          | Execution                        | Kill mechanism                         |
-| ----------------- | ---------------- | -------------------------------- | -------------------------------------- |
-| `false` (default) | VS Code Terminal | Shell integration via `sendText` | SIGINT via `\x03`                      |
-| `true`            | Execa            | Subprocess via `execa`           | SIGKILL + `psTree` for child processes |
+| Condition                          | Backend          | Execution                        | Kill mechanism                         |
+| ---------------------------------- | ---------------- | -------------------------------- | -------------------------------------- |
+| `false` (default), non-worktree    | VS Code Terminal | Shell integration via `sendText` | SIGINT via `\x03`                      |
+| `true`, non-worktree               | Execa            | Subprocess via `execa`           | SIGKILL + `psTree` for child processes |
+| Worktree task on **Linux**         | Execa (forced)   | Sandboxed via `shofer-sandbox`   | SIGKILL + `psTree` for child processes |
+| Worktree task on **macOS/Windows** | User's setting   | Advisory warning in approval     | Per backend                            |
 
 If the VS Code terminal throws a [`ShellIntegrationError`](../src/core/tools/ExecuteCommandTool.ts:25), the tool automatically retries with execa (without requiring the user to change settings).
+
+### 7.1 Worktree Shell Sandboxing (Linux)
+
+When a task runs inside an embedded worktree on Linux, `execute_command` prepends the `shofer-sandbox` wrapper binary ([`../sandbox/main.go`](../sandbox/main.go)) to the shell command. The wrapper:
+
+1. Applies a **Landlock write-only sandbox** (kernel 5.13+) — writes are restricted to the worktree directory, `/tmp`, and `/dev/null`; reads remain unrestricted
+2. Falls back to **bubblewrap** (`bwrap`) on older kernels — creates a private mount namespace with the worktree as the only writable location
+3. **Forces the execa backend** — the VS Code terminal path cannot be sandboxed because VS Code owns the process lifecycle
+
+The sandbox wrapper is the **outermost** process: `shofer-sandbox <worktree-dir> -- /bin/sh -c '<user-command>'`. This ensures the shell itself and all subprocesses inherit the Landlock ruleset. On macOS and Windows, no kernel sandbox is available — the advisory warning remains the only guard.
+
+**Key files:** [`getWorktreeSandboxPrefix()`](../src/utils/worktreePathGuard.ts), [`sandbox/main.go`](../sandbox/main.go)
 
 ---
 
@@ -295,6 +309,8 @@ If the VS Code terminal throws a [`ShellIntegrationError`](../src/core/tools/Exe
 | [`src/integrations/terminal/TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)                             | VS Code shell-integration terminal process                          |
 | [`src/integrations/terminal/ExecaTerminalProcess.ts`](../src/integrations/terminal/ExecaTerminalProcess.ts)                   | Execa fallback terminal process                                     |
 | [`src/integrations/terminal/TerminalRegistry.ts`](../src/integrations/terminal/TerminalRegistry.ts)                           | Terminal lifecycle management                                       |
+| [`src/utils/worktreePathGuard.ts`](../src/utils/worktreePathGuard.ts)                                                         | Worktree sandbox prefix resolution (`getWorktreeSandboxPrefix`)     |
+| [`sandbox/main.go`](../sandbox/main.go)                                                                                       | Landlock/bwrap sandbox wrapper binary (Go, static-linked)           |
 | [`src/core/task/Task.ts`](../src/core/task/Task.ts)                                                                           | Task-level abort (Stop button → `terminalProcess.abort()`)          |
 | [`webview-ui/src/components/chat/CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)               | UI: command output display + OctagonX abort button                  |
 | [`webview-ui/src/components/chat/ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                               | UI: Reject button → terminal abort                                  |

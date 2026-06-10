@@ -19,8 +19,16 @@ import { Package } from "../../shared/package"
 import { t } from "../../i18n"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { getWorktreeCommandWarning } from "../../utils/worktreePathGuard"
+import { getWorktreeCommandWarning, getWorktreeSandboxPrefix } from "../../utils/worktreePathGuard"
 import { taskLog } from "../../utils/logging/subsystems"
+
+/**
+ * Shell-quotes a command string for safe embedding in a sh -c argument.
+ * Uses single-quote wrapping with internal single quotes escaped as '\''.
+ */
+function shellQuote(s: string): string {
+	return `'${s.replace(/'/g, `'\\''`)}'`
+}
 
 class ShellIntegrationError extends Error {}
 
@@ -64,12 +72,23 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 
 			task.consecutiveMistakeCount = 0
 
-			// For worktree-scoped tasks, prepend a warning to the approval
-			// message so the user can see the command isn't sandboxed.
+			// For worktree-scoped tasks on Linux, force the execa backend and
+			// prepend the sandbox wrapper so all shell commands are write-restricted
+			// to the worktree directory. On non-Linux platforms, fall back to the
+			// advisory warning since no kernel sandbox is available.
+			const sandboxPrefix = getWorktreeSandboxPrefix(task)
+
 			let commandToApprove = command
-			const worktreeWarning = getWorktreeCommandWarning(task)
-			if (worktreeWarning) {
-				commandToApprove = `${worktreeWarning}\n${commandToApprove}`
+			if (sandboxPrefix) {
+				// Linux worktree task: sandboxed — show a concise info message.
+				const worktreeName = path.basename(path.resolve(task.cwd))
+				commandToApprove = `🔒 WORKTREE SANDBOX (${worktreeName}): writes restricted to worktree\n${commandToApprove}`
+			} else {
+				// Non-Linux worktree task or master task: use advisory warning.
+				const worktreeWarning = getWorktreeCommandWarning(task)
+				if (worktreeWarning) {
+					commandToApprove = `${worktreeWarning}\n${commandToApprove}`
+				}
 			}
 
 			const didApprove = await askApproval("command", commandToApprove)
@@ -82,7 +101,12 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 			const provider = await task.providerRef.deref()
 			const providerState = await provider?.getState()
 
-			const { terminalShellIntegrationDisabled = true } = providerState ?? {}
+			// Force execa backend for sandboxed worktree tasks so the sandbox
+			// wrapper runs as the outermost process. For non-sandboxed tasks,
+			// read the user's shell-integration preference from provider state.
+			const terminalShellIntegrationDisabled = sandboxPrefix
+				? true
+				: (providerState?.terminalShellIntegrationDisabled ?? true)
 
 			// Get command execution timeout from VSCode configuration (in seconds)
 			const commandExecutionTimeoutSeconds = vscode.workspace
@@ -103,9 +127,17 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 			// Convert agent-specified timeout from seconds to milliseconds
 			const agentTimeout = resolveAgentTimeoutMs(timeoutSeconds)
 
+			// When sandboxing, the user's command must be passed as a single
+			// shell-quoted argument to /bin/sh -c so the outer shell (execa)
+			// doesn't word-split it.  shellQuote uses single-quote wrapping
+			// with internal ' escaped as '\''.
+			const effectiveCommand = sandboxPrefix
+				? `${sandboxPrefix.join(" ")} /bin/sh -c ${shellQuote(command)}`
+				: command
+
 			const options: ExecuteCommandOptions = {
 				executionId,
-				command: command,
+				command: effectiveCommand,
 				customCwd,
 				terminalShellIntegrationDisabled,
 				commandExecutionTimeout,

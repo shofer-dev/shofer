@@ -70,22 +70,22 @@ When a task runs inside an embedded worktree (`task.cwd` points into `.shofer/wo
 
 **Guarded tools:**
 
-| Tool                   | What is validated                 |
-| ---------------------- | --------------------------------- |
-| `write_to_file`        | `path`                            |
-| `apply_diff`           | `path`                            |
-| `create_directory`     | `path`                            |
-| `file` (rm)            | `path`                            |
-| `file` (mv)            | `path` + `destination`            |
-| `insert_edit`          | `filePath`                        |
-| `sed`                  | `path`                            |
-| `rename_symbol`        | `filePath` (the symbol location)  |
-| `create_new_workspace` | `projectRoot` (path + name)       |
-| `execute_command`      | advisory warning in approval only |
+| Tool                   | What is validated                                                      |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `write_to_file`        | `path`                                                                 |
+| `apply_diff`           | `path`                                                                 |
+| `create_directory`     | `path`                                                                 |
+| `file` (rm)            | `path`                                                                 |
+| `file` (mv)            | `path` + `destination`                                                 |
+| `insert_edit`          | `filePath`                                                             |
+| `sed`                  | `path`                                                                 |
+| `rename_symbol`        | `filePath` (the symbol location)                                       |
+| `create_new_workspace` | `projectRoot` (path + name)                                            |
+| `execute_command`      | sandboxed on Linux (Landlock/bwrap), advisory warning on macOS/Windows |
 
 **Implementation:** [`validateWorktreePath()`](../src/utils/worktreePathGuard.ts) resolves the target against `task.cwd` and verifies it stays within the worktree directory. It detects `..` traversal, absolute paths pointing outside, and any symlinks that resolve elsewhere. For non-worktree tasks, the guard is a no-op.
 
-**`execute_command` is advisory only:** Shell commands are not sandboxed — they can escape via `cd`, absolute paths, or redirects. The approval prompt prepends a ⚠️ warning showing the worktree context so the user can inspect the command before approving.
+**`execute_command` sandboxing:** On Linux, shell commands in worktree-scoped tasks are automatically sandboxed using the `shofer-sandbox` wrapper binary ([`../sandbox/main.go`](../sandbox/main.go)). The wrapper applies a Landlock write-only sandbox (kernel 5.13+) or falls back to bubblewrap, restricting writes to the worktree directory, `/tmp`, and `/dev/null`. Reads remain unrestricted. On macOS/Windows, no kernel sandbox is available — the approval prompt displays a ⚠️ warning instead.
 
 ### 4. Checkpoint Isolation (`src/services/checkpoints/`)
 
@@ -254,5 +254,4 @@ This section catalogues discrepancies, omissions, and enhancement opportunities 
 2. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
 3. **`.shofer/worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
 4. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC, but not through a public extension API
-5. **`execute_command` is not sandboxed** — The path isolation guard blocks file-level tool mutations, but shell commands can still escape the worktree via `cd`, absolute paths, or redirects. A warning is displayed in the approval prompt as a best-effort safeguard.
-6. **`rename_symbol` may affect files outside the worktree** — The LSP rename provider operates on workspace scope (the entire repo), so a rename initiated from a worktree file could modify references in the master checkout or other worktrees. The guard validates only the source file's location, not the rename's downstream effects.
+5. **Shell sandboxing limited to Linux** — On macOS and Windows, `execute_command` in worktree tasks is not sandboxed (no kernel sandbox available). A warning is displayed in the approval prompt as a best-effort safeguard.

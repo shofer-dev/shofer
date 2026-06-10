@@ -21,6 +21,7 @@
  * Normal (non-worktree) tasks always pass validation — the guard is a no-op.
  */
 
+import * as fs from "fs"
 import * as path from "path"
 import type { Task } from "../core/task/Task"
 
@@ -82,6 +83,60 @@ export function validateWorktreePath(task: Task, relPath: string): string | null
 	}
 
 	return null
+}
+
+/**
+ * Returns whether the current platform is Linux, where kernel-level sandboxing
+ * (Landlock / bwrap) is available.
+ */
+function isLinux(): boolean {
+	return process.platform === "linux"
+}
+
+/**
+ * Returns the sandbox wrapper command prefix for worktree-scoped shell commands.
+ *
+ * On Linux, this returns the absolute path to the shofer-sandbox binary followed
+ * by the worktree directory, so the caller can prepend it to the user's command.
+ * On non-Linux platforms (macOS, Windows), it returns null — no kernel sandbox
+ * is available, so the advisory warning (getWorktreeCommandWarning) is the only
+ * guard.
+ *
+ * @param task - The task instance
+ * @returns The sandbox prefix array, or null if sandboxing is unavailable
+ */
+export function getWorktreeSandboxPrefix(task: Task): string[] | null {
+	if (!isEmbeddedWorktreeTask(task) || !isLinux()) {
+		return null
+	}
+
+	const worktreeDir = path.resolve(task.cwd)
+	// The sandbox binary lives alongside the extension's source; at runtime,
+	// __dirname resolves to the compiled output directory. The binary is at
+	// <extension-root>/sandbox/shofer-sandbox.
+	const sandboxBinary = path.resolve(__dirname, "..", "..", "sandbox", "shofer-sandbox")
+
+	// If the binary is missing or non-executable, sandboxing is unavailable.
+	// Log a diagnostic so the misconfiguration is debuggable.
+	if (!fs.existsSync(sandboxBinary)) {
+		// Lazy dynamic import to avoid a circular require with extension.ts.
+		void import("../extension")
+			.then(({ getOutputChannel }) => {
+				const ch = getOutputChannel()
+				if (!ch) return
+				ch.appendLine(
+					`[worktreePathGuard] shofer-sandbox binary not found at ${sandboxBinary}. ` +
+						`Shell commands in worktree tasks will NOT be sandboxed. ` +
+						`Build the binary: cd sandbox && GOWORK=off CGO_ENABLED=0 go build -o shofer-sandbox .`,
+				)
+			})
+			.catch(() => {
+				// channel not yet wired; drop silently
+			})
+		return null
+	}
+
+	return [sandboxBinary, worktreeDir, "--"]
 }
 
 /**
