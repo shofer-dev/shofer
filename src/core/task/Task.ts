@@ -606,6 +606,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Skill tracking — maps skill name to SKILL.md absolute path
 	loadedSkills: Map<string, string> = new Map()
 
+	// H15: Per-turn system prompt cache.
+	// The assembled prompt (base + subtask-constraints) is stable across
+	// round-trips within a turn; peer notifications are appended fresh.
+	// Cleared at turn start (initiateTaskLoop) and on context-management
+	// (condenseContext / handleContextWindowExceededError).
+	_cachedSystemPromptBase: string | null = null
+	_cachedSystemPromptKey: string = ""
+
+	// H16: Per-request tool-array cache.
+	// buildNativeToolsArrayWithRestrictions is called up to 3× per
+	// attemptApiRequest (context management, actual call, + Gemini
+	// variant).  Compute once and reuse within the request scope.
+	_cachedToolsResult: {
+		tools: import("openai").default.Chat.ChatCompletionTool[]
+		allowedFunctionNames?: string[]
+	} | null = null
+	_cachedToolsKey: string = ""
+
 	// Checkpoints
 	enableCheckpoints: boolean
 	checkpointTimeout: number
@@ -2794,6 +2812,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Clear loaded skills — summarization invalidates previously loaded skill instructions
 		this.loadedSkills.clear()
+		// H15: Condensation invalidates the system prompt cache (context changed).
+		this._cachedSystemPromptBase = null
+		this._cachedSystemPromptKey = ""
 
 		// Process any queued messages after condensing completes
 		this.processQueuedMessages()
@@ -4005,6 +4026,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		)
 		// Kicks off the checkpoints initialization process in the background.
 		getCheckpointService(this)
+
+		// H15: Invalidate per-turn system prompt and tool-array caches.
+		this._cachedSystemPromptBase = null
+		this._cachedSystemPromptKey = ""
+		this._cachedToolsResult = null
+		this._cachedToolsKey = ""
 
 		let nextUserContent = userContent
 		let includeFileDetails = true
@@ -5580,32 +5607,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async getSystemPrompt(): Promise<string> {
-		const { mcpEnabled } = (await this.providerRef.deref()?.getState()) ?? {}
-		let mcpHub: McpHub | undefined
-		if (mcpEnabled ?? true) {
-			const provider = this.providerRef.deref()
-
-			if (!provider) {
-				throw new Error("Provider reference lost during view transition")
-			}
-
-			// Wait for MCP hub initialization through McpServerManager
-			mcpHub = await McpServerManager.getInstance(provider.context, provider)
-
-			if (!mcpHub) {
-				throw new Error("Failed to get MCP hub from server manager")
-			}
-
-			// Wait for MCP servers to be connected before generating system prompt
-			await pWaitFor(() => !mcpHub!.isConnecting, { timeout: 10_000 }).catch(() => {
-				taskLog.error("MCP servers failed to connect in time")
-			})
-		}
-
-		const shoferIgnoreInstructions = this.shoferIgnoreController?.getInstructions()
-
 		const state = await this.providerRef.deref()?.getState()
-
 		const {
 			mode,
 			customModes,
@@ -5616,29 +5618,63 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			apiConfiguration,
 			enableSubfolderRules,
 			useAgentRules,
+			mcpEnabled,
 		} = state ?? {}
 
-		return await (async () => {
-			const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref()
+		if (!provider) {
+			throw new Error("Provider not available")
+		}
 
-			if (!provider) {
-				throw new Error("Provider not available")
+		const modelInfo = this.api.getModel().info
+		const taskMode = this._taskMode || (mode ?? defaultModeSlug)
+
+		// H15: Build a cache key covering every stable input to the system prompt.
+		// Peer notifications + subtask constraints are appended below; they don't
+		// participate in the cache key because they are always fresh per request.
+		const cacheKey = [
+			taskMode,
+			this.cwd,
+			customInstructions ?? "",
+			JSON.stringify(experiments ?? {}),
+			language ?? "",
+			enableSubfolderRules ?? false,
+			useAgentRules ?? true,
+			apiConfiguration?.todoListEnabled ?? true,
+			modelInfo?.isStealthModel ?? false,
+			vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false),
+			this.api.getModel().id,
+			mcpEnabled ?? true,
+			// shoferIgnore instructions are derived from files; include as cache bust.
+			this.shoferIgnoreController?.getInstructions() ?? "",
+		].join("|")
+
+		let systemPrompt: string
+		if (this._cachedSystemPromptBase !== null && this._cachedSystemPromptKey === cacheKey) {
+			systemPrompt = this._cachedSystemPromptBase
+		} else {
+			// H17: MCP-connect gate only fires on cache miss — sidesteps the
+			// per-request pWaitFor overhead when the cache is hot.
+			let mcpHub: McpHub | undefined
+			if (mcpEnabled ?? true) {
+				mcpHub = await McpServerManager.getInstance(provider.context, provider)
+				if (!mcpHub) {
+					throw new Error("Failed to get MCP hub from server manager")
+				}
+				await pWaitFor(() => !mcpHub!.isConnecting, { timeout: 10_000 }).catch(() => {
+					taskLog.error("MCP servers failed to connect in time")
+				})
 			}
 
-			const modelInfo = this.api.getModel().info
+			const shoferIgnoreInstructions = this.shoferIgnoreController?.getInstructions()
 
-			let systemPrompt = await SYSTEM_PROMPT(
+			systemPrompt = await SYSTEM_PROMPT(
 				provider.context,
 				this.cwd,
 				false,
 				mcpHub,
 				this.diffStrategy,
-				// Use the task's own mode, not the provider-global mode which
-				// reflects the currently focused task.  Without this, a mode
-				// switch in Task A would change the system prompt that Task B
-				// sees when it generates its next API request, even though
-				// the UI still shows Task B's original mode.
-				this._taskMode || (mode ?? defaultModeSlug),
+				taskMode,
 				customModePrompts,
 				customModes,
 				customInstructions,
@@ -5659,92 +5695,98 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				provider.getSkillsManager(),
 			)
 
-			// Inject subtask constraints for any child task (sync or background).
-			// Provides role awareness so the subtask knows it is working on behalf of
-			// a parent and what tools / behaviors are available to it.
-			if (this.parentTaskId) {
-				const constraints: string[] = []
-				constraints.push("SUBTASK CONSTRAINTS")
-				constraints.push("")
+			this._cachedSystemPromptBase = systemPrompt
+			this._cachedSystemPromptKey = cacheKey
+		}
 
-				// Role awareness — always injected.
-				if (this.isBackground) {
-					constraints.push(
-						"- You are a background sub-task spawned by a parent task. Your results will be collected by the parent via check_task_status or wait_for_task. Work independently and do not wait for user input — the user is not watching you.",
-					)
-					constraints.push(
-						"- The parent may cancel you at any time via the cancel_tasks tool. Checkpoint partial results in your attempt_completion so the parent can recover useful work even if you are stopped early.",
-					)
-					constraints.push(
-						"- If you genuinely need clarification, you may call ask_followup_question — your question will be routed to the parent task (NOT the user). Keep the question concise and self-contained, and only ask when you cannot make a reasonable judgment on your own.",
-					)
-				} else {
-					constraints.push(
-						"- You are a synchronous sub-task spawned by a parent task. The parent is blocked waiting for your result. Complete your work and return a concise attempt_completion result.",
-					)
-					constraints.push(
-						"- Do not ask the user follow-up questions — the parent cannot answer them. If you need clarification, make your best judgment and proceed.",
-					)
-				}
+		// The rest of the method appends subtask constraints and peer
+		// notifications — these are always fresh per request.
 
-				// Soft constraints — injected when specified by the parent.
-				if (this.softResultLength) {
-					if (constraints.length > 2) {
-						constraints.push("")
-					}
-					constraints.push(
-						`- Result length suggestion: ${this.softResultLength} characters (soft guidance — aim to keep your attempt_completion result within this budget by summarizing concisely; the parent may accept longer results).`,
-					)
-					constraints.push(
-						`  Hard safety cap: ${MAX_SUBTASK_RESULT_LENGTH} characters (results exceeding this will be truncated).`,
-					)
-				}
-				if (this.softTimeoutSec) {
-					constraints.push(
-						`- Estimated timeout: ${this.softTimeoutSec} seconds (soft guidance — the parent may wait longer and you may take longer). Pace your work accordingly.`,
-					)
-				}
-				systemPrompt = systemPrompt + "\n\n====\n\n" + constraints.join("\n")
+		// Inject subtask constraints for any child task (sync or background).
+		// Provides role awareness so the subtask knows it is working on behalf of
+		// a parent and what tools / behaviors are available to it.
+		if (this.parentTaskId) {
+			const constraints: string[] = []
+			constraints.push("SUBTASK CONSTRAINTS")
+			constraints.push("")
+
+			// Role awareness — always injected.
+			if (this.isBackground) {
+				constraints.push(
+					"- You are a background sub-task spawned by a parent task. Your results will be collected by the parent via check_task_status or wait_for_task. Work independently and do not wait for user input — the user is not watching you.",
+				)
+				constraints.push(
+					"- The parent may cancel you at any time via the cancel_tasks tool. Checkpoint partial results in your attempt_completion so the parent can recover useful work even if you are stopped early.",
+				)
+				constraints.push(
+					"- If you genuinely need clarification, you may call ask_followup_question — your question will be routed to the parent task (NOT the user). Keep the question concise and self-contained, and only ask when you cannot make a reasonable judgment on your own.",
+				)
+			} else {
+				constraints.push(
+					"- You are a synchronous sub-task spawned by a parent task. The parent is blocked waiting for your result. Complete your work and return a concise attempt_completion result.",
+				)
+				constraints.push(
+					"- Do not ask the user follow-up questions — the parent cannot answer them. If you need clarification, make your best judgment and proceed.",
+				)
 			}
 
-			// Inject async peer notifications from the dedicated FIFO queue.
-			// This runs at the start of every agent loop — async messages are never
-			// routed through the MessageQueueService.  Sync messages use a separate
-			// path (via MessageQueueService + cancelAndProcessQueuedMessages).
-			if (this.peerNotificationQueue.length > 0) {
-				const peerBlocks: string[] = []
+			// Soft constraints — injected when specified by the parent.
+			if (this.softResultLength) {
+				if (constraints.length > 2) {
+					constraints.push("")
+				}
+				constraints.push(
+					`- Result length suggestion: ${this.softResultLength} characters (soft guidance — aim to keep your attempt_completion result within this budget by summarizing concisely; the parent may accept longer results).`,
+				)
+				constraints.push(
+					`  Hard safety cap: ${MAX_SUBTASK_RESULT_LENGTH} characters (results exceeding this will be truncated).`,
+				)
+			}
+			if (this.softTimeoutSec) {
+				constraints.push(
+					`- Estimated timeout: ${this.softTimeoutSec} seconds (soft guidance — the parent may wait longer and you may take longer). Pace your work accordingly.`,
+				)
+			}
+			systemPrompt = systemPrompt + "\n\n====\n\n" + constraints.join("\n")
+		}
+
+		// Inject async peer notifications from the dedicated FIFO queue.
+		// This runs at the start of every agent loop — async messages are never
+		// routed through the MessageQueueService.  Sync messages use a separate
+		// path (via MessageQueueService + cancelAndProcessQueuedMessages).
+		if (this.peerNotificationQueue.length > 0) {
+			const peerBlocks: string[] = []
+			for (const pn of this.peerNotificationQueue) {
+				peerBlocks.push(
+					`\n\n====\n\n` +
+						`PEER MESSAGE from task ${pn.senderTaskId} ("${pn.senderTitle}"):\n` +
+						`${pn.message}\n\n` +
+						`You may respond using send_message_to_task(task_id="${pn.senderTaskId}", message=...).\n` +
+						`This is a notification — no response is required. If the message is not urgent,\n` +
+						`you may finish your current work first and respond later.`,
+				)
+			}
+			systemPrompt = systemPrompt + peerBlocks.join("")
+
+			// Telemetry: peer message received (system-prompt injection).
+			try {
+				const { TelemetryService } = await import("@shofer/telemetry")
 				for (const pn of this.peerNotificationQueue) {
-					peerBlocks.push(
-						`\n\n====\n\n` +
-							`PEER MESSAGE from task ${pn.senderTaskId} ("${pn.senderTitle}"):\n` +
-							`${pn.message}\n\n` +
-							`You may respond using send_message_to_task(task_id="${pn.senderTaskId}", message=...).\n` +
-							`This is a notification — no response is required. If the message is not urgent,\n` +
-							`you may finish your current work first and respond later.`,
-					)
+					TelemetryService.instance.capturePeerMessageReceived(this.taskId, {
+						targetTaskId: pn.senderTaskId,
+						mode: "async",
+						form: "system-prompt",
+					})
 				}
-				systemPrompt = systemPrompt + peerBlocks.join("")
-
-				// Telemetry: peer message received (system-prompt injection).
-				try {
-					const { TelemetryService } = await import("@shofer/telemetry")
-					for (const pn of this.peerNotificationQueue) {
-						TelemetryService.instance.capturePeerMessageReceived(this.taskId, {
-							targetTaskId: pn.senderTaskId,
-							mode: "async",
-							form: "system-prompt",
-						})
-					}
-				} catch {
-					// non-fatal
-				}
-
-				// Clear after injection (delivered once per message).
-				this.peerNotificationQueue = []
+			} catch {
+				// non-fatal
 			}
 
-			return systemPrompt
-		})()
+			// Clear after injection (delivered once per message).
+			this.peerNotificationQueue = []
+		}
+
+		return systemPrompt
 	}
 
 	private getCurrentProfileId(state: any): string {
@@ -5752,6 +5794,60 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			state?.listApiConfigMeta?.find((profile: any) => profile.name === state?.currentApiConfigName)?.id ??
 			"default"
 		)
+	}
+
+	// H16: Build a stable string key for the tool-array cache.
+	private _buildToolsCacheKey(
+		mode: string | undefined,
+		state: any,
+		apiConfiguration: any,
+		supportsAllowedFunctionNames: boolean,
+	): string {
+		return [
+			mode ?? "",
+			JSON.stringify(state?.customModes ?? []),
+			JSON.stringify(state?.experiments ?? {}),
+			JSON.stringify(state?.disabledTools ?? []),
+			JSON.stringify(apiConfiguration ?? {}),
+			supportsAllowedFunctionNames,
+		].join("|")
+	}
+
+	// H16: Lazy-compute the tool array, reusing across context-management
+	// and main-request call sites within the same attemptApiRequest.
+	private async _getOrBuildTools(
+		provider: any,
+		mode: string | undefined,
+		state: any,
+		apiConfiguration: any,
+		modelInfo: any,
+	): Promise<import("openai").default.Chat.ChatCompletionTool[]> {
+		// For _getOrBuildTools we always pass includeAllToolsWithRestrictions=false
+		// (context management call sites don't need the Gemini split).
+		const cacheKey = this._buildToolsCacheKey(mode, state, apiConfiguration, false)
+		if (this._cachedToolsResult && this._cachedToolsKey === cacheKey) {
+			return this._cachedToolsResult.tools
+		}
+		if (!provider) {
+			return []
+		}
+		const toolsResult = await buildNativeToolsArrayWithRestrictions({
+			provider,
+			cwd: this.cwd,
+			mode,
+			customModes: state?.customModes,
+			experiments: state?.experiments,
+			apiConfiguration,
+			disabledTools: state?.disabledTools,
+			modelInfo,
+			includeAllToolsWithRestrictions: false,
+		})
+		this._cachedToolsResult = {
+			tools: toolsResult.tools,
+			allowedFunctionNames: toolsResult.allowedFunctionNames,
+		}
+		this._cachedToolsKey = cacheKey
+		return toolsResult.tools
 	}
 
 	private async handleContextWindowExceededError(): Promise<void> {
@@ -5876,6 +5972,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 			// Clear loaded skills — context truncation/summarization invalidates previously loaded skill instructions
 			this.loadedSkills.clear()
+			// H15: Context-window-exceeded (truncation/condensation) invalidates the cache.
+			this._cachedSystemPromptBase = null
+			this._cachedSystemPromptKey = ""
 		} finally {
 			// Notify webview that context management is complete (removes in-progress spinner)
 			// IMPORTANT: Must always be sent to dismiss the spinner, even on error
@@ -5999,26 +6098,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					?.postMessageToWebview({ type: "condenseTaskContextStarted", text: this.taskId })
 			}
 
-			// Build tools for condensing metadata (same tools used for normal API calls)
-			// This ensures the condensing API call includes tool definitions for providers that need them
-			let contextMgmtTools: import("openai").default.Chat.ChatCompletionTool[] = []
-			{
-				const provider = this.providerRef.deref()
-				if (provider) {
-					const toolsResult = await buildNativeToolsArrayWithRestrictions({
-						provider,
-						cwd: this.cwd,
-						mode,
-						customModes: state?.customModes,
-						experiments: state?.experiments,
-						apiConfiguration,
-						disabledTools: state?.disabledTools,
-						modelInfo,
-						includeAllToolsWithRestrictions: false,
-					})
-					contextMgmtTools = toolsResult.tools
-				}
-			}
+			// H16: Reuse the main tool-array build result for context management.
+			// The main call below uses the same (mode, cwd, experiments, ...)
+			// params; the only difference is includeAllToolsWithRestrictions
+			// (false here, variable there).  Passing all tools as a superset
+			// to the condensing API call is harmless — it just gets extra
+			// tool definitions it won't invoke.
+			const _provider = this.providerRef.deref()
+			const contextMgmtTools: import("openai").default.Chat.ChatCompletionTool[] = _provider
+				? await this._getOrBuildTools(_provider, mode, state, apiConfiguration, modelInfo)
+				: []
 
 			// Build metadata with tools and taskId for the condensing API call
 			const contextMgmtMetadata: ApiHandlerCreateMessageMetadata = {
@@ -6127,6 +6216,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				// Clear loaded skills — context truncation/summarization invalidates previously loaded skill instructions
 				this.loadedSkills.clear()
+				// H15: In-request context management invalidates the cache.
+				this._cachedSystemPromptBase = null
+				this._cachedSystemPromptKey = ""
 			} finally {
 				// Notify webview that context management is complete (sets isCondensing = false)
 				// This removes the in-progress spinner and allows the completed result to show
@@ -6162,29 +6254,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			throw new Error("Auto-approval limit reached and user did not approve continuation")
 		}
 
-		// Whether we include tools is determined by whether we have any tools to send.
-		const modelInfo = this.api.getModel().info
-
-		// Build complete tools array: native tools + dynamic MCP tools
-		// When includeAllToolsWithRestrictions is true, returns all tools but provides
-		// allowedFunctionNames for providers (like Gemini) that need to see all tool
-		// definitions in history while restricting callable tools for the current mode.
-		// Only Gemini currently supports this - other providers filter tools normally.
-		let allTools: OpenAI.Chat.ChatCompletionTool[] = []
-		let allowedFunctionNames: string[] | undefined
-
-		// Gemini requires all tool definitions to be present for history compatibility,
-		// but uses allowedFunctionNames to restrict which tools can be called.
-		// Other providers (Anthropic, OpenAI, etc.) don't support this feature yet,
-		// so they continue to receive only the filtered tools for the current mode.
+		// H16: Reuse the cached tool-array result from above.
+		// For non-Gemini providers the context-management and main calls produce
+		// identical results; for Gemini the context-management call passes all
+		// tools (harmless superset).  The cached result already includes
+		// allowedFunctionNames when includeAllToolsWithRestrictions was requested.
 		const supportsAllowedFunctionNames = apiConfiguration?.apiProvider === "gemini"
 
-		{
+		let allTools: OpenAI.Chat.ChatCompletionTool[]
+		let allowedFunctionNames: string[] | undefined
+
+		if (
+			this._cachedToolsResult &&
+			this._cachedToolsKey ===
+				this._buildToolsCacheKey(mode, state, apiConfiguration, supportsAllowedFunctionNames)
+		) {
+			allTools = this._cachedToolsResult.tools
+			allowedFunctionNames = this._cachedToolsResult.allowedFunctionNames
+		} else {
 			const provider = this.providerRef.deref()
 			if (!provider) {
 				throw new Error("Provider reference lost during tool building")
 			}
-
 			const toolsResult = await buildNativeToolsArrayWithRestrictions({
 				provider,
 				cwd: this.cwd,
@@ -6193,9 +6284,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				experiments: state?.experiments,
 				apiConfiguration,
 				disabledTools: state?.disabledTools,
-				modelInfo,
+				modelInfo: this.api.getModel().info,
 				includeAllToolsWithRestrictions: supportsAllowedFunctionNames,
 			})
+			this._cachedToolsResult = {
+				tools: toolsResult.tools,
+				allowedFunctionNames: toolsResult.allowedFunctionNames,
+			}
+			this._cachedToolsKey = this._buildToolsCacheKey(mode, state, apiConfiguration, supportsAllowedFunctionNames)
 			allTools = toolsResult.tools
 			allowedFunctionNames = toolsResult.allowedFunctionNames
 		}
