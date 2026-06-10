@@ -39,16 +39,20 @@
 > | **H4**        | Delta channel for `taskHistory`/`shoferMessages`            | Converted `postStateToWebview()` callers to `withoutTaskHistory` variant. **Superseded 2026-06-09** — incremental messaging splits `postInitState` (full snapshot) from `postConfigUpdate`/`postTaskStateUpdate` (targeted deltas), achieving the same IPC payload reduction at the type level. | —          | ✅ Superseded            | 2026-06-09     |
 > | ~~**H5.b**~~  | ~~Native `simdjson` addon for large-file parse~~            | Implemented + benchmarked 2026-05-21 — on Node 22, V8 `JSON.parse` was ~5× _faster_ than `simdjson` on the representative payload (4.5 ms vs 22.9 ms for 1.6 MB); wrapper and dep reverted. See H5.c instead.                                                                                   | —          | ❌ Dropped (empirically) | —              |
 > | ~~**H5.c**~~  | ~~`worker_threads` for parse of large files~~               | Worker read file + `JSON.parse`d; only result crossed postMessage. 1 MiB threshold. Implemented + benchmarked 2026-05-21 — on Node 22, the worker path was 2.7× _slower_ than main-thread baseline (52 ms vs 19 ms for 2.3 MB) because structuredClone of the parsed array dominates. Reverted. | —          | ❌ Dropped (empirically) | —              |
+> | **H11**       | Incremental token-bearing message count                     | Maintain `_tokenBearingMessageCount` as a live field; O(1) validity check in `_refreshTaskMetadata`                                                                                                                                                                                             | 🟡 Medium  | ✅ Done                  | 2026-06-10     |
+> | **H12**       | Threshold-triggered JSONL compaction                        | Skip O(n) serialize+write when `_appendedSinceCompaction < 100`; compact at turn boundaries                                                                                                                                                                                                     | 🟡 Medium  | ✅ Done                  | 2026-06-10     |
+> | **H13**       | Reuse append file handle + memoized `mkdir`                 | Long-lived `fs.open(…, "a")` handle; `Set<string>` directory-ensured cache; handle lifecycle tied to `dispose`/`abortTask`                                                                                                                                                                      | 🟢 Low     | ✅ Done                  | 2026-06-10     |
+> | **H14**       | BlobStore cross-call content cache                          | `_readCache` Map skips repeated `fs.readFile` per blob; index-delta variant at `prepareMessagesForApi` layer implemented and reverted (see reversion notes)                                                                                                                                     | 🟡 Med†    | ✅ Done                  | 2026-06-10     |
 > | **H2**        | Windowed message loading                                    | Load last K messages with Virtuoso scroll-to-load sentinel                                                                                                                                                                                                                                      | 🔴 High    | ❌ Open                  | —              |
 > | **H7**        | Paginate history index                                      | Split `_index.json` into pages at 1,000+ tasks                                                                                                                                                                                                                                                  | 🟢 Low     | ❌ Open                  | —              |
 > | **IPC proto** | Incremental messaging (IPC protocol refinement)             | Replace three `postStateToWebview*` methods with `postInitState` (full snapshot), `postConfigUpdate(key,value)` (single-key delta), and `postTaskStateUpdate(updates)` (task lifecycle delta). Webview splits `"state"` handler into `stateInit`/`configUpdate`/`taskStateUpdate`.              | 🟡 Medium  | ✅ Done                  | 2026-06-09     |
 
-## Verification (2026-06-10)
+## Verification (2026-06-10, corrected)
 
-Claims in this document were re-verified against HEAD. The **behavioral** claims
-hold; the **anchors and one root-cause narrative have drifted** and are flagged
-below (per the repo's Doc Line-Number Freshness Rule and Docs-Implementation
-Coherence Rule).
+> All line-number anchors verified against HEAD (Task.ts ≈ 7,118 lines).
+> Root Cause #2 rewritten for JSONL-append architecture. H9 section rewritten
+> as historical (referenced `postStateToWebviewWithoutTaskHistory` has zero refs
+> in `src/`).
 
 **Verified accurate:**
 
@@ -66,85 +70,64 @@ Coherence Rule).
 - The H8 static-state cache was removed (see comment at
   [`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts#L217)).
 
-**Drift to correct (flagged here; inline anchors below are left as-is for diff clarity):**
-
-- **Line numbers throughout are stale.** `Task.ts` has grown to ~7,118 lines.
-  Current anchors: `preloadShoferMessages` → L3104 (doc says 2493),
-  `saveShoferMessages` → L1933 (doc says 1479), `addToShoferMessages` → L1835,
-  `getStateToPostToWebview` → L3206 (doc says 2620), `writeIndex` → L398 (doc says 391).
-  The H9 anchors (1505/3733/4555) no longer correspond to anything.
-- **Root Cause #2 is written against the pre-JSONL design.** Persistence has
-  since migrated to append-only JSONL
-  ([`taskMessages.ts`](extensions/shofer/src/core/task-persistence/taskMessages.ts),
-  [`jsonlLog.ts`](extensions/shofer/src/core/task-persistence/jsonlLog.ts)): new
-  and mutated messages are written via **O(1) `appendJsonLine`**; the read path
-  collapses duplicates with `dedupeByKey(m => m.ts)`; a full rewrite
-  (`writeJsonLines`, tmp→rename) happens only as **compaction** at turn
-  boundaries (`_flushSaveShoferMessages`, `dispose`, `abortTask`,
-  `overwriteShoferMessages`). The "`structuredClone` per chunk" and
-  "`safeWriteJson` per chunk" costs in Root Cause #2 **no longer exist on the
-  streaming hot path** — H0 (debounce) and H6 (sync snapshot) are subsumed by
-  the JSONL append architecture.
-- **The H9 detail section (below) is superseded but not rewritten.** It still
-  cites `postStateToWebviewWithoutTaskHistory`, which has **zero references in
-  `src/`**. The status table already marks H9 "Superseded"; treat the narrative
-  as historical.
-
-The newly-identified opportunities surfaced by this re-verification are in
-**Additional Optimizations (2026-06-10)** near the end of this document.
-
 ## Root Causes Identified
 
 ### 1. `preloadShoferMessages()` — Redundant Re-Read on Every Task Switch
 
-[`Task.preloadShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L2493) is called from
-[`ShoferProvider.createTaskWithHistoryItem()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L1215)
-every time the user switches to a task. It performs the following sequential disk I/O:
+[`Task.preloadShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L3100) is called from
+[`ShoferProvider.createTaskWithHistoryItem()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L1467)
+every time the user switches to a task. **(H1 + H3 resolved in pre-2026-05-21.)** The
+current implementation performs parallel `shoferMessages` + `apiConversationHistory` reads
+and publishes the sanitized array in-memory without a redundant re-read:
 
+```typescript
+// Task.ts ~L3104–3172: _preloadShoferMessagesImpl()
+this.shoferMessages = modifiedShoferMessages
+this.apiConversationHistory = apiConversationHistory
+this.historyPreloaded = true
+// Fire-and-forget the sanitized save; in-memory is already canonical.
+void this.overwriteShoferMessages(modifiedShoferMessages).catch(...)
 ```
-preloadShoferMessages()
-  → readTaskMessages()                                      // READ  #1: fs.readFile + JSON.parse  ui_messages.json
-  → splice/resize/trim the array                            //       in-memory manipulation only
-  → overwriteShoferMessages() → saveTaskMessages()          // WRITE:   safeWriteJson  ui_messages.json
-                              → taskMetadata()              //       walks full array to recompute token usage + HistoryItem
-  → getSavedShoferMessages() → readTaskMessages()           // READ  #2: re-reads the file just written (REDUNDANT)
-  → getSavedApiConversationHistory()                        // READ  #3: fs.readFile + JSON.parse  api_conversation_history.json
-```
 
-READ #2 is pure waste — `modifiedShoferMessages` is byte-identical to what was just persisted.
-READ #3 is sequential with the rest but independent of `shoferMessages` and can be parallelized.
+### 2. Streaming Hot Path — Now O(1) JSONL Appends (Post-Migration)
 
-For a typical ~2 MB `ui_messages.json`, `JSON.parse` is ~4 ms (Node parses at ~500 MB/s);
-the dominant cost on cold task switch is the **combination** of all I/O, the
-`taskMetadata` full-array walk, and `safeWriteJson`'s tmp → fsync → rename sequence. The
-"~300 ms–1 s+" figure in the previous revision was unsubstantiated — actual wall-clock
-cost needs to be instrumented (see "Metrics to Track" below) before stating a number.
+> **Note (2026-06-10):** This section has been rewritten for the current
+> JSONL-append architecture. The pre-JSONL narrative described `structuredClone`
+>
+> - `safeWriteJson` per chunk — those costs no longer exist on the streaming hot
+>   path.
 
-### 2. `saveShoferMessages` Save Frequency — Write Amplification on the Streaming Hot Path
+Persistence is now append-only JSONL
+([`taskMessages.ts`](extensions/shofer/src/core/task-persistence/taskMessages.ts),
+[`jsonlLog.ts`](extensions/shofer/src/core/task-persistence/jsonlLog.ts)).
 
-[`saveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1479) is invoked from
-`addToShoferMessages` / `updateShoferMessage` on **every streamed chunk** during an agent
-turn (partial messages, streamed reasoning chunks, `api_req_started` cost updates, …).
-Each call:
+- **New and mutated messages** are written via **O(1) `appendTaskMessage`** →
+  `appendJsonLine()` at the [`addToShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1835)
+  and [`updateShoferMessage()`](extensions/shofer/src/core/task/Task.ts#L1902)
+  call sites — one line per mutation, no clone, no full-array serialize.
+- The debounced [`saveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1933)
+  (H0, 250 ms trailing) now only calls `_refreshTaskMetadata()` (lightweight
+  HistoryItem derivation) — it does **not** rewrite the JSONL log. The streaming
+  hot path is a debounced metadata refresh, not a full file write.
+- **Compaction** (`writeJsonLines`, tmp→rename) runs only at turn boundaries via
+  [`_flushSaveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L2061),
+  `dispose`, `abortTask`, and `overwriteShoferMessages`. Per-chunk appends are
+  O(1); full rewrites are bounded to ~once per turn.
+- The read path collapses duplicates with `dedupeByKey(m => m.ts)`, preserving
+  first-occurrence position.
 
-1. `structuredClone(this.shoferMessages)` — full O(n) deep copy of the conversation array.
-2. `safeWriteJson()` — tmp file write + `fsync` + `rename`.
-3. `taskMetadata()` — walks the full message array to recompute token usage and rebuild
-   the `HistoryItem`.
-4. `updateTaskHistory()` — persists the rebuilt `HistoryItem`.
+Residual O(n) work on/near the hot path that survived the migration is covered by
+H11–H14 under Additional Optimizations.
 
-For a long turn this is hundreds of full-array clone + write + walk cycles. In
-steady-state streaming, this dwarfs every gain available on the task-switch path.
+### 3. State Broadcasting — Superseded by Incremental Messaging
 
-### 3. State Broadcasting — Full `taskHistory` Array on Every State Push
-
-[`ShoferProvider.getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L2620)
-serializes the full `taskHistory` array on every state push, and the host → webview
-`postMessage` performs a structured clone of the whole payload (including
-`shoferMessages`) per push. Mitigations exist (`postStateToWebviewWithoutTaskHistory`,
-`postStateToWebviewWithoutShoferMessages`) but `postStateToWebview()` is still called
-from many paths — task switch, settings change, mode change, MCP updates, etc. — not
-just one.
+The old [`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3206)
+carried the full `taskHistory` + `shoferMessages` arrays on every state push.
+**Resolved 2026-06-09** by incremental messaging: `postInitState()` (full snapshot,
+O(1) per task lifetime), `postConfigUpdate(key, value)` (single-key delta), and
+`postTaskStateUpdate(updates)` (task lifecycle delta). Per-message
+`shoferMessageAppended` / `messageUpdated` deltas replace full-array pushes on the
+streaming path.
 
 ### 4. `JSON.parse` Is Blocking (Single-Threaded Event Loop)
 
@@ -154,7 +137,7 @@ for the long-tail of >10 MB conversations.
 
 ### 5. Task History Index Grows Unboundedly
 
-[`TaskHistoryStore.writeIndex()`](extensions/shofer/src/core/task-persistence/TaskHistoryStore.ts#L391)
+[`TaskHistoryStore.writeIndex()`](extensions/shofer/src/core/task-persistence/TaskHistoryStore.ts#L398)
 writes the full `HistoryItem[]` into `_index.json` on every mutation (with 2 s debounce).
 The index grows linearly with task count. Negligible until ~1,000+ tasks.
 
@@ -164,16 +147,15 @@ The index grows linearly with task count. Negligible until ~1,000+ tasks.
 
 ### 🔴 H0: Coalesce / Debounce `saveShoferMessages` During Streaming
 
-**Target file:** [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L1479)
+**Target file:** [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L1933)
 
 The save fires on every streamed chunk. Coalesce trailing edits with a short debounce
 (e.g., 100–250 ms) so a burst of streaming updates collapses to a single write.
 On turn boundaries (turn end, `attempt_completion`, abort, suspend) flush synchronously
 so persisted state matches in-memory state at every observable checkpoint.
 
-Pair with item H6 below (avoid `structuredClone` per save) and item H2.bis (incremental
-`taskMetadata` token accounting) — together these are the dominant steady-state cost
-during agent execution.
+Pair with H2.bis (incremental `taskMetadata` token accounting) — together these are
+the dominant steady-state cost during agent execution.
 
 **Estimated improvement:** Order-of-magnitude reduction in steady-state write/fsync rate
 and CPU spent in `taskMetadata` during long turns. Single biggest realistic win.
@@ -185,9 +167,9 @@ deactivation, and on abort. Make the debounce interval a setting (typed via
 
 ### 🔴 H1: Eliminate the Unnecessary Re-Read in `preloadShoferMessages()`
 
-**Target file:** [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L2493)
+**Target file:** [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L3100)
 
-**Current code (lines 2541–2544):**
+**Pre-fix code (now resolved):**
 
 ```typescript
 await this.overwriteShoferMessages(modifiedShoferMessages) // WRITE + taskMetadata recompute
@@ -222,42 +204,26 @@ meaningful slice of the preload cost.
 
 ### 🔴 H3: Parallelize `preloadShoferMessages()` I/O
 
-`shoferMessages` and `apiConversationHistory` are independent files. Compose with H1:
-
-```typescript
-const [shoferMsgs, apiHistory] = await Promise.all([
-	this.getSavedShoferMessages(),
-	this.getSavedApiConversationHistory(),
-])
-// … sanitize shoferMsgs in memory …
-this.shoferMessages = shoferMsgs
-this.apiConversationHistory = apiHistory
-void this.persistSanitizedPreloadSnapshot(shoferMsgs)
-```
+`shoferMessages` and `apiConversationHistory` are independent files. **Resolved:**
+the current implementation at [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L3104)
+reads both in parallel via `Promise.all` and publishes the sanitized array in-memory
+without a round-trip re-read.
 
 **Risk:** Low. **Estimated improvement:** ~25–35 % of remaining preload time when both
 files are large and comparable in size.
 
-### 🟡 H4: Use a `taskHistoryUpdated` Delta Channel; Don't Send the Full Array on State Pushes
+### 🟡 H4: Delta Channels for `taskHistory` / `shoferMessages`
 
 **Targets:**
 
-- [`ShoferProvider.getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L2620)
-- [`ShoferProvider.postStateToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts)
+- [`ShoferProvider.getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3206)
+- [`ShoferProvider.postInitState()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3052)
 
-Today `taskHistory` is serialized on every `postStateToWebview()` call site — task
-switch, settings change, mode change, MCP refresh, etc. Replace with:
-
-1. A lightweight `taskHistoryUpdated` `ExtensionMessage` variant carrying only the
-   changed `HistoryItem` (insert / update / delete + id). Add to `@shofer/types` per the
-   Module Boundaries Rule.
-2. An initial-load `taskHistorySnapshot` variant sent once when the webview mounts.
-3. Switch all `postStateToWebview()` callers off carrying `taskHistory`; route mutations
-   exclusively through `taskHistoryUpdated`.
-
-Apply the same treatment to `shoferMessages` (large array, structure-cloned per push):
-push a `messagesUpdated` delta for partial-message edits instead of re-sending the full
-array. (`messageUpdated` already exists for the single-message case — generalize.)
+**Superseded 2026-06-09** by incremental messaging. `postInitState()` carries the full
+snapshot O(1) per task lifetime; `postConfigUpdate(key, value)` and
+`postTaskStateUpdate(updates)` deliver targeted deltas. Per-message
+`shoferMessageAppended` / `messageUpdated` replace full-array pushes on the streaming
+path. The `taskHistoryItemUpdated` delta channel covers HistoryItem mutations.
 
 **Risk:** Medium. Webview state-reducer changes; the exhaustive switch on
 `ExtensionMessage` will surface every consumer (per the Exhaustive Switch Rule).
@@ -268,7 +234,7 @@ IPC structured-clone path — biggest win for users with large histories.
 
 **Target files:**
 
-- [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L2493) — `preloadShoferMessages()`
+- [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L3100) — `preloadShoferMessages()`
 - [`taskMessages.ts`](extensions/shofer/src/core/task-persistence/taskMessages.ts) — new `readTaskMessagesWindowed`
 - [`ChatView.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatView.tsx) — sentinel + scroll-to-load
 - [`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) — state push
@@ -297,7 +263,7 @@ relied on by:
 - `taskMetadata()` (walks all messages for token usage — needs incremental accounting
   per item H2.bis below, or a separate persisted summary).
 - Checkpoint restore / pending-edit replay in
-  [`createTaskWithHistoryItem`](extensions/shofer/src/core/webview/ShoferProvider.ts#L1215).
+  [`createTaskWithHistoryItem`](extensions/shofer/src/core/webview/ShoferProvider.ts#L1467).
 - Message edit / delete flows operating by `ts` and array index.
 - `prependMessage` and the message-queue drain path.
 - The Virtuoso scroll lifecycle (`USER_BROWSING_HISTORY`) must coexist with
@@ -321,25 +287,17 @@ standalone win because of H0/save frequency.
 paths (`addToShoferMessages`, `updateShoferMessage`, `overwriteShoferMessages`, edit
 flows, checkpoint restore). Unit-test the invariant.
 
-### 🟡 H6: Replace `structuredClone` in `saveShoferMessages` With a Sync Snapshot
+### 🟡 H6: Sync `JSON.stringify` Snapshot Instead of `structuredClone`
 
-[`saveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1479) currently clones
-the whole array because `safeWriteJson` is async and `this.shoferMessages` is mutated
-concurrently by the streaming loop (partial message updates, appended reasoning chunks).
-The "just add an invariant comment" suggestion from the previous revision was wrong —
-the invariant does **not** hold today.
-
-Safer rewrite: snapshot synchronously to a string before awaiting:
-
-```ts
-const snapshot = JSON.stringify(this.shoferMessages) // sync; no concurrent mutation possible
-await safeWriteJsonFromString(filePath, snapshot)
-```
-
-Requires a small addition to [`safeWriteJson`](extensions/shofer/src/utils/safeWriteJson.ts)
-to accept a pre-serialized string (or expose a sibling helper). This avoids the O(n) deep
-clone while preserving the concurrency invariant. Compose with H0 — debounced saves take
-the snapshot once per debounce window, not once per chunk.
+**Superseded by the JSONL-append migration.** The current implementation at
+[`saveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1933) uses
+`serializeJsonLines(this.shoferMessages)` (sync snapshot) and writes atomically via
+`writeJsonLines`. This is only called at compaction boundaries (turn end, dispose, abort,
+overwrite). On the streaming hot path, `appendTaskMessage` → `appendJsonLine()` is O(1)
+and never clones the full array. The `safeWriteJson` utility
+([`safeWriteJson.ts`](extensions/shofer/src/utils/safeWriteJson.ts)) retains support for
+a pre-serialized string parameter via `jsonString` for callers that want to supply
+pre-serialized data.
 
 **Risk:** Low–Medium. New `safeWriteJson` overload; audit any other call site that
 depends on the clone-isolation side effect (unlikely — it was just defensive
@@ -443,19 +401,33 @@ becoming a real problem.
 
 ### 🟢 H8: Memoize Static Parts of `getStateToPostToWebview()`
 
-Settings rebuilt on every state push (`allowedCommands`, `deniedCommands`, `mcpServers`,
-`customModes`) can be cached with invalidation via `ContextProxy.onDidChange` (already
-wired). Low risk; small win — keep as cleanup pass.
+**Removed 2026-06-09** — the static-state cache (`_cachedMergedAllowed`, etc.) was
+removed because `postInitState()` fires O(1) per task lifetime, not per streaming
+token. See comment at
+[`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts#L217).
+Allowed/denied commands are recomputed fresh in
+[`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3206).
 
 ---
 
-## 🟡 H9: Gate `postStateToWebview` for Non-Focused (Background) Tasks
+## 🟡 H9: Background-Task State Push Gating (Historical)
 
-**Target file:** [`Task.ts`](extensions/shofer/src/core/task/Task.ts)
+> **Status:** ✅ Superseded 2026-06-09. This section is preserved as design
+> rationale. The `postStateToWebviewWithoutTaskHistory` and
+> `postStateToWebviewWithoutShoferMessages` methods referenced below have **zero
+> references** in `src/` — they were removed by incremental messaging. The H9
+> goal (avoid wasteful state pushes for background tasks) is achieved by the
+> current architecture: the `shoferMessageAppended` delta path at
+> [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L1885) already gates on
+> `getFocusedTaskId() === taskId || getCurrentTask()?.taskId === taskId`,
+> [`updateShoferMessage()`](extensions/shofer/src/core/task/Task.ts#L1902)
+> gates on the same dual check, and the stream-start/stream-completion
+> skinny-push blocks that H9 would have gated were removed entirely by the IPC
+> protocol refinement.
 
-### Problem
+### Historical problem (pre-2026-06-09)
 
-`updateShoferMessage()` already has a focus gate (line 1529):
+Before incremental messaging, `updateShoferMessage()` already had a focus gate:
 
 ```typescript
 if (provider && provider.taskManager?.getFocusedTaskId() === this.taskId) {
@@ -463,77 +435,33 @@ if (provider && provider.taskManager?.getFocusedTaskId() === this.taskId) {
 }
 ```
 
-This means partial text updates (the dominant streaming hot path) and `api_req_started`
-usage updates skip the webview push for background tasks — good.
+This meant partial text updates (the dominant streaming hot path) and
+`api_req_started` usage updates skipped the webview push for background tasks —
+good. But three other call sites unconditionally pushed full state via
+`postStateToWebviewWithoutTaskHistory()` — from `addToShoferMessages()` (for
+non-partial messages), stream-start, and stream-completion blocks. These
+full-array serialization + IPC pushes ran unconditionally regardless of focus.
 
-But three other call sites unconditionally push full state:
+With incremental messaging, the streaming delta path intrinsically gates on
+focus, and those full-snapshot paths were removed — achieving H9's goal at the
+protocol level.
 
-1. **`addToShoferMessages()`** at [`Task.ts:1505`](extensions/shofer/src/core/task/Task.ts:1505):
+### Current focus-gated streaming paths
 
-    ```typescript
-    await provider?.postStateToWebviewWithoutTaskHistory()
-    ```
-
-    Called from `say()` for non-partial messages (api_req_started, completion_result,
-    tool messages, new partial first-chunks) and from `ask()` for tool-approval/command
-    approval asks.
-
-2. **Stream start** at [`Task.ts:3733`](extensions/shofer/src/core/task/Task.ts:3733):
-   After updating the placeholder `api_req_started` message with real data — always
-   pushes state.
-
-3. **Stream completion** at [`Task.ts:4555`](extensions/shofer/src/core/task/Task.ts:4555):
-   After processing all streaming chunks — always pushes state.
-
-All three call `getStateToPostToWebview()` (builds ~100-key state object), serialize it,
-and push via IPC. The `shoferMessages` field reflects the FOCUSED task's messages
-(`getCurrentTask()` at [`ShoferProvider.ts:2773`](extensions/shofer/src/core/webview/ShoferProvider.ts:2773)),
-so the pushed data is actually stale — none of the focused task's messages changed.
-
-**Impact per background task API turn:** 2 full state rebuild + push cycles (stream start
-and end), plus 1 per non-partial `say`/`ask` call (~4-8 per turn).
-
-### Fix
-
-Add `isFocusedTask()` gate before all three state pushes:
-
-```typescript
-// In addToShoferMessages (Task.ts line 1505):
-if (provider && provider.taskManager?.getFocusedTaskId() === this.taskId) {
-	await provider.postStateToWebviewWithoutTaskHistory()
-}
-
-// Same pattern for stream start (line 3733) and completion (line 4555).
-```
-
-**Risk:** 🟢 Low. Same pattern already proven in `updateShoferMessage`. The only risk is
-if any webview component depends on receiving a full state push when a background
-task transitions states — but background task state is communicated via
-`taskHistoryItemUpdated` / `taskHistoryUpdated` delta channels (per H4), not via full
-state pushes.
-
-**Estimated improvement:** Eliminates 6–10 `getStateToPostToWebview()` + IPC pushes per
-background task API turn. For a typical orchestrator scenario with 2–3 concurrent
-background children each running 8-turn tasks, this removes ~50–150 wasteful state
-pushes. The `getStateToPostToWebview()` call alone is ~50–200 µs (pure JS, no I/O),
-so while not enormous individually, it adds up under concurrency.
-
-### Verified: Paths that already skip webview pushes for background tasks
-
-| Path                                    | Gate                                      | Location                                                                                                                        |
-| --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Partial text updates (streaming chunks) | `updateShoferMessage` focus check         | [`Task.ts:2367`](extensions/shofer/src/core/task/Task.ts:2367) → [`Task.ts:1529`](extensions/shofer/src/core/task/Task.ts:1529) |
-| Partial reasoning updates               | Same                                      | [`Task.ts:4550`](extensions/shofer/src/core/task/Task.ts:4550)                                                                  |
-| Tool_preparing dismiss                  | Same                                      | [`Task.ts:2464`](extensions/shofer/src/core/task/Task.ts:2464)                                                                  |
-| api_req_started in-place usage updates  | Same                                      | [`Task.ts:4247`](extensions/shofer/src/core/task/Task.ts:4247)                                                                  |
-| saveShoferMessages (disk write)         | ✅ Always fires for persistence — correct | [`Task.ts:1535`](extensions/shofer/src/core/task/Task.ts:1535) — debounced by H0                                                |
+| Path                                    | Gate                            | Location                                                                          |
+| --------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
+| `shoferMessageAppended` delta           | Dual focus/current check        | [`Task.ts:1882`](extensions/shofer/src/core/task/Task.ts#L1882)                   |
+| `messageUpdated` delta                  | Dual focus/current check        | [`Task.ts:1911`](extensions/shofer/src/core/task/Task.ts#L1911)                   |
+| `_refreshTaskMetadata` (debounced)      | ✅ Always fires for persistence | [`Task.ts:1978`](extensions/shofer/src/core/task/Task.ts#L1978) — H0-debounced    |
+| `_flushSaveShoferMessages` (compaction) | ✅ Always fires for persistence | [`Task.ts:2061`](extensions/shofer/src/core/task/Task.ts#L2061) — turn boundaries |
 
 ### Save path note
 
-`safeWriteJson` to `ui_messages.json` still fires for background tasks (via H0-debounced
-`saveShoferMessages`). This is intentional — background task messages must survive VS Code
-restarts. H0 already reduces the write frequency to 250 ms trailing debounce. If profiling
-shows disk I/O from concurrent background saves is still a bottleneck, further
+The H0-debounced
+[`_debouncedSaveShoferMessages`](extensions/shofer/src/core/task/Task.ts#L941)
+fires for all tasks — this is intentional, as background task messages must
+survive VS Code restarts. The debounce interval is 250 ms trailing. If profiling
+shows disk I/O from concurrent background saves is a bottleneck, further
 optimizations could include:
 
 - Longer debounce interval for background tasks (1–2 s) vs focused (250 ms)
@@ -624,14 +552,11 @@ H2 only becomes worthwhile once the steady-state quadratic is gone.
 
 ---
 
-## Additional Optimizations (2026-06-10)
+## Additional Optimizations (2026-06-10) — All Implemented
 
-These four items were surfaced by the 2026-06-10 re-verification. They target
-residual O(n) work that survived the JSONL-append migration — the migration
-killed per-chunk full rewrites, but several O(n) walks/serializations still run
-on or near the streaming hot path. All anchors below are verified against HEAD.
+> H11–H14 landed 2026-06-10. Anchors verified against HEAD.
 
-### 🟡 H11: Incremental Token-Bearing Message Count (finish what H2.bis started)
+### 🟡 H11: Incremental Token-Bearing Message Count ✅ Done (2026-06-10)
 
 **Target:** [`Task._countTokenBearingMessages()`](extensions/shofer/src/core/task/Task.ts#L2039)
 
@@ -672,7 +597,7 @@ later `updateShoferMessage`. Unit-test the count against
 `_countTokenBearingMessages()` as an oracle across append/update/overwrite/edit
 flows (mirror the H2.bis test).
 
-### 🟡 H12: Threshold-Triggered JSONL Compaction (stop rewriting the whole log every turn)
+### 🟡 H12: Threshold-Triggered JSONL Compaction ✅ Done (2026-06-10)
 
 **Targets:**
 [`saveTaskMessages()`](extensions/shofer/src/core/task-persistence/taskMessages.ts#L113),
@@ -698,7 +623,7 @@ from long tasks while keeping the log bounded.
 durability is unchanged (appends are already flushed). Keep an unconditional
 compaction on `dispose`/`deactivate` so idle tasks settle to a compact form.
 
-### 🟢 H13: Reuse the Append File Handle; Drop the Per-Append `mkdir`
+### 🟢 H13: Reuse Append Handle + Memoized `mkdir` ✅ Done (2026-06-10)
 
 **Target:** [`appendJsonLine()`](extensions/shofer/src/core/task-persistence/jsonlLog.ts#L56)
 
@@ -727,40 +652,33 @@ tied to `dispose`/`abortTask`, and a write error must invalidate the cached
 handle so the next append reopens. Do (a) unconditionally; do (b) only if
 profiling shows append syscall overhead is material under heavy streaming.
 
-### 🟡 H14: Incrementalize `prepareMessagesForApi` / Content Externalization
+### 🟡 H14: BlobStore Cross-Call Content Cache ✅ Done (2026-06-10)
 
-**Targets:** `Task.prepareMessagesForApi()`, `Task.externalizeMessageContent()`
-in [`Task.ts`](extensions/shofer/src/core/task/Task.ts)
+> **Design note:** An index-delta variant (caching resolved messages keyed by
+> `_lastResolvedApiHistoryLength` and cloning a prefix from
+> `apiConversationHistory`) was implemented and reverted — the caller passes
+> `cleanConversationHistory`, a derived view post
+> truncation/merge/image-stripping/re-indexing, so the prefix-cloning index was
+> desynchronised from the actual messages and sent un-resolved blob refs to the
+> LLM. See the **Reversion notes (2026-06-10)** below.
 
-Before each API request, `prepareMessagesForApi` walks the **entire**
-`apiConversationHistory` and rebuilds every message (cloning nested
-`content`/`tool_result` blocks) to resolve blob refs; `externalizeMessageContent`
-similarly re-scans content to externalize over-cap strings. This is O(context
-size) per turn and grows with conversation length — a quiet per-turn tax that
-scales with the same `n` H2/H10 worry about.
+**Target:** [`BlobStore.resolveRefs()`](extensions/shofer/src/services/blob-store/BlobStore.ts#L143)
 
-**Fix:** Only newly-appended messages can contain un-externalized content, and
-already-resolved messages don't change. Cache the resolved/externalized form
-keyed by message `ts` (invalidated on edit/delete/checkpoint-restore, which
-already go through `overwrite*`), and process only the **delta** since the last
-request. Past messages are immutable in steady state, so the per-turn walk
-collapses to "resolve the few new blocks."
+The correct fix operates one level down: Blob content is immutable
+(sha256-addressed), so resolved content is cached in a cross-call map:
 
-**Risk:** 🟡 Medium. Correctness hinges on cache invalidation covering every
-mutation path (`overwriteApiConversationHistory`, condense, edit/delete). Gate
-behind a feasibility check that the resolved form is referentially stable for
-unchanged messages. Lower priority than H11–H13 unless profiling shows
-`prepareMessagesForApi` is a measurable slice of per-turn latency on long tasks.
+- [`BlobStore._readCache`](extensions/shofer/src/services/blob-store/BlobStore.ts#L74) — `Map<sha256, content>`, lives for the lifetime of the `BlobStore` instance (one per task)
+- [`resolveRefs()`](extensions/shofer/src/services/blob-store/BlobStore.ts#L143) — checks `_readCache` before `this.read()` (disk); populates the cache on first resolution
+- Cache hit skips the `fs.readFile` disk I/O; cache validity is unconditional (content is content-addressed)
+- Working set is self-bounding: only in-context-window blobs are ever resolved, so resident content tracks the context window
+- An LRU cap can be added later if profiling shows memory growth in pathological long tasks
 
-### Where these sit in the order
+### Implementation summary
 
-H11 and H13(a) are low-risk, mechanical, and independently shippable — do them
-first. H12 is the larger steady-state win for very long single tasks (removes the
-per-turn O(n) compaction) but needs the threshold tuning and a shutdown-compaction
-guarantee. H14 is the most invasive and should wait for a profile that implicates
-`prepareMessagesForApi`. As with the existing items, **instrument before
-committing H12/H14** (extend the "Metrics to Track" list with compaction
-frequency/byte-volume and `prepareMessagesForApi` p50/p95).
+H11, H13, and H14 are independently done. H12's threshold tuning (`100` appends)
+can be adjusted based on field data. The doc's "Metrics to Track" section below
+can be extended with compaction frequency/byte-volume and
+`prepareMessagesForApi` p50/p95 if desired.
 
 ---
 
@@ -810,13 +728,13 @@ Instrument these before committing the larger items (H2, H4) so we can attribute
 - **`postStateToWebview()` JSON payload size**: log byte length before `postMessage`.
   Validates H4.
 - **`_index.json` size and parse time** during `loadIndex()` / `writeIndex()`.
-- **Background task state push count**: log how many `postStateToWebviewWithoutTaskHistory`/
-  `addToShoferMessages` calls come from background tasks vs focused task per minute.
-  Gated on `process.env.DEBUG`. Validates H9 hypothesis.
+- **Background task state push count (historical)**: H9 superseded by incremental
+  messaging — the `shoferMessageAppended` and `messageUpdated` delta paths already
+  gate on focus. Count background vs focused `_refreshTaskMetadata` calls if needed.
 
 Per the Output Channel Logging Rule, route diagnostics through `outputChannelLogger`
 gated on `process.env.DEBUG` (cf. existing `home-screen-flash` pattern in
-[`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts#L2672)) — not
+[`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3372)) — not
 `console.log`.
 
 ---
@@ -844,10 +762,24 @@ gated on `process.env.DEBUG` (cf. existing `home-screen-flash` pattern in
   modern Node.
 - **H1 tradeoff** around skipping `taskMetadata` on preload now stated explicitly
   (option (a) safe-by-default, option (b) cheaper-but-stale).
-- **H9 added (2026-05-21)** — audit of background-task streaming state pushes.
-  `updateShoferMessage` already gates on `isFocusedTask()` (covers 80%+ of streaming
-  chunk updates). Three remaining call sites in `addToShoferMessages`, stream-start,
-  and stream-completion push full state for every task regardless of focus.
-  Fix is a one-line gate at each call site, same pattern already proven in
-  `updateShoferMessage`. Found during investigation of whether background-task
-  streaming was causing avoidable overhead.
+- **H9 added (2026-05-21); rewritten 2026-06-10** — audit of background-task
+  streaming state pushes. The underlying concern (wasteful state pushes for
+  background tasks) was resolved by incremental messaging: the
+  `shoferMessageAppended` and `messageUpdated` delta paths intrinsically gate on
+  focus, and the skinny-push blocks H9 targeted were removed.
+
+## Reversion notes (2026-06-10)
+
+- **H14 index-delta variant — implemented and reverted.** An earlier cut cached
+  resolved messages keyed by `_lastResolvedApiHistoryLength` and cloned a
+  prefix from `this.apiConversationHistory` in `prepareMessagesForApi`. The
+  caller passes `cleanConversationHistory`, a derived view post truncation,
+  consecutive-message merging, image-block stripping, and re-indexing — so
+  the cached prefix index was desynchronised from the actual messages,
+  producing two compounding defects: (a) wrong-array / index desync
+  (re-included stripped blocks, un-merged consecutive user messages,
+  pre-summary messages), and (b) un-resolved blob refs sent to the LLM
+  (cloned from the externalised stored form with no `resolveRefs`). The
+  revert restored the original full-iteration `prepareMessagesForApi`. The
+  correct fix operates one level down: [`BlobStore._readCache`](extensions/shofer/src/services/blob-store/BlobStore.ts#L74)
+  cross-call sha256 → content cache, immune to re-indexing.
