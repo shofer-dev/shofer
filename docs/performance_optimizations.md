@@ -43,6 +43,56 @@
 > | **H7**        | Paginate history index                                      | Split `_index.json` into pages at 1,000+ tasks                                                                                                                                                                                                                                                  | 🟢 Low     | ❌ Open                  | —              |
 > | **IPC proto** | Incremental messaging (IPC protocol refinement)             | Replace three `postStateToWebview*` methods with `postInitState` (full snapshot), `postConfigUpdate(key,value)` (single-key delta), and `postTaskStateUpdate(updates)` (task lifecycle delta). Webview splits `"state"` handler into `stateInit`/`configUpdate`/`taskStateUpdate`.              | 🟡 Medium  | ✅ Done                  | 2026-06-09     |
 
+## Verification (2026-06-10)
+
+Claims in this document were re-verified against HEAD. The **behavioral** claims
+hold; the **anchors and one root-cause narrative have drifted** and are flagged
+below (per the repo's Doc Line-Number Freshness Rule and Docs-Implementation
+Coherence Rule).
+
+**Verified accurate:**
+
+- Incremental messaging is real and wired: `postInitState`, `postConfigUpdate`,
+  and `postTaskStateUpdate` exist on `ShoferProvider` and are the live IPC
+  surface; the old `postStateToWebview*` variants are gone.
+- `shoferMessageAppended` is the sole streaming delta path
+  ([`Task.ts`](extensions/shofer/src/core/task/Task.ts#L1885) `addToShoferMessages`,
+  gated on `getFocusedTaskId() === taskId || getCurrentTask()?.taskId === taskId`).
+- `UV_THREADPOOL_SIZE = "16"` is set at the top of
+  [`extension.ts`](extensions/shofer/src/extension.ts#L12) before any `fs` import (H5.a).
+- The H10 incremental-consolidation module
+  ([`incrementalMessageProcessing.ts`](extensions/shofer/webview-ui/src/components/chat/incrementalMessageProcessing.ts))
+  and its spec exist.
+- The H8 static-state cache was removed (see comment at
+  [`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts#L217)).
+
+**Drift to correct (flagged here; inline anchors below are left as-is for diff clarity):**
+
+- **Line numbers throughout are stale.** `Task.ts` has grown to ~7,118 lines.
+  Current anchors: `preloadShoferMessages` → L3104 (doc says 2493),
+  `saveShoferMessages` → L1933 (doc says 1479), `addToShoferMessages` → L1835,
+  `getStateToPostToWebview` → L3206 (doc says 2620), `writeIndex` → L398 (doc says 391).
+  The H9 anchors (1505/3733/4555) no longer correspond to anything.
+- **Root Cause #2 is written against the pre-JSONL design.** Persistence has
+  since migrated to append-only JSONL
+  ([`taskMessages.ts`](extensions/shofer/src/core/task-persistence/taskMessages.ts),
+  [`jsonlLog.ts`](extensions/shofer/src/core/task-persistence/jsonlLog.ts)): new
+  and mutated messages are written via **O(1) `appendJsonLine`**; the read path
+  collapses duplicates with `dedupeByKey(m => m.ts)`; a full rewrite
+  (`writeJsonLines`, tmp→rename) happens only as **compaction** at turn
+  boundaries (`_flushSaveShoferMessages`, `dispose`, `abortTask`,
+  `overwriteShoferMessages`). The "`structuredClone` per chunk" and
+  "`safeWriteJson` per chunk" costs in Root Cause #2 **no longer exist on the
+  streaming hot path** — H0 (debounce) and H6 (sync snapshot) are subsumed by
+  the JSONL append architecture.
+- **The H9 detail section (below) is superseded but not rewritten.** It still
+  cites `postStateToWebviewWithoutTaskHistory`, which has **zero references in
+  `src/`**. The status table already marks H9 "Superseded"; treat the narrative
+  as historical.
+
+The newly-identified opportunities surfaced by this re-verification are in
+**Additional Optimizations (2026-06-10)** near the end of this document.
+
 ## Root Causes Identified
 
 ### 1. `preloadShoferMessages()` — Redundant Re-Read on Every Task Switch
@@ -571,6 +621,146 @@ H10 removes the quadratic **regardless of `n`** and is webview-only (Low–Med
 risk). H2 (windowed loading) is the complementary, higher-risk follow-up that
 additionally bounds the cold-load render of very large histories. Land H10 first;
 H2 only becomes worthwhile once the steady-state quadratic is gone.
+
+---
+
+## Additional Optimizations (2026-06-10)
+
+These four items were surfaced by the 2026-06-10 re-verification. They target
+residual O(n) work that survived the JSONL-append migration — the migration
+killed per-chunk full rewrites, but several O(n) walks/serializations still run
+on or near the streaming hot path. All anchors below are verified against HEAD.
+
+### 🟡 H11: Incremental Token-Bearing Message Count (finish what H2.bis started)
+
+**Target:** [`Task._countTokenBearingMessages()`](extensions/shofer/src/core/task/Task.ts#L2039)
+
+H2.bis cached the _result_ of token accounting in `_cachedTokenUsage`, keyed on
+`_tokenBearingMessageCount`. But the cache-validity check still calls
+`_countTokenBearingMessages()`, which **walks the entire `shoferMessages` array**
+on every metadata refresh (`_refreshTaskMetadata`, on the debounced save path):
+
+```typescript
+private _countTokenBearingMessages(): number {
+	let count = 0
+	for (const m of this.shoferMessages) {
+		if (
+			(m.type === "say" && m.say === "api_req_started" && m.text) ||
+			(m.type === "say" && m.say === "condense_context")
+		) {
+			count++
+		}
+	}
+	return count
+}
+```
+
+So every refresh is still O(n) — just O(n) counting instead of O(n) summing. For
+a long task this is the residual per-save walk H2.bis was meant to eliminate.
+
+**Fix:** Maintain the count as a field updated at the (few) mutation sites that
+can change it — `addToShoferMessages` (+1 when the appended message is
+token-bearing), `updateShoferMessage` (a partial→final `api_req_started` flips
+`text` from empty to non-empty: +1 on that transition), and reset/recount in
+`overwriteShoferMessages` (the only place the whole array is replaced). The
+recount on `overwrite*` is acceptable — it is already an O(n) compaction path.
+Then the validity check becomes O(1).
+
+**Risk:** 🟡 Medium — same invariant-maintenance concern as H2.bis; the tricky
+case is the partial-message `api_req_started` whose `text` is populated by a
+later `updateShoferMessage`. Unit-test the count against
+`_countTokenBearingMessages()` as an oracle across append/update/overwrite/edit
+flows (mirror the H2.bis test).
+
+### 🟡 H12: Threshold-Triggered JSONL Compaction (stop rewriting the whole log every turn)
+
+**Targets:**
+[`saveTaskMessages()`](extensions/shofer/src/core/task-persistence/taskMessages.ts#L113),
+[`Task._flushSaveShoferMessages()`](extensions/shofer/src/core/task/Task.ts)
+
+Compaction (`writeJsonLines` → `serializeJsonLines(entire array)` + tmp + rename)
+runs **unconditionally at every turn boundary**. For an n-message task that is an
+O(n) serialize + O(n) write every turn, even when only a handful of lines were
+appended since the last compaction. The append log is already durable and the
+read path already dedupes by `ts`, so compaction is purely a **log-size bound**,
+not a correctness requirement.
+
+**Fix:** Track appended-line count and duplicate count since the last
+compaction (cheap counters incremented alongside `appendTaskMessage`). Compact
+only when a threshold is crossed — e.g. `linesSinceCompaction > K` (bounds file
+growth) **or** `duplicateRatio > 0.5` (bounds dedup work on next cold read).
+Skip the rewrite otherwise; the next genuine `overwrite*` (checkpoint/edit) or
+extension shutdown still compacts. This removes the per-turn O(n) serialize+write
+from long tasks while keeping the log bounded.
+
+**Risk:** 🟡 Medium. The log file grows between compactions, so cold-read
+`dedupeByKey` does more work; the duplicate-ratio threshold caps that. Crash
+durability is unchanged (appends are already flushed). Keep an unconditional
+compaction on `dispose`/`deactivate` so idle tasks settle to a compact form.
+
+### 🟢 H13: Reuse the Append File Handle; Drop the Per-Append `mkdir`
+
+**Target:** [`appendJsonLine()`](extensions/shofer/src/core/task-persistence/jsonlLog.ts#L56)
+
+Every append currently does:
+
+```typescript
+await fs.mkdir(path.dirname(filePath), { recursive: true })
+await fs.appendFile(filePath, line, "utf8") // open → write → close
+```
+
+On a streaming turn, partial-message updates re-append the mutated message **per
+chunk**, so this is one redundant `mkdir` (the directory exists after the first
+write) plus one open/write/close cycle **per chunk**. The `mkdir` is pure waste
+after the task directory exists; the repeated open/close adds syscall overhead
+under high chunk rates.
+
+**Fix:** (a) Hoist the `mkdir` to task-directory creation (or memoize a
+"directory ensured" flag per `filePath`) so it runs once, not per append.
+(b) Optionally keep a long-lived append handle (`fs.open(..., "a")`) per task,
+reused across appends and closed on `dispose`, replacing open/write/close with a
+single `write`. The existing per-file `enqueueWrite` serialization already
+guarantees appends don't interleave, so a shared handle is safe.
+
+**Risk:** 🟢 Low for (a) — trivial. 🟡 Low–Med for (b) — handle lifecycle must be
+tied to `dispose`/`abortTask`, and a write error must invalidate the cached
+handle so the next append reopens. Do (a) unconditionally; do (b) only if
+profiling shows append syscall overhead is material under heavy streaming.
+
+### 🟡 H14: Incrementalize `prepareMessagesForApi` / Content Externalization
+
+**Targets:** `Task.prepareMessagesForApi()`, `Task.externalizeMessageContent()`
+in [`Task.ts`](extensions/shofer/src/core/task/Task.ts)
+
+Before each API request, `prepareMessagesForApi` walks the **entire**
+`apiConversationHistory` and rebuilds every message (cloning nested
+`content`/`tool_result` blocks) to resolve blob refs; `externalizeMessageContent`
+similarly re-scans content to externalize over-cap strings. This is O(context
+size) per turn and grows with conversation length — a quiet per-turn tax that
+scales with the same `n` H2/H10 worry about.
+
+**Fix:** Only newly-appended messages can contain un-externalized content, and
+already-resolved messages don't change. Cache the resolved/externalized form
+keyed by message `ts` (invalidated on edit/delete/checkpoint-restore, which
+already go through `overwrite*`), and process only the **delta** since the last
+request. Past messages are immutable in steady state, so the per-turn walk
+collapses to "resolve the few new blocks."
+
+**Risk:** 🟡 Medium. Correctness hinges on cache invalidation covering every
+mutation path (`overwriteApiConversationHistory`, condense, edit/delete). Gate
+behind a feasibility check that the resolved form is referentially stable for
+unchanged messages. Lower priority than H11–H13 unless profiling shows
+`prepareMessagesForApi` is a measurable slice of per-turn latency on long tasks.
+
+### Where these sit in the order
+
+H11 and H13(a) are low-risk, mechanical, and independently shippable — do them
+first. H12 is the larger steady-state win for very long single tasks (removes the
+per-turn O(n) compaction) but needs the threshold tuning and a shutdown-compaction
+guarantee. H14 is the most invasive and should wait for a profile that implicates
+`prepareMessagesForApi`. As with the existing items, **instrument before
+committing H12/H14** (extend the "Metrics to Track" list with compaction
+frequency/byte-volume and `prepareMessagesForApi` p50/p95).
 
 ---
 
