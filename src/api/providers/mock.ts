@@ -110,6 +110,13 @@ const BUILT_IN_SCENARIOS: MockScenario[] = [
 	{ match: "Hello", response: "Hello! Mock assistant here." },
 	{ match: "number", response: "42" },
 
+	// ── Mode exercises ────────────────────────────────────────────────────────
+	{
+		match: "what an architect agent does differently from a code agent",
+		response:
+			"An architect agent plans, designs, and strategizes before implementation, breaking down complex problems into specifications — unlike a code agent which directly writes and modifies code.",
+	},
+
 	// ── CLI tool-exercising scenarios ─────────────────────────────────────────
 	//
 	// Multi-turn scenarios for the tool-use CLI cases (test_harness.md scenarios
