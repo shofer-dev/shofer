@@ -18,11 +18,11 @@ Peer messaging enables:
 
 ## Scope: Same Root Task
 
-Peer communication is scoped to tasks sharing the same [`rootTaskId`](parallelism.md#task). A task's `rootTaskId` is immutable — set at construction from [`TaskOptions.rootTask?.taskId`](../src/core/task/Task.ts:732) and persisted in [`HistoryItem`](../packages/types/src/history.ts). Tasks without a `rootTaskId` (top-level tasks not spawned via `new_task`) are not eligible for peer messaging.
+Peer communication is scoped to tasks sharing the same [`rootTaskId`](parallelism.md#task). A task's `rootTaskId` is immutable — set at construction from [`TaskOptions.rootTask?.taskId`](../src/core/task/Task.ts:732) and persisted in [`HistoryItem`](../packages/types/src/history.ts). The root task (created directly by the user, no `rootTaskId`) is eligible for peer messaging — it can message any task in its tree using its own `taskId` as the effective root. Sub-tasks require `knownPeers` grants.
 
 The [`TaskManager`](../src/services/task-manager/TaskManager.ts) already maintains the centralized registry of all live tasks (`activeTasks` and `managedTasks` maps). Peer tools query this registry filtered by `rootTaskId`, removing the `backgroundChildren` gating that limits current tools to direct children only.
 
-> **Background-task requirement:** sharing a `rootTaskId` makes a task _visible_ to the read-only peer tools (`list_background_tasks`, `check_task_status`, `wait_for_task`), but the **active** flow — `send_message_to_task` — additionally requires both participants to be **background (async) tasks**. A foreground/blocking subtask has a `rootTaskId` too, but its parent is hard-suspended awaiting it, so it is not a concurrent peer. See [Background-task precondition](#background-task-precondition).
+> **Note:** The `isBackgroundTask` restriction was removed (commit `e640a4578`). Any task sharing the root task — foreground or background — can use `send_message_to_task`. The root task itself (no `rootTaskId`) can message any task in its tree.
 
 ```
 Root Task (task-0)
@@ -150,26 +150,9 @@ Always-available tool. Sends a message to a peer task. Two modes: async (fire-an
 2. `target.rootTaskId === caller.rootTaskId`.
 3. `target.taskId !== caller.taskId`.
 4. `task_id` must be in the caller's `knownPeers` set — unless the caller is the root task (no `rootTaskId`), which is omnipotent within its tree. For sub-tasks, `knownPeers` is **always set**; when the set does not contain `task_id`, the call is rejected regardless of same-root membership.
-5. **Both `caller` and `target` must be background tasks** (`isBackgroundTask === true`). See [Background-task precondition](#background-task-precondition).
+    > **Removed (commit `e640a4578`):** Scope validation rule #5 (`isBackgroundTask` check) was removed. Any task — foreground or background, root or subtask — can send and receive peer messages. Rules #1–#4 are sufficient.
 
-#### Background-task precondition
-
-`send_message_to_task` requires **both** the caller and the target to be **background (async) tasks** (`isBackgroundTask === true`, set when spawned with `new_task(is_background=true)`). Sharing a `rootTaskId` is necessary but **not sufficient**: a _foreground/blocking_ subtask also has a `rootTaskId`, yet its parent is **hard-suspended inside the `new_task` await** for the entire duration of its run. That hard-suspension breaks the three flows peer messaging depends on:
-
-- **Concurrency.** Peer messaging presupposes peers running _at the same time_. A foreground subtask is the single task its parent is blocked on — there is no concurrently-scheduled sibling to send to it or receive from it. The "siblings exchange messages while both run" model **is** the background-task model.
-- **Escalation-up.** A foreground recipient cannot escalate an `ask_followup_question` to its (blocked) parent — the question falls through to the user (see [`ask_followup_question` from a task in a peer exchange](#ask_followup_question-from-a-task-in-a-peer-exchange)). A recipient that may need to consult its supervisor while serving a peer prompt MUST therefore be a background task.
-- **No nested-block deadlocks.** A foreground sender issuing a _sync_ send blocks itself while its own parent is already blocked on it, stacking two suspensions and widening the deadlock surface — the sender can no longer be reached by anyone trying to unblock it.
-
-The same `isBackgroundTask` flag that gates `ask_followup_question` routing-to-parent thus gates participation in peer messaging: a task that is not independently schedulable is neither a reachable recipient nor a safe sync sender. A caller or target failing this check is rejected synchronously — `Error: Peer messaging requires both tasks to be background tasks.`
-
-**Parent/child sync is not peer sync.** The sync-response-routing generalization (§[Sync response routing](#sync-response-routing-initiator-addressed)) unifies result delivery by keying resolvers on the recipient's `taskId`, but the _initiator kinds_ remain mutually exclusive on the target's `isBackgroundTask` flag:
-
-| Initiator kind                     | Target's `isBackgroundTask`       | Sync resolver path                                              |
-| ---------------------------------- | --------------------------------- | --------------------------------------------------------------- |
-| Parent (`new_task`, foreground)    | `false`                           | `blockingChildResolvers` → `resumeBlockingParent` stack-pop     |
-| Peer (`send_message_to_task` sync) | `true` (enforced by precondition) | `pendingSyncResolvers` → fire resolver, skip stack manipulation |
-
-The unified routing map (`pendingSyncResolvers`) serves both, but the code branches at delivery: `AttemptCompletionTool` checks _which_ map entry exists and runs the corresponding bookkeeping (stack-pop + parent-history for parent initiators; resolver-only for peer initiators). An implementer MUST NOT collapse both paths into a single code branch — the `isBackgroundTask` flag and `parentTaskId` context determine which bookkeeping steps apply.
+> **Removed (commit `e640a4578`):** The `isBackgroundTask` restriction was removed from `send_message_to_task`. Any task — foreground or background — can be caller or target. The parent/child sync routing table below is retained for historical reference; the `pendingSyncResolvers` map now serves all initiators uniformly, keyed by recipient `taskId`.
 
 ### Async mode (`wait = false`, default)
 
