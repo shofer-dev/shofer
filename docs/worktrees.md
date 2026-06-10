@@ -85,7 +85,7 @@ When a task runs inside an embedded worktree (`task.cwd` points into `.shofer/wo
 
 **Implementation:** [`validateWorktreePath()`](../src/utils/worktreePathGuard.ts) resolves the target against `task.cwd` and verifies it stays within the worktree directory. It detects `..` traversal, absolute paths pointing outside, and any symlinks that resolve elsewhere. For non-worktree tasks, the guard is a no-op.
 
-**`execute_command` sandboxing:** On Linux, shell commands in worktree-scoped tasks are automatically sandboxed using the `shofer-sandbox` wrapper binary ([`../sandbox/main.go`](../sandbox/main.go)). The wrapper applies a Landlock write-only sandbox (kernel 5.13+) or falls back to bubblewrap, restricting writes to the worktree directory, `/tmp`, and `/dev/null`. Reads remain unrestricted. On macOS/Windows, no kernel sandbox is available — the approval prompt displays a ⚠️ warning instead.
+**`execute_command` sandboxing:** On Linux, shell commands in worktree-scoped tasks are automatically sandboxed using the `shofer-sandbox` wrapper binary, compiled from Go source at build time ([`../src/sandbox/main.go`](../src/sandbox/main.go)). The wrapper applies a Landlock write-only sandbox (kernel 5.13+) or falls back to bubblewrap, restricting writes to the worktree directory, `/tmp`, and `/dev/null`. Reads remain unrestricted. On macOS/Windows, no kernel sandbox is available — the approval prompt displays a ⚠️ warning instead.
 
 ### 4. Checkpoint Isolation (`src/services/checkpoints/`)
 
