@@ -70,18 +70,105 @@
 - The H8 static-state cache was removed (see comment at
   [`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts#L217)).
 
+## Task-Switch Latency: Hot / Cold / Warm Paths
+
+> Added 2026-06-10. Anchors verified against HEAD. The user-reported symptom —
+> "switching to a long task is slow to populate the ChatView" — is the **cold**
+> path below. The landed H0–H14 work is concentrated on the **hot** (streaming)
+> path; the cold path was largely left intact.
+
+Three distinct task-switch paths are dispatched from
+[`ShoferProvider.focusTask()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L4931):
+
+- **Hot** — the task is already open and the agent is streaming. New content
+  arrives as `shoferMessageAppended` / `messageUpdated` deltas (incremental
+  messaging), with debounced saves (H0), O(1) JSONL appends (H12–H13), and
+  incremental webview consolidation (H10). Almost all landed items optimize this
+  path.
+
+- **Cold** — first visit to a task with no live instance (`isTaskAlive` false) →
+  `else` branch →
+  [`showTaskWithId(taskId, { keepCurrentTask: true })`](extensions/shofer/src/core/webview/ShoferProvider.ts#L4983)
+  → full rehydrate:
+  [`preloadShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L3192)
+  (two parallel reads + `JSON.parse` of both files via `getSavedShoferMessages` /
+  `getSavedApiConversationHistory`, then a cheap pure-JS sanitize), `Task`
+  construction, `resumeTaskFromHistory`, then `postInitState()`. The rehydrated
+  instance is then kept alive via
+  [`registerBackgroundTask(resumedTask)`](extensions/shofer/src/core/webview/ShoferProvider.ts#L4993)
+  (see the comment at L4984).
+
+- **Warm re-switch** — revisiting an already-visited task (`isTaskAlive` true) →
+  LIVE path
+  ([`focusTask`](extensions/shofer/src/core/webview/ShoferProvider.ts#L4944)):
+  the retained in-memory `Task` instance is swapped into the stack and
+  `postInitState()` is called. **No disk read, no `JSON.parse`, no sanitize, no
+  construction.**
+
+### Attributed costs (hand-timed, not yet sub-step-instrumented)
+
+For a representative long task the observed split was **~4–5 s cold** vs
+**~1 s warm**. Because warm and cold differ by exactly one stage — the host-side
+rehydrate — the two numbers attribute as:
+
+| Term                                                                                                                         | Runs on   | Approx cost          |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------- | -------------------- |
+| Host rehydrate: parallel read + `JSON.parse` + sanitize + construct + `resumeTaskFromHistory`                                | cold only | ~3–4 s (cold−warm Δ) |
+| Shared tail: `postInitState()` full-array IPC clone + webview `processorRef.reset()` → full consolidation + Virtuoso remount | both      | ~1 s (warm floor)    |
+
+The dominant term is the host rehydrate, **not** the IPC clone or the webview
+consolidation — if those dominated, warm re-switch would also be slow.
+
+### Already-wired instrumentation (correction)
+
+Coarse wall-time instrumentation already exists via the
+[`time()`](extensions/shofer/src/utils/perf.ts#L75) helper:
+[`preloadShoferMessages`](extensions/shofer/src/core/task/Task.ts#L3193),
+`saveShoferMessages`, and
+[`postInitState`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3063)
+each report to a Prometheus histogram and, when `process.env.DEBUG` is set, log
+p50/p95 to the output channel. The cold-path split (whole-`preloadShoferMessages`
+vs whole-`postInitState`) is therefore **already measurable today** under
+`DEBUG` — no new code required.
+
+What is **not** yet instrumented: (a) the sub-step breakdown _inside_
+`_preloadShoferMessagesImpl` — read+parse (which lives inside
+`getSavedShoferMessages` / `getSavedApiConversationHistory`) vs the cheap
+sanitize — and (b) the webview-side first consolidation pass (host `time()`
+calls do not cross the IPC boundary). Add those two splits before choosing
+between simdjson and a tail-read.
+
+### Implications for the open items
+
+- **H10 gives zero benefit on task switch.** On every switch the webview calls
+  `processorRef.current.reset()`, so the next `process()` is a full
+  `combineApiRequests(combineCommandSequences(...))` + `getApiMetrics` pass over
+  the whole array (including `JSON.parse` of every `api_req_started.text`). H10's
+  incremental cache only amortizes _subsequent_ streamed chunks within a task.
+
+- The dominant ~3–4 s term is attacked by **windowed/tail JSONL read** (read only
+  the last K lines → bounded parse; the read-half of H2) and **H5.b (simdjson /
+  off-main-thread parse)**. The tail-read also shrinks the ~1 s floor (smaller
+  IPC clone, K-message first consolidation), so it hits both terms.
+
+- The "render most-recent-first / chunk the IPC" idea — a lower-risk alternative
+  to full H2 that keeps the full array in host memory and chunks only delivery +
+  consolidation order, leaving every host-side invariant untouched — targets only
+  the ~1 s floor, not the dominant rehydrate term. Worth doing for perceived
+  latency, but it cannot by itself fix slow long-task switches.
+
 ## Root Causes Identified
 
 ### 1. `preloadShoferMessages()` — Redundant Re-Read on Every Task Switch
 
-[`Task.preloadShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L3154) is called from
+[`Task.preloadShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L3192) is called from
 [`ShoferProvider.createTaskWithHistoryItem()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L1467)
 every time the user switches to a task. **(H1 + H3 resolved in pre-2026-05-21.)** The
 current implementation performs parallel `shoferMessages` + `apiConversationHistory` reads
 and publishes the sanitized array in-memory without a redundant re-read:
 
 ```typescript
-// Task.ts ~L3158–3226: _preloadShoferMessagesImpl()
+// Task.ts ~L3196–3265: _preloadShoferMessagesImpl()
 this.shoferMessages = modifiedShoferMessages
 this.apiConversationHistory = apiConversationHistory
 this.historyPreloaded = true
@@ -119,15 +206,24 @@ Persistence is now append-only JSONL
 Residual O(n) work on/near the hot path that survived the migration is covered by
 H11–H14 under Additional Optimizations.
 
-### 3. State Broadcasting — Superseded by Incremental Messaging
+### 3. State Broadcasting — Streaming Path Superseded; Task-Switch Init Still Full-Array
 
-The old [`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3206)
+The old [`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3212)
 carried the full `taskHistory` + `shoferMessages` arrays on every state push.
-**Resolved 2026-06-09** by incremental messaging: `postInitState()` (full snapshot,
-O(1) per task lifetime), `postConfigUpdate(key, value)` (single-key delta), and
-`postTaskStateUpdate(updates)` (task lifecycle delta). Per-message
+**Resolved 2026-06-09 for the streaming path** by incremental messaging:
+`postInitState()` (full snapshot, O(1) per task lifetime), `postConfigUpdate(key, value)`
+(single-key delta), and `postTaskStateUpdate(updates)` (task lifecycle delta). Per-message
 `shoferMessageAppended` / `messageUpdated` deltas replace full-array pushes on the
 streaming path.
+
+**Cold-path caveat (2026-06-10):** the supersession applies to the _streaming_
+path only. On a task switch, `postInitState()` →
+[`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3212)
+still serializes the **entire** `shoferMessages` + `taskHistory` arrays and
+structured-clones them across the IPC boundary — every switch, cold or warm.
+This is the ~1 s warm-floor term in the
+[Task-Switch Latency: Hot / Cold / Warm Paths](#task-switch-latency-hot--cold--warm-paths)
+section above; see it for the full attribution.
 
 ### 4. `JSON.parse` Is Blocking (Single-Threaded Event Loop)
 
