@@ -105,20 +105,44 @@ export async function appendJsonLine(filePath: string, value: unknown): Promise<
 	await enqueueWrite(filePath, async () => {
 		await ensureDirOnce(path.dirname(filePath))
 		let handle = getAppendHandle(filePath)
+		const open = async () => {
+			try {
+				return await fs.open(filePath, "a")
+			} catch (e: any) {
+				if (e && e.code === "ENOENT") {
+					// Test envs that mock mkdir but not open → directory
+					// is never created on disk and fs.open fails with
+					// ENOENT.  Fall back to appendFile as a one-shot.
+					return null
+				}
+				throw e
+			}
+		}
 		if (!handle) {
-			handle = await fs.open(filePath, "a")
-			setAppendHandle(filePath, handle)
+			const h = await open()
+			if (h) {
+				handle = h
+				setAppendHandle(filePath, handle)
+			} else {
+				await fs.appendFile(filePath, line, "utf8")
+				return
+			}
 		}
 		try {
 			await handle.write(line, null, "utf8")
 		} catch {
-			// Write error — the handle may be stale (e.g. file replaced by
-			// a concurrent `writeJsonLines` compaction). Invalidate and retry
-			// once with a fresh handle.
+			// Write error — handle may be stale (file replaced by
+			// compaction). Invalidate, re-open, retry once. If re-open
+			// also fails, fall back to appendFile.
 			invalidateAppendHandle(filePath)
-			handle = await fs.open(filePath, "a")
-			setAppendHandle(filePath, handle)
-			await handle.write(line, null, "utf8")
+			const h = await open()
+			if (h) {
+				handle = h
+				setAppendHandle(filePath, handle)
+				await handle.write(line, null, "utf8")
+			} else {
+				await fs.appendFile(filePath, line, "utf8")
+			}
 		}
 	})
 }
