@@ -235,7 +235,7 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 const mockPostMessage = (state: Partial<ExtensionState>) => {
 	window.postMessage(
 		{
-			type: "state",
+			type: "stateInit",
 			state: {
 				version: "1.0.0",
 				shoferMessages: [],

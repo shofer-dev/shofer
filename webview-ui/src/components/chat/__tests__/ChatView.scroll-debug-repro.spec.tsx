@@ -11,7 +11,7 @@ import ChatView, { type ChatViewProps } from "../ChatView"
 type FollowOutput = ((isAtBottom: boolean) => "auto" | false) | "auto" | false
 
 interface ExtensionStateMessage {
-	type: "state"
+	type: "stateInit"
 	state: {
 		version: string
 		shoferMessages: ShoferMessage[]
@@ -213,7 +213,7 @@ const resolveFollowOutput = (isAtBottom: boolean): "auto" | false => {
 
 const postState = (shoferMessages: ShoferMessage[]) => {
 	const message: ExtensionStateMessage = {
-		type: "state",
+		type: "stateInit",
 		state: {
 			version: "1.0.0",
 			shoferMessages,
