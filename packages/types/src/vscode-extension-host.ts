@@ -46,7 +46,9 @@ import type { WorktreeIncludeStatus, WorktreeStatus } from "./worktree.js"
 export interface ExtensionMessage {
 	type:
 		| "action"
-		| "state"
+		| "stateInit"
+		| "configUpdate"
+		| "taskStateUpdate"
 		| "taskHistoryUpdated"
 		| "taskHistoryItemUpdated"
 		| "selectedImages"
@@ -163,10 +165,15 @@ export interface ExtensionMessage {
 		| "toggleAutoApprove"
 	invoke?: "newChat" | "sendMessage" | "primaryButtonClick" | "secondaryButtonClick" | "setChatBoxMessage"
 	/**
-	 * Partial state updates are allowed to reduce message size (e.g. omit large fields like taskHistory).
-	 * The webview is responsible for merging.
+	 * Full state snapshot for stateInit message (replaces the old "state" bulk push).
+	 * Sent on webview launch, visibility return, reset, and task switch.
 	 */
-	state?: Partial<ExtensionState>
+	state?: ExtensionState
+	/** Key for configUpdate message — the setting key that changed. */
+	key?: string
+	/** Partial task-state update for taskStateUpdate messages. The webview
+	 *  merges these fields into its local ExtensionState. */
+	taskStateUpdates?: Partial<ExtensionState>
 	images?: string[]
 	filePaths?: string[]
 	openedTabs?: Array<{
@@ -475,14 +482,6 @@ export type ExtensionState = Pick<
 	taskSyncEnabled: boolean
 	openAiCodexIsAuthenticated?: boolean
 	debug?: boolean
-
-	/**
-	 * Monotonically increasing sequence number for shoferMessages state pushes.
-	 * When present, the frontend should only apply shoferMessages from a state push
-	 * if its seq is greater than the last applied seq. This prevents stale state
-	 * (captured during async getStateToPostToWebview) from overwriting newer messages.
-	 */
-	shoferMessagesSeq?: number
 }
 
 export interface Command {

@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import type { ExtensionState } from "./vscode-extension-host.js"
 import { ShoferEventName } from "./events.js"
 import type { ShoferSettings } from "./global-settings.js"
 import type { ShoferMessage, QueuedMessage, TokenUsage } from "./message.js"
@@ -55,7 +56,16 @@ export interface TaskProviderLike {
 	): this
 
 	// @TODO: Find a better way to do this.
-	postStateToWebview(): Promise<void>
+	postInitState(): Promise<void>
+	postConfigUpdate(key: string, value: unknown): void
+	postTaskStateUpdate(
+		updates: Partial<
+			Pick<
+				ExtensionState,
+				"currentTaskId" | "currentTaskItem" | "messageQueue" | "parallelTasks" | "focusedTaskId"
+			>
+		>,
+	): void
 }
 
 export type TaskAbortReason = "user" | "completed" | "error" | "abandoned"
