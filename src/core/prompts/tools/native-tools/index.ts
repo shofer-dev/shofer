@@ -7,18 +7,27 @@ import attemptCompletion from "./attempt_completion"
 import ragSearch from "./rag_search"
 
 /**
- * Return a deep copy of the standard `attempt_completion` tool definition
- * with its `result` parameter schema replaced by the given JSON Schema
- * contract.
+ * Return a copy of `attempt_completion` with its `result` parameter schema
+ * swapped for the given contract JSON Schema.
  *
- * The contract schema is injected as `result.parameters` so providers with
- * constrained decoding (OpenAI/Gemini) enforce it at decode time.
- * Providers without (DeepSeek Cloud) treat it as a semantic hint.
+ * The `rating`, `feedback`, and `strict` fields are spread from the base
+ * tool definition so the schema here does not duplicate them — if the base
+ * changes (e.g. rating enum), this function picks up the change
+ * automatically.  Only the `result` property is replaced; the contract
+ * becomes its sub-schema (i.e. the LLM produces `{ result: {<contract>},
+ * rating, feedback }`).
+ *
+ * The contract schema is within the universal + strict-safe subset
+ * (§4.3 of todos/output_contract_enforcement.md) so it is safe to send to
+ * every provider.  Providers with constrained decoding (OpenAI/Gemini)
+ * enforce it at decode time; providers without (DeepSeek Cloud) treat it
+ * as a strong semantic hint.
  */
 function applyCompletionSchema(
 	base: OpenAI.Chat.ChatCompletionFunctionTool,
 	schema: Record<string, unknown>,
 ): OpenAI.Chat.ChatCompletionFunctionTool {
+	const baseProps = (base.function.parameters as any)?.properties ?? {}
 	return {
 		...base,
 		function: {
@@ -27,22 +36,15 @@ function applyCompletionSchema(
 				type: "object",
 				properties: {
 					result: schema as OpenAI.FunctionParameters,
-					rating: {
-						type: "string",
-						description: "Self-assessment rating: 'poor', 'well', or 'excellent'",
-						enum: ["poor", "well", "excellent"],
-					},
-					feedback: {
-						type: "string",
-						description:
-							"Optional feedback for Shofer.Dev engineers to improve tooling, system prompt, etc. Only provide if you detected something that didn't work as expected or have a concrete improvement idea.",
-					},
+					...(baseProps.rating ? { rating: baseProps.rating } : {}),
+					...(baseProps.feedback ? { feedback: baseProps.feedback } : {}),
 				},
-				required: ["result", "rating"],
-				additionalProperties: false,
+				required: [
+					"result",
+					...((base.function.parameters as any)?.required?.filter((k: string) => k !== "result") ?? []),
+				],
+				additionalProperties: (base.function.parameters as any)?.additionalProperties ?? false,
 			},
-			// Keep the base strict flag — it's already true on attempt_completion
-			strict: true,
 		},
 	}
 }
