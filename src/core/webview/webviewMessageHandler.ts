@@ -1754,13 +1754,13 @@ export const webviewMessageHandler = async (
 			const ttsEnabled = message.bool ?? true
 			await updateGlobalState("ttsEnabled", ttsEnabled)
 			setTtsEnabled(ttsEnabled)
-			await provider.postInitState()
+			provider.postConfigUpdate("ttsEnabled", ttsEnabled)
 			break
 		case "ttsSpeed":
 			const ttsSpeed = message.value ?? 1.0
 			await updateGlobalState("ttsSpeed", ttsSpeed)
 			setTtsSpeed(ttsSpeed)
-			await provider.postInitState()
+			provider.postConfigUpdate("ttsSpeed", ttsSpeed)
 			break
 		case "playTts":
 			if (message.text) {
@@ -1871,14 +1871,14 @@ export const webviewMessageHandler = async (
 
 		case "hasOpenedModeSelector":
 			await updateGlobalState("hasOpenedModeSelector", message.bool ?? true)
-			await provider.postInitState()
+			provider.postConfigUpdate("hasOpenedModeSelector", message.bool ?? true)
 			break
 
 		case "lockApiConfigAcrossModes": {
 			const enabled = message.bool ?? false
 			await provider.context.workspaceState.update("lockApiConfigAcrossModes", enabled)
 
-			await provider.postInitState()
+			provider.postConfigUpdate("lockApiConfigAcrossModes", enabled)
 			break
 		}
 
@@ -1894,17 +1894,17 @@ export const webviewMessageHandler = async (
 				}
 
 				await updateGlobalState("pinnedApiConfigs", updatedPinned)
-				await provider.postInitState()
+				provider.postConfigUpdate("pinnedApiConfigs", updatedPinned)
 			}
 			break
 		case "enhancementApiConfigId":
 			await updateGlobalState("enhancementApiConfigId", message.text)
-			await provider.postInitState()
+			provider.postConfigUpdate("enhancementApiConfigId", message.text)
 			break
 
 		case "autoApprovalEnabled":
 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
-			await provider.postInitState()
+			provider.postConfigUpdate("autoApprovalEnabled", message.bool ?? false)
 			break
 		case "enhancePrompt":
 			if (message.text) {
@@ -2605,14 +2605,14 @@ export const webviewMessageHandler = async (
 				TelemetryService.instance.captureTelemetrySettingsChanged(previousSetting, telemetrySetting)
 			}
 
-			await provider.postInitState()
+			provider.postConfigUpdate("telemetrySetting", telemetrySetting)
 			break
 		}
 		case "debugSetting": {
 			await vscode.workspace
 				.getConfiguration(Package.name)
 				.update("debug", message.bool ?? false, vscode.ConfigurationTarget.Global)
-			await provider.postInitState()
+			provider.postConfigUpdate("debug", message.bool ?? false)
 			break
 		}
 		case "shoferCloudSignIn": {

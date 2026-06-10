@@ -2656,13 +2656,13 @@ export class ShoferProvider
 	 */
 	async setDefaultApiConfiguration(name: string) {
 		await this.contextProxy.setValue("currentApiConfigName", name)
-		await this.postInitState()
+		this.postConfigUpdate("currentApiConfigName", name)
 	}
 
 	async updateCustomInstructions(instructions?: string) {
 		// User may be clearing the field.
 		await this.updateGlobalState("customInstructions", instructions || undefined)
-		await this.postInitState()
+		this.postConfigUpdate("customInstructions", instructions || undefined)
 	}
 
 	// MCP
