@@ -129,3 +129,38 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		expect(resultNames).not.toContain("edit")
 	})
 })
+
+it("includes send_message_to_task in subtasks group for code mode", () => {
+	const nativeTools: OpenAI.Chat.ChatCompletionTool[] = [
+		makeTool("send_message_to_task"),
+		makeTool("new_task"),
+		makeTool("check_task_status"),
+		makeTool("write_to_file"),
+	]
+
+	const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, undefined, undefined)
+
+	const resultNames = result.map((t) => (t as any).function.name)
+	expect(resultNames).toContain("send_message_to_task")
+	expect(resultNames).toContain("new_task")
+	expect(resultNames).toContain("check_task_status")
+})
+
+it("includes subtasks tools by default (no model exclusions)", () => {
+	const nativeTools: OpenAI.Chat.ChatCompletionTool[] = [
+		makeTool("send_message_to_task"),
+		makeTool("new_task"),
+		makeTool("check_task_status"),
+		makeTool("wait_for_task"),
+		makeTool("list_background_tasks"),
+		makeTool("cancel_tasks"),
+		makeTool("answer_subtask_question"),
+	]
+
+	const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, undefined, undefined)
+
+	const resultNames = result.map((t) => (t as any).function.name)
+	expect(resultNames).toHaveLength(7)
+	expect(resultNames).toContain("send_message_to_task")
+	expect(resultNames).toContain("new_task")
+})
