@@ -27,6 +27,7 @@
  */
 
 import * as fs from "fs/promises"
+import { FileHandle } from "fs/promises"
 import * as path from "path"
 
 import { taskLog } from "../../utils/logging/subsystems"
@@ -48,16 +49,77 @@ function enqueueWrite(filePath: string, op: () => Promise<void>): Promise<void> 
 	return next
 }
 
+// H13(a): track which directories have already been created so we skip the
+// per-append `fs.mkdir(..., { recursive: true })` after the first write.
+const ensuredDirs = new Set<string>()
+
+function ensureDirOnce(dir: string): Promise<void> {
+	if (ensuredDirs.has(dir)) return Promise.resolve()
+	return fs.mkdir(dir, { recursive: true }).then(() => {
+		ensuredDirs.add(dir)
+	})
+}
+
+// H13(b): long-lived append file handles, keyed by file path.
+// Closed on `disposeAppendHandle` (called at task dispose/abort).
+// A write error invalidates the handle so the next append reopens.
+const appendHandles = new Map<string, FileHandle>()
+
+function getAppendHandle(filePath: string): FileHandle | undefined {
+	return appendHandles.get(filePath)
+}
+
+function setAppendHandle(filePath: string, handle: FileHandle): void {
+	appendHandles.set(filePath, handle)
+}
+
+function invalidateAppendHandle(filePath: string): void {
+	const h = appendHandles.get(filePath)
+	if (h) {
+		appendHandles.delete(filePath)
+		void h.close().catch(() => {})
+	}
+}
+
+/**
+ * Dispose the cached append file handle for `filePath`, if any.
+ * Safe to call even when no handle is cached. Callers should invoke this
+ * at task `dispose` / `abortTask` to release the fd.
+ */
+export function disposeAppendHandle(filePath: string): void {
+	invalidateAppendHandle(filePath)
+}
+
 /**
  * Append a single JSONL record to `filePath`. The line is built synchronously
  * (before yielding) so the queued op writes a frozen string the caller cannot
  * mutate mid-flight.
+ *
+ * H13: On the first append to a file, `fs.mkdir` is called once and the
+ * directory creation is memoized. A long-lived append handle (`fs.open(..., "a")`)
+ * is kept and reused across appends — no per-chunk open/write/close. A write
+ * error invalidates the handle so the next append reopens.
  */
 export async function appendJsonLine(filePath: string, value: unknown): Promise<void> {
 	const line = JSON.stringify(value) + "\n"
 	await enqueueWrite(filePath, async () => {
-		await fs.mkdir(path.dirname(filePath), { recursive: true })
-		await fs.appendFile(filePath, line, "utf8")
+		await ensureDirOnce(path.dirname(filePath))
+		let handle = getAppendHandle(filePath)
+		if (!handle) {
+			handle = await fs.open(filePath, "a")
+			setAppendHandle(filePath, handle)
+		}
+		try {
+			await handle.write(line, null, "utf8")
+		} catch {
+			// Write error — the handle may be stale (e.g. file replaced by
+			// a concurrent `writeJsonLines` compaction). Invalidate and retry
+			// once with a fresh handle.
+			invalidateAppendHandle(filePath)
+			handle = await fs.open(filePath, "a")
+			setAppendHandle(filePath, handle)
+			await handle.write(line, null, "utf8")
+		}
 	})
 }
 
@@ -70,7 +132,10 @@ export async function appendJsonLine(filePath: string, value: unknown): Promise<
  */
 export async function writeJsonLines(filePath: string, content: string): Promise<void> {
 	await enqueueWrite(filePath, async () => {
-		await fs.mkdir(path.dirname(filePath), { recursive: true })
+		await ensureDirOnce(path.dirname(filePath))
+		// H13: a full rewrite replaces the file — invalidate any cached
+		// append handle so the next append reopens on the new inode.
+		invalidateAppendHandle(filePath)
 		const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}`
 		await fs.writeFile(tmpPath, content, "utf8")
 		await fs.rename(tmpPath, filePath)

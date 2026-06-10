@@ -26,7 +26,14 @@ import type { ShoferMessage } from "@shofer/types"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { taskLog } from "../../utils/logging/subsystems"
-import { appendJsonLine, dedupeByKey, readJsonLines, serializeJsonLines, writeJsonLines } from "./jsonlLog"
+import {
+	appendJsonLine,
+	dedupeByKey,
+	disposeAppendHandle,
+	readJsonLines,
+	serializeJsonLines,
+	writeJsonLines,
+} from "./jsonlLog"
 
 const LEGACY_UI_MESSAGES = "ui_messages.json"
 
@@ -119,4 +126,24 @@ export async function saveTaskMessages({
 	const filePath = await uiMessagesPath(taskId, globalStoragePath)
 	const content = serialized ?? serializeJsonLines(messages)
 	await writeJsonLines(filePath, content)
+}
+
+export type DisposeAppendHandleForTaskOptions = {
+	taskId: string
+	globalStoragePath: string
+}
+
+/**
+ * Release the long-lived append file handle cached for this task's JSONL log.
+ * Safe to call multiple times; no-op if no handle is cached.
+ *
+ * Called from `Task.dispose()` (reached via `abortTask()`) so the fd is not
+ * leaked across task instances.
+ */
+export async function disposeAppendHandleForTask({
+	taskId,
+	globalStoragePath,
+}: DisposeAppendHandleForTaskOptions): Promise<void> {
+	const filePath = await uiMessagesPath(taskId, globalStoragePath)
+	disposeAppendHandle(filePath)
 }
