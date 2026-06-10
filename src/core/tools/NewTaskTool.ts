@@ -247,14 +247,12 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					parentTaskId: task.taskId,
 				})
 
-				// Dynamic-add: add the spawned child's taskId to the spawner's
-				// knownPeers so the spawner can message it (least-privilege
-				// baseline — the spawner can reach parent + own children).
-				// When knownPeers is undefined (root user task with no peer grants),
-				// skip — the spawner does not participate in peer messaging.
-				if (task.knownPeers) {
-					task.knownPeers.add(child.taskId)
+				// Initialize knownPeers lazily so the root task can also
+				// send messages to its children (not just child↔child).
+				if (!task.knownPeers) {
+					task.knownPeers = new Set<string>()
 				}
+				task.knownPeers.add(child.taskId)
 
 				// Baseline knownPeers for the child: parent only (least-privilege default).
 				const childPeers = new Set<string>([task.taskId])
