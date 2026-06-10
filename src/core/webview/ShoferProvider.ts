@@ -2488,9 +2488,11 @@ export class ShoferProvider
 				// this.contextProxy.setValues({ ...providerSettings, listApiConfigMeta: ..., currentApiConfigName: ... })
 				// We should probably switch to that and verify that it works.
 				// I left the original implementation in just to be safe.
+				// currentApiConfigName is NOT written here — setDefaultApiConfiguration
+				// is the single writer of the global default. The activate=true branch
+				// refreshes live provider settings + task API handlers only.
 				await Promise.all([
 					this.updateGlobalState("listApiConfigMeta", await this.providerSettingsManager.listConfig()),
-					this.updateGlobalState("currentApiConfigName", name),
 					this.providerSettingsManager.setModeConfig(mode, id),
 					this.contextProxy.setProviderSettings(providerSettings),
 				])
@@ -2753,7 +2755,11 @@ export class ShoferProvider
 		}
 
 		const profileName = `Requesty (${new Date().toLocaleString()})`
-		await this.upsertProviderProfile(profileName, newConfiguration)
+		// Pass activate=false — upsertProviderProfile just saves the config;
+		// activateProviderProfile below does the single live refresh + sets
+		// the global default. Avoids double setProviderSettings + double postInitState.
+		await this.upsertProviderProfile(profileName, newConfiguration, false)
+		await this.activateProviderProfile({ name: profileName })
 	}
 
 	// Task history

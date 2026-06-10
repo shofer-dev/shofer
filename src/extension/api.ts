@@ -618,10 +618,20 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			throw new Error(`Profile with name "${name}" already exists`)
 		}
 
-		const id = await this.sidebarProvider.upsertProviderProfile(name, profile ?? {}, activate)
+		// upsertProviderProfile saves the config + refreshes live settings when activate=true,
+		// but no longer sets currentApiConfigName (that is now the sole responsibility of
+		// activateProviderProfile / setDefaultApiConfiguration). When activate is requested,
+		// follow up with an explicit activation so the profile becomes the global default.
+		// Pass activate=false — upsertProviderProfile just saves; activateProviderProfile
+		// below handles the single live refresh + global default set when activate=true.
+		const id = await this.sidebarProvider.upsertProviderProfile(name, profile ?? {}, false)
 
 		if (!id) {
 			throw new Error(`Failed to create profile with name "${name}"`)
+		}
+
+		if (activate) {
+			await this.sidebarProvider.activateProviderProfile({ name })
 		}
 
 		return id
@@ -638,10 +648,18 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			throw new Error(`Profile with name "${name}" does not exist`)
 		}
 
-		const id = await this.sidebarProvider.upsertProviderProfile(name, profile, activate)
+		// upsertProviderProfile saves the config + refreshes live settings when activate=true,
+		// but no longer sets currentApiConfigName. Activate explicitly when requested.
+		// Pass activate=false — upsertProviderProfile just saves; activateProviderProfile
+		// below handles the single live refresh + global default set when activate=true.
+		const id = await this.sidebarProvider.upsertProviderProfile(name, profile, false)
 
 		if (!id) {
 			throw new Error(`Failed to update profile with name "${name}"`)
+		}
+
+		if (activate) {
+			await this.sidebarProvider.activateProviderProfile({ name })
 		}
 
 		return id
@@ -652,10 +670,18 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		profile: ProviderSettings,
 		activate: boolean = true,
 	): Promise<string | undefined> {
-		const id = await this.sidebarProvider.upsertProviderProfile(name, profile, activate)
+		// upsertProviderProfile saves the config + refreshes live settings when activate=true,
+		// but no longer sets currentApiConfigName. Activate explicitly when requested.
+		// Pass activate=false — upsertProviderProfile just saves; activateProviderProfile
+		// below handles the single live refresh + global default set when activate=true.
+		const id = await this.sidebarProvider.upsertProviderProfile(name, profile, false)
 
 		if (!id) {
 			throw new Error(`Failed to upsert profile with name "${name}"`)
+		}
+
+		if (activate) {
+			await this.sidebarProvider.activateProviderProfile({ name })
 		}
 
 		return id
