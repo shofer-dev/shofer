@@ -553,7 +553,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * first user message. For non-started tasks (`startTask: false`), resolves
 	 * immediately.
 	 *
-	 * Used by `createTaskWithHistoryItem` to defer `postStateToWebview` until
+	 * Used by `createTaskWithHistoryItem` to defer `postInitState` until
 	 * messages are available, preventing the home-screen flash when switching
 	 * focus to a history task before its messages have loaded.
 	 */
@@ -875,7 +875,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.messageQueueStateChangedHandler = () => {
 			this.emit(ShoferEventName.TaskUserMessage, this.taskId)
 			this.emit(ShoferEventName.QueuedMessagesUpdated, this.taskId, this.messageQueueService.messages)
-			this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
+			// Push the updated message queue to the webview via incremental
+			// taskStateUpdate (not a full postInitState). Gate on the same
+			// focused/current-task check as addToShoferMessages.
+			const p = this.providerRef.deref()
+			if (
+				p &&
+				(p.taskManager?.getFocusedTaskId() === this.taskId || p.getCurrentTask()?.taskId === this.taskId)
+			) {
+				p.postTaskStateUpdate({ messageQueue: this.messageQueueService.messages })
+			}
 		}
 
 		this.messageQueueService.on("stateChanged", this.messageQueueStateChangedHandler)
@@ -1867,14 +1876,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// "new task, user is watching" case. Background tasks (other managed
 		// tasks, or tasks popped from the stack) accumulate messages in-memory
 		// (still persisted to disk); the webview picks them up via the full
-		// postStateToWebview on focusTask() swap.
+		// postInitState on focusTask() swap.
 		if (
 			provider &&
 			(provider.taskManager?.getFocusedTaskId() === this.taskId ||
 				provider.getCurrentTask()?.taskId === this.taskId)
 		) {
 			await provider.postMessageToWebview({ type: "shoferMessageAppended", shoferMessage: message })
-			await provider.postStateToWebviewWithoutShoferMessages()
 		}
 		this.emit(ShoferEventName.Message, { action: "created", message })
 		await this._debouncedSaveShoferMessages()
@@ -2013,7 +2021,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Subclasses (e.g. WorkflowTask) may contribute extra persisted
 			// fields. Merging here guarantees the extension is present on EVERY
 			// history write, so the webview sees it from the very first
-			// postStateToWebview rather than only after the first checkpoint.
+			// postInitState rather than only after the first checkpoint.
 			await this.providerRef.deref()?.updateTaskHistory({ ...historyItem, ...this.getHistoryExtension() })
 
 			return true
@@ -2869,7 +2877,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					this._debouncedSaveShoferMessages.cancel()
 					await this.saveShoferMessages()
 
-					// More performant than an entire `postStateToWebview`.
+					// More performant than an entire `postInitState`.
 					this.updateShoferMessage(lastMessage)
 				} else {
 					// This is a new and complete message, so add it like normal.
@@ -3025,8 +3033,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// The todo list is already set in the constructor if initialTodos were provided
 			// No need to add any messages - the todoList property is already set
 
-			await this.providerRef.deref()?.postStateToWebviewWithoutTaskHistory()
-
 			await this.say("text", task, images)
 			this._messagesReadyResolve()
 
@@ -3082,7 +3088,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 *
 	 * MUST be called by `createTaskWithHistoryItem` BEFORE the task is pushed
 	 * onto `shoferStack` (i.e. before it becomes `getCurrentTask()`), so that
-	 * any concurrent `postStateToWebview()` triggered during the rehydration
+	 * any concurrent `postInitState()` triggered during the rehydration
 	 * window (e.g. a background task's `addToShoferMessages`, or an unrelated
 	 * webview round-trip) reads a non-empty `shoferMessages` and the home
 	 * screen never wins a render.
@@ -3206,7 +3212,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.diagLog(
 				`[DIAG resumeTaskFromHistory] about to ask(${askType}), taskId=${this.taskId}.${this.instanceId}, queueSize=${this.messageQueueService.messages.length}`,
 			)
-			const { response, text, images } = await this.ask(askType) // Calls `postStateToWebview`.
+			const { response, text, images } = await this.ask(askType) // Calls `postInitState`.
 			this.diagLog(
 				`[DIAG resumeTaskFromHistory] ask returned: response=${response}, text=${text?.substring(0, 100)}, hasImages=${!!(images && images.length > 0)}`,
 			)
@@ -4212,18 +4218,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// §4.2 + H9: Skinny push (omits shoferMessages + taskHistory). Per-message
 			// deltas (`shoferMessageAppended` / `messageUpdated`) keep the webview's
 			// shoferMessages array in sync; `taskHistoryItemUpdated` covers history.
-			// Only push when this task is the one the user sees (see
-			// addToShoferMessages for dual-check rationale).
-			{
-				const p = this.providerRef.deref()
-				if (
-					p &&
-					(p.taskManager?.getFocusedTaskId() === this.taskId || p.getCurrentTask()?.taskId === this.taskId)
-				) {
-					await p.postStateToWebviewWithoutShoferMessages()
-				}
-			}
-
+			// §4.2 + H9: Skinny push removed — per-message deltas
+			// (`shoferMessageAppended` / `messageUpdated`) keep the webview's
+			// shoferMessages array in sync; `taskHistoryItemUpdated` covers history.
 			try {
 				let cacheWriteTokens = 0
 				let cacheReadTokens = 0
@@ -5123,16 +5120,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// deltas keep shoferMessages in sync; taskHistoryItemUpdated covers history.
 				// Only push when this task is the one the user sees (see
 				// addToShoferMessages for dual-check rationale).
-				{
-					const p = this.providerRef.deref()
-					if (
-						p &&
-						(p.taskManager?.getFocusedTaskId() === this.taskId ||
-							p.getCurrentTask()?.taskId === this.taskId)
-					) {
-						await p.postStateToWebviewWithoutShoferMessages()
-					}
-				}
 
 				// No legacy text-stream tool parser state to reset.
 

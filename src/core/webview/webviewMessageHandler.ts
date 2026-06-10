@@ -358,7 +358,7 @@ export const webviewMessageHandler = async (
 				})
 
 				// Update the UI to reflect the deletion
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			}
 		} catch (error) {
 			webviewLog.error("Error in delete message:", error)
@@ -528,7 +528,7 @@ export const webviewMessageHandler = async (
 			})
 
 			// Update the UI to reflect the deletion
-			await provider.postStateToWebview()
+			await provider.postInitState()
 
 			await currentShofer.submitUserMessage(editedContent, images)
 		} catch (error) {
@@ -655,7 +655,7 @@ export const webviewMessageHandler = async (
 			const customModes = await provider.customModesManager.getCustomModes()
 			await updateGlobalState("customModes", customModes)
 
-			provider.postStateToWebview()
+			provider.postInitState()
 			provider.workspaceTracker?.initializeFilePaths() // Don't await.
 
 			// Always push the current parallel task state so the TaskSelector has
@@ -931,7 +931,7 @@ export const webviewMessageHandler = async (
 					await reinitializeAssistantAgent(provider)
 				}
 
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			}
 
 			break
@@ -968,17 +968,17 @@ export const webviewMessageHandler = async (
 						`[updateCostLimit] persist failed for ${message.taskId}: ${err instanceof Error ? err.message : String(err)}`,
 					)
 				}
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			}
 			break
 		case "clearTask":
 			// Clear task resets the current task.
 			await provider.clearTask()
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		case "didShowAnnouncement":
 			await updateGlobalState("lastShownAnnouncementId", provider.latestAnnouncementId)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		case "selectImages":
 			const images = await selectImages()
@@ -1053,7 +1053,7 @@ export const webviewMessageHandler = async (
 					results.push(...batchResults)
 
 					// Update the UI after each batch to show progress
-					await provider.postStateToWebview()
+					await provider.postInitState()
 				}
 
 				// Log final results
@@ -1685,7 +1685,7 @@ export const webviewMessageHandler = async (
 				await provider.getMcpHub()?.deleteServer(message.serverName, message.source as "global" | "project")
 
 				// Refresh the webview state
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
 				provider.log(`Failed to delete MCP server: ${errorMessage}`)
@@ -1754,13 +1754,13 @@ export const webviewMessageHandler = async (
 			const ttsEnabled = message.bool ?? true
 			await updateGlobalState("ttsEnabled", ttsEnabled)
 			setTtsEnabled(ttsEnabled)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		case "ttsSpeed":
 			const ttsSpeed = message.value ?? 1.0
 			await updateGlobalState("ttsSpeed", ttsSpeed)
 			setTtsSpeed(ttsSpeed)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		case "playTts":
 			if (message.text) {
@@ -1820,13 +1820,7 @@ export const webviewMessageHandler = async (
 				const existingPrompts = getGlobalState("customModePrompts") ?? {}
 				const updatedPrompts = { ...existingPrompts, [message.promptMode]: message.customPrompt }
 				await updateGlobalState("customModePrompts", updatedPrompts)
-				const currentState = await provider.getStateToPostToWebview()
-				const stateWithPrompts = {
-					...currentState,
-					customModePrompts: updatedPrompts,
-					hasOpenedModeSelector: currentState.hasOpenedModeSelector ?? false,
-				}
-				provider.postMessageToWebview({ type: "state", state: stateWithPrompts })
+				provider.postConfigUpdate("customModePrompts", updatedPrompts)
 
 				if (TelemetryService.hasInstance()) {
 					// Determine which setting was changed by comparing objects
@@ -1877,14 +1871,14 @@ export const webviewMessageHandler = async (
 
 		case "hasOpenedModeSelector":
 			await updateGlobalState("hasOpenedModeSelector", message.bool ?? true)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 
 		case "lockApiConfigAcrossModes": {
 			const enabled = message.bool ?? false
 			await provider.context.workspaceState.update("lockApiConfigAcrossModes", enabled)
 
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		}
 
@@ -1900,17 +1894,17 @@ export const webviewMessageHandler = async (
 				}
 
 				await updateGlobalState("pinnedApiConfigs", updatedPinned)
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			}
 			break
 		case "enhancementApiConfigId":
 			await updateGlobalState("enhancementApiConfigId", message.text)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 
 		case "autoApprovalEnabled":
 			await updateGlobalState("autoApprovalEnabled", message.bool ?? false)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		case "enhancePrompt":
 			if (message.text) {
@@ -2309,7 +2303,7 @@ export const webviewMessageHandler = async (
 					// Update state after saving the mode
 					const customModes = await provider.customModesManager.getCustomModes()
 					await updateGlobalState("customModes", customModes)
-					await provider.postStateToWebview()
+					await provider.postInitState()
 
 					// Track telemetry for custom mode creation or update
 					if (TelemetryService.hasInstance()) {
@@ -2532,7 +2526,7 @@ export const webviewMessageHandler = async (
 						// Update state after importing
 						const customModes = await provider.customModesManager.getCustomModes()
 						await updateGlobalState("customModes", customModes)
-						await provider.postStateToWebview()
+						await provider.postInitState()
 
 						// Send success message to webview, include the imported slug so UI can switch
 						provider.postMessageToWebview({
@@ -2611,14 +2605,14 @@ export const webviewMessageHandler = async (
 				TelemetryService.instance.captureTelemetrySettingsChanged(previousSetting, telemetrySetting)
 			}
 
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		}
 		case "debugSetting": {
 			await vscode.workspace
 				.getConfiguration(Package.name)
 				.update("debug", message.bool ?? false, vscode.ConfigurationTarget.Global)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		}
 		case "shoferCloudSignIn": {
@@ -2645,7 +2639,7 @@ export const webviewMessageHandler = async (
 					.waitForCallback()
 					.then(async () => {
 						vscode.window.showInformationMessage("Successfully signed in to OpenAI Codex")
-						await provider.postStateToWebview()
+						await provider.postInitState()
 					})
 					.catch((error) => {
 						provider.log(`OpenAI Codex OAuth callback failed: ${error}`)
@@ -2664,7 +2658,7 @@ export const webviewMessageHandler = async (
 				const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
 				await openAiCodexOAuthManager.clearCredentials()
 				vscode.window.showInformationMessage("Signed out from OpenAI Codex")
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			} catch (error) {
 				provider.log(`OpenAI Codex sign out failed: ${error}`)
 				vscode.window.showErrorMessage("OpenAI Codex sign out failed.")
@@ -2698,7 +2692,7 @@ export const webviewMessageHandler = async (
 				// Cloud auth callback no longer supported
 				vscode.window.showErrorMessage("Cloud services have been removed.")
 
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			} catch (error) {
 				provider.log(`ManualUrl#handleAuthCallback failed: ${error}`)
 				const errorMessage = error instanceof Error ? error.message : t("common:errors.manual_url_auth_failed")
@@ -2712,7 +2706,7 @@ export const webviewMessageHandler = async (
 		case "clearCloudAuthSkipModel": {
 			// Clear the flag that indicates auth completed without model selection
 			await provider.context.globalState.update("shofer-auth-skip-model", undefined)
-			await provider.postStateToWebview()
+			await provider.postInitState()
 			break
 		}
 		case "switchOrganization": {
@@ -2802,7 +2796,7 @@ export const webviewMessageHandler = async (
 				})
 
 				// Update webview state
-				await provider.postStateToWebview()
+				await provider.postInitState()
 
 				// Then handle validation and initialization for the current workspace
 				const currentCodeIndexManager = provider.getCurrentWorkspaceCodeIndexManager()
@@ -2945,7 +2939,7 @@ export const webviewMessageHandler = async (
 					Boolean(patch.codebaseIndexGitEnabled) !== Boolean(currentConfig.codebaseIndexGitEnabled)
 				const merged = { ...currentConfig, ...patch }
 				await updateGlobalState("codebaseIndexConfig", merged)
-				await provider.postStateToWebview()
+				await provider.postInitState()
 
 				if (codeEnableFlipped) {
 					const codeManager = provider.getCurrentWorkspaceCodeIndexManager()
@@ -3256,7 +3250,7 @@ export const webviewMessageHandler = async (
 						search: message.filters.search,
 						tags: message.filters.tags,
 					})
-					await provider.postStateToWebview()
+					await provider.postInitState()
 				} catch (error) {
 					webviewLog.error("Marketplace: Error filtering items:", error)
 					vscode.window.showErrorMessage("Failed to filter marketplace items")
@@ -3278,7 +3272,7 @@ export const webviewMessageHandler = async (
 						message.mpItem,
 						message.mpInstallOptions,
 					)
-					await provider.postStateToWebview()
+					await provider.postInitState()
 					webviewLog.info(`Marketplace item installed and config file opened: ${configFilePath}`)
 
 					// Send success message to webview
@@ -3305,7 +3299,7 @@ export const webviewMessageHandler = async (
 			if (marketplaceManager && message.mpItem && message.mpInstallOptions) {
 				try {
 					await marketplaceManager.removeInstalledMarketplaceItem(message.mpItem, message.mpInstallOptions)
-					await provider.postStateToWebview()
+					await provider.postInitState()
 
 					// Send success message to webview
 					provider.postMessageToWebview({
@@ -3356,7 +3350,7 @@ export const webviewMessageHandler = async (
 					const configFilePath = await marketplaceManager.installMarketplaceItem(message.payload.item, {
 						parameters: message.payload.parameters,
 					})
-					await provider.postStateToWebview()
+					await provider.postInitState()
 					webviewLog.info(
 						`Marketplace item with parameters installed and config file opened: ${configFilePath}`,
 					)
@@ -4091,7 +4085,7 @@ export const webviewMessageHandler = async (
 				// task's draft, matching the "newTask" handler behaviour.
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 				// Send worktree status update so the UI can show badge info
-				await provider.postStateToWebview()
+				await provider.postInitState()
 			} catch (error) {
 				provider.log(`Error creating managed task: ${error}`)
 				// Reset the UI even on failure so the user isn't stuck.
@@ -4358,7 +4352,7 @@ export const webviewMessageHandler = async (
 
 				// Notify UI and start the slang loop
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
-				await provider.postStateToWebview()
+				await provider.postInitState()
 
 				// Start the workflow loop
 				provider.log(
