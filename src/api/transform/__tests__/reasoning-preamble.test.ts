@@ -37,8 +37,8 @@ describe("isAtomicPreambleToken", () => {
 		["• ", true],
 		["• response", true],
 		["•response", true],
-		["answer", true],
-		["Answer", true],
+		["answer", false],
+		["Answer", false],
 		["response", true],
 		["•Okay", false],
 		["Let me think", false],
@@ -53,12 +53,12 @@ describe("cleanReasoningChunk", () => {
 		expect(cleanReasoningChunk("•")).toBeUndefined()
 		expect(cleanReasoningChunk("•response")).toBeUndefined()
 		expect(cleanReasoningChunk("• response")).toBeUndefined()
-		expect(cleanReasoningChunk("answer")).toBeUndefined()
+		expect(cleanReasoningChunk("answer")).toBe("answer")
 	})
 
 	test("glued preamble → prefix stripped", () => {
 		expect(cleanReasoningChunk("•Okay, let's think")).toBe("Okay, let's think")
-		expect(cleanReasoningChunk("•response now let me…")).toBe(" now let me…")
+		expect(cleanReasoningChunk("•response now let me…")).toBe("now let me…")
 	})
 
 	test("no preamble → pass through", () => {

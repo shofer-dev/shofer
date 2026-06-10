@@ -23,7 +23,7 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 	// Also filter out trivial model-generated preamble tokens — same regex as
 	// src/api/transform/reasoning-preamble.ts (single source of truth).
 	const trimmedContent = content?.trim() ?? ""
-	const hasContent = trimmedContent.length > 0 && !/^•\s*response\s*/i.test(trimmedContent)
+	const hasContent = trimmedContent.length > 0 && !/^•\s*(?:response\s*)?/i.test(trimmedContent)
 
 	const [isCollapsed, setIsCollapsed] = useState(reasoningBlockCollapsed)
 

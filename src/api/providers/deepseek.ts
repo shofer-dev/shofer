@@ -17,7 +17,6 @@ import { convertToR1Format } from "../transform/r1-format"
 import { OpenAiHandler } from "./openai"
 import type { ApiHandlerCreateMessageMetadata } from "../index"
 import { cleanReasoningChunk } from "../transform/reasoning-preamble"
-import { getOutputChannel } from "../../extension"
 
 // Custom interface for DeepSeek params to support thinking mode
 type DeepSeekChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParamsStreaming & {
@@ -118,9 +117,11 @@ export class DeepSeekHandler extends OpenAiHandler {
 			// Filter out trivial model-generated preamble tokens (e.g. "• response").
 			if ("reasoning_content" in delta && delta.reasoning_content) {
 				const text = (delta.reasoning_content as string) || ""
-				// Diagnostic: log reasoning chunks to identify preamble patterns.
-				getOutputChannel()?.appendLine(`[DeepSeek reasoning] chunk=${JSON.stringify(text.slice(0, 80))}`)
-				const cleaned = cleanReasoningChunk(text)
+				const cleaned = cleanReasoningChunk(text, (msg) => {
+					void import("../../extension").then(({ getOutputChannel }) =>
+						getOutputChannel()?.appendLine(msg),
+					)
+				})
 				if (cleaned) {
 					yield { type: "reasoning", text: cleaned }
 				}

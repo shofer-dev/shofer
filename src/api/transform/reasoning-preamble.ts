@@ -2,24 +2,28 @@
  * Shared definition of trivial reasoning preamble tokens that some models
  * (DeepSeek via deepseek-reasoner, OpenRouter) emit before actual thinking
  * content.  The tokens are never legitimate reasoning — they are a format
- * artifact (bullet + label) mis-emitted at the start of the reasoning stream.
+ * artifact (bullet + optional label) mis-emitted at the start of the
+ * reasoning stream.
  *
  * SINGLE SOURCE OF TRUTH — imported by provider handlers (deepseek.ts,
  * openrouter.ts) and by the UI guard (ReasoningBlock.tsx).
  */
 
 /**
- * Regex that matches a bullet-prefixed "response" preamble at the start of
- * a reasoning chunk.  Handles all observed and potential variants:
- *   - "•"          (bare bullet)
- *   - "• "         (bullet + trailing space)
- *   - "• response" (bullet + space + "response")
- *   - "•response"  (bullet + "response" without space)
- *   - "•response " (bullet + "response" + trailing space)
+ * Regex that matches a bullet-prefixed preamble at the start of a reasoning
+ * chunk.  The "response" segment is optional so a bare bullet glued to real
+ * content ("•Okay…") is also caught.
+ *
+ * Matched variants:
+ *   - "•"              (bare bullet)
+ *   - "• "             (bullet + trailing space)
+ *   - "• response"     (bullet + space + "response")
+ *   - "•response"      (bullet + "response" without space)
+ *   - "•response "     (bullet + "response" + trailing space)
  *
  * Case-insensitive on the word so "• Response" is also caught.
  */
-export const REASONING_PREAMBLE_RE = /^•\s*response\s*/i
+export const REASONING_PREAMBLE_RE = /^•\s*(?:response\s*)?/i
 
 /**
  * Strip the reasoning preamble prefix from a chunk's text.
@@ -34,14 +38,16 @@ export function stripReasoningPreamble(text: string): string {
 }
 
 /**
- * Legacy single-chunk equality check retained as a fast-path for the common
- * case.  Only tokens that are known to be entire chunks consisting solely of
- * a preamble marker are listed.  Do NOT add general English words here —
- * those belong in the prefix-strip path.
+ * Single-chunk equality check retained as a fast-path.  Only tokens known to
+ * be entire chunks consisting solely of a preamble marker are listed.
+ * English words ("answer", "Answer") are NOT included — a model's genuine
+ * first reasoning chunk could literally be the word "answer", and dropping it
+ * would silently discard real thinking content.
  *
- * This is an optimisation: we can drop the chunk without running the regex.
+ * "response" is included because standalone "response" before the actual
+ * reasoning is a known artifact from reasoning_details text encoding.
  */
-const LEGACY_ATOMIC_TOKENS = new Set(["•", "• response", "•response", "answer", "Answer"])
+const LEGACY_ATOMIC_TOKENS = new Set(["•", "• response", "•response", "response"])
 
 /**
  * Fast-path check: return true when the entire chunk text is a known
@@ -56,7 +62,7 @@ export function isAtomicPreambleToken(text: string): boolean {
 /**
  * Process a reasoning chunk by first checking the atomic-token fast path,
  * then stripping any preamble prefix.  Returns `undefined` when the chunk
- * should be entirely dropped (no content remains after stripping).
+ * should be entirely dropped (no meaningful content remains after stripping).
  *
  * @param text — raw reasoning chunk text from the provider
  * @param diagnosticLog — optional logger for debugging preamble processing
@@ -71,10 +77,17 @@ export function cleanReasoningChunk(text: string, diagnosticLog?: (msg: string) 
 
 	// Strip preamble prefix from accumulated/boundary text
 	const cleaned = stripReasoningPreamble(text)
-	if (cleaned !== text && cleaned.length === 0) {
-		diagnosticLog?.(`[reasoning-preamble] stripped to empty: ${JSON.stringify(text)}`)
+
+	// Drop chunks that became empty after stripping, and independently drop
+	// chunks that were empty or whitespace to begin with (the empty check
+	// must NOT be gated on cleaned !== text, or ""/" " returns as-is).
+	if (cleaned.trim().length === 0) {
+		if (cleaned !== text) {
+			diagnosticLog?.(`[reasoning-preamble] stripped to empty: ${JSON.stringify(text)}`)
+		}
 		return undefined
 	}
+
 	if (cleaned !== text) {
 		diagnosticLog?.(`[reasoning-preamble] stripped prefix: ${JSON.stringify(text)} -> ${JSON.stringify(cleaned)}`)
 	}

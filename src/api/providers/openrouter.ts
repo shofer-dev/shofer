@@ -473,7 +473,11 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 						}
 
 						if (reasoningText) {
-							reasoningText = cleanReasoningChunk(reasoningText)
+							reasoningText = cleanReasoningChunk(reasoningText, (msg) => {
+								void import("../../extension").then(({ getOutputChannel }) =>
+									getOutputChannel()?.appendLine(msg),
+								)
+							})
 						}
 
 						if (reasoningText) {
@@ -487,7 +491,13 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 				// Skip if we've already yielded from reasoning_details to avoid duplicate display.
 				// Also strip trivial model-generated preamble tokens (e.g. "• response", "response").
 				if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
-					const cleaned = !hasYieldedReasoningFromDetails ? cleanReasoningChunk(delta.reasoning) : undefined
+					const cleaned = !hasYieldedReasoningFromDetails
+						? cleanReasoningChunk(delta.reasoning, (msg) => {
+								void import("../../extension").then(({ getOutputChannel }) =>
+									getOutputChannel()?.appendLine(msg),
+								)
+							})
+						: undefined
 					if (cleaned) {
 						yield { type: "reasoning", text: cleaned }
 					}
