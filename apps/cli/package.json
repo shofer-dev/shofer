@@ -1,6 +1,6 @@
 {
 	"name": "@shofer/cli",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "Shofer CLI - Run the Shofer agent from the command line",
 	"private": true,
 	"type": "module",
