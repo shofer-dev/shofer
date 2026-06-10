@@ -3,6 +3,7 @@ import * as fs from "fs"
 import * as path from "path"
 import { fileURLToPath } from "url"
 import process from "node:process"
+import { execSync } from "node:child_process"
 import * as console from "node:console"
 
 import { copyPaths, copyWasms, copyLocales, setupLocaleWatcher } from "@shofer/build"
@@ -86,7 +87,6 @@ async function main() {
 					const sandboxDest = path.join(sandboxDestDir, "shofer-sandbox")
 
 					try {
-						const { execSync } = await import("node:child_process")
 						execSync("go build -o shofer-sandbox .", {
 							cwd: sandboxDir,
 							env: { ...process.env, GOWORK: "off", CGO_ENABLED: "0" },
