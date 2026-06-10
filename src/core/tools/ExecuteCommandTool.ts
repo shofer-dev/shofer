@@ -130,9 +130,11 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 			// When sandboxing, the user's command must be passed as a single
 			// shell-quoted argument to /bin/sh -c so the outer shell (execa)
 			// doesn't word-split it.  shellQuote uses single-quote wrapping
-			// with internal ' escaped as '\''.
+			// with internal ' escaped as '\''.  Both path tokens and the
+			// user command are quoted — workspaces with spaces in the path
+			// are rare but possible.
 			const effectiveCommand = sandboxPrefix
-				? `${sandboxPrefix.join(" ")} /bin/sh -c ${shellQuote(command)}`
+				? `${shellQuote(sandboxPrefix[0])} ${shellQuote(sandboxPrefix[1])} -- /bin/sh -c ${shellQuote(command)}`
 				: command
 
 			const options: ExecuteCommandOptions = {

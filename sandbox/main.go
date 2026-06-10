@@ -174,11 +174,17 @@ func applyLandlock(worktreeDir string) error {
 	}
 	defer unix.Close(int(rulesetFd))
 
-	// Allow writes to the worktree, /tmp, and /dev (for /dev/null redirects).
+	// Allow writes to worktree + /tmp + /dev.
+	//
+	// Landlock LANDLOCK_RULE_PATH_BENEATH requires a directory fd, so
+	// we must grant /dev (the directory) rather than /dev/null alone.
+	// In containerized deployments DAC+capabilities prevent writes to
+	// block devices, and MAKE_BLOCK/MAKE_CHAR require CAP_MKNOD which
+	// is not granted.
 	allowedPaths := []string{
 		worktreeDir,
 		"/tmp",
-		"/dev", // O_PATH on /dev/null (char device) may fail; use the parent dir
+		"/dev",
 	}
 
 	for _, p := range allowedPaths {
