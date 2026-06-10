@@ -103,8 +103,9 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { ipcLog, webviewLog } from "../../utils/logging/subsystems"
 import { time } from "../../utils/perf"
+
 import { setProviderReady } from "../../metrics/server"
 
 /**
@@ -206,28 +207,15 @@ export class ShoferProvider
 	private pendingSyncResolvers: Map<string, { initiatorTaskId: string; resolve: (result: string) => void }> =
 		new Map()
 
-	/**
-	 * Monotonically increasing sequence number for shoferMessages state pushes.
-	 * Used by the frontend to reject stale state that arrives out-of-order.
-	 */
-	private shoferMessagesSeq = 0
-
 	public isViewLaunched = false
 	public settingsImportedAt?: number
 	public readonly latestAnnouncementId = "apr-2026-v3.52.0-poe-xai-minimax" // v3.52.0 Poe provider, xAI improvements, and MiniMax fixes
 	public readonly providerSettingsManager: ProviderSettingsManager
 	public readonly customModesManager: CustomModesManager
 
-	// H8: Static-state memoization.
-	// mergedAllowedCommands / mergedDeniedCommands are rebuilt on every
-	// postStateToWebview call but change only when the underlying
-	// settings change.  Cache them with a generation counter bumped
-	// by ContextProxy.onDidChange and workspace.onDidChangeConfiguration.
-	private _cachedMergedAllowed?: string[]
-	private _cachedMergedDenied?: string[]
-	private _cachedMergedGen = -1
-	private _settingsGeneration = 0
-	private _onDidChangeSettingsDisposable?: vscode.Disposable
+	// Phase 3: H8 static-state cache removed — allowed/denied commands are
+	// recomputed fresh in getStateToPostToWebview(). The cache was only worth it
+	// when postInitState was called >1/sec; with incremental messaging it won't be.
 	// ── Heartbeat / health-check fields ──────────────────────────────────────
 	/** Heartbeat timer ID. Cleared on webview reset and on final dispose. */
 	private _heartbeatTimer: NodeJS.Timeout | null = null
@@ -275,8 +263,6 @@ export class ShoferProvider
 	 */
 	private static readonly LIVENESS_TIMEOUT_MS = 30_000
 
-	private _settingsGenerationConfigDisposable?: vscode.Disposable
-
 	constructor(
 		readonly context: vscode.ExtensionContext,
 		private readonly outputChannel: vscode.OutputChannel,
@@ -323,24 +309,9 @@ export class ShoferProvider
 		// seeds exactly once.
 		this.taskManager.ensureRestored()
 
-		// H8: Subscribe to ContextProxy.onDidChange to invalidate the
-		// static-state cache.  When any global setting or secret changes,
-		// bump the generation counter so the next postStateToWebview
-		// rebuilds merged commands / modes from scratch.
-		this._onDidChangeSettingsDisposable = this.contextProxy.onDidChange(({ key }) => {
-			if (key === "allowedCommands" || key === "deniedCommands") {
-				this._settingsGeneration++
-			}
-		})
-		// Invalidate on workspace-config changes too — mergeAllowedCommands
-		// also reads vscode.workspace.getConfiguration("shofer.allowedCommands").
-		// Null-guarded: vscode.workspace.onDidChangeConfiguration is not
-		// available in test environments where the vscode module is a stub.
-		this._settingsGenerationConfigDisposable = vscode.workspace.onDidChangeConfiguration?.((e) => {
-			if (e.affectsConfiguration("shofer.allowedCommands") || e.affectsConfiguration("shofer.deniedCommands")) {
-				this._settingsGeneration++
-			}
-		})
+		// Phase 3: H8 static-state cache removed — allowed/denied commands are
+		// recomputed fresh in getStateToPostToWebview(). The cache was only worth it
+		// when postInitState was called >1/sec; with incremental messaging it won't be.
 
 		// Set up task event forwarding to webview.
 		this.taskManager.on("tasks:updated", (managedTasks) => {
@@ -383,7 +354,8 @@ export class ShoferProvider
 		this.providerSettingsManager = new ProviderSettingsManager(this.context)
 
 		this.customModesManager = new CustomModesManager(this.context, async () => {
-			await this.postStateToWebviewWithoutShoferMessages()
+			const modes = await this.customModesManager.getCustomModes()
+			this.postConfigUpdate("customModes", modes)
 		})
 
 		// Initialize MCP Hub through the singleton manager
@@ -1102,11 +1074,7 @@ export class ShoferProvider
 
 		this._disposed = true
 
-		// H8: Dispose settings-change subscriptions
-		this._onDidChangeSettingsDisposable?.dispose()
-		this._settingsGenerationConfigDisposable?.dispose()
-		this._onDidChangeSettingsDisposable = undefined
-		this._settingsGenerationConfigDisposable = undefined
+		// Phase 3: H8 disposables removed
 
 		// Clear all tasks from the stack.
 		while (this.shoferStack.length > 0) {
@@ -1425,7 +1393,7 @@ export class ShoferProvider
 					// Push full state on re-show so a blank webview (e.g. renderer
 					// restarted under memory/CPU pressure) can recover without
 					// waiting for the next user interaction.
-					this.postStateToWebview()
+					this.postInitState()
 				} else {
 					this.log("[webview-lifecycle] Tab panel became hidden")
 				}
@@ -1443,7 +1411,7 @@ export class ShoferProvider
 					// Push full state on re-show so a blank webview (e.g. renderer
 					// restarted under memory/CPU pressure) can recover without
 					// waiting for the next user interaction.
-					this.postStateToWebview()
+					this.postInitState()
 				} else {
 					this.log("[webview-lifecycle] Sidebar panel became hidden")
 				}
@@ -1554,7 +1522,7 @@ export class ShoferProvider
 					// created); non-fatal.
 				}
 				await liveInstance.messagesReady
-				await this.postStateToWebview()
+				await this.postInitState()
 				if (process.env.DEBUG) {
 					this.debug(`[task-switch] id=${historyItem.id} (live-instance swap, timing via @perf)`)
 				}
@@ -1691,7 +1659,7 @@ export class ShoferProvider
 		// then explicitly preload `shoferMessages` from disk via
 		// `preloadShoferMessages()` BEFORE the task is pushed onto
 		// `shoferStack` (i.e. before it becomes `getCurrentTask()`), guaranteeing
-		// that any concurrent `postStateToWebview()` call landing in the
+		// that any concurrent `postInitState()` call landing in the
 		// rehydration window (e.g. from a background task's
 		// `addToShoferMessages`, or from an unrelated webview round-trip) reads
 		// a non-empty messages array and the home screen never wins a render.
@@ -1869,7 +1837,7 @@ export class ShoferProvider
 		// stack, just like the plain-task path does at line ~1688. Without
 		// this, WorkflowView renders the empty-stream "Starting workflow…"
 		// spinner on restore because the task's shoferMessages is [] at the
-		// moment showTaskWithId pushes its postStateToWebview.
+		// moment showTaskWithId pushes its postInitState.
 		await workflowTask.preloadShoferMessages()
 
 		if (isRehydratingCurrentTask) {
@@ -2257,7 +2225,7 @@ export class ShoferProvider
 			}
 		}
 
-		await this.postStateToWebview()
+		await this.postInitState()
 	}
 
 	/**
@@ -2324,7 +2292,7 @@ export class ShoferProvider
 
 		const lockApiConfigAcrossModes = this.context.workspaceState.get("lockApiConfigAcrossModes", false)
 		if (lockApiConfigAcrossModes) {
-			await this.postStateToWebviewWithoutTaskHistory()
+			await this.postInitState()
 			return
 		}
 
@@ -2364,7 +2332,7 @@ export class ShoferProvider
 			}
 		}
 
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 	}
 
 	/**
@@ -2540,9 +2508,17 @@ export class ShoferProvider
 				this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true, profileName: name })
 			} else {
 				await this.updateGlobalState("listApiConfigMeta", await this.providerSettingsManager.listConfig())
+				// When editing the currently-active profile with activate=false,
+				// still refresh live contextProxy settings and running task API
+				// handlers so edits take effect immediately without re-selection.
+				const { currentApiConfigName } = await this.getState()
+				if (currentApiConfigName === name) {
+					await this.contextProxy.setProviderSettings(providerSettings)
+					this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true, profileName: name })
+				}
 			}
 
-			await this.postStateToWebviewWithoutTaskHistory()
+			await this.postInitState()
 			return id
 		} catch (error) {
 			this.log(
@@ -2574,7 +2550,7 @@ export class ShoferProvider
 			listApiConfigMeta: entries,
 		})
 
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 	}
 
 	private async persistStickyProviderProfileToCurrentTask(apiConfigName: string): Promise<void> {
@@ -2646,7 +2622,7 @@ export class ShoferProvider
 		// Change the provider for tasks whose sticky profile matches.
 		this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true, profileName: name })
 
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 
 		if (providerSettings.apiProvider) {
 			this.emit(ShoferEventName.ProviderProfileChanged, { name, provider: providerSettings.apiProvider })
@@ -2664,7 +2640,7 @@ export class ShoferProvider
 		// Push the config's settings into the webview's apiConfiguration so the
 		// user can edit them, but do NOT change currentApiConfigName.
 		await this.contextProxy.setProviderSettings(providerSettings)
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 	}
 
 	/**
@@ -2680,13 +2656,13 @@ export class ShoferProvider
 	 */
 	async setDefaultApiConfiguration(name: string) {
 		await this.contextProxy.setValue("currentApiConfigName", name)
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 	}
 
 	async updateCustomInstructions(instructions?: string) {
 		// User may be clearing the field.
 		await this.updateGlobalState("customInstructions", instructions || undefined)
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 	}
 
 	// MCP
@@ -2862,10 +2838,10 @@ export class ShoferProvider
 		// screen (where the webview's cached shoferMessages is []), the
 		// chatButtonClicked navigation lands on an empty chat → ChatView
 		// renders the home screen for a frame until resumeTaskFromHistory's
-		// eventual ask() triggers its own postStateToWebview. The
+		// eventual ask() triggers its own postInitState. The
 		// preload-before-publish step in createTaskWithHistoryItem guarantees
 		// this push carries the populated history.
-		await this.postStateToWebview()
+		await this.postInitState()
 
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 	}
@@ -3027,7 +3003,7 @@ export class ShoferProvider
 				}
 			}
 
-			await this.postStateToWebviewWithoutTaskHistory()
+			await this.postInitState()
 			// Deletion is not communicated via taskHistoryItemUpdated, so push a
 			// lightweight taskHistoryUpdated message so the webview drops the
 			// removed tasks from TaskSelector immediately.
@@ -3046,7 +3022,7 @@ export class ShoferProvider
 		await this.taskHistoryStore.delete(id)
 		this.recentTasksCache = undefined
 
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 		// See deleteTaskWithId: webview needs an explicit task-history broadcast
 		// to drop the deleted item from the TaskSelector list.
 		await this.broadcastTaskHistoryUpdate()
@@ -3054,52 +3030,76 @@ export class ShoferProvider
 
 	async refreshWorkspace() {
 		this.currentWorkspacePath = getWorkspacePath()
-		await this.postStateToWebviewWithoutTaskHistory()
+		await this.postInitState()
 	}
-	async postStateToWebview() {
-		return time("postStateToWebview", async () => {
+
+	/**
+	 * **Full state init** — one-shot snapshot of the complete ExtensionState.
+	 * Replaces the old `postStateToWebview()`. Sent on:
+	 * - Webview launch / visibility return (after didBecomeVisible)
+	 * - Task-creation / completion reset (newTask, clearTask, resetState)
+	 * - Task focus / switch (focusTask, managedTask launch)
+	 * - Delegate finished (delegateFinishTask)
+	 * - Settings import, profile change, MCP server lifecycle
+	 *
+	 * Everything else should use incremental `configUpdate` / `taskStateUpdate`.
+	 *
+	 * **Diagnostics**: this is the escape-hatch path. If you see this firing more
+	 * than O(1) times per task lifetime (excluding visibility resets), a call site
+	 * should be migrated to `postConfigUpdate()` or `postTaskStateUpdate()`.
+	 * Enable log category `IPC` + `Webview` to monitor.
+	 */
+	async postInitState(): Promise<void> {
+		ipcLog.info("postInitState — full state push", {
+			taskCount: this.shoferStack.length,
+			focusedTaskId: this.taskManager.getFocusedTaskId(),
+		})
+		return time("postInitState", async () => {
 			const state = await this.getStateToPostToWebview()
-			this.shoferMessagesSeq++
-			state.shoferMessagesSeq = this.shoferMessagesSeq
-			this.postMessageToWebview({ type: "state", state })
+			this.postMessageToWebview({ type: "stateInit", state })
 		})
 	}
 
 	/**
-	 * Like postStateToWebview but intentionally omits taskHistory.
+	 * **Config update** — a single key/value pair. The webview merges `{ [key]: value }`
+	 * into its local `ExtensionState`. Replaces `postInitState()` at settings
+	 * toggle, custom-mode CRUD, profile-switch sites where only one setting changed.
 	 *
-	 * Rationale:
-	 * - taskHistory can be large and was being resent on every chat message update.
-	 * - The webview maintains taskHistory in-memory and receives updates via
-	 *   `taskHistoryUpdated` / `taskHistoryItemUpdated`.
+	 * **Diagnostics**: these should be the most common state pushes after message
+	 * streaming. Enable `IPC` to verify the key granularity.
 	 */
-	async postStateToWebviewWithoutTaskHistory(): Promise<void> {
-		return time("postStateToWebviewWithoutTaskHistory", async () => {
-			const state = await this.getStateToPostToWebview()
-			this.shoferMessagesSeq++
-			state.shoferMessagesSeq = this.shoferMessagesSeq
-			const { taskHistory: _omit, ...rest } = state
-			this.postMessageToWebview({ type: "state", state: rest })
+	postConfigUpdate(key: string, value: unknown): void {
+		ipcLog.info(`postConfigUpdate key="${key}"`, {
+			key,
+			valueType: typeof value,
+			isArray: Array.isArray(value),
 		})
+		this.postMessageToWebview({ type: "configUpdate", key, value })
 	}
 
 	/**
-	 * Like postStateToWebview but intentionally omits both shoferMessages and taskHistory.
+	 * **Task state update** — task lifecycle fields only (currentTaskId, currentTaskItem,
+	 * messageQueue, parallelTasks, focusedTaskId). Replaces `postInitState()` at
+	 * task-switch and task-focus call sites where the only thing that changed is which
+	 * task is active. The webview merges these fields into its local state.
 	 *
-	 * Rationale:
-	 * - Cloud event handlers (auth, settings, user-info) and mode changes trigger state pushes
-	 *   that have nothing to do with chat messages. Including shoferMessages in these pushes
-	 *   creates race conditions where a stale snapshot of shoferMessages (captured during async
-	 *   getStateToPostToWebview) overwrites newer messages the task has streamed in the meantime.
-	 * - This method ensures cloud/mode events only push the state fields they actually affect
-	 *   (cloud auth, org settings, profiles, etc.) without interfering with task message streaming.
+	 * **Diagnostics**: these should fire every time the active task changes.
+	 * Enable `IPC` to verify the delta is targeted (not a full state push).
 	 */
-	async postStateToWebviewWithoutShoferMessages(): Promise<void> {
-		return time("postStateToWebviewWithoutShoferMessages", async () => {
-			const state = await this.getStateToPostToWebview()
-			const { shoferMessages: _omitMessages, taskHistory: _omitHistory, ...rest } = state
-			this.postMessageToWebview({ type: "state", state: rest })
+	postTaskStateUpdate(
+		updates: Partial<
+			Pick<
+				ExtensionState,
+				"currentTaskId" | "currentTaskItem" | "messageQueue" | "parallelTasks" | "focusedTaskId"
+			>
+		>,
+	): void {
+		ipcLog.info("postTaskStateUpdate", {
+			keys: Object.keys(updates),
+			hasCurrentTaskId: "currentTaskId" in updates,
+			hasCurrentTaskItem: "currentTaskItem" in updates,
 		})
+		this.postMessageToWebview({ type: "taskStateUpdate", taskStateUpdates: updates })
 	}
 
 	/**
@@ -3304,17 +3304,11 @@ export class ShoferProvider
 		const telemetryKey = process.env.POSTHOG_API_KEY
 		const machineId = vscode.env.machineId
 		// H8: Build merged commands from cache when settings haven't changed.
-		// mergeAllowedCommands / mergeDeniedCommands deduplicate and merge
-		// global-state + workspace-config arrays — a pure function of the
-		// input lists that changes only when the underlying settings change.
-		const gen = this._settingsGeneration
-		if (this._cachedMergedGen !== gen) {
-			this._cachedMergedAllowed = this.mergeAllowedCommands(allowedCommands)
-			this._cachedMergedDenied = this.mergeDeniedCommands(deniedCommands)
-			this._cachedMergedGen = gen
-		}
-		const mergedAllowedCommands = this._cachedMergedAllowed
-		const mergedDeniedCommands = this._cachedMergedDenied
+		// Phase 3: cache removed — recomputed fresh every time. With
+		// incremental messaging, postInitState runs O(1) times per task lifetime
+		// (start + focus), not per streaming token.
+		const mergedAllowedCommands = this.mergeAllowedCommands(allowedCommands)
+		const mergedDeniedCommands = this.mergeDeniedCommands(deniedCommands)
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
@@ -3375,7 +3369,7 @@ export class ShoferProvider
 					currentTask.metadata?.task !== undefined
 				) {
 					this.debug(
-						`[home-screen-flash] postStateToWebview about to send shoferMessages=[] for ` +
+						`[home-screen-flash] postInitState about to send shoferMessages=[] for ` +
 							`unloaded history task ${currentTask.taskId}.${currentTask.instanceId} ` +
 							`(isInitialized=${currentTask.isInitialized}). ` +
 							`Caller: ${new Error().stack?.split("\n").slice(2, 6).join(" | ")}`,
@@ -3870,7 +3864,7 @@ export class ShoferProvider
 		await this.providerSettingsManager.resetAllConfigs()
 		await this.customModesManager.resetCustomModes()
 		await this.removeShoferFromStack()
-		await this.postStateToWebview()
+		await this.postInitState()
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 	}
 
@@ -4691,7 +4685,7 @@ export class ShoferProvider
 		}
 
 		// 4) Refresh the webview so the user sees the parent's chat again.
-		await this.postStateToWebview()
+		await this.postInitState()
 
 		// 5) Emit provider-level event.
 		try {
@@ -4906,7 +4900,7 @@ export class ShoferProvider
 			await this.updateTaskHistory(historyItem)
 
 			// Notify the webview of the new current task and switch to the chat tab.
-			await this.postStateToWebview()
+			await this.postInitState()
 			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 
 			this.debug(`Created managed task: ${managedTask.id} (${managedTask.name})`)
@@ -4964,11 +4958,11 @@ export class ShoferProvider
 					// Sticky-mode is per-task: the mode picker reads the focused
 					// task's `_taskMode` directly in the state push below, so no
 					// global mirror write is needed on focus.
-					await this.postStateToWebview()
+					await this.postInitState()
 				} else {
 					// Stack is empty — just push the task
 					await this.addShoferToStack(liveTask)
-					await this.postStateToWebview()
+					await this.postInitState()
 				}
 			} else {
 				// No live instance or instance is dead/aborted — load from history

@@ -1227,7 +1227,7 @@ export class WorkflowTask extends Task {
 	/**
 	 * Persist the workflow extension once, eagerly, before the slang loop
 	 * starts. Called by the create/restore flows so the first
-	 * `postStateToWebview` already carries `isWorkflow`/`slangSource`/`flowState`
+	 * `postInitState` already carries `isWorkflow`/`slangSource`/`flowState`
 	 * and the webview routes to `WorkflowView` on the very first frame (no
 	 * `ChatView` flash while waiting for the first in-loop checkpoint).
 	 */

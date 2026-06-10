@@ -190,19 +190,9 @@ const TIME_ROUTES: Record<string, TimeRoute> = {
 		help: "Duration of Task.preloadShoferMessages (ms).",
 		buckets: STD_BUCKETS_MS,
 	},
-	postStateToWebview: {
-		name: "shofer_post_state_duration_ms",
-		help: "Duration of ShoferProvider.postStateToWebview* (ms).",
-		buckets: STD_BUCKETS_MS,
-	},
-	postStateToWebviewWithoutTaskHistory: {
-		name: "shofer_post_state_duration_ms",
-		help: "Duration of ShoferProvider.postStateToWebview* (ms).",
-		buckets: STD_BUCKETS_MS,
-	},
-	postStateToWebviewWithoutShoferMessages: {
-		name: "shofer_post_state_duration_ms",
-		help: "Duration of ShoferProvider.postStateToWebview* (ms).",
+	postInitState: {
+		name: "shofer_post_init_state_duration_ms",
+		help: "Duration of ShoferProvider.postInitState (ms).",
 		buckets: STD_BUCKETS_MS,
 	},
 	createTaskWithHistoryItem: {

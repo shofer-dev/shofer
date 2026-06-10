@@ -60,6 +60,9 @@ export const workflowLog = getLogger().child({ ctx: "Workflow" })
 /** i18n / translations */
 export const i18nLog = getLogger().child({ ctx: "I18n" })
 
+/** IPC protocol-level messages (stateInit, configUpdate, taskStateUpdate, shoferMessageAppended, etc.) */
+export const ipcLog = getLogger().child({ ctx: "IPC" })
+
 /** General utilities (countTokens, path, perf, etc.) */
 
 /** Scroll lifecycle (useScrollLifecycle webview-to-host diagnostic forwarding) */

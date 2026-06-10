@@ -317,7 +317,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		}
 
 		await provider.removeShoferFromStack()
-		await provider.postStateToWebview()
+		await provider.postInitState()
 		await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 		await provider.postMessageToWebview({ type: "invoke", invoke: "newChat", text, images })
 
@@ -367,7 +367,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	public async clearCurrentTask(_lastMessage?: string) {
 		// Legacy finishSubTask removed; clear current by closing active task instance.
 		await this.sidebarProvider.removeShoferFromStack()
-		await this.sidebarProvider.postStateToWebview()
+		await this.sidebarProvider.postInitState()
 	}
 
 	public async cancelCurrentTask() {
@@ -598,7 +598,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	public async setConfiguration(values: ShoferSettings) {
 		await this.sidebarProvider.contextProxy.setValues(values)
 		await this.sidebarProvider.providerSettingsManager.saveConfig(values.currentApiConfigName || "default", values)
-		await this.sidebarProvider.postStateToWebview()
+		await this.sidebarProvider.postInitState()
 	}
 
 	// Provider Profile Management
@@ -810,7 +810,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		}
 
 		await task.seedHistory()
-		await this.sidebarProvider.postStateToWebview()
+		await this.sidebarProvider.postInitState()
 
 		task.start()
 

@@ -34,7 +34,7 @@ type ExportOptions = {
 type ImportWithProviderOptions = ImportOptions & {
 	provider: {
 		settingsImportedAt?: number
-		postStateToWebview: () => Promise<void>
+		postInitState: () => Promise<void>
 	}
 }
 
@@ -324,7 +324,7 @@ export const importSettingsWithFeedback = async (
 
 	if (result.success) {
 		provider.settingsImportedAt = Date.now()
-		await provider.postStateToWebview()
+		await provider.postInitState()
 
 		// Show warnings if any profiles had issues but were still imported (with modifications)
 		if (result.warnings && result.warnings.length > 0) {
