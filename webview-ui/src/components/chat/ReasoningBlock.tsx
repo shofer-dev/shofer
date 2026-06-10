@@ -20,9 +20,10 @@ export const ReasoningBlock = ({ content, isStreaming, isLast }: ReasoningBlockP
 
 	// When streaming, always show the header to indicate thinking is in progress.
 	// When not streaming and the content is empty (or whitespace-only), render nothing.
-	// Also filter out trivial model-generated preamble tokens like "• response".
+	// Also filter out trivial model-generated preamble tokens — same regex as
+	// src/api/transform/reasoning-preamble.ts (single source of truth).
 	const trimmedContent = content?.trim() ?? ""
-	const hasContent = trimmedContent.length > 0 && !/^•( ?response)?$/.test(trimmedContent)
+	const hasContent = trimmedContent.length > 0 && !/^•\s*response\s*/i.test(trimmedContent)
 
 	const [isCollapsed, setIsCollapsed] = useState(reasoningBlockCollapsed)
 

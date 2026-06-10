@@ -4427,13 +4427,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						switch (chunk.type) {
 							case "reasoning": {
 								reasoningMessage += chunk.text
-								// Strip trivial model-generated preamble tokens from the
-								// beginning of the accumulated reasoning text. Models
-								// (DeepSeek, OpenRouter) emit "•", "• response", or
-								// "•response" before actual thinking. Streaming chunks
-								// fragment the preamble (•, " ", "response" arrive
-								// separately), so per-chunk filters are not sufficient.
-								reasoningMessage = reasoningMessage.replace(/^•\s*response\s*/i, "")
 								// Only apply formatting if the message contains sentence-ending punctuation followed by **
 								let formattedReasoning = reasoningMessage
 								if (reasoningMessage.includes("**")) {

@@ -16,12 +16,8 @@ import { convertToR1Format } from "../transform/r1-format"
 
 import { OpenAiHandler } from "./openai"
 import type { ApiHandlerCreateMessageMetadata } from "../index"
-
-/** Tokens some models emit as trivial reasoning preamble before actual thinking begins. */
-const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "•response", "•", "answer", "Answer"])
-function isTrivialReasoningToken(text: string): boolean {
-	return TRIVIAL_REASONING_TOKENS.has(text) || TRIVIAL_REASONING_TOKENS.has(text.trim())
-}
+import { cleanReasoningChunk } from "../transform/reasoning-preamble"
+import { getOutputChannel } from "../../extension"
 
 // Custom interface for DeepSeek params to support thinking mode
 type DeepSeekChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParamsStreaming & {
@@ -122,8 +118,11 @@ export class DeepSeekHandler extends OpenAiHandler {
 			// Filter out trivial model-generated preamble tokens (e.g. "• response").
 			if ("reasoning_content" in delta && delta.reasoning_content) {
 				const text = (delta.reasoning_content as string) || ""
-				if (!isTrivialReasoningToken(text)) {
-					yield { type: "reasoning", text }
+				// Diagnostic: log reasoning chunks to identify preamble patterns.
+				getOutputChannel()?.appendLine(`[DeepSeek reasoning] chunk=${JSON.stringify(text.slice(0, 80))}`)
+				const cleaned = cleanReasoningChunk(text)
+				if (cleaned) {
+					yield { type: "reasoning", text: cleaned }
 				}
 			}
 

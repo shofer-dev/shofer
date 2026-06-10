@@ -28,6 +28,7 @@ import { convertToR1Format } from "../transform/r1-format"
 import { addCacheBreakpoints as addAnthropicCacheBreakpoints } from "../transform/caching/anthropic"
 import { addCacheBreakpoints as addGeminiCacheBreakpoints } from "../transform/caching/gemini"
 import type { OpenRouterReasoningParams } from "../transform/reasoning"
+import { cleanReasoningChunk } from "../transform/reasoning-preamble"
 import { getModelParams } from "../transform/model-params"
 
 import { getModels } from "./fetchers/modelCache"
@@ -137,12 +138,6 @@ interface CompletionUsage {
 	cost_details?: {
 		upstream_inference_cost?: number
 	}
-}
-
-/** Tokens some models emit as trivial reasoning preamble before actual thinking begins. */
-const TRIVIAL_REASONING_TOKENS = new Set(["response", "• response", "•response", "•", "answer", "Answer"])
-function isTrivialReasoningToken(text: string): boolean {
-	return TRIVIAL_REASONING_TOKENS.has(text) || TRIVIAL_REASONING_TOKENS.has(text.trim())
 }
 
 export class OpenRouterHandler extends BaseProvider implements SingleCompletionHandler {
@@ -477,10 +472,8 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 							reasoningText = detail.summary
 						}
 
-						// Filter out trivial model-generated preamble tokens that some
-						// models emit as the first reasoning token (e.g. "• response").
-						if (reasoningText && isTrivialReasoningToken(reasoningText)) {
-							reasoningText = undefined
+						if (reasoningText) {
+							reasoningText = cleanReasoningChunk(reasoningText)
 						}
 
 						if (reasoningText) {
@@ -492,10 +485,11 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 
 				// Handle top-level reasoning field for UI display.
 				// Skip if we've already yielded from reasoning_details to avoid duplicate display.
-				// Also skip trivial model-generated preamble tokens (e.g. "• response", "response").
+				// Also strip trivial model-generated preamble tokens (e.g. "• response", "response").
 				if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
-					if (!hasYieldedReasoningFromDetails && !isTrivialReasoningToken(delta.reasoning)) {
-						yield { type: "reasoning", text: delta.reasoning }
+					const cleaned = !hasYieldedReasoningFromDetails ? cleanReasoningChunk(delta.reasoning) : undefined
+					if (cleaned) {
+						yield { type: "reasoning", text: cleaned }
 					}
 				}
 
