@@ -534,6 +534,71 @@ export const ChatRowContent = ({
 		setShowToolInput((prev) => !prev)
 	}, [])
 
+	// H19+H20: Memoized computations hoisted above the render switches so hooks
+	// are called unconditionally (React rules-of-hooks).  Each is keyed on
+	// message.text or message.ts so it re-evaluates only when the data changes,
+	// skipping the JSON.parse / reverse-scan work on every parent re-render.
+	const parsedRagSearch = useMemo(() => {
+		try {
+			return message.text
+				? (JSON.parse(message.text) as {
+						content: {
+							query: string
+							results: Array<{
+								filePath: string
+								score: number
+								startLine: number
+								endLine: number
+								codeChunk: string
+							}>
+						}
+					} | null)
+				: null
+		} catch (error) {
+			console.error("Failed to parse ragSearch content:", error)
+			return null
+		}
+	}, [message.text])
+
+	const parsedGitSearch = useMemo(() => {
+		try {
+			return message.text
+				? (JSON.parse(message.text) as {
+						content: {
+							query: string
+							results: Array<{
+								commit_hash: string
+								short_hash: string
+								author: string
+								author_date: string
+								subject: string
+								body: string
+								score: number
+							}>
+						}
+					} | null)
+				: null
+		} catch (error) {
+			console.error("Failed to parse gitSearch content:", error)
+			return null
+		}
+	}, [message.text])
+
+	const rateLimitWaitSeconds = useMemo(() => {
+		if (!message.text) return undefined
+		try {
+			const data = JSON.parse(message.text)
+			return typeof data.seconds === "number" ? data.seconds : undefined
+		} catch {
+			return undefined
+		}
+	}, [message.text])
+
+	const previousTodos = useMemo(
+		() => getPreviousTodos(shoferMessages, message.ts),
+		[shoferMessages, message.ts],
+	)
+
 	if (tool) {
 		switch (tool.tool as string) {
 			case "editedExistingFile":
@@ -679,8 +744,6 @@ export const ChatRowContent = ({
 			}
 			case "updateTodoList" as any: {
 				const todos = (tool as any).todos || []
-				// Get previous todos from the latest todos in the task context
-				const previousTodos = getPreviousTodos(shoferMessages, message.ts)
 
 				return <TodoChangeDisplay previousTodos={previousTodos} newTodos={todos} />
 			}
@@ -1596,17 +1659,7 @@ export const ChatRowContent = ({
 				case "api_req_rate_limit_wait": {
 					const isWaiting = message.partial === true
 
-					const waitSeconds = (() => {
-						if (!message.text) return undefined
-						try {
-							const data = JSON.parse(message.text)
-							return typeof data.seconds === "number" ? data.seconds : undefined
-						} catch {
-							return undefined
-						}
-					})()
-
-					return isWaiting && waitSeconds !== undefined ? (
+					return isWaiting && rateLimitWaitSeconds !== undefined ? (
 						<div
 							className={`group text-sm transition-opacity opacity-100`}
 							style={{
@@ -1618,7 +1671,7 @@ export const ChatRowContent = ({
 								<ProgressIndicator />
 								<span style={{ color: normalColor }}>{t("chat:apiRequest.rateLimitWait")}</span>
 							</div>
-							<span className="text-xs font-light text-vscode-descriptionForeground">{waitSeconds}s</span>
+							<span className="text-xs font-light text-vscode-descriptionForeground">{rateLimitWaitSeconds}s</span>
 						</div>
 					) : null
 				}
@@ -1803,66 +1856,23 @@ export const ChatRowContent = ({
 						return <TruncationResultRow data={message.contextTruncation} />
 					}
 					return null
-				case "rag_search_result":
-					let parsed: {
-						content: {
-							query: string
-							results: Array<{
-								filePath: string
-								score: number
-								startLine: number
-								endLine: number
-								codeChunk: string
-							}>
-						}
-					} | null = null
-
-					try {
-						if (message.text) {
-							parsed = JSON.parse(message.text)
-						}
-					} catch (error) {
-						console.error("Failed to parse ragSearch content:", error)
-					}
-
-					if (parsed && !parsed?.content) {
-						console.error("Invalid ragSearch content structure:", parsed.content)
+				case "rag_search_result": {
+					if (parsedRagSearch && !parsedRagSearch?.content) {
+						console.error("Invalid ragSearch content structure:", parsedRagSearch.content)
 						return <div>Error displaying search results.</div>
 					}
 
-					const { results = [] } = parsed?.content || {}
+					const { results = [] } = parsedRagSearch?.content || {}
 
 					return <RagSearchResultsDisplay results={results} />
-				case "git_search_result":
-					let gitParsed: {
-						content: {
-							query: string
-							results: Array<{
-								commit_hash: string
-								short_hash: string
-								author: string
-								author_date: string
-								subject: string
-								body: string
-								score: number
-							}>
-						}
-					} | null = null
-
-					try {
-						if (message.text) {
-							gitParsed = JSON.parse(message.text)
-						}
-					} catch (error) {
-						console.error("Failed to parse gitSearch content:", error)
-					}
-
-					if (gitParsed && !gitParsed?.content) {
-						console.error("Invalid gitSearch content structure:", gitParsed.content)
+				}
+				case "git_search_result": {
+					if (parsedGitSearch && !parsedGitSearch?.content) {
+						console.error("Invalid gitSearch content structure:", parsedGitSearch.content)
 						return <div>Error displaying search results.</div>
 					}
 
-					const gitResults = gitParsed?.content?.results || []
+					const gitResults = parsedGitSearch?.content?.results || []
 					const count = gitResults.length
 
 					return (
@@ -1906,6 +1916,7 @@ export const ChatRowContent = ({
 							</div>
 						</div>
 					)
+				}
 				case "tool_result": {
 					// Render raw tool output in an expandable section beneath the tool invocation.
 					const resultInfo = safeJsonParse<import("@shofer/types").ShoferSayToolResult>(message.text || "{}")

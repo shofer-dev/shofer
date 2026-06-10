@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 
 import {
 	type ProviderSettings,
@@ -642,7 +642,12 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setPrevCloudIsAuthenticated(currentAuth)
 	}, [state.cloudIsAuthenticated, prevCloudIsAuthenticated, state.apiConfiguration?.apiProvider])
 
-	const contextValue: ExtensionStateContextType = {
+	// H18: Memoize the context value to prevent identity churn on every render.
+	// Stabilizes the context object reference so consumers that read unchanged
+	// fields (the common case during streaming deltas) skip re-renders.
+	// Inline setters are stable closures — they close over setState which is
+	// referentially stable from useState.
+	const contextValue: ExtensionStateContextType = useMemo(() => ({
 		...state,
 		reasoningBlockCollapsed: state.reasoningBlockCollapsed ?? true,
 		didHydrateState,
@@ -777,7 +782,26 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		parallelTasks: state.parallelTasks ?? [],
 		focusedTaskId: state.focusedTaskId ?? null,
 		taskNotifications: (state.taskNotifications ?? []) as TaskNotification[],
-	}
+	}), [
+		state,
+		didHydrateState,
+		showWelcome,
+		theme,
+		mcpServers,
+		currentCheckpoint,
+		filePaths,
+		openedTabs,
+		commands,
+		extensionRouterModels,
+		vsCodeLmModels,
+		marketplaceItems,
+		marketplaceInstalledMetadata,
+		skills,
+		loadedSkills,
+		pendingWorktreeDir,
+		setApiConfiguration,
+		setListApiConfigMeta,
+	])
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>
 }

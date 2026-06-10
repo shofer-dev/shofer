@@ -59,6 +59,24 @@ export const MAX_IMAGES_PER_MESSAGE = 20 // This is the Anthropic limit.
 
 const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
 
+/** H22: Hoisted to module level to avoid new object identity per render. */
+const VIRTUOSO_VIEWPORT_INCREASE = { top: 3_000, bottom: 1000 } as const
+
+/** H22: Hoisted to module level to avoid new array identity per render. */
+const ALWAYS_HIDDEN_ONCE_PROCESSED_ASK: ShoferAsk[] = [
+	"api_req_failed",
+	"resume_task",
+	"resume_completed_task",
+]
+
+/** H22: Hoisted to module level to avoid new array identity per render. */
+const ALWAYS_HIDDEN_ONCE_PROCESSED_SAY = [
+	"api_req_finished",
+	"api_req_retried",
+	"api_req_deleted",
+	"mcp_server_request_started",
+]
+
 const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewProps> = (
 	{ isHidden, showAnnouncement, hideAnnouncement },
 	ref,
@@ -1388,19 +1406,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			}
 
 			if (everVisibleMessagesTsRef.current.has(message.ts)) {
-				const alwaysHiddenOnceProcessedAsk: ShoferAsk[] = [
-					"api_req_failed",
-					"resume_task",
-					"resume_completed_task",
-				]
-				const alwaysHiddenOnceProcessedSay = [
-					"api_req_finished",
-					"api_req_retried",
-					"api_req_deleted",
-					"mcp_server_request_started",
-				]
-				if (message.ask && alwaysHiddenOnceProcessedAsk.includes(message.ask)) return false
-				if (message.say && alwaysHiddenOnceProcessedSay.includes(message.say)) return false
+				if (message.ask && (ALWAYS_HIDDEN_ONCE_PROCESSED_ASK as ShoferAsk[]).includes(message.ask)) return false
+				if (message.say && ALWAYS_HIDDEN_ONCE_PROCESSED_SAY.includes(message.say)) return false
 				if (message.say === "text" && (message.text ?? "") === "" && (message.images?.length ?? 0) === 0) {
 					return false
 				}
@@ -2080,7 +2087,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							ref={virtuosoRef}
 							key={task.ts}
 							className="scrollable grow overflow-y-scroll mb-1"
-							increaseViewportBy={{ top: 3_000, bottom: 1000 }}
+							increaseViewportBy={VIRTUOSO_VIEWPORT_INCREASE}
 							data={groupedMessages}
 							initialTopMostItemIndex={groupedMessages.length > 0 ? groupedMessages.length - 1 : 0}
 							restoreStateFrom={restoreSnapshot}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import React, { memo, useEffect, useRef, useState } from "react"
 import mermaid from "mermaid"
 import styled from "styled-components"
 import { useDebounceEffect } from "@src/utils/useDebounceEffect"
@@ -87,7 +87,7 @@ interface MermaidBlockProps {
 	code: string
 }
 
-export default function MermaidBlock({ code }: MermaidBlockProps) {
+const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
@@ -221,7 +221,9 @@ export default function MermaidBlock({ code }: MermaidBlockProps) {
 			)}
 		</MermaidBlockContainer>
 	)
-}
+})
+
+export default MermaidBlock
 
 async function svgToPng(svgEl: SVGElement): Promise<string> {
 	// Clone the SVG to avoid modifying the original
