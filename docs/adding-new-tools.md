@@ -42,7 +42,12 @@ const myTool: OpenAI.Chat.ChatCompletionTool = {
 	function: {
 		name: "my_tool",
 		description: "Description shown to LLM",
-		strict: true,
+		// Omit strict: true unless every property in `properties` also appears in
+		// `required`. With OpenAI Structured Outputs, strict: true means there is
+		// no way to mark a field as genuinely optional — the model MUST emit every
+		// property. For tools with optional/advisory parameters, leave strict
+		// disabled (the default) so the model can omit them and fall back to
+		// handler-side defaults. See `grep_search.ts` and `new_task.ts`.
 		parameters: {
 			type: "object",
 			properties: {
@@ -89,7 +94,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
                           "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
     mode:        { tools: ["switch_mode"] },
     subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task",
-                           "cancel_tasks", "answer_subtask_question"] },
+                          "list_background_tasks", "cancel_tasks", "answer_subtask_question"] },
     questions:   { tools: ["ask_followup_question"] },
     uncategorized: { tools: [] },
 }
@@ -119,6 +124,9 @@ interface MyToolParams {
 export class MyTool extends BaseTool<"my_tool"> {
 	readonly name = "my_tool" as const
 
+	// Note: the real ToolCallbacks bag carries more members than shown here;
+	// this is a simplified illustration. Handlers also go through
+	// myTool.handle(task, block, callbacks) — not .execute() directly.
 	async execute(params: MyToolParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { param1, param2 } = params
 		const { handleError, pushToolResult } = callbacks
@@ -230,7 +238,7 @@ Auto-approval decisions happen in `checkAutoApproval()` in [`src/core/auto-appro
 - **`mode` group, `ask:"tool"`** — add to the `switchMode` branch gated by `alwaysAllowModeSwitch`.
 - **MCP status/management tool with `ask:"tool"`** — add to the unconditional `["checkMcpCallStatus", "waitForMcpCall"]` list if purely informational.
 - **MCP invocation with `ask:"use_mcp_server"`** — the payload's `type` field MUST be `"use_mcp_tool"` or `"access_mcp_resource"`; any other value falls through to the default `ask` branch and the `alwaysAllowMcp` toggle will not apply. Pattern for async invocations: post `type: "use_mcp_tool"` plus an `async: true` flag (see [`CallMcpToolAsyncTool.ts`](../src/core/tools/CallMcpToolAsyncTool.ts)).
-- **Unconditionally auto-approved (no toggle)** — add the camelCase name to the appropriate "approve" list near the top of the `ask === "tool"` branch (e.g. alongside `updateTodoList`, `skills`, `findFiles`, …).
+- **Unconditionally auto-approved (no toggle)** — add the camelCase name to the appropriate "approve" list near the top of the `ask === "tool"` branch. The branch has two separate lists: the `["updateTodoList", "skills", "setTaskTitle", "giveFeedback"]` unconditional-approve block, and the `["findFiles", "viewImage", "fetchWebPage", …]` informational read-only block. Pick the one that matches the tool's intent.
 - **New toggle needed** — add a new `alwaysAllow*` setting following the pattern in [`auto_approval.md`](auto_approval.md), then add a new branch in `checkAutoApproval`.
 
 The `alwaysAllow*` toggles in Settings → Auto-Approve map by intent (not 1:1 to TOOL_GROUPS):
@@ -291,7 +299,9 @@ This section tracks known gaps, undocumented steps, and design warts in the nati
 
 - **Multi-tool coordinated changes**: When a new tool changes parameters on _existing_ tools (e.g., adding `scope` to `list_background_tasks`, relaxing gates in `check_task_status` / `wait_for_task`, adding `peer_task_ids` to `new_task`), the checklist applies to **each affected tool individually** — every tool whose schema or `NativeToolArgs` changes needs its own pass through Steps 1, 4, 6, 7. The `send_message_to_task` implementation touched 4 existing tools plus the new tool, and each one needed: schema update (`native-tools/*.ts`), `NativeToolArgs` update (`shared/tools.ts`), and sometimes `NativeToolCallParser` case changes.
 
-- **Schema `required` fields**: Tools with optional parameters described to the model as "soft" / "advisory" hints (e.g., `wait`, `timeout_sec` on `send_message_to_task`) MUST be absent from schema `required` (per the [Advisory Parameter Defaults Rule](../.shofer/worktrees/arkware.ai-c1wwz/extensions/shofer/.shofer/rules-code/adding-new-tools.md)) AND have host-side defaults applied silently in `execute()`. The two halves MUST stay coherent: the schema cannot tell the model a field is optional while the handler treats it as mandatory. Initially, `send_message_to_task` had `required: ["task_id", "message", "wait", "timeout_sec"]` — this was wrong because `wait` and `timeout_sec` are advisory, and the LLM would omit them expecting defaults, only to be rejected by the schema validator. Fixed to `required: ["task_id", "message"]`.
+- **Schema `required` fields**: Tools with optional parameters described to the model as "soft" / "advisory" hints (e.g., `wait`, `timeout_sec` on `send_message_to_task`, `softResultLength` / `softTimeoutSec` / `peer_task_ids` on `new_task`) MUST be absent from schema `required` (per the [Advisory Parameter Defaults Rule](https://github.com/arkware-ai/shofer/blob/main/extensions/shofer/.shofer/rules-code/adding-new-tools.md)) AND have host-side defaults applied silently in `execute()`. The two halves MUST stay coherent: the schema cannot tell the model a field is optional while the handler treats it as mandatory. Initially, `send_message_to_task` had `required: ["task_id", "message", "wait", "timeout_sec"]` — this was wrong because `wait` and `timeout_sec` are advisory, and the LLM would omit them expecting defaults, only to be rejected by the schema validator. Fixed to `required: ["task_id", "message"]`.
+
+    **Important strict-mode constraint**: When a tool has advisory parameters that are in `properties` but absent from `required`, `strict: true` MUST NOT be set on the schema. OpenAI Structured Outputs with `strict: true` requires ALL properties to appear in `required` — there is no way to mark a field as genuinely optional. Use `strict: false` (the default, as in `grep_search.ts`) OR list every property in `required` with nullable types (as in `generate_image.ts`). Both `new_task.ts` and `send_message_to_task.ts` were shipped with `strict: true` while omitting advisory params from `required` — a violation of this constraint that was fixed by removing `strict: true`.
 
 - **`ShoferSayTool.tool` + `ChatRow` (Steps 8-9) are optional for functional correctness**: A tool that renders its chat-row entry via the raw `callbacks.askApproval("tool", JSON.stringify({ tool: "myTool", … }))` path produces a generic but functional chat row even without a dedicated `ShoferSayTool` variant and `ChatRow` case. Steps 8-9 only apply when the tool wants a _rich, custom_ chat row. The `send_message_to_task` tool uses the generic path and is fully functional without a custom `ChatRow` — the tool invocation is visible in the chat UI as a basic `"tool"` row. A doc note warning that bare `askApproval("tool", …)` calls without a corresponding `ChatRow` renderer can appear as a silent hang should be added. (This is a corollary of the `askToolApproval()` gap above — tools that skip `askToolApproval` entirely have no chat entry at all; tools that use the raw `askApproval("tool", JSON.stringify(…))` path at least get a generic row.)
 
