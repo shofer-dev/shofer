@@ -230,7 +230,7 @@ Auto-approval decisions happen in `checkAutoApproval()` in [`src/core/auto-appro
 - **`mode` group, `ask:"tool"`** — add to the `switchMode` branch gated by `alwaysAllowModeSwitch`.
 - **MCP status/management tool with `ask:"tool"`** — add to the unconditional `["checkMcpCallStatus", "waitForMcpCall"]` list if purely informational.
 - **MCP invocation with `ask:"use_mcp_server"`** — the payload's `type` field MUST be `"use_mcp_tool"` or `"access_mcp_resource"`; any other value falls through to the default `ask` branch and the `alwaysAllowMcp` toggle will not apply. Pattern for async invocations: post `type: "use_mcp_tool"` plus an `async: true` flag (see [`CallMcpToolAsyncTool.ts`](../src/core/tools/CallMcpToolAsyncTool.ts)).
-- **Unconditionally auto-approved (no toggle)** — add the camelCase name to the appropriate "approve" list near the top of the `ask === "tool"` branch (e.g. alongside `updateTodoList`, `skills`, `fetchWebPage`, …).
+- **Unconditionally auto-approved (no toggle)** — add the camelCase name to the appropriate "approve" list near the top of the `ask === "tool"` branch (e.g. alongside `updateTodoList`, `skills`, `findFiles`, …).
 - **New toggle needed** — add a new `alwaysAllow*` setting following the pattern in [`auto_approval.md`](auto_approval.md), then add a new branch in `checkAutoApproval`.
 
 The `alwaysAllow*` toggles in Settings → Auto-Approve map by intent (not 1:1 to TOOL_GROUPS):

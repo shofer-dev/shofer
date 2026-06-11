@@ -90,7 +90,6 @@ of `alwaysAllowReadOnly`):
 
 | Tool                     | What it queries                                    |
 | ------------------------ | -------------------------------------------------- |
-| `fetch_web_page`         | Public web pages (HTTP GET only).                  |
 | `find_files`             | File-name glob matching against workspace index.   |
 | `view_image`             | Reads an image file for visual analysis.           |
 | `get_errors`             | Language-server diagnostics for open files.        |
@@ -149,7 +148,6 @@ Controls the read-only tool actions as classified by `isReadOnlyToolAction()`:
 | `get_changed_files`      |
 | `get_project_setup_info` |
 | `list_code_usages`       |
-| `fetch_web_page`         |
 | `git_search`             |
 | `ask_assistant_agent`    |
 
@@ -250,9 +248,10 @@ These are **separate concepts**:
 
 A tool being in `ALWAYS_AVAILABLE_TOOLS` does **not** mean it's auto-approved. For example,
 `send_message_to_task` (sync mode) is always available but still requires the
-`alwaysAllowSubtasks` toggle for auto-approval. Conversely, `fetch_web_page` is
-auto-approved unconditionally but is **not** in `ALWAYS_AVAILABLE_TOOLS` — it's
-available through the mode's `read` group.
+`alwaysAllowSubtasks` toggle for auto-approval. Conversely, `grep_search` is
+not in `ALWAYS_AVAILABLE_TOOLS` but is gated by `alwaysAllowReadOnly` — it is
+available through the mode's `read` group, and auto-approved only when that
+toggle is on.
 
 ---
 
@@ -313,9 +312,9 @@ _Discovered during the 2026-05-20 verification review against source at [`index.
    section to describe the actual mechanism (group-based gating + `alwaysAllowUncategorized`).
 
 8. **`rag_search` not unconditionally auto-approved** — the doc's `ALWAYS_AVAILABLE_TOOLS` vs
-   Auto-Approval section used `rag_search` as an example of unconditional auto-approval, but
-   it's actually gated by `alwaysAllowReadOnly`. Replaced with `fetch_web_page` which IS
-   unconditionally approved.
+    Auto-Approval section used `rag_search` as an example of unconditional auto-approval, but
+    it's actually gated by `alwaysAllowReadOnly`. Replaced with `grep_search` which correctly
+    illustrates a tool that is available through group membership but gated by a toggle.
 
 ### Structural / Completeness Issues (Open)
 

@@ -83,9 +83,6 @@ scenarios:
     state: {}
     test:
       - ask: tool
-        tool: fetchWebPage
-        expect_decision: approve
-      - ask: tool
         tool: findFiles
         expect_decision: approve
       - ask: tool
