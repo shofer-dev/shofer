@@ -189,7 +189,7 @@ Stage F — Escalation (after tool returns)
 
 **Notable:** The detector triggers an ask (`"tool_repetition"`) before emitting the error, so the user can provide guidance inline.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L835-884
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L858-905
 
 **Effect:**
 
@@ -212,7 +212,7 @@ Stage F — Escalation (after tool returns)
 - **All subsequent tool calls in the same turn are skipped** with:
     > Skipping tool \<description\> due to user rejecting a previous tool.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `askApproval` callback at L699-734, rejection path at L713-723; skip path at L542-557
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `askApproval` callback at L713-755, rejection path at L726-736; skip path at L545-561
 
 **Recovery:** The tool result contains the rejection. The LLM receives it and can try a different approach in the next turn.
 
@@ -226,7 +226,7 @@ Stage F — Escalation (after tool returns)
 
 > Shofer tried to use \<tool\> without value for required parameter '\<param\>'. Retrying...
 
-**Location:** [`Task.sayAndCreateMissingParamError`](../src/core/task/Task.ts) — L2922-2930
+**Location:** [`Task.sayAndCreateMissingParamError`](../src/core/task/Task.ts) — L3055
 
 **Effect:**
 
@@ -249,7 +249,7 @@ Stage F — Escalation (after tool returns)
 
 Where \<action\> is the `action` parameter passed to `handleError`.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `handleError` callback at L745-759
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `handleError` callback at L759
 
 **Effect:**
 
@@ -286,7 +286,7 @@ Where \<action\> is the `action` parameter passed to `handleError`.
 
 > "mistake_limit_reached" ask type — user is prompted for guidance.
 
-**Location:** [`Task.ts`](../src/core/task/Task.ts) — `recursivelyMakeRooRequests` at L4001-4035
+**Location:** [`Task.ts`](../src/core/task/Task.ts) — `recursivelyMakeShoferRequests` at L4198
 
 **Effect:**
 
@@ -323,7 +323,7 @@ Where \<action\> is the `action` parameter passed to `handleError`.
 
 Every tool_use block MUST receive exactly one `tool_result` (native tool calling requirement). The dispatch code enforces this:
 
-- `hasToolResult` flag prevents duplicates (L560, L602-607)
+- `hasToolResult` flag prevents duplicates (L563, L616)
 - `pushToolResult` is the single choke point for emitting results
 - Error paths use `pushToolResult` or `shofer.pushToolResultToUserContent(…)` directly
 - `didAlreadyUseTool = true` signals the stream loop to stop collecting more tool_use blocks in this turn
