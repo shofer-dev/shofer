@@ -45,11 +45,22 @@ config files, etc. The sandbox policy is:
 
 ```
 ALLOW WRITE: <worktree-path>/**
+ALLOW WRITE: <main>/.git/worktrees/<name>/**   (git metadata; auto-discovered)
+ALLOW WRITE: <main>/.git/objects/**             (shared object store; auto-discovered)
+ALLOW WRITE: <main>/.git/refs/**                (shared refs; auto-discovered)
 ALLOW WRITE: /tmp/**              (shared; not a concern)
 ALLOW WRITE: /dev/null            (for shell redirects to /dev/null)
 DENY  WRITE: everything-else
 READS:               unrestricted
 ```
+
+> **Git metadata discovery is automatic.** In a git worktree, `.git` is a plain file containing
+> `gitdir: /path/to/.git/worktrees/<name>`. The sandbox wrapper reads this file at startup,
+> resolves the `gitdir` path, and also reads the `commondir` pointer inside the worktree's git
+> metadata directory (typically `../..` → the main `.git` dir) to whitelist `objects/` and
+> `refs/`. This means `git add`, `git commit`, `git checkout`, and other git operations work
+> inside sandboxed worktree shells without any manual configuration. See
+> [`resolveWorktreeGitPaths()`](extensions/shofer/src/sandbox/main.go:305).
 
 ### Mechanism: `landlock` (Linux 5.13+)
 
@@ -101,12 +112,14 @@ despite a denied write will not.
 
 ### Implementation: Sandbox Wrapper Binary
 
-A dedicated wrapper binary (Go or Rust, shipped with the extension) that:
+A dedicated wrapper binary (Go, shipped with the extension) that:
 
-1. Detects whether the kernel supports landlock (≥ 5.13)
-2. If landlock: creates a landlock ruleset with write-only restrictions, self-restricts, then `exec`s the target command
-3. If no landlock but `bwrap` available: prefixes the command with `bwrap --bind <worktree> ... -- /bin/bash -c '<cmd>'`
-4. If neither: exits with an error (shouldn't happen on Linux)
+1. Resolves the git metadata directories from the worktree's `.git` file (see `resolveWorktreeGitPaths`
+   in [`main.go`](extensions/shofer/src/sandbox/main.go:305))
+2. Detects whether the kernel supports landlock (≥ 5.13)
+3. If landlock: creates a landlock ruleset with write-only restrictions (worktree + git metadata + `/tmp` + `/dev/null`), self-restricts, then `exec`s the target command
+4. If no landlock but `bwrap` available: bind-mounts the worktree + git metadata paths + `/tmp` + `/dev/null` as writable, then `exec`s the target command
+5. If neither: exits with an error (shouldn't happen on Linux)
 
 The [`ExecuteCommandTool.ts`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts) handler:
 
@@ -121,7 +134,7 @@ The [`ExecuteCommandTool.ts`](extensions/shofer/src/core/tools/ExecuteCommandToo
 | `src/core/tools/ExecuteCommandTool.ts`          | Force execa + wrap command via `shellQuote()` into `<wrapper> <worktree> -- /bin/sh -c '<cmd>'`                                                   | ✅     |
 | `src/utils/worktreePathGuard.ts`                | Added `getWorktreeSandboxPrefix()` (existence check + lazy output-channel diagnostic); repurposed `getWorktreeCommandWarning()` for macOS/Windows | ✅     |
 | `src/core/tools/RenameSymbolTool.ts`            | Validate every `affectedRelPaths` entry against the worktree boundary before `applyEdit`                                                          | ✅     |
-| `sandbox/main.go` + `sandbox/main_test.go`      | Landlock (ABI-negotiated) + bwrap wrapper; 5 Go tests                                                                                             | ✅     |
+| `sandbox/main.go` + `sandbox/main_test.go`      | Landlock (ABI-negotiated) + bwrap wrapper + git worktree metadata discovery; 10 Go tests (5 unit + 5 git-resolution)                              | ✅     |
 | `src/utils/__tests__/worktreePathGuard.test.ts` | 5 unit tests for `getWorktreeSandboxPrefix`                                                                                                       | ✅     |
 
 > **Design deviation:** the original plan threaded a sandbox-prefix parameter through

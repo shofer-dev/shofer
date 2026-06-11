@@ -11,11 +11,13 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -48,9 +50,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := applyLandlock(absWorktree); err != nil {
+	// Discover git metadata directories for git-worktree support.
+	// In a git worktree, the ".git" is a plain file pointing to the real
+	// git metadata directory (e.g. <main>/.git/worktrees/<name>).  Without
+	// write access to that directory, git add/commit/checkout fails.
+	extraPaths := resolveWorktreeGitPaths(absWorktree)
+
+	if err := applyLandlock(absWorktree, extraPaths); err != nil {
 		if errors.Is(err, errLandlockUnavailable) {
-			if err := fallbackBwrap(absWorktree, cmdArgs); err != nil {
+			if err := fallbackBwrap(absWorktree, extraPaths, cmdArgs); err != nil {
 				fmt.Fprintf(os.Stderr, "shofer-sandbox: bwrap fallback failed: %v\n", err)
 				os.Exit(1)
 			}
@@ -142,9 +150,10 @@ func queryLandlockABI() int {
 //   - <worktree>/**    (the task's assigned worktree)
 //   - /tmp/**           (shared temporary directory)
 //   - /dev/null         (shell redirects to /dev/null)
+//   - extraPaths        (git metadata directories resolved via resolveWorktreeGitPaths)
 //
 // Reads from all paths remain unrestricted.
-func applyLandlock(worktreeDir string) error {
+func applyLandlock(worktreeDir string, extraPaths []string) error {
 	if landlockSupportedABI == 0 {
 		return errLandlockUnavailable
 	}
@@ -184,6 +193,7 @@ func applyLandlock(worktreeDir string) error {
 		"/tmp",
 		"/dev/null",
 	}
+	allowedPaths = append(allowedPaths, extraPaths...)
 
 	for _, p := range allowedPaths {
 		if err := addWritePath(int(rulesetFd), p, writeMask); err != nil {
@@ -259,8 +269,8 @@ func addWritePath(rulesetFd int, path string, writeMask uint64) error {
 // bind-mounts are read-only.
 //
 // Bind order: read-only / first, then overlay writable worktree + /tmp +
-// /dev/null so they aren't shadowed by the ro-bind.
-func fallbackBwrap(worktreeDir string, cmdArgs []string) error {
+// /dev/null + extraPaths so they aren't shadowed by the ro-bind.
+func fallbackBwrap(worktreeDir string, extraPaths []string, cmdArgs []string) error {
 	bwrapPath, err := exec.LookPath("bwrap")
 	if err != nil {
 		return fmt.Errorf("bwrap not found (and landlock unavailable): %w", err)
@@ -272,11 +282,124 @@ func fallbackBwrap(worktreeDir string, cmdArgs []string) error {
 		"--bind", worktreeDir, worktreeDir,
 		"--bind", "/tmp", "/tmp",
 		"--dev-bind", "/dev/null", "/dev/null",
-		"--",
 	}
+	for _, p := range extraPaths {
+		bwrapArgs = append(bwrapArgs, "--bind", p, p)
+	}
+	bwrapArgs = append(bwrapArgs, "--")
 	bwrapArgs = append(bwrapArgs, cmdArgs...)
 
 	return syscall.Exec(bwrapPath, append([]string{"bwrap"}, bwrapArgs...), os.Environ())
+}
+
+// resolveWorktreeGitPaths discovers git metadata directories that need write
+// access inside a git worktree.
+//
+// In a git worktree, the ".git" in the checkout root is a plain file (not a
+// directory) containing a "gitdir:" line that points to the real per-worktree
+// metadata directory under .git/worktrees/<name>/.  Inside that directory,
+// "commondir" points (usually via "../..") to the main .git directory where
+// shared objects, refs, and logs live.
+//
+// Without write access to these directories, every git command that writes
+// (add, commit, checkout, merge, …) fails inside a sandboxed worktree.
+//
+// Returns a list of absolute directory paths to whitelist.  On error or when
+// the worktree root lacks a .git file, returns nil (git dir resolution is
+// best-effort — non-git directories simply get no extra paths).
+func resolveWorktreeGitPaths(worktreeDir string) []string {
+	gitDir, err := parseWorktreeGitDir(worktreeDir)
+	if err != nil || gitDir == "" {
+		return nil
+	}
+
+	paths := []string{gitDir}
+
+	// Resolve the commondir pointer (usually "../.." → main .git) to
+	// also whitelist shared objects/ and refs/.  Use trailing-sep paths
+	// so we only allow writes below those subdirectories, not to config
+	// or hooks.
+	if commonObj, commonRefs := parseCommondirPaths(gitDir); commonObj != "" {
+		paths = append(paths, commonObj)
+		if commonRefs != "" {
+			paths = append(paths, commonRefs)
+		}
+	}
+
+	return paths
+}
+
+// parseWorktreeGitDir reads the "gitdir:" line from <worktreeDir>/.git and
+// returns the absolute path to the per-worktree metadata directory.
+func parseWorktreeGitDir(worktreeDir string) (string, error) {
+	gitFile := filepath.Join(worktreeDir, ".git")
+	data, err := os.ReadFile(gitFile)
+	if err != nil {
+		return "", err
+	}
+
+	line := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(line, "gitdir: ") {
+		return "", fmt.Errorf("unexpected .git file content: %s", line)
+	}
+
+	gitDir := strings.TrimPrefix(line, "gitdir: ")
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(worktreeDir, gitDir)
+	}
+
+	return filepath.Clean(gitDir), nil
+}
+
+// parseCommondirPaths reads <gitDir>/commondir and returns the absolute paths
+// to the shared objects/ and refs/ directories.  The commondir file contains a
+// relative path from the per-worktree gitdir to the main .git directory
+// (typically "../..").
+//
+// Returns objectsPath (ends in /objects) and refsPath (ends in /refs).
+// If commondir cannot be read, both are empty strings.
+func parseCommondirPaths(gitDir string) (objectsPath string, refsPath string) {
+	commonFile := filepath.Join(gitDir, "commondir")
+	rel, err := readFirstLine(commonFile)
+	if err != nil || rel == "" {
+		return "", ""
+	}
+
+	commonAbs := filepath.Join(gitDir, rel)
+	commonAbs = filepath.Clean(commonAbs)
+
+	objectsPath = filepath.Join(commonAbs, "objects")
+	refsPath = filepath.Join(commonAbs, "refs")
+
+	// Only return paths that actually exist — avoids polluting the ruleset
+	// with phantom entries.
+	if _, err := os.Stat(objectsPath); os.IsNotExist(err) {
+		objectsPath = ""
+	}
+	if _, err := os.Stat(refsPath); os.IsNotExist(err) {
+		refsPath = ""
+	}
+
+	return objectsPath, refsPath
+}
+
+// readFirstLine reads the first line of a file and returns it with whitespace
+// trimmed.  Returns ("", nil) on ENOENT.
+func readFirstLine(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	if scanner.Scan() {
+		return strings.TrimSpace(scanner.Text()), nil
+	}
+	return "", scanner.Err()
 }
 
 // execCmd execs the target command, replacing the current process.
