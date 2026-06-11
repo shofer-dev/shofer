@@ -330,6 +330,7 @@ WORKER_EOF
 	echo "------------------------------------------------------"
 fi
 
+# ── Overall summary (runs unconditionally, even if Part 2 was skipped) ──
 echo ""
 echo "================= OVERALL SUMMARY (${PRESET}) ================="
 echo "TOTAL  PASS=${TOTAL_PASS}  FAIL=${TOTAL_FAIL}"
