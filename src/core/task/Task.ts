@@ -4744,11 +4744,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 											presentAssistantMessage(this)
 										} else if (toolUseIndex !== undefined) {
 											// finalizeStreamingToolCall returned null (malformed JSON or missing args)
-											// Mark the tool as non-partial so it's presented as complete, but execution
-											// will be short-circuited in presentAssistantMessage with a structured tool_result.
+											// Clear the stale partial nativeArgs so presentAssistantMessage's guard
+											// (isKnownTool && !block.nativeArgs) fires and surfaces the error instead
+											// of silently dispatching the tool with incomplete arguments.
 											const existingToolUse = this.assistantMessageContent[toolUseIndex]
 											if (existingToolUse && existingToolUse.type === "tool_use") {
 												existingToolUse.partial = false
+												existingToolUse.nativeArgs = undefined
 												// Ensure it has the ID for native protocol
 												;(existingToolUse as any).id = event.id
 											}
@@ -4759,7 +4761,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 											// Mark that we have new content to process
 											this.userMessageContentReady = false
 
-											// Present the tool call - validation will handle missing params
+											// Present the tool call — nativeArgs was cleared above so
+											// presentAssistantMessage's §C guard will surface the error.
 											presentAssistantMessage(this)
 										}
 									}
@@ -5205,11 +5208,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							presentAssistantMessage(this)
 						} else if (toolUseIndex !== undefined) {
 							// finalizeStreamingToolCall returned null (malformed JSON or missing args)
-							// We still need to mark the tool as non-partial so it gets executed
-							// The tool's validation will catch any missing required parameters
+							// Clear the stale partial nativeArgs so presentAssistantMessage's guard
+							// (isKnownTool && !block.nativeArgs) fires and surfaces the error instead
+							// of silently dispatching the tool with incomplete arguments.
 							const existingToolUse = this.assistantMessageContent[toolUseIndex]
 							if (existingToolUse && existingToolUse.type === "tool_use") {
 								existingToolUse.partial = false
+								existingToolUse.nativeArgs = undefined
 								// Ensure it has the ID for native protocol
 								;(existingToolUse as any).id = event.id
 							}
@@ -5220,7 +5225,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							// Mark that we have new content to process
 							this.userMessageContentReady = false
 
-							// Present the tool call - validation will handle missing params
+							// Present the tool call — nativeArgs was cleared above so
+							// presentAssistantMessage's §C guard will surface the error.
 							await this.dismissToolPreparingRow()
 							presentAssistantMessage(this)
 						}

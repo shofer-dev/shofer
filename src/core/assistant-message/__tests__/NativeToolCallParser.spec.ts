@@ -386,6 +386,32 @@ describe("NativeToolCallParser", () => {
 					expect(nativeArgs.limit).toBe(10)
 				}
 			})
+
+			it("should return null when required arg is missing (guard-UNblock regression test)", () => {
+				// REGRESSION: The bug in docs/tool-call-failures.md §B/§C was that
+				// finalizeStreamingToolCall() returns null (correct), but
+				// createPartialToolUse had already populated a stale partial
+				// nativeArgs that Task.ts's null-branch did NOT clear, so the
+				// guard (isKnownTool && !block.nativeArgs) never fired.
+				//
+				// This test locks in the parser-level contract: finalize with
+				// incomplete args MUST return null, so Task.ts's null-branch
+				// (which now clears nativeArgs) is reached.
+				const id = "toolu_incomplete_002"
+				NativeToolCallParser.startStreamingToolCall(id, "read_file")
+
+				// Optimistic partial: path was streamed, populate a partial nativeArgs
+				NativeToolCallParser.processStreamingChunk(id, JSON.stringify({ path: "src/incomplete.ts" }))
+
+				// Now feed an overwriting chunk that is valid JSON but is MISSING
+				// the required 'path' field — the final parse must fail.
+				NativeToolCallParser.processStreamingChunk(id, JSON.stringify({ mode: "slice", offset: 10 }))
+
+				const result = NativeToolCallParser.finalizeStreamingToolCall(id)
+
+				// Parser contract: null on incomplete/malformed final args.
+				expect(result).toBeNull()
+			})
 		})
 	})
 })
