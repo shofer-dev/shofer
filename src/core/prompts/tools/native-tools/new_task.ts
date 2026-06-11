@@ -27,7 +27,13 @@ export default {
 	function: {
 		name: "new_task",
 		description: NEW_TASK_DESCRIPTION,
-		strict: true,
+		// Note: strict mode is intentionally disabled for this tool.
+		// Several parameters (softResultLength, softTimeoutSec, peer_task_ids) are
+		// advisory hints — the model MAY omit them and the handler applies defaults.
+		// With strict: true, OpenAI Structured Outputs requires ALL properties in
+		// `properties` to appear in `required`, forcing the model to emit every
+		// optional param on every call. Disabling strict lets the model omit
+		// advisory params entirely and fall back to the defaults documented above.
 		parameters: {
 			type: "object",
 			properties: {

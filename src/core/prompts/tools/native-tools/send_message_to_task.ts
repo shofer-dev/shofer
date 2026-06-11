@@ -31,7 +31,12 @@ export default {
 	function: {
 		name: "send_message_to_task",
 		description: SEND_MESSAGE_TO_TASK_DESCRIPTION,
-		strict: true,
+		// Note: strict mode is intentionally disabled for this tool.
+		// The `wait` and `timeout_sec` parameters are advisory hints — the model
+		// MAY omit them and the handler applies defaults. With strict: true, OpenAI
+		// Structured Outputs requires ALL properties in `properties` to appear in
+		// `required`, forcing the model to emit every optional param on every call.
+		// Disabling strict lets the model omit advisory params entirely.
 		parameters: {
 			type: "object",
 			properties: {
