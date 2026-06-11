@@ -194,24 +194,25 @@ func TestParseWorktreeGitDir_NotAWorktree(t *testing.T) {
 // of git metadata paths from a simulated worktree directory.
 func TestResolveWorktreeGitPaths_Integration(t *testing.T) {
 	// Layout:
-	//   tmpdir/
-	//     main/
-	//       .git/
-	//         objects/         ← shared objects dir
-	//         refs/            ← shared refs dir
-	//         worktrees/
-	//           test-wt/
-	//             commondir    ← contains "../.."
-	//     worktree/            ← the simulated checkout root
-	//       .git               ← "gitdir: .../worktrees/test-wt"
-	tmpDir := t.TempDir()
+	//   repo/               ← repo root (contains .git/ dir)
+	//     .git/             ← main .git directory
+	//       objects/        ← shared objects dir
+	//       refs/           ← shared refs dir
+	//       worktrees/
+	//         test-wt/
+	//           commondir   ← contains "../.."
+	//     sub/worktree/     ← the simulated checkout root
+	//       .git            ← "gitdir: .../repo/.git/worktrees/test-wt"
+	repo := t.TempDir()
 
-	mainGit := filepath.Join(tmpDir, "main", ".git")
+	mainGit := filepath.Join(repo, ".git")
 	wtGitDir := filepath.Join(mainGit, "worktrees", "test-wt")
-	worktree := filepath.Join(tmpDir, "worktree")
+	worktree := filepath.Join(repo, "sub", "worktree")
 
+	// Create main .git directory (so resolveRepoRoot finds it).
 	// Create shared .git objects/ and refs/
 	for _, d := range []string{
+		mainGit,
 		filepath.Join(mainGit, "objects"),
 		filepath.Join(mainGit, "refs"),
 		wtGitDir,
@@ -270,6 +271,125 @@ func TestResolveWorktreeGitPaths_Integration(t *testing.T) {
 	}
 	if !foundRefs {
 		t.Errorf("expected refs dir %s in paths, got %v", expectedRefs, paths)
+	}
+}
+
+// TestResolveWorktreeGitPaths_TamperedGitFile verifies that a tampered .git
+// file (e.g. gitdir: /etc) is rejected — no extra paths are whitelisted.
+func TestResolveWorktreeGitPaths_TamperedGitFile(t *testing.T) {
+	// Layout: same as integration test but the .git file points to /etc.
+	repo := t.TempDir()
+	mainGit := filepath.Join(repo, ".git")
+	worktree := filepath.Join(repo, "sub", "worktree")
+
+	for _, d := range []string{mainGit, worktree} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", d, err)
+		}
+	}
+
+	// Tampered .git file — points to /etc instead of the real gitdir.
+	if err := os.WriteFile(
+		filepath.Join(worktree, ".git"),
+		[]byte("gitdir: /etc\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile(.git): %v", err)
+	}
+
+	paths := resolveWorktreeGitPaths(worktree)
+	if paths != nil {
+		t.Errorf("expected nil for tampered .git file, got %v", paths)
+	}
+}
+
+// TestResolveWorktreeGitPaths_GitdirNotUnderRepo verifies that a gitdir
+// pointing to a worktrees dir of a different repo is rejected.
+func TestResolveWorktreeGitPaths_GitdirNotUnderRepo(t *testing.T) {
+	repo := t.TempDir()
+	mainGit := filepath.Join(repo, ".git")
+	worktree := filepath.Join(repo, "sub", "worktree")
+
+	// Create a fake .git/worktrees dir in a separate location.
+	otherRepo := t.TempDir()
+	otherGit := filepath.Join(otherRepo, ".git")
+	otherWtDir := filepath.Join(otherGit, "worktrees", "evil-wt")
+
+	for _, d := range []string{mainGit, worktree, otherGit, otherWtDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", d, err)
+		}
+	}
+
+	// .git file points to a different repo's worktree dir.
+	if err := os.WriteFile(
+		filepath.Join(worktree, ".git"),
+		[]byte(fmt.Sprintf("gitdir: %s\n", otherWtDir)),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile(.git): %v", err)
+	}
+
+	paths := resolveWorktreeGitPaths(worktree)
+	if paths != nil {
+		t.Errorf("expected nil for cross-repo gitdir, got %v", paths)
+	}
+}
+
+// TestIsValidGitDir verifies the validation logic directly.
+func TestIsValidGitDir(t *testing.T) {
+	repo := "/repo"
+
+	tests := []struct {
+		name    string
+		gitDir  string
+		wantOk  bool
+	}{
+		{"legitimate path", "/repo/.git/worktrees/my-task", true},
+		{"nested name", "/repo/.git/worktrees/sub/name", true},
+		{"not under worktrees", "/repo/.git/objects", false},
+		{"outside repo", "/etc/.git/worktrees/x", false},
+		{"exactly worktrees dir", "/repo/.git/worktrees", false},
+		{"path traversal in name", "/repo/.git/worktrees/../evil", false},
+		{"dot component", "/repo/.git/worktrees/./evil", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isValidGitDir(repo, tt.gitDir)
+			if got != tt.wantOk {
+				t.Errorf("isValidGitDir(%q) = %v, want %v", tt.gitDir, got, tt.wantOk)
+			}
+		})
+	}
+}
+
+// TestResolveRepoRoot verifies walking up to find the main .git directory.
+func TestResolveRepoRoot(t *testing.T) {
+	repo := t.TempDir()
+	mainGit := filepath.Join(repo, ".git")
+	if err := os.MkdirAll(mainGit, 0o755); err != nil {
+		t.Fatalf("MkdirAll(.git): %v", err)
+	}
+
+	// Worktree deep in the repo.
+	worktree := filepath.Join(repo, "a", "b", "c", "worktree")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatalf("MkdirAll(worktree): %v", err)
+	}
+
+	got := resolveRepoRoot(worktree)
+	if got != repo {
+		t.Errorf("resolveRepoRoot(%s) = %s, want %s", worktree, got, repo)
+	}
+}
+
+// TestResolveRepoRoot_NotFound verifies walking up with no .git dir anywhere.
+func TestResolveRepoRoot_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	got := resolveRepoRoot(dir)
+	if got != "" {
+		t.Errorf("expected empty string, got %s", got)
 	}
 }
 

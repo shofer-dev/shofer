@@ -304,12 +304,26 @@ func fallbackBwrap(worktreeDir string, extraPaths []string, cmdArgs []string) er
 // Without write access to these directories, every git command that writes
 // (add, commit, checkout, merge, …) fails inside a sandboxed worktree.
 //
+// Security: the .git file is writable by the sandboxed process (it lives inside
+// the worktree).  Before whitelisting any gitdir, we validate that it lies under
+// the same repository's .git/worktrees/ — a tampered .git file (e.g. gitdir: /etc)
+// is rejected silently and no extra paths are whitelisted.
+//
 // Returns a list of absolute directory paths to whitelist.  On error or when
 // the worktree root lacks a .git file, returns nil (git dir resolution is
 // best-effort — non-git directories simply get no extra paths).
 func resolveWorktreeGitPaths(worktreeDir string) []string {
 	gitDir, err := parseWorktreeGitDir(worktreeDir)
 	if err != nil || gitDir == "" {
+		return nil
+	}
+
+	// Validate that the gitdir is under the same repository's
+	// .git/worktrees/ — the .git file is writable from inside the
+	// sandbox, so a malicious command could rewrite it to point to
+	// /etc or another write-target.
+	repoRoot := resolveRepoRoot(worktreeDir)
+	if repoRoot == "" || !isValidGitDir(repoRoot, gitDir) {
 		return nil
 	}
 
@@ -327,6 +341,61 @@ func resolveWorktreeGitPaths(worktreeDir string) []string {
 	}
 
 	return paths
+}
+
+// resolveRepoRoot finds the repository root by walking up from worktreeDir
+// until it finds a directory containing .git (either as a directory or file).
+// Returns the absolute path, or "" if not found.
+func resolveRepoRoot(worktreeDir string) string {
+	// Walk up from the worktreeDir to find the main repo root.  In a git
+	// worktree, the checkout lives at any depth; the repo root is the
+	// directory that contains the main .git directory.
+	dir := filepath.Clean(worktreeDir)
+	for {
+		gitPath := filepath.Join(dir, ".git")
+		if st, err := os.Stat(gitPath); err == nil {
+			// .git exists and is a directory → this is the main repo root.
+			if st.IsDir() {
+				return dir
+			}
+			// .git exists and is a file → this is a worktree itself;
+			// keep walking up toward the main repo.
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "" // reached root without finding main .git
+		}
+		dir = parent
+	}
+}
+
+// isValidGitDir validates that gitDir is a legitimate git worktree metadata
+// directory under the repository's .git/worktrees/.
+//
+// The pattern must be: <repoRoot>/.git/worktrees/<name>
+// Where <name> is a non-empty path component (not ".", not "..").
+func isValidGitDir(repoRoot, gitDir string) bool {
+	worktreesPrefix := filepath.Join(repoRoot, ".git", "worktrees") + string(os.PathSeparator)
+
+	// Must be under <repoRoot>/.git/worktrees/
+	if !strings.HasPrefix(gitDir, worktreesPrefix) {
+		return false
+	}
+
+	// Must not be exactly the worktrees directory itself.
+	rel := strings.TrimPrefix(gitDir, worktreesPrefix)
+	if rel == "" || rel == "." {
+		return false
+	}
+
+	// Reject path traversal components.
+	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+		if part == ".." || part == "." {
+			return false
+		}
+	}
+
+	return true
 }
 
 // parseWorktreeGitDir reads the "gitdir:" line from <worktreeDir>/.git and
