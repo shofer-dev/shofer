@@ -151,7 +151,7 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 		// falls through to dispatch.  We assert that no error was surfaced
 		// via the guard path.
 		const guardErrorCalls = (mockTask.say as ReturnType<typeof vi.fn>).mock.calls.filter(
-			([askType, msg]: [string, string]) =>
+			([askType, msg]: any[]) =>
 				askType === "error" && typeof msg === "string" && msg.includes("missing nativeArgs"),
 		)
 		expect(guardErrorCalls).toHaveLength(0)
@@ -191,7 +191,7 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 
 		// The guard error was surfaced exactly once (for the bad block)
 		const guardErrorCalls = (mockTask.say as ReturnType<typeof vi.fn>).mock.calls.filter(
-			([askType, msg]: [string, string]) =>
+			([askType, msg]: any[]) =>
 				askType === "error" && typeof msg === "string" && msg.includes("missing nativeArgs"),
 		)
 		expect(guardErrorCalls).toHaveLength(1)
