@@ -102,6 +102,16 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 
 If the tool should bypass mode filtering entirely, add it to `ALWAYS_AVAILABLE_TOOLS` instead. Also add a display name in `TOOL_DISPLAY_NAMES`.
 
+**For `write`-group tools only:** you must also register the tool in the fileRegex enforcement contracts in [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts). Three data structures must be updated:
+
+| Structure                | What to add                                                                                                                            | Why                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `WRITE_MUTATOR_TOOLS`    | Tool name (snake_case)                                                                                                                 | Gate — without it, fileRegex is never checked for this tool                                            |
+| `MUTATION_GATING_PARAMS` | `toolName: ["param1", "param2"]` — params that must be present before enforcement activates; use `[]` if the tool has no gating params | Prevents premature rejection during streaming partial-param parsing (e.g. `{path}` before `{content}`) |
+| `getMutatedPaths()`      | A new `case` extracting the target file/directory paths from `toolParams`                                                              | The single source of truth for "which paths does this tool touch?"                                     |
+
+If you skip this step, the tool will silently bypass `fileRegex` restrictions — just like `sed`, `file`, `create_directory`, `create_new_workspace`, and `generate_image` did before `getMutatedPaths` was introduced (commit `c81acab0c`).
+
 > **TOOL_GROUPS drives mode filtering and the tools UI** — but it is _not_ the single source of truth for auto-approval. The `read`, `write`, `execute`, `browser`, and `questions` groups _are_ group-driven (via `getToolGroupForSayTool` in [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)), so adding a tool there is enough. The `subtasks`, `mode`, and `mcp` groups use **separate hardcoded camelCase allowlists** inside `checkAutoApproval()` in [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts) — a new tool in any of those three groups MUST also be added to the relevant list there, or it will fall through to the default "ask" branch and prompt the user even when the matching `alwaysAllow*` toggle is on. See Step 10 below.
 
 ## Step 4: Tool Handler
@@ -284,6 +294,8 @@ Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts
 This section tracks known gaps, undocumented steps, and design warts in the native tool implementation workflow. These are not bugs in this doc — they are places where the codebase plumbing is more complex than the checklist captures, or where a missing step will silently break tool integration.
 
 ### Checklist gaps (items not in the 11-step list but needed in practice)
+
+- **`WRITE_MUTATOR_TOOLS` / `MUTATION_GATING_PARAMS` / `getMutatedPaths()` (in [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts))**: Every new `write`-group tool that mutates filesystem paths MUST be registered in all three structures. This was discovered during the `fileRegex` bypass audit (commit `c81acab0c`), which found that `sed`, `file`, `create_directory`, `create_new_workspace`, and `generate_image` each silently bypassed mode file restrictions because the old `EDIT_OPERATION_PARAMS` param-name heuristic didn't cover them. The `getMutatedPaths()` contract is the single source of truth for "which paths does this tool touch?" — any future path-based policy check should resolve through it rather than inferring intent from coincidental param names. Step 3 now includes a dedicated table documenting the three registration points.
 
 - **`askToolApproval()` is mandatory — no silent tools**: Every `execute()` method MUST call `this.askToolApproval(callbacks, { tool: "…", content: "…" })` to render a ChatRow entry. Even tools that appear to "do nothing visible" (like `sleep`) must do this — without it the tool invocation produces no indication in the chat UI, which looks like a **silent hang** to the user. The `BaseTool` helper is preferred over the raw `callbacks.askApproval("tool", …)` because it goes through the standard ask→checkAutoApproval pipeline. The `sleep` tool was shipped without this call (see commit `91a070a40`) and required a follow-up fix. A future lint rule should enforce that every `BaseTool` subclass calls `askToolApproval` in its `execute()`.
 
