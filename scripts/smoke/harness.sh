@@ -247,23 +247,23 @@ else
 		FIXTURES+=( "$(basename "$f" .slang)" )
 	done
 
-	TMPDIR="$(mktemp -d)"
-	trap "rm -rf ${TMPDIR}" EXIT
+	WF_LOG_DIR="$(mktemp -d)"
+	trap "rm -rf ${WF_LOG_DIR}" EXIT
 
 	# Export env vars so xargs child processes can access them.
 	# CLI_DIR is the absolute path to apps/cli, already computed at line ~40.
 	WF_CLI_DIR="${CLI_DIR}"
-	export WF_ENV TMPDIR TIMEOUT_WF WF_CLI_DIR
+	export WF_ENV WF_LOG_DIR TIMEOUT_WF WF_CLI_DIR
 
 	WF_PASS=0
 	WF_FAIL=0
 
-	WF_SCRIPT="${TMPDIR}/_wf_worker.sh"
+	WF_SCRIPT="${WF_LOG_DIR}/_wf_worker.sh"
 	cat > "${WF_SCRIPT}" <<'WORKER_EOF'
 #!/usr/bin/env bash
 set -u
 name="$1"
-log="${TMPDIR}/${name}.log"
+log="${WF_LOG_DIR}/${name}.log"
 
 # cd into the CLI directory — WF_CLI_DIR is exported by the parent
 # (absolute path, already resolved from BASH_SOURCE up there).
@@ -296,7 +296,7 @@ WORKER_EOF
 
 	# Collect results.
 	for name in "${FIXTURES[@]}"; do
-		log="${TMPDIR}/${name}.log"
+		log="${WF_LOG_DIR}/${name}.log"
 		# grep -F avoids regex interpretation of fixture names containing
 		# special characters (currently all safe, but this is defensive).
 		if grep -qF "✅ ${name}:" "$log" 2>/dev/null; then
