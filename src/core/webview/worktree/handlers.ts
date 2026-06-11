@@ -198,6 +198,25 @@ export async function handleCreateWorktree(
 			// Log but don't fail the worktree creation.
 			provider.log(`Warning: Failed to copy worktreeinclude files: ${error}`)
 		}
+
+		// Shallow submodule initialization.
+		// On failure, tear down the worktree — half-initialized worktrees are
+		// useless (submodules appear as empty directories) and confusing.
+		const submoduleResult = await worktreeService.initSubmodules(result.worktree.path, 1)
+		if (!submoduleResult.success) {
+			provider.log(
+				`Submodule init failed for ${result.worktree.path}: ${submoduleResult.error} — removing worktree.`,
+			)
+			// Best-effort cleanup: remove the worktree directory + branch.
+			const cleanupResult = await worktreeService.deleteWorktree(cwd, result.worktree.path, true)
+			if (!cleanupResult.success) {
+				provider.log(`Cleanup after failed submodule init also failed: ${cleanupResult.message}`)
+			}
+			return {
+				success: false,
+				message: `Worktree created but discarded: submodule initialization failed. ${submoduleResult.error}`,
+			}
+		}
 	}
 
 	return result
@@ -220,19 +239,22 @@ export async function handleGetAvailableBranches(provider: ShoferProvider): Prom
 
 export async function handleGetWorktreeDefaults(provider: ShoferProvider): Promise<WorktreeDefaultsResponse> {
 	const suffix = generateRandomSuffix()
-	const workspaceFolders = vscode.workspace.workspaceFolders
-	const projectName = workspaceFolders?.[0]?.name || "project"
 	const cwd = provider.cwd
+
+	// Unified naming: branch, directory basename, and worktree label all share
+	// the same random token `shofer-<suffix>` so there is exactly one name to
+	// track across all three surfaces.
+	const name = `shofer-${suffix}`
 
 	// Embedded worktree convention: all worktrees MUST live under
 	// .shofer/worktrees/ inside the workspace. The path is auto-generated,
 	// not user-configurable (folder picker removed from CreateWorktreeModal),
 	// and enforced in handleCreateWorktree by normalizing any path outside
 	// the convention prefix.
-	const suggestedPath = path.join(cwd, ".shofer", "worktrees", `${projectName}-${suffix}`)
+	const suggestedPath = path.join(cwd, ".shofer", "worktrees", name)
 
 	return {
-		suggestedBranch: `worktree/shofer-${suffix}`,
+		suggestedBranch: name,
 		suggestedPath,
 	}
 }

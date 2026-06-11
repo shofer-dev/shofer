@@ -5,9 +5,20 @@ describe("Built-in Commands", () => {
 		it("should return all built-in commands", async () => {
 			const commands = await getBuiltInCommands()
 
-			expect(commands).toHaveLength(4)
+			expect(commands).toHaveLength(10)
 			expect(commands.map((cmd) => cmd.name)).toEqual(
-				expect.arrayContaining(["init", "migrate-from-roocode", "migrate-from-copilot", "migrate-from-claude"]),
+				expect.arrayContaining([
+					"init",
+					"migrate-from-roocode",
+					"migrate-from-copilot",
+					"migrate-from-claude",
+					"merge-worktree",
+					"merge-worktree-cleanup",
+					"rebase-worktree",
+					"rebase-worktree-cleanup",
+					"dryrun-rebase-worktree",
+					"worktree-status",
+				]),
 			)
 
 			// Verify all commands have required properties
@@ -65,16 +76,33 @@ describe("Built-in Commands", () => {
 		it("should return all built-in command names", async () => {
 			const names = await getBuiltInCommandNames()
 
-			expect(names).toHaveLength(4)
+			expect(names).toHaveLength(10)
 			expect(names).toEqual(
-				expect.arrayContaining(["init", "migrate-from-roocode", "migrate-from-copilot", "migrate-from-claude"]),
+				expect.arrayContaining([
+					"init",
+					"migrate-from-roocode",
+					"migrate-from-copilot",
+					"migrate-from-claude",
+					"merge-worktree",
+					"merge-worktree-cleanup",
+					"rebase-worktree",
+					"rebase-worktree-cleanup",
+					"dryrun-rebase-worktree",
+					"worktree-status",
+				]),
 			)
-			// Order doesn't matter since it's based on filesystem order
+			// Order doesn't matter since it's based on object property order
 			expect(names.sort()).toEqual([
+				"dryrun-rebase-worktree",
 				"init",
+				"merge-worktree",
+				"merge-worktree-cleanup",
 				"migrate-from-claude",
 				"migrate-from-copilot",
 				"migrate-from-roocode",
+				"rebase-worktree",
+				"rebase-worktree-cleanup",
+				"worktree-status",
 			])
 		})
 

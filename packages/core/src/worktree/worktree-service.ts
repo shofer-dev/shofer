@@ -332,6 +332,38 @@ export class WorktreeService {
 	}
 
 	/**
+	 * Initialize submodules in a worktree with shallow clone.
+	 *
+	 * Runs `git submodule update --init --depth <depth>` in the given directory.
+	 * Returns a result object; does NOT throw. Callers decide blocking policy —
+	 * the current VSCode caller treats failure as fatal and rolls back the
+	 * worktree.
+	 *
+	 * @param cwd — the worktree directory to run submodule init in
+	 * @param depth — shallow clone depth (default: 1 = HEAD only)
+	 */
+	async initSubmodules(cwd: string, depth = 1): Promise<{ success: boolean; error?: string }> {
+		try {
+			// Check whether .gitmodules exists first — avoid running a command
+			// that will fail with a noisy error for repos without submodules.
+			const { stat } = await import("fs/promises")
+			const gitmodulesPath = path.join(cwd, ".gitmodules")
+			try {
+				await stat(gitmodulesPath)
+			} catch {
+				// No .gitmodules — nothing to init. Success trivially.
+				return { success: true }
+			}
+
+			await execFileAsync("git", ["submodule", "update", "--init", "--depth", String(depth)], { cwd })
+			return { success: true }
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error)
+			return { success: false, error: errorMessage }
+		}
+	}
+
+	/**
 	 * Normalize a path for comparison (handle trailing slashes, etc.)
 	 */
 	private normalizePath(p: string): string {

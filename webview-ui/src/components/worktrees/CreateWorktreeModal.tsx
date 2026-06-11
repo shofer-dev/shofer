@@ -13,7 +13,7 @@ interface CreateWorktreeModalProps {
 	open: boolean
 	onClose: () => void
 	openAfterCreate?: boolean
-	onSuccess?: () => void
+	onSuccess?: (createdPath?: string) => void
 }
 
 export const CreateWorktreeModal = ({
@@ -116,7 +116,10 @@ export const CreateWorktreeModal = ({
 								taskName: `worktree: ${branchNameRef.current}`,
 							})
 						}
-						onSuccessRef.current?.()
+						// Forward the created worktree path to onSuccess so callers
+						// can auto-select the newly created worktree.
+						const createdPath = message.worktree?.path ?? worktreePathRef.current
+						onSuccessRef.current?.(createdPath)
 						onCloseRef.current()
 					} else {
 						setError(message.text || "Unknown error")

@@ -52,7 +52,7 @@ Handlers translate webview IPC messages to core service calls:
 - `handleListWorktrees` — Enforces constraints (no multi-root; subfolder workspaces allowed only when the subfolder lives under `<gitRoot>/.shofer/worktrees/` — i.e., it is itself an embedded worktree)
 - `handleCreateWorktree` — Creates worktree then auto-copies `.shofer/worktreeinclude` files with progress
 - `handleDeleteWorktree` — Delegates to core service
-- `handleGetWorktreeDefaults` — Generates suggested path (`<workspace>/.shofer/worktrees/<project>-<random>`) and branch name (`worktree/shofer-<random>`)
+- `handleGetWorktreeDefaults` — Generates a single random token `shofer-<random>` used verbatim as the branch name, the worktree directory basename (`<workspace>/.shofer/worktrees/shofer-<random>`), and the worktree label — one name across all three surfaces
 
 ### 3. Per-Task `cwd`
 
@@ -86,6 +86,17 @@ When a task runs inside an embedded worktree (`task.cwd` points into `.shofer/wo
 **Implementation:** [`validateWorktreePath()`](../src/utils/worktreePathGuard.ts) resolves the target against `task.cwd` and verifies it stays within the worktree directory. It detects `..` traversal, absolute paths pointing outside, and any symlinks that resolve elsewhere. For non-worktree tasks, the guard is a no-op.
 
 **`execute_command` sandboxing:** On Linux, shell commands in worktree-scoped tasks are automatically sandboxed using the `shofer-sandbox` wrapper binary, compiled from Go source at build time ([`../src/sandbox/main.go`](../src/sandbox/main.go)). The wrapper applies a Landlock write-only sandbox (kernel 5.13+) or falls back to bubblewrap, restricting writes to the worktree directory, `/tmp`, and `/dev/null`. Reads remain unrestricted. On macOS/Windows, no kernel sandbox is available — the approval prompt displays a ⚠️ warning instead.
+
+### 3b. Auto-Create Worktree on Send
+
+New ad-hoc tasks default to running in a freshly created worktree, with no extra clicks. The flow is split across the webview and host:
+
+1. **Webview decision** ([`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)) — on send, `handleSendMessage` sets `autoCreateWorktree = pendingWorktreeDir === null && !worktreeExplicitOptOut`. In other words, auto-create fires only when the user neither picked a specific worktree (`pendingWorktreeDir`) nor explicitly chose "Current branch" (`worktreeExplicitOptOut`, set by the opt-out entry in `WorktreeIndicator`). The flag is included in the `newTask` IPC message.
+2. **Host creation** ([`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts), `newTask` case) — when `message.autoCreateWorktree && !worktreeDir`, the handler calls `handleGetWorktreeDefaults` for the unified `shofer-<suffix>` name, then `handleCreateWorktree` with `createNewBranch: true` and `baseBranch: undefined` (branches from HEAD).
+3. **Scoping** — on success, the created `worktree.path` becomes the `worktreeDir` passed to `createManagedTask`, so the task runs scoped to the new worktree.
+4. **Hard-failure abort** — if creation (or its required submodule init, see §"Submodule Auto-Initialization") fails, the handler does **not** start a task on the workspace root. It resets the UI (`newChat`) and surfaces `vscode.window.showErrorMessage` with the failure message, then returns.
+
+This guarantees a single, unambiguous trigger: an explicit worktree pick or an explicit "Current branch" opt-out both suppress auto-create, so the user never ends up with a second, unintended worktree.
 
 ### 4. Checkpoint Isolation (`src/services/checkpoints/`)
 
@@ -156,9 +167,17 @@ Worktrees are disabled when the VS Code workspace root is a subdirectory of the 
 | Subdirectory of parent repo (`/repo/ext/`)                | `/repo/`         | ❌         |
 | Embedded worktree (`/repo/.shofer/worktrees/repo-hl911/`) | `/repo/`         | ✅         |
 
+### Submodule Auto-Initialization
+
+When a worktree is created, Shofer automatically runs `git submodule update --init --depth 1` in the new worktree. This is a **shallow clone** — only the latest commit of each submodule is fetched, not the full history.
+
+- **Trigger**: runs automatically after every worktree creation (via [`handleCreateWorktree`](../src/core/webview/worktree/handlers.ts)), immediately after worktreeinclude file copy.
+- **.gitmodules guard**: if the repository has no `.gitmodules` file, the init is silently skipped (no submodules to initialize).
+- **Hard failure**: if the submodule clone/init fails (network, auth, etc.), the worktree is torn down (directory removed, branch deleted) and the operation fails — a half-initialized worktree with empty submodule directories is not useful.
+- **Depth**: `--depth 1` is the current default. This keeps the clone fast and lightweight for most use cases.
+
 ### Caveats with Submodules
 
-- **No auto-initialization**: `git worktree add` creates the directory structure but does not run `git submodule update --init`. Submodules in the new worktree appear as empty directories until manually initialized.
 - **`.shofer/worktreeinclude` doesn't apply**: Submodule directories are tracked by git, so they won't match `.gitignore` patterns.
 - **Checkpoint safety**: The shadow git checkpoint system uses `GIT_DIR` isolation (see [`submodule-support.md`](./submodule-support.md)) to prevent submodule discovery during checkpoint operations.
 
@@ -178,7 +197,7 @@ Worktrees are disabled when the VS Code workspace root is a subdirectory of the 
 | `branchWorktreeInclude`    | `worktreeBranch`                                                                  |
 | `checkoutBranch`           | `worktreeBranch`                                                                  |
 | `browseForWorktreePath`    | (none)                                                                            |
-| `newTask`                  | `text`, `images?`, `worktreeDir?`                                                 |
+| `newTask`                  | `text`, `images?`, `worktreeDir?`, `autoCreateWorktree?`                          |
 | `createParallelTask`       | `taskName?`, `text?`, `images?`, `worktreeDir?`                                   |
 | `getWorktreeStatus`        | (none)                                                                            |
 
@@ -209,11 +228,12 @@ Core types are defined in [`packages/types/src/worktree.ts`](../packages/types/s
 
 ## Worktree Indicator
 
-The [`WorktreeIndicator`](../webview-ui/src/components/chat/WorktreeIndicator.tsx) is the single chat-input-bar control for everything worktree-related. It serves three purposes:
+The [`WorktreeIndicator`](../webview-ui/src/components/chat/WorktreeIndicator.tsx) is the single chat-input-bar control for everything worktree-related. It serves four purposes:
 
-1. **Status** — ahead/behind counts, files changed, uncommitted change count, last commit, merge readiness. Requested via `getWorktreeStatus` when the popover opens; the backend handler runs 5+ git queries in parallel and returns a `WorktreeStatus` object.
-2. **Switch** — lists every other worktree (excluding the bare repo and the currently checked-out one). Clicking one posts `createParallelTask` with `worktreeDir` set to that worktree's path, spawning a parallel task scoped to it without leaving the window.
-3. **Create** — a "Create new worktree…" entry at the bottom opens `CreateWorktreeModal` with `openAfterCreate=true`, so a parallel task is automatically spawned in the freshly created worktree.
+1. **Default: "New worktree"** — when no task is active and no worktree has been explicitly selected, the chip defaults to "New worktree" instead of the current branch name. This is the zero-click path: the user types a prompt, presses Send, a worktree is auto-created, and the task runs in the new worktree.
+2. **Status** — ahead/behind counts, files changed, uncommitted change count, last commit, merge readiness. Requested via `getWorktreeStatus` when the popover opens; the backend handler runs 5+ git queries in parallel and returns a `WorktreeStatus` object.
+3. **Switch** — lists every other worktree (excluding the bare repo and the currently checked-out one). Clicking one posts `createParallelTask` with `worktreeDir` set to that worktree's path, spawning a parallel task scoped to it without leaving the window.
+4. **Opt-out** — a "Current branch" entry in the popover lets the user opt out of worktree isolation. Selecting it sets `worktreeExplicitOptOut = true` so `autoCreateWorktree` is not triggered on send.
 
 The trigger is always rendered (it does not auto-hide on a single-worktree repo) so users can create the first worktree from the same place they later switch between them.
 
@@ -251,7 +271,6 @@ This section catalogues discrepancies, omissions, and enhancement opportunities 
 ## Known Limitations
 
 1. **No multi-root workspace support** — Workspaces with multiple folders cannot use worktrees
-2. **No submodule initialization** — Creating a worktree in a repo with submodules requires manual `git submodule update --init`
-3. **`.shofer/worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
-4. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC, but not through a public extension API
-5. **Shell sandboxing limited to Linux** — On macOS and Windows, `execute_command` in worktree tasks is not sandboxed (no kernel sandbox available). A warning is displayed in the approval prompt as a best-effort safeguard.
+2. **`.shofer/worktreeinclude` intersection-only** — Cannot copy files that are not also in `.gitignore`
+3. **No programmatic API for external consumers** — Worktree operations are accessible via webview IPC, but not through a public extension API
+4. **Shell sandboxing limited to Linux** — On macOS and Windows, `execute_command` in worktree tasks is not sandboxed (no kernel sandbox available). A warning is displayed in the approval prompt as a best-effort safeguard.

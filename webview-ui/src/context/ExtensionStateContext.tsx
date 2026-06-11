@@ -175,6 +175,13 @@ export interface ExtensionStateContextType extends ExtensionState {
 	// persisted across reloads and not synced to the extension host.
 	pendingWorktreeDir: string | null
 	setPendingWorktreeDir: (value: string | null) => void
+	/**
+	 * When true, the user explicitly chose "Current branch" to opt out of
+	 * worktree isolation. Used to distinguish from "never chose anything"
+	 * (where auto-create worktree should fire).
+	 */
+	worktreeExplicitOptOut: boolean
+	setWorktreeExplicitOptOut: (value: boolean) => void
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -338,6 +345,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [skills, setSkills] = useState<SkillMetadata[]>([])
 	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
 	const [pendingWorktreeDir, setPendingWorktreeDir] = useState<string | null>(null)
+	const [worktreeExplicitOptOut, setWorktreeExplicitOptOut] = useState(false)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
 
 	const setListApiConfigMeta = useCallback(
@@ -808,6 +816,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				setState((prevState) => ({ ...prevState, includeTaskHistoryInEnhance: value })),
 			pendingWorktreeDir,
 			setPendingWorktreeDir,
+			worktreeExplicitOptOut,
+			setWorktreeExplicitOptOut,
 			includeCurrentTime: state.includeCurrentTime ?? true,
 			setIncludeCurrentTime: (value) => setState((prevState) => ({ ...prevState, includeCurrentTime: value })),
 			includeCurrentCost: state.includeCurrentCost ?? true,
@@ -836,6 +846,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			skills,
 			loadedSkills,
 			pendingWorktreeDir,
+			worktreeExplicitOptOut,
 			setApiConfiguration,
 			setListApiConfigMeta,
 		],

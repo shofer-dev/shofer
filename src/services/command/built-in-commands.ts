@@ -864,6 +864,651 @@ Migration complete:
 	 ℹ worktreeinclude — already supported, no action needed
 \`\`\``,
 	},
+	"merge-worktree": {
+		name: "merge-worktree",
+		description: "Merge worktree branch into base with a merge commit (no cleanup)",
+		content: `<task>
+You are merging a worktree branch into the base branch using a merge commit (--no-ff). The worktree and branch are left intact after the merge. The user may specify the branch name; if not provided, infer it from the current branch (typically worktree/shofer-<suffix>).
+</task>
+
+## Step 1: Gather information
+
+Run these commands in parallel:
+
+\`\`\`bash
+git branch --show-current
+\`\`\`
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git branch --list 'worktree/*'
+\`\`\`
+
+From the output, identify:
+- **SOURCE_BRANCH**: the worktree branch to merge. If the user specified one, use it. Otherwise, use the current branch if it starts with worktree/. If neither is clear, ask the user.
+- **SOURCE_WORKTREE_PATH**: the filesystem path of the worktree with SOURCE_BRANCH checked out (from git worktree list)
+- **BASE_BRANCH**: the target branch. Check if main or master exists locally. Prefer whichever exists. If both, prefer main.
+- **BASE_WORKTREE_PATH**: the filesystem path of the worktree with BASE_BRANCH checked out
+
+## Step 2: Validate
+
+- SOURCE_BRANCH exists (git branch --list <SOURCE_BRANCH>)
+- BASE_BRANCH exists (git branch --list <BASE_BRANCH>)
+- SOURCE_BRANCH != BASE_BRANCH
+
+Commits unique to SOURCE_BRANCH:
+
+\`\`\`bash
+git log <BASE_BRANCH>..<SOURCE_BRANCH> --oneline
+\`\`\`
+
+If this is empty, the branch has no unique commits. Report: "<SOURCE_BRANCH> has no unique commits relative to <BASE_BRANCH>. There is nothing to merge."
+
+## Step 3: Switch to the base worktree
+
+You MUST be in the base worktree before merging. If you are currently in SOURCE_WORKTREE_PATH, switch away:
+
+\`\`\`bash
+cd <BASE_WORKTREE_PATH> && git checkout <BASE_BRANCH>
+\`\`\`
+
+Pull latest (ask first):
+
+\`\`\`bash
+git pull origin <BASE_BRANCH>
+\`\`\`
+
+## Step 4: Merge
+
+\`\`\`bash
+git merge <SOURCE_BRANCH> --no-ff
+\`\`\`
+
+### If conflicts occur:
+
+1. git diff --name-only --diff-filter=U -- list conflicted files
+2. For each conflicted file, use git blame and git log to understand the intent behind both sides of the conflict
+3. Make intelligent decisions: keep both changes when they are independent (bugfix + feature), prefer the more recent change when they overlap, prioritize bugfixes over refactors
+4. **BAIL-OUT**: If you are unsure about the correct resolution for ANY file -- if both sides contain substantial, conflicting logic changes, or if the intent is unclear from git history -- do NOT guess. Run git merge --abort to return to pre-merge state. Tell the user: "Unsure how to resolve conflicts in [files]. Aborted the merge. You will need to resolve these manually." Stop here.
+5. After resolving all files: git add . && git commit -m "merge: resolve conflicts merging <SOURCE_BRANCH> into <BASE_BRANCH>"
+
+### If merge succeeds:
+Show the merge commit: git log -1 --oneline
+
+## Step 5: Report
+
+Summarize:
+- Merged: <SOURCE_BRANCH> -> <BASE_BRANCH>
+- Merge commit: <hash>
+- The worktree branch <SOURCE_BRANCH> and its directory still exist (use merge-worktree-cleanup to also clean up)
+
+Remind the user to push the base branch if appropriate: git push origin <BASE_BRANCH>
+
+Do NOT push to origin yourself.`,
+	},
+	"merge-worktree-cleanup": {
+		name: "merge-worktree-cleanup",
+		description: "Merge worktree branch into base, then delete branch + worktree directory",
+		content: `<task>
+You are merging a worktree branch into the base branch, then cleaning up both the branch and the worktree directory. The user may specify the branch name; if not provided, infer it from the current branch (typically worktree/shofer-<suffix>).
+</task>
+
+## Step 1: Gather information
+
+Run these commands in parallel:
+
+\`\`\`bash
+git branch --show-current
+\`\`\`
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git branch --list 'worktree/*'
+\`\`\`
+
+From the output, identify:
+- **SOURCE_BRANCH**: the worktree branch to merge and then delete. If the user specified one, use it. Otherwise, use the current branch if it starts with worktree/. If neither is clear, ask the user.
+- **SOURCE_WORKTREE_PATH**: the filesystem path of the worktree with SOURCE_BRANCH checked out (from git worktree list)
+- **BASE_BRANCH**: the target branch. Check if main or master exists locally. Prefer whichever exists. If both, prefer main.
+- **BASE_WORKTREE_PATH**: the filesystem path of the worktree with BASE_BRANCH checked out
+
+## Step 2: Validate
+
+- SOURCE_BRANCH exists (git branch --list <SOURCE_BRANCH>)
+- BASE_BRANCH exists (git branch --list <BASE_BRANCH>)
+- SOURCE_BRANCH != BASE_BRANCH (never delete the base branch)
+- You are NOT currently in SOURCE_WORKTREE_PATH (you cannot delete the worktree you're standing in)
+
+Commits unique to SOURCE_BRANCH:
+
+\`\`\`bash
+git log <BASE_BRANCH>..<SOURCE_BRANCH> --oneline
+\`\`\`
+
+If this is empty, the branch has no unique commits. Report: "<SOURCE_BRANCH> has no unique commits relative to <BASE_BRANCH>. There is nothing to merge." Then ask: "Do you still want to clean up (delete the branch and worktree)?" If yes, skip to Step 5.
+
+## Step 3: Switch to the base worktree
+
+You MUST be in the base worktree before merging:
+
+\`\`\`bash
+cd <BASE_WORKTREE_PATH> && git checkout <BASE_BRANCH>
+\`\`\`
+
+Pull latest (ask first):
+
+\`\`\`bash
+git pull origin <BASE_BRANCH>
+\`\`\`
+
+## Step 4: Merge
+
+\`\`\`bash
+git merge <SOURCE_BRANCH> --no-ff
+\`\`\`
+
+### If conflicts occur:
+
+1. git diff --name-only --diff-filter=U -- list conflicted files
+2. For each conflicted file, use git blame and git log to understand the intent behind both sides
+3. Make intelligent decisions: keep both changes when independent, prefer more recent when overlapping, prioritize bugfixes over refactors
+4. **BAIL-OUT**: If unsure about ANY file -- if both sides contain substantial, conflicting logic changes -- do NOT guess. Run git merge --abort. Tell the user: "Unsure how to resolve conflicts in [files]. Aborted the merge. You will need to resolve these manually." Stop here. Do NOT continue to cleanup.
+5. After resolving: git add . && git commit -m "merge: resolve conflicts merging <SOURCE_BRANCH> into <BASE_BRANCH>"
+
+### If merge succeeds:
+Show the merge commit: git log -1 --oneline
+
+## Step 5: Remove the worktree
+
+Remove the worktree directory from git's worktree list first -- you cannot delete a branch while its worktree is still registered:
+
+\`\`\`bash
+git worktree remove <SOURCE_WORKTREE_PATH>
+\`\`\`
+
+If the worktree has uncommitted changes, remove will fail. Use --force only after confirming with the user.
+
+## Step 6: Delete the branch
+
+After the worktree is removed, delete the source branch:
+
+\`\`\`bash
+git branch -d <SOURCE_BRANCH>
+\`\`\`
+
+If the branch has unmerged changes, -d will fail. Use -D only after confirming with the user.
+
+Note: If git worktree remove --force was used in Step 5, the branch may already be deleted automatically. git branch -d will report "branch not found" in that case -- this is expected.
+
+## Step 7: Verify cleanup
+
+Confirm everything is clean:
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git branch --list '<SOURCE_BRANCH>'  # should return nothing
+\`\`\`
+
+## Step 8: Report
+
+Summarize:
+- Merged: <SOURCE_BRANCH> -> <BASE_BRANCH>
+- Merge commit: <hash>
+- Branch deleted: <SOURCE_BRANCH>
+- Worktree removed: <SOURCE_WORKTREE_PATH>
+
+Remind the user to push: git push origin <BASE_BRANCH>
+
+Do NOT push to origin yourself.`,
+	},
+	"rebase-worktree": {
+		name: "rebase-worktree",
+		description: "Rebase worktree branch onto base, fast-forward merge (no cleanup)",
+		content: `<task>
+You are rebasing a worktree branch onto the base branch, producing a linear history without a merge commit. The branch and worktree are left intact. The user may specify the branch name; if not provided, infer it from the current branch (typically worktree/shofer-<suffix>).
+</task>
+
+## Step 1: Gather information
+
+Run these commands in parallel:
+
+\`\`\`bash
+git branch --show-current
+\`\`\`
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git branch --list 'worktree/*'
+\`\`\`
+
+From the output, identify:
+- **SOURCE_BRANCH**: the worktree branch to rebase. If the user specified one, use it. Otherwise, use the current branch if it starts with worktree/. If neither is clear, ask the user.
+- **SOURCE_WORKTREE_PATH**: the filesystem path of the worktree with SOURCE_BRANCH checked out
+- **BASE_BRANCH**: the target branch. Check if main or master exists locally. Prefer whichever exists. If both, prefer main.
+- **BASE_WORKTREE_PATH**: the filesystem path of the worktree with BASE_BRANCH checked out
+
+## Step 2: Validate
+
+- SOURCE_BRANCH exists (git branch --list <SOURCE_BRANCH>)
+- BASE_BRANCH exists (git branch --list <BASE_BRANCH>)
+- SOURCE_BRANCH != BASE_BRANCH
+
+Show commits unique to SOURCE_BRANCH:
+
+\`\`\`bash
+git log <BASE_BRANCH>..<SOURCE_BRANCH> --oneline
+\`\`\`
+
+If empty, the branch has no unique commits. Report this and ask if the user still wants to proceed.
+
+Fetch latest base (ask first):
+
+\`\`\`bash
+git pull origin <BASE_BRANCH>
+\`\`\`
+
+## Step 3: Rebase the source branch onto base
+
+You must be in SOURCE_WORKTREE_PATH, on SOURCE_BRANCH:
+
+\`\`\`bash
+cd <SOURCE_WORKTREE_PATH> && git checkout <SOURCE_BRANCH>
+\`\`\`
+
+Run the rebase:
+
+\`\`\`bash
+git rebase <BASE_BRANCH>
+\`\`\`
+
+### Handling conflicts during rebase
+
+If the rebase produces conflicts, resolve them automatically:
+
+1. git diff --name-only --diff-filter=U -- list conflicted files
+2. For each conflicted file, use git blame and git log to understand intent. Use git log <BASE_BRANCH>..<SOURCE_BRANCH> -- <file> to see what the source branch changed.
+3. Resolve intelligently: keep both changes when independent, prefer more recent when overlapping, prioritize bugfixes over refactors
+4. After resolving: git add <file> then git rebase --continue
+5. **BAIL-OUT**: If unsure about ANY file, stop. Run git rebase --abort. Tell the user: "Unsure how to resolve conflicts in [files]. Aborted the rebase. Please resolve manually or use a merge strategy instead."
+
+## Step 4: Fast-forward the base branch
+
+\`\`\`bash
+cd <BASE_WORKTREE_PATH> && git checkout <BASE_BRANCH> && git merge <SOURCE_BRANCH> --ff-only
+\`\`\`
+
+## Step 5: Report
+
+Summarize:
+- Rebased: <SOURCE_BRANCH> onto <BASE_BRANCH>
+- Fast-forwarded: <BASE_BRANCH> to include rebased commits
+- Commits applied: <count>
+
+Remind the user:
+- The worktree branch <SOURCE_BRANCH> still exists
+- The worktree directory still exists
+- Consider pushing: git push origin <BASE_BRANCH>
+- Since this was a rebase, the remote base branch will require --force-with-lease if it had been previously pushed
+
+Do NOT push to origin. Do NOT delete the branch or worktree.`,
+	},
+	"rebase-worktree-cleanup": {
+		name: "rebase-worktree-cleanup",
+		description: "Rebase worktree branch onto base, fast-forward merge, then delete branch + worktree",
+		content: `<task>
+You are rebasing a worktree branch onto the base branch and cleaning up both the branch and the worktree directory. The user may specify the branch name; if not provided, infer it from the current branch (typically worktree/shofer-<suffix>).
+</task>
+
+## Step 1: Gather information
+
+Run these commands in parallel:
+
+\`\`\`bash
+git branch --show-current
+\`\`\`
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git branch --list 'worktree/*'
+\`\`\`
+
+From the output, identify:
+- **SOURCE_BRANCH**: the worktree branch to rebase and then delete. If the user specified one, use it. Otherwise, use the current branch if it starts with worktree/. If neither is clear, ask the user.
+- **SOURCE_WORKTREE_PATH**: the filesystem path of the worktree with SOURCE_BRANCH checked out
+- **BASE_BRANCH**: the target branch. Check if main or master exists locally. Prefer whichever exists. If both, prefer main.
+- **BASE_WORKTREE_PATH**: the filesystem path of the worktree with BASE_BRANCH checked out
+
+## Step 2: Validate
+
+- SOURCE_BRANCH exists (git branch --list <SOURCE_BRANCH>)
+- BASE_BRANCH exists (git branch --list <BASE_BRANCH>)
+- SOURCE_BRANCH != BASE_BRANCH (never delete the base branch)
+- You are NOT currently in SOURCE_WORKTREE_PATH (you cannot delete the worktree you're standing in)
+
+Commits unique to SOURCE_BRANCH:
+
+\`\`\`bash
+git log <BASE_BRANCH>..<SOURCE_BRANCH> --oneline
+\`\`\`
+
+If empty, the branch has no unique commits. Report: "<SOURCE_BRANCH> has no unique commits relative to <BASE_BRANCH>. There is nothing to rebase." Then ask: "Do you still want to clean up (delete the branch and worktree)?" If yes, skip to Step 6.
+
+Fetch latest base (ask first):
+
+\`\`\`bash
+git pull origin <BASE_BRANCH>
+\`\`\`
+
+## Step 3: Rebase the source branch onto base
+
+Switch to SOURCE_WORKTREE_PATH, on SOURCE_BRANCH:
+
+\`\`\`bash
+cd <SOURCE_WORKTREE_PATH> && git checkout <SOURCE_BRANCH>
+\`\`\`
+
+Run the rebase:
+
+\`\`\`bash
+git rebase <BASE_BRANCH>
+\`\`\`
+
+### Handling conflicts during rebase
+
+1. git diff --name-only --diff-filter=U -- list conflicted files
+2. For each conflicted file, use git blame and git log to understand intent. Use git log <BASE_BRANCH>..<SOURCE_BRANCH> -- <file> to see what the source branch changed.
+3. Resolve intelligently: keep both changes when independent, prefer more recent when overlapping, prioritize bugfixes over refactors
+4. After resolving: git add <file> then git rebase --continue
+5. **BAIL-OUT**: If unsure about ANY file, stop. Run git rebase --abort. Tell the user: "Unsure how to resolve conflicts in [files]. Aborted the rebase. Please resolve manually or use a merge strategy instead." Do NOT continue to cleanup.
+
+## Step 4: Fast-forward the base branch
+
+\`\`\`bash
+cd <BASE_WORKTREE_PATH> && git checkout <BASE_BRANCH> && git merge <SOURCE_BRANCH> --ff-only
+\`\`\`
+
+## Step 5: Report rebase result
+
+Show the new commits now on BASE_BRANCH: git log --oneline -<N>
+
+## Step 6: Remove the worktree
+
+Remove the worktree directory first -- you cannot delete a branch while its worktree is still registered:
+
+\`\`\`bash
+git worktree remove <SOURCE_WORKTREE_PATH>
+\`\`\`
+
+If the worktree has uncommitted changes, remove will fail. Use --force only after confirming with the user.
+
+## Step 7: Delete the branch
+
+\`\`\`bash
+git branch -d <SOURCE_BRANCH>
+\`\`\`
+
+If the branch has unmerged changes, -d will fail. Use -D only after confirming with the user.
+
+## Step 8: Verify cleanup
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git branch --list '<SOURCE_BRANCH>'  # should return nothing
+\`\`\`
+
+## Step 9: Report
+
+Summarize:
+- Rebased: <SOURCE_BRANCH> onto <BASE_BRANCH>
+- Fast-forwarded: <BASE_BRANCH>
+- Branch deleted: <SOURCE_BRANCH>
+- Worktree removed: <SOURCE_WORKTREE_PATH>
+
+Remind the user to push: git push origin <BASE_BRANCH>
+Since this was a rebase, the remote base branch will require --force-with-lease if it had been previously pushed.
+
+Do NOT push to origin yourself.`,
+	},
+	"dryrun-rebase-worktree": {
+		name: "dryrun-rebase-worktree",
+		description: "Preview rebase conflicts without committing changes",
+		content: `<task>
+You are performing a dry-run rebase to preview what conflicts would occur, without actually completing the rebase. The user may specify the branch name; if not provided, infer it from the current branch (typically worktree/shofer-<suffix>).
+</task>
+
+## Step 1: Gather information
+
+Run these commands in parallel:
+
+\`\`\`bash
+git branch --show-current
+\`\`\`
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git branch --list 'worktree/*'
+\`\`\`
+
+From the output, identify:
+- **SOURCE_BRANCH**: the worktree branch to test-rebase. If the user specified one, use it. Otherwise, use the current branch if it starts with worktree/. If neither is clear, ask the user.
+- **SOURCE_WORKTREE_PATH**: the filesystem path of the worktree with SOURCE_BRANCH checked out
+- **BASE_BRANCH**: the target branch. Check if main or master exists locally. Prefer whichever exists. If both, prefer main.
+
+## Step 2: Validate
+
+- SOURCE_BRANCH exists (git branch --list <SOURCE_BRANCH>)
+- BASE_BRANCH exists (git branch --list <BASE_BRANCH>)
+- SOURCE_BRANCH != BASE_BRANCH
+
+Show what would be rebased:
+
+\`\`\`bash
+git log <BASE_BRANCH>..<SOURCE_BRANCH> --oneline
+\`\`\`
+
+## Step 3: Simulate the rebase
+
+Switch to the source worktree:
+
+\`\`\`bash
+cd <SOURCE_WORKTREE_PATH> && git checkout <SOURCE_BRANCH>
+\`\`\`
+
+Run the dry-run rebase:
+
+\`\`\`bash
+git rebase <BASE_BRANCH>
+\`\`\`
+
+## Step 4: Report results
+
+### If the rebase applies cleanly:
+
+Report: "Rebase of <SOURCE_BRANCH> onto <BASE_BRANCH> would apply cleanly. No conflicts expected."
+
+Show the new commit order: git log --oneline -<N>
+
+Then abort back to original state:
+
+\`\`\`bash
+git reset --hard ORIG_HEAD
+\`\`\`
+
+### If conflicts are detected:
+
+List them:
+
+\`\`\`bash
+git diff --name-only --diff-filter=U
+\`\`\`
+
+For each conflicted file, show the conflict markers:
+
+\`\`\`bash
+grep -n '<<<<<<<\|=======\\|>>>>>>>' <file>
+\`\`\`
+
+Report: "Conflicts would occur in <N> file(s): [list]. These will need to be resolved if you proceed with the rebase."
+
+## Step 5: Abort and clean up
+
+If rebase is in progress (conflicts occurred): git rebase --abort
+If rebase completed successfully: git reset --hard ORIG_HEAD
+
+Confirm clean state:
+
+\`\`\`bash
+git status --short  # should be empty
+\`\`\`
+
+\`\`\`bash
+git branch --show-current  # should be SOURCE_BRANCH
+\`\`\`
+
+## Step 6: Recommend next steps
+
+Based on the result:
+
+- **No conflicts**: "Safe to proceed. Run rebase-worktree to rebase and fast-forward merge."
+- **Conflicts found**: "Conflicts expected. You can: (a) run rebase-worktree and let the agent auto-resolve, (b) resolve them yourself, or (c) use merge-worktree (merge strategy) which may produce different conflicts."
+- **Many commits**: "There are <N> commits to rebase. If conflicts occur, you may need to resolve them multiple times (once per commit). Consider merge-worktree for a single conflict resolution."`,
+	},
+	"worktree-status": {
+		name: "worktree-status",
+		description: "Detailed status report for current worktree branch",
+		content: `<task>
+You are producing a detailed status report for the current worktree branch. The user may specify a branch name; if not provided, use the current branch.
+</task>
+
+## Step 1: Gather basic information
+
+Run these commands in parallel:
+
+\`\`\`bash
+git branch --show-current
+\`\`\`
+
+\`\`\`bash
+git worktree list
+\`\`\`
+
+\`\`\`bash
+git status --short
+\`\`\`
+
+Identify:
+- **CURRENT_BRANCH**: the branch to report on
+- **CURRENT_WORKTREE_PATH**: the filesystem path of the current worktree
+- **BASE_BRANCH**: check if main or master exists locally. Prefer whichever exists. If both, prefer main.
+- **ALL_WORKTREES**: all worktrees listed
+
+If CURRENT_BRANCH is the base branch, skip ahead/behind and focus on files changed and last-commit info.
+
+## Step 2: Collect status data
+
+Run these in parallel:
+
+\`\`\`bash
+# Commits on this branch that are NOT on base
+git log <BASE_BRANCH>..<CURRENT_BRANCH> --oneline
+\`\`\`
+
+\`\`\`bash
+# Commits on base that are NOT on this branch
+git log <CURRENT_BRANCH>..<BASE_BRANCH> --oneline
+\`\`\`
+
+\`\`\`bash
+# Files changed (working tree vs HEAD)
+git diff --name-status HEAD
+\`\`\`
+
+\`\`\`bash
+# Last commit info
+git log -1 --format="%h %s (%ar) by %an"
+\`\`\`
+
+\`\`\`bash
+# Total files changed in this branch vs base
+git diff --name-status <BASE_BRANCH>...<CURRENT_BRANCH>
+\`\`\`
+
+\`\`\`bash
+# Uncommitted changes summary
+git status --short | wc -l
+\`\`\`
+
+## Step 3: Check merge readiness
+
+Simulate a merge to detect conflicts:
+
+\`\`\`bash
+git merge --no-commit --no-ff <CURRENT_BRANCH>
+\`\`\`
+
+If the merge fails due to conflicts: git diff --name-only --diff-filter=U, then git merge --abort
+If the merge succeeds cleanly: git merge --abort
+
+## Step 4: Present the report
+
+Format the output clearly:
+
+\`\`\`
+## Worktree Status: <CURRENT_BRANCH>
+
+**Path**: <CURRENT_WORKTREE_PATH>
+**Base branch**: <BASE_BRANCH>
+**Last commit**: <hash> "<subject>" (<relative time>) by <author>
+
+### Ahead/Behind
+- Ahead of <BASE_BRANCH>: <N> commits
+- Behind <BASE_BRANCH>: <N> commits
+
+### Files Changed (vs base)
+- <N> files changed, <N> insertions, <N> deletions
+- <list of changed files with status letters>
+
+### Working Tree
+- <N> uncommitted changes (tracked files)
+
+### Merge Readiness
+- No conflicts with <BASE_BRANCH> -- safe to merge
+  OR
+- Conflicts detected in <N> file(s): [list] -- merge will need resolution
+\`\`\`
+
+## Step 5: Recommend next steps
+
+Based on the status:
+
+- **Has unique commits + no conflicts**: "Ready to merge. Run merge-worktree or merge-worktree-cleanup."
+- **Has unique commits + conflicts**: "Conflicts expected. Run dryrun-rebase-worktree to preview, then merge-worktree when ready."
+- **No unique commits**: "This branch has no unique commits relative to <BASE_BRANCH>. You can safely delete it with merge-worktree-cleanup (no merge needed)."
+- **Has uncommitted changes**: "You have <N> uncommitted changes. Commit or stash them before merging."
+- **Behind base**: "This branch is <N> commits behind <BASE_BRANCH>. Consider rebasing first: rebase-worktree."
+- **Current branch is base branch**: "You are on <BASE_BRANCH>. All other worktrees:" (then list each with its ahead/behind count)`,
+	},
 }
 
 /**

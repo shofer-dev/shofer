@@ -15,5 +15,7 @@
 	"disabledNotGitRepo": "Worktrees unavailable: workspace is not a git repository",
 	"disabledMultiRoot": "Worktrees unavailable in multi-root workspaces",
 	"disabledSubfolder": "Worktrees unavailable: workspace is a subfolder of a git repository",
-	"disabledNoFolder": "Worktrees unavailable: no workspace folder open"
+	"disabledNoFolder": "Worktrees unavailable: no workspace folder open",
+	"defaultNewWorktree": "New worktree",
+	"currentBranch": "Current branch"
 }

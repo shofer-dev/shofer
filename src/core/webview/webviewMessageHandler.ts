@@ -561,7 +561,6 @@ export const webviewMessageHandler = async (
 		}
 	}
 
-	console.error("[DEBUG webviewMessageHandler] received message type:", message.type)
 	switch (message.type) {
 		case "webviewLog": {
 			const text = message.text ?? ""
@@ -770,19 +769,38 @@ export const webviewMessageHandler = async (
 			// Use createManagedTask to preserve current task in background (parallel execution).
 			// The old task continues running while the new task is focused in the UI.
 			try {
-				console.error("[DEBUG webviewMessageHandler:newTask] resolving images...")
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
-				console.error("[DEBUG webviewMessageHandler:newTask] resolved, creating managed task...")
 
 				const messageText = resolved.text
 
+				// Auto-create worktree when the webview signals that no worktree was
+				// explicitly picked (neither a specific worktree nor explicit "Current branch").
+				let worktreeDir = message.worktreeDir
+				if (message.autoCreateWorktree && !worktreeDir) {
+					const defaults = await handleGetWorktreeDefaults(provider)
+					const createResult = await handleCreateWorktree(provider, {
+						path: defaults.suggestedPath,
+						branch: defaults.suggestedBranch,
+						baseBranch: undefined, // defaults to HEAD
+						createNewBranch: true,
+					})
+					if (createResult.success && createResult.worktree) {
+						worktreeDir = createResult.worktree.path
+					} else {
+						// Worktree creation (or its required submodule init) failed.
+						// Abort — don't start a task with a broken/missing worktree.
+						await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+						vscode.window.showErrorMessage(`Failed to create worktree: ${createResult.message}`)
+						return
+					}
+				}
+
 				// Pre-task mode / API-config seeds chosen in the chat dropdown.
 				// When absent, createTask falls back to the global Settings defaults.
-				await provider.createManagedTask(undefined, messageText, resolved.images, message.worktreeDir, {
+				await provider.createManagedTask(undefined, messageText, resolved.images, worktreeDir, {
 					mode: message.mode,
 					apiConfigName: message.apiConfigName,
 				})
-				console.error("[DEBUG webviewMessageHandler:newTask] createManagedTask completed")
 				// Task created successfully - notify the UI to reset
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 			} catch (error) {
@@ -3857,7 +3875,7 @@ export const webviewMessageHandler = async (
 
 		case "createWorktree": {
 			try {
-				const { success, message: text } = await handleCreateWorktree(
+				const result = await handleCreateWorktree(
 					provider,
 					{
 						path: message.worktreePath!,
@@ -3874,7 +3892,19 @@ export const webviewMessageHandler = async (
 					},
 				)
 
-				await provider.postMessageToWebview({ type: "worktreeResult", success, text })
+				await provider.postMessageToWebview({
+					type: "worktreeResult",
+					success: result.success,
+					text: result.message,
+					worktree:
+						result.success && result.worktree
+							? {
+									path: result.worktree.path,
+									branch: result.worktree.branch,
+									isCurrent: result.worktree.isCurrent,
+								}
+							: undefined,
+				} as any)
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
 				await provider.postMessageToWebview({ type: "worktreeResult", success: false, text: errorMessage })

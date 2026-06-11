@@ -895,6 +895,8 @@ export interface WebviewMessage {
 	worktreePath?: string
 	/** Embedded worktree directory for new tasks scoped to a git worktree subdirectory. */
 	worktreeDir?: string
+	/** When true, the host auto-creates a worktree before starting the new task. */
+	autoCreateWorktree?: boolean
 	worktreeBranch?: string
 	worktreeBaseBranch?: string
 	worktreeCreateNewBranch?: boolean

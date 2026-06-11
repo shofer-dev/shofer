@@ -27,7 +27,14 @@ import { CreateWorktreeModal } from "@/components/worktrees/CreateWorktreeModal"
  */
 export const WorktreeIndicator = () => {
 	const { t } = useAppTranslation()
-	const { shoferMessages, currentTaskItem, pendingWorktreeDir, setPendingWorktreeDir } = useExtensionState()
+	const {
+		shoferMessages,
+		currentTaskItem,
+		pendingWorktreeDir,
+		setPendingWorktreeDir,
+		worktreeExplicitOptOut,
+		setWorktreeExplicitOptOut,
+	} = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [modalOpen, setModalOpen] = useState(false)
 	const [worktrees, setWorktrees] = useState<Worktree[]>([])
@@ -103,6 +110,13 @@ export const WorktreeIndicator = () => {
 		!availability.isMultiRoot &&
 		!availability.isSubfolder
 
+	// "New worktree" default: when no task is active, no pending worktree dir
+	// is set, the user hasn't explicitly opted out to "Current branch", and the
+	// control is available, the default state is "New worktree" rather than
+	// "Current branch".
+	const showNewWorktreeDefault =
+		!hasActiveTask && pendingWorktreeDir === null && !worktreeExplicitOptOut && isAvailable
+
 	const disabledTooltip = !availability.hasWorkspaceFolder
 		? t("worktreeStatus:disabledNoFolder")
 		: availability.isMultiRoot
@@ -154,10 +168,29 @@ export const WorktreeIndicator = () => {
 		[hasActiveTask, setPendingWorktreeDir],
 	)
 
+	// Select "Current branch" — opts out of worktree isolation.
+	const handleSelectCurrentBranch = useCallback(() => {
+		setOpen(false)
+		if (hasActiveTask) return
+		setPendingWorktreeDir(null)
+		setWorktreeExplicitOptOut(true)
+	}, [hasActiveTask, setPendingWorktreeDir, setWorktreeExplicitOptOut])
+
 	const handleCreate = useCallback(() => {
 		setOpen(false)
 		setModalOpen(true)
 	}, [])
+
+	// After worktree creation, auto-select it and refresh the list.
+	const handleCreateSuccess = useCallback(
+		(createdPath?: string) => {
+			refresh()
+			if (createdPath) {
+				setPendingWorktreeDir(createdPath)
+			}
+		},
+		[refresh, setPendingWorktreeDir],
+	)
 
 	return (
 		<>
@@ -176,7 +209,11 @@ export const WorktreeIndicator = () => {
 								: "opacity-40 cursor-not-allowed",
 						)}>
 						<GitBranch className="w-3 h-3 shrink-0" />
-						<span className="truncate">{selectedWorktree?.branch || t("worktrees:noBranch")}</span>
+						<span className="truncate">
+							{showNewWorktreeDefault
+								? t("worktreeStatus:defaultNewWorktree")
+								: selectedWorktree?.branch || t("worktrees:noBranch")}
+						</span>
 						<ChevronDown className="size-2.5 shrink-0 opacity-70" />
 					</PopoverTrigger>
 				</StandardTooltip>
@@ -190,7 +227,9 @@ export const WorktreeIndicator = () => {
 						<div className="px-3 pt-3 pb-2">
 							<h4 className="text-sm font-semibold m-0 flex items-center gap-2">
 								<GitBranch className="w-3.5 h-3.5" />
-								{selectedWorktree?.branch || t("worktrees:noBranch")}
+								{showNewWorktreeDefault
+									? t("worktreeStatus:defaultNewWorktree")
+									: selectedWorktree?.branch || t("worktrees:noBranch")}
 							</h4>
 						</div>
 
@@ -269,6 +308,53 @@ export const WorktreeIndicator = () => {
 							</div>
 						)}
 
+						{/* "New worktree" as first/default option (pre-task only) */}
+						{!hasActiveTask && (
+							<>
+								<div className="border-t border-vscode-dropdown-border" />
+								<button
+									type="button"
+									onClick={handleCreate}
+									className={cn(
+										"w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
+										"bg-transparent border-none cursor-pointer",
+										"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
+										"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
+									)}>
+									<Plus className="w-3.5 h-3.5 shrink-0" />
+									<span>{t("worktreeStatus:createNew")}</span>
+									{showNewWorktreeDefault && (
+										<Check className="w-3.5 h-3.5 shrink-0 opacity-80 ml-auto" />
+									)}
+								</button>
+							</>
+						)}
+
+						{/* "Current branch" opt-out option (pre-task only) */}
+						{!hasActiveTask && (
+							<>
+								<div className="border-t border-vscode-dropdown-border" />
+								<button
+									type="button"
+									onClick={handleSelectCurrentBranch}
+									className={cn(
+										"w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
+										"bg-transparent border-none cursor-pointer",
+										"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
+										"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
+									)}>
+									<GitBranch className="w-3.5 h-3.5 shrink-0 opacity-80" />
+									<span className="flex-1">{t("worktreeStatus:currentBranch")}</span>
+									{!showNewWorktreeDefault && pendingWorktreeDir === null && !selectedWorktree && (
+										<Check className="w-3.5 h-3.5 shrink-0 opacity-80" />
+									)}
+									{!showNewWorktreeDefault && selectedWorktree?.isCurrent && (
+										<Check className="w-3.5 h-3.5 shrink-0 opacity-80" />
+									)}
+								</button>
+							</>
+						)}
+
 						{/* (c) Select another worktree (pre-task only) */}
 						{!hasActiveTask && selectableWorktrees.length > 1 && (
 							<>
@@ -299,32 +385,13 @@ export const WorktreeIndicator = () => {
 								</div>
 							</>
 						)}
-
-						{/* (b) Create new worktree (pre-task only) */}
-						{!hasActiveTask && (
-							<>
-								<div className="border-t border-vscode-dropdown-border" />
-								<button
-									type="button"
-									onClick={handleCreate}
-									className={cn(
-										"w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
-										"bg-transparent border-none cursor-pointer",
-										"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
-										"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
-									)}>
-									<Plus className="w-3.5 h-3.5 shrink-0" />
-									<span>{t("worktreeStatus:createNew")}</span>
-								</button>
-							</>
-						)}
 					</div>
 				</PopoverContent>
 			</Popover>
 			<CreateWorktreeModal
 				open={modalOpen}
 				onClose={() => setModalOpen(false)}
-				onSuccess={refresh}
+				onSuccess={handleCreateSuccess}
 				openAfterCreate={true}
 			/>
 		</>
