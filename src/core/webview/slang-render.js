@@ -704,7 +704,8 @@ function compileSequenceSVG(flow, agentNames) {
 
 	var svgW = Math.max(600, columns.length * COL_W + MARGIN * 2)
 	var svgH = Math.max(400, timelineEvents.length * STEP_H + TOP_PAD + 100)
-	var s = '<svg width="' + svgW + '" height="' + svgH + '" xmlns="http://www.w3.org/2000/svg">' + defs()
+	var s =
+		'<svg id="slang-svg" width="' + svgW + '" height="' + svgH + '" xmlns="http://www.w3.org/2000/svg">' + defs()
 
 	for (var i = 0; i < columns.length; i++) {
 		var cx = MARGIN + i * COL_W + COL_W / 2
@@ -851,7 +852,13 @@ function compileSwimlaneSVG(flow, agentNames) {
 		if (est > maxLaneHeight) maxLaneHeight = est
 	}
 
-	var s = '<svg width="' + svgW + '" height="' + maxLaneHeight + '" xmlns="http://www.w3.org/2000/svg">' + defs()
+	var s =
+		'<svg id="slang-svg" width="' +
+		svgW +
+		'" height="' +
+		maxLaneHeight +
+		'" xmlns="http://www.w3.org/2000/svg">' +
+		defs()
 
 	// Mutable Y cursor shared across recursive calls
 	var _cy = 0
@@ -1318,7 +1325,7 @@ var _svgn = null,
 	_layers = null,
 	_svgEl = null
 
-// ── Zoom & pan state (topology view only) ──
+// ── Zoom & pan state (all views) ──
 var _zoomViewBox = null,
 	_zoomPanning = false,
 	_zoomPanSX = 0,
@@ -1594,27 +1601,31 @@ function handleRender(payload) {
 		'" data-view="swimlane">Agent Logic Flow</button>' +
 		"</div>"
 
+	var zoomLabel = " &nbsp;|&nbsp; \uD83D\uDD0D Scroll to zoom, drag background to pan"
 	if (_currentView === "topology") {
 		h +=
 			'<div class="graph-hint">\uD83D\uDD90\uFE0F Drag nodes to rearrange &nbsp;|&nbsp; \uD83D\uDD04 Auto-layout from topology layers' +
-			" &nbsp;|&nbsp; \uD83D\uDD0D Scroll to zoom, drag background to pan</div>"
+			zoomLabel +
+			"</div>"
 	} else if (_currentView === "sequence") {
 		h +=
-			'<div class="graph-hint">\u23F1\uFE0F Message-passing chronology mapped top-to-bottom across processing tracks</div>'
+			'<div class="graph-hint">\u23F1\uFE0F Message-passing chronology mapped top-to-bottom across processing tracks' +
+			zoomLabel +
+			"</div>"
 	} else {
 		h +=
-			'<div class="graph-hint">\uD83E\uDDEC Sequential operation blocks and branching statements broken down per agent lane</div>'
-	}
-
-	// ── Zoom controls (topology only) ──
-	if (_currentView === "topology") {
-		h +=
-			'<div class="zoom-controls">' +
-			'<button class="zoom-btn" data-zoom="in" title="Zoom in">+</button>' +
-			'<button class="zoom-btn" data-zoom="out" title="Zoom out">\u2212</button>' +
-			'<button class="zoom-btn" data-zoom="fit" title="Fit to view">\u26F6</button>' +
+			'<div class="graph-hint">\uD83E\uDDEC Sequential operation blocks and branching statements broken down per agent lane' +
+			zoomLabel +
 			"</div>"
 	}
+
+	// ── Zoom controls (all views) ──
+	h +=
+		'<div class="zoom-controls">' +
+		'<button class="zoom-btn" data-zoom="in" title="Zoom in">+</button>' +
+		'<button class="zoom-btn" data-zoom="out" title="Zoom out">\u2212</button>' +
+		'<button class="zoom-btn" data-zoom="fit" title="Fit to view">\u26F6</button>' +
+		"</div>"
 
 	var agentNames = {},
 		agentMeta = {}
@@ -1670,18 +1681,18 @@ function handleRender(payload) {
 		})
 	}
 
+	_svgn = document
+	_svgEl = document.getElementById("slang-svg")
+
+	// Initialize zoom state from SVG dimensions
+	if (_svgEl) {
+		var initW = parseFloat(_svgEl.getAttribute("width")) || 500
+		var initH = parseFloat(_svgEl.getAttribute("height")) || 300
+		_zoomViewBox = { x: 0, y: 0, w: initW, h: initH }
+	}
+
+	// ── Topology-specific: node drag + edge hover ──
 	if (_currentView === "topology") {
-		_svgn = document
-		_svgEl = document.getElementById("slang-svg")
-
-		// Initialize zoom state from SVG dimensions
-		if (_svgEl) {
-			var initW = parseFloat(_svgEl.getAttribute("width")) || 500
-			var initH = parseFloat(_svgEl.getAttribute("height")) || 300
-			_zoomViewBox = { x: 0, y: 0, w: initW, h: initH }
-		}
-
-		// ── Node drag ──
 		var groups = _svgEl ? Array.prototype.slice.call(_svgEl.querySelectorAll(".node-group")) : []
 		for (var gi = 0; gi < groups.length; gi++) groups[gi].addEventListener("mousedown", beginDrag)
 		document.removeEventListener("mousemove", moveDrag)
@@ -1689,47 +1700,45 @@ function handleRender(payload) {
 		document.removeEventListener("mouseup", endDrag)
 		document.addEventListener("mouseup", endDrag)
 
-		// ── Edge hover highlights ──
 		var edgeGroups = _svgEl ? Array.prototype.slice.call(_svgEl.querySelectorAll(".edge-group")) : []
 		for (var ei = 0; ei < edgeGroups.length; ei++) {
 			edgeGroups[ei].addEventListener("mouseenter", edgeHoverIn)
 			edgeGroups[ei].addEventListener("mouseleave", edgeHoverOut)
 		}
+	}
 
-		// ── Zoom buttons ──
-		var zoomBtns = document.querySelectorAll(".zoom-btn[data-zoom]")
-		for (var zi = 0; zi < zoomBtns.length; zi++) {
-			zoomBtns[zi].addEventListener("click", function () {
-				var action = this.getAttribute("data-zoom")
-				if (action === "in") zoomIn()
-				else if (action === "out") zoomOut()
-				else if (action === "fit") zoomFit()
-			})
-		}
+	// ── Zoom buttons (all views) ──
+	var zoomBtns = document.querySelectorAll(".zoom-btn[data-zoom]")
+	for (var zi = 0; zi < zoomBtns.length; zi++) {
+		zoomBtns[zi].addEventListener("click", function () {
+			var action = this.getAttribute("data-zoom")
+			if (action === "in") zoomIn()
+			else if (action === "out") zoomOut()
+			else if (action === "fit") zoomFit()
+		})
+	}
 
-		// ── Mousewheel zoom on SVG ──
-		if (_svgEl) {
-			_svgEl.addEventListener("wheel", function (e) {
-				if (!_zoomViewBox) return
-				e.preventDefault()
-				var rect = _svgEl.getBoundingClientRect()
-				var mx = e.clientX - rect.left
-				var my = e.clientY - rect.top
-				var vbX = _zoomViewBox.x + (mx / rect.width) * _zoomViewBox.w
-				var vbY = _zoomViewBox.y + (my / rect.height) * _zoomViewBox.h
-				var factor = e.deltaY > 0 ? 1.15 : 0.87
-				_zoomViewBox.w *= factor
-				_zoomViewBox.h *= factor
-				_zoomViewBox.x = vbX - (mx / rect.width) * _zoomViewBox.w
-				_zoomViewBox.y = vbY - (my / rect.height) * _zoomViewBox.h
-				applyZoom()
-			})
-			// ── Background drag-to-pan on SVG ──
-			_svgEl.addEventListener("mousedown", beginSvgPan)
-			document.removeEventListener("mousemove", moveSvgPan)
-			document.addEventListener("mousemove", moveSvgPan)
-			document.removeEventListener("mouseup", endSvgPan)
-			document.addEventListener("mouseup", endSvgPan)
-		}
+	// ── Mousewheel zoom + background drag-to-pan on SVG (all views) ──
+	if (_svgEl) {
+		_svgEl.addEventListener("wheel", function (e) {
+			if (!_zoomViewBox) return
+			e.preventDefault()
+			var rect = _svgEl.getBoundingClientRect()
+			var mx = e.clientX - rect.left
+			var my = e.clientY - rect.top
+			var vbX = _zoomViewBox.x + (mx / rect.width) * _zoomViewBox.w
+			var vbY = _zoomViewBox.y + (my / rect.height) * _zoomViewBox.h
+			var factor = e.deltaY > 0 ? 1.15 : 0.87
+			_zoomViewBox.w *= factor
+			_zoomViewBox.h *= factor
+			_zoomViewBox.x = vbX - (mx / rect.width) * _zoomViewBox.w
+			_zoomViewBox.y = vbY - (my / rect.height) * _zoomViewBox.h
+			applyZoom()
+		})
+		_svgEl.addEventListener("mousedown", beginSvgPan)
+		document.removeEventListener("mousemove", moveSvgPan)
+		document.addEventListener("mousemove", moveSvgPan)
+		document.removeEventListener("mouseup", endSvgPan)
+		document.addEventListener("mouseup", endSvgPan)
 	}
 }
