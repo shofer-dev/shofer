@@ -197,7 +197,7 @@ This preserves the invariant: background tasks should execute without stealing f
 
 ## Background Task Orchestration Tools
 
-Five tools manage the parent-child relationship for background tasks. All are **always available** (bypass mode filtering). `check_task_status`, `wait_for_task`, and `list_background_tasks` are unconditionally auto-approved (read-only queries). `cancel_tasks` and `answer_subtask_question` are gated by the `alwaysAllowSubtasks` toggle.
+Six tools manage the parent-child relationship for background tasks. `list_background_tasks` and `send_message_to_task` are **always available** (bypass mode filtering); the remaining four are gated by the `subtasks` tool group. `check_task_status`, `wait_for_task`, and `list_background_tasks` are unconditionally auto-approved (read-only queries). `cancel_tasks` and `answer_subtask_question` are gated by the `alwaysAllowSubtasks` toggle. `send_message_to_task` (async) is always auto-approved; sync mode is gated by `alwaysAllowSubtasks`.
 
 ### `check_task_status`
 

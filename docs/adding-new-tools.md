@@ -89,7 +89,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
                           "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
     mode:        { tools: ["switch_mode"] },
     subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task",
-                          "list_background_tasks", "cancel_tasks", "answer_subtask_question"] },
+                           "cancel_tasks", "answer_subtask_question"] },
     questions:   { tools: ["ask_followup_question"] },
     uncategorized: { tools: [] },
 }

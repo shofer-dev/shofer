@@ -93,7 +93,7 @@ is defined in `TOOL_GROUPS` — a `Record<ToolGroup, ToolGroupConfig>`:
 | `execute`       | System commands       | `execute_command`, `read_command_output`, `sleep`                                                                                                                                                                                                                  |
 | `mcp`           | MCP protocol          | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`                                                                                                                                                         |
 | `mode`          | Mode switching        | `switch_mode`                                                                                                                                                                                                                                                      |
-| `subtasks`      | Task orchestration    | `new_task`, `check_task_status`, `wait_for_task`, `list_background_tasks`, `cancel_tasks`, `answer_subtask_question`                                                                                                                                               |
+| `subtasks`      | Task orchestration    | `new_task`, `check_task_status`, `wait_for_task`, `cancel_tasks`, `answer_subtask_question`                                                                                                                                                                        |
 | `questions`     | User interaction      | `ask_followup_question`                                                                                                                                                                                                                                            |
 | `browser`       | Browser automation    | _(empty — browser tools are provided by the `browser-tools` MCP server)_                                                                                                                                                                                           |
 | `uncategorized` | Fallback              | _(empty — for tools without explicit classification)_                                                                                                                                                                                                              |
@@ -115,14 +115,16 @@ group is a coordinated change affecting `toolGroups` const, `TOOL_GROUPS` object
 These tools are always available across all modes — unless explicitly disabled
 via the `disabledTools` setting or excluded by `tools_denied`:
 
-| Tool                 | Purpose                                      |
-| -------------------- | -------------------------------------------- |
-| `attempt_completion` | Signal task completion with a rating         |
-| `update_todo_list`   | Track and update the task todo list          |
-| `run_slash_command`  | Execute built-in and custom slash commands   |
-| `skills`             | Load skill instructions into task context    |
-| `set_task_title`     | Set a descriptive title for the current task |
-| `give_feedback`      | Send feedback to the Shofer developers       |
+| Tool                    | Purpose                                      |
+| ----------------------- | -------------------------------------------- |
+| `attempt_completion`    | Signal task completion with a rating         |
+| `update_todo_list`      | Track and update the task todo list          |
+| `run_slash_command`     | Execute built-in and custom slash commands   |
+| `skills`                | Load skill instructions into task context    |
+| `set_task_title`        | Set a descriptive title for the current task |
+| `give_feedback`         | Send feedback to the Shofer developers       |
+| `list_background_tasks` | List background tasks (children or peers)    |
+| `send_message_to_task`  | Send async/sync messages to peer tasks       |
 
 ## 5. Tool List Assembly: `getToolsForMode()`
 
@@ -243,11 +245,11 @@ definitions (role, group assignments, custom instructions) see the source.
 | #   | Slug          | Name           | Groups                                                                              | Default |
 | --- | ------------- | -------------- | ----------------------------------------------------------------------------------- | ------- |
 | 1   | `code`        | 💻 Code        | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` | Yes     |
-| 2   | `architect`   | 🏗️ Architect   | `read`, `["write", { fileRegex: "\\.md$" }]`, `mcp`, `questions`                    | —       |
+| 2   | `architect`   | 🏗️ Architect   | `read`, `["write", { fileRegex: "\\.md$" }]`, `mcp`, `subtasks`, `questions`        | —       |
 | 3   | `debug`       | 🪲 Debug       | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`         | —       |
 | 4   | `code-search` | 🔎 Code Search | `read`, `execute`, `mcp`, `questions`                                               | —       |
 | 5   | `web-search`  | 🌐 Web Search  | `browser`, `questions`, `mcp`                                                       | —       |
-| 6   | `reviewer`    | 👀 Reviewer    | `read`, `execute`, `mcp`, `questions`                                               | —       |
+| 6   | `reviewer`    | 👀 Reviewer    | `read`, `execute`, `mcp`, `subtasks`, `questions`                                   | —       |
 
 **Key structural notes:**
 
@@ -257,8 +259,9 @@ definitions (role, group assignments, custom instructions) see the source.
   `fileRegex` tuple — any attempt to write to a non-`.md` file throws a
   `FileRestrictionError`.
 - **`debug`** has near-full access (same as `code` minus `mode`).
-- **`code-search`**, **`reviewer`**, and **`architect`** have no `write`
-  (or `write` is restricted), no `mode`, and no `subtasks`.
+- **`code-search`** has no `write`, no `mode`, and no `subtasks`. **`architect`**
+  and **`reviewer`** have `write` restricted to `.md` files and no `write`
+  respectively, no `mode`, but include `subtasks`.
 - **`web-search`** is the only mode with the `browser` group and has no `read`.
 - All tool group assignments and role text are in
   [`DEFAULT_MODES`](../packages/types/src/mode.ts:199-270); this table is

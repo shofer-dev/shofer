@@ -4,13 +4,14 @@ Complete reference for all native tools available in Shofer, their mode availabi
 
 ## Mode Availability
 
-| Mode            | Groups                                                             | Description                  |
-| --------------- | ------------------------------------------------------------------ | ---------------------------- |
-| 🏗️ Architect    | `read`, `write` (md only), `mcp`, `questions`                      | Plan and design              |
-| 💻 Code         | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions` | Write and modify code        |
-| ❓ Ask          | `read`, `mcp`                                                      | Get answers and explanations |
-| 🪲 Debug        | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`         | Diagnose and fix issues      |
-| 🪃 Orchestrator | varies                                                             | Delegates to other modes     |
+| Mode            | Groups                                                             | Description                     |
+| --------------- | ------------------------------------------------------------------ | ------------------------------- |
+| 🏗️ Architect    | `read`, `write` (md only), `mcp`, `subtasks`, `questions`          | Plan and design                 |
+| 💻 Code         | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions` | Write and modify code           |
+| ❓ Ask          | `read`, `mcp`                                                      | Get answers and explanations    |
+| 🪲 Debug        | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`         | Diagnose and fix issues         |
+| 👀 Reviewer     | `read`, `execute`, `mcp`, `subtasks`, `questions`                  | Review code and identify issues |
+| 🪃 Orchestrator | varies                                                             | Delegates to other modes        |
 
 **Always-available tools** bypass mode filtering entirely (see column below).
 

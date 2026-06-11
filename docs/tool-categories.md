@@ -16,8 +16,8 @@ Shofer uses a single unified ToolGroup system as the **single source of truth** 
 | 3   | `execute`       | System command execution                             | `execute_command`, `read_command_output`, `sleep`, `ide_panel_open`, `ide_editor_goto_line`       |
 | 4   | `browser`       | Browser automation and web page control              | `browser_navigate`, `browser_click`, `browser_screenshot`, `browser_read_page`                    |
 | 5   | `mcp`           | MCP protocol tools                                   | `use_mcp_tool`, `access_mcp_resource`                                                             |
-| 6   | `mode`          | Mode switching and task lifecycle                    | `switch_mode`, `new_task`                                                                         |
-| 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `list_background_tasks`                                     |
+| 6   | `mode`          | Mode switching                                       | `switch_mode`                                                                                     |
+| 7   | `subtasks`      | Background / delegated task management               | `check_task_status`, `wait_for_task`, `cancel_tasks`, `answer_subtask_question`                   |
 | 8   | `questions`     | User-facing questions and follow-ups                 | `ask_followup_question`                                                                           |
 | 9   | `uncategorized` | Fallback for tools without explicit classification   | (empty by default; MCP tools without a `group` field land here)                                   |
 
@@ -35,7 +35,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
     browser:     { tools: [] },  // external LM tools from browser-tools
     mcp:         { tools: ["use_mcp_tool", "access_mcp_resource", "call_mcp_tool_async", "check_mcp_call_status", "wait_for_mcp_call"] },
     mode:        { tools: ["switch_mode"] },
-    subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task", "list_background_tasks", "cancel_tasks", "answer_subtask_question"] },
+    subtasks:    { tools: ["new_task", "check_task_status", "wait_for_task", "cancel_tasks", "answer_subtask_question"] },
     questions:   { tools: ["ask_followup_question"] },
     uncategorized: { tools: [] },
 }
@@ -107,17 +107,18 @@ When a mode requests tools, each tool's group is checked against the mode's allo
 
 | Default mode | Allowed groups                                                                      |
 | ------------ | ----------------------------------------------------------------------------------- |
-| architect    | `read`, `write` (`.md` only), `mcp`, `questions`                                    |
+| architect    | `read`, `write` (`.md` only), `mcp`, `subtasks`, `questions`                        |
 | code         | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` |
 | ask          | `read`, `mcp`                                                                       |
 | debug        | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`         |
+| reviewer     | `read`, `execute`, `mcp`, `subtasks`, `questions`                                   |
 | orchestrator | (empty — delegates via `new_task`)                                                  |
 
 ### Always-available tools
 
 These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TOOLS`](../packages/types/src/tool.ts) constant:
 
-`attempt_completion`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`
+`attempt_completion`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`, `list_background_tasks`, `send_message_to_task`
 
 ### MCP tools without group
 

@@ -249,9 +249,10 @@ These are **separate concepts**:
 | Auto-approval            | [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts) | Whether a tool invocation requires user confirmation |
 
 A tool being in `ALWAYS_AVAILABLE_TOOLS` does **not** mean it's auto-approved. For example,
-`new_task` is always available but still requires the `alwaysAllowSubtasks` toggle for
-auto-approval. Conversely, `fetch_web_page` is auto-approved unconditionally but is
-**not** in `ALWAYS_AVAILABLE_TOOLS` — it's available through the mode's `read` group.
+`send_message_to_task` (sync mode) is always available but still requires the
+`alwaysAllowSubtasks` toggle for auto-approval. Conversely, `fetch_web_page` is
+auto-approved unconditionally but is **not** in `ALWAYS_AVAILABLE_TOOLS` — it's
+available through the mode's `read` group.
 
 ---
 

@@ -36,7 +36,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 3. Start a task in **Ask** mode.
 4. Confirm all always-available tools are callable alongside the mode's `read` and `mcp` tools.
 
-**Expected:** The 7 always-available tools are callable in every mode regardless of `groups`.
+**Expected:** The 8 always-available tools are callable in every mode regardless of `groups`.
 
 ---
 
