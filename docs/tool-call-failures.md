@@ -76,14 +76,14 @@ A failure at any stage must produce three outputs:
 
 **Actual behavior by stream format:**
 
-| Stream format                                   | What happens                                                                                                                                                                                                                            | UI result                                             |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Legacy `tool_call` chunk                        | `parseToolCall()` returns `null` → the `if (!toolUse)` branch at [`Task.ts:4779`](src/core/task/Task.ts:4779) fires `say("error", …)` + `pushToolResultToUserContent({ is_error: true })`                                               | ✅ Error row visible (same as §A)                     |
-| Streaming `tool_call_partial` + `tool_call_end` | `finalizeStreamingToolCall()` returns `null` → the `else if (toolUseIndex !== undefined)` branch at [`Task.ts:4745`](src/core/task/Task.ts:4745) keeps the **stale partial block** and only sets `partial = false` → presented (see §C) | ⚠️ **Often NOT visible — see the bug in §C and Gaps** |
+| Stream format                                   | What happens                                                                                                                                                                                                                                                              | UI result                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Legacy `tool_call` chunk                        | `parseToolCall()` returns `null` → the `if (!toolUse)` branch at [`Task.ts:4779`](src/core/task/Task.ts:4779) fires `say("error", …)` + `pushToolResultToUserContent({ is_error: true })`                                                                                 | ✅ Error row visible (same as §A) |
+| Streaming `tool_call_partial` + `tool_call_end` | `finalizeStreamingToolCall()` returns `null` → the `else if (toolUseIndex !== undefined)` branch at [`Task.ts:4745`](src/core/task/Task.ts:4745) sets `partial = false` **and clears the stale partial `nativeArgs`** → presented → §C guard fires (**fixed 2026-06-11**) | ✅ Error row visible (via §C)     |
 
-The legacy path is the only one that reliably surfaces this failure, and modern
-providers stream tool calls, so the legacy path is rarely taken in practice. This is
-the most likely reason failures are not surfacing in the UI.
+Both paths now reliably surface this failure. Before the 2026-06-11 fix, the streaming
+path left a stale partial `nativeArgs` on the block, which defeated the §C guard and
+caused the tool to be dispatched silently with incomplete arguments — see §C and Gaps.
 
 ### C. `presentAssistantMessage`: known tool, missing `nativeArgs`
 
@@ -109,33 +109,29 @@ if (!block.partial) {
 - ✅ `shofer.pushToolResultToUserContent({ is_error: true })` — LLM receives the error
 - ✅ `shofer.recordToolError(block.name as ToolName, errorMessage)` — captured in tool usage stats
 
-> 🐞 **BUG (identified 2026-06-11): the guard `!block.nativeArgs` is unreliable on
-> the streaming path, which is why failures go unsurfaced.**
+> ✅ **FIXED (2026-06-11): the streaming path now clears the stale partial `nativeArgs`,
+> so this guard fires reliably.**
 >
-> The guard assumes that when `finalizeStreamingToolCall()` returns `null`, the block
-> left in `assistantMessageContent[toolUseIndex]` has **no** `nativeArgs`. That is
-> false. During streaming, each `tool_call_delta` replaces the block with the output of
+> **The bug that was fixed:** the guard assumes that when `finalizeStreamingToolCall()`
+> returns `null`, the block left in `assistantMessageContent[toolUseIndex]` has **no** > `nativeArgs`. During streaming this was false. Each `tool_call_delta` replaces the
+> block with the output of
 > [`createPartialToolUse`](src/core/assistant-message/NativeToolCallParser.ts:377),
 > which **optimistically populates a partial `nativeArgs`** from whatever has parsed so
 > far (e.g. for `read_file` it sets `nativeArgs = { path, mode, offset, limit, … }` as
 > soon as a `path` appears — see [line 435](src/core/assistant-message/NativeToolCallParser.ts:435)).
+> When the final strict parse then failed, the null-branches only flipped
+> `partial = false` and left the stale partial `nativeArgs` in place, so
+> `!block.nativeArgs` was `false`, the §C guard was skipped, and the tool was dispatched
+> with incomplete args — no error row, no mistake increment.
 >
-> When the final strict parse then fails (malformed/incomplete JSON, or a required
-> field that `createPartialToolUse` did not require), the stream consumer's null-branch
-> at [`Task.ts:4745`](src/core/task/Task.ts:4745) / [`Task.ts:5206`](src/core/task/Task.ts:5206)
-> only flips `partial = false` — it **does not clear the stale partial `nativeArgs`**.
-> So `block.nativeArgs` is truthy, `!block.nativeArgs` is `false`, and this §C guard is
-> **skipped**. `isKnownTool` is `true`, so §D (unknown tool) is also skipped. The block
-> falls through to the dispatch `switch` at
-> [`presentAssistantMessage.ts:895`](src/core/assistant-message/presentAssistantMessage.ts:895)
-> and the tool is **executed with incomplete/partial args** — no error row, no mistake
-> increment from this path. The comments at `Task.ts:4748` and `Task.ts:5208` ("execution
-> will be short-circuited in presentAssistantMessage" / "validation will handle missing
-> params") therefore describe a guarantee the code does not uphold.
->
-> Net effect: on the common streaming path, a known tool with bad/incomplete arguments
-> is silently dispatched instead of producing the visible error this section promises.
-> See **Gaps** for proposed fixes.
+> **The fix** clears `existingToolUse.nativeArgs = undefined` alongside
+> `partial = false` in both stream-consumer null-branches —
+> [`Task.ts:4753`](src/core/task/Task.ts:4753) (the `tool_call_end` path) and
+> [`Task.ts:5217`](src/core/task/Task.ts:5217) (the `finalizeRawChunks()` tail). This
+> restores the invariant the guard assumes ("finalize failed ⇒ no `nativeArgs`"), so a
+> known tool with bad/incomplete arguments on the streaming path now produces the
+> visible error this section promises. The previously-stale comments at those lines have
+> been updated to match.
 
 ### D. `presentAssistantMessage`: unknown tool name
 
@@ -221,21 +217,22 @@ tools at all (the `"no_tools_used"` path in `initiateTaskLoop`).
 
 ## UI visibility summary
 
-| Scenario                                                                                                                   | Chat error row  | LLM receives error           | Mistake counter         |
-| -------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------- | ----------------------- |
-| `parseToolCall()` returns `null` — **legacy** `tool_call` chunk (unknown name / bad JSON / missing params)                 | ✅              | ✅                           | ✅                      |
-| `parseToolCall()` returns `null` — **streaming**, valid name + bad/incomplete args, **stale partial `nativeArgs` present** | ❌ **(bug §C)** | ❌ (tool runs with bad args) | ❌                      |
-| `parseToolCall()` returns `null` — **streaming**, valid name + **no** partial `nativeArgs`                                 | ✅ (via §C)     | ✅                           | ✅                      |
-| `parseToolCall()` returns `null` — **streaming**, unknown tool name                                                        | ✅ (via §D)     | ✅                           | ✅                      |
-| `presentAssistantMessage`: missing `nativeArgs` (guard fires)                                                              | ✅              | ✅                           | ✅                      |
-| `presentAssistantMessage`: unknown tool                                                                                    | ✅              | ✅                           | ✅                      |
-| `presentAssistantMessage`: mode-validation fails                                                                           | ❌              | ✅                           | ✅                      |
-| Tool repetition limit                                                                                                      | ✅ (ask dialog) | ✅                           | N/A (separate detector) |
-| Mistake limit reached                                                                                                      | ✅ (ask dialog) | — (blocks further execution) | Resets to 0             |
+| Scenario                                                                                                   | Chat error row  | LLM receives error           | Mistake counter         |
+| ---------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------- | ----------------------- |
+| `parseToolCall()` returns `null` — **legacy** `tool_call` chunk (unknown name / bad JSON / missing params) | ✅              | ✅                           | ✅                      |
+| `parseToolCall()` returns `null` — **streaming**, valid name + bad/incomplete args (**fixed 2026-06-11**)  | ✅ (via §C)     | ✅                           | ✅                      |
+| `parseToolCall()` returns `null` — **streaming**, valid name + **no** partial `nativeArgs`                 | ✅ (via §C)     | ✅                           | ✅                      |
+| `parseToolCall()` returns `null` — **streaming**, unknown tool name                                        | ✅ (via §D)     | ✅                           | ✅                      |
+| `presentAssistantMessage`: missing `nativeArgs` (guard fires)                                              | ✅              | ✅                           | ✅                      |
+| `presentAssistantMessage`: unknown tool                                                                    | ✅              | ✅                           | ✅                      |
+| `presentAssistantMessage`: mode-validation fails                                                           | ❌              | ✅                           | ✅                      |
+| Tool repetition limit                                                                                      | ✅ (ask dialog) | ✅                           | N/A (separate detector) |
+| Mistake limit reached                                                                                      | ✅ (ask dialog) | — (blocks further execution) | Resets to 0             |
 
-> The second row is the reported symptom: on the streaming path (the default for modern
-> providers), a known tool with malformed/incomplete arguments is dispatched silently
-> because the lingering partial `nativeArgs` defeats the §C guard.
+> The second row was the reported symptom: on the streaming path (the default for modern
+> providers), a known tool with malformed/incomplete arguments was dispatched silently
+> because the lingering partial `nativeArgs` defeated the §C guard. Fixed 2026-06-11 by
+> clearing `nativeArgs` in the stream-consumer null-branches (see Gaps → Resolved).
 
 ## Key files
 
@@ -252,39 +249,49 @@ tools at all (the `"no_tools_used"` path in `initiateTaskLoop`).
 
 ## Gaps & areas for improvement
 
-### 🐞 Primary bug: streaming failures are silently dispatched (root cause of "failures not surfacing")
+### ✅ Resolved: streaming failures are now surfaced (root cause of "failures not surfacing")
 
-When `finalizeStreamingToolCall()` returns `null`, the two stream-consumer null-branches
-([`Task.ts:4745`](src/core/task/Task.ts:4745) and [`Task.ts:5206`](src/core/task/Task.ts:5206))
-keep the stale partial block built by `createPartialToolUse`, which carries an
-optimistic partial `nativeArgs`. The §C guard in `presentAssistantMessage`
-(`isKnownTool && !block.nativeArgs && !customTool`) then fails to fire, so the tool is
-executed with incomplete args instead of producing a visible error. See §B and §C.
+**Status: fixed 2026-06-11 via option 1 below.** When `finalizeStreamingToolCall()`
+returned `null`, the two stream-consumer null-branches kept the stale partial block built
+by `createPartialToolUse`, which carried an optimistic partial `nativeArgs`. The §C guard
+in `presentAssistantMessage` (`isKnownTool && !block.nativeArgs && !customTool`) then
+failed to fire, so the tool was executed with incomplete args instead of producing a
+visible error. See §B and §C.
 
-**Proposed fixes (pick one; ordered by preference):**
+The fix clears `existingToolUse.nativeArgs = undefined` (alongside `partial = false`) in
+both `else if (toolUseIndex !== undefined)` branches —
+[`Task.ts:4753`](src/core/task/Task.ts:4753) and [`Task.ts:5217`](src/core/task/Task.ts:5217) —
+restoring the invariant the §C guard assumes ("finalize failed ⇒ no `nativeArgs`") so the
+existing error path fires.
 
-1. **Clear the stale `nativeArgs` in the null-branches.** In both `else if (toolUseIndex !== undefined)`
-   branches, set `existingToolUse.nativeArgs = undefined` (alongside `partial = false`)
-   before calling `presentAssistantMessage`. This restores the invariant the §C guard
-   assumes — "finalize failed ⇒ no `nativeArgs`" — and makes the existing error path fire.
-   Smallest, most targeted fix.
+**Alternatives considered (not taken):**
 
 2. **Make the parser distinguish "invalid" from "absent".** Have `finalizeStreamingToolCall()`
    / `parseToolCall()` signal _invalid finalization_ explicitly (e.g. return a sentinel
    `{ invalid: true, reason }` or a typed result) rather than collapsing both the
-   unknown-name and bad-args cases into a bare `null`. The stream consumer and §C could
-   then surface a precise message and never rely on the truthiness of a partial
-   `nativeArgs`. Cleanest long-term design (Schema-First / fail-closed spirit).
+   unknown-name and bad-args cases into a bare `null`. Cleaner long-term design
+   (Schema-First / fail-closed spirit); deferred as a larger change.
 
 3. **Validate `nativeArgs` completeness in §C, not just presence.** Re-run the strict
    `parseToolCall` (or a schema validation) on the finalized block inside
-   `presentAssistantMessage` and surface the error when it fails, instead of trusting
-   `!block.nativeArgs`. More work per dispatch; duplicates parser logic.
+   `presentAssistantMessage`. More work per dispatch; duplicates parser logic.
 
-> Whichever fix is chosen, add a regression test under
-> `src/core/assistant-message/__tests__/` that drives a streaming tool call with a valid
-> name but missing required param and asserts a `say("error", …)` is emitted and the
-> tool's `handle()` is **not** invoked.
+### ⚠️ Still outstanding: no regression test locks in the fix
+
+The fix was verified against 23 existing tests, but **none of them exercises this path** —
+no test references `finalizeStreamingToolCall`, `nativeArgs = undefined`, the §C guard, or
+the streaming bad-args scenario. The fix can silently regress if either null-branch is
+later "tidied up". Add a regression test under
+`src/core/assistant-message/__tests__/` (or `src/core/task/__tests__/`) that:
+
+1. Drives the streaming consumer through `tool_call_start` → `tool_call_delta` (partial
+   args that populate `nativeArgs` for e.g. `read_file`) → `tool_call_end` with
+   incomplete/invalid accumulated JSON so `finalizeStreamingToolCall()` returns `null`.
+2. Asserts a `say("error", …)` row is emitted, a `tool_result` with `is_error: true` is
+   pushed, `consecutiveMistakeCount` is incremented, and the tool's `handle()`/`execute()`
+   is **not** invoked.
+3. Covers the symmetric `finalizeRawChunks()` tail branch at
+   [`Task.ts:5209`](src/core/task/Task.ts:5209) as well.
 
 ### Documentation accuracy note
 
@@ -300,8 +307,10 @@ via `say("error", …)`. Corrected above.
   with weaker models and the self-correction via `tool_result` is usually fast enough
   that the user wouldn't notice.
 - **MCP tool name format errors (§H)** could be handled more explicitly in the stream
-  consumer rather than relying on the `presentAssistantMessage` fallback path. Note this
-  path shares the same stale-`nativeArgs` exposure as the primary bug above.
+  consumer rather than relying on the `presentAssistantMessage` fallback path. This path
+  flows through the same `finalizeRawChunks()` null-branch that now clears `nativeArgs`,
+  so it is covered by the 2026-06-11 fix and no longer silently dispatches — but the
+  explicit, named handling would still produce a clearer error message.
 - **`TOOL_DISPLAY_NAMES`** and the `toolDescription()` switch in
   `presentAssistantMessage.ts` could include the tool's canonical name formatting so
   error messages are more readable (e.g., `execute_command` → `execute command`).

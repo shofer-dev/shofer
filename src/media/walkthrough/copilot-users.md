@@ -19,4 +19,4 @@ If you're coming from GitHub Copilot, Shofer offers everything Copilot does and 
 
 Run the `/migrate-from-copilot` slash command to automatically migrate your existing Copilot configuration (`.github/copilot-instructions.md`, agents, skills, instructions) to Shofer equivalents.
 
-[Read the full Copilot → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md)
+[Read the full Copilot → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md)

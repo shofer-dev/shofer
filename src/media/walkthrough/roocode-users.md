@@ -18,4 +18,4 @@ Shofer is a major architectural improvement over Roo-Code (Roo-Code fork), with 
 
 Run the `/migrate-from-roocode` slash command to automatically migrate your Roo-Code configuration into Shofer. Notice that conversations are not migrated.
 
-[Read the full Roo-Code → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md)
+[Read the full Roo-Code → Shofer guide](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_roocode_users.md)

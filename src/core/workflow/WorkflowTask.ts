@@ -556,6 +556,9 @@ export class WorkflowTask extends Task {
 			}
 
 			// 3. No agent can make progress and none committed → deadlock.
+			// Abort the entire agent subtree (recursive — agent tasks may
+			// have spawned their own children). Budget-exhaustion paths
+			// below do the same via super.abortBackgroundChildren().
 			if (stakes.length === 0 && escalations.length === 0) {
 				this.flowState.status = "deadlock"
 				const agentDump = [...this.flowState.agents.entries()]
@@ -565,8 +568,9 @@ export class WorkflowTask extends Task {
 					`[WorkflowTask#${this.taskId}] #TRACE Deadlock at round ${this.flowState.round}. Agents: [${agentDump}] convergeExpr=${JSON.stringify(getConvergeExpr(this.flowDecl))} allCommitted=${this.allAgentsCommitted()}`,
 				)
 				await this.sayProgress(
-					`⛔ Deadlock at round ${this.flowState.round}: no agent can make progress and none have committed.`,
+					`⛔ Deadlock at round ${this.flowState.round}: no agent can make progress and none have committed. Aborting all children.`,
 				)
+				await super.abortBackgroundChildren()
 				await this.persistCheckpoint()
 				await this.emitTaskCompleted("poor")
 				return

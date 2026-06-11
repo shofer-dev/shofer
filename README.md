@@ -20,8 +20,8 @@
   <a href="https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md">Docs</a> ·
   <a href="https://marketplace.visualstudio.com/items?itemName=Shoferdev.shofer">Install</a> ·
   <a href="https://github.com/shofer-dev/shofer">GitHub</a> ·
-  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md">Roo-Code Migration</a> ·
-  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md">Copilot Migration</a>
+  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_roocode_users.md">Roo-Code Migration</a> ·
+  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md">Copilot Migration</a>
 </p>
 
 <p align="center">
@@ -165,9 +165,9 @@ Key recommendations: start with auto-approval toggles **OFF** and enable increme
 
 ## Migration Paths
 
-**Coming from Roo-Code?** Shofer is a major architectural improvement with parallel tasks, async MCP calling, semantic code & git log indexing, native worktree support, and background subtasks. Run `/migrate-from-roocode` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md)
+**Coming from Roo-Code?** Shofer is a major architectural improvement with parallel tasks, async MCP calling, semantic code & git log indexing, native worktree support, and background subtasks. Run `/migrate-from-roocode` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_roocode_users.md)
 
-**Coming from GitHub Copilot?** Shofer gives you full model choice, local-first privacy, 50+ native tools, and parallel task execution. Run `/migrate-from-copilot` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md)
+**Coming from GitHub Copilot?** Shofer gives you full model choice, local-first privacy, 50+ native tools, and parallel task execution. Run `/migrate-from-copilot` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md)
 
 ## Community
 

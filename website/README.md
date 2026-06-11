@@ -221,8 +221,8 @@ The website content is derived from the following Shofer documentation files (no
 
 - [`extensions/shofer/README.md`](../README.md) — Product overview, quick start, UI elements
 - [`extensions/shofer/USER_MANUAL.md`](../USER_MANUAL.md) — Modes, settings, parallel tasks, worktrees, MCP, RAG, assistant agent
-- [`extensions/shofer/docs/shofer_for_roocode_users.md`](../docs/shofer_for_roocode_users.md) — Roo-Code migration guide and comparison
-- [`extensions/shofer/docs/shofer_for_copilot_users.md`](../docs/shofer_for_copilot_users.md) — Copilot migration guide and comparison
+- [`extensions/shofer/docs/migration/shofer_for_roocode_users.md`](../docs/migration/shofer_for_roocode_users.md) — Roo-Code migration guide and comparison
+- [`extensions/shofer/docs/migration/shofer_for_copilot_users.md`](../docs/migration/shofer_for_copilot_users.md) — Copilot migration guide and comparison
 - [`extensions/shofer/src/media/walkthrough/`](../src/media/walkthrough/) — Walkthrough step content (welcome, modes, features, etc.)
 
 ## Design Decisions

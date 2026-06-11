@@ -387,7 +387,9 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 	},
 	"walkthrough.openCopilotGuide": async () => {
 		await vscode.env.openExternal(
-			vscode.Uri.parse("https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_copilot_users.md"),
+			vscode.Uri.parse(
+				"https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md",
+			),
 		)
 	},
 	"walkthrough.open": async () => {
@@ -399,7 +401,9 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 	},
 	"walkthrough.openRoocodeGuide": async () => {
 		await vscode.env.openExternal(
-			vscode.Uri.parse("https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md"),
+			vscode.Uri.parse(
+				"https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_roocode_users.md",
+			),
 		)
 	},
 })

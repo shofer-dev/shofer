@@ -52,5 +52,5 @@ export const rooCodeMigration = {
 	description:
 		"Shofer is a major architectural improvement over Roo-Code — a complete rebuild with parallel tasks, async MCP calling, semantic code & git indexing, native worktree support, and dozens of new features.",
 	command: "/migrate-from-roocode",
-	docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/shofer_for_roocode_users.md",
+	docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_roocode_users.md",
 }

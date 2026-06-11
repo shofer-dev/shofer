@@ -170,6 +170,22 @@ File changed:
 
 - [`useScrollLifecycle.ts`](../webview-ui/src/hooks/useScrollLifecycle.ts) — line 34, plus guards at: task-switch block (line 181), `transitionScrollPhase` (line 203), `scrollToBottomAuto` (line 221), `enterUserBrowsingHistory` (line 253), `finishHydrationWindow` retry (line 312), `finishHydrationWindow` exhausted (line 326), `startHydrationWindow` (line 340), `handleRowHeightChange` force-pin (line 439), `atBottomStateChangeCallback` safety-net (line 509).
 
+## Open Issues (Causes C, D, E)
+
+These are genuine scroll-behavior issues identified by the root-cause analysis that are **not yet fixed**. Each is a residual source of the churn that the applied fixes (A, B, F) did not address.
+
+### Cause C — Non-streaming disengage false positives
+
+In `ANCHORED_FOLLOWING` while **not** streaming, `atBottomStateChangeCallback` ([line 526](../webview-ui/src/hooks/useScrollLifecycle.ts:526)) treats **any** `isAtBottom === false` as a user scroll-up and transitions to `USER_BROWSING_HISTORY`. Non-user causes (collapsing row, late-loading image, [`FileChangesPanel`](../webview-ui/src/components/chat/ChatView.tsx:2136) resizing) spuriously eject the user from follow and flash the scroll-to-bottom button. **Proposed fix:** require a corroborating signal (the wheel/pointer/keyboard `userIntentScrollUpRef` already being set) or a measured `scrollTop` delta before disengaging, rather than trusting the bare not-at-bottom flag.
+
+### Cause D — Mid-list height growth is invisible to the hook
+
+`ChatRow` receives `onHeightChange={handleRowHeightChange}` from `ChatView` ([`ChatView.tsx` line 1811](../webview-ui/src/components/chat/ChatView.tsx:1811)). The implementation inside `ChatRow` uses `useSize` from `react-use`, which wraps the row in an extra measuring `<div>` and reports `height`; an effect fires `onHeightChange(height > prevHeightRef.current)` **only when the row `isLast`** ([`ChatRow.tsx` lines 215–227](../webview-ui/src/components/chat/ChatRow.tsx:215), `isLast` guard at line 221). A row growing in the middle of the list (a tool result expanding above the last message) therefore never notifies the hook, so the viewport is not pulled down. **Proposed fix:** report height changes for any row near the bottom of the list, not just the literal last one, or rely on Virtuoso's own `followOutput` measurement instead of the per-row callback.
+
+### Cause E — Per-task snapshot capture runs during the render phase
+
+`ChatView` calls `virtuosoRef.current?.getState(...)` and writes to `virtuosoStateByTaskTsRef` during the React **render phase** at [lines 204–220](../webview-ui/src/components/chat/ChatView.tsx:204). Under React StrictMode (double-invoked render) these run twice; the `ranges.length > 0` guard at [line 214](../webview-ui/src/components/chat/ChatView.tsx:214) is a mitigation, not a fix. **Proposed fix:** move the snapshot capture into `useLayoutEffect` so it is a committed side effect, not a render-phase one.
+
 ## Doc-vs-Source Discrepancies (Lower Priority)
 
 The following are documentation-accuracy gaps found while auditing this doc against [`useScrollLifecycle.ts`](../webview-ui/src/hooks/useScrollLifecycle.ts) and [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx). They do not cause scroll bugs but should be corrected for the doc to stay trustworthy.
@@ -209,19 +225,3 @@ The pointer-scroll-up detection mechanism ([lines 568–640](../webview-ui/src/h
 ### Missing cleanup guards
 
 The hook uses `isMountedRef` ([line 105](../webview-ui/src/hooks/useScrollLifecycle.ts:105)) to prevent state updates after unmount, and `cancelReanchorFrame` to cancel pending animation frames. Neither is mentioned in the doc.
-
-## Open Issues (Causes C, D, E)
-
-These are genuine scroll-behavior issues identified by the root-cause analysis that are **not yet fixed**. Each is a residual source of the churn that the applied fixes (A, B, F) did not address.
-
-### Cause C — Non-streaming disengage false positives
-
-In `ANCHORED_FOLLOWING` while **not** streaming, `atBottomStateChangeCallback` ([line 526](../webview-ui/src/hooks/useScrollLifecycle.ts:526)) treats **any** `isAtBottom === false` as a user scroll-up and transitions to `USER_BROWSING_HISTORY`. Non-user causes (collapsing row, late-loading image, [`FileChangesPanel`](../webview-ui/src/components/chat/ChatView.tsx:2136) resizing) spuriously eject the user from follow and flash the scroll-to-bottom button. **Proposed fix:** require a corroborating signal (the wheel/pointer/keyboard `userIntentScrollUpRef` already being set) or a measured `scrollTop` delta before disengaging, rather than trusting the bare not-at-bottom flag.
-
-### Cause D — Mid-list height growth is invisible to the hook
-
-`ChatRow` receives `onHeightChange={handleRowHeightChange}` from `ChatView` ([`ChatView.tsx` line 1811](../webview-ui/src/components/chat/ChatView.tsx:1811)). The implementation inside `ChatRow` uses `useSize` from `react-use`, which wraps the row in an extra measuring `<div>` and reports `height`; an effect fires `onHeightChange(height > prevHeightRef.current)` **only when the row `isLast`** ([`ChatRow.tsx` lines 215–227](../webview-ui/src/components/chat/ChatRow.tsx:215), `isLast` guard at line 221). A row growing in the middle of the list (a tool result expanding above the last message) therefore never notifies the hook, so the viewport is not pulled down. **Proposed fix:** report height changes for any row near the bottom of the list, not just the literal last one, or rely on Virtuoso's own `followOutput` measurement instead of the per-row callback.
-
-### Cause E — Per-task snapshot capture runs during the render phase
-
-`ChatView` calls `virtuosoRef.current?.getState(...)` and writes to `virtuosoStateByTaskTsRef` during the React **render phase** at [lines 204–220](../webview-ui/src/components/chat/ChatView.tsx:204). Under React StrictMode (double-invoked render) these run twice; the `ranges.length > 0` guard at [line 214](../webview-ui/src/components/chat/ChatView.tsx:214) is a mitigation, not a fix. **Proposed fix:** move the snapshot capture into `useLayoutEffect` so it is a committed side effect, not a render-phase one.

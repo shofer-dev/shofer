@@ -46,7 +46,9 @@ The button is hidden (opacity 0) when:
 
 Images are automatically disabled when the selected model doesn't support vision input. This is controlled by the [`supportsImages`](../../src/api/providers/fetchers/vercel-ai-gateway.ts) property on each model's metadata.
 
-For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from llm-router via the `shofer.llm.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). See [`vscode-lm.ts`](../../src/api/providers/vscode-lm.ts) `refreshShoferCapabilities()` and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
+For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from the active provider extension via the `shofer.router.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). The command is registered by the `shofer-router` extension ([`shofer-router/src/main.ts`](../../shofer-router/src/main.ts)), which resolves per-model `imageInput` from its model registry. See [`refreshShoferCapabilities()`](../../src/api/providers/vscode-lm.ts:245) (which invokes the command at [`vscode-lm.ts:255`](../../src/api/providers/vscode-lm.ts:255)) and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
+
+The lookup is **fail-closed**: if the side-channel command is unavailable (provider extension not installed, not activated, or it throws), `shoferCapabilities` is left untouched and [`supportsImages` resolves to `false`](../../src/api/providers/vscode-lm.ts:939) (`this.shoferCapabilities?.imageInput ?? false`). A vision-capable model therefore has its images stripped whenever the capability lookup cannot complete, rather than risking an API error by sending image blocks to a model whose support is unknown.
 
 When `shouldDisableImages` is `true`:
 
@@ -60,8 +62,8 @@ The full chain:
 1. Model catalog (fetcher) sets `supportsImages` per model
 2. The API handler exposes `getModel().info.supportsImages`
 3. The provider checks this before constructing the system prompt
-4. The webview receives `shouldDisableImages` as a prop
-5. [`ChatTextArea`](../webview-ui/src/components/chat/ChatTextArea.tsx) uses it to gate paste/drop/button
+4. The webview derives `shouldDisableImages` in [`ChatView.tsx:1248`](../webview-ui/src/components/chat/ChatView.tsx:1248) as `!model?.supportsImages || selectedImages.length >= MAX_IMAGES_PER_MESSAGE` — so images are gated off both when the model lacks vision support **and** once the per-message image cap is reached
+5. [`ChatTextArea`](../webview-ui/src/components/chat/ChatTextArea.tsx) receives `shouldDisableImages` as a prop and uses it to gate paste/drop/button
 
 ## Image Display in the Chat
 
@@ -204,7 +206,7 @@ Upstream AI provider
 ## Image Size Limits
 
 - **Per-message count**: [`MAX_IMAGES_PER_MESSAGE`](../webview-ui/src/components/chat/ChatView.tsx) controls the maximum number of images per message
-- **Per-file size**: [`maxImageFileSize`](https://shofer.dev/docs/) setting controls maximum image size for `read_file` tool
+- **Per-file size**: [`maxImageFileSize`](../packages/types/src/global-settings.ts:170) setting controls the per-image file size limit (default 5 MB), and [`maxTotalImageSize`](../packages/types/src/global-settings.ts:171) caps the total across all images per operation (default 20 MB)
 
 ## Multi-Turn Image Handling
 
@@ -327,7 +329,7 @@ The assistant agent has a separate implementation in [`tool-executor.ts`](../../
   [`maxImageFileSize`](../packages/types/src/global-settings.ts:170) (per-file MB limit, default 5) and
   [`maxTotalImageSize`](../packages/types/src/global-settings.ts:171) (per-operation total MB limit, default 20).
   The `read_file` tool does not reference its own dedicated size constant; it uses the global settings.
-  Corrected to `maxImageFileSize`.
+  Both names and links are now correct.
 
 - **Fixed: Broken cross-doc anchor `tool_access.md#image-generation`** (line 215) —
   [`tool_access.md`](tool_access.md) contains no `image-generation` section and never mentions
@@ -350,9 +352,24 @@ The assistant agent has a separate implementation in [`tool-executor.ts`](../../
   "new vision-capable provider." Poe may no longer be an active provider; this entry can be
   verified against the current provider catalog.
 
-- **Thumbnails sizing** — The doc states thumbnails are "34×34px" (line 70). This is a
-  visual-design detail that could drift without notice. Consider verifying against
-  [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx) styles.
+- **Verified: Thumbnails sizing** — The doc states thumbnails are "34×34px" (line 70).
+  Verified against [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx:60–61):
+  `width: 34, height: 34` inline styles — correct.
+
+- **Open (source code, not doc): capability side-channel namespace inconsistency** — The
+  `vscode-lm` capability lookup actually invokes `shofer.router.*` commands
+  ([`vscode-lm.ts:255`](../../src/api/providers/vscode-lm.ts:255), `:1081`), which are registered by the
+  `shofer-router` extension ([`shofer-router/src/main.ts:679-680`](../../shofer-router/src/main.ts:679)) —
+  the live path, under which image capability resolves correctly. However, the doc-comments and all
+  three catch-block warning strings inside `vscode-lm.ts` still name `shofer.llm.*` (12 occurrences),
+  so a developer debugging "images disabled on a vision model" sees a log naming a command the code
+  never calls. Separately, a **second** extension, `llm-provider`, registers the same logical commands
+  under `shofer.llm.*` ([`llm-provider/src/main.ts:467,477`](../../llm-provider/src/main.ts:467)); if a
+  deployment ships `llm-provider` instead of `shofer-router`, the `shofer.router.*` lookup silently
+  fails and (per the fail-closed behavior above) images are stripped from vision-capable models. Both
+  are **source-code** coherence issues — fixing them means aligning `vscode-lm.ts`'s comments/warnings
+  to `shofer.router.*` and consolidating the two extensions onto one canonical namespace; they are not
+  defects in this document.
 
 ## Changelog History
 

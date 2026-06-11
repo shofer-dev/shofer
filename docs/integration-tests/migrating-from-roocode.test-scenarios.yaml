@@ -1,7 +1,7 @@
 # Integration test scenarios: Shofer features for Roo-Code migrants
 #
 # Covers the 19 user-facing feature areas described in
-#   docs/shofer_for_roocode_users.md
+#   docs/migration/shofer_for_roocode_users.md
 #
 # Each scenario is a self-contained sequence of steps that exercises one
 # feature or interaction.  Tests are ordered by architectural dependency —

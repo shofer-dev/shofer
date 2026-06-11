@@ -743,7 +743,7 @@ modes, and relocating MCP configuration.
 	   | Claude          | Shofer Action                                                                     |
 	   |-----------------|-----------------------------------------------------------------------------------|
 	   | \`.mcp.json\`   | Convert format and write to \`.shofer/mcp.json\` if target does not already exist |
-	   | \`.mcp.json\`   | (GitHub Copilot version — Copilot does NOT use local .mcp.json; see copilot.md)   |
+	   | \`.mcp.json\`   | (GitHub Copilot version — Copilot does NOT use local .mcp.json; see migration/copilot.md)   |
 
 	   Claude's .mcp.json uses STDIO-based MCP servers without an explicit
 	   \`"type"\` field. Shofer requires \`"type": "stdio"\` for all
