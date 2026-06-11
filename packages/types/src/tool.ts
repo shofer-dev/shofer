@@ -228,15 +228,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		tools: ["switch_mode"],
 	},
 	subtasks: {
-		tools: [
-			"new_task",
-			"check_task_status",
-			"wait_for_task",
-			"list_background_tasks",
-			"cancel_tasks",
-			"answer_subtask_question",
-			"send_message_to_task",
-		],
+		tools: ["new_task", "check_task_status", "wait_for_task", "cancel_tasks", "answer_subtask_question"],
 	},
 	questions: {
 		tools: ["ask_followup_question"],
@@ -260,6 +252,8 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"skills",
 	"set_task_title",
 	"give_feedback",
+	"list_background_tasks",
+	"send_message_to_task",
 ] as const
 
 /**
