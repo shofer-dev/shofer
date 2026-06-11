@@ -120,8 +120,10 @@ import {
 	appendApiMessage,
 	appendTaskMessage,
 	readApiMessages,
+	readApiMessagesTail,
 	saveApiMessages,
 	readTaskMessages,
+	readTaskMessagesTail,
 	saveTaskMessages,
 	taskMetadata,
 } from "../task-persistence"
@@ -1732,9 +1734,29 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// Shofer Messages
 
-	private async getSavedShoferMessages(): Promise<ShoferMessage[]> {
+	public async getSavedShoferMessages(): Promise<ShoferMessage[]> {
 		return readTaskMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
 	}
+
+	// T1.B: tail-read helpers for cold task-switch optimisation.
+	// Read only the last N messages from disk instead of the full history.
+	private async getSavedShoferMessagesTail(maxMessages: number): Promise<[ShoferMessage[], boolean]> {
+		return readTaskMessagesTail({ taskId: this.taskId, globalStoragePath: this.globalStoragePath, maxMessages })
+	}
+
+	private async getSavedApiConversationHistoryTail(maxMessages: number): Promise<[ApiMessage[], boolean]> {
+		return readApiMessagesTail({ taskId: this.taskId, globalStoragePath: this.globalStoragePath, maxMessages })
+	}
+
+	/**
+	 * `true` when `preloadShoferMessages` was called with `maxMessages` and
+	 * there are older messages on disk that were not loaded. The webview
+	 * renders a "Load older messages…" sentinel when this flag is set.
+	 *
+	 * Not persisted — resets to `false` on the next full load or when the
+	 * user loads all remaining pages.
+	 */
+	public hasMoreShoferMessages: boolean = false
 
 	/**
 	 * Lazily-constructed BlobStore for this task. The blob directory lives
@@ -3189,22 +3211,30 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * I/O. `resumeTaskFromHistory()` checks the same `historyPreloaded` flag
 	 * and skips its own load prefix when this has already run.
 	 */
-	public async preloadShoferMessages(): Promise<void> {
-		return time("preloadShoferMessages", () => this._preloadShoferMessagesImpl())
+	public async preloadShoferMessages(maxMessages?: number): Promise<void> {
+		return time("preloadShoferMessages", () => this._preloadShoferMessagesImpl(maxMessages))
 	}
 
-	private async _preloadShoferMessagesImpl(): Promise<void> {
+	private async _preloadShoferMessagesImpl(maxMessages?: number): Promise<void> {
 		if (this.historyPreloaded) {
 			return
 		}
 
-		// H1: Issue both disk reads concurrently. They touch independent
-		// files (`ui_messages.json` and `api_conversation_history.json`)
-		// and the sanitization step below only depends on the first.
-		const [modifiedShoferMessages, apiConversationHistory] = await Promise.all([
-			this.getSavedShoferMessages(),
+		// H1 + T1.B: Issue both disk reads concurrently. They touch independent
+		// files. When `maxMessages` is set, use the tail reader for shoferMessages
+		// (UI) only — apiConversationHistory is re-read fully by
+		// resumeTaskFromHistory before any LLM request, so tail-reading it here
+		// is wasted overhead.
+		const tailMode = typeof maxMessages === "number" && maxMessages > 0
+		const [rawShofer, apiConversationHistory] = await Promise.all([
+			tailMode
+				? this.getSavedShoferMessagesTail(maxMessages)
+				: this.getSavedShoferMessages().then((m) => [m, false] as const),
 			this.getSavedApiConversationHistory(),
 		])
+
+		let [modifiedShoferMessages, hasMoreUi] = rawShofer
+		this.hasMoreShoferMessages = hasMoreUi
 
 		// Remove any resume messages that may have been added before.
 		const lastRelevantMessageIndex = findLastIndex(
@@ -3256,12 +3286,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.historyPreloaded = true
 		this._messagesReadyResolve()
 
-		// Persist the sanitized snapshot in the background. The task is
-		// already usable; the write only matters for subsequent reloads.
-		// Errors are logged but do not block the resume flow.
-		void this.overwriteShoferMessages(modifiedShoferMessages).catch((err) => {
-			taskLog.warn(`preloadShoferMessages: background sanitized save failed: ${err}`)
-		})
+		// T1.B: When tail-loading, skip the background compaction write.
+		// The in-memory array is a window, not the full history — rewriting
+		// from it would lose older messages. The JSONL log is already compact
+		// (last turn boundary flush compacted it), so this skip is safe and
+		// avoids unnecessary I/O on the cold-switch path.
+		if (!tailMode) {
+			void this.overwriteShoferMessages(modifiedShoferMessages).catch((err) => {
+				taskLog.warn(`preloadShoferMessages: background sanitized save failed: ${err}`)
+			})
+		}
 	}
 
 	/**

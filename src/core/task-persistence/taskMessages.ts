@@ -31,6 +31,7 @@ import {
 	dedupeByKey,
 	disposeAppendHandle,
 	readJsonLines,
+	readJsonLinesTail,
 	serializeJsonLines,
 	writeJsonLines,
 } from "./jsonlLog"
@@ -146,4 +147,39 @@ export async function disposeAppendHandleForTask({
 }: DisposeAppendHandleForTaskOptions): Promise<void> {
 	const filePath = await uiMessagesPath(taskId, globalStoragePath)
 	disposeAppendHandle(filePath)
+}
+
+// ---- Tail-read (T1.B) ----
+
+export type ReadTaskMessagesTailOptions = {
+	taskId: string
+	globalStoragePath: string
+	/** Maximum number of records to read from the tail of the JSONL log. */
+	maxMessages: number
+}
+
+/**
+ * Read the last `maxMessages` records from the task's JSONL log.
+ *
+ * Returns `[messages, hasMore]` — `hasMore` is `true` when there are
+ * older messages not included in the returned window. Used on cold
+ * task-switch to avoid reading + parsing the full history for long tasks.
+ *
+ * Falls back to `readTaskMessages` when the file is empty or `maxMessages`
+ * is zero/negative.
+ */
+export async function readTaskMessagesTail({
+	taskId,
+	globalStoragePath,
+	maxMessages,
+}: ReadTaskMessagesTailOptions): Promise<[ShoferMessage[], boolean]> {
+	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
+	const filePath = path.join(taskDir, GlobalFileNames.uiMessages)
+	const tailResult = await readJsonLinesTail<ShoferMessage>(filePath, maxMessages)
+	if (tailResult === null) {
+		await unlinkLegacyIfPresent(taskDir)
+		return [[], false]
+	}
+	const [records, hasMore] = tailResult
+	return [dedupeByKey(records, (m) => m.ts), hasMore]
 }

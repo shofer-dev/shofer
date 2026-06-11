@@ -43,8 +43,10 @@
 > | **H12**       | Threshold-triggered JSONL compaction                        | Skip O(n) serialize+write when `_appendedSinceCompaction < 100`; compact at turn boundaries                                                                                                                                                                                                     | 🟡 Medium  | ✅ Done                  | 2026-06-10     |
 > | **H13**       | Reuse append file handle + memoized `mkdir`                 | Long-lived `fs.open(…, "a")` handle; `Set<string>` directory-ensured cache; handle lifecycle tied to `dispose`/`abortTask`                                                                                                                                                                      | 🟢 Low     | ✅ Done                  | 2026-06-10     |
 > | **H14**       | BlobStore cross-call content cache                          | `_readCache` Map skips repeated `fs.readFile` per blob; index-delta variant at `prepareMessagesForApi` layer implemented and reverted (see reversion notes)                                                                                                                                     | 🟡 Medium  | ✅ Done                  | 2026-06-10     |
-> | **H2**        | Windowed message loading                                    | Load last K messages with Virtuoso scroll-to-load sentinel                                                                                                                                                                                                                                      | 🔴 High    | ❌ Open                  | —              |
+> | **H2**        | Windowed message loading                                    | Load last K messages with Virtuoso scroll-to-load sentinel                                                                                                                                                                                                                                      | 🔴 High    | ✅ Superseded (T1.B)     | 2026-06-10     |
 > | **H7**        | Paginate history index                                      | Split `_index.json` into pages at 1,000+ tasks                                                                                                                                                                                                                                                  | 🟢 Low     | ❌ Open                  | —              |
+> | **H23**       | Eliminate duplicate `getTaskWithId` read (T1.A)             | `showTaskWithId` eagerly reads `api_conversation_history.jsonl` + dedupes, then immediately re-reads in `preloadShoferMessages`. Added `skipApiHistory` flag — 100% wasted I/O eliminated on cold switch.                                                                                       | 🟢 Low     | ✅ Done                  | 2026-06-10     |
+> | **H24**       | Tail-only JSONL read on cold switch (T1.B)                  | `readJsonLinesTail` reads last N records; `preloadShoferMessages` accepts `maxMessages`; `COLD_LOAD_TAIL_WINDOW=200`. Webview "Load older messages…" sentinel → `loadOlderMessages` IPC + batched `shoferMessagesPrepended` (ordered older page, union-by-`ts` merge).                          | 🟡 Medium  | ✅ Done                  | 2026-06-10     |
 > | **IPC proto** | Incremental messaging (IPC protocol refinement)             | Replace three `postStateToWebview*` methods with `postInitState` (full snapshot), `postConfigUpdate(key,value)` (single-key delta), and `postTaskStateUpdate(updates)` (task lifecycle delta). Webview splits `"state"` handler into `stateInit`/`configUpdate`/`taskStateUpdate`.              | 🟡 Medium  | ✅ Done                  | 2026-06-09     |
 
 ## Verification (2026-06-10, corrected)
@@ -156,6 +158,38 @@ between simdjson and a tail-read.
   consolidation order, leaving every host-side invariant untouched — targets only
   the ~1 s floor, not the dominant rehydrate term. Worth doing for perceived
   latency, but it cannot by itself fix slow long-task switches.
+
+### H24 (T1.B) implementation details
+
+- **Tail read**: `preloadShoferMessages` with `maxMessages` uses
+  `readJsonLinesTail` (last N lines) for `shoferMessages` only. The API
+  conversation history is read in full (tail-reading it is wasted work —
+  `resumeTaskFromHistory` re-reads the full file before building any LLM
+  request).
+- **Batch delivery**: `loadOlderShoferMessages` sends the older page in a
+  single `shoferMessagesPrepended` IPC with an ordered (oldest-first)
+  array, applied by the webview in one `setState`. No O(n) round-trips, no
+  order reversal.
+- **Union-by-`ts` merge**: the host rebuilds its in-memory array as
+  `[...olderPage, ...in-memory tail, ...newTail]`, where `newTail` is any
+  disk-tail message not already resident — so a background append that
+  landed between the disk read and the merge is preserved rather than lost
+  to a wholesale replace-from-disk. The webview likewise dedupes the
+  prepended page by `ts` against its current tail before concatenating.
+- **Known artifact**: the 200-message UI tail can begin mid-turn (e.g. a
+  `command_output` whose originating `command` ask is older than the
+  window). The webview handles this gracefully — orphaned outputs render
+  without a parent block — and the full turn is restored once the user
+  clicks "Load older messages".
+- **Residual hardening (advisory, not blocking)**: (a)
+  `shoferMessagesPrepended` carries no `taskId`, so a task switch during
+  the awaited send could apply the page to the wrong array — the window is
+  now a single message-batch rather than N, so the risk is small, but a
+  `taskId` guard mirroring the `shoferMessageAppended` focus gate would
+  close it. (b) The host-side prefix/tail disjointness relies on
+  `getSavedShoferMessages` deduping by `ts` and the split aligning to the
+  window start; this invariant is currently unstated in code and should
+  carry a comment to survive future edits to the windowing logic.
 
 ## Root Causes Identified
 

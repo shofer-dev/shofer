@@ -63,11 +63,7 @@ const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
 const VIRTUOSO_VIEWPORT_INCREASE = { top: 3_000, bottom: 1000 } as const
 
 /** H22: Hoisted to module level to avoid new array identity per render. */
-const ALWAYS_HIDDEN_ONCE_PROCESSED_ASK: ShoferAsk[] = [
-	"api_req_failed",
-	"resume_task",
-	"resume_completed_task",
-]
+const ALWAYS_HIDDEN_ONCE_PROCESSED_ASK: ShoferAsk[] = ["api_req_failed", "resume_task", "resume_completed_task"]
 
 /** H22: Hoisted to module level to avoid new array identity per render. */
 const ALWAYS_HIDDEN_ONCE_PROCESSED_SAY = [
@@ -107,6 +103,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		taskNotifications,
 		pendingWorktreeDir,
 		setPendingWorktreeDir,
+		hasMoreShoferMessages,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -2095,6 +2092,21 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
 							atBottomThreshold={1}
+							components={{
+								Header: () =>
+									hasMoreShoferMessages ? (
+										<div className="flex justify-center py-3">
+											<button
+												type="button"
+												className="text-sm text-vscode-textLink-foreground hover:text-vscode-textLink-activeForeground hover:underline"
+												onClick={() => {
+													vscode.postMessage({ type: "loadOlderMessages" })
+												}}>
+												Load older messages…
+											</button>
+										</div>
+									) : null,
+							}}
 						/>
 						<SessionSearch
 							messages={messages}

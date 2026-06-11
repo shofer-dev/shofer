@@ -19,7 +19,14 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { taskLog } from "../../utils/logging/subsystems"
-import { appendJsonLine, dedupeByKey, readJsonLines, serializeJsonLines, writeJsonLines } from "./jsonlLog"
+import {
+	appendJsonLine,
+	dedupeByKey,
+	readJsonLines,
+	readJsonLinesTail,
+	serializeJsonLines,
+	writeJsonLines,
+} from "./jsonlLog"
 
 export type ApiMessage = Anthropic.MessageParam & {
 	ts?: number
@@ -85,6 +92,39 @@ export async function readApiMessages({
 		return []
 	}
 	return dedupeByKey(parsed, (m) => m.ts)
+}
+
+export type ReadApiMessagesTailOptions = {
+	taskId: string
+	globalStoragePath: string
+	/** Maximum number of records to read from the tail of the JSONL log. */
+	maxMessages: number
+}
+
+/**
+ * Read the last `maxMessages` records from the task's API conversation
+ * history JSONL log.
+ *
+ * Returns `[messages, hasMore]` — `hasMore` is `true` when there are
+ * older messages not included in the returned window.
+ *
+ * Falls back to `readApiMessages` when the file is empty or `maxMessages`
+ * is zero/negative.
+ */
+export async function readApiMessagesTail({
+	taskId,
+	globalStoragePath,
+	maxMessages,
+}: ReadApiMessagesTailOptions): Promise<[ApiMessage[], boolean]> {
+	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
+	const filePath = path.join(taskDir, GlobalFileNames.apiConversationHistory)
+	const tailResult = await readJsonLinesTail<ApiMessage>(filePath, maxMessages)
+	if (tailResult === null) {
+		await unlinkLegacyIfPresent(taskDir)
+		return [[], false]
+	}
+	const [records, hasMore] = tailResult
+	return [dedupeByKey(records, (m) => m.ts), hasMore]
 }
 
 export type AppendApiMessageOptions = {

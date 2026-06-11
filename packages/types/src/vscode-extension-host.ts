@@ -57,6 +57,7 @@ export interface ExtensionMessage {
 		| "invoke"
 		| "messageUpdated"
 		| "shoferMessageAppended"
+		| "shoferMessagesPrepended"
 		| "blobContent"
 		| "mcpServers"
 		| "enhancedPrompt"
@@ -182,6 +183,8 @@ export interface ExtensionMessage {
 		path?: string
 	}>
 	shoferMessage?: ShoferMessage
+	/** Batch for shoferMessagesPrepended (older pages loaded in one IPC round-trip). */
+	shoferMessages?: ShoferMessage[]
 	/** §4.3 blob fetch response: sha256 ↔ content (or undefined if missing). */
 	blob?: { sha256: string; bytes: number; content?: string; error?: string }
 	routerModels?: RouterModels
@@ -394,6 +397,8 @@ export type ExtensionState = Pick<
 	lockApiConfigAcrossModes?: boolean
 	version: string
 	shoferMessages: ShoferMessage[]
+	/** T1.B: true when cold-load only read the tail of the message log. */
+	hasMoreShoferMessages?: boolean
 	currentTaskId?: string
 	currentTaskItem?: HistoryItem
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
@@ -721,6 +726,7 @@ export interface WebviewMessage {
 		| "fatal_error"
 		| "pong"
 		// Skills messages
+		| "loadOlderMessages"
 		| "requestSkills"
 		| "createSkill"
 		| "deleteSkill"

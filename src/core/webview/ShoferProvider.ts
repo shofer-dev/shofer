@@ -1466,14 +1466,14 @@ export class ShoferProvider
 
 	public async createTaskWithHistoryItem(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
-		options?: { startTask?: boolean; keepCurrentTask?: boolean },
+		options?: { startTask?: boolean; keepCurrentTask?: boolean; maxMessages?: number },
 	) {
 		return time("createTaskWithHistoryItem", () => this._createTaskWithHistoryItemImpl(historyItem, options))
 	}
 
 	private async _createTaskWithHistoryItemImpl(
 		historyItem: HistoryItem & { rootTask?: Task; parentTask?: Task },
-		options?: { startTask?: boolean; keepCurrentTask?: boolean },
+		options?: { startTask?: boolean; keepCurrentTask?: boolean; maxMessages?: number },
 	) {
 		const isCliRuntime = process.env.SHOFER_CLI_RUNTIME === "1"
 		// CLI injects runtime provider settings from command flags/env at startup.
@@ -1691,7 +1691,11 @@ export class ShoferProvider
 		// task BEFORE it is observable as `getCurrentTask()`. This is the
 		// critical ordering: addShoferToStack / in-place swap below must see a
 		// task whose messages are already non-empty.
-		await task.preloadShoferMessages()
+		//
+		// T1.B: When `maxMessages` is set, read only the tail of the JSONL
+		// logs. This avoids reading + parsing the full history for long tasks
+		// on cold switch.
+		await task.preloadShoferMessages(options?.maxMessages)
 
 		if (isRehydratingCurrentTask) {
 			// Replace the current task in-place to avoid UI flicker
@@ -2764,7 +2768,10 @@ export class ShoferProvider
 
 	// Task history
 
-	async getTaskWithId(id: string): Promise<{
+	async getTaskWithId(
+		id: string,
+		opts?: { skipApiHistory?: boolean },
+	): Promise<{
 		historyItem: HistoryItem
 		taskDirPath: string
 		apiConversationHistoryFilePath: string
@@ -2779,27 +2786,34 @@ export class ShoferProvider
 		}
 
 		const { getTaskDirectoryPath } = await import("../../utils/storage")
-		const { readApiMessages } = await import("../task-persistence/apiMessages")
 		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 		const taskDirPath = await getTaskDirectoryPath(globalStoragePath, id)
 		const apiConversationHistoryFilePath = path.join(taskDirPath, GlobalFileNames.apiConversationHistory)
 		const uiMessagesFilePath = path.join(taskDirPath, GlobalFileNames.uiMessages)
 
 		let apiConversationHistory: Anthropic.MessageParam[] = []
-		try {
-			apiConversationHistory = await readApiMessages({ taskId: id, globalStoragePath })
-		} catch (error) {
-			webviewLog.warn(
-				`[getTaskWithId] api_conversation_history.jsonl corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
-			)
-		}
-		// An empty API history is only anomalous for LLM-backed tasks. A workflow
-		// orchestrator (`isWorkflow`) drives no LLM of its own — its observable
-		// history lives entirely in `ui_messages.jsonl` as the say/ask stream — so
-		// an empty `api_conversation_history.jsonl` is expected, not a fault. Only
-		// warn for tasks that should have API turns.
-		if (apiConversationHistory.length === 0 && !historyItem.isWorkflow) {
-			webviewLog.warn(`[getTaskWithId] api_conversation_history.jsonl missing or empty for task ${id}`)
+
+		// T1.A: Skip the full api_conversation_history.jsonl read when the caller
+		// only needs the historyItem (e.g. showTaskWithId, which immediately
+		// re-reads the same file in preloadShoferMessages). This avoids a
+		// 100%-wasted read + parse + dedupe on every cold task switch.
+		if (!opts?.skipApiHistory) {
+			const { readApiMessages } = await import("../task-persistence/apiMessages")
+			try {
+				apiConversationHistory = await readApiMessages({ taskId: id, globalStoragePath })
+			} catch (error) {
+				webviewLog.warn(
+					`[getTaskWithId] api_conversation_history.jsonl corrupted for task ${id}, returning empty history: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+			// An empty API history is only anomalous for LLM-backed tasks. A workflow
+			// orchestrator (`isWorkflow`) drives no LLM of its own — its observable
+			// history lives entirely in `ui_messages.jsonl` as the say/ask stream — so
+			// an empty `api_conversation_history.jsonl` is expected, not a fault. Only
+			// warn for tasks that should have API turns.
+			if (apiConversationHistory.length === 0 && !historyItem.isWorkflow) {
+				webviewLog.warn(`[getTaskWithId] api_conversation_history.jsonl missing or empty for task ${id}`)
+			}
 		}
 
 		return {
@@ -2831,11 +2845,27 @@ export class ShoferProvider
 		return { historyItem, aggregatedCosts }
 	}
 
+	/**
+	 * Number of tail messages to read on cold task-switch (T1.B).
+	 * Capped at this value to bound read+parse+dedupe cost on rehydrate.
+	 * When exceeded, `hasMoreShoferMessages` is set on the Task and a
+	 * "Load older messages" sentinel is rendered in the webview.
+	 */
+	private static readonly COLD_LOAD_TAIL_WINDOW = 200
+
 	async showTaskWithId(id: string, options?: { keepCurrentTask?: boolean }) {
 		if (id !== this.getCurrentTask()?.taskId) {
 			// Non-current task.
-			const { historyItem } = await this.getTaskWithId(id)
-			await this.createTaskWithHistoryItem(historyItem, { keepCurrentTask: options?.keepCurrentTask }) // Clears existing task unless keepCurrentTask is true.
+			// T1.A: skipApiHistory avoids a 100%-wasted read+parse+dedupe of
+			// api_conversation_history.jsonl — preloadShoferMessages re-reads it
+			// moments later in createTaskWithHistoryItem.
+			// T1.B: maxMessages limits the cold-load read to the tail of
+			// the JSONL logs so we don't parse thousands of messages on switch.
+			const { historyItem } = await this.getTaskWithId(id, { skipApiHistory: true })
+			await this.createTaskWithHistoryItem(historyItem, {
+				keepCurrentTask: options?.keepCurrentTask,
+				maxMessages: ShoferProvider.COLD_LOAD_TAIL_WINDOW,
+			})
 		}
 
 		// LLM hint: Push the new task's (already-preloaded) shoferMessages to
@@ -2850,6 +2880,62 @@ export class ShoferProvider
 		await this.postInitState()
 
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+	}
+
+	/**
+	 * T1.B: Load the full message log from disk and merge the older
+	 * (pre-window) messages into the in-memory array. Batches the older
+	 * page into a single IPC delta so the webview gets one setState and
+	 * the message order is preserved.
+	 *
+	 * After loading, `hasMoreShoferMessages` is set to `false` since
+	 * the full history is now resident.
+	 */
+	async loadOlderShoferMessages(): Promise<void> {
+		const task = this.getCurrentTask()
+		if (!task || !task.hasMoreShoferMessages) {
+			return
+		}
+		const taskId = task.taskId
+
+		// Load the full deduped message log.
+		const allMessages = await task.getSavedShoferMessages()
+
+		// The in-memory window is the tail of the full array.
+		// The prefix (olderMessages) and the in-memory tail are
+		// disjoint by construction: getSavedShoferMessages dedupes by
+		// ts and the slice boundary aligns to the window start.
+		// No host-side dedup against the tail is needed.
+		const loadedCount = task.shoferMessages.length
+		const olderMessages = allMessages.slice(0, Math.max(0, allMessages.length - loadedCount))
+
+		// Merge: keep any messages that landed in-memory since the
+		// read started (appends during load are rare but possible).
+		// Union by ts, preserving on-disk order, then appending any
+		// newly-seen messages at the tail.
+		const tailSet = new Set(task.shoferMessages.map((m) => m.ts))
+		const newTail = allMessages
+			.slice(Math.max(0, allMessages.length - loadedCount))
+			.filter((m) => !tailSet.has(m.ts))
+		task.shoferMessages = [
+			...allMessages.slice(0, Math.max(0, allMessages.length - loadedCount)),
+			...task.shoferMessages,
+			...newTail,
+		]
+		task.hasMoreShoferMessages = false
+
+		// Batch the older page in one IPC round-trip — the webview
+		// does one setState with [...olderMessages, ...prev].
+		if (olderMessages.length > 0) {
+			await this.postMessageToWebview({
+				type: "shoferMessagesPrepended",
+				shoferMessages: olderMessages,
+				taskId,
+			})
+		}
+
+		// Hide the sentinel.
+		await this.postTaskStateUpdate({ hasMoreShoferMessages: false })
 	}
 
 	async exportTaskWithId(id: string) {
@@ -3096,7 +3182,12 @@ export class ShoferProvider
 		updates: Partial<
 			Pick<
 				ExtensionState,
-				"currentTaskId" | "currentTaskItem" | "messageQueue" | "parallelTasks" | "focusedTaskId"
+				| "currentTaskId"
+				| "currentTaskItem"
+				| "messageQueue"
+				| "parallelTasks"
+				| "focusedTaskId"
+				| "hasMoreShoferMessages"
 			>
 		>,
 	): void {
@@ -3383,6 +3474,9 @@ export class ShoferProvider
 				}
 				return msgs
 			})(),
+			// T1.B: signal the webview that older messages exist on disk
+			// and a "Load older messages" sentinel should be shown.
+			hasMoreShoferMessages: currentTask?.hasMoreShoferMessages ?? false,
 			currentTaskTodos: currentTask?.todoList || [],
 			messageQueue: currentTask?.messageQueueService?.messages ?? [],
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),

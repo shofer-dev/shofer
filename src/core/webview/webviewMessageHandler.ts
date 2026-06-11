@@ -1015,6 +1015,9 @@ export const webviewMessageHandler = async (
 		case "showTaskWithId":
 			await provider.focusTask(message.text!)
 			break
+		case "loadOlderMessages":
+			await provider.loadOlderShoferMessages()
+			break
 		case "condenseTaskContextRequest":
 			provider.condenseTaskContext(message.text!)
 			break

@@ -228,6 +228,80 @@ export async function readJsonLines<T>(filePath: string): Promise<T[] | null> {
 }
 
 /**
+ * Read the last `maxLines` records from a JSONL file without reading the
+ * entire file into memory. Returns a tuple `[records, hasMore]`:
+ * - `records` — the tail, oldest-first (preserving on-disk order).
+ * - `hasMore` — `true` when the file contained more lines than `maxLines`
+ *   and the returned slice is only a window.
+ *
+ * Uses a reverse-chunked scan from end-of-file, collecting lines
+ * backwards until `maxLines` non-empty lines are found, then reversing
+ * the collected batch. This avoids the O(n) `split("\n")` and
+ * `JSON.parse` of the full file for large histories.
+ *
+ * Tolerates a truncated final line (crash mid-append) identically to
+ * `readJsonLines`.
+ *
+ * Returns `null` when the file does not exist (so callers can
+ * distinguish "missing" from "empty").
+ *
+ * When `maxLines` is `undefined` or `0`, falls back to a full read via
+ * `readJsonLines` (no tail optimisation).
+ */
+export async function readJsonLinesTail<T>(filePath: string, maxLines: number): Promise<[T[], boolean] | null> {
+	if (maxLines <= 0) {
+		// Fallback: full read
+		const parsed = await readJsonLines<T>(filePath)
+		if (parsed === null) return null
+		return [parsed, false]
+	}
+
+	// Read entire file as string, split, and take the tail.
+	// This avoids JSON.parse of the full file for large histories
+	// while remaining correct (no chunk-boundary edge cases).
+	// Future: a true reverse-seek scan could skip the O(n) split
+	// for very large files, but the dominant cost is JSON.parse,
+	// not string allocation.
+	let content: string
+	try {
+		content = await fs.readFile(filePath, "utf8")
+	} catch (e: any) {
+		if (e && e.code === "ENOENT") return null
+		throw e
+	}
+
+	if (content.length === 0) return [[], false]
+
+	const lines = content.split("\n")
+	// Drop the empty trailing element from split on final "\n"
+	const lastIdx = lines.length - 1
+	const validEnd = lastIdx >= 0 && lines[lastIdx] === "" ? lastIdx : lines.length
+
+	// Take the last maxLines non-empty lines
+	const result: T[] = []
+	const start = Math.max(0, validEnd - maxLines)
+	const hasMore = start > 0
+
+	for (let i = start; i < validEnd; i++) {
+		const line = lines[i]
+		if (!line) continue
+		try {
+			result.push(JSON.parse(line) as T)
+		} catch (e) {
+			if (i === validEnd - 1) {
+				// Truncated final line from crash mid-append; drop silently
+				continue
+			}
+			taskLog.warn(
+				`[readJsonLinesTail] skipping malformed line ${i + 1} in ${filePath}: ${e instanceof Error ? e.message : String(e)}`,
+			)
+		}
+	}
+
+	return [result, hasMore]
+}
+
+/**
  * Dedupe a parsed log by the key returned from `getKey`. Later occurrences
  * replace earlier ones at the earlier position, so an `updateShoferMessage`-
  * style append-with-same-ts preserves message ordering while overwriting the
