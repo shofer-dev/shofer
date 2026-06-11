@@ -526,10 +526,18 @@ export function useScrollLifecycle({
 				: !isAtBottom && !isHydratingRef.current && !streamingSafetyNet
 			setShowScrollToBottom(shouldShow)
 
-			// --- Phase-transition and auto-scroll logic (unchanged) ---
+			// --- Phase-transition and auto-scroll logic ---
 
-			// Strict: while in USER_BROWSING_HISTORY, never auto-scroll or re-anchor
 			if (currentPhase === "USER_BROWSING_HISTORY") {
+				// Re-engage anchored follow when the user manually scrolls
+				// back to the bottom — but NOT during the brief disengage
+				// immune window (set by enterUserBrowsingHistory). Without
+				// this guard an in-flight programmatic scroll-to-bottom
+				// (e.g. hydration) would repin the user right after they
+				// escaped.
+				if (isAtBottom && !userDisengagedRef.current) {
+					enterAnchoredFollowing("user-scrolled-to-bottom")
+				}
 				return
 			}
 
