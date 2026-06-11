@@ -239,6 +239,27 @@ The trigger is always rendered (it does not auto-hide on a single-worktree repo)
 
 i18n translations: [`webview-ui/src/i18n/locales/en/worktreeStatus.json`](../webview-ui/src/i18n/locales/en/worktreeStatus.json)
 
+## Built-in Worktree Slash Commands
+
+Six worktree merge/rebase/cleanup commands ship as **built-in** slash commands in [`built-in-commands.ts`](../src/services/command/built-in-commands.ts), alongside `init` and the `migrate-from-*` commands. They are always available regardless of whether the project has a `.shofer/commands/` directory, and are invocable by the agent via the `run_slash_command` tool (gated behind the `runSlashCommand` experiment).
+
+| Command                   | Description                                                                         | Cleanup? |
+| ------------------------- | ----------------------------------------------------------------------------------- | -------- |
+| `merge-worktree`          | Merge worktree branch into base with a merge commit (no cleanup)                    | ❌       |
+| `merge-worktree-cleanup`  | Merge worktree branch into base, then delete branch + worktree directory            | ✅       |
+| `rebase-worktree`         | Rebase worktree branch onto base, fast-forward merge (no cleanup)                   | ❌       |
+| `rebase-worktree-cleanup` | Rebase worktree branch onto base, fast-forward merge, then delete branch + worktree | ✅       |
+| `dryrun-rebase-worktree`  | Preview rebase conflicts without committing changes                                 | ❌       |
+| `worktree-status`         | Detailed status report for current worktree branch                                  | N/A      |
+
+**Behavior shared by all merge/rebase commands:**
+
+- Auto-detect the base branch (`main` or `master`, preferring `main`) and the source branch (the current worktree branch, typically `shofer-<suffix>`).
+- Attempt auto-resolution of conflicts first, but **bail out** on ambiguous conflicts rather than guessing, presenting clear next-step recommendations.
+- **Never push to origin** — pushing is left to the user.
+
+**Precedence.** Per the priority chain in [`commands.ts`](../src/services/command/commands.ts) (`project > global > built-in`), a project-level `.shofer/commands/<name>.md` overrides the built-in of the same name. Projects without `.shofer/commands/` get these as sensible defaults out of the box; projects with custom merge logic are unaffected.
+
 ## Gaps, Issues & Areas for Improvement
 
 This section catalogues discrepancies, omissions, and enhancement opportunities discovered during doc-to-source verification.

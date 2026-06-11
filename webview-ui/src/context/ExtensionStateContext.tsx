@@ -182,6 +182,14 @@ export interface ExtensionStateContextType extends ExtensionState {
 	 */
 	worktreeExplicitOptOut: boolean
 	setWorktreeExplicitOptOut: (value: boolean) => void
+	/**
+	 * Name of a workflow being launched. Set by LauncherView when the user
+	 * picks a workflow; cleared when a task arrives in the webview (signaling
+	 * the workflow has been created). WorktreeIndicator shows a spinner with
+	 * this name while pending.
+	 */
+	pendingWorkflowName: string | null
+	setPendingWorkflowName: (value: string | null) => void
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -346,6 +354,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
 	const [pendingWorktreeDir, setPendingWorktreeDir] = useState<string | null>(null)
 	const [worktreeExplicitOptOut, setWorktreeExplicitOptOut] = useState(false)
+	const [pendingWorkflowName, setPendingWorkflowName] = useState<string | null>(null)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
 
 	const setListApiConfigMeta = useCallback(
@@ -818,6 +827,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			setPendingWorktreeDir,
 			worktreeExplicitOptOut,
 			setWorktreeExplicitOptOut,
+			pendingWorkflowName,
+			setPendingWorkflowName,
 			includeCurrentTime: state.includeCurrentTime ?? true,
 			setIncludeCurrentTime: (value) => setState((prevState) => ({ ...prevState, includeCurrentTime: value })),
 			includeCurrentCost: state.includeCurrentCost ?? true,
@@ -847,6 +858,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			loadedSkills,
 			pendingWorktreeDir,
 			worktreeExplicitOptOut,
+			pendingWorkflowName,
 			setApiConfiguration,
 			setListApiConfigMeta,
 		],

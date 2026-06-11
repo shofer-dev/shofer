@@ -32,8 +32,8 @@ export const WorktreeIndicator = () => {
 		currentTaskItem,
 		pendingWorktreeDir,
 		setPendingWorktreeDir,
-		worktreeExplicitOptOut,
-		setWorktreeExplicitOptOut,
+		pendingWorkflowName,
+		setPendingWorkflowName,
 	} = useExtensionState()
 	const [open, setOpen] = useState(false)
 	const [modalOpen, setModalOpen] = useState(false)
@@ -110,12 +110,18 @@ export const WorktreeIndicator = () => {
 		!availability.isMultiRoot &&
 		!availability.isSubfolder
 
-	// "New worktree" default: when no task is active, no pending worktree dir
-	// is set, the user hasn't explicitly opted out to "Current branch", and the
-	// control is available, the default state is "New worktree" rather than
-	// "Current branch".
-	const showNewWorktreeDefault =
-		!hasActiveTask && pendingWorktreeDir === null && !worktreeExplicitOptOut && isAvailable
+	// When no task is active and no worktree is pending, the chip shows the
+	// current git branch. The user can opt into "New worktree" via the popover.
+	const showNewWorktreeDefault = false
+
+	// When a workflow is being launched (worktree creation in progress), clear
+	// pendingWorkflowName as soon as we detect a task is active (the workflow
+	// has landed in the webview).
+	useEffect(() => {
+		if (pendingWorkflowName && (hasActiveTask || currentTaskItem)) {
+			setPendingWorkflowName(null)
+		}
+	}, [pendingWorkflowName, hasActiveTask, currentTaskItem, setPendingWorkflowName])
 
 	const disabledTooltip = !availability.hasWorkspaceFolder
 		? t("worktreeStatus:disabledNoFolder")
@@ -168,14 +174,6 @@ export const WorktreeIndicator = () => {
 		[hasActiveTask, setPendingWorktreeDir],
 	)
 
-	// Select "Current branch" — opts out of worktree isolation.
-	const handleSelectCurrentBranch = useCallback(() => {
-		setOpen(false)
-		if (hasActiveTask) return
-		setPendingWorktreeDir(null)
-		setWorktreeExplicitOptOut(true)
-	}, [hasActiveTask, setPendingWorktreeDir, setWorktreeExplicitOptOut])
-
 	const handleCreate = useCallback(() => {
 		setOpen(false)
 		setModalOpen(true)
@@ -210,9 +208,11 @@ export const WorktreeIndicator = () => {
 						)}>
 						<GitBranch className="w-3 h-3 shrink-0" />
 						<span className="truncate">
-							{showNewWorktreeDefault
-								? t("worktreeStatus:defaultNewWorktree")
-								: selectedWorktree?.branch || t("worktrees:noBranch")}
+							{pendingWorkflowName
+								? `starting ${pendingWorkflowName}…`
+								: showNewWorktreeDefault
+									? t("worktreeStatus:defaultNewWorktree")
+									: selectedWorktree?.branch || t("worktrees:noBranch")}
 						</span>
 						<ChevronDown className="size-2.5 shrink-0 opacity-70" />
 					</PopoverTrigger>
@@ -227,9 +227,11 @@ export const WorktreeIndicator = () => {
 						<div className="px-3 pt-3 pb-2">
 							<h4 className="text-sm font-semibold m-0 flex items-center gap-2">
 								<GitBranch className="w-3.5 h-3.5" />
-								{showNewWorktreeDefault
-									? t("worktreeStatus:defaultNewWorktree")
-									: selectedWorktree?.branch || t("worktrees:noBranch")}
+								{pendingWorkflowName
+									? `starting ${pendingWorkflowName}…`
+									: showNewWorktreeDefault
+										? t("worktreeStatus:defaultNewWorktree")
+										: selectedWorktree?.branch || t("worktrees:noBranch")}
 							</h4>
 						</div>
 
@@ -308,7 +310,7 @@ export const WorktreeIndicator = () => {
 							</div>
 						)}
 
-						{/* "New worktree" as first/default option (pre-task only) */}
+						{/* "New worktree" option (pre-task only) */}
 						{!hasActiveTask && (
 							<>
 								<div className="border-t border-vscode-dropdown-border" />
@@ -323,34 +325,6 @@ export const WorktreeIndicator = () => {
 									)}>
 									<Plus className="w-3.5 h-3.5 shrink-0" />
 									<span>{t("worktreeStatus:createNew")}</span>
-									{showNewWorktreeDefault && (
-										<Check className="w-3.5 h-3.5 shrink-0 opacity-80 ml-auto" />
-									)}
-								</button>
-							</>
-						)}
-
-						{/* "Current branch" opt-out option (pre-task only) */}
-						{!hasActiveTask && (
-							<>
-								<div className="border-t border-vscode-dropdown-border" />
-								<button
-									type="button"
-									onClick={handleSelectCurrentBranch}
-									className={cn(
-										"w-full flex items-center gap-2 px-3 py-2 text-sm text-left",
-										"bg-transparent border-none cursor-pointer",
-										"text-vscode-foreground hover:bg-vscode-list-hoverBackground",
-										"focus:outline-none focus-visible:bg-vscode-list-hoverBackground",
-									)}>
-									<GitBranch className="w-3.5 h-3.5 shrink-0 opacity-80" />
-									<span className="flex-1">{t("worktreeStatus:currentBranch")}</span>
-									{!showNewWorktreeDefault && pendingWorktreeDir === null && !selectedWorktree && (
-										<Check className="w-3.5 h-3.5 shrink-0 opacity-80" />
-									)}
-									{!showNewWorktreeDefault && selectedWorktree?.isCurrent && (
-										<Check className="w-3.5 h-3.5 shrink-0 opacity-80" />
-									)}
 								</button>
 							</>
 						)}

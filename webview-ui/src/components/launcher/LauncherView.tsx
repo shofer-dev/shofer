@@ -80,7 +80,7 @@ const LauncherCard = ({
 
 export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps) => {
 	const { t } = useAppTranslation()
-	const { setMode } = useExtensionState()
+	const { setMode, setPendingWorkflowName } = useExtensionState()
 	const [workflows, setWorkflows] = useState<LauncherWorkflow[]>([])
 	const [workflowsLoaded, setWorkflowsLoaded] = useState(false)
 
@@ -112,10 +112,11 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 
 	const handlePickWorkflow = useCallback(
 		(name: string) => {
+			setPendingWorkflowName(name)
 			vscode.postMessage({ type: "createWorkflow", flowName: name })
 			onClose()
 		},
-		[onClose],
+		[onClose, setPendingWorkflowName],
 	)
 
 	const title = useMemo(() => {
