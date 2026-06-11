@@ -39,6 +39,22 @@ import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-lim
 import type { SkillMetadata } from "./skills.js"
 import type { WorktreeIncludeStatus, WorktreeStatus } from "./worktree.js"
 
+/** Workflow metadata for the launcher UI — mirrors FlowDecl + FlowParam fields from the Slang AST. */
+export interface LauncherWorkflow {
+	/** Machine identifier — used for `createWorkflow` IPC. */
+	name: string
+	/** Human-readable title for the card. Falls back to `name` if unset. */
+	title: string
+	/** Markdown description. Rendered as secondary text in the card. */
+	description?: string
+	/** Icon key (e.g. "rocket", "gear", "search", "code"). Mapped to lucide icon in the webview. */
+	icon?: string
+	/** Agent names extracted from `AgentDecl` nodes in the flow body. */
+	agents: string[]
+	/** Input parameters with optional descriptions. */
+	params: Array<{ name: string; type: string; description?: string }>
+}
+
 /**
  * ExtensionMessage
  * Extension -> Webview | CLI
@@ -242,10 +258,7 @@ export interface ExtensionMessage {
 		childrenCost: number
 	}
 	// Workflow response properties
-	workflows?: Array<{
-		name: string
-		params: Array<{ name: string; type: string }>
-	}>
+	workflows?: Array<LauncherWorkflow>
 	// Parallel task response properties
 	parallelTasks?: Array<{
 		id: string
@@ -442,10 +455,7 @@ export type ExtensionState = Pick<
 	renderContext: "sidebar" | "editor"
 
 	// Workflow management
-	workflows?: Array<{
-		name: string
-		params: Array<{ name: string; type: string }>
-	}>
+	workflows?: Array<LauncherWorkflow>
 	// Parallel task management
 	parallelTasks?: Array<{
 		id: string

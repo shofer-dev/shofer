@@ -6,7 +6,12 @@
 	"newWorkflow": {
 		"title": "Choose a workflow",
 		"loading": "Discovering workflows…",
-		"empty": "No workflows found. Add a .slang flow under .shofer/workflows/."
+		"empty": "No workflows found. Add a .slang flow under .shofer/workflows/.",
+		"agentsCount": "{{count}} agent",
+		"agentsCount_plural": "{{count}} agents",
+		"noAgents": "No agents",
+		"paramsCount": "{{count}} parameter",
+		"paramsCount_plural": "{{count}} parameters"
 	},
 	"close": "Close"
 }

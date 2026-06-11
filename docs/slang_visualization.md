@@ -325,3 +325,7 @@ provenance.
 > in `_render`). When a file has any parse error, the static-analysis warnings are
 > suppressed and only the parse errors are shown. This is reasonable but worth
 > stating in the [Rendering Pipeline](#rendering-pipeline) section.
+
+### Launcher Metadata Parity
+
+The workflow launcher ([`LauncherView.tsx`](../webview-ui/src/components/launcher/LauncherView.tsx)) now renders the same rich metadata that the Slang custom editor visualizes: `flow.title`, `flow.description`, `flow.icon` (mapped to lucide components), agent names, and param descriptions. The backend [`listWorkflows` handler](../src/core/webview/webviewMessageHandler.ts:4262) extracts these fields from the Slang AST and ships them to the webview as a typed `LauncherWorkflow` interface (defined in [`@shofer/types`](../packages/types/src/vscode-extension-host.ts:42)). The icon map in the webview (`ICON_MAP`: `Record<string, LucideIcon>`) mirrors the editor's `iconToEmoji()` map; both should be kept in sync when new icon keys are added.

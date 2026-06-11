@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ListChecks, Rocket, X } from "lucide-react"
+import { ListChecks, Rocket, Beaker, Code, Cog, Search, Shield, Star, X, type LucideIcon } from "lucide-react"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { useExtensionState } from "@src/context/ExtensionStateContext"
-import type { Mode } from "@shofer/shared/modes"
 import { Tab, TabContent, TabHeader } from "../common/Tab"
 
 /**
@@ -24,10 +22,23 @@ import { Tab, TabContent, TabHeader } from "../common/Tab"
  * the webview back to the chat surface, where live status renders).
  */
 
-/** A discovered .slang workflow as reported by the host `workflowsList` message. */
+/**
+ * A discovered .slang workflow as reported by the host `workflowsList` message.
+ * Mirrors the `LauncherWorkflow` type in @shofer/types.
+ */
 interface LauncherWorkflow {
+	/** Machine identifier — used for `createWorkflow` IPC. */
 	name: string
-	params: Array<{ name: string; type: string }>
+	/** Human-readable title for the card. Falls back to `name` if unset. */
+	title: string
+	/** Markdown description. Rendered as secondary text in the card. */
+	description?: string
+	/** Icon key (e.g. "rocket", "gear", "search", "code"). Mapped to lucide icon. */
+	icon?: string
+	/** Agent names extracted from `AgentDecl` nodes in the flow body. */
+	agents: string[]
+	/** Input parameters with optional descriptions. */
+	params: Array<{ name: string; type: string; description?: string }>
 }
 
 /** A selectable mode card in the "New Task" stage. */
@@ -52,16 +63,30 @@ interface LauncherViewProps {
 
 type Stage = "task" | "workflow"
 
-/** A single clickable launcher card with an icon, title and optional subtitle. */
+/** Map of .slang icon keys → lucide-react components. */
+const ICON_MAP: Record<string, LucideIcon> = {
+	rocket: Rocket,
+	beaker: Beaker,
+	code: Code,
+	cog: Cog,
+	gear: Cog,
+	search: Search,
+	shield: Shield,
+	star: Star,
+}
+
+/** Single clickable launcher card with an icon, title and optional subtitle/body. */
 const LauncherCard = ({
 	icon,
 	title,
 	subtitle,
+	body,
 	onClick,
 }: {
 	icon: React.ReactNode
 	title: string
 	subtitle?: string
+	body?: string
 	onClick: () => void
 }) => (
 	<button
@@ -74,13 +99,17 @@ const LauncherCard = ({
 			{subtitle ? (
 				<span className="mt-0.5 line-clamp-2 text-sm text-vscode-descriptionForeground">{subtitle}</span>
 			) : null}
+			{body ? (
+				<span className="mt-1 line-clamp-3 text-xs text-vscode-descriptionForeground whitespace-pre-line">
+					{body}
+				</span>
+			) : null}
 		</span>
 	</button>
 )
 
 export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps) => {
 	const { t } = useAppTranslation()
-	const { setMode, setPendingWorkflowName } = useExtensionState()
 	const [workflows, setWorkflows] = useState<LauncherWorkflow[]>([])
 	const [workflowsLoaded, setWorkflowsLoaded] = useState(false)
 
@@ -100,23 +129,18 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 
 	const handlePickMode = useCallback(
 		(slug: string) => {
-			// The pre-task mode is a webview-owned tier-1 draft: set it locally so
-			// the chat dropdown reflects the pick, then ask the host to reset to a
-			// fresh chat surface. The draft is forwarded with `newTask` on send.
-			setMode(slug as Mode)
-			vscode.postMessage({ type: "launchTask", text: slug })
+			vscode.postMessage({ type: "launchTask", mode: slug })
 			onClose()
 		},
-		[onClose, setMode],
+		[onClose],
 	)
 
 	const handlePickWorkflow = useCallback(
 		(name: string) => {
-			setPendingWorkflowName(name)
 			vscode.postMessage({ type: "createWorkflow", flowName: name })
 			onClose()
 		},
-		[onClose, setPendingWorkflowName],
+		[onClose],
 	)
 
 	const title = useMemo(() => {
@@ -164,19 +188,55 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 					) : workflows.length === 0 ? (
 						<p className="text-sm text-vscode-descriptionForeground">{t("launcher:newWorkflow.empty")}</p>
 					) : (
-						workflows.map((flow) => (
-							<LauncherCard
-								key={flow.name}
-								icon={<Rocket className="size-5" />}
-								title={flow.name}
-								subtitle={
-									flow.params.length > 0
-										? flow.params.map((p) => `${p.name}: ${p.type}`).join(", ")
-										: undefined
-								}
-								onClick={() => handlePickWorkflow(flow.name)}
-							/>
-						))
+						workflows.map((flow) => {
+							// Resolve icon: lookup in map, fall back to Rocket
+							const IconComponent = flow.icon ? (ICON_MAP[flow.icon] ?? Rocket) : Rocket
+
+							// Build subtitle: flow name (muted) + agent count badge
+							const agentLabel =
+								flow.agents.length === 0
+									? t("launcher:newWorkflow.noAgents")
+									: flow.agents.length === 1
+										? t("launcher:newWorkflow.agentsCount", { count: 1 })
+										: t("launcher:newWorkflow.agentsCount_plural", { count: flow.agents.length })
+
+							// Build params subtitle: list param names/types with descriptions as tooltip-style text
+							const paramsSubtitle =
+								flow.params.length > 0
+									? flow.params
+											.map((p) => {
+												const desc = p.description ? ` — ${p.description}` : ""
+												return `${p.name}: ${p.type}${desc}`
+											})
+											.join(", ")
+									: undefined
+
+							// Number of params label
+							const paramsLabel =
+								flow.params.length > 0
+									? flow.params.length === 1
+										? t("launcher:newWorkflow.paramsCount", { count: 1 })
+										: t("launcher:newWorkflow.paramsCount_plural", { count: flow.params.length })
+									: undefined
+
+							// Subtitle line: name (muted) | N agents | N params
+							const subtitleParts = [flow.name, agentLabel]
+							if (paramsLabel) {
+								subtitleParts.push(paramsLabel)
+							}
+							const cardSubtitle = subtitleParts.join(" • ")
+
+							return (
+								<LauncherCard
+									key={flow.name}
+									icon={<IconComponent className="size-5" />}
+									title={flow.title}
+									subtitle={cardSubtitle}
+									body={paramsSubtitle || flow.description || undefined}
+									onClick={() => handlePickWorkflow(flow.name)}
+								/>
+							)
+						})
 					)
 				) : null}
 			</TabContent>

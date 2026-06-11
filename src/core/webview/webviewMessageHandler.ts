@@ -4295,15 +4295,39 @@ export const webviewMessageHandler = async (
 			try {
 				const { discoverWorkflows, parseSlang } = await import("../workflow/index")
 				const workflows = await discoverWorkflows(provider.cwd)
-				// Parse each workflow to extract metadata
+				// Parse each workflow to extract full metadata (title, description,
+				// icon, agents, param descriptions) from the Slang AST.
 				const parsedWorkflows = Array.from(workflows.entries()).map(([name, source]) => {
 					try {
 						const { ast } = parseSlang(source)
 						const flow = ast.flows[0]
-						const params = flow?.params?.map((p: any) => ({ name: p.name, type: p.paramType })) || []
-						return { name, params }
+						if (!flow) {
+							return { name, title: name, description: "", icon: undefined, agents: [], params: [] }
+						}
+
+						// Extract agent names from AgentDecl nodes in the flow body
+						const agents = (flow.body ?? [])
+							.filter((b: any) => b.type === "AgentDecl")
+							.map((a: any) => a.name)
+
+						// Include param descriptions — they're already parsed by the AST
+						const params = (flow.params ?? []).map((p: any) => ({
+							name: p.name,
+							type: p.paramType,
+							description: p.description,
+						}))
+
+						return {
+							name, // machine identifier (for createWorkflow lookup)
+							title: flow.title || name, // human-readable (fall back to name)
+							description: flow.description || "",
+							icon: flow.icon, // e.g. "rocket", "gear", "search", "code"
+							agents,
+							params,
+						}
 					} catch {
-						return { name, params: [] as { name: string; type: string }[] }
+						// Graceful fallback for unparseable .slang files
+						return { name, title: name, description: "", icon: undefined, agents: [], params: [] }
 					}
 				})
 				await provider.postMessageToWebview({

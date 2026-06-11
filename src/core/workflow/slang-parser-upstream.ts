@@ -188,6 +188,22 @@ class Parser {
 
 		const body = this.parseFlowBody()
 		const end = this.expect(TokenType.RBrace)
+
+		// Attach descriptions declared via `param <name> { description: ... }` body
+		// blocks onto the matching typed FlowParam, so consumers (launcher UI, the
+		// interpreter) can read `param.description` directly rather than re-scanning
+		// the body for ParamMetaDecl nodes.
+		if (params) {
+			for (const item of body) {
+				if (item.type === "ParamMetaDecl") {
+					const target = params.find((p) => p.name === item.name)
+					if (target) {
+						target.description = item.description
+					}
+				}
+			}
+		}
+
 		return { type: "FlowDecl", name, params, body, title, description, icon, span: this.spanFrom(start, end) }
 	}
 
