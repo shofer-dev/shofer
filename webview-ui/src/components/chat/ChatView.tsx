@@ -2091,7 +2091,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							itemContent={itemContent}
 							followOutput={followOutputCallback}
 							atBottomStateChange={atBottomStateChangeCallback}
-							atBottomThreshold={1}
+							atBottomThreshold={16}
 							components={{
 								Header: () =>
 									hasMoreShoferMessages ? (

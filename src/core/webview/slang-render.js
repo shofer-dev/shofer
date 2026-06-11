@@ -61,7 +61,7 @@ function renderMarkdown(text) {
 function safeRender(payload) {
 	try {
 		if (payload) _lastPayload = payload
-		render(_lastPayload)
+		handleRender(_lastPayload)
 	} catch (e) {
 		var app = document.getElementById("app")
 		if (app) {
@@ -81,6 +81,17 @@ window.switchView = function (viewName) {
 	_currentView = viewName
 	safeRender(null)
 }
+
+// ─── postMessage listener for live-refresh payloads ──────────────────
+// The provider sends new payloads via postMessage on every document change
+// after the initial HTML load.  This preserves _currentView, zoom, and drag
+// state instead of rebuilding the entire webview DOM on every keystroke.
+window.addEventListener("message", function (event) {
+	var msg = event.data
+	if (msg && msg.type === "render") {
+		safeRender(msg)
+	}
+})
 
 function exprStr(e) {
 	if (!e) return "?"
@@ -1494,7 +1505,7 @@ function updateConnectedEdges(agent) {
 }
 
 // ── main orchestration layout router ──
-function render(payload) {
+function handleRender(payload) {
 	// CSP debugging: warn in console so devs know where to look if interactivity breaks
 	console.log("[Slang] Render starting \u2014 if tab buttons don\u2019t work, check CSP blocks inline handlers")
 
