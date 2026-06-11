@@ -122,3 +122,7 @@ head -5 /tmp/shofer_logs/_output-schema.log
 Known issue: test #8 (session-resume) fails on both mock and DS. This is an
 infrastructure limitation in CLI headless mode (`viewLaunched` is `false`),
 not a regression.
+
+## References
+
+- docs/test_harness.md
