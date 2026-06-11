@@ -103,7 +103,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		taskNotifications,
 		pendingWorktreeDir,
 		setPendingWorktreeDir,
-		worktreeExplicitOptOut,
 		hasMoreShoferMessages,
 	} = useExtensionState()
 
@@ -977,17 +976,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					// On the home screen the user may have chosen a target worktree
 					// via WorktreeIndicator. Forward it so the new task spawns
 					// scoped to that worktree's directory; clear after consuming.
-					//
-					// When the user never explicitly picked a worktree AND did not
-					// explicitly opt out to "Current branch", tell the host to
-					// auto-create a worktree before starting the task.
-					const autoCreateWorktree = pendingWorktreeDir === null && !worktreeExplicitOptOut
 					vscode.postMessage({
 						type: "newTask",
 						text,
 						images,
 						worktreeDir: pendingWorktreeDir ?? undefined,
-						autoCreateWorktree,
 						// Pre-task tier-1 selections from the chat dropdown. The host
 						// seeds the new task with these and falls back to the global
 						// Settings defaults when absent.
@@ -1069,7 +1062,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			apiConfiguration?.apiProvider,
 			pendingWorktreeDir,
 			setPendingWorktreeDir,
-			worktreeExplicitOptOut,
 			mode,
 			currentApiConfigName,
 		], // messagesRef and shoferAskRef are stable
