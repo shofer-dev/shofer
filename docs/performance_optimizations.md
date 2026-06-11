@@ -812,28 +812,28 @@ can be extended with compaction frequency/byte-volume and
 
 ---
 
-## Future Opportunities (2026-06-10) — Not Yet Triaged
+## Future Opportunities (2026-06-10) — All Implemented (verified 2026-06-11)
 
 > These items were surfaced during a 2026-06-10 review pass. Unlike H0–H14
 > (persistence + IPC/state-broadcast axes), they cover two hot paths the
 > existing plan does not address: the **per-API-request build path** (host) and
 > **React render hygiene** in the webview (beyond the H10 consolidation work).
-> All are **❌ Open**. Per the doc's "instrument first" discipline, profile each
-> (render-count profiler for the webview items; `IPC`/`Webview` log categories
-> and per-request timing for the host items) before committing. Line-number
+> **All H15–H22 landed and were verified against HEAD on 2026-06-11.** The
+> per-item sections below retain the original problem framing for context; each
+> now carries a ✅ Done marker with the implementing call site. Line-number
 > anchors are intentionally omitted in favor of symbolic names per the Doc
-> Code-Example Line-Number Rule — re-verify call sites at implementation time.
+> Code-Example Line-Number Rule — re-verify call sites if revisiting.
 >
 > | #       | Item                                      | Path         | Description                                                                                        | Risk      | Status  |
 > | ------- | ----------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------- | --------- | ------- |
-> | **H15** | Cache the assembled system prompt         | Host (build) | `getSystemPrompt`/`SYSTEM_PROMPT` re-walks rules dirs + `AGENTS.md` per LLM round-trip             | 🟡 Medium | ❌ Open |
-> | **H16** | Dedupe the per-request tool-array build   | Host (build) | `buildNativeToolsArrayWithRestrictions` runs 2× per request with identical params; MCP/dir scan    | 🟢 Low    | ❌ Open |
-> | **H17** | Sidestep the per-request MCP-connect wait | Host (build) | 10s `pWaitFor` MCP gate on the system-prompt path; subsumed by H15 caching                         | 🟢 Low    | ❌ Open |
-> | **H18** | Memoize `ExtensionStateContext` value     | Webview      | Bare object literal rebuilt every render → all `useExtensionState()` consumers re-render per delta | 🟡 Medium | ❌ Open |
-> | **H19** | Memoize `ChatRow` per-render `JSON.parse` | Webview      | git/RAG/git-integration result rows re-parse `message.text` on every parent re-render              | 🟢 Low    | ❌ Open |
-> | **H20** | Memoize `getPreviousTodos` reverse scan   | Webview      | O(n) reverse scan + `JSON.parse` per `updateTodoList` row render                                   | 🟢 Low    | ❌ Open |
-> | **H21** | Wrap `MermaidBlock` in `memo()`           | Webview      | Re-renders with parent; `CodeBlock`/`MarkdownBlock` already memoized — the odd one out             | 🟢 Low    | ❌ Open |
-> | **H22** | Hoist inline object/array identities      | Webview      | Inline `increaseViewportBy={{…}}` on Virtuoso + constant arrays in the visible-messages filter     | 🟢 Low    | ❌ Open |
+> | **H15** | Cache the assembled system prompt         | Host (build) | `getSystemPrompt`/`SYSTEM_PROMPT` re-walks rules dirs + `AGENTS.md` per LLM round-trip             | 🟡 Medium | ✅ Done |
+> | **H16** | Dedupe the per-request tool-array build   | Host (build) | `buildNativeToolsArrayWithRestrictions` runs 2× per request with identical params; MCP/dir scan    | 🟢 Low    | ✅ Done |
+> | **H17** | Sidestep the per-request MCP-connect wait | Host (build) | 10s `pWaitFor` MCP gate on the system-prompt path; subsumed by H15 caching                         | 🟢 Low    | ✅ Done |
+> | **H18** | Memoize `ExtensionStateContext` value     | Webview      | Bare object literal rebuilt every render → all `useExtensionState()` consumers re-render per delta | 🟡 Medium | ✅ Done |
+> | **H19** | Memoize `ChatRow` per-render `JSON.parse` | Webview      | git/RAG/git-integration result rows re-parse `message.text` on every parent re-render              | 🟢 Low    | ✅ Done |
+> | **H20** | Memoize `getPreviousTodos` reverse scan   | Webview      | O(n) reverse scan + `JSON.parse` per `updateTodoList` row render                                   | 🟢 Low    | ✅ Done |
+> | **H21** | Wrap `MermaidBlock` in `memo()`           | Webview      | Re-renders with parent; `CodeBlock`/`MarkdownBlock` already memoized — the odd one out             | 🟢 Low    | ✅ Done |
+> | **H22** | Hoist inline object/array identities      | Webview      | Inline `increaseViewportBy={{…}}` on Virtuoso + constant arrays in the visible-messages filter     | 🟢 Low    | ✅ Done |
 
 ### Host-side: the request-build path
 
@@ -841,11 +841,22 @@ can be extended with compaction frequency/byte-volume and
 many (every tool use → another round-trip). The following work repeats per call
 even though its inputs are stable across the turn.
 
-#### 🟡 H15: Cache the Assembled System Prompt
+#### 🟡 H15: Cache the Assembled System Prompt ✅ Done (2026-06-10)
 
 **Target:** [`Task.getSystemPrompt()`](extensions/shofer/src/core/task/Task.ts) →
 `SYSTEM_PROMPT` →
 [`addCustomInstructions`](extensions/shofer/src/core/prompts/sections/custom-instructions.ts)
+
+**Implemented:** `getSystemPrompt()` memoizes the assembled base prompt in
+`_cachedSystemPromptBase`, keyed on `_cachedSystemPromptKey` — a `|`-joined
+signature of `taskMode`, `cwd`, `customInstructions`, `experiments`, `language`,
+`enableSubfolderRules`, `useAgentRules`, `todoListEnabled`, `isStealthModel`,
+`newTaskRequireTodos`, model id, `mcpEnabled`, the MCP server-set id
+(`_mcpServerSetId`), and the shoferIgnore instructions. Cache hit returns the
+stored prompt; cache miss recomputes and refreshes both fields. The cache is
+busted explicitly after context management. Subtask constraints and peer
+notifications are still appended fresh per request (intentionally outside the
+cached base).
 
 Every request re-reads `.shofer/rules/` (recursive dir walk),
 `.roorules`/`.clinerules`, mode-specific rule dirs, and
@@ -862,7 +873,7 @@ turn's round-trips) captures most of the win at low risk.
 **Risk:** 🟡 Medium — cache invalidation must cover rules-file edits and
 mode/MCP changes or the prompt goes stale.
 
-#### 🟢 H16: Dedupe the Per-Request Tool-Array Build
+#### 🟢 H16: Dedupe the Per-Request Tool-Array Build ✅ Done (2026-06-10)
 
 **Target:** [`buildNativeToolsArrayWithRestrictions`](extensions/shofer/src/core/task/build-tools.ts),
 called twice per `attemptApiRequest` (context-management metadata + the actual
@@ -870,18 +881,28 @@ call) with identical `(mode, cwd, experiments, apiConfiguration, disabledTools,
 modelInfo)`. Internally it enumerates MCP tools + normalizes schemas, and (if
 `customTools`) scans the `.shofer` directory.
 
-**Fix:** Compute once per `attemptApiRequest` and reuse for both sites;
-optionally memoize across round-trips with the same key as H15.
+**Implemented:** `Task._getOrBuildTools()` wraps
+`buildNativeToolsArrayWithRestrictions`, caching the result in
+`_cachedToolsResult` keyed on `_cachedToolsKey` (`_buildToolsCacheKey(mode,
+state, apiConfiguration, …)`). Both the context-management call site and the
+main-request call site go through the cache, so the build runs once per
+`attemptApiRequest` and is reused across round-trips while the key is stable.
 
 **Risk:** 🟢 Low — single-call-scoped reuse is mechanical.
 
-#### 🟢 H17: Sidestep the Per-Request MCP-Connect Wait
+#### 🟢 H17: Sidestep the Per-Request MCP-Connect Wait ✅ Done (2026-06-10)
 
 **Target:** the `pWaitFor` MCP-connected gate on the system-prompt path in
 [`Task.getSystemPrompt()`](extensions/shofer/src/core/task/Task.ts).
 
 Benign when connected, but it is a per-request gate (up to ~10s) that H15's
 caching would also sidestep. Fold into H15 rather than fixing standalone.
+
+**Implemented:** folded into H15 as intended. The `pWaitFor(() =>
+!mcpHub.isConnecting, { timeout: 10_000 })` gate now lives inside the
+cache-miss branch of `getSystemPrompt()`, so a hot system-prompt cache skips the
+MCP-connect wait entirely. On cache miss the gate still runs and captures the
+server-set id for cache-key participation.
 
 **Risk:** 🟢 Low.
 
@@ -890,7 +911,7 @@ caching would also sidestep. Fold into H15 rather than fixing standalone.
 H10 removed the O(n²) consolidation cost; these are the remaining classic React
 identity/parse costs on the render path.
 
-#### 🟡 H18: Memoize the `ExtensionStateContext` Value
+#### 🟡 H18: Memoize the `ExtensionStateContext` Value ✅ Done (2026-06-10)
 
 **Target:** the context value object in
 [`ExtensionStateContext.tsx`](extensions/shofer/webview-ui/src/context/ExtensionStateContext.tsx).
@@ -901,11 +922,13 @@ state change, including each streamed delta. This likely dominates webview CPU
 during streaming and sits **upstream of all the H10 work**, making it the
 single highest-leverage webview fix still on the table.
 
-**Fix:** `useMemo` the context value; stabilize setters with `useCallback`.
+**Implemented:** the `contextValue` object is now wrapped in `useMemo` with an
+explicit dependency list (`state`, `didHydrateState`, `showWelcome`, `theme`,
+`mcpServers`, …), so consumers no longer re-render on an unrelated parent render.
 
 **Risk:** 🟡 Medium — wide consumer surface, but mechanical.
 
-#### 🟢 H19: Memoize `ChatRow` Per-Render `JSON.parse`
+#### 🟢 H19: Memoize `ChatRow` Per-Render `JSON.parse` ✅ Done (2026-06-10)
 
 **Target:** the git/RAG/git-integration result-row branches in
 [`ChatRow.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatRow.tsx).
@@ -913,33 +936,38 @@ single highest-leverage webview fix still on the table.
 These call `JSON.parse(message.text)` directly in render, re-parsing on every
 parent re-render (which H18 makes frequent).
 
-**Fix:** `useMemo` keyed on `message.text`.
+**Implemented:** the RAG-search, git-search, and rate-limit-wait branches each
+parse `message.text` inside a `useMemo` keyed on `message.text`
+(`parsedRagSearch` and siblings), so the parse runs only when the text changes.
 
 **Risk:** 🟢 Low. Compounds with H18 during streaming.
 
-#### 🟢 H20: Memoize `getPreviousTodos` Reverse Scan
+#### 🟢 H20: Memoize `getPreviousTodos` Reverse Scan ✅ Done (2026-06-10)
 
 **Target:** `getPreviousTodos` in
 [`ChatRow.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatRow.tsx) —
 an O(n) reverse scan + `JSON.parse` run per `updateTodoList` row render, not
 memoized.
 
-**Fix:** `useMemo` the scan result.
+**Implemented:** `previousTodos` is now a `useMemo` over
+`getPreviousTodos(shoferMessages, message.ts)`, keyed on `shoferMessages` and
+`message.ts`, so the reverse scan + parse runs only when those change.
 
 **Risk:** 🟢 Low.
 
-#### 🟢 H21: Wrap `MermaidBlock` in `memo()`
+#### 🟢 H21: Wrap `MermaidBlock` in `memo()` ✅ Done (2026-06-10)
 
 **Target:** [`MermaidBlock.tsx`](extensions/shofer/webview-ui/src/components/common/MermaidBlock.tsx).
 
 Re-renders with its parent; `CodeBlock`/`MarkdownBlock` are already memoized, so
 this is the odd one out.
 
-**Fix:** Wrap the component in `memo()`.
+**Implemented:** `MermaidBlock` is now declared as `memo(function MermaidBlock(
+{ code }) { … })` and exported as the memoized component.
 
 **Risk:** 🟢 Low.
 
-#### 🟢 H22: Hoist Inline Object/Array Identities
+#### 🟢 H22: Hoist Inline Object/Array Identities ✅ Done (2026-06-10)
 
 **Targets:** inline `increaseViewportBy={{…}}` on the Virtuoso list and the
 constant arrays allocated inside the visible-messages filter in
@@ -947,6 +975,11 @@ constant arrays allocated inside the visible-messages filter in
 
 New object/array identities per render defeat child memoization. Low value
 individually; trivial to hoist to module-level constants or `useMemo`.
+
+**Implemented:** the viewport config is hoisted to a module constant
+(`VIRTUOSO_VIEWPORT_INCREASE = { top: 3_000, bottom: 1000 }`) and passed as
+`increaseViewportBy={VIRTUOSO_VIEWPORT_INCREASE}`; `visibleMessages` is computed
+inside a `useMemo` rather than rebuilt inline each render.
 
 **Risk:** 🟢 Low.
 
