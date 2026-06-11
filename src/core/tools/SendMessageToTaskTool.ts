@@ -3,14 +3,11 @@ import { TelemetryService } from "@shofer/telemetry"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
-import type { TaskState, TaskLifecycle } from "@shofer/types"
+import type { TaskLifecycle } from "@shofer/types"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 
 const DEFAULT_TIMEOUT_SECONDS = 120
-
-/** Lifecycle values where the task is not actively processing a turn. */
-const NON_BUSY_LIFECYCLES: ReadonlySet<TaskLifecycle> = new Set(["idle", "completed", "paused", "error"])
 
 interface SendMessageToTaskParams {
 	task_id: string
@@ -58,16 +55,7 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		try {
-			// Lifetimes where the target is actively doing work and cannot
-			// accept a peer message. Messages must fail fast instead of
-			// being queued behind in-progress work.
-			const BUSY_LIFECYCLES: TaskLifecycle[] = ["running", "waiting_input", "waiting"]
-
 			// --- Scope validation ---
-			// The root task (user-initiated, not spawned via new_task) has
-			// no rootTaskId because it IS the root. Use its own taskId as the
-			// effective root for peer scope validation, consistent with
-			// NewTaskTool and ListBackgroundTasksTool.
 			const effectiveRootId = task.rootTaskId ?? task.taskId
 
 			if (task_id === task.taskId) {
@@ -82,11 +70,9 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 			}
 
 			// --- Unified target resolution ---
-			// Check live instance first, then persisted history.
 			const targetInstance = provider.taskManager.getManagedTaskInstance(task_id)
 
 			if (targetInstance) {
-				// Live instance — validate scope and deliverability.
 				if (!targetInstance.isBackgroundTask) {
 					pushToolResult(
 						formatResponse.toolError(
@@ -100,25 +86,18 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					return
 				}
 			} else {
-				// No live instance — check persisted history.
 				try {
 					const { historyItem } = await provider.getTaskWithId(task_id)
 					if (!historyItem.rootTaskId || historyItem.rootTaskId !== effectiveRootId) {
 						pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
 						return
 					}
-					// isBackgroundTask is a runtime-only flag; persisted tasks from
-					// new_task(is_background=true) implicitly qualify. A manually-
-					// created top-level task without rootTaskId was already rejected.
 				} catch {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable.`))
 					return
 				}
 			}
 
-			// Check least-privilege peer scope: undefined ⇒ deny all, except
-			// for the root task (no rootTaskId) which is omnipotent within its
-			// own tree — it has no knownPeers because it wasn't spawned.
 			if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(task_id))) {
 				pushToolResult(formatResponse.toolError(`Task ${task_id} is not in your allowed peer set.`))
 				return
@@ -138,9 +117,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 			// --- Rehydrate if no live instance but task is resumable ---
 			let targetState = provider.taskManager.getManagedTaskInstance(task_id)
 			if (!targetState) {
-				// The task has persisted history and is not "error". Rehydrate it
-				// so we have a live MessageQueueService to enqueue into. Follow
-				// the same pattern as WorkflowTask.resumeAgentTask.
 				try {
 					const { historyItem } = await provider.getTaskWithId(task_id)
 					await provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
@@ -149,23 +125,46 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} could not be rehydrated.`))
 					return
 				}
-
 				if (!targetState) {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable after rehydration.`))
 					return
 				}
 			}
 
-			// Reject messages to busy targets — fail fast instead of queueing.
-			const targetManagedForBusy = provider.taskManager.getManagedTask(task_id)
-			const targetLifecycle = targetManagedForBusy?.state?.lifecycle
-			if (targetLifecycle && BUSY_LIFECYCLES.includes(targetLifecycle)) {
-				pushToolResult(
-					formatResponse.toolError(
-						`Task ${task_id} is busy (${targetLifecycle}) and cannot accept messages until it finishes.`,
-					),
-				)
-				return
+			// --- Busy check ---
+			// Sync: fail-fast on all busy states (running can't accept submitUserMessage).
+			// Async: fail-fast only on non-running busy states (waiting_input/waiting).
+			//   running tasks have an active agent loop; the peerNotificationQueue
+			//   entry is injected into their system prompt on the next turn — no
+			//   need to fail.
+			const targetBusyManaged = provider.taskManager.getManagedTask(task_id)
+			const targetBusyLifecycle = targetBusyManaged?.state?.lifecycle
+			if (targetBusyLifecycle) {
+				if (isSync) {
+					if (
+						targetBusyLifecycle === "running" ||
+						targetBusyLifecycle === "waiting_input" ||
+						targetBusyLifecycle === "waiting"
+					) {
+						pushToolResult(
+							formatResponse.toolError(
+								`Task ${task_id} is busy (${targetBusyLifecycle}) and cannot accept a sync request. ` +
+									`Use async send_message_to_task for non-interrupting coordination, ` +
+									`or wait for the task to become idle.`,
+							),
+						)
+						return
+					}
+				} else {
+					if (targetBusyLifecycle === "waiting_input" || targetBusyLifecycle === "waiting") {
+						pushToolResult(
+							formatResponse.toolError(
+								`Task ${task_id} is ${targetBusyLifecycle} and cannot accept messages until it becomes active.`,
+							),
+						)
+						return
+					}
+				}
 			}
 
 			// Resolve sender title.
@@ -184,27 +183,12 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				return
 			}
 
-			// Determine whether recipient is busy (mid-turn).
-			const isBusy = targetState.taskStatus === "running" && !NON_BUSY_LIFECYCLES.has(lifecycle)
-
 			if (isSync) {
 				// --- Sync mode: blocking wait ---
-				// Sync always delivers as an annotated user-turn via MessageQueueService
-				// (Form B) so it wakes/resumes the recipient. If the recipient is busy
-				// (actively running a turn), fail-fast — syncing to a busy worker
-				// would abort its in-flight work (see docs/task_messaging.md).
-				if (isBusy) {
-					pushToolResult(
-						formatResponse.toolError(
-							`Task ${task_id} is currently running and cannot accept a sync request. ` +
-								`Use async send_message_to_task for non-interrupting coordination, ` +
-								`or wait for the task to become idle.`,
-						),
-					)
-					return
-				}
+				// Submit as a PEER PROMPT via submitUserMessage — the normal
+				// task input path. The recipient is non-busy (validated above),
+				// so the message is processed immediately as a user turn.
 
-				// 1. Check for existing sync prompt on this recipient.
 				if (provider.hasPendingSyncResolver(task_id)) {
 					pushToolResult(
 						formatResponse.toolError(
@@ -214,7 +198,6 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					return
 				}
 
-				// 2. Enqueue an annotated user-turn via the recipient's MessageQueueService.
 				const promptText =
 					`PEER PROMPT from task ${task.taskId} ("${senderTitle}"):\n` +
 					`${message}\n\n` +
@@ -225,25 +208,17 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					`Timeout: ${effectiveTimeout} seconds. If you do not respond in time, the request\n` +
 					`will be discarded and the sender will receive a timeout error.`
 
-				const queuedMessage = targetState.messageQueueService.addMessage(promptText, [])
-				const queuedMessageId = queuedMessage.id
+				// Deliver via submitUserMessage — the normal task input path.
+				await targetState.submitUserMessage(promptText, [])
 
-				// Mirror the webview queueMessage handler: if the recipient is idle
-				// (abort=true after attempt_completion), trigger cancelAndProcessQueuedMessages
-				// to restart the recipient's event loop, just like the user clicking "Send".
-				if (targetState.abort) {
-					targetState.cancelAndProcessQueuedMessages()
-				}
-
-				// 3. Register a sync resolver for this recipient.
+				// Register a sync resolver for this recipient.
 				const responsePromise = provider.registerPendingSyncResolver(task_id, task.taskId)
 
-				// 4. Block with AbortSignal-backed timeout (Cooperative Cancellation Rule).
+				// Block with AbortSignal-backed timeout (Cooperative Cancellation Rule).
 				const abortController = new AbortController()
 				const timeoutId = setTimeout(() => abortController.abort(), effectiveTimeout * 1000)
 				let taskAbortHandler: (() => void) | undefined
 
-				// Wire the task's abort signal into our controller.
 				if (task.abortSignal?.aborted) {
 					abortController.abort()
 				} else if (task.abortSignal) {
@@ -272,32 +247,19 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 						)
 					})
 				} catch (_err) {
-					// Timeout or abort — try to retract the message from the queue.
-					const removed = targetState.messageQueueService.removeMessage(queuedMessageId)
 					provider.clearPendingSyncResolver(task_id)
 					const reason = abortController.signal.aborted ? "aborted" : "timed out"
-					if (removed) {
-						pushToolResult(
-							formatResponse.toolError(
-								`No response from task ${task_id} (${reason}). The message was retracted.`,
-							),
-						)
-					} else {
-						pushToolResult(formatResponse.toolError(`No response from task ${task_id} (${reason}).`))
-					}
+					pushToolResult(formatResponse.toolError(`No response from task ${task_id} (${reason}).`))
 					return
 				} finally {
-					// Clean up task abort listener and timeout on both success and failure.
 					if (task.abortSignal && taskAbortHandler) {
 						task.abortSignal.removeEventListener("abort", taskAbortHandler)
 					}
 					clearTimeout(timeoutId)
 				}
 
-				// 5. Success — deliver result.
 				pushToolResult(syncResult)
 
-				// Telemetry: message sent.
 				try {
 					TelemetryService.instance.capturePeerMessageSent(task.taskId, {
 						mode: "sync",
@@ -309,67 +271,31 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				}
 			} else {
 				// --- Async mode: fire-and-forget ---
-				// Async messages to a BUSY recipient are delivered as Form A
-				// (system-prompt injection via peerNotificationQueue). For a
-				// NON-BUSY recipient, deliver as Form B (annotated user-turn via
-				// MessageQueueService) to wake/resume the task — same as sync
-				// but without the blocking resolver.
-				if (isBusy) {
-					// Form A: system-prompt injection on the next API call.
-					targetState.peerNotificationQueue.push({
-						senderTaskId: task.taskId,
-						senderTitle,
-						message,
-						timestamp: Date.now(),
+				// Deliver as a PEER MESSAGE via peerNotificationQueue. The
+				// recipient's agent loop injects these into the system prompt
+				// at the start of every turn. Async messages are passive
+				// notifications — no wake, no queueing.
+				targetState.peerNotificationQueue.push({
+					senderTaskId: task.taskId,
+					senderTitle,
+					message,
+					timestamp: Date.now(),
+				})
+
+				try {
+					TelemetryService.instance.capturePeerMessageSent(task.taskId, {
+						mode: "async",
+						status: "delivered",
+						targetTaskId: task_id,
 					})
-
-					// Telemetry: async message enqueued (Form A).
-					try {
-						TelemetryService.instance.capturePeerMessageSent(task.taskId, {
-							mode: "async",
-							status: "delivered",
-							targetTaskId: task_id,
-						})
-					} catch {
-						// non-fatal
-					}
-
-					pushToolResult(
-						`Message sent to task ${task_id} ("${getManagedTaskTitle(task, task_id) ?? task_id}"). ` +
-							`Delivery: on the recipient's next turn.`,
-					)
-				} else {
-					// Form B: enqueue as an annotated user-turn that wakes/resumes the task.
-					const promptText =
-						`PEER MESSAGE from task ${task.taskId} ("${senderTitle}"):\n` +
-						`${message}\n\n` +
-						`You may respond using send_message_to_task(task_id="${task.taskId}", message=...).\n` +
-						`This is a notification — no response is required. If the message is not urgent,\n` +
-						`you may finish your current work first and respond later.`
-
-					targetState.messageQueueService.addMessage(promptText, [])
-
-					// Wake the recipient if it's idle/completed/paused.
-					if (targetState.abort) {
-						targetState.cancelAndProcessQueuedMessages()
-					}
-
-					// Telemetry: async message enqueued (Form B).
-					try {
-						TelemetryService.instance.capturePeerMessageSent(task.taskId, {
-							mode: "async",
-							status: "delivered",
-							targetTaskId: task_id,
-						})
-					} catch {
-						// non-fatal
-					}
-
-					pushToolResult(
-						`Message sent to task ${task_id} ("${getManagedTaskTitle(task, task_id) ?? task_id}"). ` +
-							`Delivery: on the recipient's next turn (resuming it if idle).`,
-					)
+				} catch {
+					// non-fatal
 				}
+
+				pushToolResult(
+					`Message sent to task ${task_id} ("${getManagedTaskTitle(task, task_id) ?? task_id}"). ` +
+						`Delivery: on the recipient's next turn.`,
+				)
 			}
 		} catch (error) {
 			await handleError("sending peer message", error instanceof Error ? error : new Error(String(error)))

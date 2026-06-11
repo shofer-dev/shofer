@@ -8,25 +8,24 @@ describe("SendMessageToTaskTool", () => {
 	})
 
 	function buildTask(overrides: Record<string, any> = {}) {
+		const providerObj = {
+			taskManager: {
+				getManagedTaskInstance: vi.fn(),
+				getManagedTask: vi.fn(),
+				getManagedTasks: vi.fn().mockReturnValue([]),
+			},
+			getTaskWithId: vi.fn(),
+			createTaskWithHistoryItem: vi.fn(),
+			hasPendingSyncResolver: vi.fn().mockReturnValue(false),
+			registerPendingSyncResolver: vi.fn(),
+			clearPendingSyncResolver: vi.fn(),
+		}
 		return {
 			taskId: "caller-1",
 			rootTaskId: "root-1",
 			isBackgroundTask: true,
 			knownPeers: new Set(["peer-1"]),
-			providerRef: {
-				deref: () => ({
-					taskManager: {
-						getManagedTaskInstance: vi.fn(),
-						getManagedTask: vi.fn(),
-						getManagedTasks: vi.fn().mockReturnValue([]),
-					},
-					getTaskWithId: vi.fn(),
-					createTaskWithHistoryItem: vi.fn(),
-					hasPendingSyncResolver: vi.fn().mockReturnValue(false),
-					registerPendingSyncResolver: vi.fn(),
-					clearPendingSyncResolver: vi.fn(),
-				}),
-			},
+			providerRef: { deref: () => providerObj },
 			...overrides,
 		} as any
 	}
@@ -42,11 +41,21 @@ describe("SendMessageToTaskTool", () => {
 
 	// ─── Scope validation ───────────────────────────────────────────
 
-	it("rejects tasks without rootTaskId", async () => {
+	it("root tasks (no rootTaskId) can message peers", async () => {
 		const task = buildTask({ rootTaskId: undefined })
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			isBackgroundTask: true,
+			rootTaskId: task.taskId,
+			taskStatus: "idle",
+			submitUserMessage: vi.fn().mockResolvedValue(undefined),
+		})
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
+		provider.registerPendingSyncResolver.mockReturnValue(Promise.resolve("root result"))
+
 		const cbs = buildCallbacks()
-		await tool.execute({ task_id: "peer-1", message: "hi" }, task, cbs)
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("rootTaskId required"))
+		await tool.execute({ task_id: "peer-1", message: "hi", wait: true, timeout_sec: 1 }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith("root result")
 	})
 
 	it("rejects self-messaging", async () => {
@@ -54,13 +63,6 @@ describe("SendMessageToTaskTool", () => {
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "caller-1", message: "hi" }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("yourself"))
-	})
-
-	it("rejects non-background caller", async () => {
-		const task = buildTask({ isBackgroundTask: false })
-		const cbs = buildCallbacks()
-		await tool.execute({ task_id: "peer-1", message: "hi" }, task, cbs)
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("background task"))
 	})
 
 	it("rejects target not in knownPeers", async () => {
@@ -75,6 +77,18 @@ describe("SendMessageToTaskTool", () => {
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("allowed peer set"))
 	})
 
+	it("rejects non-background target (live instance)", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			isBackgroundTask: false,
+			rootTaskId: "root-1",
+		})
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "hi" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("background task"))
+	})
+
 	// ─── Deliverability checks ──────────────────────────────────────
 
 	it("rejects errored target (live instance)", async () => {
@@ -85,9 +99,7 @@ describe("SendMessageToTaskTool", () => {
 			rootTaskId: "root-1",
 			taskStatus: "idle",
 		})
-		provider.taskManager.getManagedTask.mockReturnValue({
-			state: { lifecycle: "error" },
-		})
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "error" } })
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1", message: "hi" }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("errored"))
@@ -117,57 +129,56 @@ describe("SendMessageToTaskTool", () => {
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("not reachable"))
 	})
 
-	// ─── Async mode, non-busy recipient (Form B) ────────────────────
+	// ─── Busy checks ────────────────────────────────────────────────
 
-	it("async: delivers via MessageQueueService for non-busy (idle) recipient and restarts", async () => {
-		const task = buildTask()
-		const provider = task.providerRef.deref()
-		const addMessage = vi.fn().mockReturnValue({ id: "msg-1" })
-		const cancelAndProcessQueuedMessages = vi.fn()
-		provider.taskManager.getManagedTaskInstance.mockReturnValue({
-			isBackgroundTask: true,
-			rootTaskId: "root-1",
-			taskStatus: "running", // default getter when aborted
-			abort: true,
-			messageQueueService: { addMessage },
-			cancelAndProcessQueuedMessages,
-		})
-		provider.taskManager.getManagedTask.mockReturnValue({
-			state: { lifecycle: "completed" },
-		})
-		const cbs = buildCallbacks()
-		await tool.execute({ task_id: "peer-1", message: "hello", wait: false }, task, cbs)
-
-		// Form B: message enqueued as user-turn
-		expect(addMessage).toHaveBeenCalledWith(expect.stringContaining("PEER MESSAGE"), [])
-		// Wake: recipient was aborted
-		expect(cancelAndProcessQueuedMessages).toHaveBeenCalled()
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Message sent"))
-	})
-
-	// ─── Async mode, busy recipient (Form A) ────────────────────────
-
-	it("async: delivers via peerNotificationQueue for busy recipient", async () => {
+	it("sync: rejects running recipient", async () => {
 		const task = buildTask()
 		const provider = task.providerRef.deref()
 		provider.taskManager.getManagedTaskInstance.mockReturnValue({
 			isBackgroundTask: true,
 			rootTaskId: "root-1",
 			taskStatus: "running",
-			peerNotificationQueue: [],
 		})
-		provider.taskManager.getManagedTask.mockReturnValue({
-			state: { lifecycle: "running" },
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "running" } })
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "urgent", wait: true }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("busy"))
+	})
+
+	it("sync: rejects waiting_input recipient", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			isBackgroundTask: true,
+			rootTaskId: "root-1",
+			taskStatus: "running",
 		})
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "waiting_input" } })
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "urgent", wait: true }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("busy"))
+	})
+
+	it("async: allows running recipient (system prompt injection)", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		const peerNotificationQueue: any[] = []
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			isBackgroundTask: true,
+			rootTaskId: "root-1",
+			taskStatus: "running",
+			peerNotificationQueue,
+		})
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "running" } })
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1", message: "heads up", wait: false }, task, cbs)
 
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("recipient's next turn"))
+		expect(peerNotificationQueue.length).toBe(1)
+		expect(peerNotificationQueue[0].message).toBe("heads up")
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Message sent"))
 	})
 
-	// ─── Sync mode, busy recipient ──────────────────────────────────
-
-	it("sync: rejects busy (running) recipient", async () => {
+	it("async: rejects waiting_input recipient", async () => {
 		const task = buildTask()
 		const provider = task.providerRef.deref()
 		provider.taskManager.getManagedTaskInstance.mockReturnValue({
@@ -175,39 +186,53 @@ describe("SendMessageToTaskTool", () => {
 			rootTaskId: "root-1",
 			taskStatus: "running",
 		})
-		provider.taskManager.getManagedTask.mockReturnValue({
-			state: { lifecycle: "running" },
-		})
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "waiting_input" } })
 		const cbs = buildCallbacks()
-		await tool.execute({ task_id: "peer-1", message: "urgent", wait: true }, task, cbs)
-
-		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("cannot accept a sync request"))
+		await tool.execute({ task_id: "peer-1", message: "heads up", wait: false }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("cannot accept"))
 	})
 
-	// ─── Sync mode, non-busy recipient ──────────────────────────────
+	// ─── Async mode: peerNotificationQueue ──────────────────────────
 
-	it("sync: enqueues Form B and blocks on response", async () => {
+	it("async: delivers via peerNotificationQueue for non-busy recipient", async () => {
 		const task = buildTask()
 		const provider = task.providerRef.deref()
-		const addMessage = vi.fn().mockReturnValue({ id: "msg-1" })
-		const responsePromise = Promise.resolve("sync result from peer")
+		const peerNotificationQueue: any[] = []
 		provider.taskManager.getManagedTaskInstance.mockReturnValue({
 			isBackgroundTask: true,
 			rootTaskId: "root-1",
-			taskStatus: "running",
-			abort: true,
-			messageQueueService: { addMessage, removeMessage: vi.fn().mockReturnValue(true) },
-			cancelAndProcessQueuedMessages: vi.fn(),
+			taskStatus: "idle",
+			peerNotificationQueue,
 		})
-		provider.taskManager.getManagedTask.mockReturnValue({
-			state: { lifecycle: "idle" },
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "completed" } })
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "hello", wait: false }, task, cbs)
+
+		expect(peerNotificationQueue.length).toBe(1)
+		expect(peerNotificationQueue[0].senderTaskId).toBe("caller-1")
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Message sent"))
+	})
+
+	// ─── Sync mode: submitUserMessage + resolver ────────────────────
+
+	it("sync: submits via submitUserMessage and blocks on response", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		const submitUserMessage = vi.fn().mockResolvedValue(undefined)
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			isBackgroundTask: true,
+			rootTaskId: "root-1",
+			taskStatus: "idle",
+			submitUserMessage,
 		})
-		provider.registerPendingSyncResolver.mockReturnValue(responsePromise)
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
+		provider.registerPendingSyncResolver.mockReturnValue(Promise.resolve("sync result from peer"))
 
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1", message: "urgent", wait: true, timeout_sec: 5 }, task, cbs)
 
-		expect(addMessage).toHaveBeenCalledWith(expect.stringContaining("PEER PROMPT"), [])
+		expect(submitUserMessage).toHaveBeenCalledWith(expect.stringContaining("PEER PROMPT"), [])
+		expect(submitUserMessage.mock.calls[0][0]).toContain("urgent")
 		expect(cbs.pushToolResult).toHaveBeenCalledWith("sync result from peer")
 	})
 
@@ -215,38 +240,27 @@ describe("SendMessageToTaskTool", () => {
 		const task = buildTask()
 		const provider = task.providerRef.deref()
 
-		// First call returns null (no live instance).
-		// After rehydration, returns the rehydrated instance.
-		let callCount = 0
-		const addMessage = vi.fn().mockReturnValue({ id: "msg-2" })
-		provider.taskManager.getManagedTaskInstance.mockImplementation(() => {
-			callCount++
-			if (callCount === 1) return null
-			return {
+		const submitUserMessage = vi.fn().mockResolvedValue(undefined)
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+		provider.createTaskWithHistoryItem.mockImplementation(() => {
+			provider.taskManager.getManagedTaskInstance.mockReturnValue({
 				isBackgroundTask: true,
 				rootTaskId: "root-1",
-				taskStatus: "running",
-				abort: true,
-				messageQueueService: { addMessage, removeMessage: vi.fn().mockReturnValue(true) },
-				cancelAndProcessQueuedMessages: vi.fn(),
-			}
+				taskStatus: "idle",
+				submitUserMessage,
+			})
+			return Promise.resolve(undefined)
 		})
-		provider.taskManager.getManagedTask.mockReturnValue(null)
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
 		provider.getTaskWithId.mockResolvedValue({
-			historyItem: {
-				rootTaskId: "root-1",
-				taskState: { lifecycle: "idle" },
-			},
+			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "idle" } },
 		})
-		provider.createTaskWithHistoryItem.mockResolvedValue(undefined)
 		provider.registerPendingSyncResolver.mockReturnValue(Promise.resolve("rehydrated result"))
 
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1", message: "hello", wait: true, timeout_sec: 5 }, task, cbs)
-
-		// Verify rehydration was called.
 		expect(provider.createTaskWithHistoryItem).toHaveBeenCalled()
-		expect(addMessage).toHaveBeenCalledWith(expect.stringContaining("PEER PROMPT"), [])
+		expect(submitUserMessage).toHaveBeenCalled()
 		expect(cbs.pushToolResult).toHaveBeenCalledWith("rehydrated result")
 	})
 })
