@@ -235,9 +235,9 @@ else
 
 	WF_DIR="${CLI_DIR}/scripts/integration/fixtures"
 	WF_RUNNER="pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts"
-	WF_ENV="PROVIDER=shofer MODEL=deepseek/deepseek-v4-pro BASE_URL=${ROUTER_URL}"
+	WF_ENV="PROVIDER=shofer API_KEY=shofer MODEL=${DS_MODEL} BASE_URL=${ROUTER_URL}"
 	if [[ "${PRESET}" == "mock" ]]; then
-			WF_ENV="PROVIDER=mock API_KEY=x MODEL=mock-model"
+		WF_ENV="PROVIDER=mock API_KEY=x MODEL=mock-model"
 	fi
 
 	# Collect fixture names (without .slang extension).
@@ -250,8 +250,10 @@ else
 	TMPDIR="$(mktemp -d)"
 	trap "rm -rf ${TMPDIR}" EXIT
 
-	# Export the env vars + command so xargs sub-shells can access them.
-	export WF_ENV TMPDIR TIMEOUT_WF
+	# Export env vars so xargs child processes can access them.
+	# CLI_DIR is the absolute path to apps/cli, already computed at line ~40.
+	WF_CLI_DIR="${CLI_DIR}"
+	export WF_ENV TMPDIR TIMEOUT_WF WF_CLI_DIR
 
 	WF_PASS=0
 	WF_FAIL=0
@@ -263,11 +265,9 @@ set -u
 name="$1"
 log="${TMPDIR}/${name}.log"
 
-# Navigate to the CLI directory so the relative tsx path resolves regardless
-# of what cwd xargs inherits.
-SCRIPT_DIR_WF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_DIR_WF="$(cd "${SCRIPT_DIR_WF}/../.." && pwd)"  # extensions/shofer
-cd "${CLI_DIR_WF}/apps/cli" || exit 2
+# cd into the CLI directory — WF_CLI_DIR is exported by the parent
+# (absolute path, already resolved from BASH_SOURCE up there).
+cd "${WF_CLI_DIR}" || exit 2
 
 env MATCH="${name}" TIMEOUT_MS="$((TIMEOUT_WF * 1000))" ${WF_ENV} \
 	pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts \
@@ -312,7 +312,9 @@ WORKER_EOF
 			reason=""
 			reason="$(grep -oE "✗ ${name}: status=[^ ]+" "$log" 2>/dev/null | grep -oE "status=[^ ]+" | sed 's/status=//')"
 			# Fall back: timeout line carries no status= prefix (workflow-conformance.ts:201).
-			if [[ -z "${reason}" ]] && grep -q "✗ ${name}: timed out" "$log" 2>/dev/null; then
+			# The actual timeout line is "✗ <name>: waitForCompletion timed out after …"
+			# (workflow-conformance.ts:201 + api-harness.ts:365), not "✗ <name>: timed out".
+			if [[ -z "${reason}" ]] && grep -q "✗ ${name}:.*timed out" "$log" 2>/dev/null; then
 				reason="TIMEOUT"
 			fi
 			echo "  ✗  ${name}  -- status=${reason:-NO_OUTPUT}"
