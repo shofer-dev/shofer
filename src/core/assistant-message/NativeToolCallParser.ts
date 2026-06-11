@@ -937,6 +937,17 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "read_command_output":
+				if (partialArgs.artifact_id !== undefined) {
+					nativeArgs = {
+						artifact_id: partialArgs.artifact_id,
+						search: partialArgs.search,
+						offset: this.coerceOptionalNumber(partialArgs.offset),
+						limit: this.coerceOptionalNumber(partialArgs.limit),
+					}
+				}
+				break
+
 			case "sed":
 				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
