@@ -9,11 +9,43 @@ import type { ToolUse } from "../../shared/tools"
 
 const DEFAULT_TIMEOUT_SECONDS = 120
 
+/** Lifecycle values where the task is not actively processing a turn. */
+const NON_BUSY_LIFECYCLES: ReadonlySet<TaskLifecycle> = new Set(["idle", "completed", "paused", "error"])
+
 interface SendMessageToTaskParams {
 	task_id: string
 	message: string
 	wait?: boolean | null
 	timeout_sec?: number | null
+}
+
+/**
+ * Helper: resolve the target task's lifecycle, falling back to persisted history
+ * when there is no live instance. Returns the lifecycle (or "error" if the task
+ * is not reachable at all) and whether the task is known to exist.
+ */
+async function resolveTargetLifecycle(
+	task_id: string,
+	provider: ReturnType<Task["providerRef"]["deref"]>,
+): Promise<{ lifecycle: TaskLifecycle; exists: boolean }> {
+	if (!provider) return { lifecycle: "error", exists: false }
+
+	const targetState = provider.taskManager.getManagedTaskInstance(task_id)
+	if (targetState) {
+		const targetManaged = provider.taskManager.getManagedTask(task_id)
+		return { lifecycle: targetManaged?.state?.lifecycle ?? "idle", exists: true }
+	}
+
+	// No live instance — check persisted history.
+	try {
+		const { historyItem } = await provider.getTaskWithId(task_id)
+		return {
+			lifecycle: historyItem.taskState?.lifecycle ?? "idle",
+			exists: true,
+		}
+	} catch {
+		return { lifecycle: "error", exists: false }
+	}
 }
 
 export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
@@ -49,23 +81,37 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				return
 			}
 
-			// Resolve the target task.
+			// --- Unified target resolution ---
+			// Check live instance first, then persisted history.
 			const targetInstance = provider.taskManager.getManagedTaskInstance(task_id)
-			if (!targetInstance) {
-				// Check persisted history for a resumable task.
-				try {
-					const { historyItem } = await provider.getTaskWithId(task_id)
-					if (historyItem.rootTaskId !== effectiveRootId) {
-						pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
-						return
-					}
-				} catch {
-					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable.`))
+
+			if (targetInstance) {
+				// Live instance — validate scope and deliverability.
+				if (!targetInstance.isBackgroundTask) {
+					pushToolResult(
+						formatResponse.toolError(
+							`Peer messaging requires the target task ${task_id} to be a background task.`,
+						),
+					)
+					return
+				}
+				if (targetInstance.rootTaskId !== effectiveRootId) {
+					pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
 					return
 				}
 			} else {
-				if (targetInstance.rootTaskId !== effectiveRootId) {
-					pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
+				// No live instance — check persisted history.
+				try {
+					const { historyItem } = await provider.getTaskWithId(task_id)
+					if (!historyItem.rootTaskId || historyItem.rootTaskId !== effectiveRootId) {
+						pushToolResult(formatResponse.toolError(`Task ${task_id} does not share your root task.`))
+						return
+					}
+					// isBackgroundTask is a runtime-only flag; persisted tasks from
+					// new_task(is_background=true) implicitly qualify. A manually-
+					// created top-level task without rootTaskId was already rejected.
+				} catch {
+					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable.`))
 					return
 				}
 			}
@@ -78,31 +124,34 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				return
 			}
 
-			// Resolve target state for delivery model.
-			const targetState = provider.taskManager.getManagedTaskInstance(task_id)
+			// --- Deliverability check ---
+			const { lifecycle, exists } = await resolveTargetLifecycle(task_id, provider)
+			if (!exists) {
+				pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable.`))
+				return
+			}
+			if (lifecycle === "error") {
+				pushToolResult(formatResponse.toolError(`Task ${task_id} has errored and cannot receive messages.`))
+				return
+			}
 
-			// Reject unreachable targets. Reject, don't drop — both async and sync
-			// fail loud so the sender can react instead of assuming silent delivery.
+			// --- Rehydrate if no live instance but task is resumable ---
+			let targetState = provider.taskManager.getManagedTaskInstance(task_id)
 			if (!targetState) {
-				// Check if resumable from persisted history.
+				// The task has persisted history and is not "error". Rehydrate it
+				// so we have a live MessageQueueService to enqueue into. Follow
+				// the same pattern as WorkflowTask.resumeAgentTask.
 				try {
 					const { historyItem } = await provider.getTaskWithId(task_id)
-					const lifecycle = historyItem.taskState?.lifecycle
-					if (lifecycle === "error") {
-						pushToolResult(
-							formatResponse.toolError(`Task ${task_id} has errored and cannot receive messages.`),
-						)
-						return
-					}
+					await provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
+					targetState = provider.taskManager.getManagedTaskInstance(task_id)
 				} catch {
-					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable.`))
+					pushToolResult(formatResponse.toolError(`Task ${task_id} could not be rehydrated.`))
 					return
 				}
-			} else {
-				const targetManaged = provider.taskManager.getManagedTask(task_id)
-				const lifecycle = targetManaged?.state?.lifecycle
-				if (lifecycle === "error") {
-					pushToolResult(formatResponse.toolError(`Task ${task_id} has errored and cannot receive messages.`))
+
+				if (!targetState) {
+					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable after rehydration.`))
 					return
 				}
 			}
@@ -135,8 +184,25 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				return
 			}
 
+			// Determine whether recipient is busy (mid-turn).
+			const isBusy = targetState.taskStatus === "running" && !NON_BUSY_LIFECYCLES.has(lifecycle)
+
 			if (isSync) {
 				// --- Sync mode: blocking wait ---
+				// Sync always delivers as an annotated user-turn via MessageQueueService
+				// (Form B) so it wakes/resumes the recipient. If the recipient is busy
+				// (actively running a turn), fail-fast — syncing to a busy worker
+				// would abort its in-flight work (see docs/task_messaging.md).
+				if (isBusy) {
+					pushToolResult(
+						formatResponse.toolError(
+							`Task ${task_id} is currently running and cannot accept a sync request. ` +
+								`Use async send_message_to_task for non-interrupting coordination, ` +
+								`or wait for the task to become idle.`,
+						),
+					)
+					return
+				}
 
 				// 1. Check for existing sync prompt on this recipient.
 				if (provider.hasPendingSyncResolver(task_id)) {
@@ -159,18 +225,13 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					`Timeout: ${effectiveTimeout} seconds. If you do not respond in time, the request\n` +
 					`will be discarded and the sender will receive a timeout error.`
 
-				const queuedMessage = targetState ? targetState.messageQueueService.addMessage(promptText, []) : null
-				const queuedMessageId = queuedMessage?.id
-
-				if (!queuedMessageId) {
-					pushToolResult(formatResponse.toolError(`Task ${task_id} is not reachable for sync delivery.`))
-					return
-				}
+				const queuedMessage = targetState.messageQueueService.addMessage(promptText, [])
+				const queuedMessageId = queuedMessage.id
 
 				// Mirror the webview queueMessage handler: if the recipient is idle
 				// (abort=true after attempt_completion), trigger cancelAndProcessQueuedMessages
 				// to restart the recipient's event loop, just like the user clicking "Send".
-				if (targetState && targetState.abort) {
+				if (targetState.abort) {
 					targetState.cancelAndProcessQueuedMessages()
 				}
 
@@ -212,10 +273,7 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					})
 				} catch (_err) {
 					// Timeout or abort — try to retract the message from the queue.
-					const removed =
-						queuedMessageId && targetState
-							? targetState.messageQueueService.removeMessage(queuedMessageId)
-							: false
+					const removed = targetState.messageQueueService.removeMessage(queuedMessageId)
 					provider.clearPendingSyncResolver(task_id)
 					const reason = abortController.signal.aborted ? "aborted" : "timed out"
 					if (removed) {
@@ -251,38 +309,67 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				}
 			} else {
 				// --- Async mode: fire-and-forget ---
-				// All async peer messages go into the recipient's dedicated
-				// peerNotificationQueue FIFO, which is drained at the start of the
-				// next agent loop via system-prompt injection (see Task.getSystemPrompt).
-				// There is no Form A / Form B distinction — everything is delivered
-				// uniformly.  This queue is independent of the MessageQueueService,
-				// which is reserved for user messages and sync prompts.
-				if (targetState) {
+				// Async messages to a BUSY recipient are delivered as Form A
+				// (system-prompt injection via peerNotificationQueue). For a
+				// NON-BUSY recipient, deliver as Form B (annotated user-turn via
+				// MessageQueueService) to wake/resume the task — same as sync
+				// but without the blocking resolver.
+				if (isBusy) {
+					// Form A: system-prompt injection on the next API call.
 					targetState.peerNotificationQueue.push({
 						senderTaskId: task.taskId,
 						senderTitle,
 						message,
 						timestamp: Date.now(),
 					})
-				}
-				// Note: if there's no live instance (task is not running but is
-				// resumable from persisted history), the message cannot be delivered.
-				// This is a documented gap (see docs/task_messaging.md).
 
-				// Telemetry: message enqueued to peerNotificationQueue.
-				try {
-					TelemetryService.instance.capturePeerMessageSent(task.taskId, {
-						mode: "async",
-						status: "delivered",
-						targetTaskId: task_id,
-					})
-				} catch {
-					// non-fatal
-				}
+					// Telemetry: async message enqueued (Form A).
+					try {
+						TelemetryService.instance.capturePeerMessageSent(task.taskId, {
+							mode: "async",
+							status: "delivered",
+							targetTaskId: task_id,
+						})
+					} catch {
+						// non-fatal
+					}
 
-				pushToolResult(
-					`Message sent to task ${task_id} ("${getManagedTaskTitle(task, task_id) ?? task_id}"). Delivery: on the recipient's next turn (resuming it if idle).`,
-				)
+					pushToolResult(
+						`Message sent to task ${task_id} ("${getManagedTaskTitle(task, task_id) ?? task_id}"). ` +
+							`Delivery: on the recipient's next turn.`,
+					)
+				} else {
+					// Form B: enqueue as an annotated user-turn that wakes/resumes the task.
+					const promptText =
+						`PEER MESSAGE from task ${task.taskId} ("${senderTitle}"):\n` +
+						`${message}\n\n` +
+						`You may respond using send_message_to_task(task_id="${task.taskId}", message=...).\n` +
+						`This is a notification — no response is required. If the message is not urgent,\n` +
+						`you may finish your current work first and respond later.`
+
+					targetState.messageQueueService.addMessage(promptText, [])
+
+					// Wake the recipient if it's idle/completed/paused.
+					if (targetState.abort) {
+						targetState.cancelAndProcessQueuedMessages()
+					}
+
+					// Telemetry: async message enqueued (Form B).
+					try {
+						TelemetryService.instance.capturePeerMessageSent(task.taskId, {
+							mode: "async",
+							status: "delivered",
+							targetTaskId: task_id,
+						})
+					} catch {
+						// non-fatal
+					}
+
+					pushToolResult(
+						`Message sent to task ${task_id} ("${getManagedTaskTitle(task, task_id) ?? task_id}"). ` +
+							`Delivery: on the recipient's next turn (resuming it if idle).`,
+					)
+				}
 			}
 		} catch (error) {
 			await handleError("sending peer message", error instanceof Error ? error : new Error(String(error)))
