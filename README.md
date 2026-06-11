@@ -62,9 +62,9 @@ Shofer ships with 5 built-in modes — choose from the Mode Selector dropdown in
 | 🪲 **Debug**        | Troubleshooting errors and diagnosing root causes.                       |
 | 🪃 **Orchestrator** | Coordinating complex multi-step work by delegating to sub-tasks.         |
 
-Create your own modes (Reviewer, Search, Opinion, Browser, and more) via [`.shofer/shofermodes`](src/USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
+Create your own modes (Reviewer, Search, Opinion, Browser, and more) via [`.shofer/shofermodes`](USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
 
-Learn more: [User Manual](src/USER_MANUAL.md) • [Custom Modes](src/USER_MANUAL.md#4-custom-modes)
+Learn more: [User Manual](USER_MANUAL.md) • [Custom Modes](USER_MANUAL.md#4-custom-modes)
 
 ## Workflows
 
@@ -80,7 +80,7 @@ Shofer ships with **two built-in multi-agent workflows** — formal, determinist
 
 Launch a workflow via **New… → New Workflow** in the chat toolbar. Create your own custom workflows as `.slang` files under `.shofer/workflows/` (project) or `~/.shofer/workflows/` (global).
 
-Learn more: [User Manual → Workflows](src/USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](docs/built-in-workflows.md) • [Slang Language Spec](docs/slang_specs.md)
+Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](docs/built-in-workflows.md) • [Slang Language Spec](docs/slang_specs.md)
 
 ## Parallel Tasks & Worktrees
 

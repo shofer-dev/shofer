@@ -1,4 +1,4 @@
-# Built-in Modes — Source of Truth
+# Built-in Modes
 
 This document describes the Source-of-Truth (SoT) chain for the six built-in modes
 in the Shofer VS Code extension. It covers where each mode is defined, how tool

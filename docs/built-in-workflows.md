@@ -1,4 +1,4 @@
-# Built-in Workflows — Source of Truth
+# Built-in Workflows
 
 This document describes the Source-of-Truth (SoT) chain for the two built-in
 workflows in the Shofer VS Code extension: **Debug** and **Implement a Feature**.
