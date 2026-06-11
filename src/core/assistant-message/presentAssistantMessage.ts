@@ -533,6 +533,8 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.filePath}']`
 					case "rename_symbol":
 						return `[${block.name} for '${block.params.filePath}']`
+					case "sed":
+						return `[${block.name} for '${block.params.path}']`
 					case "sleep":
 						return `[Sleep for ${block.params.seconds || "?"}s]`
 					default:
