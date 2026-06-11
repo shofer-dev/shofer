@@ -3605,6 +3605,7 @@ export class ShoferProvider
 				}
 			})(),
 			debug: vscode.workspace.getConfiguration(Package.name).get<boolean>("debug", false),
+			workflowVizHtml: undefined, // pushed live via postConfigUpdate from WorkflowTask.notifySlangEditor()
 		}
 	}
 

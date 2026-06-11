@@ -37,6 +37,7 @@ import SessionSearch from "./SessionSearch"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
 import { createIncrementalMessageProcessor } from "./incrementalMessageProcessing"
+import SlangViz from "./SlangViz"
 
 export interface WorkflowViewProps {
 	isHidden: boolean
@@ -88,6 +89,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		taskNotifications,
 		pendingWorktreeDir,
 		setPendingWorktreeDir,
+		workflowVizHtml,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -2014,6 +2016,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							</StandardTooltip>
 						)}
 					</div>
+					<SlangViz html={workflowVizHtml} />
 					{showScrollToBottom && (
 						<div className="flex h-9 items-center mb-px px-[15px]">
 							<StandardTooltip content={t("chat:scrollToBottom")}>

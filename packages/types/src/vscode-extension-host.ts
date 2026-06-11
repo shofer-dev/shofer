@@ -456,6 +456,7 @@ export type ExtensionState = Pick<
 
 	// Workflow management
 	workflows?: Array<LauncherWorkflow>
+	workflowVizHtml?: string
 	// Parallel task management
 	parallelTasks?: Array<{
 		id: string

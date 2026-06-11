@@ -10,6 +10,7 @@
  * Design: see docs/todos/workflow_design.md for the full specification.
  */
 
+import { readFileSync } from "fs"
 import * as path from "path"
 import * as fs from "fs/promises"
 import os from "os"
@@ -45,7 +46,7 @@ import {
 	type Instr,
 	MAX_CONTROL_FLOW_STEPS,
 } from "./slang-interpreter"
-import { parseSlang, validateSlangAST } from "./slang-parser"
+import { parseSlang, parseSlang as parseSlangFull, validateSlangAST } from "./slang-parser"
 import type {
 	FlowDecl as UpstreamFlowDecl,
 	AgentDecl as UpstreamAgentDecl,
@@ -1297,18 +1298,29 @@ export class WorkflowTask extends Task {
 	}
 
 	/**
-	 * Push the current FlowState to the Slang custom editor so the three
-	 * visualization views can overlay runtime per-agent progress (opIndex,
-	 * status, mailbox).  When no editor is open for the .slang file this is
-	 * a no-op — the static view continues to work as before.
+	 * Push the current FlowState to the Slang custom editor AND the WorkflowView
+	 * webview so both surfaces show live per-agent runtime progress (opIndex,
+	 * status, mailbox). When no editor is open for the .slang file the custom
+	 * editor path is a no-op — the webview path still works independently.
 	 */
 	private notifySlangEditor(): void {
 		const sourcePath = this.flowState.sourcePath
-		if (!sourcePath) return
-		try {
-			SlangEditorProvider.notifyRuntimeState(sourcePath, serializeFlowState(this.flowState))
-		} catch (error) {
-			workflowLog.info(`[WorkflowTask#${this.taskId}] Failed to notify Slang editor of runtime state:`, error)
+		const runState = serializeFlowState(this.flowState)
+
+		// Push to the Slang custom editor (if open).
+		if (sourcePath) {
+			try {
+				SlangEditorProvider.notifyRuntimeState(sourcePath, runState)
+			} catch (error) {
+				workflowLog.info(`[WorkflowTask#${this.taskId}] Failed to notify Slang editor of runtime state:`, error)
+			}
+		}
+
+		// Push the self-contained HTML viz to the WorkflowView webview.
+		const provider = this.providerRef.deref()
+		if (provider) {
+			const html = buildWorkflowVizHtml(this.slangSource, this.flowState, runState)
+			provider.postConfigUpdate("workflowVizHtml", html)
 		}
 	}
 
@@ -1480,5 +1492,108 @@ async function loadFromDir(dir: string, workflows: Map<string, string>): Promise
 		}
 	} catch {
 		/* dir doesn't exist */
+	}
+}
+
+// ── Workflow VIz HTML Builder (for WorkflowView webview) ──
+
+/**
+ * Builds a self-contained HTML page that renders the three slang
+ * visualization diagrams (topology, sequence, swimlane) with live
+ * runtime state overlays. The page is meant to be rendered in a
+ * sandboxed iframe in WorkflowView via srcdoc.
+ *
+ * We read slang-render.js and slang-render.css at module init time
+ * (same pattern as SlangEditorProvider) and inline them into the HTML
+ * so no external file references are needed. dagre is loaded from
+ * unpkg CDN — it's a tiny (17KB gzip) pure-JS layout library.
+ *
+ * The rendering is initialised via a `safeRender()` call in an inline
+ * script that passes both the parsed flow AST and the serialized
+ * FlowState as the `runState` field so per-agent progress badges
+ * appear immediately.
+ */
+export function buildWorkflowVizHtml(
+	slangSource: string,
+	flowState: FlowState,
+	runState: Record<string, unknown>,
+): string {
+	if (!slangSource) return ""
+
+	const { ast, errors } = parseSlangFull(slangSource)
+	if (errors.length > 0 || ast.flows.length === 0) return ""
+
+	const flowDeclaration = ast.flows[0]
+
+	// Strip parser-internal Span objects that don't serialise into JSON.
+	const flow = stripSpans(flowDeclaration)
+	const diags: string[] = []
+
+	// Load the render engine and CSS (read once, cached after first call).
+	const RENDER_JS = _lazyReadFile(path.join(__dirname, "..", "webview", "slang-render.js"))
+	const RENDER_CSS = _lazyReadFile(path.join(__dirname, "..", "webview", "slang-render.css"))
+
+	const payload = JSON.stringify({
+		type: "render",
+		fileName: flowState.sourcePath ?? "workflow",
+		flow,
+		diags,
+		runState,
+	})
+		.replace(/</g, "\\u003c")
+		.replace(/>/g, "\\u003e")
+		.replace(/&/g, "\\u0026")
+
+	// NOTE: dagre is loaded from CDN. This is acceptable for a
+	// developer-oriented tool (not user-facing content), and keeps
+	// the bundle size small. The CDN URL is pinned to a specific
+	// version to avoid supply-chain drift.
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slang — Workflow Viz</title>
+<style>${RENDER_CSS}</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="diags" class="diag-section"></div>
+<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"><\\/script>
+<script>${RENDER_JS}</script>
+<script>(function () { "use strict"; var __payload = ${payload}; safeRender(__payload); })();</script>
+</body>
+</html>`
+}
+
+/** Strip Span wrapper objects from a parsed AST so it JSON-serialises. */
+function stripSpans(obj: unknown): unknown {
+	if (obj === null || obj === undefined) return obj
+	if (Array.isArray(obj)) return obj.map(stripSpans)
+	if (typeof obj !== "object") return obj
+	const record = obj as Record<string, unknown>
+	if ("start" in record && "end" in record && Object.keys(record).length === 2) return undefined
+	const out: Record<string, unknown> = {}
+	for (const key of Object.keys(record)) {
+		if (key === "location" || key === "span") continue
+		out[key] = stripSpans(record[key])
+	}
+	return out
+}
+
+let _renderJsCache: string | null = null
+let _renderCssCache: string | null = null
+
+function _lazyReadFile(filePath: string): string {
+	if (filePath.endsWith(".js") && _renderJsCache) return _renderJsCache
+	if (filePath.endsWith(".css") && _renderCssCache) return _renderCssCache
+	try {
+		const content = readFileSync(filePath, "utf-8")
+		if (filePath.endsWith(".js")) _renderJsCache = content
+		if (filePath.endsWith(".css")) _renderCssCache = content
+		return content
+	} catch {
+		workflowLog.warn(`[WorkflowViz] Failed to read ${filePath}; viz will be empty`)
+		return ""
 	}
 }
