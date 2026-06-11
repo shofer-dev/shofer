@@ -1495,7 +1495,7 @@ async function loadFromDir(dir: string, workflows: Map<string, string>): Promise
 	}
 }
 
-// ── Workflow VIz HTML Builder (for WorkflowView webview) ──
+// ── Workflow Viz HTML Builder (for WorkflowView webview) ── (for WorkflowView webview) ──
 
 /**
  * Builds a self-contained HTML page that renders the three slang
@@ -1530,8 +1530,10 @@ export function buildWorkflowVizHtml(
 	const diags: string[] = []
 
 	// Load the render engine and CSS (read once, cached after first call).
-	const RENDER_JS = _lazyReadFile(path.join(__dirname, "..", "webview", "slang-render.js"))
-	const RENDER_CSS = _lazyReadFile(path.join(__dirname, "..", "webview", "slang-render.css"))
+	// In the bundled output, __dirname is src/dist/ (where extension.js lives).
+	// slang-render.js and slang-render.css are copied to the same directory by esbuild.
+	const RENDER_JS = _lazyReadFile(path.join(__dirname, "slang-render.js"))
+	const RENDER_CSS = _lazyReadFile(path.join(__dirname, "slang-render.css"))
 
 	const payload = JSON.stringify({
 		type: "render",

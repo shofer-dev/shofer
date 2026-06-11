@@ -1,14 +1,8 @@
 /**
- * SlangViz — renders the three slang workflow visualization diagrams
- * (topology, sequence, swimlane) inside a sandboxed iframe.
- *
- * The host side (WorkflowTask) generates a fully self-contained HTML page
- * and pushes it via ExtensionState.workflowVizHtml. This component renders
- * that HTML in a sandboxed iframe via srcdoc. No inter-frame communication
- * is needed — each round's new flowState triggers a fresh HTML bundle.
- *
- * The containing WorkflowView.tsx is responsible for reading
- * `workflowVizHtml` from ExtensionState and passing it as a prop.
+ * SlangViz — renders the slang workflow visualization diagrams inside a
+ * sandboxed iframe.  The host generates a self-contained HTML page and
+ * pushes it via ExtensionState.workflowVizHtml.  An optional `initialView`
+ * prop sets the starting diagram (topology|sequence|swimlane).
  */
 
 import React, { useRef, useEffect } from "react"
@@ -16,41 +10,42 @@ import React, { useRef, useEffect } from "react"
 export interface SlangVizProps {
 	/** Self-contained HTML page produced by buildWorkflowVizHtml(). */
 	html: string | undefined
+	/** Which view to show initially. */
+	initialView?: "topology" | "sequence" | "swimlane"
 }
 
-/**
- * A sandboxed iframe that renders the slang visualization HTML.
- * The iframe is styled to fill its parent and has no border or padding.
- */
-const SlangViz: React.FC<SlangVizProps> = ({ html }) => {
+const SlangViz: React.FC<SlangVizProps> = ({ html, initialView }) => {
 	const iframeRef = useRef<HTMLIFrameElement>(null)
 
 	useEffect(() => {
 		const iframe = iframeRef.current
 		if (!iframe || !html) return
 
-		// Write srcdoc to trigger a full re-render. Using srcdoc is
-		// simpler than blobs and works in all modern browsers (including
-		// the VS Code webview which is Chromium-based).
-		iframe.srcdoc = html
-	}, [html])
+		// Patch the HTML to set the initial view before srcdoc.
+		if (initialView && initialView !== "topology") {
+			const patched = html.replace('var _currentView = "topology"', `var _currentView = "${initialView}"`)
+			iframe.srcdoc = patched
+		} else {
+			iframe.srcdoc = html
+		}
+	}, [html, initialView])
 
-	// When there's no viz content, render nothing (not even an empty
-	// iframe) to avoid wasted space in non-workflow tasks.
 	if (!html) return null
 
 	return (
-		<iframe
-			ref={iframeRef}
-			sandbox="allow-scripts" // allow dagre CDN + inline render script
-			style={{
-				width: "100%",
-				height: "480px",
-				border: "none",
-				background: "var(--vscode-editor-background, #1e1e1e)",
-			}}
-			title="Slang Workflow Visualization"
-		/>
+		<div style={{ width: "100%", flex: "1 1 0%", minHeight: 0 }}>
+			<iframe
+				ref={iframeRef}
+				sandbox="allow-scripts"
+				style={{
+					width: "100%",
+					height: "100%",
+					border: "none",
+					background: "var(--vscode-editor-background, #1e1e1e)",
+				}}
+				title="Slang Workflow Visualization"
+			/>
+		</div>
 	)
 }
 

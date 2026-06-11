@@ -93,6 +93,9 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
+	// Workflow viz tab: "chat" | "topology" | "sequence" | "swimlane"
+	const [workflowTab, setWorkflowTab] = useState<"chat" | "topology" | "sequence" | "swimlane">("chat")
+
 	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
 
 	// When the provider changes, clear the retired-provider warning.
@@ -1977,46 +1980,83 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 
 			{task && (
 				<>
-					<div className="grow flex relative" ref={scrollContainerRef}>
-						<Virtuoso
-							ref={virtuosoRef}
-							key={task.ts}
-							className="scrollable grow overflow-y-scroll mb-1"
-							increaseViewportBy={{ top: 3_000, bottom: 1000 }}
-							data={groupedMessages}
-							initialTopMostItemIndex={groupedMessages.length > 0 ? groupedMessages.length - 1 : 0}
-							restoreStateFrom={restoreSnapshot}
-							itemContent={itemContent}
-							followOutput={followOutputCallback}
-							atBottomStateChange={atBottomStateChangeCallback}
-							atBottomThreshold={1}
-						/>
-						<SessionSearch
-							messages={messages}
-							isOpen={isSessionSearchOpen}
-							onClose={() => setIsSessionSearchOpen(false)}
-							onNavigate={(ts) => {
-								setSearchHighlightTs(ts)
-								if (ts === null) return
-								const index = groupedMessages.findIndex((msg) => msg.ts === ts)
-								if (index >= 0 && virtuosoRef.current) {
-									virtuosoRef.current.scrollToIndex({ index, align: "center" })
-								}
-							}}
-						/>
-						{!isSessionSearchOpen && (
-							<StandardTooltip content="Find in session (Ctrl+F)">
+					{/* Tab bar for workflow views */}
+					{workflowVizHtml && (
+						<div
+							className="flex gap-1 px-[15px] py-1.5"
+							style={{
+								borderBottom: "1px solid var(--vscode-widget-border, #3c3c3c)",
+							}}>
+							{(["chat", "topology", "sequence", "swimlane"] as const).map((tab) => (
 								<button
+									key={tab}
 									type="button"
-									onClick={() => setIsSessionSearchOpen(true)}
-									aria-label="Find in session"
-									className="absolute top-2 right-3 z-20 flex items-center justify-center w-7 h-7 rounded-md border border-vscode-panel-border bg-vscode-editor-background/80 hover:bg-vscode-toolbar-hoverBackground text-vscode-foreground shadow-sm">
-									<span className="codicon codicon-search text-xs" />
+									className={`text-xs font-medium px-3 py-1 rounded transition-colors border-none cursor-pointer ${
+										workflowTab === tab ? "text-white" : "opacity-60 hover:opacity-100"
+									}`}
+									style={{
+										background:
+											workflowTab === tab
+												? "var(--vscode-button-background, #0e639c)"
+												: "transparent",
+									}}
+									onClick={() => setWorkflowTab(tab as typeof workflowTab)}>
+									{
+										{
+											chat: "Chat",
+											topology: "Topology",
+											sequence: "Sequence",
+											swimlane: "Swimlane",
+										}[tab]
+									}
 								</button>
-							</StandardTooltip>
-						)}
-					</div>
-					<SlangViz html={workflowVizHtml} />
+							))}
+						</div>
+					)}
+					{workflowVizHtml && workflowTab !== "chat" && (
+						<SlangViz html={workflowVizHtml} initialView={workflowTab} />
+					)}
+					{(!workflowVizHtml || workflowTab === "chat") && (
+						<div className="flex relative grow" ref={scrollContainerRef}>
+							<Virtuoso
+								ref={virtuosoRef}
+								key={task.ts}
+								className="scrollable grow overflow-y-scroll mb-1"
+								increaseViewportBy={{ top: 3_000, bottom: 1000 }}
+								data={groupedMessages}
+								initialTopMostItemIndex={groupedMessages.length > 0 ? groupedMessages.length - 1 : 0}
+								restoreStateFrom={restoreSnapshot}
+								itemContent={itemContent}
+								followOutput={followOutputCallback}
+								atBottomStateChange={atBottomStateChangeCallback}
+								atBottomThreshold={1}
+							/>
+							<SessionSearch
+								messages={messages}
+								isOpen={isSessionSearchOpen}
+								onClose={() => setIsSessionSearchOpen(false)}
+								onNavigate={(ts) => {
+									setSearchHighlightTs(ts)
+									if (ts === null) return
+									const index = groupedMessages.findIndex((msg) => msg.ts === ts)
+									if (index >= 0 && virtuosoRef.current) {
+										virtuosoRef.current.scrollToIndex({ index, align: "center" })
+									}
+								}}
+							/>
+							{!isSessionSearchOpen && (
+								<StandardTooltip content="Find in session (Ctrl+F)">
+									<button
+										type="button"
+										onClick={() => setIsSessionSearchOpen(true)}
+										aria-label="Find in session"
+										className="absolute top-2 right-3 z-20 flex items-center justify-center w-7 h-7 rounded-md border border-vscode-panel-border bg-vscode-editor-background/80 hover:bg-vscode-toolbar-hoverBackground text-vscode-foreground shadow-sm">
+										<span className="codicon codicon-search text-xs" />
+									</button>
+								</StandardTooltip>
+							)}
+						</div>
+					)}
 					{showScrollToBottom && (
 						<div className="flex h-9 items-center mb-px px-[15px]">
 							<StandardTooltip content={t("chat:scrollToBottom")}>
