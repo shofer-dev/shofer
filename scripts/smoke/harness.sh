@@ -248,8 +248,8 @@ else
 	done
 
 	WF_LOG_DIR="$(mktemp -d)"
-	# Logs are NOT auto-cleaned — the directory path is printed at the
-	# end of the run so failures can be inspected.  Clean up manually:
+	# Logs are NOT auto-cleaned — they persist after the script exits so
+	# failures can be inspected.  Clean up manually when done:
 	#   rm -rf /tmp/tmp.XXXX
 
 	# Export env vars so xargs child processes can access them.

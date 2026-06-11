@@ -19,5 +19,5 @@ flow "commit-if" (flag: "boolean") {
   }
 
   converge when: @Worker.committed
-  budget: rounds(5), time(300)
+  budget: rounds(10), time(300)
 }
