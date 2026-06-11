@@ -227,13 +227,12 @@ export async function checkAutoApproval({
 		}
 
 		// Harmless informational / lightweight read-only tools are unconditionally auto-approved
-		// (independent of `alwaysAllowReadOnly`). These tools either query in-memory editor/LSP
-		// state, fetch a public URL, or list workspace metadata — they cannot mutate user state
-		// and gating them behind an approval prompt offers no security benefit while creating
-		// the appearance of a "silent hang" when the corresponding chat-row renderer is missing.
+		// (independent of `alwaysAllowReadOnly`). These tools query in-memory editor/LSP state
+		// or list workspace metadata — they cannot mutate user state and gating them behind an
+		// approval prompt offers no security benefit while creating the appearance of a
+		// "silent hang" when the corresponding chat-row renderer is missing.
 		if (
 			[
-				"fetchWebPage",
 				"findFiles",
 				"viewImage",
 				"getErrors",
