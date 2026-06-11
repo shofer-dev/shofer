@@ -59,6 +59,7 @@ import type {
 	OutputSchema,
 } from "./slang-ast"
 import { exprAsNumber, contractToJsonSchema } from "./slang-ast"
+import { aggregateRatings } from "./aggregate-rating"
 
 // ─── Adapter: upstream AST → WorkflowTask needs ───
 
@@ -1246,14 +1247,7 @@ export class WorkflowTask extends Task {
 		const provider = this.providerRef.deref()
 		if (!provider) return "poor"
 
-		const RATING_ORDER: Record<CompletionRating, number> = {
-			poor: 0,
-			well: 1,
-			excellent: 2,
-		}
-
-		let aggregate: CompletionRating = "poor"
-		let found = false
+		const ratings: CompletionRating[] = []
 
 		for (const [, agentState] of this.flowState.agents) {
 			if (agentState.status !== "committed" || !agentState.taskId) continue
@@ -1261,12 +1255,8 @@ export class WorkflowTask extends Task {
 			try {
 				const { historyItem } = await provider.getTaskWithId(agentState.taskId)
 				const rating = historyItem.taskState?.rating
-				if (rating && !found) {
-					aggregate = rating
-					found = true
-				} else if (rating && RATING_ORDER[rating] < RATING_ORDER[aggregate]) {
-					aggregate = rating
-					found = true
+				if (rating) {
+					ratings.push(rating)
 				}
 			} catch {
 				workflowLog.info(
@@ -1275,7 +1265,7 @@ export class WorkflowTask extends Task {
 			}
 		}
 
-		return aggregate
+		return aggregateRatings(ratings)
 	}
 
 	private async handleConverge(): Promise<void> {
