@@ -14,7 +14,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import os from "os"
 
-import type { HistoryItem, TaskHandle } from "@shofer/types"
+import type { CompletionRating, HistoryItem, TaskHandle } from "@shofer/types"
 import { ShoferEventName } from "@shofer/types"
 
 import { Task, type TaskOptions } from "../task/Task"
@@ -1237,13 +1237,55 @@ export class WorkflowTask extends Task {
 		return committedCountPure(this.flowState.agents)
 	}
 
+	/**
+	 * Aggregate child agent ratings using the minimum-common-denominator rule:
+	 * one "poor" pulls the workflow down to "poor"; two "excellent" + one "well" → "well".
+	 * If no committed agent has a rating (all errored / no committed agents), defaults to "poor".
+	 */
+	private async aggregateChildRatings(): Promise<CompletionRating> {
+		const provider = this.providerRef.deref()
+		if (!provider) return "poor"
+
+		const RATING_ORDER: Record<CompletionRating, number> = {
+			poor: 0,
+			well: 1,
+			excellent: 2,
+		}
+
+		let aggregate: CompletionRating = "poor"
+		let found = false
+
+		for (const [, agentState] of this.flowState.agents) {
+			if (agentState.status !== "committed" || !agentState.taskId) continue
+
+			try {
+				const { historyItem } = await provider.getTaskWithId(agentState.taskId)
+				const rating = historyItem.taskState?.rating
+				if (rating && !found) {
+					aggregate = rating
+					found = true
+				} else if (rating && RATING_ORDER[rating] < RATING_ORDER[aggregate]) {
+					aggregate = rating
+					found = true
+				}
+			} catch {
+				workflowLog.info(
+					`[WorkflowTask#${this.taskId}] aggregateChildRatings: could not read HistoryItem for agent '${agentState.name}' (taskId=${agentState.taskId})`,
+				)
+			}
+		}
+
+		return aggregate
+	}
+
 	private async handleConverge(): Promise<void> {
 		this.flowState.status = "converged"
 		await this.sayProgress(
 			`✅ Workflow **${this.flowState.flowName}** converged after ${this.flowState.round} round(s).`,
 		)
 		await this.persistCheckpoint()
-		await this.emitTaskCompleted("well")
+		const rating = await this.aggregateChildRatings()
+		await this.emitTaskCompleted(rating)
 	}
 
 	// ── Persistence ──

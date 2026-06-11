@@ -710,6 +710,23 @@ Do NOT use Tailwind utility classes (`bg-gray-400`, `bg-green-500`, etc.) to doc
 | ------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **sanitizeRestoredState** | [`TaskManager.ts`](../src/services/task-manager/TaskManager.ts#L621) | Static method that downgrades transient lifecycles (`running`, `waiting_input`, `waiting`) to `idle` when rehydrating tasks after a process restart. Terminal lifecycles (`completed`, `error`, `paused`) are preserved. |
 
+### Workflow Task State & Rating
+
+[`WorkflowTask`](../src/core/workflow/WorkflowTask.ts) reuses the same visual mechanism as regular tasks: [`resolveStateVisual`](../webview-ui/src/components/chat/TaskSelector.tsx#L181) combines [`LIFECYCLE_VISUAL`](../webview-ui/src/components/chat/TaskSelector.tsx#L85) with [`RATING_VISUAL`](../webview-ui/src/components/chat/TaskSelector.tsx#L150) when the lifecycle is `"completed"`. The `codicon-organization` icon in `TaskSelector` is surface-only; the status dot and icon come from `TaskState`.
+
+| Flow Status       | Lifecycle   | Rating Derivation                                  |
+| ----------------- | ----------- | -------------------------------------------------- |
+| `converged`       | `completed` | Aggregate of committed child agent ratings (below) |
+| `budget_exceeded` | `completed` | Hardcoded `"poor"`                                 |
+| `deadlock`        | `completed` | Hardcoded `"poor"`                                 |
+| `error`           | `completed` | Hardcoded `"poor"`                                 |
+
+**Minimum-Common-Denominator Rule**: The workflow's rating is the minimum rating across all committed child agents. One `"poor"` pulls the workflow down to `"poor"`; two `"excellent"` + one `"well"` → `"well"`. If no committed agent has a rating (all errored / no committed agents), defaults to `"poor"`.
+
+Example: Three agents committed — two rated `"excellent"`, one rated `"well"` → workflow rating = `"well"`.
+
+The aggregation logic lives in [`WorkflowTask.aggregateChildRatings()`](../src/core/workflow/WorkflowTask.ts), called from [`handleConverge()`](../src/core/workflow/WorkflowTask.ts) which passes the computed rating to [`emitTaskCompleted()`](../src/core/workflow/WorkflowTask.ts).
+
 ### Key Task Events (emitted by `Task`)
 
 | Event             | When                                            |
