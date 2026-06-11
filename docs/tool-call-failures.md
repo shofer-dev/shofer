@@ -1,341 +1,341 @@
-# Tool Call Failure Handling
+# Tool Call Failure Modes
 
-> Source: [`src/core/task/Task.ts`](src/core/task/Task.ts)
-> Source: [`src/core/assistant-message/presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts)
-> Source: [`src/core/assistant-message/NativeToolCallParser.ts`](src/core/assistant-message/NativeToolCallParser.ts)
-> Source: [`src/core/tools/validateToolUse.ts`](src/core/tools/validateToolUse.ts)
+**Purpose:** Comprehensive catalog of every way a tool call can fail in Shofer — error messages, escalation paths, and recovery behavior. Update this document when new failure paths are added.
 
-When the LLM emits a tool call that cannot be executed — wrong tool name, malformed
-JSON arguments, missing required parameters — the system must (a) show the user what
-happened, (b) tell the LLM so it can self-correct, and (c) count the failure toward
-the [mistake limit](mistake_limit.md). This document describes every failure path and
-the guarantees each one upholds.
+**Related files:**
 
-## Architecture overview
+- [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — main tool dispatch and error routing
+- [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — pre-execution validation (name, mode, disabled)
+- [`Task.ts`](../src/core/task/Task.ts) — `consecutiveMistakeCount`, `recordToolError`, `sayAndCreateMissingParamError`
+- [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) — streaming arg construction
+- [`ToolRepetitionDetector.ts`](../src/core/tools/ToolRepetitionDetector.ts) — identical-consecutive-call detection
 
-An LLM tool call travels through these stages before execution:
+---
+
+## 1. Failure Mode Taxonomy
+
+Every tool call goes through this pipeline. Failures at any stage short-circuit the call:
 
 ```
-LLM emits tool_call → stream consumer (Task.ts) → NativeToolCallParser
-→ assistantMessageContent → presentAssistantMessage → validateToolUse
-→ tool.execute()
+[LLM emits tool_use block]
+    │
+    ▼
+Stage A — Structural validation
+    ├─ Missing tool_use.id (XML tool calls unsupported)
+    └─ Missing nativeArgs (streaming truncation / malformed JSON)
+    │
+    ▼
+Stage B — Semantic validation (validateToolUse)
+    ├─ Unknown tool name
+    ├─ Tool disabled by user
+    ├─ Tool not allowed in current mode
+    └─ File restriction error (write group regex mismatch)
+    │
+    ▼
+Stage C — Repetition check (ToolRepetitionDetector)
+    └─ Identical consecutive tool calls exceeding limit
+    │
+    ▼
+Stage D — Approval gate (askApproval)
+    ├─ User rejects ("No" button)
+    └─ User provides feedback instead of approving
+    │
+    ▼
+Stage E — Tool execution (tool handler)
+    ├─ Missing required parameter
+    ├─ Runtime error in handler
+    ├─ Protected file / .shoferignore block
+    └─ Tool-specific business-logic error
+    │
+    ▼
+Stage F — Escalation (after tool returns)
+    └─ consecutiveMistakeCount ≥ consecutiveMistakeLimit → task asks user for guidance
 ```
 
-A failure at any stage must produce three outputs:
-
-1. **Chat UI:**[`task.say("error", message)`](src/core/task/Task.ts) — user-visible error row
-2. **LLM feedback:**[`pushToolResultToUserContent({ is_error: true })`](src/core/task/Task.ts) — matching `tool_result` so the model can recover
-3. **Mistake counter:**[`consecutiveMistakeCount++`](src/core/task/Task.ts) — counted toward the limit
-
-## Failure scenarios
-
-### A. `NativeToolCallParser.parseToolCall()` returns `null`
-
-**Location:** [`Task.ts` stream consumer, `"tool_call"` case](src/core/task/Task.ts)
-
-`parseToolCall()` returns `null` when:
-
-- The tool name is not in [`toolNames`](../packages/types/src/tool.ts), not a custom
-  tool, and not a private LM tool — [`NativeToolCallParser.ts`](src/core/assistant-message/NativeToolCallParser.ts)
-- The JSON arguments fail to parse — [`NativeToolCallParser.ts`](src/core/assistant-message/NativeToolCallParser.ts)
-
-**Behavior (as of 2026-06-11):**
-
-- ✅ `this.consecutiveMistakeCount++`
-- ✅ `task.say("error", errorMessage)` — visible in chat
-- ✅ `pushToolResultToUserContent({ is_error: true })` — LLM receives the error
-- ✅ `recordToolError(chunk.name as ToolName, errorMessage)` — captured in tool usage stats
-- ✅ The error message now includes `NativeToolCallParser.consumeLastParseError()` — the
-  parser's specific failure reason (e.g., `"Invalid arguments for tool 'read_file'.
-  Native tool calls require a valid JSON payload matching the tool schema. Received: {}"`)
-  is included instead of the generic fallback.
-
-### B. `NativeToolCallParser.parseToolCall()` fails (valid name, bad/incomplete args)
-
-**Location:** [`NativeToolCallParser.parseToolCall`](src/core/assistant-message/NativeToolCallParser.ts:996)
-
-> ⚠️ **Corrected 2026-06-11 — the previous description of this section was wrong.** > `parseToolCall()` does **not** throw to its caller. The `throw` for missing
-> `nativeArgs` lives at [`NativeToolCallParser.ts:1641`](src/core/assistant-message/NativeToolCallParser.ts:1641),
-> but it is **inside** the `try { … } catch (error) { return null }` block that
-> spans [lines 1030–1674](src/core/assistant-message/NativeToolCallParser.ts:1030).
-> The local `catch` at [line 1667](src/core/assistant-message/NativeToolCallParser.ts:1667)
-> swallows it and returns `null`:
->
-> ```typescript
-> try {
->     // …switch builds nativeArgs…
->     if (!nativeArgs && !customToolRegistry.has(resolvedName) && !isPrivateLmTool(resolvedName)) {
->         throw new Error(`[NativeToolCallParser] Invalid arguments for tool '${resolvedName}'...`)
->     }
->     return result
-> } catch (error) {
->     webviewLog.error(...)
->     return null          // ← the throw above lands here; never propagates
-> }
-> ```
->
-> Consequently **both** malformed-JSON and missing-required-param cases return
-> `null`, exactly like the unknown-name case in §A. There is no throw, no
-> `"api_req_failed"` dialog, and no "Provider Error" Retry button on this path.
-
-**Actual behavior by stream format:**
-
-| Stream format                                   | What happens                                                                                                                                                                                                                                                              | UI result                         |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Legacy `tool_call` chunk                        | `parseToolCall()` returns `null` → the `if (!toolUse)` branch at [`Task.ts:4779`](src/core/task/Task.ts:4779) fires `say("error", …)` + `pushToolResultToUserContent({ is_error: true })`                                                                                 | ✅ Error row visible (same as §A) |
-| Streaming `tool_call_partial` + `tool_call_end` | `finalizeStreamingToolCall()` returns `null` → the `else if (toolUseIndex !== undefined)` branch at [`Task.ts:4745`](src/core/task/Task.ts:4745) sets `partial = false` **and clears the stale partial `nativeArgs`** → presented → §C guard fires (**fixed 2026-06-11**) | ✅ Error row visible (via §C)     |
-
-Both paths now reliably surface this failure. Before the 2026-06-11 fix, the streaming
-path left a stale partial `nativeArgs` on the block, which defeated the §C guard and
-caused the tool to be dispatched silently with incomplete arguments — see §C and Gaps.
-
-### C. `presentAssistantMessage`: known tool, missing `nativeArgs`
-
-**Location:** [`presentAssistantMessage.ts:569`](src/core/assistant-message/presentAssistantMessage.ts:569)
-
-When `presentAssistantMessage` receives a complete (non-partial) tool block for a
-known tool but `nativeArgs` is `undefined`, the tool cannot be executed:
-
-```typescript
-if (!block.partial) {
-	const customTool = stateExperiments?.customTools ? customToolRegistry.get(block.name) : undefined
-	const isKnownTool = isValidToolName(String(block.name), stateExperiments)
-	if (isKnownTool && !block.nativeArgs && !customTool) {
-		// say("error", …) + pushToolResultToUserContent({ is_error: true })
-	}
-}
-```
+---
 
-**Behavior when the guard fires:**
+## 2. Failure Mode Reference
 
-- ✅ `shofer.consecutiveMistakeCount++`
-- ✅ `await shofer.say("error", errorMessage)` — visible in chat
-- ✅ `shofer.pushToolResultToUserContent({ is_error: true })` — LLM receives the error
-- ✅ `shofer.recordToolError(block.name as ToolName, errorMessage)` — captured in tool usage stats
-- ✅ **(2026-06-11)** Error message now includes `NativeToolCallParser.consumeLastParseError()`
-  with the parser's specific failure reason, plus the partial params that were received
-  during streaming — e.g., `"Invalid tool call for 'read_file': missing nativeArgs.
-  Parser error: [NativeToolCallParser] Invalid arguments for tool 'read_file'. ...
-  Received partial params: {}."`
+### A1. Missing `tool_use.id` (XML Tool Calls)
 
-> ✅ **FIXED (2026-06-11): the streaming path now clears the stale partial `nativeArgs`,
-> so this guard fires reliably.**
->
-> **The bug that was fixed:** the guard assumes that when `finalizeStreamingToolCall()`
-> returns `null`, the block left in `assistantMessageContent[toolUseIndex]` has **no** > `nativeArgs`. During streaming this was false. Each `tool_call_delta` replaces the
-> block with the output of
-> [`createPartialToolUse`](src/core/assistant-message/NativeToolCallParser.ts:377),
-> which **optimistically populates a partial `nativeArgs`** from whatever has parsed so
-> far (e.g. for `read_file` it sets `nativeArgs = { path, mode, offset, limit, … }` as
-> soon as a `path` appears — see [line 435](src/core/assistant-message/NativeToolCallParser.ts:435)).
-> When the final strict parse then failed, the null-branches only flipped
-> `partial = false` and left the stale partial `nativeArgs` in place, so
-> `!block.nativeArgs` was `false`, the §C guard was skipped, and the tool was dispatched
-> with incomplete args — no error row, no mistake increment.
->
-> **The fix** clears `existingToolUse.nativeArgs = undefined` alongside
-> `partial = false` in both stream-consumer null-branches —
-> [`Task.ts:4753`](src/core/task/Task.ts:4753) (the `tool_call_end` path) and
-> [`Task.ts:5217`](src/core/task/Task.ts:5217) (the `finalizeRawChunks()` tail). This
-> restores the invariant the guard assumes ("finalize failed ⇒ no `nativeArgs`"), so a
-> known tool with bad/incomplete arguments on the streaming path now produces the
-> visible error this section promises. The previously-stale comments at those lines have
-> been updated to match.
+**Trigger:** Model emits a tool call without a native `tool_use.id` field — typically XML markup like `<read_file>path</read_file>`.
 
-### D. `presentAssistantMessage`: unknown tool name
+**Error message:**
 
-**Location:** [`presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts)
+> Invalid tool call: missing tool_use.id. XML tool calls are no longer supported. Remove any XML tool markup (e.g. \<read_file\>...\</read_file\>) and use native tool calling instead.
 
-When `presentAssistantMessage` encounters a tool name that doesn't match any known
-tool, custom tool, or private LM tool:
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `case "tool_use"` guard at L368
 
-**Behavior:**
+**Effect:**
 
-- ✅ `shofer.consecutiveMistakeCount++`
-- ✅ `await shofer.say("error", t("tools:unknownToolError", { toolName: block.name }))` — visible in chat
-- ✅ `shofer.recordToolError(block.name as ToolName, errorMessage)` — captured in tool usage stats
-- ✅ `pushToolResultToUserContent({ is_error: true })` — LLM receives the error
+- `consecutiveMistakeCount++`
+- Error rendered in chat via `shofer.say("error", …)`
+- Error pushed to `userMessageContent` as text (not as a `tool_result` — there's no `tool_use_id` to pair with)
+- `didAlreadyUseTool = true` (stream continues)
+- If `consecutiveMistakeCount` hits the limit, task escalates to `mistake_limit_reached` ask
 
-### E. `presentAssistantMessage`: mode-validation fails
+**Recovery:** LLM must retry with proper native tool calling format. No automatic recovery.
 
-**Location:** [`presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts)
+---
 
-When [`validateToolUse()`](src/core/tools/validateToolUse.ts) throws — the tool is not
-allowed in the current mode per [`tool_access.md`](tool_access.md):
+### A2. Missing `nativeArgs` (Streaming Truncation / Malformed JSON)
 
-**Behavior:**
+**Trigger:** A complete (`!partial`) tool_use block for a known tool where `NativeToolCallParser` could not construct `nativeArgs` — typically because the provider terminated mid-argument-JSON or the JSON syntax was irrecoverably malformed.
 
-- ✅ `shofer.consecutiveMistakeCount++` (unless `disableMistakeLimitChecks` is enabled)
-- ❌ No `say("error", ...)` — only `pushToolResultToUserContent({ is_error: true })` so the LLM can correct itself
+**Error message:**
 
-> **Note:** This path does not emit a visible error row. It pushes a structured
-> `tool_result` with `is_error: true` to the LLM, which is usually sufficient for the
-> model to self-correct by choosing an allowed tool. Adding `say("error", …)` here
-> would be straightforward; it was deferred because mode-violations are less surprising
-> to the user (the model simply needs to pick a different tool).
+> Invalid tool call for '\<name\>': missing nativeArgs. This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.
 
-### F. Tool repetition limit
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L569-594
 
-**Location:** [`presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts)
+**Effect:**
 
-When [`ToolRepetitionDetector`](src/core/tools/ToolRepetitionDetector.ts) detects
-identical consecutive tool calls:
+- `consecutiveMistakeCount++`
+- `recordToolError(name, errorMessage)` called
+- Single error `tool_result` pushed (not fragmented across multiple pushes)
+- `didAlreadyUseTool` is **not** set — stream continues gracefully
+- Custom tools (from `customToolRegistry`) and private LM tools are exempt (they carry raw args)
 
-**Behavior:**
+**Recovery:** LLM receives the tool_result error and must retry with valid arguments.
 
-- ✅ Asks user for guidance via [`"tool_repetition_limit_reached"`](webview-ui/src/i18n/locales/en/tools.json) ask
-- ✅ `pushToolResult(formatResponse.toolError(...))` — LLM receives the error
-- ✅ Telemetry captured via `ConsecutiveMistakeError`
+---
 
-### G. Mistake limit reached
+### B1. Unknown Tool Name
 
-**Location:** [`Task.ts` `recursivelyMakeShoferRequests`](src/core/task/Task.ts)
+**Trigger:** Model calls a tool that doesn't exist in `toolNames`, isn't an MCP tool, isn't a custom tool, and isn't a private LM tool.
 
-When `consecutiveMistakeCount >= consecutiveMistakeLimit`:
+**Error message:**
 
-**Behavior:**
+> Unknown tool "\<name\>". This tool does not exist. Please use one of the available tools: \<comma-separated tool list\>.
 
-- ✅ Fires `"mistake_limit_reached"` ask — user sees guidance dialog
-- ✅ Resets `consecutiveMistakeCount = 0` on response
+**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — `isValidToolName()` at L61-64
 
-### H. `parseToolCall()` returns `null` for streaming MCP tools
+**Effect:**
 
-**Location:** [`NativeToolCallParser.ts` `parseDynamicMcpTool`](src/core/assistant-message/NativeToolCallParser.ts)
+- `consecutiveMistakeCount++`
+- Error `tool_result` pushed (validation catch block at L811-828 of `presentAssistantMessage.ts`)
+- `didAlreadyUseTool` **not** set
 
-When a dynamic MCP tool (`mcp--serverName--toolName`) has an unparseable name format:
+**Recovery:** LLM must pick a valid tool from the listed names. No automatic recovery.
 
-**Behavior:**
+---
 
-- ❌ Returns `null` — the stream consumer's `finalizeStreamingToolCall()` receives `null`
-- Then `finalizeRawChunks()` flows into the same `else if (toolUseIndex !== undefined)`
-  branch as §C — the partial block is finalized without `nativeArgs` and handled by
-  `presentAssistantMessage`
+### B2. Tool Disabled by User
 
-## Mistake counter semantics
+**Trigger:** Model calls a tool listed in the user's `disabledTools` setting (Settings → Tools). Disabled tools are removed from the LLM's tool catalog at build time, so this usually means the model hallucinated the tool from training data.
 
-[`consecutiveMistakeCount`](src/core/task/Task.ts) is incremented on **each failed
-tool invocation** from the model's perspective. When it reaches
-[`consecutiveMistakeLimit`](src/core/task/Task.ts) (default:
-[`DEFAULT_CONSECUTIVE_MISTAKE_LIMIT`](../packages/types/src/provider-settings.ts)),
-the system fires the mistake-limit dialog.
-
-Successful tool execution resets the counter to 0.
+**Error message:**
 
-The counter is also incremented by the task loop itself when the LLM produces no
-tools at all (the `"no_tools_used"` path in `initiateTaskLoop`).
-
-## UI visibility summary
+> Tool "\<name\>" has been disabled by the user in Settings → Tools and is not available in any mode. Do not attempt to call it again. Use a different tool to accomplish the task.
 
-| Scenario                                                                                                   | Chat error row  | LLM receives error           | Mistake counter         |
-| ---------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------- | ----------------------- |
-| `parseToolCall()` returns `null` — **legacy** `tool_call` chunk (unknown name / bad JSON / missing params) | ✅              | ✅                           | ✅                      |
-| `parseToolCall()` returns `null` — **streaming**, valid name + bad/incomplete args (**fixed 2026-06-11**)  | ✅ (via §C)     | ✅                           | ✅                      |
-| `parseToolCall()` returns `null` — **streaming**, valid name + **no** partial `nativeArgs`                 | ✅ (via §C)     | ✅                           | ✅                      |
-| `parseToolCall()` returns `null` — **streaming**, unknown tool name                                        | ✅ (via §D)     | ✅                           | ✅                      |
-| `presentAssistantMessage`: missing `nativeArgs` (guard fires)                                              | ✅              | ✅                           | ✅                      |
-| `presentAssistantMessage`: unknown tool                                                                    | ✅              | ✅                           | ✅                      |
-| `presentAssistantMessage`: mode-validation fails                                                           | ❌              | ✅                           | ✅                      |
-| Tool repetition limit                                                                                      | ✅ (ask dialog) | ✅                           | N/A (separate detector) |
-| Mistake limit reached                                                                                      | ✅ (ask dialog) | — (blocks further execution) | Resets to 0             |
-
-> The second row was the reported symptom: on the streaming path (the default for modern
-> providers), a known tool with malformed/incomplete arguments was dispatched silently
-> because the lingering partial `nativeArgs` defeated the §C guard. Fixed 2026-06-11 by
-> clearing `nativeArgs` in the stream-consumer null-branches (see Gaps → Resolved).
-
-## Key files
-
-| File                                                                                                             | Role                                                                                   |
-| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [`src/core/task/Task.ts`](src/core/task/Task.ts)                                                                 | Stream consumer, mistake counter, `recordToolError()`, `pushToolResultToUserContent()` |
-| [`src/core/assistant-message/presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts) | Tool validation gate, unknown tool / missing-nativeArgs handling                       |
-| [`src/core/assistant-message/NativeToolCallParser.ts`](src/core/assistant-message/NativeToolCallParser.ts)       | Parses raw tool call JSON, validates names, constructs `nativeArgs`                    |
-| [`src/core/tools/validateToolUse.ts`](src/core/tools/validateToolUse.ts)                                         | Mode-based tool access validation                                                      |
-| [`src/core/tools/ToolRepetitionDetector.ts`](src/core/tools/ToolRepetitionDetector.ts)                           | Identical consecutive call detection                                                   |
-| [`webview-ui/src/components/chat/ChatView.tsx`](webview-ui/src/components/chat/ChatView.tsx)                     | Renders `"api_req_failed"` and `"mistake_limit_reached"` ask dialogs                   |
-| [`webview-ui/src/components/chat/ChatRow.tsx`](webview-ui/src/components/chat/ChatRow.tsx)                       | Renders error rows from `say("error", ...)`                                            |
-| [`webview-ui/src/i18n/locales/en/tools.json`](webview-ui/src/i18n/locales/en/tools.json)                         | i18n strings for unknown tool error (`unknownToolError`)                               |
-
-## Gaps & areas for improvement
-
-### ✅ Resolved: streaming failures are now surfaced (root cause of "failures not surfacing")
-
-**Status: fixed 2026-06-11 via option 1 below.** When `finalizeStreamingToolCall()`
-returned `null`, the two stream-consumer null-branches kept the stale partial block built
-by `createPartialToolUse`, which carried an optimistic partial `nativeArgs`. The §C guard
-in `presentAssistantMessage` (`isKnownTool && !block.nativeArgs && !customTool`) then
-failed to fire, so the tool was executed with incomplete args instead of producing a
-visible error. See §B and §C.
-
-The fix clears `existingToolUse.nativeArgs = undefined` (alongside `partial = false`) in
-both `else if (toolUseIndex !== undefined)` branches —
-[`Task.ts:4753`](src/core/task/Task.ts:4753) and [`Task.ts:5217`](src/core/task/Task.ts:5217) —
-restoring the invariant the §C guard assumes ("finalize failed ⇒ no `nativeArgs`") so the
-existing error path fires.
-
-**Alternatives considered (not taken):**
-
-2. **Make the parser distinguish "invalid" from "absent".** Have `finalizeStreamingToolCall()`
-   / `parseToolCall()` signal _invalid finalization_ explicitly (e.g. return a sentinel
-   `{ invalid: true, reason }` or a typed result) rather than collapsing both the
-   unknown-name and bad-args cases into a bare `null`. Cleaner long-term design
-   (Schema-First / fail-closed spirit); deferred as a larger change.
-
-3. **Validate `nativeArgs` completeness in §C, not just presence.** Re-run the strict
-   `parseToolCall` (or a schema validation) on the finalized block inside
-   `presentAssistantMessage`. More work per dispatch; duplicates parser logic.
-
-### ⚠️ Still outstanding: no regression test locks in the fix
-
-The fix was verified against 23 existing tests, but **none of them exercises this path** —
-no test references `finalizeStreamingToolCall`, `nativeArgs = undefined`, the §C guard, or
-the streaming bad-args scenario. The fix can silently regress if either null-branch is
-later "tidied up". Add a regression test under
-`src/core/assistant-message/__tests__/` (or `src/core/task/__tests__/`) that:
-
-1. Drives the streaming consumer through `tool_call_start` → `tool_call_delta` (partial
-   args that populate `nativeArgs` for e.g. `read_file`) → `tool_call_end` with
-   incomplete/invalid accumulated JSON so `finalizeStreamingToolCall()` returns `null`.
-2. Asserts a `say("error", …)` row is emitted, a `tool_result` with `is_error: true` is
-   pushed, `consecutiveMistakeCount` is incremented, and the tool's `handle()`/`execute()`
-   is **not** invoked.
-3. Covers the symmetric `finalizeRawChunks()` tail branch at
-   [`Task.ts:5209`](src/core/task/Task.ts:5209) as well.
-
-### Documentation accuracy note
-
-§B previously claimed `parseToolCall()` _throws_ and that the legacy path raises an
-`"api_req_failed"` "Provider Error" dialog. Neither is true — the internal throw is
-caught locally and converted to `null`, and the legacy path surfaces the error inline
-via `say("error", …)`. Corrected above.
-
-### ✅ Resolved (2026-06-11): error messages now include parser-specific failure details
-
-**Status: fixed.** Previously, when `parseToolCall()` returned `null` (unknown name, bad
-JSON, missing params), the call sites in Task.ts and `presentAssistantMessage.ts` produced
-a generic error message: *"Tool call failed for X: the parser could not produce a valid tool
-invocation. This may be due to an unknown tool name, malformed JSON arguments, or missing
-required parameters."* The parser internally knew the specific reason (e.g., `"Invalid
-arguments for tool 'read_file'. Native tool calls require a valid JSON payload matching the
-tool schema. Received: {}"`) but it was only logged and discarded.
-
-**The fix** adds `NativeToolCallParser.lastParseError` — a static field set by
-`parseToolCall()`'s catch block and `finalizeStreamingToolCall()`'s not-found branch.
-Callers read it via `NativeToolCallParser.consumeLastParseError()` and include it in the
-error message shown to the user and fed back to the LLM. The `presentAssistantMessage` §C
-guard also includes the partial params that were received during streaming.
-
-### Pre-existing gaps (unchanged)
-
-- **Mode-validation failures (§E) are still UI-silent.** Adding `say("error", …)` would
-  make these visible to the user. The trade-off is noise: mode violations are common
-  with weaker models and the self-correction via `tool_result` is usually fast enough
-  that the user wouldn't notice.
-- **MCP tool name format errors (§H)** could be handled more explicitly in the stream
-  consumer rather than relying on the `presentAssistantMessage` fallback path. This path
-  flows through the same `finalizeRawChunks()` null-branch that now clears `nativeArgs`,
-  so it is covered by the 2026-06-11 fix and no longer silently dispatches — but the
-  explicit, named handling would still produce a clearer error message.
-- **`TOOL_DISPLAY_NAMES`** and the `toolDescription()` switch in
-  `presentAssistantMessage.ts` could include the tool's canonical name formatting so
-  error messages are more readable (e.g., `execute_command` → `execute command`).
+**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — L76-86
+
+**Effect:**
+
+- `consecutiveMistakeCount++`
+- Error `tool_result` pushed
+
+**Recovery:** LLM must choose a different tool. Repeated attempts will increment the mistake counter toward the limit.
+
+---
+
+### B3. Tool Not Allowed in Current Mode
+
+**Trigger:** Model calls a tool whose `ToolGroup` is not included in the current mode's `groups` array, and the tool is not explicitly in `tools_allowed`.
+
+**Error message:**
+
+> Tool "\<name\>" is not allowed in \<mode\> mode.
+
+**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — L99-101
+
+**Effect:**
+
+- `consecutiveMistakeCount++`
+- Error `tool_result` pushed
+
+**Recovery:** LLM can either switch modes (via `switch_mode`) or use a tool allowed in the current mode.
+
+---
+
+### B4. File Restriction Error (Write Group Regex)
+
+**Trigger:** A write-group tool targets a file that doesn't match the mode's `fileRegex` pattern. This is a mode-level scope restriction on which files can be edited.
+
+**Error message:**
+
+> File \<path\> is outside the allowed pattern: \<regex\>. Description: \<description\>. Tool: \<tool\>.
+
+**Type:** `FileRestrictionError` (custom error class)
+
+**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — `doesFileMatchRegex` at L294-296, L302-310
+
+**Effect:**
+
+- `consecutiveMistakeCount++` (thrown as a caught `Error` in the validation catch block)
+- Error `tool_result` pushed
+
+**Recovery:** LLM must target a file matching the mode's allowed pattern, or switch modes.
+
+---
+
+### C1. Identical Consecutive Tool Calls (ToolRepetitionDetector)
+
+**Trigger:** The same tool is called with identical parameters consecutively (detected via JSON serialization comparison). `new_task` is exempt (legitimate fan-out). The repetition limit equals `consecutiveMistakeLimit`.
+
+**Error message:**
+
+> Tool call repetition limit reached for \<name\>. Please try a different approach.
+
+**Notable:** The detector triggers an ask (`"tool_repetition"`) before emitting the error, so the user can provide guidance inline.
+
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L835-884
+
+**Effect:**
+
+- User is asked for guidance (same pattern as `mistake_limit_reached`)
+- Telemetry exception captured with reason `"tool_repetition"`
+- Error `tool_result` pushed
+
+**Recovery:** LLM must try a different tool or approach. The user's feedback is injected into the conversation.
+
+---
+
+### D1. User Rejects Tool Approval
+
+**Trigger:** During `askApproval(type="tool", …)`, the user clicks "No" (or the equivalent rejection action).
+
+**Effect:**
+
+- `shofer.didRejectTool = true`
+- `pushToolResult(formatResponse.toolDenied())` or `formatResponse.toolDeniedWithFeedback(text)` if feedback was provided
+- **All subsequent tool calls in the same turn are skipped** with:
+    > Skipping tool \<description\> due to user rejecting a previous tool.
+
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `askApproval` callback at L699-734, rejection path at L713-723; skip path at L542-557
+
+**Recovery:** The tool result contains the rejection. The LLM receives it and can try a different approach in the next turn.
+
+---
+
+### E1. Missing Required Parameter
+
+**Trigger:** A tool handler detects that a required parameter is missing from the call.
+
+**Error message:**
+
+> Shofer tried to use \<tool\> without value for required parameter '\<param\>'. Retrying...
+
+**Location:** [`Task.sayAndCreateMissingParamError`](../src/core/task/Task.ts) — L2922-2930
+
+**Effect:**
+
+- Error rendered to chat via `shofer.say("error", …)`
+- `task.didToolFailInCurrentTurn = true` (set by tool handler before calling)
+- `task.recordToolError(toolName)` called (in most handlers)
+- The returned error string is pushed as `tool_result`
+
+**Recovery:** The error message explicitly says "Retrying..." — the LLM is expected to retry with the missing parameter provided.
+
+---
+
+### E2. Runtime Error in Tool Handler
+
+**Trigger:** Any unhandled exception thrown during tool execution (e.g., filesystem error, network error, logic bug).
+
+**Error message:**
+
+> Error \<action\>:\n\<error.message or serialized error\>
+
+Where \<action\> is the `action` parameter passed to `handleError`.
+
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `handleError` callback at L745-759
+
+**Effect:**
+
+- Error serialized with `serializeError` and rendered to chat
+- `pushToolResult(formatResponse.toolError(errorString))`
+- `AskIgnoredError` is silently swallowed (internal control-flow signal, not a real error)
+
+**Recovery:** LLM receives the error message and can decide how to proceed.
+
+---
+
+### E3. Protected File / `.shoferignore` Block
+
+**Trigger:** A write tool targets a file matching `ShoferProtectedController.PROTECTED_PATTERNS` or excluded by `.shoferignore`.
+
+**Files covered by `PROTECTED_PATTERNS`:** `.shofer/`, `.vscode/`, `AGENTS.md`, `.shoferignore`, `.shofermodes`, `.shoferrules*`, `*.code-workspace`.
+
+**Location:** [`ShoferProtectedController.ts`](../src/core/protect/ShoferProtectedController.ts)
+
+**Effect:**
+
+- Tool handler checks `isWriteProtected(relPath)` and returns an error
+- The UI marks the target with `SHIELD_SYMBOL` (🛡️)
+
+**Recovery:** LLM must target a different file or the user must modify protection settings.
+
+---
+
+### F1. Consecutive Mistake Limit Reached
+
+**Trigger:** `consecutiveMistakeCount` reaches `consecutiveMistakeLimit` (default: 3) within a single turn. Counter increments on: validation errors (B1-B4), missing nativeArgs (A2), XML tool calls (A1), and certain handler-level errors.
+
+**Error message (via ask):**
+
+> "mistake_limit_reached" ask type — user is prompted for guidance.
+
+**Location:** [`Task.ts`](../src/core/task/Task.ts) — `recursivelyMakeRooRequests` at L4001-4035
+
+**Effect:**
+
+- `captureConsecutiveMistakeError` telemetry event
+- User asked via `mistake_limit_reached` ask
+- Counter reset to 0 after the ask resolves
+- If user provides feedback, it's injected into the conversation
+
+**Recovery:** User provides guidance; counter resets. Task continues.
+
+---
+
+## 3. Error Counter Behavior
+
+| Failure Stage            | Increments `consecutiveMistakeCount`         | Calls `recordToolError`               | Sets `didAlreadyUseTool`            |
+| ------------------------ | -------------------------------------------- | ------------------------------------- | ----------------------------------- |
+| A1 — Missing tool_use.id | ✅                                           | Best-effort (if name available)       | ✅                                  |
+| A2 — Missing nativeArgs  | ✅                                           | ✅                                    | ❌                                  |
+| B1 — Unknown tool        | ✅                                           | ❌ (validation throws before handler) | ❌                                  |
+| B2 — Tool disabled       | ✅                                           | ❌                                    | ❌                                  |
+| B3 — Not allowed in mode | ✅                                           | ❌                                    | ❌                                  |
+| B4 — File restriction    | ✅                                           | ❌                                    | ❌                                  |
+| C1 — Repetition          | ✅ (via telemetry only)                      | ❌                                    | ❌                                  |
+| D1 — User reject         | ❌                                           | ❌                                    | ✅ (indirectly via `didRejectTool`) |
+| E1 — Missing param       | ❌ (handler sets `didToolFailInCurrentTurn`) | ✅                                    | ❌                                  |
+| E2 — Runtime error       | ❌                                           | ❌                                    | ❌                                  |
+| E3 — Protected file      | ❌                                           | ❌                                    | ❌                                  |
+
+**Key insight:** `consecutiveMistakeCount` is primarily for _model errors_ (invalid calls, wrong tools, wrong modes) — not for _execution errors_ (filesystem, network, business logic). The model can't fix a disk-full error by trying again, but it can fix a wrong tool name.
+
+---
+
+## 4. Tool-Result Contract
+
+Every tool_use block MUST receive exactly one `tool_result` (native tool calling requirement). The dispatch code enforces this:
+
+- `hasToolResult` flag prevents duplicates (L560, L602-607)
+- `pushToolResult` is the single choke point for emitting results
+- Error paths use `pushToolResult` or `shofer.pushToolResultToUserContent(…)` directly
+- `didAlreadyUseTool = true` signals the stream loop to stop collecting more tool_use blocks in this turn
+
+---
+
+## 5. Adding a New Failure Mode
+
+When adding a new failure path:
+
+1. Add it to the taxonomy diagram in §1
+2. Add a detailed entry in §2
+3. Update the counter table in §3 if the new mode affects counters
+4. Ensure the failure emits exactly one `tool_result` with `is_error: true`
+5. Consider whether the failure should increment `consecutiveMistakeCount` (model-recoverable errors → yes; infrastructure errors → no)
