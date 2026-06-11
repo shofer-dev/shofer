@@ -18,6 +18,7 @@ import type { CompletionRating, HistoryItem, TaskHandle } from "@shofer/types"
 import { ShoferEventName } from "@shofer/types"
 
 import { Task, type TaskOptions } from "../task/Task"
+import { SlangEditorProvider } from "../webview/SlangEditorProvider"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { workflowLog } from "../../utils/logging/subsystems"
 import { waitForTasksEventDriven } from "./wait-for-task-helper"
@@ -623,6 +624,10 @@ export class WorkflowTask extends Task {
 			await this.sayProgress(
 				`✓ Round ${this.flowState.round} complete (${this.committedCount()}/${this.flowState.agents.size} agents committed).`,
 			)
+
+			// Push runtime state to the Slang custom editor so the visualization
+			// highlights per-agent progress (opIndex, status, mailbox).
+			this.notifySlangEditor()
 
 			// 7. Re-check convergence and checkpoint.
 			if (this.checkConverge()) {
@@ -1289,6 +1294,22 @@ export class WorkflowTask extends Task {
 	 */
 	async seedHistory(): Promise<void> {
 		await this.persistCheckpoint()
+	}
+
+	/**
+	 * Push the current FlowState to the Slang custom editor so the three
+	 * visualization views can overlay runtime per-agent progress (opIndex,
+	 * status, mailbox).  When no editor is open for the .slang file this is
+	 * a no-op — the static view continues to work as before.
+	 */
+	private notifySlangEditor(): void {
+		const sourcePath = this.flowState.sourcePath
+		if (!sourcePath) return
+		try {
+			SlangEditorProvider.notifyRuntimeState(sourcePath, serializeFlowState(this.flowState))
+		} catch (error) {
+			workflowLog.info(`[WorkflowTask#${this.taskId}] Failed to notify Slang editor of runtime state:`, error)
+		}
 	}
 
 	private async persistCheckpoint(): Promise<void> {

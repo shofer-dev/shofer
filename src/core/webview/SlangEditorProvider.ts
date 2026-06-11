@@ -36,6 +36,15 @@ const RENDER_DEBOUNCE_MS = 250
 // ─── Provider class ──────────────────────────────────────────────────────
 
 export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
+	/**
+	 * Map from absolute .slang file path to the currently-open webview panel.
+	 * Populated by resolveCustomTextEditor, cleared on panel dispose.
+	 *
+	 * WorkflowTask calls {@link notifyRuntimeState} to push live FlowState into
+	 * the editor webview so the three views can highlight per-agent progress.
+	 */
+	private static _openPanels = new Map<string, vscode.WebviewPanel>()
+
 	static register(context: vscode.ExtensionContext): SlangEditorProvider {
 		const provider = new SlangEditorProvider(context)
 		const registration = vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
@@ -43,6 +52,20 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 		})
 		context.subscriptions.push(registration)
 		return provider
+	}
+
+	/**
+	 * Push runtime workflow state to the editor webview for the given .slang
+	 * file. If the file is not currently open in a Slang custom editor, this is
+	 * a no-op.
+	 *
+	 * @param sourcePath Absolute path to the .slang file being executed.
+	 * @param runState Serialized FlowState (from {@link serializeFlowState}).
+	 */
+	static notifyRuntimeState(sourcePath: string, runState: Record<string, unknown>): void {
+		const panel = SlangEditorProvider._openPanels.get(sourcePath)
+		if (!panel) return
+		panel.webview.postMessage({ type: "runtimeState", runState })
 	}
 
 	constructor(private readonly _context: vscode.ExtensionContext) {}
@@ -94,6 +117,9 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 			)
 		}
 
+		// Register this panel so WorkflowTask can push runtime state into it.
+		SlangEditorProvider._openPanels.set(document.fileName, webviewPanel)
+
 		// Debounced document-change handler: on each keystroke we postMessage
 		// the new payload so the in-page script patches the SVG in-place. When
 		// the file has parse errors we fall back to a full HTML rebuild.
@@ -115,6 +141,7 @@ export class SlangEditorProvider implements vscode.CustomTextEditorProvider {
 		webviewPanel.onDidDispose(() => {
 			if (debounceTimer) clearTimeout(debounceTimer)
 			changeSubscription.dispose()
+			SlangEditorProvider._openPanels.delete(document.fileName)
 		})
 	}
 
@@ -255,6 +282,8 @@ interface RenderPayload {
 	fileName: string
 	flow: ReturnType<typeof stripSpans>
 	diags: string[]
+	/** Optional serialized FlowState for runtime overlays (opIndex, status, mailbox). */
+	runState?: Record<string, unknown>
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────

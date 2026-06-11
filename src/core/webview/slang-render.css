@@ -454,4 +454,23 @@ body {
 		color: var(--z-fg);
 		border-color: var(--z-fg);
 	}
+
+	/* Runtime state banner (round, committed count, flow status) */
+	.runtime-banner {
+		font-size: 0.85em;
+		color: var(--z-meta);
+		background: var(--z-card-bg);
+		border: 1px solid var(--z-card-border);
+		border-radius: 6px;
+		padding: 6px 14px;
+		margin-bottom: 12px;
+		user-select: none;
+	}
+
+	/* Runtime status badge on topology agent nodes */
+	.node-status-badge {
+		font-size: 10px;
+		font-weight: 600;
+		pointer-events: none;
+	}
 }

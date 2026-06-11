@@ -86,10 +86,20 @@ window.switchView = function (viewName) {
 // The provider sends new payloads via postMessage on every document change
 // after the initial HTML load.  This preserves _currentView, zoom, and drag
 // state instead of rebuilding the entire webview DOM on every keystroke.
+// Runtime state updates (from WorkflowTask.slangLoop) arrive as
+// { type: "runtimeState", runState } and are merged into _lastPayload.
 window.addEventListener("message", function (event) {
 	var msg = event.data
 	if (msg && msg.type === "render") {
 		safeRender(msg)
+	} else if (msg && msg.type === "runtimeState") {
+		// Merge runtime state into the last static payload and re-render
+		// in-place so per-agent progress overlays appear without a full
+		// HTML rebuild.
+		if (_lastPayload) {
+			_lastPayload.runState = msg.runState
+			safeRender(null)
+		}
 	}
 })
 
@@ -399,6 +409,39 @@ function renderNode(nm, meta) {
 			s +=
 				'<text x="14" y="64" font-size="11" fill="var(--z-meta,#888)" style="pointer-events:none">' +
 				esc(r2) +
+				"</text>"
+		}
+	}
+
+	// Runtime badge: agent status + opIndex when runState is available
+	if (_runState) {
+		var ars = getAgentRunState(nm)
+		if (ars) {
+			var statusColor = agentStatusColor(ars.status)
+			var badgeLabel = ars.status
+			if (ars.opIndex !== undefined && ars.opIndex > 0) {
+				badgeLabel += " (" + ars.opIndex + ")"
+			}
+			var blw = badgeLabel.length * 6.5 + 12
+			s +=
+				'<rect x="' +
+				(NODE_W - blw - 6) +
+				'" y="' +
+				(NODE_H - 22) +
+				'" width="' +
+				blw +
+				'" height="16" rx="3" fill="' +
+				statusColor +
+				'" opacity="0.25" />'
+			s +=
+				'<text x="' +
+				(NODE_W - blw) +
+				'" y="' +
+				(NODE_H - 10) +
+				'" font-size="10" font-weight="600" fill="' +
+				statusColor +
+				'" style="pointer-events:none">' +
+				esc(badgeLabel) +
 				"</text>"
 		}
 	}
@@ -1303,6 +1346,31 @@ function compileSwimlaneSVG(flow, agentNames) {
 			esc(ag.name) +
 			"</text>"
 
+		// Runtime status badge per lane
+		if (_runState) {
+			var ars = getAgentRunState(ag.name)
+			if (ars) {
+				var sc = agentStatusColor(ars.status)
+				var sl = ars.status + (ars.opIndex !== undefined && ars.opIndex > 0 ? " @" + ars.opIndex : "")
+				s +=
+					'<rect x="' +
+					(lx + LANE_W - 80) +
+					'" y="28" width="' +
+					(sl.length * 6.5 + 10) +
+					'" height="16" rx="3" fill="' +
+					sc +
+					'" opacity="0.25" />'
+				s +=
+					'<text x="' +
+					(lx + LANE_W - 75) +
+					'" y="40" font-size="10" font-weight="600" fill="' +
+					sc +
+					'" style="pointer-events:none">' +
+					esc(sl) +
+					"</text>"
+			}
+		}
+
 		_cy = 70
 		var midX = lx + (LANE_W - 10) / 2
 		s += '<line class="flow-spine" x1="' + midX + '" y1="' + _cy + '" x2="' + midX + '" y2="' + (_cy + 15) + '" />'
@@ -1512,12 +1580,43 @@ function updateConnectedEdges(agent) {
 }
 
 // ── main orchestration layout router ──
+/** Runtime state from the WorkflowTask executor — null when viewing a static file. */
+var _runState = null
+
+/** Look up serialized AgentState from runState.agents (array of [name, state] pairs). */
+function getAgentRunState(agentName) {
+	if (!_runState || !_runState.agents) return null
+	for (var ri = 0; ri < _runState.agents.length; ri++) {
+		if (_runState.agents[ri][0] === agentName) return _runState.agents[ri][1]
+	}
+	return null
+}
+
+/** Return a CSS color for an AgentStatus value. */
+function agentStatusColor(status) {
+	switch (status) {
+		case "running":
+			return COLORS.agent // green
+		case "blocked":
+			return COLORS.await // purple
+		case "committed":
+			return COLORS.meta // gray
+		case "idle":
+			return COLORS.flow // blue
+		case "error":
+			return "var(--z-err,#f87171)" // red
+		default:
+			return COLORS.meta
+	}
+}
+
 function handleRender(payload) {
 	// CSP debugging: warn in console so devs know where to look if interactivity breaks
 	console.log("[Slang] Render starting \u2014 if tab buttons don\u2019t work, check CSP blocks inline handlers")
 
 	var flow = payload.flow,
 		diags = payload.diags || []
+	_runState = payload.runState || null
 	var app = document.getElementById("app"),
 		diagsEl = document.getElementById("diags")
 	if (!flow) {
@@ -1617,6 +1716,31 @@ function handleRender(payload) {
 			'<div class="graph-hint">\uD83E\uDDEC Sequential operation blocks and branching statements broken down per agent lane' +
 			zoomLabel +
 			"</div>"
+	}
+
+	// ── Runtime state banner (when a workflow is actively executing) ──
+	if (_runState && _runState.round !== undefined) {
+		var committed = 0
+		if (_runState.agents) {
+			for (var rsi = 0; rsi < _runState.agents.length; rsi++) {
+				if (_runState.agents[rsi][1].status === "committed") committed++
+			}
+		}
+		var totalAgents = _runState.agents ? _runState.agents.length : 0
+		h +=
+			'<div class="runtime-banner">' +
+			"\uD83D\uDD04 Round " +
+			esc(String(_runState.round)) +
+			" &middot; " +
+			esc(String(committed)) +
+			"/" +
+			esc(String(totalAgents)) +
+			" committed" +
+			' &middot; Status: <span style="color:' +
+			agentStatusColor(_runState.status || "running") +
+			';font-weight:600">' +
+			esc(_runState.status || "running") +
+			"</span></div>"
 	}
 
 	// ── Zoom controls (all views) ──
