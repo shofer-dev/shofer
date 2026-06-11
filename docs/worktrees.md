@@ -206,8 +206,9 @@ When a worktree is created, Shofer automatically runs `git submodule update --in
 | Message Type            | Payload                                                                          |
 | ----------------------- | -------------------------------------------------------------------------------- |
 | `worktreeList`          | `worktrees[]`, `isGitRepo`, `isMultiRoot`, `isSubfolder`, `gitRootPath`, `error` |
-| `worktreeResult`        | `success`, `text`                                                                |
+| `worktreeResult`        | `success`, `text`, `worktree?` (path, branch, isCurrent)                         |
 | `worktreeCopyProgress`  | `copyProgressBytesCopied`, `copyProgressItemName`                                |
+| `worktreeCreationStep`  | `worktreeCreationStep`, `worktreeCreationStepDetail`                             |
 | `branchList`            | `localBranches[]`, `remoteBranches[]`, `currentBranch`                           |
 | `worktreeDefaults`      | `suggestedBranch`, `suggestedPath`                                               |
 | `worktreeIncludeStatus` | `exists`, `hasGitignore`, `gitignoreContent`                                     |
@@ -230,10 +231,10 @@ Core types are defined in [`packages/types/src/worktree.ts`](../packages/types/s
 
 The [`WorktreeIndicator`](../webview-ui/src/components/chat/WorktreeIndicator.tsx) is the single chat-input-bar control for everything worktree-related. It serves four purposes:
 
-1. **Default: "New worktree"** — when no task is active and no worktree has been explicitly selected, the chip defaults to "New worktree" instead of the current branch name. This is the zero-click path: the user types a prompt, presses Send, a worktree is auto-created, and the task runs in the new worktree.
-2. **Status** — ahead/behind counts, files changed, uncommitted change count, last commit, merge readiness. Requested via `getWorktreeStatus` when the popover opens; the backend handler runs 5+ git queries in parallel and returns a `WorktreeStatus` object.
-3. **Switch** — lists every other worktree (excluding the bare repo and the currently checked-out one). Clicking one posts `createParallelTask` with `worktreeDir` set to that worktree's path, spawning a parallel task scoped to it without leaving the window.
-4. **Opt-out** — a "Current branch" entry in the popover lets the user opt out of worktree isolation. Selecting it sets `worktreeExplicitOptOut = true` so `autoCreateWorktree` is not triggered on send.
+1. **Current branch** — when no task is active, the chip shows the current git branch. The popover lists other worktrees for switching and a "New worktree" option for creating one via the [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx).
+2. **Creation progress** — when a worktree is being created (via "New worktree" or the auto-create flow), the popover shows step-by-step progress: "Copying worktreeinclude files…" and "Initializing submodules…" with real-time done/failed status. Steps are reported via the `worktreeCreationStep` IPC message.
+3. **Status** — ahead/behind counts, files changed, uncommitted change count, last commit, merge readiness. Requested via `getWorktreeStatus` when the popover opens; the backend handler runs 5+ git queries in parallel and returns a `WorktreeStatus` object.
+4. **Pending workflow** — when a workflow is being launched (via the LauncherView "New Workflow" path), the chip shows "starting \<name\>…" and clears automatically when the workflow task appears in the webview.
 
 The trigger is always rendered (it does not auto-hide on a single-worktree repo) so users can create the first worktree from the same place they later switch between them.
 
