@@ -101,18 +101,109 @@ export function validateToolUse(
 	}
 }
 
-const EDIT_OPERATION_PARAMS = [
-	"diff",
-	"content",
-	"operations",
-	"search",
-	"replace",
-	"args",
-	"line",
-	"patch", // Used by apply_patch
-	"old_string", // Used by search_replace and edit_file
-	"new_string", // Used by search_replace and edit_file
-] as const
+// Tools in the write group that mutate filesystem paths.
+// Used to gate fileRegex enforcement — only these tools are subject to per-file
+// restriction checks; read-only tools in the write group (none currently) are not.
+const WRITE_MUTATOR_TOOLS = new Set([
+	"write_to_file",
+	"apply_diff",
+	"insert_edit",
+	"rename_symbol",
+	"create_directory",
+	"create_new_workspace",
+	"file",
+	"sed",
+	"generate_image",
+	// Custom tools
+	"search_replace",
+	"edit_file",
+	"edit",
+	"apply_patch",
+])
+
+/**
+ * For each write-group mutator, the params that must be present before fileRegex
+ * enforcement activates. Prevents premature rejection during streaming partial-param
+ * parsing, where e.g. `{path: "test.js"}` arrives for `write_to_file` before
+ * `content` has been streamed.
+ *
+ * Tools with an empty array (e.g. create_directory) validate as soon as `path`
+ * appears — they have no secondary mutation-indicator param.
+ */
+const MUTATION_GATING_PARAMS: Record<string, string[]> = {
+	write_to_file: ["content"],
+	apply_diff: ["diff"],
+	insert_edit: ["line", "text"],
+	rename_symbol: ["newName"],
+	sed: ["pattern", "replacement"],
+	file: ["subcommand"],
+	create_directory: [],
+	create_new_workspace: ["name"],
+	generate_image: ["prompt"],
+	search_replace: ["old_string", "new_string"],
+	edit_file: ["old_string", "new_string"],
+	edit: ["old_string", "new_string"],
+	apply_patch: ["patch"],
+}
+
+/**
+ * Extract the file/directory paths that a tool call would mutate.
+ * Returns paths relative to the workspace, or an empty array if none can be
+ * determined from the supplied params.
+ *
+ * This is the single source of truth for "which paths does this tool touch?"
+ * — fileRegex enforcement and any future path-based policy checks should all
+ * resolve through this function rather than inferring intent from coincidental
+ * param names.
+ */
+function getMutatedPaths(tool: string, toolParams: Record<string, any>): string[] {
+	switch (tool) {
+		case "write_to_file":
+		case "apply_diff":
+		case "sed":
+			return toolParams.path ? [toolParams.path] : []
+
+		case "insert_edit":
+		case "rename_symbol": {
+			const p = toolParams.path || toolParams.filePath
+			return p ? [p] : []
+		}
+
+		case "create_directory":
+			return toolParams.path ? [toolParams.path] : []
+
+		case "create_new_workspace":
+			if (toolParams.path && toolParams.name) {
+				return [
+					typeof toolParams.path === "string" && typeof toolParams.name === "string"
+						? `${toolParams.path}/${toolParams.name}`
+						: String(toolParams.path),
+				]
+			}
+			return []
+
+		case "file": {
+			const paths: string[] = []
+			if (toolParams.path) paths.push(toolParams.path)
+			// mv mutates both source and destination
+			if (toolParams.subcommand === "mv" && toolParams.destination) {
+				paths.push(toolParams.destination)
+			}
+			return paths
+		}
+
+		case "generate_image":
+			return toolParams.path ? [toolParams.path] : []
+
+		case "search_replace":
+		case "edit_file":
+		case "edit":
+			return toolParams.file_path ? [toolParams.file_path] : []
+
+		default:
+			return []
+	}
+}
 
 // Markers used in apply_patch format to identify file operations
 const PATCH_FILE_MARKERS = ["*** Add File: ", "*** Delete File: ", "*** Update File: "] as const
@@ -286,32 +377,40 @@ export function isToolAllowedForMode(
 
 		// For the write group, check file regex if specified
 		if (groupName === "write" && options.fileRegex) {
-			const filePath = toolParams?.path || toolParams?.filePath || toolParams?.file_path
-			// Check if this is an actual edit operation (not just path-only for streaming)
-			const isEditOperation = EDIT_OPERATION_PARAMS.some((param) => toolParams?.[param])
+			// Only enforce for tools that actually mutate files (excludes read-only
+			// tools that may be in the write group in the future).
+			if (WRITE_MUTATOR_TOOLS.has(tool)) {
+				// Streaming partial-params gate: skip enforcement until at least one
+				// mutation-indicator param is present, so we don't reject a partial
+				// {path: "test.js"} before the model streams {content: ...}.
+				const gatingParams = MUTATION_GATING_PARAMS[tool]
+				const hasMutationParams =
+					!gatingParams || gatingParams.length === 0
+						? true
+						: gatingParams.some((p) => toolParams?.[p] !== undefined)
 
-			// Handle single file path validation
-			if (filePath && isEditOperation && !doesFileMatchRegex(filePath, options.fileRegex)) {
-				throw new FileRestrictionError(mode.name, options.fileRegex, options.description, filePath, tool)
-			}
+				if (hasMutationParams) {
+					const mutatedPaths = getMutatedPaths(tool, toolParams)
 
-			// Handle apply_patch: extract file paths from patch content and validate each
-			if (tool === "apply_patch" && typeof toolParams?.patch === "string") {
-				const patchFilePaths = extractFilePathsFromPatch(toolParams.patch)
-				for (const patchFilePath of patchFilePaths) {
-					if (!doesFileMatchRegex(patchFilePath, options.fileRegex)) {
-						throw new FileRestrictionError(
-							mode.name,
-							options.fileRegex,
-							options.description,
-							patchFilePath,
-							tool,
-						)
+					// apply_patch: also extract paths from embedded patch markers
+					const allPaths =
+						tool === "apply_patch" && typeof toolParams?.patch === "string"
+							? [...mutatedPaths, ...extractFilePathsFromPatch(toolParams.patch)]
+							: mutatedPaths
+
+					for (const targetPath of allPaths) {
+						if (!doesFileMatchRegex(targetPath, options.fileRegex)) {
+							throw new FileRestrictionError(
+								mode.name,
+								options.fileRegex,
+								options.description,
+								targetPath,
+								tool,
+							)
+						}
 					}
 				}
 			}
-
-			// Native-only: multi-file edits provide structured params; no legacy XML args parsing.
 		}
 
 		return true

@@ -504,6 +504,207 @@ describe("isToolAllowedForMode", () => {
 				),
 			).toThrow(FileRestrictionError)
 		})
+		it("enforces fileRegex for sed (previously bypassed)", () => {
+			expect(
+				isToolAllowedForMode("sed", "markdown-editor", customModes, undefined, {
+					path: "test.md",
+					pattern: "foo",
+					replacement: "bar",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("sed", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+					pattern: "foo",
+					replacement: "bar",
+				}),
+			).toThrow(FileRestrictionError)
+			expect(() =>
+				isToolAllowedForMode("sed", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+					pattern: "foo",
+					replacement: "bar",
+				}),
+			).toThrow(/\\.md\$/)
+		})
+
+		it("enforces fileRegex for file rm (previously bypassed)", () => {
+			expect(
+				isToolAllowedForMode("file", "markdown-editor", customModes, undefined, {
+					subcommand: "rm",
+					path: "test.md",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("file", "markdown-editor", customModes, undefined, {
+					subcommand: "rm",
+					path: "test.js",
+				}),
+			).toThrow(FileRestrictionError)
+			expect(() =>
+				isToolAllowedForMode("file", "markdown-editor", customModes, undefined, {
+					subcommand: "rm",
+					path: "test.js",
+				}),
+			).toThrow(/\\.md\$/)
+		})
+
+		it("enforces fileRegex for file mv — source and destination (previously bypassed)", () => {
+			expect(
+				isToolAllowedForMode("file", "markdown-editor", customModes, undefined, {
+					subcommand: "mv",
+					path: "test.md",
+					destination: "renamed.md",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("file", "markdown-editor", customModes, undefined, {
+					subcommand: "mv",
+					path: "test.md",
+					destination: "renamed.js",
+				}),
+			).toThrow(FileRestrictionError)
+		})
+
+		it("enforces fileRegex for create_directory (previously bypassed)", () => {
+			expect(
+				isToolAllowedForMode("create_directory", "markdown-editor", customModes, undefined, {
+					path: "docs/readme.md",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("create_directory", "markdown-editor", customModes, undefined, {
+					path: "src/app.js",
+				}),
+			).toThrow(FileRestrictionError)
+		})
+
+		it("enforces fileRegex for create_new_workspace (previously bypassed)", () => {
+			expect(
+				isToolAllowedForMode("create_new_workspace", "markdown-editor", customModes, undefined, {
+					path: "/tmp",
+					name: "test.md",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("create_new_workspace", "markdown-editor", customModes, undefined, {
+					path: "/tmp",
+					name: "test",
+				}),
+			).toThrow(FileRestrictionError)
+		})
+
+		it("enforces fileRegex for generate_image (previously bypassed)", () => {
+			expect(
+				isToolAllowedForMode("generate_image", "markdown-editor", customModes, undefined, {
+					prompt: "a cat",
+					path: "images/output.md",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("generate_image", "markdown-editor", customModes, undefined, {
+					prompt: "a cat",
+					path: "images/output.png",
+				}),
+			).toThrow(FileRestrictionError)
+		})
+
+		it("enforces fileRegex for insert_edit (path and filePath alias)", () => {
+			expect(
+				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
+					path: "test.md",
+					line: 3,
+					text: "hello",
+				}),
+			).toBe(true)
+			expect(
+				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
+					filePath: "test.md",
+					line: 3,
+					text: "hello",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+					line: 3,
+					text: "hello",
+				}),
+			).toThrow(FileRestrictionError)
+			expect(() =>
+				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
+					filePath: "test.js",
+					line: 3,
+					text: "hello",
+				}),
+			).toThrow(FileRestrictionError)
+		})
+
+		it("enforces fileRegex for rename_symbol (previously partial)", () => {
+			expect(
+				isToolAllowedForMode("rename_symbol", "markdown-editor", customModes, undefined, {
+					path: "test.md",
+					line: 1,
+					column: 1,
+					newName: "foo",
+				}),
+			).toBe(true)
+
+			expect(() =>
+				isToolAllowedForMode("rename_symbol", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+					line: 1,
+					column: 1,
+					newName: "foo",
+				}),
+			).toThrow(FileRestrictionError)
+		})
+
+		it("skips fileRegex enforcement during streaming partial params (gating)", () => {
+			// write_to_file gates on `content` — no enforcement without it
+			expect(
+				isToolAllowedForMode("write_to_file", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+				}),
+			).toBe(true)
+			// apply_diff gates on `diff`
+			expect(
+				isToolAllowedForMode("apply_diff", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+				}),
+			).toBe(true)
+			// sed gates on `pattern` or `replacement`
+			expect(
+				isToolAllowedForMode("sed", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+				}),
+			).toBe(true)
+			// file gates on `subcommand` — path-only is gated
+			expect(
+				isToolAllowedForMode("file", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+				}),
+			).toBe(true)
+			// generate_image gates on `prompt` — path-only is gated
+			expect(
+				isToolAllowedForMode("generate_image", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+				}),
+			).toBe(true)
+			// create_directory has no gating params — validates immediately
+			expect(() =>
+				isToolAllowedForMode("create_directory", "markdown-editor", customModes, undefined, {
+					path: "test.js",
+				}),
+			).toThrow(FileRestrictionError)
+		})
 	})
 
 	it("handles non-existent modes", () => {
