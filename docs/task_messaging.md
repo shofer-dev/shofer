@@ -64,7 +64,7 @@ Existing tool (always available, auto-approved). Extended with an optional `scop
 ### Implementation
 
 - **`scope = "children"` (default):** Unchanged — iterates `Task.backgroundChildren`.
-- **`scope = "peers"`:** Filters [`TaskManager.getManagedTasks()`](../src/services/task-manager/TaskManager.ts:315) by `rootTaskId === caller.rootTaskId && taskId !== caller.taskId`. Enriches each entry with the title from `ManagedTask.name` and the status from `ManagedTask.state.lifecycle`.
+- **`scope = "peers"`:** Filters [`TaskManager.getManagedTasks()`](../src/services/task-manager/TaskManager.ts:342) by `rootTaskId === caller.rootTaskId && taskId !== caller.taskId` using the `ManagedTask.rootTaskId` field (set at registration time, available for both live and terminal tasks). Enriches each entry with the title from `ManagedTask.name` and the status from `ManagedTask.state.lifecycle`. No async history lookups — terminal (`completed`/`error`/`paused`) tasks that are no longer live are included because `ManagedTask` entries are never evicted on completion/abort.
 
 ### Returns (peers scope)
 
@@ -475,7 +475,13 @@ Resolved by the [Recipient delivery model](#recipient-delivery-model) at send ti
 
 ### Target task has no active instance
 
-If the task has resumable persisted history, the Form B enqueue resumes it (the `queueMessage`/`Task.ask()` path rehydrates and drains). If there is neither a live instance nor resumable history, the message is undeliverable and **both** async and sync reject (`Error: Task <task_id> is not reachable.`). Messages are **not** durably persisted for a never-rehydrated task — see Gaps & Future Work.
+When the target has no live `Task` instance but **resumable persisted history** (non-`error` lifecycle), the [`SendMessageToTaskTool`](../src/core/tools/SendMessageToTaskTool.ts) handler **rehydrates** the target via [`provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })`](../src/core/webview/ShoferProvider.ts:1490) — the same pattern used by [`WorkflowTask.resumeAgentTask`](../src/core/workflow/WorkflowTask.ts:859). The freshly rehydrated instance gets a live `MessageQueueService` and the message is enqueued/queued normally.
+
+- **Sync** — always delivered as Form B (annotated user-turn + `cancelAndProcessQueuedMessages` wake). The sender blocks until the recipient's `attempt_completion` or timeout.
+- **Async to a non-busy peer** (`completed`/`idle`/`paused`) — delivered as Form B (annotated user-turn + wake).
+- **Async to a busy peer** (`running`) — delivered as Form A (system-prompt injection via `peerNotificationQueue`) for a rehydrated instance; for a non-rehydratable task it would be rejected below.
+
+If there is **neither** a live instance **nor** resumable persisted history, **both** async and sync reject with `Error: Task <task_id> is not reachable.` Messages are **not** durably persisted for a never-rehydrated task.
 
 ### Sender aborts while waiting for sync response
 
@@ -518,9 +524,9 @@ Rejected at scope validation: `target.rootTaskId !== caller.rootTaskId`.
 
 ## Remaining & Future Items
 
-### Known gaps (v1.0.84)
+### Known gaps (v1.0.84 → fixed in v1.0.86)
 
-1. **Async messages to resumable-but-unloaded peers are lost.** If a peer has no live `Task` instance but persisted history showing it is resumable (`completed`/`idle`/`paused`/`waiting_input`/`waiting` lifecycle), the async delivery code has no `messageQueueService` to enqueue into — the message cannot be persisted for rehydration. The tool still reports "Message sent" (the sender isn't lied to in the sense that it was genuinely dispatched, but the recipient won't see it until its task is manually resumed from history). Sync mode correctly rejects in this case. A future iteration could persist Form B messages alongside the task's message history so they are re-enqueued on restore.
+1. ~~**Async messages to resumable-but-unloaded peers are lost.**~~ ✅ **Fixed.** Both async and sync `send_message_to_task` now rehydrate resumable-but-unloaded recipients via `createTaskWithHistoryItem({ keepCurrentTask: true })` before delivery. Sync additionally fails-fast when the recipient is busy (`running` lifecycle). Async to a non-busy recipient is delivered as Form B (waking it); async to a busy recipient is delivered as Form A. A truly unreachable task (no history) is rejected with an error — async no longer silently drops and reports "Message sent".
 
 2. **No broadcast mechanism.** Sending to multiple peers requires multiple `send_message_to_task` calls. A `broadcast_to_peers` variant could reduce round-trips but adds complexity (partial failures, fan-out semantics). Defer.
 
