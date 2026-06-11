@@ -19,6 +19,7 @@ import type {
 	WorktreeListResponse,
 	WorktreeDefaultsResponse,
 	WorktreeStatus,
+	PostMessageToWebview,
 } from "@shofer/types"
 import { worktreeService, worktreeIncludeService, type CopyProgressCallback } from "@shofer/core"
 
@@ -157,6 +158,7 @@ export async function handleCreateWorktree(
 		createNewBranch?: boolean
 	},
 	onCopyProgress?: CopyProgressCallback,
+	onStep?: (step: string, detail?: string) => void,
 ): Promise<WorktreeResult> {
 	const cwd = provider.cwd
 
@@ -186,6 +188,7 @@ export async function handleCreateWorktree(
 	// If successful and worktreeinclude exists, copy the files.
 	if (result.success && result.worktree) {
 		try {
+			onStep?.("Copying worktreeinclude files…")
 			const copiedItems = await worktreeIncludeService.copyWorktreeIncludeFiles(
 				cwd,
 				result.worktree.path,
@@ -194,15 +197,19 @@ export async function handleCreateWorktree(
 			if (copiedItems.length > 0) {
 				result.message += ` (copied ${copiedItems.length} item(s) from worktreeinclude)`
 			}
+			onStep?.("Copying worktreeinclude files…", "done")
 		} catch (error) {
 			// Log but don't fail the worktree creation.
 			provider.log(`Warning: Failed to copy worktreeinclude files: ${error}`)
+			onStep?.("Copying worktreeinclude files…", "skipped (error)")
 		}
 
 		// Shallow submodule initialization.
 		// On failure, tear down the worktree — half-initialized worktrees are
 		// useless (submodules appear as empty directories) and confusing.
+		onStep?.("Initializing submodules…")
 		const submoduleResult = await worktreeService.initSubmodules(result.worktree.path, 1)
+		onStep?.("Initializing submodules…", submoduleResult.success ? "done" : "failed")
 		if (!submoduleResult.success) {
 			provider.log(
 				`Submodule init failed for ${result.worktree.path}: ${submoduleResult.error} — removing worktree.`,

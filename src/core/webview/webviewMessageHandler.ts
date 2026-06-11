@@ -3890,6 +3890,13 @@ export const webviewMessageHandler = async (
 							copyProgressItemName: progress.itemName,
 						})
 					},
+					(step, detail) => {
+						provider.postMessageToWebview({
+							type: "worktreeCreationStep",
+							worktreeCreationStep: step,
+							worktreeCreationStepDetail: detail,
+						})
+					},
 				)
 
 				await provider.postMessageToWebview({

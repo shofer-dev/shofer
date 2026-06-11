@@ -127,6 +127,7 @@ export interface ExtensionMessage {
 		| "worktreeList"
 		| "worktreeResult"
 		| "worktreeCopyProgress"
+		| "worktreeCreationStep"
 		| "branchList"
 		| "worktreeDefaults"
 		| "worktreeIncludeStatus"
@@ -313,6 +314,9 @@ export interface ExtensionMessage {
 	copyProgressBytesCopied?: number
 	copyProgressTotalBytes?: number
 	copyProgressItemName?: string
+	// worktreeCreationStep — current phase during worktree creation
+	worktreeCreationStep?: string
+	worktreeCreationStepDetail?: string
 	// folderSelected
 	path?: string
 	// worktreeStatus

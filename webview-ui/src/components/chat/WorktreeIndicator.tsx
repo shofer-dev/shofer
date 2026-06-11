@@ -40,6 +40,8 @@ export const WorktreeIndicator = () => {
 	const [worktrees, setWorktrees] = useState<Worktree[]>([])
 	const [status, setStatus] = useState<WorktreeStatus | null>(null)
 	const [loading, setLoading] = useState(false)
+	// Step-by-step progress during worktree creation.
+	const [creationSteps, setCreationSteps] = useState<{ step: string; detail?: string; completed: boolean }[]>([])
 	// Backend reports why worktrees may be unavailable (no folder open, not a
 	// git repo, multi-root, subfolder of a repo). We capture it so the chip
 	// can render in a disabled state instead of opening an empty popover.
@@ -89,6 +91,26 @@ export const WorktreeIndicator = () => {
 			if (message.type === "worktreeStatus") {
 				setStatus(message.worktreeStatus)
 				setLoading(false)
+			}
+			if (message.type === "worktreeCreationStep") {
+				const step = (message as any).worktreeCreationStep as string
+				const detail = (message as any).worktreeCreationStepDetail as string | undefined
+				setCreationSteps((prev) => {
+					// "done" / "skipped" / "failed" — mark the matching step complete.
+					if (detail === "done" || detail === "skipped" || detail?.startsWith("failed")) {
+						return prev.map((s) => (s.step === step ? { ...s, detail, completed: true } : s))
+					}
+					// New step starting.
+					const exists = prev.some((s) => s.step === step)
+					if (!exists) {
+						return [...prev, { step, detail, completed: false }]
+					}
+					return prev
+				})
+			}
+			if (message.type === "worktreeResult") {
+				// Worktree creation finished — clear steps.
+				setCreationSteps([])
 			}
 		}
 		window.addEventListener("message", handleMessage)
@@ -234,6 +256,43 @@ export const WorktreeIndicator = () => {
 										: selectedWorktree?.branch || t("worktrees:noBranch")}
 							</h4>
 						</div>
+
+						{/* Creation progress steps */}
+						{creationSteps.length > 0 && (
+							<div className="px-3 pb-2">
+								{creationSteps.map((s, i) => {
+									const done = s.completed
+									const failed = s.detail?.startsWith("failed")
+									return (
+										<div
+											key={i}
+											className="flex items-center gap-2 py-0.5 text-xs text-vscode-descriptionForeground">
+											<span
+												className={cn(
+													"codicon w-3.5 h-3.5 shrink-0",
+													done && !failed
+														? "codicon-check text-green-600 dark:text-green-400"
+														: failed
+															? "codicon-error text-red-600 dark:text-red-400"
+															: "codicon-loading codicon-modifier-spin",
+												)}
+											/>
+											<span className="truncate">{s.step}</span>
+											{done && !failed && (
+												<span className="text-green-600 dark:text-green-400 ml-auto shrink-0">
+													{s.detail}
+												</span>
+											)}
+											{failed && (
+												<span className="text-red-600 dark:text-red-400 ml-auto shrink-0">
+													{s.detail}
+												</span>
+											)}
+										</div>
+									)
+								})}
+							</div>
+						)}
 
 						{/* (a) Status */}
 						{loading ? (
