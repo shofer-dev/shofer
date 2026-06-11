@@ -2019,10 +2019,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							<StandardTooltip content={t("chat:scrollToBottom")}>
 								<Button
 									variant="secondary"
-									className={
-										"flex-[2] " +
-										(blinkScrollToBottom ? "animate-pulse border border-yellow-400/60" : "")
-									}
+									className={"flex-[2]" + (blinkScrollToBottom ? " animate-pulse" : "")}
 									onClick={handleScrollToBottomClick}>
 									<span className="codicon codicon-chevron-down"></span>
 								</Button>
