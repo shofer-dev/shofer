@@ -2,7 +2,8 @@
 	"landing": {
 		"greeting": "Welcome to Shofer!",
 		"introduction": "With a range of built-in and extensible Modes, Shofer lets you plan, architect, code, debug and boost your productivity like never before.",
-		"getStarted": "Get Started"
+		"getStarted": "Get Started",
+		"walkthrough": "Take the guided walkthrough"
 	},
 	"providerSignup": {
 		"useAnotherProvider": "3rd-party Provider",

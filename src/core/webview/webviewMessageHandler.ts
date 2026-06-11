@@ -2687,6 +2687,14 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
+		case "walkthroughOpen": {
+			await vscode.commands.executeCommand(
+				"workbench.action.openWalkthrough",
+				"shoferdev.shofer#shofer.getStarted",
+				false,
+			)
+			break
+		}
 		case "shoferCloudManualUrl": {
 			try {
 				if (!message.text) {

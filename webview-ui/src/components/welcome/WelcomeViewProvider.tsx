@@ -13,7 +13,7 @@ import { Tab, TabContent } from "../common/Tab"
 
 import ShoferHero from "./ShoferHero"
 import { Trans } from "react-i18next"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, GraduationCap } from "lucide-react"
 
 const WelcomeViewProvider = () => {
 	const { apiConfiguration, currentApiConfigName, setApiConfiguration, uriScheme } = useExtensionState()
@@ -64,9 +64,13 @@ const WelcomeViewProvider = () => {
 						</p>
 					</div>
 
-					<div className="mt-2 flex gap-2 items-center">
+					<div className="mt-2 flex gap-2 items-center flex-wrap">
 						<Button onClick={handleNavigateToConfigureProvider} variant="primary">
 							{t("welcome:landing.getStarted")}
+						</Button>
+						<Button onClick={() => vscode.postMessage({ type: "walkthroughOpen" })} variant="secondary">
+							<GraduationCap className="size-4" />
+							{t("welcome:landing.walkthrough")}
 						</Button>
 					</div>
 

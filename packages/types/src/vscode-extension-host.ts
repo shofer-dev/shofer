@@ -624,6 +624,7 @@ export interface WebviewMessage {
 		| "toggleToolEnabledForPrompt"
 		| "toggleMcpServer"
 		| "updateMcpTimeout"
+		| "walkthroughOpen"
 		| "enhancePrompt"
 		| "enhancedPrompt"
 		| "draggedImages"
