@@ -248,7 +248,9 @@ else
 	done
 
 	WF_LOG_DIR="$(mktemp -d)"
-	trap "rm -rf ${WF_LOG_DIR}" EXIT
+	# Logs are NOT auto-cleaned — the directory path is printed at the
+	# end of the run so failures can be inspected.  Clean up manually:
+	#   rm -rf /tmp/tmp.XXXX
 
 	# Export env vars so xargs child processes can access them.
 	# CLI_DIR is the absolute path to apps/cli, already computed at line ~40.

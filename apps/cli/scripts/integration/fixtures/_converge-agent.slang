@@ -24,5 +24,5 @@ flow "converge-agent" (task: "string") {
   }
 
   converge when: @Orchestrator.committed
-  budget: rounds(10), time(60)
+  budget: rounds(10), time(300)
 }
