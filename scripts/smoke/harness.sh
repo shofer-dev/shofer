@@ -23,7 +23,7 @@
 #   DS_MODEL   model for the `ds` preset    (default deepseek/deepseek-v4-pro)
 #   TIMEOUT    per-scenario timeout seconds (default 120)
 #   TIMEOUT_WF per-workflow timeout seconds for Part 2 (default 600)
-#   WF_PARALLEL max concurrent workflow processes (default 4, 0 = sequential)
+#   WF_PARALLEL max concurrent workflow processes (default 4)
 #   SKIP_PART2 skip workflow conformance (default unset; set to 1 to skip)
 #
 # Exit code: 0 if all scenarios in both parts pass, 1 otherwise.
@@ -237,7 +237,7 @@ else
 	WF_RUNNER="pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts"
 	WF_ENV="PROVIDER=shofer MODEL=deepseek/deepseek-v4-pro BASE_URL=${ROUTER_URL}"
 	if [[ "${PRESET}" == "mock" ]]; then
-		WF_ENV="PROVIDER=mock MODEL=mock-model"
+			WF_ENV="PROVIDER=mock API_KEY=x MODEL=mock-model"
 	fi
 
 	# Collect fixture names (without .slang extension).
@@ -251,7 +251,7 @@ else
 	trap "rm -rf ${TMPDIR}" EXIT
 
 	# Export the env vars + command so xargs sub-shells can access them.
-	export WF_ENV TMPDIR TIMEOUT_WF CLI_DIR WF_RUNNER
+	export WF_ENV TMPDIR TIMEOUT_WF
 
 	WF_PASS=0
 	WF_FAIL=0
@@ -262,32 +262,60 @@ else
 set -u
 name="$1"
 log="${TMPDIR}/${name}.log"
+
+# Navigate to the CLI directory so the relative tsx path resolves regardless
+# of what cwd xargs inherits.
+SCRIPT_DIR_WF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_DIR_WF="$(cd "${SCRIPT_DIR_WF}/../.." && pwd)"  # extensions/shofer
+cd "${CLI_DIR_WF}/apps/cli" || exit 2
+
 env MATCH="${name}" TIMEOUT_MS="$((TIMEOUT_WF * 1000))" ${WF_ENV} \
 	pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts \
 	> "${log}" 2>&1
 WORKER_EOF
 	chmod +x "${WF_SCRIPT}"
 
-	if [[ "${WF_PARALLEL}" -gt 0 ]]; then
-		# Process-per-flow isolation: each fixture runs in its own child
-		# process, avoiding the singleton collision and process.exit(0)
-		# issues in the in-process concurrency path.  xargs -P N drives
-		# the desired level of parallelism.
-		printf '%s\n' "${FIXTURES[@]}" | \
-			xargs -P "${WF_PARALLEL}" -I{} "${WF_SCRIPT}" "{}"
+	# Process-per-flow isolation: each fixture runs in its own child
+	# process, avoiding the singleton collision and process.exit(0)
+	# issues in the in-process concurrency path.  xargs -P N drives
+	# the desired level of parallelism.
+	#
+	# Guard against the nullglob edge case where no _*.slang files exist
+	# (the printf would trip set -u on bash < 4.4).
+	if [[ ${#FIXTURES[@]} -gt 0 ]]; then
+		if [[ "${WF_PARALLEL}" -gt 1 ]]; then
+			printf '%s\n' "${FIXTURES[@]}" | \
+				xargs -P "${WF_PARALLEL}" -I{} "${WF_SCRIPT}" "{}"
+		else
+			# Serial mode (WF_PARALLEL=0 or 1): run fixtures one at a time.
+			for name in "${FIXTURES[@]}"; do
+				"${WF_SCRIPT}" "${name}"
+			done
+		fi
 	fi
 
 	# Collect results.
 	for name in "${FIXTURES[@]}"; do
 		log="${TMPDIR}/${name}.log"
-		if grep -q "✅ ${name}:" "$log" 2>/dev/null; then
+		# grep -F avoids regex interpretation of fixture names containing
+		# special characters (currently all safe, but this is defensive).
+		if grep -qF "✅ ${name}:" "$log" 2>/dev/null; then
 			echo "  ✅ ${name}"
 			WF_PASS=$((WF_PASS + 1))
 			TOTAL_PASS=$((TOTAL_PASS + 1))
 		else
+			# Parse the per-flow result line for the actual terminal status.
+			# The runner's summary block never executes under MATCH=<single>
+			# because api-harness.ts dispose() calls process.exit(0) after
+			# the first iteration.  So we extract from the per-flow line
+			# (workflow-conformance.ts:217-219), which uses `status=` not `got=`.
 			reason=""
-			reason="$(grep -oE "got=[^ ]+" "$log" 2>/dev/null | tail -1 | sed 's/got=//')"
-			echo "  ✗  ${name}  -- got=${reason:-NO_OUTPUT}"
+			reason="$(grep -oE "✗ ${name}: status=[^ ]+" "$log" 2>/dev/null | grep -oE "status=[^ ]+" | sed 's/status=//')"
+			# Fall back: timeout line carries no status= prefix (workflow-conformance.ts:201).
+			if [[ -z "${reason}" ]] && grep -q "✗ ${name}: timed out" "$log" 2>/dev/null; then
+				reason="TIMEOUT"
+			fi
+			echo "  ✗  ${name}  -- status=${reason:-NO_OUTPUT}"
 			echo "     log: ${log}"
 			WF_FAIL=$((WF_FAIL + 1))
 			TOTAL_FAIL=$((TOTAL_FAIL + 1))
