@@ -35,6 +35,9 @@ export interface ManagedTask {
 	id: string
 	name: string
 	taskId: string
+	/** Immutable root task ID set at task construction. Used by peer-scoped tools
+	 *  to resolve same-root membership without async history lookups. */
+	rootTaskId?: string
 	workspace: string
 	createdAt: number
 	lastActiveAt: number
@@ -160,6 +163,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			id: task.taskId,
 			name: name || "New Task",
 			taskId: task.taskId,
+			rootTaskId: task.rootTaskId,
 			workspace: task.cwd || "",
 			createdAt: Date.now(),
 			lastActiveAt: Date.now(),
@@ -212,6 +216,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			id: task.taskId,
 			name: existing?.name ?? autoName,
 			taskId: task.taskId,
+			rootTaskId: task.rootTaskId,
 			workspace: task.cwd || "",
 			createdAt: existing?.createdAt ?? Date.now(),
 			lastActiveAt: Date.now(),
@@ -763,6 +768,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 						? item.task.slice(0, 50).trim() + (item.task.length > 50 ? "..." : "")
 						: `Task ${item.number}`),
 				taskId: item.id,
+				rootTaskId: item.rootTaskId,
 				workspace: item.workspace || "",
 				createdAt: item.ts,
 				lastActiveAt: item.lastActiveTs || item.ts,

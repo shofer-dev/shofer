@@ -28,22 +28,16 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 			for (const managed of allManaged) {
 				const peerId = managed.id
 				if (peerId === task.taskId) continue
-				// Resolve rootTaskId: live instance first, then persisted history
-				// so resumable-but-unloaded peers are included.
-				const liveTask = provider.taskManager.getManagedTaskInstance(peerId)
-				let peerRootTaskId = liveTask?.rootTaskId
-				if (!peerRootTaskId) {
-					try {
-						const { historyItem } = await provider.getTaskWithId(peerId)
-						peerRootTaskId = historyItem.rootTaskId
-					} catch {
-						// Not resumable — skip.
-						continue
-					}
-				}
+
+				// Resolve rootTaskId from the ManagedTask entry (set at register time).
+				// This covers both live and non-live (terminal) tasks because
+				// ManagedTask entries are never evicted on completion/abort.
+				const peerRootTaskId = managed.rootTaskId
 				if (task.rootTaskId && peerRootTaskId !== task.rootTaskId) continue
+
 				// Respect least-privilege peer scope: undefined ⇒ deny all.
 				if (!task.knownPeers || !task.knownPeers.has(peerId)) continue
+
 				tasks.push({
 					task_id: peerId,
 					title: managed.name ?? peerId,
