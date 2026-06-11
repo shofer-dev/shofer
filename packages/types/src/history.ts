@@ -129,6 +129,14 @@ export const historyItemSchema = z.object({
 	// File change stats — total lines added/removed across all files in this task.
 	insertions: z.number().optional(),
 	deletions: z.number().optional(),
+	/**
+	 * Accumulated active wall-clock time in milliseconds. Only counts time
+	 * spent in the `running` lifecycle — excludes time waiting for user input
+	 * (`waiting_input`), waiting on external events (`waiting`), manually
+	 * paused (`paused`), and idle. Survives restarts; on resume, new running
+	 * intervals are added to the persisted baseline.
+	 */
+	activeTimeMs: z.number().optional(),
 	// Workflow support — set when this HistoryItem represents a WorkflowTask.
 	/** Whether this task is a WorkflowTask (has a slang-driven loop). */
 	isWorkflow: z.boolean().optional(),

@@ -2052,6 +2052,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						buttonsDisabled={sendingDisabled}
 						handleCondenseContext={handleCondenseContext}
 						todos={latestTodos}
+						activeTimeMs={
+							(currentTaskItem
+								? parallelTasks?.find((p) => p.id === currentTaskItem.id)?.activeTimeMs
+								: undefined) ?? currentTaskItem?.activeTimeMs
+						}
 					/>
 
 					{checkpointWarning && (
@@ -2142,7 +2147,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							<StandardTooltip content={t("chat:scrollToBottom")}>
 								<Button
 									variant="secondary"
-									className={"flex-[2] " + (blinkScrollToBottom ? "animate-pulse border border-yellow-400/60" : "")}
+									className={
+										"flex-[2] " +
+										(blinkScrollToBottom ? "animate-pulse border border-yellow-400/60" : "")
+									}
 									onClick={handleScrollToBottomClick}>
 									<span className="codicon codicon-chevron-down"></span>
 								</Button>
@@ -2166,8 +2174,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 															? t("chat:startNewTask.tooltip")
 															: primaryButtonText === t("chat:resumeTask.title")
 																? t("chat:resumeTask.tooltip")
-																: primaryButtonText ===
-																	  t("chat:proceedAnyways.title")
+																: primaryButtonText === t("chat:proceedAnyways.title")
 																	? t("chat:proceedAnyways.tooltip")
 																	: primaryButtonText ===
 																		  t("chat:proceedWhileRunning.title")

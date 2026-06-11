@@ -266,6 +266,8 @@ export interface ManagedTask {
 	createdAt: number
 	lastActiveAt: number
 	state: TaskState
+	/** Accumulated active wall-clock time in ms spent in the `running` lifecycle. */
+	activeTimeMs: number
 }
 
 export interface TaskSelectorProps {

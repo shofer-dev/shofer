@@ -254,6 +254,7 @@ export interface ExtensionMessage {
 		createdAt: number
 		lastActiveAt: number
 		state: TaskState
+		activeTimeMs: number
 	}>
 	focusedTaskId?: string | null
 	taskId?: string
@@ -450,6 +451,7 @@ export type ExtensionState = Pick<
 		createdAt: number
 		lastActiveAt: number
 		state: TaskState
+		activeTimeMs: number
 	}>
 	focusedTaskId?: string | null
 	taskNotifications?: Array<{

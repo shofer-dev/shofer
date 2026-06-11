@@ -7,7 +7,7 @@ import type { ShoferMessage } from "@shofer/types"
 
 import { getModelMaxOutputTokens } from "@shofer/shared/api"
 
-import { formatLargeNumber } from "@src/utils/format"
+import { formatLargeNumber, formatDuration } from "@src/utils/format"
 import { cn } from "@src/lib/utils"
 import { StandardTooltip, Button, Table, TableBody, TableRow, TableCell, CircularProgress } from "@src/components/ui"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
@@ -43,6 +43,8 @@ export interface TaskHeaderProps {
 	costLimit?: { maxUsd: number; action: "pause" | "abort" | "kill" }
 	/** Live-update the cap; ChatView owns the actual postMessage call. */
 	onUpdateCostLimit?: (next: { maxUsd: number; action: "pause" | "abort" | "kill" }) => void
+	/** Accumulated active wall-clock time in ms (excludes idle, waiting, paused). */
+	activeTimeMs?: number
 }
 
 const TaskHeader = ({
@@ -62,6 +64,7 @@ const TaskHeader = ({
 	todos,
 	costLimit,
 	onUpdateCostLimit,
+	activeTimeMs,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
 	const { apiConfiguration, currentTaskItem, parallelTasks } = useExtensionState()
@@ -468,6 +471,16 @@ const TaskHeader = ({
 													</span>
 												</StandardTooltip>
 											</td>
+										</tr>
+									)}
+
+									{/* Active time display */}
+									{typeof activeTimeMs === "number" && activeTimeMs > 0 && (
+										<tr>
+											<th className="font-medium text-left align-top w-1 whitespace-nowrap pr-3 h-[24px]">
+												{t("chat:task.activeTime")}
+											</th>
+											<td className="font-light align-top">{formatDuration(activeTimeMs)}</td>
 										</tr>
 									)}
 

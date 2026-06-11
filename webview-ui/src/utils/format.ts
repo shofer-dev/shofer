@@ -73,3 +73,26 @@ export const formatTimeAgo = (timestamp: number) => {
 
 	return i18next.t("common:time_ago.just_now")
 }
+
+/**
+ * Format a duration in milliseconds to a human-readable string.
+ * Examples: "2m 30s", "1h 15m", "3h 2m", "5s"
+ */
+export function formatDuration(ms: number): string {
+	if (ms <= 0) return "0s"
+	const seconds = Math.floor(ms / 1000)
+	const minutes = Math.floor(seconds / 60)
+	const hours = Math.floor(minutes / 60)
+
+	if (hours > 0) {
+		const remMin = minutes % 60
+		if (remMin > 0) return `${hours}h ${remMin}m`
+		return `${hours}h`
+	}
+	if (minutes > 0) {
+		const remSec = seconds % 60
+		if (remSec > 0) return `${minutes}m ${remSec}s`
+		return `${minutes}m`
+	}
+	return `${seconds}s`
+}

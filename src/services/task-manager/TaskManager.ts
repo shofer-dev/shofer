@@ -39,6 +39,15 @@ export interface ManagedTask {
 	createdAt: number
 	lastActiveAt: number
 	state: TaskState
+	/**
+	 * Accumulated active wall-clock time in milliseconds. Only counts time
+	 * spent in the `running` lifecycle. Incremented each time the task leaves
+	 * the `running` state (to waiting_input, waiting, paused, completed,
+	 * error). Persisted to HistoryItem for survival across restarts.
+	 */
+	activeTimeMs: number
+	/** Epoch ms when the task last entered the `running` state. `0` if not currently running. */
+	_runningSince: number
 }
 
 /**
@@ -155,6 +164,8 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			createdAt: Date.now(),
 			lastActiveAt: Date.now(),
 			state: TaskManager.makeState("running"),
+			activeTimeMs: 0,
+			_runningSince: Date.now(),
 		}
 
 		this.managedTasks.set(managedTask.id, managedTask)
@@ -195,6 +206,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		// Fallback only fires for genuinely new tasks (no persisted history).
 		// For rehydrated tasks `existing` was seeded by restoreManagedTasks.
 		const state = existing?.state ?? TaskManager.makeState(task.abandoned || task.abort ? "idle" : "running")
+		const isRunning = state.lifecycle === "running"
 
 		const managedTask: ManagedTask = {
 			id: task.taskId,
@@ -204,6 +216,8 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			createdAt: existing?.createdAt ?? Date.now(),
 			lastActiveAt: Date.now(),
 			state,
+			activeTimeMs: existing?.activeTimeMs ?? 0,
+			_runningSince: isRunning ? Date.now() : 0,
 		}
 
 		this.managedTasks.set(managedTask.id, managedTask)
@@ -422,7 +436,18 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const prevState = managedTask.state
 		if (TaskManager.statesEqual(prevState, state)) return
 
+		// Accumulate wall-clock time spent in `running` when leaving it.
+		if (prevState.lifecycle === "running" && managedTask._runningSince > 0) {
+			managedTask.activeTimeMs += Date.now() - managedTask._runningSince
+			managedTask._runningSince = 0
+		}
+
 		managedTask.state = state
+
+		// Start timing when entering `running`.
+		if (state.lifecycle === "running") {
+			managedTask._runningSince = Date.now()
+		}
 
 		// Bump the per-task version counter so any in-flight persist for an
 		// older state will detect that it's stale and silently drop.
@@ -490,9 +515,11 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 				taskLog.debug(
 					`[TaskManager] Persisting state for ${targetTaskId}: v${capturedVersion} ${state.lifecycle}${state.rating ? ":" + state.rating : ""}`,
 				)
+				const activeTimeMs = this.managedTasks.get(targetTaskId)?.activeTimeMs
 				await provider.updateTaskHistory({
 					id: targetTaskId,
 					taskState: state,
+					activeTimeMs,
 				} as HistoryItem)
 			} catch (err) {
 				taskLog.error(
@@ -709,6 +736,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			// Guard: never overwrite a Task that was already registered via
 			// registerBackgroundTask() (which may carry a more-recent state).
 			if (this.managedTasks.has(item.id)) continue
+			const restoredState = TaskManager.sanitizeRestoredState(item.taskState)
 			const managedTask: ManagedTask = {
 				id: item.id,
 				name:
@@ -720,7 +748,9 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 				workspace: item.workspace || "",
 				createdAt: item.ts,
 				lastActiveAt: item.lastActiveTs || item.ts,
-				state: TaskManager.sanitizeRestoredState(item.taskState),
+				state: restoredState,
+				activeTimeMs: item.activeTimeMs ?? 0,
+				_runningSince: 0,
 			}
 			this.managedTasks.set(managedTask.id, managedTask)
 		}

@@ -672,6 +672,7 @@ export const webviewMessageHandler = async (
 						createdAt: s.createdAt,
 						lastActiveAt: s.lastActiveAt,
 						state: s.state,
+						activeTimeMs: s.activeTimeMs,
 					})),
 					focusedTaskId: provider.taskManager.getFocusedTaskId(),
 				})
@@ -4385,6 +4386,7 @@ export const webviewMessageHandler = async (
 						createdAt: s.createdAt,
 						lastActiveAt: s.lastActiveAt,
 						state: s.state,
+						activeTimeMs: s.activeTimeMs,
 					})),
 				})
 			} catch (error) {

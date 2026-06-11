@@ -40,6 +40,7 @@ export interface ManagedTask {
 	createdAt: number
 	lastActiveAt: number
 	state: TaskState
+	activeTimeMs: number
 }
 
 export interface TaskNotification {

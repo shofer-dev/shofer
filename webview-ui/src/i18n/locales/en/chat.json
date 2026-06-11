@@ -10,6 +10,7 @@
 		"cache": "Cache",
 		"apiCost": "API Cost",
 		"size": "Size",
+		"activeTime": "Active Time",
 		"condenseContext": "Intelligently condense context",
 		"contextWindow": "Context Length",
 		"closeAndStart": "Close task and start a new one",

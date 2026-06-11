@@ -325,6 +325,7 @@ export class ShoferProvider
 					createdAt: s.createdAt,
 					lastActiveAt: s.lastActiveAt,
 					state: s.state,
+					activeTimeMs: s.activeTimeMs,
 				})),
 				focusedTaskId: this.taskManager.getFocusedTaskId(),
 			})
@@ -5357,6 +5358,7 @@ export class ShoferProvider
 				createdAt: s.createdAt,
 				lastActiveAt: s.lastActiveAt,
 				state: s.state,
+				activeTimeMs: s.activeTimeMs,
 			})),
 		})
 	}

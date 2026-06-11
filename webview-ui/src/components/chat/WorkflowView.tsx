@@ -1953,6 +1953,11 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 						buttonsDisabled={sendingDisabled}
 						handleCondenseContext={() => {}}
 						todos={undefined}
+						activeTimeMs={
+							(currentTaskItem
+								? parallelTasks?.find((p) => p.id === currentTaskItem.id)?.activeTimeMs
+								: undefined) ?? currentTaskItem?.activeTimeMs
+						}
 					/>
 				</>
 			) : (
@@ -2014,7 +2019,10 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							<StandardTooltip content={t("chat:scrollToBottom")}>
 								<Button
 									variant="secondary"
-									className={"flex-[2] " + (blinkScrollToBottom ? "animate-pulse border border-yellow-400/60" : "")}
+									className={
+										"flex-[2] " +
+										(blinkScrollToBottom ? "animate-pulse border border-yellow-400/60" : "")
+									}
 									onClick={handleScrollToBottomClick}>
 									<span className="codicon codicon-chevron-down"></span>
 								</Button>
@@ -2038,8 +2046,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 															? t("chat:startNewTask.tooltip")
 															: primaryButtonText === t("chat:resumeTask.title")
 																? t("chat:resumeTask.tooltip")
-																: primaryButtonText ===
-																	  t("chat:proceedAnyways.title")
+																: primaryButtonText === t("chat:proceedAnyways.title")
 																	? t("chat:proceedAnyways.tooltip")
 																	: primaryButtonText ===
 																		  t("chat:proceedWhileRunning.title")
