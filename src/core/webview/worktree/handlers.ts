@@ -19,7 +19,6 @@ import type {
 	WorktreeListResponse,
 	WorktreeDefaultsResponse,
 	WorktreeStatus,
-	PostMessageToWebview,
 } from "@shofer/types"
 import { worktreeService, worktreeIncludeService, type CopyProgressCallback } from "@shofer/core"
 
