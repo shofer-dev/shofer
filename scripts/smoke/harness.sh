@@ -2,24 +2,19 @@
 #
 # Shofer CLI smoke-test harness.
 #
-# Runs the Part-1 CLI scenarios documented in docs/test_harness.md against a
-# chosen provider and reports a PASS/FAIL summary. The scenarios exercise the
-# headless CLI end-to-end: provider routing, output formats, the stdin NDJSON
-# stream protocol, session persistence, tool use (read_file / execute_command /
-# write_to_file / new_task), mode switching, and signal handling.
+# Runs TWO suites:
 #
-# Two presets are provided:
+#   Part 1 — CLI scenarios (docs/test_harness.md §1-25).
+#            Sequential by design (some scenarios share session/filesystem state).
 #
+#   Part 2 — Workflow conformance (23 _-prefixed .slang fixtures).
+#            Parallelised via xargs (process-per-flow isolation) to keep total
+#            wall-clock time reasonable against real providers. Uses the existing
+#            MATCH= knob so each child process runs exactly one fixture.
+#
+# Presets (same as before):
 #   mock    Hermetic mock provider — no network, no credentials, deterministic.
-#           This is the gating preset: every scenario must PASS.
-#
 #   ds      DeepSeek via the local llm-router (http://localhost:30081/v1).
-#           Requires the router to be reachable. Free-text scenarios are matched
-#           leniently because a real model's exact wording is not guaranteed.
-#
-# Usage:
-#   scripts/smoke/harness.sh [mock|ds]            # default: mock
-#   PROVIDER="--provider …" MODEL="--model …" scripts/smoke/harness.sh   # custom
 #
 # Override knobs (env):
 #   PROVIDER   provider flags (e.g. "--provider mock --api-key x")
@@ -27,8 +22,11 @@
 #   ROUTER_URL base URL for the `ds` preset (default http://localhost:30081/v1)
 #   DS_MODEL   model for the `ds` preset    (default deepseek/deepseek-v4-pro)
 #   TIMEOUT    per-scenario timeout seconds (default 120)
+#   TIMEOUT_WF per-workflow timeout seconds for Part 2 (default 600)
+#   WF_PARALLEL max concurrent workflow processes (default 4, 0 = sequential)
+#   SKIP_PART2 skip workflow conformance (default unset; set to 1 to skip)
 #
-# Exit code: 0 if all scenarios pass, 1 otherwise.
+# Exit code: 0 if all scenarios in both parts pass, 1 otherwise.
 set -u
 
 PRESET="${1:-mock}"
@@ -43,6 +41,9 @@ WS_ROOT="$(cd "${EXT_DIR}/../.." && pwd)"             # repo root
 ROUTER_URL="${ROUTER_URL:-http://localhost:30081/v1}"
 DS_MODEL="${DS_MODEL:-deepseek/deepseek-v4-pro}"
 TIMEOUT="${TIMEOUT:-120}"
+TIMEOUT_WF="${TIMEOUT_WF:-600}"
+WF_PARALLEL="${WF_PARALLEL:-4}"
+SKIP_PART2="${SKIP_PART2:-0}"
 
 # Provider/model presets (override via env to use any other provider).
 case "${PRESET}" in
@@ -74,14 +75,18 @@ SL() { timeout "${TIMEOUT}" $CLI $PROVIDER $MODEL $WS "$@" 2>/dev/null; }
 
 PASS=0
 FAIL=0
+TOTAL_PASS=0
+TOTAL_FAIL=0
 declare -a RESULTS
 ok() {
-	RESULTS+=("PASS  $1")
+	RESULTS+=("  PASS  $1")
 	PASS=$((PASS + 1))
+	TOTAL_PASS=$((TOTAL_PASS + 1))
 }
 no() {
-	RESULTS+=("FAIL  $1  -- $2")
+	RESULTS+=("  FAIL  $1  -- $2")
 	FAIL=$((FAIL + 1))
+	TOTAL_FAIL=$((TOTAL_FAIL + 1))
 }
 
 echo "Shofer CLI smoke harness — preset='${PRESET}'"
@@ -89,6 +94,10 @@ echo "  PROVIDER: ${PROVIDER}"
 echo "  MODEL:    ${MODEL}"
 echo "  WS:       ${WS_ROOT}"
 echo ""
+
+echo "============================================"
+echo " Part 1: CLI scenarios (sequential)"
+echo "============================================"
 
 echo "=== 1 basic print ==="
 out=$(SL --print "Reply with exactly: DEEPSEEK_OK")
@@ -207,9 +216,92 @@ out=$(timeout 60 $CLI $PROVIDER $MODEL $WS list sessions 2>/dev/null | head -5)
 [ -n "$out" ] && ok "22 list-sessions" || no "22 list-sessions" "empty"
 
 echo ""
-echo "================= SUMMARY (${PRESET}) ================="
+echo "================= PART 1 SUMMARY (${PRESET}) ================="
 for r in "${RESULTS[@]}"; do echo "$r"; done
 echo "------------------------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
 
-[ "$FAIL" -eq 0 ]
+# ─────────────────────────────────────────────────────────────────────────
+# Part 2 — Workflow conformance (process-per-flow parallel)
+# ─────────────────────────────────────────────────────────────────────────
+if [[ "${SKIP_PART2}" == "1" ]]; then
+	echo ""
+	echo "Part 2 (workflow conformance) — SKIPPED (SKIP_PART2=1)"
+else
+	echo ""
+	echo "============================================"
+	echo " Part 2: Workflow conformance (parallel x${WF_PARALLEL})"
+	echo "============================================"
+
+	WF_DIR="${CLI_DIR}/scripts/integration/fixtures"
+	WF_RUNNER="pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts"
+	WF_ENV="PROVIDER=shofer MODEL=deepseek/deepseek-v4-pro BASE_URL=${ROUTER_URL}"
+	if [[ "${PRESET}" == "mock" ]]; then
+		WF_ENV="PROVIDER=mock MODEL=mock-model"
+	fi
+
+	# Collect fixture names (without .slang extension).
+	shopt -s nullglob
+	FIXTURES=()
+	for f in "${WF_DIR}"/_*.slang; do
+		FIXTURES+=( "$(basename "$f" .slang)" )
+	done
+
+	TMPDIR="$(mktemp -d)"
+	trap "rm -rf ${TMPDIR}" EXIT
+
+	# Export the env vars + command so xargs sub-shells can access them.
+	export WF_ENV TMPDIR TIMEOUT_WF CLI_DIR WF_RUNNER
+
+	WF_PASS=0
+	WF_FAIL=0
+
+	WF_SCRIPT="${TMPDIR}/_wf_worker.sh"
+	cat > "${WF_SCRIPT}" <<'WORKER_EOF'
+#!/usr/bin/env bash
+set -u
+name="$1"
+log="${TMPDIR}/${name}.log"
+env MATCH="${name}" TIMEOUT_MS="$((TIMEOUT_WF * 1000))" ${WF_ENV} \
+	pnpm --filter @shofer/cli exec tsx scripts/integration/cases/workflow-conformance.ts \
+	> "${log}" 2>&1
+WORKER_EOF
+	chmod +x "${WF_SCRIPT}"
+
+	if [[ "${WF_PARALLEL}" -gt 0 ]]; then
+		# Process-per-flow isolation: each fixture runs in its own child
+		# process, avoiding the singleton collision and process.exit(0)
+		# issues in the in-process concurrency path.  xargs -P N drives
+		# the desired level of parallelism.
+		printf '%s\n' "${FIXTURES[@]}" | \
+			xargs -P "${WF_PARALLEL}" -I{} "${WF_SCRIPT}" "{}"
+	fi
+
+	# Collect results.
+	for name in "${FIXTURES[@]}"; do
+		log="${TMPDIR}/${name}.log"
+		if grep -q "✅ ${name}:" "$log" 2>/dev/null; then
+			echo "  ✅ ${name}"
+			WF_PASS=$((WF_PASS + 1))
+			TOTAL_PASS=$((TOTAL_PASS + 1))
+		else
+			reason=""
+			reason="$(grep -oE "got=[^ ]+" "$log" 2>/dev/null | tail -1 | sed 's/got=//')"
+			echo "  ✗  ${name}  -- got=${reason:-NO_OUTPUT}"
+			echo "     log: ${log}"
+			WF_FAIL=$((WF_FAIL + 1))
+			TOTAL_FAIL=$((TOTAL_FAIL + 1))
+		fi
+	done
+
+	echo ""
+	echo "================= PART 2 SUMMARY (${PRESET}) ================="
+	echo "PASS=${WF_PASS}  FAIL=${WF_FAIL}"
+	echo "------------------------------------------------------"
+fi
+
+echo ""
+echo "================= OVERALL SUMMARY (${PRESET}) ================="
+echo "TOTAL  PASS=${TOTAL_PASS}  FAIL=${TOTAL_FAIL}"
+
+[ "${TOTAL_FAIL}" -eq 0 ]
