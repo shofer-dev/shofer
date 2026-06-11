@@ -366,7 +366,25 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 
 	// ────────────────────────────── Queries ──────────────────────────────
 
+	/**
+	 * Return all managed tasks sorted by most-recently-active first.
+	 *
+	 * For currently-running tasks, the current `_runningSince` interval is
+	 * accumulated into the stored `activeTimeMs` field (mutated in place) so
+	 * that the next persist to `HistoryItem` records the correct wall-clock
+	 * time.  `_runningSince` is then reset to `now` to avoid double-counting
+	 * on subsequent calls.  This ensures crash-resilience: if the extension
+	 * host dies mid-run, the persisted `activeTimeMs` reflects the time up to
+	 * the last `getManagedTasks()` call rather than zero.
+	 */
 	getManagedTasks(): ManagedTask[] {
+		const now = Date.now()
+		for (const m of this.managedTasks.values()) {
+			if (m.state.lifecycle === "running" && m._runningSince > 0) {
+				m.activeTimeMs += now - m._runningSince
+				m._runningSince = now
+			}
+		}
 		return Array.from(this.managedTasks.values()).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
 	}
 
