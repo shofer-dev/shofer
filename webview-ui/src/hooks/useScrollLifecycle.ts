@@ -14,7 +14,16 @@
  *
  * **User escape intent** (wheel-up / keyboard-nav-up / pointer-scroll-up /
  *   row expansion) moves to `USER_BROWSING_HISTORY`, sets
- *   `followOutput=false`, and shows the scroll-to-bottom button.
+ *   `followOutput=false`.
+ *
+ * **Scroll-to-bottom button visibility:** `showScrollToBottom` reflects
+ *   `!isAtBottom` in every lifecycle phase (except during the hydration
+ *   window, where it is suppressed to avoid flicker).  This means the button
+ *   appears even during ANCHORED_FOLLOWING when transient layout changes
+ *   momentarily pull the user off the bottom — the old behaviour required an
+ *   explicit user scroll-up gesture first.  The caller is expected to layer
+ *   a blink / pulse animation on top of the button when a pending approval
+ *   or question coexists with the scroll cue.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react"
@@ -261,6 +270,9 @@ export function useScrollLifecycle({
 			}
 			transitionScrollPhase("USER_BROWSING_HISTORY", _source)
 			setShowScrollToBottom(true)
+			// atBottomStateChangeCallback also sets showScrollToBottom
+			// based on isAtBottom, so the flag is always coherent even
+			// when Virtuoso hasn't yet reported the new scroll position.
 			// Open a brief immune window so any in-flight programmatic
 			// scroll-to-bottom that completes after this point cannot
 			// pull the user back to ANCHORED_FOLLOWING.
@@ -477,6 +489,20 @@ export function useScrollLifecycle({
 	// -----------------------------------------------------------------------
 	// Virtuoso callback: atBottomStateChange
 	// -----------------------------------------------------------------------
+	//
+	// Scroll-to-bottom button visibility is computed FIRST (before any
+	// phase-transition or auto-scroll logic) so that the button is visible
+	// in EVERY case where the user is not at the bottom — including during
+	// ANCHORED_FOLLOWING when transient layout changes momentarily pull the
+	// user off the bottom.  The only exception is the hydration window
+	// (initial scroll-to-bottom after a task switch), where we suppress the
+	// button to avoid a distracting flash.
+	//
+	// Previously the button only appeared after the phase had transitioned to
+	// USER_BROWSING_HISTORY, which required an explicit scroll-up gesture
+	// first.  Now the caller (ChatView / WorkflowView) can layer a blink
+	// animation on the button when a pending approval also exists, prompting
+	// the user to scroll down before they can see and act on the buttons.
 
 	const atBottomStateChangeCallback = useCallback(
 		(isAtBottom: boolean) => {
@@ -484,14 +510,30 @@ export function useScrollLifecycle({
 
 			const currentPhase = scrollPhaseRef.current
 
+			// --- Scroll-to-bottom button visibility (computed first) ---
+			// Show the button in these cases:
+			// 1. USER_BROWSING_HISTORY — always show (re-anchor CTA).
+			// 2. ANCHORED_FOLLOWING / HYDRATING where !isAtBottom AND
+			//    we are NOT about to auto-scroll-back:
+			//    - Hydration: suppress during the hydration window.
+			//    - Streaming safety-net: suppress when we're about to
+			//      call scrollToBottomAuto() (line ~547 below) — avoids
+			//      a one-frame flash before the re-scroll.
+			const streamingSafetyNet =
+				currentPhase === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current
+			const shouldShow = currentPhase === "USER_BROWSING_HISTORY"
+				? true
+				: !isAtBottom && !isHydratingRef.current && !streamingSafetyNet
+			setShowScrollToBottom(shouldShow)
+
+			// --- Phase-transition and auto-scroll logic (unchanged) ---
+
 			// Strict: while in USER_BROWSING_HISTORY, never auto-scroll or re-anchor
 			if (currentPhase === "USER_BROWSING_HISTORY") {
-				setShowScrollToBottom(true)
 				return
 			}
 
 			if (!isAtBottom && isHydratingRef.current) {
-				setShowScrollToBottom(false)
 				return
 			}
 
@@ -516,7 +558,6 @@ export function useScrollLifecycle({
 					})
 				}
 				scrollToBottomAuto()
-				setShowScrollToBottom(false)
 				return
 			}
 
@@ -530,8 +571,6 @@ export function useScrollLifecycle({
 				enterUserBrowsingHistory("pointer-scroll-up")
 				return
 			}
-
-			setShowScrollToBottom(false)
 		},
 		[enterAnchoredFollowing, enterUserBrowsingHistory, isStreaming, scrollToBottomAuto, taskTs],
 	)
