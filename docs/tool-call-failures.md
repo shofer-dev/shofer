@@ -39,12 +39,16 @@ A failure at any stage must produce three outputs:
   tool, and not a private LM tool — [`NativeToolCallParser.ts`](src/core/assistant-message/NativeToolCallParser.ts)
 - The JSON arguments fail to parse — [`NativeToolCallParser.ts`](src/core/assistant-message/NativeToolCallParser.ts)
 
-**Behavior (as of 2026-06-09):**
+**Behavior (as of 2026-06-11):**
 
 - ✅ `this.consecutiveMistakeCount++`
 - ✅ `task.say("error", errorMessage)` — visible in chat
 - ✅ `pushToolResultToUserContent({ is_error: true })` — LLM receives the error
 - ✅ `recordToolError(chunk.name as ToolName, errorMessage)` — captured in tool usage stats
+- ✅ The error message now includes `NativeToolCallParser.consumeLastParseError()` — the
+  parser's specific failure reason (e.g., `"Invalid arguments for tool 'read_file'.
+  Native tool calls require a valid JSON payload matching the tool schema. Received: {}"`)
+  is included instead of the generic fallback.
 
 ### B. `NativeToolCallParser.parseToolCall()` fails (valid name, bad/incomplete args)
 
@@ -108,6 +112,11 @@ if (!block.partial) {
 - ✅ `await shofer.say("error", errorMessage)` — visible in chat
 - ✅ `shofer.pushToolResultToUserContent({ is_error: true })` — LLM receives the error
 - ✅ `shofer.recordToolError(block.name as ToolName, errorMessage)` — captured in tool usage stats
+- ✅ **(2026-06-11)** Error message now includes `NativeToolCallParser.consumeLastParseError()`
+  with the parser's specific failure reason, plus the partial params that were received
+  during streaming — e.g., `"Invalid tool call for 'read_file': missing nativeArgs.
+  Parser error: [NativeToolCallParser] Invalid arguments for tool 'read_file'. ...
+  Received partial params: {}."`
 
 > ✅ **FIXED (2026-06-11): the streaming path now clears the stale partial `nativeArgs`,
 > so this guard fires reliably.**
@@ -299,6 +308,22 @@ later "tidied up". Add a regression test under
 `"api_req_failed"` "Provider Error" dialog. Neither is true — the internal throw is
 caught locally and converted to `null`, and the legacy path surfaces the error inline
 via `say("error", …)`. Corrected above.
+
+### ✅ Resolved (2026-06-11): error messages now include parser-specific failure details
+
+**Status: fixed.** Previously, when `parseToolCall()` returned `null` (unknown name, bad
+JSON, missing params), the call sites in Task.ts and `presentAssistantMessage.ts` produced
+a generic error message: *"Tool call failed for X: the parser could not produce a valid tool
+invocation. This may be due to an unknown tool name, malformed JSON arguments, or missing
+required parameters."* The parser internally knew the specific reason (e.g., `"Invalid
+arguments for tool 'read_file'. Native tool calls require a valid JSON payload matching the
+tool schema. Received: {}"`) but it was only logged and discarded.
+
+**The fix** adds `NativeToolCallParser.lastParseError` — a static field set by
+`parseToolCall()`'s catch block and `finalizeStreamingToolCall()`'s not-found branch.
+Callers read it via `NativeToolCallParser.consumeLastParseError()` and include it in the
+error message shown to the user and fed back to the LLM. The `presentAssistantMessage` §C
+guard also includes the partial params that were received during streaming.
 
 ### Pre-existing gaps (unchanged)
 

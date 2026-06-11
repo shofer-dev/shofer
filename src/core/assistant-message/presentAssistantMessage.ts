@@ -38,6 +38,7 @@ import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
 import { skillsTool } from "../tools/SkillsTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
+import { NativeToolCallParser } from "./NativeToolCallParser"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { ragSearchTool } from "../tools/RagSearchTool"
 import { gitSearchTool } from "../tools/GitSearchTool"
@@ -570,9 +571,17 @@ export async function presentAssistantMessage(shofer: Task) {
 				const customTool = stateExperiments?.customTools ? customToolRegistry.get(block.name) : undefined
 				const isKnownTool = isValidToolName(String(block.name), stateExperiments)
 				if (isKnownTool && !block.nativeArgs && !customTool) {
+					// Include the parser's specific failure reason when available.
+					const parseError = NativeToolCallParser.consumeLastParseError()
+					const details = parseError
+						? ` Parser error: ${parseError}`
+						: ` This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.`
+					const receivedParams =
+						block.params && Object.keys(block.params).length > 0
+							? ` Received partial params: ${JSON.stringify(block.params)}.`
+							: ""
 					const errorMessage =
-						`Invalid tool call for '${block.name}': missing nativeArgs. ` +
-						`This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.`
+						`Invalid tool call for '${block.name}': missing nativeArgs.${details}${receivedParams}`
 
 					shofer.consecutiveMistakeCount++
 					try {

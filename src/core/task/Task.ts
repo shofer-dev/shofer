@@ -4780,10 +4780,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								})
 
 								if (!toolUse) {
+									const parseError = NativeToolCallParser.consumeLastParseError()
 									const errorMessage =
 										`Tool call failed for "${chunk.name}": the parser could not produce a valid ` +
-										`tool invocation. This may be due to an unknown tool name, malformed JSON ` +
-										`arguments, or missing required parameters.`
+										`tool invocation.` +
+										(parseError
+											? ` Reason: ${parseError}`
+											: ` This may be due to an unknown tool name, malformed JSON arguments, or missing required parameters.`)
 
 									taskLog.error(`Failed to parse tool call for task ${this.taskId}:`, chunk)
 

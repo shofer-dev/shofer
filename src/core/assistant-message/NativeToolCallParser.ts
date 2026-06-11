@@ -55,6 +55,16 @@ export type ToolCallStreamEvent = ApiStreamToolCallStartChunk | ApiStreamToolCal
  * provider-level raw chunks into start/delta/end events.
  */
 export class NativeToolCallParser {
+	/** Stores the last parse error so callers can include specifics in error messages. */
+	public static lastParseError: string | null = null
+
+	/** Read and clear the last parse error. */
+	public static consumeLastParseError(): string | null {
+		const err = this.lastParseError
+		this.lastParseError = null
+		return err
+	}
+
 	// Streaming state management for argument accumulation (keyed by tool call id)
 	// Note: name is string to accommodate dynamic MCP tools (mcp--serverName--toolName)
 	private static streamingToolCalls = new Map<
@@ -298,6 +308,7 @@ export class NativeToolCallParser {
 	public static finalizeStreamingToolCall(id: string): ToolUse | McpToolUse | null {
 		const toolCall = this.streamingToolCalls.get(id)
 		if (!toolCall) {
+			this.lastParseError = `Unknown streaming tool call ID "${id}" — may have been finalized already or never started`
 			return null
 		}
 
@@ -1665,9 +1676,10 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
-			webviewLog.error(
-				`Failed to parse tool call arguments: ${error instanceof Error ? error.message : String(error)}`,
-			)
+			const errorMessage = error instanceof Error ? error.message : String(error)
+			this.lastParseError = errorMessage
+
+			webviewLog.error(`Failed to parse tool call arguments: ${errorMessage}`)
 
 			webviewLog.error(`Tool call: ${JSON.stringify(toolCall, null, 2)}`)
 			return null
