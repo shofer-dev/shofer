@@ -4,13 +4,14 @@
 
 ## What Does Exist (verified)
 
-| Location                                                                                           | Purpose                                                          |
-| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [`packages/telemetry/src/`](packages/telemetry/src/)                                               | Base telemetry client + PostHog client                           |
-| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type only                                |
-| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class (no Shofer-specific handler) |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`      |
-| [`website/`](website/)                                                                             | Astro marketing/product pages (accurate)                         |
+| Location                                                                                           | Purpose                                                                                                        |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [`packages/telemetry/src/`](packages/telemetry/src/)                                               | Base telemetry client + PostHog client                                                                         |
+| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type only                                                                              |
+| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class (no Shofer-specific handler)                                               |
+| [`src/api/providers/shofer.ts`](src/api/providers/shofer.ts)                                       | `ShoferHandler` — thin `OpenRouterHandler` subclass for a **local llm-router** (see §"Shofer Router Provider") |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`                                                    |
+| [`website/`](website/)                                                                             | Astro marketing/product pages (accurate)                                                                       |
 
 This document provides a comprehensive overview of all cloud-related features in the Shofer extension, covering the cloud service architecture, authentication, settings synchronization, telemetry, task sharing, bridge connectivity, the Shofer Router provider, cloud profile management, image generation, MDM enforcement, and the web UI components.
 
@@ -84,8 +85,13 @@ The sections below describe cloud features from the upstream codebase. **None of
 
 - `packages/cloud/` (entire package — `CloudService`, `WebAuthService`, `StaticTokenAuthService`, `CloudSettingsService`, `StaticSettingsService`, `CloudAPI`, `CloudShareService`, `TelemetryClient`, `RetryQueue`, `RefreshTimer`, `config.ts`, `errors.ts`)
 - `packages/types/src/cloud.ts` (all cloud type definitions)
-- `src/api/providers/shofer.ts` (Shofer-specific AI provider handler)
 - `webview-ui/src/components/cloud/` (all cloud UI components)
+
+> **Exception — `src/api/providers/shofer.ts` DOES exist**, but it is **not** the
+> upstream cloud `RooHandler` described in §"Shofer Router Provider" below. It is a
+> thin `OpenRouterHandler` subclass targeting a **locally-running llm-router**. See
+> the rewritten §"Shofer Router Provider" for the actual implementation.
+
 - `webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`
 - `src/services/mdm/MdmService.ts`
 
@@ -329,32 +335,32 @@ The `creditBalance()` method (GET `/api/extension/credit-balance`) returns a num
 
 ## Shofer Router Provider
 
-**File:** [`src/api/providers/shofer.ts`](src/api/providers/shofer.ts)
+**File:** [`src/api/providers/shofer.ts`](../src/api/providers/shofer.ts) — **this file exists and is current.**
 
-The [`RooHandler`](src/api/providers/shofer.ts:40) is the AI model provider that routes requests through Shofer Cloud's proxy API at `https://api.shofer.dev/proxy/v1`. It extends [`BaseOpenAiCompatibleProvider`](src/api/providers/base-openai-compatible-provider.ts).
+> The upstream cloud `RooHandler` (Shofer Cloud proxy at `api.shofer.dev`, session-token
+> auth, dynamic model loading, cloud image generation) does **not** exist here. What
+> follows describes the **actual** `ShoferHandler`.
 
-### Key Features
+The actual `ShoferHandler` extends [`OpenRouterHandler`](../src/api/providers/openrouter.ts)
+and is designed for connecting Shofer to a **locally-running llm-router** instance
+(default base URL `http://localhost:30081/v1`), not a hosted cloud proxy. It behaves
+identically to OpenRouter except for three deliberate differences:
 
-- **Automatic authentication:** Uses the Cloud session token as the API key via [`getSessionToken()`](src/api/providers/shofer.ts:35).
-- **Dynamic model loading:** Fetches available models from the proxy on initialization.
-- **Reasoning support:** Handles `reasoning_details` array format (used by Gemini 3, Claude, OpenAI o-series) and `reasoning_content` (used by DeepSeek, MiMo), preserving them across multi-turn conversations.
-- **Usage tracking:** Reports token usage (input, output, cache reads/writes), normalizing for protocol differences (OpenAI expects total input tokens; Anthropic expects non-cached).
-- **Free model detection:** Zero-cost display for free models.
-- **App version header:** Sends `X-Shofer-App-Version` with every request.
-- **Task ID header:** Sends `X-Shofer-Task-ID` for session tracking.
+- **`conversation_id` injection:** every `createMessage` patches the OpenAI client so
+  each `/v1/chat/completions` body carries `conversation_id = metadata.taskId` (the
+  per-task UUID v7). llm-router requires this on every call; conversation IDs are
+  per-task (a single handler is shared across concurrent tasks). See
+  [`conversationId.md`](conversationId.md).
+- **No default model:** `getModel()` throws if no model is configured rather than
+  silently falling back to OpenRouter's default — misrouting every request to a model
+  the user never asked for is worse than a loud failure.
+- **Shofer-prefixed options:** reads `shoferBaseUrl` / `shoferApiKey` (falling back to
+  `openRouter*` fields, then `http://localhost:30081/v1` / `"shofer"`) and `apiModelId`
+  for the model, so the shofer provider's config does not collide with OpenRouter's.
 
-### Model Loading
-
-Models are loaded dynamically from the Shofer proxy API and cached via the shared [`modelCache`](src/api/providers/fetchers/modelCache.ts). The model cache is refreshed when auth state changes (e.g., login/logout), ensuring authenticated model lists are always available.
-
-### Image Generation via Cloud
-
-The [`RooHandler.generateImage()`](src/api/providers/shofer.ts:416) method supports two API methods:
-
-- **Chat completions** (default): Uses the standard chat API with image-capable models.
-- **Images API**: Uses a dedicated `/v1/images/generations` endpoint when `apiMethod === "images_api"`.
-
-Image generation is integrated in the [`GenerateImageTool`](src/core/tools/GenerateImageTool.ts) which supports both OpenRouter and Shofer Cloud as providers.
+There is no session-token auth, no `X-Shofer-*` headers, no cloud image generation, and
+no proxy model-loading in the actual implementation. To add a brand-new provider, see
+[`new-llm-provider.md`](new-llm-provider.md).
 
 ---
 
