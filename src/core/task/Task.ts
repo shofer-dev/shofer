@@ -5824,7 +5824,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return false
 	}
 
-	private async getSystemPrompt(): Promise<string> {
+	// `injectPeerNotifications` MUST be true only on the real agent-request path
+	// (attemptApiRequest). Condensation / truncation summary prompts also call
+	// getSystemPrompt(), and draining the peer queue there would inject the
+	// notification into a *summarizer* prompt and clear it before the agent ever
+	// sees it — silently losing the message. Those callers leave it false.
+	private async getSystemPrompt(injectPeerNotifications = false): Promise<string> {
 		const state = await this.providerRef.deref()?.getState()
 		const {
 			mode,
@@ -6002,11 +6007,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			systemPrompt = systemPrompt + "\n\n====\n\n" + constraints.join("\n")
 		}
 
-		// Inject async peer notifications from the dedicated FIFO queue.
-		// This runs at the start of every agent loop — async messages are never
-		// routed through the MessageQueueService.  Sync messages use a separate
+		// Inject async peer notifications from the dedicated FIFO queue. This runs
+		// once per real agent-loop iteration (attemptApiRequest passes
+		// injectPeerNotifications=true); condensation/truncation summary prompts
+		// pass false so they don't consume the queue. Async messages are never
+		// routed through the MessageQueueService. Sync messages use a separate
 		// path (via MessageQueueService + cancelAndProcessQueuedMessages).
-		if (this.peerNotificationQueue.length > 0) {
+		if (injectPeerNotifications && this.peerNotificationQueue.length > 0) {
 			const peerBlocks: string[] = []
 			for (const pn of this.peerNotificationQueue) {
 				peerBlocks.push(
@@ -6309,7 +6316,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// in the caller.
 		Task.lastGlobalApiRequestTime = performance.now()
 
-		const systemPrompt = await this.getSystemPrompt()
+		// Real agent request: drain + inject any pending async peer notifications here
+		// (and only here) so condensation/truncation summary prompts can't consume them.
+		const systemPrompt = await this.getSystemPrompt(true)
 		const { contextTokens } = this.getTokenUsage()
 
 		if (contextTokens) {

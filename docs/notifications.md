@@ -130,15 +130,24 @@ See [`SendMessageToTaskTool.ts:156–246`](../src/core/tools/SendMessageToTaskTo
 
 ## When Notifications Are Drained
 
-`getSystemPrompt()` is called at these points in the agent loop:
+`getSystemPrompt(injectPeerNotifications)` is called at three points, but the peer
+queue is **drained and cleared at only one** — the real agent request. The flag
+defaults to `false`; only `attemptApiRequest` passes `true`:
 
-| Call site                                            | Line | Context                                               |
-| ---------------------------------------------------- | ---- | ----------------------------------------------------- |
-| [`attemptApiRequest`](../src/core/task/Task.ts:5826) | 5826 | **Every API request** — before each call to the model |
-| [`condenseContext`](../src/core/task/Task.ts:2611)   | 2611 | Context condensation (forced truncation)              |
-| Condense truncation path                             | 5703 | `manageContext()` during truncation                   |
+| Call site                    | Drains peer queue?               | Context                             |
+| ---------------------------- | -------------------------------- | ----------------------------------- |
+| `attemptApiRequest`          | ✅ Yes — `getSystemPrompt(true)` | **Every API request** to the model  |
+| `condenseContext`            | ❌ No                            | Context-condensation summary prompt |
+| `manageContext()` truncation | ❌ No                            | Forced-truncation summary prompt    |
 
-The primary call site is `attemptApiRequest` — it runs on every iteration of the agent loop:
+> **Why the flag (bug fix).** `condenseContext` and the truncation path also build a
+> system prompt via `getSystemPrompt()`, but those prompts feed the **summarizer**
+> model, not the agent. The drain used to be unconditional, so a notification that
+> arrived just before a condensation got injected into the summary prompt and cleared
+> — the agent never saw it (silent loss). Gating the drain on `injectPeerNotifications`
+> ensures only the real agent request consumes the queue.
+
+The draining call site is `attemptApiRequest` — it runs on every iteration of the agent loop:
 
 ```
 initiateTaskLoop
@@ -156,14 +165,14 @@ A notification pushed mid-loop (while the recipient is processing a tool) gets p
 
 ## Separation from MessageQueueService
 
-| Concern               | `peerNotificationQueue`                 | `MessageQueueService`                                                       |
-| --------------------- | --------------------------------------- | --------------------------------------------------------------------------- |
-| **Purpose**           | Async peer notifications                | User messages, sync prompts                                                 |
-| **Delivery**          | System-prompt injection (once per loop) | User-turn injection (interrupts loop)                                       |
-| **Triggers wake-up?** | No                                      | Yes (`stateChanged` → `TaskUserMessage` → `cancelAndProcessQueuedMessages`) |
-| **Persisted?**        | No (in-memory only)                     | Yes (via `QueuedMessage` in history)                                        |
-| **UI visible?**       | No (injected in prompt only)            | Yes (shown in `QueuedMessages` panel)                                       |
-| **Cleared on**        | Drained every loop iteration            | Drained on `dequeueMessage()` / `Send Now`                                  |
+| Concern               | `peerNotificationQueue`                              | `MessageQueueService`                                                       |
+| --------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Purpose**           | Async peer notifications                             | User messages, sync prompts                                                 |
+| **Delivery**          | System-prompt injection (once per loop)              | User-turn injection (interrupts loop)                                       |
+| **Triggers wake-up?** | No                                                   | Yes (`stateChanged` → `TaskUserMessage` → `cancelAndProcessQueuedMessages`) |
+| **Persisted?**        | No (in-memory only)                                  | Yes (via `QueuedMessage` in history)                                        |
+| **UI visible?**       | No (injected in prompt only)                         | Yes (shown in `QueuedMessages` panel)                                       |
+| **Cleared on**        | Drained once per agent request (`attemptApiRequest`) | Drained on `dequeueMessage()` / `Send Now`                                  |
 
 ---
 
