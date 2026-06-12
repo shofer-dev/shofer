@@ -201,6 +201,20 @@ export async function checkAutoApproval({
 			return state.alwaysAllowSubtasks === true ? { decision: "approve" } : { decision: "ask" }
 		}
 
+		// askFollowupQuestion routed to another task is unconditionally approved.
+		// A question only reaches the `ask === "tool"` path here when a background
+		// child routes it UP to its parent (see AskFollowupQuestionTool: the
+		// `task.parentTaskId && task.isBackgroundTask` branch uses
+		// askApproval("tool", {tool: "askFollowupQuestion", ...})). No human is
+		// interrupted — the parent answers via `answer_subtask_question` — so
+		// gating it behind a user prompt is meaningless and would silently hang
+		// the child. A question directed at the USER instead goes through the
+		// `ask === "followup"` path above, which remains gated by
+		// `alwaysAllowFollowupQuestions`.
+		if ((tool?.tool as string) === "askFollowupQuestion") {
+			return { decision: "approve" }
+		}
+
 		// sendMessageToTask: async is always approved (fire-and-forget); sync is gated.
 		if ((tool?.tool as string) === "sendMessageToTask") {
 			const isSync = (tool as any).wait === true

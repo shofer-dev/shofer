@@ -64,6 +64,29 @@ either harmless meta-operations or purely informational queries against in-memor
 | `set_task_title`   | Renames the task in UI and history — non-destructive.           |
 | `give_feedback`    | Appends a feedback line to the extension output channel.        |
 
+### Inter-Task Questions
+
+A **question directed at another task** is always auto-approved. `ask_followup_question`
+only reaches the `tool` ask path here when a background child routes its question **up to
+its parent** (see [`AskFollowupQuestionTool`](../src/core/tools/AskFollowupQuestionTool.ts) —
+the `task.parentTaskId && task.isBackgroundTask` branch calls
+`askApproval("tool", { tool: "askFollowupQuestion", … })`). No human is interrupted: the
+parent fields the question and answers via `answer_subtask_question`. Gating it behind a user
+prompt would be meaningless and would silently hang the child (no resolver exists for an
+auto-context).
+
+| Tool                                | Rationale                                                         |
+| ----------------------------------- | ----------------------------------------------------------------- |
+| `ask_followup_question` (to parent) | Routed up the task tree; answered by another agent, not the user. |
+
+> **Distinction:** A question directed at the **user** instead flows through the
+> `followup` **ask** category (`task.ask("followup", …)`), which is gated by
+> `alwaysAllowFollowupQuestions` (see [below](#alwaysallowfollowupquestions)). The tool name
+> is the same (`ask_followup_question`); the **destination** — parent task vs. user —
+> determines the path and therefore the gating. See
+> [`task_messaging.md`](task_messaging.md#ask_followup_question-from-a-task-in-a-peer-exchange)
+> and [`parallelism.md`](parallelism.md#ask_followup_question-routing).
+
 ### Background-Task Status Tools
 
 These query **in-memory state** owned by the parent task. They never touch the filesystem
@@ -231,9 +254,14 @@ additional `alwaysAllowUncategorized` toggle. For `access_mcp_resource`, the
 
 ### `alwaysAllowFollowupQuestions`
 
-When ON and a `followupAutoApproveTimeoutMs` is configured, follow-up question suggestions
-auto-select after a countdown. Without a timeout, the toggle alone does not auto-approve
-— the user is still asked.
+Governs **user-directed** follow-up questions only — those that reach the `followup` **ask**
+category via `task.ask("followup", …)`. When ON and a `followupAutoApproveTimeoutMs` is
+configured, follow-up question suggestions auto-select after a countdown. Without a timeout,
+the toggle alone does not auto-approve — the user is still asked.
+
+> A `ask_followup_question` that a background child routes **up to its parent** never reaches
+> this toggle. It arrives on the `tool` ask path and is **unconditionally approved** (see
+> [Inter-Task Questions](#inter-task-questions)). Same tool, different destination.
 
 ---
 
@@ -312,9 +340,9 @@ _Discovered during the 2026-05-20 verification review against source at [`index.
    section to describe the actual mechanism (group-based gating + `alwaysAllowUncategorized`).
 
 8. **`rag_search` not unconditionally auto-approved** — the doc's `ALWAYS_AVAILABLE_TOOLS` vs
-    Auto-Approval section used `rag_search` as an example of unconditional auto-approval, but
-    it's actually gated by `alwaysAllowReadOnly`. Replaced with `grep_search` which correctly
-    illustrates a tool that is available through group membership but gated by a toggle.
+   Auto-Approval section used `rag_search` as an example of unconditional auto-approval, but
+   it's actually gated by `alwaysAllowReadOnly`. Replaced with `grep_search` which correctly
+   illustrates a tool that is available through group membership but gated by a toggle.
 
 ### Structural / Completeness Issues (Open)
 

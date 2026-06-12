@@ -323,15 +323,18 @@ If a background child aborts (error, user intervention), the parent is **not** a
 
 Background task orchestration tools are registered as always-approved in [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts):
 
-| Tool                      | Reason                                                               |
-| ------------------------- | -------------------------------------------------------------------- |
-| `check_task_status`       | Read-only query; no side effects                                     |
-| `wait_for_task`           | Blocking wait with timeout; no side effects on other tasks           |
-| `list_background_tasks`   | Read-only enumeration                                                |
-| `cancel_tasks`            | Parent owns its children; stopping is non-destructive to other tasks |
-| `answer_subtask_question` | Parent answering its own child's question; no external side effects  |
+| Tool                      | Reason                                                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| `check_task_status`       | Read-only query; no side effects                                                                   |
+| `wait_for_task`           | Blocking wait with timeout; no side effects on other tasks                                         |
+| `list_background_tasks`   | Read-only enumeration                                                                              |
+| `cancel_tasks`            | Parent owns its children; stopping is non-destructive to other tasks                               |
+| `answer_subtask_question` | Parent answering its own child's question; no external side effects                                |
+| `ask_followup_question`   | Child routing a question **up to its parent**; answered by another agent, not the user (see below) |
 
 The `tool` string in the JSON payload uses camelCase (`checkTaskStatus`, `waitForTask`, `listBackgroundTasks`) and must match the `ShoferSayTool.tool` union and the `ChatRow` switch case.
+
+> **`ask_followup_question` is auto-approved only when directed at another task.** A background child's question routed to its parent arrives on the `tool` ask path and is unconditionally approved — no human is interrupted (see [`auto_approval.md`](auto_approval.md#inter-task-questions)). A question directed at the **user** instead flows through the `followup` ask category, gated by `alwaysAllowFollowupQuestions`. Same tool, different destination.
 
 ### ChatRow rendering
 
