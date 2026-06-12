@@ -1,6 +1,14 @@
 import { memo, useRef, useState, useMemo, useCallback } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft, Rocket } from "lucide-react"
+import {
+	ChevronUp,
+	ChevronDown,
+	HardDriveDownload,
+	HardDriveUpload,
+	FoldVertical,
+	ArrowLeft,
+	Rocket,
+} from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
 import type { ShoferMessage, WorkflowVizMeta } from "@shofer/types"
@@ -360,7 +368,7 @@ const TaskHeader = ({
 								</h3>
 								{wfMeta.flowName && (
 									<div className="text-[0.72em] text-vscode-descriptionForeground mb-1 font-mono">
-										flow "{wfMeta.flowName}"
+										flow &quot;{wfMeta.flowName}&quot;
 									</div>
 								)}
 								{wfMeta.description && (
@@ -372,14 +380,13 @@ const TaskHeader = ({
 									<div className="text-[0.72em] text-vscode-descriptionForeground mb-1.5">
 										Params:{" "}
 										{Object.entries(
-											wfMeta.params.reduce<Record<string, { type: string; description?: string }[]>>(
-												(acc, p) => {
-													if (!acc[p.name]) acc[p.name] = []
-													acc[p.name].push({ type: p.type, description: p.description })
-													return acc
-												},
-												{},
-											),
+											wfMeta.params.reduce<
+												Record<string, { type: string; description?: string }[]>
+											>((acc, p) => {
+												if (!acc[p.name]) acc[p.name] = []
+												acc[p.name].push({ type: p.type, description: p.description })
+												return acc
+											}, {}),
 										).map(([name, entries], i, arr) => (
 											<span key={name}>
 												<code className="bg-vscode-textCodeBlock-background px-1.5 py-0.5 rounded text-[1.05em]">
