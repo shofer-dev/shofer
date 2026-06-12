@@ -30,11 +30,14 @@ const KIND_META: Record<TaskInteractionPayload["kind"], { label: string; color: 
 
 // ── Layout ──
 
-const COL_WIDTH = 150
-const LEFT_PAD = 24
-const HEADER_H = 56
-const ROW_H = 42
-const BOTTOM_PAD = 20
+const COL_WIDTH = 200
+const LEFT_PAD = 30
+const HEADER_H = 64
+const ROW_H = 48
+const BOTTOM_PAD = 28
+const HBOX_W = COL_WIDTH - 48 // lifeline header box width
+const ACT_W = 8 // activation box width
+const ACT_H = 30 // activation box height
 /** Padding around the content when fitting the pan/zoom viewBox. */
 const VIEW_PAD = 16
 
@@ -172,6 +175,33 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 					className="w-full h-full cursor-grab"
 					style={{ cursor: isPanning ? "grabbing" : undefined }}
 					{...handlers}>
+					{/* Arrowhead markers — one per kind colour, plus error. */}
+					<defs>
+						{Object.entries(KIND_META).map(([key, m]) => (
+							<marker
+								key={key}
+								id={`seqah-${key}`}
+								markerWidth={10}
+								markerHeight={10}
+								refX={8}
+								refY={5}
+								orient="auto"
+								markerUnits="userSpaceOnUse">
+								<path d="M0,1 L9,5 L0,9 Z" fill={m.color} />
+							</marker>
+						))}
+						<marker
+							id="seqah-error"
+							markerWidth={10}
+							markerHeight={10}
+							refX={8}
+							refY={5}
+							orient="auto"
+							markerUnits="userSpaceOnUse">
+							<path d="M0,1 L9,5 L0,9 Z" fill="var(--vscode-errorForeground, #ef4444)" />
+						</marker>
+					</defs>
+
 					{/* Lifelines */}
 					{lifelines.map((id) => {
 						const x = colX(id)!
@@ -182,27 +212,28 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 									y1={HEADER_H}
 									x2={x}
 									y2={height - BOTTOM_PAD}
-									stroke="var(--vscode-panel-border)"
-									strokeWidth={1}
-									strokeDasharray="2 3"
+									stroke="var(--vscode-widget-border)"
+									strokeWidth={1.5}
+									strokeDasharray="4 4"
 								/>
 								<rect
-									x={x - COL_WIDTH / 2 + 6}
-									y={8}
-									width={COL_WIDTH - 12}
-									height={HEADER_H - 18}
-									rx={4}
+									x={x - HBOX_W / 2}
+									y={18}
+									width={HBOX_W}
+									height={30}
+									rx={5}
 									fill="var(--vscode-editorWidget-background)"
 									stroke="var(--vscode-widget-border)"
 								/>
 								<text
 									x={x}
-									y={HEADER_H - 22}
+									y={37}
 									textAnchor="middle"
-									fontSize={10}
+									fontSize={11}
+									fontWeight={600}
 									fill="var(--vscode-foreground)">
 									<title>{titleOf.get(id)}</title>
-									{truncate(titleOf.get(id) ?? id, 20)}
+									{truncate(titleOf.get(id) ?? id, 24)}
 								</text>
 							</g>
 						)
@@ -215,8 +246,9 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 						const fromX = colX(ix.fromTaskId)
 						const toX = colX(ix.toTaskId)
 						const color = ix.isError ? "var(--vscode-errorForeground, #ef4444)" : meta.color
-						const dash = ix.isError ? "4 3" : undefined
-						const label = truncate(`${meta.label}${ix.label ? ": " + ix.label : ""}`, 30)
+						const markerId = ix.isError ? "seqah-error" : `seqah-${ix.kind}`
+						const dash = ix.isError ? "5 3" : undefined
+						const label = truncate(`${meta.label}${ix.label ? ": " + ix.label : ""}`, 34)
 
 						// Self / unresolved target → a short stub on the source lifeline.
 						if (fromX === null || toX === null || fromX === toX) {
@@ -224,47 +256,73 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 							if (x === null) return null
 							return (
 								<g key={i}>
+									<rect
+										x={x - ACT_W / 2}
+										y={y - ACT_H / 2}
+										width={ACT_W}
+										height={ACT_H}
+										rx={2}
+										fill={color}
+										opacity={0.16}
+									/>
 									<line
 										x1={x}
 										y1={y}
-										x2={x + 26}
+										x2={x + 30}
 										y2={y}
 										stroke={color}
-										strokeWidth={1.5}
+										strokeWidth={2}
+										strokeLinecap="round"
 										strokeDasharray={dash}
+										markerEnd={`url(#${markerId})`}
 									/>
-									<circle cx={x} cy={y} r={2.5} fill={color} />
-									<text x={x + 30} y={y + 3} fontSize={9} fill="var(--vscode-foreground)">
+									<text x={x + 36} y={y + 3.5} fontSize={10} fill={color}>
 										{label}
 									</text>
 								</g>
 							)
 						}
 
-						const dir = toX > fromX ? 1 : -1
 						const midX = (fromX + toX) / 2
 						return (
 							<g key={i}>
+								{/* Activation boxes on both lifelines */}
+								<rect
+									x={fromX - ACT_W / 2}
+									y={y - ACT_H / 2}
+									width={ACT_W}
+									height={ACT_H}
+									rx={2}
+									fill={color}
+									opacity={0.16}
+								/>
+								<rect
+									x={toX - ACT_W / 2}
+									y={y - ACT_H / 2}
+									width={ACT_W}
+									height={ACT_H}
+									rx={2}
+									fill={color}
+									opacity={0.16}
+								/>
 								<line
 									x1={fromX}
 									y1={y}
 									x2={toX}
 									y2={y}
 									stroke={color}
-									strokeWidth={1.5}
+									strokeWidth={2}
+									strokeLinecap="round"
 									strokeDasharray={dash}
-								/>
-								{/* arrowhead */}
-								<polygon
-									points={`${toX},${y} ${toX - dir * 7},${y - 4} ${toX - dir * 7},${y + 4}`}
-									fill={color}
+									markerEnd={`url(#${markerId})`}
 								/>
 								<text
 									x={midX}
-									y={y - 5}
+									y={y - 7}
 									textAnchor="middle"
-									fontSize={9}
-									fill="var(--vscode-descriptionForeground)">
+									fontSize={10}
+									fontWeight={500}
+									fill={color}>
 									<title>{ix.label || meta.label}</title>
 									{label}
 								</text>

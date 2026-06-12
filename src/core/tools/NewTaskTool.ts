@@ -217,6 +217,10 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					undefined,
 				)
 
+				// Record the spawned child id on the parent so the task-viz spawn
+				// interaction (and ToolSpan.spawnedTaskId) point at the real child.
+				task.childTaskId = child.taskId
+
 				// Register the child with TaskManager so it is tracked as a managed background task.
 				provider.taskManager.registerBackgroundTask(child)
 
@@ -306,6 +310,9 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					undefined, // configuration
 					undefined,
 				)
+
+				// Record the spawned child id on the parent (task-viz spawn arrow).
+				task.childTaskId = child.taskId
 
 				// Register resolver after createTask so we have the child's taskId.
 				// The child runs asynchronously, so registration completes before any
