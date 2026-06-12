@@ -1451,6 +1451,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					break
 				case "mcp_server_request_started":
 					return false
+				case "task_interaction":
+					// Control-plane event for the Sequence view only; never rendered
+					// as a chat row. Must be hidden on first appearance too, otherwise
+					// the raw JSON flashes once before ALWAYS_HIDDEN_ONCE_PROCESSED_SAY
+					// hides it on the next render.
+					return false
 			}
 			return true
 		})
