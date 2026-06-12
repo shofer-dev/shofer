@@ -383,6 +383,14 @@ Form A injection happens during system prompt construction, near the subtask-con
 
 Form B never touches the system prompt — it is enqueued as a user-turn via `messageQueueService.addMessage()` (the `queueMessage` path) and drained by `Task.ask()`.
 
+> **Form A drains only on the real agent request.** `getSystemPrompt()` is also
+> called to build the **summarizer** prompts for context condensation and forced
+> truncation. The peer-notification drain (which clears the queue after injecting)
+> is gated behind `injectPeerNotifications`, passed `true` **only** by
+> `attemptApiRequest`. Without that guard a notification arriving just before a
+> condensation would be injected into the summary prompt (seen only by the
+> summarizer) and cleared — lost to the recipient agent. See [`notifications.md`](notifications.md#when-notifications-are-drained).
+
 ```
 System prompt construction (existing)
   → ... base system prompt ...
