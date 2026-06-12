@@ -152,17 +152,16 @@ A donut chart ([`TaskStatsView.tsx`](../webview-ui/src/components/chat/TaskStats
 
 A request is split into phases, and tool spans into their own categories:
 
-| Category               | Source                                                                                 | Colour |
-| ---------------------- | -------------------------------------------------------------------------------------- | ------ |
-| **Setup**              | task construction → first request (`min(startedAtOffsetMs)`): init, checkpoint kickoff | pink   |
-| **Waiting for model**  | TTFB: request start → first chunk (`ttfbMs`)                                           | blue   |
-| **Thinking**           | reasoning: `ttfbMs` → `genStartOffsetMs` (first non-reasoning chunk)                   | purple |
-| **Streaming response** | generation: `genStartOffsetMs` → request end                                           | green  |
-| **Tool execution**     | non-blocking local `ToolSpan`s                                                         | orange |
-| **MCP calls**          | `ToolSpan`s named `mcp:<server>/<tool>` (the MCP dispatch path)                        | indigo |
-| **Waiting for task**   | `ToolSpan.waitsForTask` (wait_for_task, blocking new_task, sync send_message_to_task)  | cyan   |
-| **Sleeping**           | the `sleep` tool                                                                       | yellow |
-| **Overhead**           | remainder — see below                                                                  | gray   |
+| Category               | Source                                                                                | Colour |
+| ---------------------- | ------------------------------------------------------------------------------------- | ------ |
+| **Waiting for model**  | TTFB: request start → first chunk (`ttfbMs`)                                          | blue   |
+| **Thinking**           | reasoning: `ttfbMs` → `genStartOffsetMs` (first non-reasoning chunk)                  | purple |
+| **Streaming response** | generation: `genStartOffsetMs` → request end                                          | green  |
+| **Tool execution**     | non-blocking local `ToolSpan`s                                                        | orange |
+| **MCP calls**          | `ToolSpan`s named `mcp:<server>/<tool>` (the MCP dispatch path)                       | indigo |
+| **Waiting for task**   | `ToolSpan.waitsForTask` (wait_for_task, blocking new_task, sync send_message_to_task) | cyan   |
+| **Sleeping**           | the `sleep` tool                                                                      | yellow |
+| **Overhead**           | remainder — see below                                                                 | gray   |
 
 Overlapping spans are resolved by painting them onto one offset axis with priority (tools > request phases) and reading back non-overlapping per-category totals.
 
