@@ -80,6 +80,14 @@ Applied in [`src/api/providers/vertex.ts`](../src/api/providers/vertex.ts:28):
 
 ## Shofer Cloud (API-Configured)
 
+> **⚠️ NOT CURRENTLY WIRED.** This section describes a path that is **not live** in
+> the current codebase. The resolution helper [`resolveVersionedSettings`](../src/api/providers/fetchers/versionedSettings.ts)
+> exists and is unit-tested, but it has **no production callers** (only its own spec
+> references it), and the Shofer Cloud API that would fetch these settings does **not
+> exist** in this fork (see [`cloud.md`](cloud.md)). Treat the mechanisms below as the
+> design for a feature that is dormant, not as runtime behavior. The **live** tool
+> preferences are the local code-defined ones above (OpenAI-via-router, Gemini, Vertex).
+
 Settings are fetched from the Shofer Cloud API and applied per model. The API supports two configuration mechanisms:
 
 ### Plain Settings
@@ -168,7 +176,7 @@ This section records deficiencies discovered during the May 2026 verification re
 
 2. **Missing coverage of other native providers.** The doc covers Gemini, Vertex, and OpenAI-via-router but doesn't mention Anthropic, DeepSeek, Ollama, or VS Code LM providers. If any of those gain tool preferences, this doc will silently go stale. Add a section or an explicit note that "these providers currently apply no tool preferences."
 
-3. **Shofer Cloud fetcher entry point not documented.** The doc describes resolution logic but doesn't link to the actual fetcher that loads settings from the API. The closest reference is [`versionedSettings.ts`](../src/api/providers/fetchers/versionedSettings.ts) which only handles version-keyed resolution — it doesn't perform the API fetch. Add a pointer to the file that calls `resolveVersionedSettings` (likely a model-info fetcher).
+3. **Shofer Cloud fetcher does not exist — the path is dead.** ✅ resolved: there is no file that calls `resolveVersionedSettings` in production (only its spec references it), and the Shofer Cloud API that would supply these settings is absent from this fork (see [`cloud.md`](cloud.md)). The "Shofer Cloud (API-Configured)" section is now marked NOT WIRED. If the cloud path is ever revived, wire `resolveVersionedSettings` into the model-info fetch and update both docs.
 
 4. **`disabledTools` setting not mentioned.** The filter pipeline in [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts:310) also supports a `disabledTools` array that removes tools regardless of mode groups or model preferences. This is a user-facing knob orthogonal to the model-preference mechanism and should be documented.
 
