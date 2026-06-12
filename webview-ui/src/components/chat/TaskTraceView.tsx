@@ -81,6 +81,13 @@ const GUTTER_WIDTH = 200
 const HEADER_HEIGHT = 30
 const PADDING_X = 20
 const PADDING_Y = 10
+/**
+ * Fixed width of the plot's coordinate space. The waterfall is laid out in this
+ * stable coordinate system (independent of the live element size); the viewBox
+ * frames it and the SVG's `preserveAspectRatio="meet"` scales it to fill the
+ * panel — so "Fit" always encloses the whole trace, just like the Sequence view.
+ */
+const CONTENT_WIDTH = 1000
 
 /** Idle gaps at least this long get a dashed "skipped" marker on the axis. */
 const GAP_LABEL_THRESHOLD_MS = 1000
@@ -191,69 +198,30 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 	const compToX = useCallback(
 		(comp: number) => {
 			const ratio = comp / timeline.totalActive
-			return GUTTER_WIDTH + PADDING_X + ratio * (viewBox.w - GUTTER_WIDTH - PADDING_X * 2)
+			return GUTTER_WIDTH + PADDING_X + ratio * (CONTENT_WIDTH - GUTTER_WIDTH - PADDING_X * 2)
 		},
-		[timeline.totalActive, viewBox.w],
+		[timeline.totalActive],
 	)
 
 	// Map a raw offset → SVG X coordinate (through the collapsed axis).
 	const timeToX = useCallback((offsetMs: number) => compToX(compress(offsetMs)), [compToX, compress])
 
 	// Drag-to-pan + cursor-anchored wheel zoom (shared with the Sequence view).
-	const {
-		isPanning,
-		zoomBy: rawZoomBy,
-		handlers: rawHandlers,
-	} = useSvgPanZoom(svgRef, viewBox, setViewBox, {
+	const { isPanning, zoomBy, handlers } = useSvgPanZoom(svgRef, viewBox, setViewBox, {
 		noPanSelector: ".trace-bar, .tooltip-trigger",
 	})
 
-	// Once the user zooms, stop auto-refitting so we don't fight their view.
-	const userAdjusted = useRef(false)
-	const zoomBy = useCallback(
-		(scale: number) => {
-			userAdjusted.current = true
-			rawZoomBy(scale)
-		},
-		[rawZoomBy],
+	// Fit = frame the trace's whole content box (CONTENT_WIDTH × totalHeight).
+	// `preserveAspectRatio="meet"` then scales that box to fill the panel, so the
+	// entire waterfall is always enclosed (exactly like the Sequence view) and
+	// element resizes need no re-measure. The viewBox refits when the content
+	// height changes (new rows).
+	const fitBox = useCallback(
+		() => ({ x: -PADDING_X, y: 0, w: CONTENT_WIDTH + PADDING_X * 2, h: totalHeight }),
+		[totalHeight],
 	)
-	const handlers = {
-		...rawHandlers,
-		onWheel: (e: React.WheelEvent<SVGSVGElement>) => {
-			userAdjusted.current = true
-			rawHandlers.onWheel(e)
-		},
-	}
-
-	// Fit = fill all available space at 1:1. The viewBox is sized to the SVG's
-	// own pixel box (clientWidth × clientHeight) so its aspect ratio matches the
-	// element exactly — `preserveAspectRatio="meet"` then scales by 1 with no
-	// letterboxing. (Sizing the viewBox to the *content* height instead made a
-	// tall trace force a uniform down-scale, shrinking the drawing into a small
-	// centred box — the bug this replaces.) The horizontal layout fills
-	// `viewBox.w` (see `compToX`), so the waterfall always spans the full width.
-	const fitToView = useCallback(() => {
-		const el = svgRef.current
-		const w = el?.clientWidth ?? 800
-		const h = el?.clientHeight ?? 400
-		userAdjusted.current = false
-		setViewBox({ x: -PADDING_X, y: 0, w, h })
-	}, [])
-
-	// Keep the trace fitted to the available space: on mount, when the data
-	// changes, and whenever the container resizes (e.g. the panel grows after the
-	// chat input is hidden) — unless the user has manually zoomed.
-	useEffect(() => {
-		const el = svgRef.current
-		if (!el) return
-		const refit = () => {
-			if (!userAdjusted.current) fitToView()
-		}
-		refit()
-		const ro = new ResizeObserver(refit)
-		ro.observe(el)
-		return () => ro.disconnect()
-	}, [fitToView, totalHeight])
+	const fitToView = useCallback(() => setViewBox(fitBox()), [fitBox])
+	useEffect(() => setViewBox(fitBox()), [fitBox])
 
 	if (rows.length === 0) {
 		return (
@@ -278,7 +246,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 	// Step is pixel-aware: pick the smallest "nice" step (1/2/2.5/5 × 10ⁿ) that
 	// keeps tick labels at least ~MIN_TICK_PX apart, so they never overlap.
 	const rangeMs = timeline.totalActive
-	const plotW = Math.max(1, viewBox.w - GUTTER_WIDTH - PADDING_X * 2)
+	const plotW = Math.max(1, CONTENT_WIDTH - GUTTER_WIDTH - PADDING_X * 2)
 	const MIN_TICK_PX = 76
 	const maxTicks = Math.max(2, Math.floor(plotW / MIN_TICK_PX))
 	const tickStep = niceTimeStep(rangeMs / maxTicks)
@@ -325,7 +293,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 					<line
 						x1={GUTTER_WIDTH}
 						y1={HEADER_HEIGHT}
-						x2={viewBox.w - PADDING_X}
+						x2={CONTENT_WIDTH - PADDING_X}
 						y2={HEADER_HEIGHT}
 						stroke={COLOURS.border}
 						strokeWidth={1}
@@ -362,7 +330,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 									x1={x}
 									y1={HEADER_HEIGHT}
 									x2={x}
-									y2={viewBox.h}
+									y2={totalHeight}
 									stroke={COLOURS.muted}
 									strokeWidth={1}
 									strokeDasharray="2 3"
@@ -407,7 +375,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 							<rect
 								x={0}
 								y={y}
-								width={viewBox.w}
+								width={CONTENT_WIDTH}
 								height={ROW_HEIGHT + row.payload.toolSpans.length * TOOL_ROW_HEIGHT}
 								fill={ri % 2 === 0 ? "transparent" : "rgba(128,128,128,0.03)"}
 							/>
