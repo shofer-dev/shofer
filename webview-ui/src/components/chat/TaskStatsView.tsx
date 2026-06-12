@@ -65,8 +65,8 @@ function formatMs(ms: number): string {
 
 interface Breakdown {
 	totals: Record<CatKey, number>
-	/** Per-tool execution time (excludes wait_for_task), largest first. */
-	toolTotals: Array<{ name: string; ms: number }>
+	/** Per-tool execution time + run/error counts (excludes wait/sleep), largest first. */
+	toolTotals: Array<{ name: string; ms: number; count: number; errors: number }>
 	/** Total running time: sum of all categories. Excludes idle/inter-prompt gaps. */
 	totalMs: number
 	requestCount: number
@@ -86,7 +86,7 @@ interface Segment {
  */
 function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 	const segments: Segment[] = []
-	const toolMap = new Map<string, number>()
+	const toolMap = new Map<string, { ms: number; count: number; errors: number }>()
 	let minStart = Infinity
 	let maxEnd = -Infinity
 	let requestCount = 0
@@ -131,7 +131,11 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 			minStart = Math.min(minStart, s)
 			maxEnd = Math.max(maxEnd, e)
 			if (!isWait && !isSleep) {
-				toolMap.set(span.toolName, (toolMap.get(span.toolName) ?? 0) + (e - s))
+				const cur = toolMap.get(span.toolName) ?? { ms: 0, count: 0, errors: 0 }
+				cur.ms += e - s
+				cur.count += 1
+				if (span.isError) cur.errors += 1
+				toolMap.set(span.toolName, cur)
 			}
 		}
 	}
@@ -171,7 +175,7 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 	}
 
 	const toolTotals = Array.from(toolMap.entries())
-		.map(([name, ms]) => ({ name, ms }))
+		.map(([name, v]) => ({ name, ms: v.ms, count: v.count, errors: v.errors }))
 		.sort((x, y) => y.ms - x.ms)
 
 	const totalMs =
@@ -391,6 +395,21 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages, activeMs }) => 
 											backgroundColor: CAT_BY_KEY.tool.color,
 										}}
 									/>
+								</span>
+								{/* run count · success ratio */}
+								<span
+									className="tabular-nums w-20 text-right flex-shrink-0"
+									title={`${tool.count} run${tool.count === 1 ? "" : "s"}, ${tool.errors} failed`}>
+									<span className="text-[var(--vscode-descriptionForeground)]">{tool.count}×</span>{" "}
+									<span
+										style={{
+											color:
+												tool.errors > 0
+													? "var(--vscode-errorForeground, #ef4444)"
+													: "var(--vscode-descriptionForeground)",
+										}}>
+										{Math.round(((tool.count - tool.errors) / tool.count) * 100)}%
+									</span>
 								</span>
 								<span className="tabular-nums text-[var(--vscode-descriptionForeground)] w-16 text-right flex-shrink-0">
 									{formatMs(tool.ms)}
