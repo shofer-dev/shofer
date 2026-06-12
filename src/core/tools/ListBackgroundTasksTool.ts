@@ -2,9 +2,32 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
 import type { ToolUse } from "../../shared/tools"
+import type { TaskLifecycle } from "@shofer/types"
 
 type ListBackgroundTasksParams = {
 	scope?: "children" | "peers" | null
+}
+
+interface TaskEntry {
+	task_id: string
+	title: string
+	status: TaskLifecycle
+	created_at?: number
+}
+
+/** Resolve the best-known lifecycle by preferring the live ManagedTask state. */
+function resolveLifecycle(
+	taskId: string,
+	task: Task,
+	persistedLifecycle: TaskLifecycle,
+): TaskLifecycle {
+	const provider = task.providerRef.deref()
+	if (!provider) return persistedLifecycle
+
+	const managed = provider.taskManager.getManagedTask(taskId)
+	if (managed?.state?.lifecycle) return managed.state.lifecycle
+
+	return persistedLifecycle
 }
 
 export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
@@ -14,35 +37,54 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 		const scope = params.scope ?? "children"
 		const { askApproval, pushToolResult } = callbacks
 
-		let tasks: Array<{ task_id: string; title: string | undefined; status: string; created_at?: number }>
+		const provider = task.providerRef.deref()
+		if (!provider) {
+			pushToolResult("Provider reference lost")
+			return
+		}
+
+		let tasks: TaskEntry[]
 
 		if (scope === "peers") {
-			// Enumerate all tasks sharing the caller's rootTaskId.
-			const provider = task.providerRef.deref()
-			if (!provider) {
-				pushToolResult("Provider reference lost")
-				return
-			}
-			const allManaged = provider.taskManager.getManagedTasks()
+			// ───── Peers scope: merge ManagedTasks + TaskHistoryStore ─────
+			// ManagedTasks covers live + terminal tasks still in the in-memory
+			// registry.  TaskHistoryStore covers EVERY task ever persisted,
+			// including stopped/cancelled tasks removed from ManagedTasks.
+			const seen = new Set<string>()
 			tasks = []
-			for (const managed of allManaged) {
-				const peerId = managed.id
-				if (peerId === task.taskId) continue
 
-				// Resolve rootTaskId from the ManagedTask entry (set at register time).
-				// This covers both live and non-live (terminal) tasks because
-				// ManagedTask entries are never evicted on completion/abort.
-				const peerRootTaskId = managed.rootTaskId
-				if (task.rootTaskId && peerRootTaskId !== task.rootTaskId) continue
+			const effectiveRootId = task.rootTaskId ?? task.taskId
 
-				// Respect least-privilege peer scope: undefined ⇒ deny all.
-				if (!task.knownPeers || !task.knownPeers.has(peerId)) continue
+			// 1. ManagedTasks (in-memory, authoritative for lifecycle)
+			for (const managed of provider.taskManager.getManagedTasks()) {
+				if (managed.id === task.taskId) continue
+				if (managed.rootTaskId && managed.rootTaskId !== effectiveRootId) continue
+				if (!task.knownPeers || !task.knownPeers.has(managed.id)) continue
 
+				seen.add(managed.id)
 				tasks.push({
-					task_id: peerId,
-					title: managed.name ?? peerId,
-					status: managed.state?.lifecycle ?? "idle",
+					task_id: managed.id,
+					title: managed.name ?? managed.id,
+					status: resolveLifecycle(managed.id, task, managed.state?.lifecycle ?? "idle"),
 					created_at: managed.createdAt,
+				})
+			}
+
+			// 2. TaskHistoryStore (persisted, catches tasks removed from ManagedTasks)
+			const allHistory = provider.taskHistoryStore.getAll()
+			for (const item of allHistory) {
+				if (item.id === task.taskId) continue
+				if (seen.has(item.id)) continue
+				if (item.rootTaskId && item.rootTaskId !== effectiveRootId) continue
+				if (!task.knownPeers || !task.knownPeers.has(item.id)) continue
+
+				seen.add(item.id)
+				const lifecycle = resolveLifecycle(item.id, task, item.taskState?.lifecycle ?? "idle")
+				tasks.push({
+					task_id: item.id,
+					title: item.name ?? item.task ?? "",
+					status: lifecycle,
+					created_at: item.createdAt ?? item.ts,
 				})
 			}
 
@@ -53,14 +95,45 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 			} catch {
 				// non-fatal
 			}
+
+			// Sort by created_at descending (newest first)
+			tasks.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
 		} else {
-			// Default: children scope (existing behavior).
-			tasks = Array.from(task.backgroundChildren.values()).map((h) => ({
-				task_id: h.taskId,
-				title: getManagedTaskTitle(task, h.taskId),
-				status: h.status,
-				created_at: h.createdAt,
-			}))
+			// ───── Children scope: TaskHandle + TaskHistoryStore ─────
+			const seen = new Set<string>()
+			tasks = []
+
+			// 1. Live background children (TaskHandle — runtime)
+			for (const [childId, handle] of task.backgroundChildren) {
+				seen.add(childId)
+				tasks.push({
+					task_id: childId,
+					title: getManagedTaskTitle(task, childId) ?? childId,
+					status: (handle.status as TaskLifecycle) ?? "idle",
+					created_at: handle.createdAt,
+				})
+			}
+
+			// 2. Persisted background children not in the live map
+			// (stopped/cancelled children removed from backgroundChildren)
+			const allHistory = provider.taskHistoryStore.getAll()
+			for (const item of allHistory) {
+				if (seen.has(item.id)) continue
+				if (!item.isBackground) continue
+				if (item.parentTaskId !== task.taskId) continue
+
+				seen.add(item.id)
+				const lifecycle = resolveLifecycle(item.id, task, item.taskState?.lifecycle ?? "idle")
+				tasks.push({
+					task_id: item.id,
+					title: item.name ?? item.task ?? "",
+					status: lifecycle,
+					created_at: item.createdAt ?? item.ts,
+				})
+			}
+
+			// Sort by created_at ascending (oldest first) to match existing behavior
+			tasks.sort((a, b) => (a.created_at ?? 0) - (b.created_at ?? 0))
 		}
 
 		// Finalize the streaming partial "tool" ask with the task snapshot so the

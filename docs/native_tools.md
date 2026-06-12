@@ -479,7 +479,16 @@ Answer a question that a background child task asked via `ask_followup_question`
 
 ### `list_background_tasks`
 
-List background tasks. With `scope="children"` (default), lists all background child tasks started by this task via `new_task` with `is_background=true`. With `scope="peers"`, lists all tasks sharing the same root task (siblings, aunts/uncles, grandchildren) — not just direct children. Returns each task's ID, title, current status, and creation timestamp.
+List background tasks. With `scope="children"` (default), lists all background child tasks started by this task via `new_task` with `is_background=true`. With `scope="peers"`, lists all tasks sharing the same root task (siblings, aunts/uncles, grandchildren) — not just direct children.
+
+The tool merges data from two sources to provide a complete picture:
+
+- **In-memory (`TaskManager.getManagedTasks()`):** Live tasks plus terminal tasks still in the registry. Provides the authoritative lifecycle for active tasks.
+- **Persisted (`TaskHistoryStore`):** All tasks ever persisted, including stopped/cancelled tasks that have been removed from the in-memory registry. This ensures that explicitly stopped tasks and non-hydrated peers appear in the listing with their last known status.
+
+Deduplication: when a task exists in both sources, the in-memory entry wins (its lifecycle is more current). Both sources respect the same filters (`rootTaskId`, `knownPeers` for peers scope; `parentTaskId` and `isBackground` for children scope).
+
+Returns each task's ID, title, current status (a `TaskLifecycle` value: `idle`, `running`, `waiting_input`, `waiting`, `paused`, `completed`, `error`), and creation timestamp.
 
 | Param   | Type                              | Required | Description                                                                                           |
 | ------- | --------------------------------- | :------: | ----------------------------------------------------------------------------------------------------- |
@@ -489,23 +498,23 @@ List background tasks. With `scope="children"` (default), lists all background c
 
 Send a message to a peer task sharing the same root task. The caller and target must share a root task (the root/parent task can message any task in its tree; sub-tasks require `knownPeers`). Discover the target's task ID via `list_background_tasks(scope="peers")`.
 
-**Busy-target fail-fast:** Messages to BUSY targets (`running`, `waiting`, `waiting_input`) are REJECTED immediately with an error — they never queue behind in-progress work. Only idle, completed, or paused tasks can receive messages.
+**Busy-target fail-fast:** Sync messages to busy targets (`running`, `waiting`, `waiting_input`) are REJECTED immediately. Async messages are rejected for `waiting_input` and `waiting` targets, but are **allowed** for `running` targets (the notification rides along in the system prompt on the next API call). Non-busy targets (`idle`, `completed`, `paused`) always accept messages in both modes.
 
 **Async mode (`wait=false`, default):**
 
 - Returns immediately (fire-and-forget). No blocking.
-- Pushed into the recipient's `peerNotificationQueue` and delivered on its next turn.
-- Use for non-urgent coordination — the recipient sees it when it gets to its next turn.
+- For a `running` recipient: injected into the system prompt as a PEER MESSAGE notification on the next turn (Form A delivery).
+- For a non-busy recipient (`idle`, `completed`, `paused`): enqueued as an annotated user-turn that wakes/resumes the recipient via `MessageQueueService` (Form B delivery, the same path user messages use).
 - The recipient may optionally respond via `send_message_to_task`.
-- BUSY TASKS REJECT: async messages to busy targets fail immediately.
+- BUSY TASKS REJECT: async to `waiting_input`/`waiting` targets fail immediately. Async to `running` is allowed.
 
 **Sync mode (`wait=true`):**
 
 - Sender blocks until the recipient calls `attempt_completion` or the timeout (default 120s) expires.
-- The message is enqueued as a `PEER PROMPT` that wakes up / restarts idle, completed, or paused recipients.
+- The message is enqueued as a `PEER PROMPT` that wakes up / restarts idle, completed, or paused recipients (same Form B path as async for non-busy, but with sync resolver).
 - The recipient MUST respond via `attempt_completion`; its result is returned to the blocked sender.
 - WARNING: `attempt_completion` is TERMINAL — the recipient ends after responding. Only sync-message a peer you intend to stop and have answer you.
-- BUSY TASKS REJECT: sync messages to busy targets fail immediately.
+- BUSY TASKS REJECT: sync to ALL busy states (`running`, `waiting`, `waiting_input`) is rejected. Use async for non-interrupting coordination with running peers.`
 
 | Param         | Type            | Required | Description                                                                                                                                       |
 | ------------- | --------------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
