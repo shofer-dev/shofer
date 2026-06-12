@@ -1,7 +1,6 @@
 import React, { useMemo } from "react"
 import type { HistoryItem, TaskState, TaskLifecycle, CompletionRating } from "@shofer/types"
 import { LIFECYCLE_VISUAL, RATING_VISUAL } from "./TaskSelector"
-import { formatTimeAgo } from "@src/utils/format"
 import { cn } from "@src/lib/utils"
 
 /**

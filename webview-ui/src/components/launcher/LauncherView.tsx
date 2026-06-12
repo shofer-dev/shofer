@@ -226,13 +226,21 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 							}
 							const cardSubtitle = subtitleParts.join(" • ")
 
+							// Body: show the description AND the param list when both exist.
+							// `LauncherCard` renders body with `whitespace-pre-line`, so a
+							// newline separates them. Previously `paramsSubtitle` shadowed
+							// `flow.description` for any workflow that declared params, hiding
+							// the description entirely — contrary to the launcher metadata
+							// acceptance criteria.
+							const cardBody = [flow.description, paramsSubtitle].filter(Boolean).join("\n") || undefined
+
 							return (
 								<LauncherCard
 									key={flow.name}
 									icon={<IconComponent className="size-5" />}
 									title={flow.title}
 									subtitle={cardSubtitle}
-									body={paramsSubtitle || flow.description || undefined}
+									body={cardBody}
 									onClick={() => handlePickWorkflow(flow.name)}
 								/>
 							)

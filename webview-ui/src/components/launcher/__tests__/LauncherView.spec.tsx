@@ -132,6 +132,9 @@ describe("LauncherView workflow cards", () => {
 
 		// Param with description (appears in the body)
 		expect(screen.getByText(/name: string — The name of the person to greet\./)).toBeInTheDocument()
+
+		// Description is shown alongside the param list (not shadowed by it)
+		expect(screen.getByText(/Simplest possible workflow\./)).toBeInTheDocument()
 	})
 
 	it("falls back gracefully for a minimal workflow with no metadata", () => {

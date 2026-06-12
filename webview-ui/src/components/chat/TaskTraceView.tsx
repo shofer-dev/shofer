@@ -362,7 +362,6 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 								onMouseEnter={(e) => {
 									const rect = svgRef.current?.getBoundingClientRect()
 									if (!rect) return
-									const scaleX = viewBox.w / rect.width
 									setHoveredSpan({
 										x: e.clientX,
 										y: e.clientY,
