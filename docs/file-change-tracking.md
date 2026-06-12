@@ -178,9 +178,24 @@ without `captureOriginal` will appear in the panel but diff won't work.
 
 ### Partial (tracks final but not original — diff won't work)
 
-| Tool                                                       | Gap                                                                                                                              |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [`generate_image`](../src/core/tools/GenerateImageTool.ts) | Calls `trackFileContext("shofer_edited")` but no `captureOriginal` — appears in panel, accept/revert work, click-to-diff doesn't |
+| Tool                                                       | Gap                                                                                                                                      |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [`generate_image`](../src/core/tools/GenerateImageTool.ts) | Calls `trackFileContext("shofer_edited")` but no `captureOriginal` — appears in panel, click-to-diff is disabled (`!hasOriginalContent`) |
+
+> **Why not just add `captureOriginal`?** The snapshot infrastructure is
+> **text/utf8-oriented**: `buildSnapshotFromContent` only ever produces the
+> `"text"` or `"absent"` `SnapshotKind` (never `"binary"`, which is declared in
+> the type but currently unproduced), and both `captureOriginal` and
+> `captureFinal` round-trip content as utf8 strings (`fs.readFile(abs, "utf8")` /
+> `fs.writeFile(dest, content, "utf8")`). Passing a PNG's bytes through that path
+> corrupts them, so a naive `captureOriginal` call for `generate_image` would
+> store a broken "original" and break revert/redo rather than fix click-to-diff.
+> Tracking generated images correctly requires real binary support (Buffer-based
+> base/final copies + binary hashing). AGENTS.md lists `generate_image` among
+> tools that must track manually; that becomes actionable once the snapshot
+> system gains binary support (see TODO below). Until then this is a known,
+> deliberate limitation — binary image diffs are not meaningful in a text diff
+> editor anyway.
 
 ### Not tracked
 
@@ -397,3 +412,4 @@ After a checkpoint restore, `base/` and `final/` directories are stale until cle
 ## TODO / Future work
 
 - Clear `<taskDir>/base/`, `<taskDir>/final/`, `<taskDir>/originals/`, and `<taskDir>/finals/` after a successful checkpoint restore so the next edits start with fresh baselines (see [Checkpoint restore interaction](#checkpoint-restore-interaction)).
+- **Binary snapshot support.** Make `buildSnapshotFromContent` actually produce the `"binary"` `SnapshotKind` and have `captureOriginal`/`captureFinal` store base/final copies as raw `Buffer`s (binary hashing) rather than utf8 strings. This unblocks full tracking for `generate_image` (and any future binary-producing tool) per the AGENTS.md File Change Tracking Pattern.
