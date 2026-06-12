@@ -132,11 +132,14 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 			}
 
 			// --- Busy check ---
-			// Sync: fail-fast on all busy states (running can't accept submitUserMessage).
-			// Async: fail-fast only on non-running busy states (waiting_input/waiting).
-			//   running tasks have an active agent loop; the peerNotificationQueue
-			//   entry is injected into their system prompt on the next turn — no
-			//   need to fail.
+			// Sync: fail-fast on all busy states (running/waiting_input/waiting).
+			//   Sync-messaging a running peer would interrupt and terminate its
+			//   in-flight work (attempt_completion is terminal), so reject — the
+			//   sender should target an idle/completed peer or use async instead.
+			// Async: fail-fast only on the transient non-running busy states
+			//   (waiting_input/waiting), which have no clean injection point. A
+			//   running peer is allowed: its live agent loop injects the
+			//   peerNotificationQueue entry into the system prompt on the next turn.
 			const targetBusyManaged = provider.taskManager.getManagedTask(task_id)
 			const targetBusyLifecycle = targetBusyManaged?.state?.lifecycle
 			if (targetBusyLifecycle) {
@@ -185,9 +188,11 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 
 			if (isSync) {
 				// --- Sync mode: blocking wait ---
-				// Submit as a PEER PROMPT via submitUserMessage — the normal
-				// task input path. The recipient is non-busy (validated above),
-				// so the message is processed immediately as a user turn.
+				// Deliver the PEER PROMPT as an annotated user-turn (Form B) and
+				// block until the recipient answers via attempt_completion (routed
+				// back through the sync resolver) or the timeout fires. The
+				// recipient is non-busy (validated above); if its loop has stopped
+				// it is woken below.
 
 				if (provider.hasPendingSyncResolver(task_id)) {
 					pushToolResult(
@@ -208,11 +213,32 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					`Timeout: ${effectiveTimeout} seconds. If you do not respond in time, the request\n` +
 					`will be discarded and the sender will receive a timeout error.`
 
-				// Deliver via submitUserMessage — the normal task input path.
-				await targetState.submitUserMessage(promptText, [])
+				// Deliver as an annotated user-turn via the recipient's
+				// MessageQueueService (Form B) — the same well-tested path the
+				// webview "Send"/queueMessage flow uses. Capture the queued id so
+				// the prompt can be retracted on timeout/abort.
+				const queuedMessage = targetState.messageQueueService.addMessage(promptText, [])
+				// addMessage returns undefined only when both text and images are empty;
+				// promptText is always non-empty here, but guard for type-safety.
+				if (!queuedMessage) {
+					pushToolResult(formatResponse.toolError(`Failed to queue peer prompt for task ${task_id}.`))
+					return
+				}
+				const queuedMessageId = queuedMessage.id
 
-				// Register a sync resolver for this recipient.
+				// Register the sync resolver BEFORE waking the recipient so the
+				// resolver is already in place when the recipient eventually calls
+				// attempt_completion.
 				const responsePromise = provider.registerPendingSyncResolver(task_id, task.taskId)
+
+				// Wake/resume a non-running recipient. A completed/paused/idle-
+				// aborted recipient (abort === true) has no live loop to drain the
+				// queue; cancelAndProcessQueuedMessages restarts it with the queued
+				// PEER PROMPT, mirroring the webview queueMessage handler. A still-
+				// running recipient drains the queue on its next Task.ask().
+				if (targetState.abort) {
+					void targetState.cancelAndProcessQueuedMessages()
+				}
 
 				// Block with AbortSignal-backed timeout (Cooperative Cancellation Rule).
 				const abortController = new AbortController()
@@ -247,6 +273,11 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 						)
 					})
 				} catch (_err) {
+					// Timeout or abort — retract the still-queued PEER PROMPT so a
+					// recipient that has not yet consumed it never sees a request the
+					// sender already abandoned. If it was already consumed, removeMessage
+					// is a no-op and any later reply is discarded (the sender is gone).
+					targetState.messageQueueService.removeMessage(queuedMessageId)
 					provider.clearPendingSyncResolver(task_id)
 					const reason = abortController.signal.aborted ? "aborted" : "timed out"
 					pushToolResult(formatResponse.toolError(`No response from task ${task_id} (${reason}).`))
@@ -271,16 +302,36 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				}
 			} else {
 				// --- Async mode: fire-and-forget ---
-				// Deliver as a PEER MESSAGE via peerNotificationQueue. The
-				// recipient's agent loop injects these into the system prompt
-				// at the start of every turn. Async messages are passive
-				// notifications — no wake, no queueing.
-				targetState.peerNotificationQueue.push({
-					senderTaskId: task.taskId,
-					senderTitle,
-					message,
-					timestamp: Date.now(),
-				})
+				// Delivery form depends on the recipient's runtime state:
+				//   - running: Form A (system-prompt injection via
+				//     peerNotificationQueue). The live agent loop injects the
+				//     notification on its next turn — no wake needed.
+				//   - idle/completed/paused: Form B (annotated user-turn via
+				//     MessageQueueService) that wakes/resumes the recipient,
+				//     mirroring the webview queueMessage handler. A passive
+				//     system-prompt injection would never be seen by a recipient
+				//     whose loop has already stopped (the liveness trap).
+				if (targetBusyLifecycle === "running") {
+					targetState.peerNotificationQueue.push({
+						senderTaskId: task.taskId,
+						senderTitle,
+						message,
+						timestamp: Date.now(),
+					})
+				} else {
+					const promptText =
+						`PEER MESSAGE from task ${task.taskId} ("${senderTitle}"):\n` +
+						`${message}\n\n` +
+						`You may respond using send_message_to_task(task_id="${task.taskId}", message=...).\n` +
+						`This is a notification — no response is required. If the message is not urgent,\n` +
+						`you may finish your current work first and respond later.`
+
+					targetState.messageQueueService.addMessage(promptText, [])
+
+					if (targetState.abort) {
+						void targetState.cancelAndProcessQueuedMessages()
+					}
+				}
 
 				try {
 					TelemetryService.instance.capturePeerMessageSent(task.taskId, {
@@ -294,7 +345,7 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 
 				pushToolResult(
 					`Message sent to task ${task_id} ("${getManagedTaskTitle(task, task_id) ?? task_id}"). ` +
-						`Delivery: on the recipient's next turn.`,
+						`Delivery: on the recipient's next turn (resuming it if idle).`,
 				)
 			}
 		} catch (error) {
