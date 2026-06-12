@@ -7620,12 +7620,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * task's timeline origin — all tasks in the extension host share the same
 	 * `performance.now()` clock, so origins are directly comparable and the
 	 * Sequence view can place every task's events on one shared axis.
+	 *
+	 * `startOffsetMs` (this task's own timeline offset, from the tool span) marks
+	 * when the tool *started*. Pass it so a blocking tool (e.g. ask_followup_question,
+	 * which only returns after the answer arrives) is ordered by when it was issued,
+	 * not when it unblocked — otherwise the answer sorts before the question.
 	 */
-	async emitTaskInteraction(payload: Omit<TaskInteractionPayload, "rootOffsetMs">): Promise<void> {
+	async emitTaskInteraction(
+		payload: Omit<TaskInteractionPayload, "rootOffsetMs">,
+		startOffsetMs?: number,
+	): Promise<void> {
 		const rootOriginMs = (this.rootTask ?? this).timelineOriginMs
+		const atPerfMs = startOffsetMs != null ? startOffsetMs + this.timelineOriginMs : performance.now()
 		const fullPayload: TaskInteractionPayload = {
 			...payload,
-			rootOffsetMs: performance.now() - rootOriginMs,
+			rootOffsetMs: atPerfMs - rootOriginMs,
 		}
 		await this.say("task_interaction", JSON.stringify(fullPayload))
 	}

@@ -490,8 +490,11 @@ export const taskInteractionPayloadSchema = z.object({
 	kind: z.enum(["spawn", "message", "await", "answer", "cancel", "question"]),
 	label: z.string(),
 	rootOffsetMs: z.number(),
-	/** Whether the interaction failed. Renders as dashed red arrow in Sequence view. */
+	/** Whether the interaction failed. Renders as a red arrow in the Sequence view. */
 	isError: z.boolean().optional(),
+	/** Non-blocking interaction (the caller did not wait on the target). Renders as
+	 * a dashed arrow in the Sequence view; blocking/sync calls render solid. */
+	async: z.boolean().optional(),
 })
 
 export type TaskInteractionPayload = z.infer<typeof taskInteractionPayloadSchema>

@@ -1626,6 +1626,12 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 		return
 	}
 	const isError = span.isError
+	// Async = the caller did not block on the target. `waitsForTask` covers a
+	// foreground new_task / sync send_message_to_task / wait_for_task; a child's
+	// ask_followup_question also blocks (it waits for the parent's answer).
+	const blocking =
+		span.waitsForTask === true || block.name === "wait_for_task" || block.name === "ask_followup_question"
+	const isAsync = !blocking
 
 	const truncate = (value: string | undefined, max = 80): string => {
 		const text = (value ?? "").replace(/\s+/g, " ").trim()
@@ -1638,7 +1644,10 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 		Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []
 
 	const emit = (kind: TaskInteractionPayload["kind"], toTaskId: string | undefined, label: string) =>
-		shofer.emitTaskInteraction({ fromTaskId: shofer.taskId, toTaskId, kind, label, isError })
+		shofer.emitTaskInteraction(
+			{ fromTaskId: shofer.taskId, toTaskId, kind, label, isError, async: isAsync },
+			span.startedAtOffsetMs,
+		)
 
 	switch (block.name) {
 		case "new_task":

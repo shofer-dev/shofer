@@ -196,7 +196,14 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 				<span className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)]">
 					<span
 						className="inline-block w-2.5 h-0 border-t border-dashed"
-						style={{ borderColor: "var(--vscode-errorForeground, #ef4444)" }}
+						style={{ borderColor: "var(--vscode-descriptionForeground)" }}
+					/>
+					Async
+				</span>
+				<span className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)]">
+					<span
+						className="inline-block w-2.5 h-0.5"
+						style={{ backgroundColor: "var(--vscode-errorForeground, #ef4444)" }}
 					/>
 					Failed
 				</span>
@@ -301,9 +308,11 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 						const y = HEADER_H + i * ROW_H + ROW_H / 2
 						const fromX = colX(ix.fromTaskId)
 						const toX = colX(ix.toTaskId)
+						// Colour encodes outcome (red = failed); dashing encodes async
+						// (a non-blocking call the caller didn't wait on).
 						const color = ix.isError ? "var(--vscode-errorForeground, #ef4444)" : meta.color
 						const markerId = ix.isError ? "seqah-error" : `seqah-${ix.kind}`
-						const dash = ix.isError ? "5 3" : undefined
+						const dash = ix.async ? "5 3" : undefined
 						const label = truncate(`${meta.label}${ix.label ? ": " + ix.label : ""}`, 34)
 
 						// Self / unresolved target → a short stub on the source lifeline.
