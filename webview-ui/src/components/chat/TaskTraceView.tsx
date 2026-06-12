@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from "react"
 import type { ShoferMessage, ApiRequestFinishedPayload, ToolSpan } from "@shofer/types"
+import { useSvgPanZoom } from "@src/hooks/useSvgPanZoom"
 
 /**
  * Waterfall timeline view for a single task, showing every API request and its
@@ -126,8 +127,6 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 		content: string
 	} | null>(null)
 	const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: 800, h: 400 })
-	const [isPanning, setIsPanning] = useState(false)
-	const panStart = useRef({ x: 0, y: 0, vbX: 0, vbY: 0 })
 
 	// Collapsed-time model: a task is only "running" while a request cycle (the
 	// request span + its tool spans) is active. The idle gaps between cycles —
@@ -204,49 +203,10 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 	// Map a raw offset → SVG X coordinate (through the collapsed axis).
 	const timeToX = useCallback((offsetMs: number) => compToX(compress(offsetMs)), [compToX, compress])
 
-	// Pan handlers.
-	const handleMouseDown = useCallback(
-		(e: React.MouseEvent<SVGSVGElement>) => {
-			if ((e.target as Element).closest?.(".trace-bar, .tooltip-trigger")) return
-			setIsPanning(true)
-			panStart.current = { x: e.clientX, y: e.clientY, vbX: viewBox.x, vbY: viewBox.y }
-		},
-		[viewBox],
-	)
-
-	const handleMouseMove = useCallback(
-		(e: React.MouseEvent<SVGSVGElement>) => {
-			if (!isPanning) return
-			const dx = e.clientX - panStart.current.x
-			const dy = e.clientY - panStart.current.y
-			setViewBox((vb) => ({
-				...vb,
-				x: panStart.current.vbX - dx,
-				y: panStart.current.vbY - dy,
-			}))
-		},
-		[isPanning],
-	)
-
-	const handleMouseUp = useCallback(() => setIsPanning(false), [])
-
-	// Zoom via mousewheel.
-	const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
-		e.preventDefault()
-		const scale = e.deltaY > 0 ? 1.15 : 0.87
-		setViewBox((vb) => {
-			const cx = vb.x + vb.w / 2
-			const cy = vb.y + vb.h / 2
-			const nw = vb.w * scale
-			const nh = vb.h * scale
-			return {
-				x: cx - nw / 2,
-				y: cy - nh / 2,
-				w: nw,
-				h: nh,
-			}
-		})
-	}, [])
+	// Drag-to-pan + cursor-anchored wheel zoom (shared with the Sequence view).
+	const { isPanning, zoomBy, handlers } = useSvgPanZoom(svgRef, viewBox, setViewBox, {
+		noPanSelector: ".trace-bar, .tooltip-trigger",
+	})
 
 	const fitToView = useCallback(() => {
 		const w = svgRef.current?.clientWidth ?? 800
@@ -293,14 +253,14 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 					type="button"
 					className="px-2 py-0.5 text-xs rounded border"
 					style={{ borderColor: COLOURS.border, color: COLOURS.fg, backgroundColor: COLOURS.bg }}
-					onClick={() => setViewBox((vb) => ({ ...vb, w: vb.w * 0.8, h: vb.h * 0.8 }))}>
+					onClick={() => zoomBy(0.8)}>
 					+
 				</button>
 				<button
 					type="button"
 					className="px-2 py-0.5 text-xs rounded border"
 					style={{ borderColor: COLOURS.border, color: COLOURS.fg, backgroundColor: COLOURS.bg }}
-					onClick={() => setViewBox((vb) => ({ ...vb, w: vb.w * 1.25, h: vb.h * 1.25 }))}>
+					onClick={() => zoomBy(1.25)}>
 					−
 				</button>
 				<button
@@ -317,11 +277,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 				viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
 				className="w-full h-full cursor-grab"
 				style={{ cursor: isPanning ? "grabbing" : undefined }}
-				onMouseDown={handleMouseDown}
-				onMouseMove={handleMouseMove}
-				onMouseUp={handleMouseUp}
-				onMouseLeave={handleMouseUp}
-				onWheel={handleWheel}>
+				{...handlers}>
 				{/* Time axis */}
 				<g>
 					<line
