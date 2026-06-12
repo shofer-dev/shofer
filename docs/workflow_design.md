@@ -655,6 +655,23 @@ The mapping is:
 
 For simple agents (e.g., Reviewer: read-only tools), existing modes work directly. For specialized agents, the Workflow restricts the mode's tool groups via the `tools:` field at spawn time — no persisted `.shofer/shofermodes` entry needed.
 
+> **⚠️ Current reality — `mode: "orchestrator"` falls back to `code`.** The two
+> built-in workflows (`debug.slang`, `implement-feature.slang`) declare their
+> top-level agent with `mode: "orchestrator"`, but **there is no `orchestrator`
+> mode** in `DEFAULT_MODES` or `.shofer/shofermodes`. `spawnAgentTask` passes the
+> slug to `createTask({ initialMode })`, and `getModeBySlug("orchestrator")`
+> returns `undefined`, so the agent silently runs in the **`code`** fallback mode —
+> with the `code` `roleDefinition` and **all** of code's tool groups (read, write,
+> execute, …), not a delegation-only persona. Combined with `tools:`/`role:` being
+> "parsed, not yet consumed" (see below), the orchestrator's intended restriction
+> ("you do NOT write or review code yourself") is **not enforced** today; it relies
+> entirely on the agent's prompt instructions. Two ways to make it real: (a) add an
+> `orchestrator` built-in mode (groups `subtasks`, `questions`, `mcp` — no
+> write/execute) — note this would become a 7th built-in mode and must be added to
+> every mode table across the docs; or (b) wire the per-agent `tools:` restriction
+> (Planned) so the workflow narrows `code`'s groups at spawn. Until one ships, treat
+> the orchestrator as an over-privileged `code` agent.
+
 ---
 
 ## Shofer Extensions (Shofermodes Capabilities)
