@@ -37,7 +37,11 @@ program
 	.option("-k, --api-key <key>", "API key for the LLM provider")
 	.option("--provider <provider>", "API provider (shofer, anthropic, openai, openrouter, etc.)")
 	.option("-m, --model <model>", "Model to use")
-	.option("--mode <mode>", "Mode to start in (code, architect, ask, debug, etc.)", DEFAULT_FLAGS.mode)
+	.option(
+		"--mode <mode>",
+		"Mode to start in (code, architect, debug, code-search, web-search, reviewer, or a custom mode slug)",
+		DEFAULT_FLAGS.mode,
+	)
 	.option("--terminal-shell <path>", "Absolute path to shell executable for inline terminal commands")
 	.option(
 		"-r, --reasoning-effort <effort>",

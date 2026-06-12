@@ -156,32 +156,32 @@ Defined in [`packages/types/src/cli.ts`](../packages/types/src/cli.ts):
 
 ## CLI Options
 
-| Option                                  | Description                                                           | Default                     |
-| --------------------------------------- | --------------------------------------------------------------------- | --------------------------- |
-| `[prompt]`                              | Positional prompt argument                                            | None                        |
-| `--prompt-file <path>`                  | Read prompt from a file                                               | None                        |
-| `-w, --workspace <path>`                | Workspace directory                                                   | Current directory           |
-| `-p, --print`                           | Non-interactive output                                                | `false`                     |
-| `--stdin-prompt-stream`                 | Read NDJSON commands from stdin (requires `--print`)                  | `false`                     |
-| `--signal-only-exit`                    | Do not exit on completion; only SIGINT/SIGTERM (for stream harnesses) | `false`                     |
-| `-e, --extension <path>`                | Path to extension bundle directory                                    | Auto-detected               |
-| `-d, --debug`                           | Enable debug logging                                                  | `false`                     |
-| `-a, --require-approval`                | Require manual approval before each action                            | `false`                     |
-| `-k, --api-key <key>`                   | API key for the LLM provider                                          | From env var                |
-| `--provider <provider>`                 | API provider (`shofer`, `openrouter`, `anthropic`, etc.)              | `openrouter`                |
-| `-m, --model <model>`                   | Model to use                                                          | `anthropic/claude-opus-4.6` |
-| `--mode <mode>`                         | Mode (`code`, `architect`, `ask`, `debug`, `review`)                  | `code`                      |
-| `--base-url <url>`                      | Base URL for the provider (for custom/llm-router endpoints)           | None                        |
-| `--terminal-shell <path>`               | Shell executable for inline terminal commands                         | Auto-detected               |
-| `-r, --reasoning-effort <effort>`       | Reasoning effort (`unspecified`, `disabled`, `low`, `high`, etc.)     | `medium`                    |
-| `--consecutive-mistake-limit <n>`       | Error/repetition limit before guidance prompt (`0` disables)          | `10`                        |
-| `--exit-on-error`                       | Exit on API request errors instead of retrying                        | `false`                     |
-| `--ephemeral`                           | Run without persisting state (uses temporary storage)                 | `false`                     |
-| `--oneshot`                             | Exit upon task completion                                             | `false`                     |
-| `--output-format <format>`              | Output format with `--print`: `text`, `json`, `stream-json`           | `text`                      |
-| `--session-id <session-id>`             | Resume a specific task by session ID                                  | None                        |
-| `--create-with-session-id <session-id>` | Create a new task with a specific session ID (UUID)                   | None                        |
-| `-c, --continue`                        | Resume the most recent task in the current workspace                  | `false`                     |
+| Option                                  | Description                                                                                                      | Default                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `[prompt]`                              | Positional prompt argument                                                                                       | None                        |
+| `--prompt-file <path>`                  | Read prompt from a file                                                                                          | None                        |
+| `-w, --workspace <path>`                | Workspace directory                                                                                              | Current directory           |
+| `-p, --print`                           | Non-interactive output                                                                                           | `false`                     |
+| `--stdin-prompt-stream`                 | Read NDJSON commands from stdin (requires `--print`)                                                             | `false`                     |
+| `--signal-only-exit`                    | Do not exit on completion; only SIGINT/SIGTERM (for stream harnesses)                                            | `false`                     |
+| `-e, --extension <path>`                | Path to extension bundle directory                                                                               | Auto-detected               |
+| `-d, --debug`                           | Enable debug logging                                                                                             | `false`                     |
+| `-a, --require-approval`                | Require manual approval before each action                                                                       | `false`                     |
+| `-k, --api-key <key>`                   | API key for the LLM provider                                                                                     | From env var                |
+| `--provider <provider>`                 | API provider (`shofer`, `openrouter`, `anthropic`, etc.)                                                         | `openrouter`                |
+| `-m, --model <model>`                   | Model to use                                                                                                     | `anthropic/claude-opus-4.6` |
+| `--mode <mode>`                         | Built-in mode slug (`code`, `architect`, `debug`, `code-search`, `web-search`, `reviewer`) or a custom mode slug | `code`                      |
+| `--base-url <url>`                      | Base URL for the provider (for custom/llm-router endpoints)                                                      | None                        |
+| `--terminal-shell <path>`               | Shell executable for inline terminal commands                                                                    | Auto-detected               |
+| `-r, --reasoning-effort <effort>`       | Reasoning effort (`unspecified`, `disabled`, `low`, `high`, etc.)                                                | `medium`                    |
+| `--consecutive-mistake-limit <n>`       | Error/repetition limit before guidance prompt (`0` disables)                                                     | `10`                        |
+| `--exit-on-error`                       | Exit on API request errors instead of retrying                                                                   | `false`                     |
+| `--ephemeral`                           | Run without persisting state (uses temporary storage)                                                            | `false`                     |
+| `--oneshot`                             | Exit upon task completion                                                                                        | `false`                     |
+| `--output-format <format>`              | Output format with `--print`: `text`, `json`, `stream-json`                                                      | `text`                      |
+| `--session-id <session-id>`             | Resume a specific task by session ID                                                                             | None                        |
+| `--create-with-session-id <session-id>` | Create a new task with a specific session ID (UUID)                                                              | None                        |
+| `-c, --continue`                        | Resume the most recent task in the current workspace                                                             | `false`                     |
 
 ## Subcommands
 
