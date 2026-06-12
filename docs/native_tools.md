@@ -273,7 +273,7 @@ The tool is synchronous: the calling task blocks until the assistant returns an 
 
 ## Code Analysis & Refactoring
 
-> **Worktree isolation:** `rename_symbol` validates the source file location but LSP rename may affect files outside the worktree since the workspace scope covers the entire repo. See [`worktrees.md §Known Limitations`](worktrees.md#known-limitations).
+> **Worktree isolation:** `rename_symbol` validates **every** file the rename would touch against the worktree boundary (not just the source) and blocks the whole rename if any affected path is outside it — see [`worktree-shell-sandboxing.md`](worktree-shell-sandboxing.md) §"rename_symbol Isolation". (Mode-level `fileRegex` restrictions remain source-path-derived; see [`adding-new-tools.md`](adding-new-tools.md).)
 
 | Tool                     | Origin | Group | Always Available | Status | Description                                        |
 | ------------------------ | :----: | ----- | :--------------: | :----: | -------------------------------------------------- |

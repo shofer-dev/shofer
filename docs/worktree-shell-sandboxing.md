@@ -27,13 +27,15 @@ shell commands executed via `execute_command` must be unable to **write** outsid
 worktree directory. The current [`getWorktreeCommandWarning()`](extensions/shofer/src/utils/worktreePathGuard.ts:97)
 advisory warning is a best-effort placeholder that does not prevent escape.
 
-Additionally, `rename_symbol` (LSP rename) currently escapes worktree boundaries. The handler
-[`RenameSymbolTool.execute()`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:70) calls
-[`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:62) on the **source**
-file only — the LSP rename provider then operates on the entire workspace and the resulting
-`WorkspaceEdit` (enumerated via `workspaceEdit.entries()` at
-[`RenameSymbolTool.ts:127`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:127)) can modify
-references in master or sibling worktrees. This must be addressed as part of the same isolation effort.
+Additionally, `rename_symbol` (LSP rename) could escape worktree boundaries because the LSP rename
+provider operates on the entire workspace. **This is now fixed** (Phase 3 ✅): in addition to the
+source-file guard at [`RenameSymbolTool.execute()`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:70),
+the handler enumerates every affected file via `workspaceEdit.entries()` and runs each through
+[`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:62) **before** applying the
+edit; if any affected path is outside the worktree, the whole rename is blocked (strict Option A) — see
+[`RenameSymbolTool.ts:139-150`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:139). (Note: this is
+worktree-boundary enforcement; mode-level `fileRegex` restrictions for `rename_symbol` remain
+source-path-derived — see [`adding-new-tools.md`](adding-new-tools.md).)
 
 ## Design
 
@@ -143,12 +145,15 @@ The [`ExecuteCommandTool.ts`](extensions/shofer/src/core/tools/ExecuteCommandToo
 > so `ExecaTerminalProcess` was left unchanged. Functionally equivalent; the wrapper is the outermost
 > process via `<wrapper> … -- /bin/sh -c '<cmd>'`.
 
-### `rename_symbol` Isolation
+### `rename_symbol` Isolation — ✅ implemented (Option A, strict)
+
+> The design below describes the approach that was **implemented** in Phase 3. The
+> per-affected-path worktree check is live at `RenameSymbolTool.ts:139-150`.
 
 [`RenameSymbolTool`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:32) calls
-`vscode.executeDocumentRenameProvider`, which operates on the entire workspace. The current guard
+`vscode.executeDocumentRenameProvider`, which operates on the entire workspace. The source-file guard
 [`validateWorktreePath(task, filePath)`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:70)
-only validates the **source** file's location, not the rename's downstream effects.
+only validates the **source** file's location, so the downstream-effects check below was added on top.
 
 The handler already enumerates every affected file: the loop at
 [`RenameSymbolTool.ts:127`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:127) iterates
