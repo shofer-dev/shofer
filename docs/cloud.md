@@ -86,14 +86,13 @@ The sections below describe cloud features from the upstream codebase. **None of
 - `packages/cloud/` (entire package — `CloudService`, `WebAuthService`, `StaticTokenAuthService`, `CloudSettingsService`, `StaticSettingsService`, `CloudAPI`, `CloudShareService`, `TelemetryClient`, `RetryQueue`, `RefreshTimer`, `config.ts`, `errors.ts`)
 - `packages/types/src/cloud.ts` (all cloud type definitions)
 - `webview-ui/src/components/cloud/` (all cloud UI components)
+- `webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`
+- `src/services/mdm/MdmService.ts`
 
 > **Exception — `src/api/providers/shofer.ts` DOES exist**, but it is **not** the
 > upstream cloud `RooHandler` described in §"Shofer Router Provider" below. It is a
 > thin `OpenRouterHandler` subclass targeting a **locally-running llm-router**. See
 > the rewritten §"Shofer Router Provider" for the actual implementation.
-
-- `webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`
-- `src/services/mdm/MdmService.ts`
 
 Content below is preserved for reference:
 
