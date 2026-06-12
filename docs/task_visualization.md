@@ -11,23 +11,25 @@ All three share a common data model foundation: offsets from a per-task `timelin
 ## Tab Bar Layout
 
 ```
-[ Chat ] [ Tree ] [ Sequence ] [ Trace ]
+[ Chat ] [ Tree ] [ Sequence ] [ Trace ] [ Stats ]
 ```
 
 - `"Chat"` — the existing chat message list (Virtuoso).
 - `"Tree"` — the task hierarchy view.
-- `"Sequence"` — the inter-task communication diagram (future).
+- `"Sequence"` — the inter-task communication diagram.
 - `"Trace"` — the waterfall timeline for the currently focused task.
+- `"Stats"` — the active-time breakdown donut for the currently focused task.
 
 Tab state is local to `ChatView`, reset to `"Chat"` on task switch. The tabs use the same visual style as `WorkflowView`'s tab buttons (`text-xs font-medium px-3 py-1 rounded`, active = `--vscode-button-background`, inactive = `transparent` with `opacity-60`).
 
 ## Scope Per Visualization
 
-| View         | How many tasks?       | Rendering technology                              | Status                |
-| ------------ | --------------------- | ------------------------------------------------- | --------------------- |
-| **Tree**     | All under same root   | React tree component                              | Existing data, new UI |
-| **Trace**    | Single task (focused) | Custom SVG waterfall                              | v1                    |
-| **Sequence** | All under same root   | Custom SVG lifelines (ports `compileSequenceSVG`) | Future                |
+| View         | How many tasks?       | Rendering technology                          | Status                |
+| ------------ | --------------------- | --------------------------------------------- | --------------------- |
+| **Tree**     | All under same root   | React tree component                          | Existing data, new UI |
+| **Trace**    | Single task (focused) | Custom SVG waterfall                          | v1                    |
+| **Sequence** | All under same root   | Custom SVG lifelines (host-aggregated events) | v1                    |
+| **Stats**    | Single task (focused) | Custom SVG donut                              | v1                    |
 
 **Trace is single-task only.** Each task generates its own trace regardless of how tasks relate to each other (peers, parent-child). The user navigates to a different task via `TaskSelector` to see that task's trace. There is no multi-lane waterfall combining multiple tasks.
 
@@ -64,9 +66,11 @@ Rows are sorted by `number` (creation order), children indented under parents. S
 
 ---
 
-## 2. Sequence — Task Interaction Diagram (Future)
+## 2. Sequence — Task Interaction Diagram (v1)
 
 A lifeline-based sequence diagram showing inter-task communication across the task tree, analogous to `compileSequenceSVG` in [`slang-render.js`](../src/core/webview/slang-render.js:671).
+
+> **Implemented** in [`TaskSequenceView.tsx`](../webview-ui/src/components/chat/TaskSequenceView.tsx). Because `task_interaction` events live in every task's `ui_messages.json` (not just the focused task), they're aggregated host-side via the `getTaskInteractions` request → `ShoferProvider.getTaskInteractions(rootTaskId)`, which reads every task under the root and returns the events sorted by `rootOffsetMs`. The `kind` set now also includes `"question"` (`ask_followup_question` → parent). The notes below describe the original design.
 
 ### Data Source — `TaskInteraction`
 
@@ -143,6 +147,48 @@ The waterfall trace shows a single task's API requests and tool executions on a 
 | 6   | **Incremental IPC push** via existing message pipeline                                | `api_req_finished` messages are pushed to the webview as they're emitted — `ChatView`'s existing `addToShoferMessages` → `postStateToWebview` path delivers them; `TaskTraceView` filters `say === "api_req_finished"` from `shoferMessages` |
 
 No backward compatibility is preserved. Existing `api_req_started` mutation code (`updateApiReqMsg`) will be simplified to only emit the placeholder; timing/cost/error data flows into the new `api_req_finished` message instead. The `shoferSaySchema` already includes `"api_req_finished"` — no schema change needed.
+
+---
+
+## 4. Stats — Active-Time Breakdown (v1)
+
+A donut chart ([`TaskStatsView.tsx`](../webview-ui/src/components/chat/TaskStatsView.tsx)) showing **where the focused task's _active time_ went**, summed across every prompt. Single-task only, same `api_req_finished` data source as the Trace.
+
+### Categories (shared palette with the Trace)
+
+A request is split into phases, and tool spans into their own categories:
+
+| Category               | Source                                                                                | Colour |
+| ---------------------- | ------------------------------------------------------------------------------------- | ------ |
+| **Waiting for model**  | TTFB: request start → first chunk (`ttfbMs`)                                          | blue   |
+| **Thinking**           | reasoning: `ttfbMs` → `genStartOffsetMs` (first non-reasoning chunk)                  | purple |
+| **Streaming response** | generation: `genStartOffsetMs` → request end                                          | green  |
+| **Tool execution**     | non-blocking `ToolSpan`s                                                              | orange |
+| **Waiting for task**   | `ToolSpan.waitsForTask` (wait_for_task, blocking new_task, sync send_message_to_task) | cyan   |
+| **Overhead**           | remainder — see below                                                                 | gray   |
+
+Overlapping spans are resolved by painting them onto one offset axis with priority (tools > request phases) and reading back non-overlapping per-category totals.
+
+### Total = the task's Active Time (the header value)
+
+The pie's **total is `HistoryItem.activeTimeMs`** — the exact "Active Time" shown in `TaskHeader`, passed into `TaskStatsView` from `ChatView`. `activeTimeMs` is the wall-clock time the task spent **`running` or `waiting`** (blocked on another task), tracked by [`TaskManager`](../src/services/task-manager/TaskManager.ts) via lifecycle-transition intervals; it excludes only idle-equivalent states (`idle`, `waiting_input`, `paused`) and terminal states. So the header and the pie agree by construction.
+
+### What "Overhead" is
+
+The two numbers come from **different mechanisms**: `activeTimeMs` is lifecycle wall-clock (`Date.now()`), while the phase categories are summed from `api_req_finished` span offsets (`performance.now()`). **Overhead is the reconciliation slice:**
+
+```
+Overhead = activeTimeMs − (sum of the phase/tool span categories)
+```
+
+i.e. **active time that isn't attributed to any instrumented span.** Concretely it covers:
+
+1. **Between-cycle work that is still `running`** — checkpoint saves, context assembly/condensation, applying diffs, processing tool results, building the next request, `setImmediate` yields.
+2. **Edges** — task setup before the first request, and any active tail after the last span.
+3. **Clock skew** — the lifecycle clock (`Date.now`) and span clock (`performance.now`) differ slightly, so Overhead is never exactly zero.
+4. **Un-instrumented activity** — anything active that produced no span (e.g. a reasoning-only response, or a tool that bypassed the span chokepoint).
+
+Keeping both mechanisms is intentional: the Overhead slice **makes their divergence visible** rather than hiding it. A consistently small Overhead means the two agree well; a large Overhead is a signal (heavy checkpointing/processing, or missing instrumentation worth chasing). If `activeMs` is unavailable, the pie falls back to the span sum as its total (no Overhead slice).
 
 ## Data Model
 
