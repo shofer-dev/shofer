@@ -178,7 +178,7 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 
 	return (
 		<div className="h-full w-full flex flex-col relative overflow-hidden">
-			{/* Legend */}
+			{/* Legend — arrow kinds (colour) plus the two line-style encodings. */}
 			<div className="flex flex-wrap gap-x-3 gap-y-1 px-2 py-1.5 text-[10px] flex-shrink-0">
 				{Object.values(KIND_META).map((m) => (
 					<span key={m.label} className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)]">
@@ -186,6 +186,20 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 						{m.label}
 					</span>
 				))}
+				<span className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)]">
+					<span
+						className="inline-block w-2.5 h-0 border-t border-dotted"
+						style={{ borderColor: "var(--vscode-widget-border)" }}
+					/>
+					Lifeline (task)
+				</span>
+				<span className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)]">
+					<span
+						className="inline-block w-2.5 h-0 border-t border-dashed"
+						style={{ borderColor: "var(--vscode-errorForeground, #ef4444)" }}
+					/>
+					Failed
+				</span>
 			</div>
 
 			{/* Pan/zoom canvas */}
