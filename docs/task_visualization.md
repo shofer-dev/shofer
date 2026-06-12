@@ -165,6 +165,7 @@ A request is split into phases, and tool spans into their own categories:
 | **Streaming response** | generation: `genStartOffsetMs` → request end                                          | green  |
 | **Tool execution**     | non-blocking `ToolSpan`s                                                              | orange |
 | **Waiting for task**   | `ToolSpan.waitsForTask` (wait_for_task, blocking new_task, sync send_message_to_task) | cyan   |
+| **Sleeping**           | the `sleep` tool                                                                      | yellow |
 | **Overhead**           | remainder — see below                                                                 | gray   |
 
 Overlapping spans are resolved by painting them onto one offset axis with priority (tools > request phases) and reading back non-overlapping per-category totals.

@@ -63,6 +63,7 @@ const COLOURS = {
 	phaseStreaming: "var(--vscode-charts-green, #16a34a)",
 	toolBar: "var(--vscode-charts-orange, #f97316)",
 	toolBarWait: "var(--vscode-charts-cyan, #06b6d4)",
+	toolBarSleep: "var(--vscode-charts-yellow, #eab308)",
 	toolBarError: "var(--vscode-charts-red, #dc2626)",
 	toolBarSkipped: "var(--vscode-descriptionForeground)",
 
@@ -484,13 +485,18 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 								const tX = timeToX(ts.startedAtOffsetMs)
 								const tW = Math.max(timeToX(ts.finishedAtOffsetMs) - tX, 3)
 								const toolError = ts.isError
-								// Blocking inter-task tools render as "waiting for task" (cyan).
-								const toolWaits = ts.waitsForTask === true || ts.toolName === "wait_for_task"
+								// sleep → "Sleeping" (yellow); blocking inter-task tools →
+								// "Waiting for task" (cyan); everything else → tool exec (orange).
+								const toolSleeps = ts.toolName === "sleep"
+								const toolWaits =
+									!toolSleeps && (ts.waitsForTask === true || ts.toolName === "wait_for_task")
 								const toolFill = toolError
 									? COLOURS.toolBarError
-									: toolWaits
-										? COLOURS.toolBarWait
-										: COLOURS.toolBar
+									: toolSleeps
+										? COLOURS.toolBarSleep
+										: toolWaits
+											? COLOURS.toolBarWait
+											: COLOURS.toolBar
 
 								return (
 									<g key={ti}>

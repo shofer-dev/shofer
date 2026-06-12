@@ -16,12 +16,12 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * processing) is shown as "Overhead":
  *   • Waiting for model (TTFB)   • Thinking (reasoning)   • Streaming response
  *   • Tool execution   • Waiting for task (wait_for_task, a blocking new_task,
- *     or a sync send_message_to_task)   • Overhead
+ *     or a sync send_message_to_task)   • Sleeping (the sleep tool)   • Overhead
  */
 
 // ── Categories ──
 
-type CatKey = "llm" | "thinking" | "streaming" | "tool" | "waiting_subtask"
+type CatKey = "llm" | "thinking" | "streaming" | "tool" | "waiting_subtask" | "sleeping"
 
 interface CatMeta {
 	key: CatKey
@@ -38,6 +38,7 @@ const CATEGORIES: CatMeta[] = [
 	{ key: "streaming", label: "Streaming response", color: "var(--vscode-charts-green, #16a34a)", prio: 1 },
 	{ key: "tool", label: "Tool execution", color: "var(--vscode-charts-orange, #f97316)", prio: 2 },
 	{ key: "waiting_subtask", label: "Waiting for task", color: "var(--vscode-charts-cyan, #06b6d4)", prio: 2 },
+	{ key: "sleeping", label: "Sleeping", color: "var(--vscode-charts-yellow, #eab308)", prio: 2 },
 ]
 
 const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
@@ -49,6 +50,7 @@ const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
 )
 
 const WAIT_FOR_TASK_TOOL = "wait_for_task"
+const SLEEP_TOOL = "sleep"
 
 // ── Helpers ──
 
@@ -120,13 +122,15 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		for (const span of payload.toolSpans) {
 			const s = span.startedAtOffsetMs
 			const e = Math.max(span.finishedAtOffsetMs, s)
-			// `waitsForTask` flags blocking inter-task tools; fall back to the tool
-			// name for spans recorded before that flag existed.
-			const isWait = span.waitsForTask === true || span.toolName === WAIT_FOR_TASK_TOOL
-			segments.push({ start: s, end: e, cat: isWait ? "waiting_subtask" : "tool", prio: 2 })
+			// The sleep tool is its own "Sleeping" category. `waitsForTask` flags
+			// blocking inter-task tools (fall back to the tool name for older spans).
+			const isSleep = span.toolName === SLEEP_TOOL
+			const isWait = !isSleep && (span.waitsForTask === true || span.toolName === WAIT_FOR_TASK_TOOL)
+			const cat: CatKey = isSleep ? "sleeping" : isWait ? "waiting_subtask" : "tool"
+			segments.push({ start: s, end: e, cat, prio: 2 })
 			minStart = Math.min(minStart, s)
 			maxEnd = Math.max(maxEnd, e)
-			if (!isWait) {
+			if (!isWait && !isSleep) {
 				toolMap.set(span.toolName, (toolMap.get(span.toolName) ?? 0) + (e - s))
 			}
 		}
@@ -138,7 +142,14 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 	// its length to the highest-priority covering segment. Gaps (no covering
 	// segment) are idle / between-prompt time and are dropped — we only account
 	// for time the task was actually running.
-	const totals: Record<CatKey, number> = { llm: 0, thinking: 0, streaming: 0, tool: 0, waiting_subtask: 0 }
+	const totals: Record<CatKey, number> = {
+		llm: 0,
+		thinking: 0,
+		streaming: 0,
+		tool: 0,
+		waiting_subtask: 0,
+		sleeping: 0,
+	}
 	const points = Array.from(new Set([minStart, maxEnd, ...segments.flatMap((s) => [s.start, s.end])])).sort(
 		(a, b) => a - b,
 	)
@@ -163,7 +174,8 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		.map(([name, ms]) => ({ name, ms }))
 		.sort((x, y) => y.ms - x.ms)
 
-	const totalMs = totals.llm + totals.thinking + totals.streaming + totals.tool + totals.waiting_subtask
+	const totalMs =
+		totals.llm + totals.thinking + totals.streaming + totals.tool + totals.waiting_subtask + totals.sleeping
 
 	return { totals, toolTotals, totalMs, requestCount }
 }
