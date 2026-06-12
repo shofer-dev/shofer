@@ -31,6 +31,7 @@ import ChatRow from "./ChatRow"
 import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
+import TaskTreeView from "./TaskTreeView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { QueuedMessages } from "./QueuedMessages"
 import SessionSearch from "./SessionSearch"
@@ -76,6 +77,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	const {
 		shoferMessages: messages,
 		currentTaskItem,
+		taskHistory,
 		apiConfiguration,
 		organizationAllowList,
 		mode,
@@ -95,8 +97,8 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
-	// Workflow viz tab: "chat" | "topology" | "sequence" | "swimlane"
-	const [workflowTab, setWorkflowTab] = useState<"chat" | "topology" | "sequence" | "swimlane">("chat")
+	// Workflow viz tab: "chat" | "tree" | "topology" | "sequence" | "swimlane"
+	const [workflowTab, setWorkflowTab] = useState<"chat" | "tree" | "topology" | "sequence" | "swimlane">("chat")
 
 	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
 
@@ -1990,7 +1992,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							style={{
 								borderBottom: "1px solid var(--vscode-widget-border, #3c3c3c)",
 							}}>
-							{(["chat", "topology", "sequence", "swimlane"] as const).map((tab) => (
+							{(["chat", "tree", "topology", "sequence", "swimlane"] as const).map((tab) => (
 								<button
 									key={tab}
 									type="button"
@@ -2007,6 +2009,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 									{
 										{
 											chat: "Chat",
+											tree: "Tree",
 											topology: "Topology",
 											sequence: "Sequence",
 											swimlane: "Swimlane",
@@ -2016,8 +2019,16 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							))}
 						</div>
 					)}
-					{workflowVizHtml && workflowTab !== "chat" && (
+					{workflowVizHtml && workflowTab !== "chat" && workflowTab !== "tree" && (
 						<SlangViz html={workflowVizHtml} runState={workflowVizRunState} view={workflowTab} />
+					)}
+					{workflowVizHtml && workflowTab === "tree" && (
+						<div className="flex relative grow">
+							<TaskTreeView
+								taskHistory={taskHistory}
+								rootTaskId={currentTaskItem?.rootTaskId ?? currentTaskItem?.id}
+							/>
+						</div>
 					)}
 					{(!workflowVizHtml || workflowTab === "chat") && (
 						<div className="flex relative grow" ref={scrollContainerRef}>
