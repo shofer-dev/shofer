@@ -4,14 +4,16 @@ Complete reference for all native tools available in Shofer, their mode availabi
 
 ## Mode Availability
 
-| Mode            | Groups                                                             | Description                     |
-| --------------- | ------------------------------------------------------------------ | ------------------------------- |
-| 🏗️ Architect    | `read`, `write` (md only), `mcp`, `subtasks`, `questions`          | Plan and design                 |
-| 💻 Code         | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions` | Write and modify code           |
-| ❓ Ask          | `read`, `mcp`                                                      | Get answers and explanations    |
-| 🪲 Debug        | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`         | Diagnose and fix issues         |
-| 👀 Reviewer     | `read`, `execute`, `mcp`, `subtasks`, `questions`                  | Review code and identify issues |
-| 🪃 Orchestrator | varies                                                             | Delegates to other modes        |
+The six built-in modes (`DEFAULT_MODES` in [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)). See [`built-in-modes.md`](built-in-modes.md) for the authoritative source.
+
+| Mode           | Groups                                                                              | Description                     |
+| -------------- | ----------------------------------------------------------------------------------- | ------------------------------- |
+| 💻 Code        | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` | Write and modify code (default) |
+| 🏗️ Architect   | `read`, `write` (md only), `mcp`, `subtasks`, `questions`                           | Plan and design                 |
+| 🪲 Debug       | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`         | Diagnose and fix issues         |
+| 🔎 Code Search | `read`, `execute`, `mcp`, `questions`                                               | Search and explore the codebase |
+| 🌐 Web Search  | `browser`, `questions`, `mcp`                                                       | Browse and extract web content  |
+| 👀 Reviewer    | `read`, `execute`, `mcp`, `subtasks`, `questions`                                   | Review code and identify issues |
 
 **Always-available tools** bypass mode filtering entirely (see column below).
 
