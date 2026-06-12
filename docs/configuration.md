@@ -259,15 +259,20 @@ rows yet. Configure them directly in `settings.json`.
 
 ```jsonc
 {
+	// Cost limiting ON: maxUsd must be a POSITIVE number (the schema is
+	// z.number().positive() — 0 is rejected by Zod validation).
 	"shofer.defaultCostLimit": {
-		"maxUsd": 0, // positive number = cap in USD
+		"maxUsd": 5.0, // cap in USD (must be > 0)
 		"action": "pause", // "pause" | "abort" | "kill"
 	},
+	// Cost limiting OFF: use null (not 0).
+	// "shofer.defaultCostLimit": null,
 }
 ```
 
-Default per-root-task USD budget cap applied to all new tasks. When
-`maxUsd` is `0` or unset, cost limiting is disabled. See
+Default per-root-task USD budget cap applied to all new tasks. To **disable**
+cost limiting, set `defaultCostLimit` to `null` — **not** `maxUsd: 0`, which the
+`z.number().positive()` schema rejects. See
 [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for details.
 
 ### `shofer.disabledTools`
@@ -316,25 +321,19 @@ is stored in both backends, but the GlobalState copy is what ContextProxy
 serves to runtime code. The two copies can drift if a user edits
 `settings.json` directly for one but not the other.
 
-### `commandExecutionTimeout` / `commandTimeoutAllowlist` naming confusion
+### `commandExecutionTimeout` / `commandTimeoutAllowlist` naming bug — ✅ fixed
 
-The VS Code `contributes.configuration` registers these as
-[`shofer.devmandExecutionTimeout`](../src/package.json:370) and
-[`shofer.devmandTimeoutAllowlist`](../src/package.json:377) — note the
-`devmand` prefix. The `globalSettingsSchema` stores them as
-[`commandExecutionTimeout`](../packages/types/src/global-settings.ts:116)
-and [`commandTimeoutAllowlist`](../packages/types/src/global-settings.ts:117).
-
-Neither `shofer.devmandExecutionTimeout` nor
-`shofer.devmandTimeoutAllowlist` has a **single consumer** in the
-TypeScript source tree — they are dead code. The runtime reads these
-values from `globalSettingsSchema` via
-[`ContextProxy.getValue()`](../src/core/config/ContextProxy.ts:509).
-
-**Impact on users:** Setting `shofer.devmandExecutionTimeout` in
-`settings.json` has no effect. The runtime reads
-`shofer.commandExecutionTimeout` from ContextProxy instead, but that key
-does not appear in the VS Code settings UI (no settings-panel row).
+Previously, `contributes.configuration` registered these as
+`shofer.devmandExecutionTimeout` / `shofer.devmandTimeoutAllowlist` — a
+find-replace accident (`command` with `com`→`dev` becomes `devmand`). The
+runtime, however, reads `shofer.commandExecutionTimeout` /
+`shofer.commandTimeoutAllowlist` via
+`vscode.workspace.getConfiguration("shofer").get(...)`
+([`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)). So the
+registered setting (default/range/description) was dead and the key the
+runtime actually reads had no UI/schema row. The `package.json` keys were
+renamed to `shofer.commandExecutionTimeout` / `shofer.commandTimeoutAllowlist`,
+reconnecting the UI registration to the consumed key.
 
 ### `maxUsd: 0` is invalid per the schema
 
@@ -382,11 +381,13 @@ absent:
   `maxDiagnosticMessages`
 - **Write delay** — `writeDelayMs`
 
-### `newTaskRequireTodos` has no consumers
+### `newTaskRequireTodos` — wired up (earlier "dead config" note was wrong)
 
-This setting is registered in `package.json` (line 433) but has zero
-references in any TypeScript source file. Either the feature was never
-wired up or it is dead configuration.
+This setting **is** consumed:
+[`NewTaskTool.ts`](../src/core/tools/NewTaskTool.ts) reads
+`getConfiguration("shofer").get<boolean>("newTaskRequireTodos", false)` and,
+when true, rejects `new_task` calls lacking a `todos` parameter. (The previous
+revision of this gap claimed zero references — it was stale.)
 
 ### Inaccurate "debug mode (F5)" description
 

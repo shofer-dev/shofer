@@ -464,14 +464,14 @@
 					"default": [],
 					"description": "%commands.deniedCommands.description%"
 				},
-				"shofer.devmandExecutionTimeout": {
+				"shofer.commandExecutionTimeout": {
 					"type": "number",
 					"default": 0,
 					"minimum": 0,
 					"maximum": 600,
 					"description": "%commands.commandExecutionTimeout.description%"
 				},
-				"shofer.devmandTimeoutAllowlist": {
+				"shofer.commandTimeoutAllowlist": {
 					"type": "array",
 					"items": {
 						"type": "string"
