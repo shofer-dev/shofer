@@ -216,6 +216,7 @@ export const shoferSays = [
 	"tool",
 	"tool_preparing",
 	"tool_result",
+	"task_interaction",
 ] as const
 
 export const shoferSaySchema = z.enum(shoferSays)
@@ -365,3 +366,113 @@ export const queuedMessageSchema = z.object({
 })
 
 export type QueuedMessage = z.infer<typeof queuedMessageSchema>
+
+/**
+ * Task Visualization — Payload Schemas
+ *
+ * These types are serialized as JSON in the `text` field of ShoferMessage
+ * instances with `say: "api_req_finished"` or `say: "task_interaction"`.
+ * They drive the Tree, Trace, and Sequence views.
+ */
+
+/**
+ * ToolSpan: timing and metadata for a single tool execution within an API request.
+ *
+ * Captured at execution time in `presentAssistantMessage.ts` and included in
+ * the `toolSpans[]` array of `ApiRequestFinishedPayload`.
+ */
+export const toolSpanSchema = z.object({
+	/** Offset in ms from Task.timelineOriginMs when tool execution began. */
+	startedAtOffsetMs: z.number(),
+	/** Offset in ms from Task.timelineOriginMs when tool execution completed. */
+	finishedAtOffsetMs: z.number(),
+	/** Canonical tool name (e.g. "read_file", "execute_command"). */
+	toolName: z.string(),
+	/** Tool call ID from the API conversation. */
+	toolId: z.string(),
+	/** Approximate size of the tool result in characters. Null when not captured. */
+	resultSizeChars: z.number().nullable(),
+	/** Whether the tool returned an error. */
+	isError: z.boolean(),
+	/** When the tool spawned a subtask (new_task): the child task's taskId. */
+	spawnedTaskId: z.string().optional(),
+})
+
+export type ToolSpan = z.infer<typeof toolSpanSchema>
+
+/**
+ * ApiReqError: structured error info for a failed API request.
+ */
+export const apiReqErrorSchema = z.object({
+	message: z.string(),
+	type: z.string().optional(),
+	statusCode: z.number().optional(),
+	stack: z.string().optional(),
+})
+
+export type ApiReqError = z.infer<typeof apiReqErrorSchema>
+
+/**
+ * ApiRequestFinishedPayload: immutable per-API-request span emitted as an
+ * `api_req_finished` ShoferSay message at stream end.
+ */
+export const apiRequestFinishedPayloadSchema = z.object({
+	/** 0-based index of this request within the task. */
+	requestIndex: z.number(),
+	/** The task that owns this request. */
+	taskId: z.string(),
+	/** Parent task ID, or null for root tasks. */
+	parentTaskId: z.string().nullable(),
+	/** Offset in ms from timelineOriginMs when the request was initiated. */
+	startedAtOffsetMs: z.number(),
+	/** Offset in ms from timelineOriginMs when the stream ended. */
+	finishedAtOffsetMs: z.number(),
+	/** Time to first byte in ms. Null when unavailable. */
+	ttfbMs: z.number().nullable(),
+	/** Requested model ID. */
+	model: z.string(),
+	/** Wire protocol. */
+	apiProtocol: z.enum(["anthropic", "openai"]),
+	/** Retry attempt number (0 = first try). */
+	retryAttempt: z.number(),
+	/** Final token counts. */
+	tokensIn: z.number(),
+	tokensOut: z.number(),
+	cacheWrites: z.number(),
+	cacheReads: z.number(),
+	/** Estimated cost in USD. */
+	cost: z.number(),
+	/** Outcome of the request. */
+	status: z.enum(["completed", "cancelled", "error"]),
+	cancelReason: z.enum(["streaming_failed", "user_cancelled"]).optional(),
+	/** Structured error information when status === "error". */
+	error: apiReqErrorSchema.optional(),
+	/** Serialised wire-request body (if recordResponses is enabled). */
+	wireRequest: z.string().optional(),
+	/** The underlying model that actually served the request. */
+	actualModel: z.string().optional(),
+	/** Number of provider-level attempts (1 = first try succeeded). */
+	attempts: z.number().optional(),
+	/** Error message from the LLM provider when the request failed. */
+	responseError: z.string().optional(),
+	/** Tool calls executed during this request, in execution order. */
+	toolSpans: z.array(toolSpanSchema),
+})
+
+export type ApiRequestFinishedPayload = z.infer<typeof apiRequestFinishedPayloadSchema>
+
+/**
+ * TaskInteractionPayload: an inter-task communication event emitted as a
+ * `task_interaction` ShoferSay message. Used by the Sequence diagram.
+ */
+export const taskInteractionPayloadSchema = z.object({
+	fromTaskId: z.string(),
+	toTaskId: z.string().optional(),
+	kind: z.enum(["spawn", "message", "await", "answer", "cancel"]),
+	label: z.string(),
+	rootOffsetMs: z.number(),
+	/** Whether the interaction failed. Renders as dashed red arrow in Sequence view. */
+	isError: z.boolean().optional(),
+})
+
+export type TaskInteractionPayload = z.infer<typeof taskInteractionPayloadSchema>

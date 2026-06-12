@@ -147,7 +147,7 @@ export const LIFECYCLE_VISUAL: Record<TaskLifecycle, LifecycleVisual> = {
  * Picking from the codicon set keeps every state rendered through the same
  * `<span class="codicon …">` mechanism — no special-cased SVGs.
  */
-const RATING_VISUAL: Record<
+export const RATING_VISUAL: Record<
 	CompletionRating,
 	Pick<LifecycleVisual, "label" | "icon" | "iconColor" | "dot" | "borderColor">
 > = {

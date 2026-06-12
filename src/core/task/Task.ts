@@ -37,6 +37,9 @@ import {
 	type ShoferApiReqCancelReason,
 	type ShoferApiReqInfo,
 	type ApiReqError,
+	type ToolSpan,
+	type ApiRequestFinishedPayload,
+	type TaskInteractionPayload,
 	type TaskHandle,
 	type PendingParentQuestionInfo,
 	type CostLimit,
@@ -546,6 +549,41 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	toolRepetitionDetector: ToolRepetitionDetector
 	shoferIgnoreController?: ShoferIgnoreController
 	shoferProtectedController?: ShoferProtectedController
+
+	// ===== Task Visualization — Timeline =====
+
+	/**
+	 * Monotonic origin for all per-task timing.  Set once at construction
+	 * via `performance.now()` so every span offset is relative to the
+	 * same starting point regardless of when the task's history was
+	 * written.
+	 */
+	timelineOriginMs!: number
+
+	/**
+	 * Tool spans accumulated during the current API request.  Drained
+	 * into `api_req_finished.toolSpans[]` at stream end and reset for
+	 * each new request.
+	 */
+	_pendingToolSpans: ToolSpan[] = []
+
+	/**
+	 * Offset from `timelineOriginMs` when the current API request was
+	 * initiated (just before the streaming call).
+	 */
+	_pendingRequestStartOffset = 0
+
+	/**
+	 * TTFB for the current API request in ms, or `null` when not yet
+	 * available.
+	 */
+	_pendingTtfbMs: number | null = null
+
+	/**
+	 * 0-based monotonic index assigned to each API request span within
+	 * this task.
+	 */
+	_currentRequestIndex = 0
 	fileContextTracker: FileContextTracker
 	terminalProcess?: ShoferTerminalProcess
 
@@ -825,6 +863,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.rootTaskId = historyItem ? historyItem.rootTaskId : (rootTask?.rootTaskId ?? rootTask?.taskId)
 		this.parentTaskId = historyItem ? historyItem.parentTaskId : parentTask?.taskId
 		this.childTaskId = undefined
+
+		// Timeline: monotonic origin for all per-task span offsets.
+		this.timelineOriginMs = performance.now()
 
 		this.metadata = {
 			task: historyItem ? historyItem.task : task,
@@ -4237,6 +4278,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			await this.maybeWaitForProviderRateLimit(currentItem.retryAttempt ?? 0)
 			Task.lastGlobalApiRequestTime = performance.now()
 
+			// ----- Task Visualization: timeline instrumentation -----
+			// Reset per-request timeline state before each API request.
+			this._pendingToolSpans = []
+			this._pendingTtfbMs = null
+			this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
+
 			await this.say(
 				"api_req_started",
 				JSON.stringify({
@@ -4456,6 +4503,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// Update `api_req_started` to have cancelled and cost, so that
 					// we can display the cost of the partial stream and the cancellation reason
 					updateApiReqMsg(cancelReason, streamingFailedMessage)
+
+					// Emit immutable timeline span for the cancelled request.
+					const abortStatus: ApiRequestFinishedPayload["status"] =
+						cancelReason === "user_cancelled"
+							? "cancelled"
+							: cancelReason === "streaming_failed"
+								? "error"
+								: "cancelled"
+					const abortCancelReason: ApiRequestFinishedPayload["cancelReason"] | undefined =
+						cancelReason === "user_cancelled"
+							? "user_cancelled"
+							: cancelReason === "streaming_failed"
+								? "streaming_failed"
+								: undefined
+					await this.emitApiReqFinished(abortStatus, abortCancelReason)
 					// In-place mutation of api_req_started invalidates the H2.bis
 					// token-usage cache (count unchanged; cancellation cost did change).
 					this._cachedTokenUsage = undefined
@@ -4566,6 +4628,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						switch (chunk.type) {
 							case "reasoning": {
+								// Capture TTFB on the first content-bearing chunk.
+								if (this._pendingTtfbMs === null) {
+									this._pendingTtfbMs =
+										performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
+								}
 								reasoningMessage += chunk.text
 								// Only apply formatting if the message contains sentence-ending punctuation followed by **
 								let formattedReasoning = reasoningMessage
@@ -4830,6 +4897,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								break
 							}
 							case "text": {
+								// Capture TTFB on the first content-bearing chunk.
+								if (this._pendingTtfbMs === null) {
+									this._pendingTtfbMs =
+										performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
+								}
 								assistantMessage += chunk.text
 
 								// Native tool calling: text chunks are plain text.
@@ -5171,6 +5243,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 
 				this.didCompleteReadingStream = true
+
+				// Emit the immutable api_req_finished span for this request.
+				await this.emitApiReqFinished("completed")
 
 				// Set any blocks to be complete to allow `presentAssistantMessage`
 				// to finish and set `userMessageContentReady` to true.
@@ -7377,5 +7452,84 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 			this.diagLog(`[Task] Conversation history cleanup: ${parts.join(", ")}.`)
 		}
+	}
+
+	/**
+	 * Emit an immutable `api_req_finished` ShoferSay message.
+	 *
+	 * Called at stream end (success, cancellation, or error) to record the
+	 * completed API request span with its tool sub-spans. The caller has
+	 * already drained `this._pendingToolSpans` and computed
+	 * `this._pendingTtfbMs` before invoking this.
+	 */
+	private async emitApiReqFinished(
+		status: ApiRequestFinishedPayload["status"],
+		cancelReason?: ApiRequestFinishedPayload["cancelReason"],
+	): Promise<void> {
+		const modelId = getModelId(this.apiConfiguration)
+		const apiProvider = this.apiConfiguration.apiProvider
+		const apiProtocol = getApiProtocol(
+			apiProvider && !isRetiredProvider(apiProvider) ? apiProvider : undefined,
+			modelId,
+		)
+
+		// Collect token/cost data from the existing api_req_started message.
+		const lastApiReqIndex = findLastIndex(this.shoferMessages, (m) => m.say === "api_req_started")
+
+		let tokensIn = 0
+		let tokensOut = 0
+		let cacheWrites = 0
+		let cacheReads = 0
+		let cost = 0
+		let existingData: Partial<ShoferApiReqInfo> = {}
+
+		if (lastApiReqIndex >= 0 && this.shoferMessages[lastApiReqIndex]) {
+			try {
+				existingData = JSON.parse(this.shoferMessages[lastApiReqIndex].text || "{}")
+				tokensIn = existingData.tokensIn ?? 0
+				tokensOut = existingData.tokensOut ?? 0
+				cacheWrites = existingData.cacheWrites ?? 0
+				cacheReads = existingData.cacheReads ?? 0
+				cost = existingData.cost ?? 0
+			} catch {
+				// Parse errors are non-fatal — emit with zeros.
+			}
+		}
+
+		const payload: ApiRequestFinishedPayload = {
+			requestIndex: this._currentRequestIndex,
+			taskId: this.taskId,
+			parentTaskId: this.parentTaskId ?? null,
+			startedAtOffsetMs: this._pendingRequestStartOffset,
+			finishedAtOffsetMs: performance.now() - this.timelineOriginMs,
+			ttfbMs: this._pendingTtfbMs,
+			model: modelId,
+			apiProtocol: apiProtocol as "anthropic" | "openai",
+			retryAttempt: existingData.retryAttempt ?? 0,
+			tokensIn,
+			tokensOut,
+			cacheWrites,
+			cacheReads,
+			cost,
+			status,
+			cancelReason,
+			actualModel: existingData.actualModel,
+			attempts: existingData.attempts,
+			responseError: existingData.responseError,
+			toolSpans: this._pendingToolSpans,
+		}
+
+		await this.say("api_req_finished", JSON.stringify(payload))
+		this._currentRequestIndex++
+	}
+
+	/**
+	 * Emit a `task_interaction` ShoferSay message recording an inter-task
+	 * communication event (spawn, message, await, answer, cancel).
+	 *
+	 * Called from inter-task tool handlers after the tool executes.
+	 */
+	async emitTaskInteraction(payload: TaskInteractionPayload): Promise<void> {
+		await this.say("task_interaction", JSON.stringify(payload))
 	}
 }

@@ -36,6 +36,8 @@ import ChatRow from "./ChatRow"
 import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
+import TaskTreeView from "./TaskTreeView"
+import TaskTraceView from "./TaskTraceView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -71,6 +73,7 @@ const ALWAYS_HIDDEN_ONCE_PROCESSED_SAY = [
 	"api_req_retried",
 	"api_req_deleted",
 	"mcp_server_request_started",
+	"task_interaction",
 ]
 
 const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewProps> = (
@@ -196,6 +199,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+	// Task visualization tab: "chat" | "tree" | "trace". Reset to "chat" on task switch.
+	const [chatTab, setChatTab] = useState<"chat" | "tree" | "trace">("chat")
+	useEffect(() => {
+		setChatTab("chat")
+	}, [currentTaskItem?.id])
 
 	// --- Per-task scroll position snapshot & restore ---
 	// When taskTs changes, snapshot the outgoing task's full Virtuoso state
@@ -2087,128 +2096,169 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 			{task && (
 				<>
-					<div className="grow flex relative" ref={scrollContainerRef}>
-						<Virtuoso
-							ref={virtuosoRef}
-							key={task.ts}
-							className="scrollable grow overflow-y-scroll mb-1"
-							increaseViewportBy={VIRTUOSO_VIEWPORT_INCREASE}
-							data={groupedMessages}
-							initialTopMostItemIndex={groupedMessages.length > 0 ? groupedMessages.length - 1 : 0}
-							restoreStateFrom={restoreSnapshot}
-							itemContent={itemContent}
-							followOutput={followOutputCallback}
-							atBottomStateChange={atBottomStateChangeCallback}
-							atBottomThreshold={16}
-							components={{
-								Header: () =>
-									hasMoreShoferMessages ? (
-										<div className="flex justify-center py-3">
-											<button
-												type="button"
-												className="text-sm text-vscode-textLink-foreground hover:text-vscode-textLink-activeForeground hover:underline"
-												onClick={() => {
-													vscode.postMessage({ type: "loadOlderMessages" })
-												}}>
-												Load older messages…
-											</button>
-										</div>
-									) : null,
-							}}
-						/>
-						<SessionSearch
-							messages={messages}
-							isOpen={isSessionSearchOpen}
-							onClose={() => setIsSessionSearchOpen(false)}
-							onNavigate={(ts) => {
-								setSearchHighlightTs(ts)
-								if (ts === null) return
-								const index = groupedMessages.findIndex((msg) => msg.ts === ts)
-								if (index >= 0 && virtuosoRef.current) {
-									virtuosoRef.current.scrollToIndex({ index, align: "center" })
-								}
-							}}
-						/>
-						{!isSessionSearchOpen && (
-							<StandardTooltip content="Find in session (Ctrl+F)">
+					{/* Tab bar for task visualizations */}
+					<div className="flex items-center gap-1 px-3 pt-1 pb-0">
+						{(["chat", "tree", "trace"] as const).map((tab) => {
+							const labels: Record<string, string> = {
+								chat: t("chat:tabChat"),
+								tree: t("chat:tabTree"),
+								trace: t("chat:tabTrace"),
+							}
+							return (
 								<button
+									key={tab}
 									type="button"
-									onClick={() => setIsSessionSearchOpen(true)}
-									aria-label="Find in session"
-									className="absolute top-2 right-3 z-20 flex items-center justify-center w-7 h-7 rounded-md border border-vscode-panel-border bg-vscode-editor-background/80 hover:bg-vscode-toolbar-hoverBackground text-vscode-foreground shadow-sm">
-									<span className="codicon codicon-search text-xs" />
+									className={`text-xs font-medium px-3 py-1 rounded ${
+										chatTab === tab
+											? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]"
+											: "bg-transparent text-[var(--vscode-foreground)] opacity-60 hover:opacity-100"
+									}`}
+									onClick={() => setChatTab(tab)}>
+									{labels[tab] ?? tab}
 								</button>
-							</StandardTooltip>
-						)}
+							)
+						})}
 					</div>
-					<FileChangesPanel taskId={currentTaskItem?.id} />
-					{showScrollToBottom && (
-						<div className="flex h-9 items-center mb-px px-[15px]">
-							<StandardTooltip content={t("chat:scrollToBottom")}>
-								<Button
-									variant="secondary"
-									className={"flex-[2]" + (blinkScrollToBottom ? " animate-pulse" : "")}
-									onClick={handleScrollToBottomClick}>
-									<span className="codicon codicon-chevron-down"></span>
-								</Button>
-							</StandardTooltip>
+
+					{chatTab === "chat" && (
+						<>
+							<div className="grow flex relative" ref={scrollContainerRef}>
+								<Virtuoso
+									ref={virtuosoRef}
+									key={task.ts}
+									className="scrollable grow overflow-y-scroll mb-1"
+									increaseViewportBy={VIRTUOSO_VIEWPORT_INCREASE}
+									data={groupedMessages}
+									initialTopMostItemIndex={
+										groupedMessages.length > 0 ? groupedMessages.length - 1 : 0
+									}
+									restoreStateFrom={restoreSnapshot}
+									itemContent={itemContent}
+									followOutput={followOutputCallback}
+									atBottomStateChange={atBottomStateChangeCallback}
+									atBottomThreshold={16}
+									components={{
+										Header: () =>
+											hasMoreShoferMessages ? (
+												<div className="flex justify-center py-3">
+													<button
+														type="button"
+														className="text-sm text-vscode-textLink-foreground hover:text-vscode-textLink-activeForeground hover:underline"
+														onClick={() => {
+															vscode.postMessage({ type: "loadOlderMessages" })
+														}}>
+														Load older messages…
+													</button>
+												</div>
+											) : null,
+									}}
+								/>
+								<SessionSearch
+									messages={messages}
+									isOpen={isSessionSearchOpen}
+									onClose={() => setIsSessionSearchOpen(false)}
+									onNavigate={(ts) => {
+										setSearchHighlightTs(ts)
+										if (ts === null) return
+										const index = groupedMessages.findIndex((msg) => msg.ts === ts)
+										if (index >= 0 && virtuosoRef.current) {
+											virtuosoRef.current.scrollToIndex({ index, align: "center" })
+										}
+									}}
+								/>
+								{!isSessionSearchOpen && (
+									<StandardTooltip content="Find in session (Ctrl+F)">
+										<button
+											type="button"
+											onClick={() => setIsSessionSearchOpen(true)}
+											aria-label="Find in session"
+											className="absolute top-2 right-3 z-20 flex items-center justify-center w-7 h-7 rounded-md border border-vscode-panel-border bg-vscode-editor-background/80 hover:bg-vscode-toolbar-hoverBackground text-vscode-foreground shadow-sm">
+											<span className="codicon codicon-search text-xs" />
+										</button>
+									</StandardTooltip>
+								)}
+							</div>
+							<FileChangesPanel taskId={currentTaskItem?.id} />
+							{showScrollToBottom && (
+								<div className="flex h-9 items-center mb-px px-[15px]">
+									<StandardTooltip content={t("chat:scrollToBottom")}>
+										<Button
+											variant="secondary"
+											className={"flex-[2]" + (blinkScrollToBottom ? " animate-pulse" : "")}
+											onClick={handleScrollToBottomClick}>
+											<span className="codicon codicon-chevron-down"></span>
+										</Button>
+									</StandardTooltip>
+								</div>
+							)}
+							{(primaryButtonText || secondaryButtonText) && (
+								<div className="flex h-9 items-center mb-1 px-[15px]">
+									{primaryButtonText && (
+										<StandardTooltip
+											content={
+												primaryButtonText === t("chat:retry.title")
+													? t("chat:retry.tooltip")
+													: primaryButtonText === t("chat:save.title")
+														? t("chat:save.tooltip")
+														: primaryButtonText === t("chat:approve.title")
+															? t("chat:approve.tooltip")
+															: primaryButtonText === t("chat:runCommand.title")
+																? t("chat:runCommand.tooltip")
+																: primaryButtonText === t("chat:startNewTask.title")
+																	? t("chat:startNewTask.tooltip")
+																	: primaryButtonText === t("chat:resumeTask.title")
+																		? t("chat:resumeTask.tooltip")
+																		: primaryButtonText ===
+																			  t("chat:proceedAnyways.title")
+																			? t("chat:proceedAnyways.tooltip")
+																			: primaryButtonText ===
+																				  t("chat:proceedWhileRunning.title")
+																				? t("chat:proceedWhileRunning.tooltip")
+																				: undefined
+											}>
+											<Button
+												variant="primary"
+												disabled={!enableButtons}
+												className={secondaryButtonText ? "flex-1 mr-[6px]" : "flex-[2] mr-0"}
+												onClick={() => handlePrimaryButtonClick(inputValue, selectedImages)}>
+												{primaryButtonText}
+											</Button>
+										</StandardTooltip>
+									)}
+									{secondaryButtonText && (
+										<StandardTooltip
+											content={
+												secondaryButtonText === t("chat:startNewTask.title")
+													? t("chat:startNewTask.tooltip")
+													: secondaryButtonText === t("chat:reject.title")
+														? t("chat:reject.tooltip")
+														: secondaryButtonText === t("chat:terminate.title")
+															? t("chat:terminate.tooltip")
+															: secondaryButtonText === t("chat:killCommand.title")
+																? t("chat:killCommand.tooltip")
+																: undefined
+											}>
+											<Button
+												variant="secondary"
+												disabled={!enableButtons}
+												className="flex-1 ml-[6px]"
+												onClick={() => handleSecondaryButtonClick(inputValue, selectedImages)}>
+												{secondaryButtonText}
+											</Button>
+										</StandardTooltip>
+									)}
+								</div>
+							)}
+						</>
+					)}
+					{chatTab === "tree" && (
+						<div className="grow flex relative">
+							<TaskTreeView taskHistory={taskHistory} />
 						</div>
 					)}
-					{(primaryButtonText || secondaryButtonText) && (
-						<div className="flex h-9 items-center mb-1 px-[15px]">
-							{primaryButtonText && (
-								<StandardTooltip
-									content={
-										primaryButtonText === t("chat:retry.title")
-											? t("chat:retry.tooltip")
-											: primaryButtonText === t("chat:save.title")
-												? t("chat:save.tooltip")
-												: primaryButtonText === t("chat:approve.title")
-													? t("chat:approve.tooltip")
-													: primaryButtonText === t("chat:runCommand.title")
-														? t("chat:runCommand.tooltip")
-														: primaryButtonText === t("chat:startNewTask.title")
-															? t("chat:startNewTask.tooltip")
-															: primaryButtonText === t("chat:resumeTask.title")
-																? t("chat:resumeTask.tooltip")
-																: primaryButtonText === t("chat:proceedAnyways.title")
-																	? t("chat:proceedAnyways.tooltip")
-																	: primaryButtonText ===
-																		  t("chat:proceedWhileRunning.title")
-																		? t("chat:proceedWhileRunning.tooltip")
-																		: undefined
-									}>
-									<Button
-										variant="primary"
-										disabled={!enableButtons}
-										className={secondaryButtonText ? "flex-1 mr-[6px]" : "flex-[2] mr-0"}
-										onClick={() => handlePrimaryButtonClick(inputValue, selectedImages)}>
-										{primaryButtonText}
-									</Button>
-								</StandardTooltip>
-							)}
-							{secondaryButtonText && (
-								<StandardTooltip
-									content={
-										secondaryButtonText === t("chat:startNewTask.title")
-											? t("chat:startNewTask.tooltip")
-											: secondaryButtonText === t("chat:reject.title")
-												? t("chat:reject.tooltip")
-												: secondaryButtonText === t("chat:terminate.title")
-													? t("chat:terminate.tooltip")
-													: secondaryButtonText === t("chat:killCommand.title")
-														? t("chat:killCommand.tooltip")
-														: undefined
-									}>
-									<Button
-										variant="secondary"
-										disabled={!enableButtons}
-										className="flex-1 ml-[6px]"
-										onClick={() => handleSecondaryButtonClick(inputValue, selectedImages)}>
-										{secondaryButtonText}
-									</Button>
-								</StandardTooltip>
-							)}
+					{chatTab === "trace" && (
+						<div className="grow flex relative">
+							<TaskTraceView messages={messages} />
 						</div>
 					)}
 				</>
