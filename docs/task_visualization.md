@@ -152,15 +152,17 @@ A donut chart ([`TaskStatsView.tsx`](../webview-ui/src/components/chat/TaskStats
 
 A request is split into phases, and tool spans into their own categories:
 
-| Category               | Source                                                                                | Colour |
-| ---------------------- | ------------------------------------------------------------------------------------- | ------ |
-| **Waiting for model**  | TTFB: request start → first chunk (`ttfbMs`)                                          | blue   |
-| **Thinking**           | reasoning: `ttfbMs` → `genStartOffsetMs` (first non-reasoning chunk)                  | purple |
-| **Streaming response** | generation: `genStartOffsetMs` → request end                                          | green  |
-| **Tool execution**     | non-blocking `ToolSpan`s                                                              | orange |
-| **Waiting for task**   | `ToolSpan.waitsForTask` (wait_for_task, blocking new_task, sync send_message_to_task) | cyan   |
-| **Sleeping**           | the `sleep` tool                                                                      | yellow |
-| **Overhead**           | remainder — see below                                                                 | gray   |
+| Category               | Source                                                                                 | Colour |
+| ---------------------- | -------------------------------------------------------------------------------------- | ------ |
+| **Setup**              | task construction → first request (`min(startedAtOffsetMs)`): init, checkpoint kickoff | pink   |
+| **Waiting for model**  | TTFB: request start → first chunk (`ttfbMs`)                                           | blue   |
+| **Thinking**           | reasoning: `ttfbMs` → `genStartOffsetMs` (first non-reasoning chunk)                   | purple |
+| **Streaming response** | generation: `genStartOffsetMs` → request end                                           | green  |
+| **Tool execution**     | non-blocking local `ToolSpan`s                                                         | orange |
+| **MCP calls**          | `ToolSpan`s named `mcp:<server>/<tool>` (the MCP dispatch path)                        | indigo |
+| **Waiting for task**   | `ToolSpan.waitsForTask` (wait_for_task, blocking new_task, sync send_message_to_task)  | cyan   |
+| **Sleeping**           | the `sleep` tool                                                                       | yellow |
+| **Overhead**           | remainder — see below                                                                  | gray   |
 
 Overlapping spans are resolved by painting them onto one offset axis with priority (tools > request phases) and reading back non-overlapping per-category totals.
 
@@ -383,6 +385,11 @@ switch, `isError` derived from the `{status:"error"}` result shape,
 for blocking inter-task tools (`wait_for_task`, a foreground `new_task`, or a
 sync `send_message_to_task`). `maybeRecordTaskInteraction()` runs after the
 dispatch switch to emit the `task_interaction` events (§ Sequence).
+
+**MCP tools** run through a separate dispatch (`useMcpToolTool.handle` with its
+own `pushToolResult`), so they're captured there too — recorded as a `ToolSpan`
+named `mcp:<server>/<tool>`, which the Stats/Trace surface as the "MCP calls"
+category.
 
 ### 5. `abortTask()` — flush the in-flight request
 
