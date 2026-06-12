@@ -57,12 +57,13 @@ either harmless meta-operations or purely informational queries against in-memor
 
 ### Meta-Operations
 
-| Tool               | Rationale                                                       |
-| ------------------ | --------------------------------------------------------------- |
-| `update_todo_list` | Updates the task checklist — UI-only, no side effects.          |
-| `skills`           | Loads pre-defined instructions — skills must be user-installed. |
-| `set_task_title`   | Renames the task in UI and history — non-destructive.           |
-| `give_feedback`    | Appends a feedback line to the extension output channel.        |
+| Tool               | Rationale                                                                                                                                                                                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_todo_list` | Updates the task checklist — UI-only, no side effects.                                                                                                                                                                                                                             |
+| `skills`           | Loads pre-defined instructions — skills must be user-installed.                                                                                                                                                                                                                    |
+| `set_task_title`   | Renames the task in UI and history — non-destructive.                                                                                                                                                                                                                              |
+| `give_feedback`    | Appends a feedback line to the extension output channel.                                                                                                                                                                                                                           |
+| `sleep`            | Pauses execution for a fixed delay — no I/O. Note: it is in `TOOL_GROUPS.execute`, but is approved **unconditionally**, independent of `alwaysAllowExecute`. Gating a harmless pause would only prompt the user on every delay (and, without a chat row, look like a silent hang). |
 
 ### Inter-Task Questions
 
@@ -104,6 +105,13 @@ or network and mutate nothing:
 > permission before spawning, cancelling, or completing a subtask. This prevents
 > uncontrolled task-tree growth while still letting the model inspect tasks it has
 > already spawned.
+
+> **`send_message_to_task` is split by mode:** the **async** (fire-and-forget,
+> `wait: false`) form is approved **unconditionally** — it only enqueues a message
+> and returns immediately. The **sync** (`wait: true`) form blocks the caller on the
+> target's reply and is gated behind `alwaysAllowSubtasks`, like the other
+> control-plane subtask tools. See the `sendMessageToTask` branch in
+> [`checkAutoApproval`](../src/core/auto-approval/index.ts).
 
 ### Lightweight Read-Only Tools
 
