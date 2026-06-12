@@ -24,7 +24,9 @@ const KIND_META: Record<TaskInteractionPayload["kind"], { label: string; color: 
 	message: { label: "message", color: "var(--vscode-charts-blue, #3b82f6)" },
 	await: { label: "await", color: "var(--vscode-charts-purple, #a855f7)" },
 	answer: { label: "answer", color: "var(--vscode-charts-cyan, #06b6d4)" },
-	cancel: { label: "cancel", color: "var(--vscode-errorForeground, #ef4444)" },
+	// Neutral grey, not the failure-red: a cancel is a deliberate stop, and red
+	// is reserved for errored interactions (`isError`) so the two stay distinct.
+	cancel: { label: "cancel", color: "var(--vscode-descriptionForeground, #9ca3af)" },
 	question: { label: "question", color: "var(--vscode-charts-yellow, #eab308)" },
 }
 
