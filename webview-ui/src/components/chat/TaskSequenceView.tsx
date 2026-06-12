@@ -78,31 +78,73 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 		return () => window.removeEventListener("message", handler)
 	}, [rootTaskId])
 
-	// Build the ordered set of lifelines: tasks under this root (oldest first),
-	// plus any interaction endpoint not present in history (appended).
+	// Build the ordered set of lifelines: ordered by task *creation* time, root
+	// leftmost and the newest task rightmost (like a software sequence diagram).
+	//
+	// Ordering must use a stable creation signal. `HistoryItem.ts` tracks *last
+	// activity*, not creation, so it changes every time a task is touched or the
+	// tab is revisited — keying on it reordered the lifelines between visits.
+	// We key on `createdAt`; when a task lacks a stored `createdAt` (or isn't in
+	// history at all), we fall back to an immutable proxy: the root's creation
+	// time plus the earliest `rootOffsetMs` the task appears at in the (sorted,
+	// session-stable) interaction stream — i.e. roughly its spawn moment.
 	const { lifelines, columnOf, titleOf } = useMemo(() => {
-		const inRoot = taskHistory
-			.filter((i) => (i.rootTaskId ?? i.id) === rootTaskId)
-			.sort((a, b) => (a.createdAt ?? a.ts) - (b.createdAt ?? b.ts))
+		const inRoot = taskHistory.filter((i) => (i.rootTaskId ?? i.id) === rootTaskId)
 
-		const ids: string[] = []
+		const createdAtOf = new Map<string, number>()
 		const title = new Map<string, string>()
 		for (const item of inRoot) {
-			ids.push(item.id)
+			if (item.createdAt != null) createdAtOf.set(item.id, item.createdAt)
 			title.set(item.id, getTaskDisplayName(item))
 		}
+
+		const rootItem = inRoot.find((i) => i.id === rootTaskId)
+		const rootCreatedAt = rootItem?.createdAt ?? rootItem?.ts ?? 0
+		const birthOffset = new Map<string, number>()
 		for (const ix of interactions) {
 			for (const id of [ix.fromTaskId, ix.toTaskId]) {
-				if (id && !title.has(id)) {
-					ids.push(id)
-					title.set(id, id.slice(0, 8))
-				}
+				if (!id) continue
+				const prev = birthOffset.get(id)
+				if (prev === undefined || ix.rootOffsetMs < prev) birthOffset.set(id, ix.rootOffsetMs)
 			}
 		}
+
+		const allIds = new Set<string>()
+		for (const item of inRoot) allIds.add(item.id)
+		for (const ix of interactions) {
+			if (ix.fromTaskId) allIds.add(ix.fromTaskId)
+			if (ix.toTaskId) allIds.add(ix.toTaskId)
+		}
+
+		// Creation key on a single epoch-ms scale.
+		const keyOf = (id: string): number => {
+			const c = createdAtOf.get(id)
+			if (c != null) return c
+			const b = birthOffset.get(id)
+			if (b != null) return rootCreatedAt + b
+			return Number.MAX_SAFE_INTEGER // unknown creation → park on the right
+		}
+
+		const ids = Array.from(allIds).sort((a, b) => {
+			if (a === rootTaskId) return -1
+			if (b === rootTaskId) return 1
+			// `id` breaks exact-time ties so the order is fully deterministic.
+			return keyOf(a) - keyOf(b) || (a < b ? -1 : a > b ? 1 : 0)
+		})
+
+		for (const id of ids) if (!title.has(id)) title.set(id, id.slice(0, 8))
 		const col = new Map<string, number>()
 		ids.forEach((id, i) => col.set(id, i))
 		return { lifelines: ids, columnOf: col, titleOf: title }
 	}, [taskHistory, rootTaskId, interactions])
+
+	// Arrows run top→bottom in chronological order (newest at the bottom). Sort a
+	// copy by the immutable `rootOffsetMs` so the order is stable across visits
+	// regardless of the order the host returned them in.
+	const orderedInteractions = useMemo(
+		() => [...interactions].sort((a, b) => a.rootOffsetMs - b.rootOffsetMs),
+		[interactions],
+	)
 
 	const colX = (id: string | undefined): number | null => {
 		if (!id) return null
@@ -111,7 +153,7 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 	}
 
 	const width = Math.max(lifelines.length * COL_WIDTH + LEFT_PAD * 2, 240)
-	const height = HEADER_H + interactions.length * ROW_H + BOTTOM_PAD
+	const height = HEADER_H + orderedInteractions.length * ROW_H + BOTTOM_PAD
 
 	// Drag-to-pan + cursor-anchored wheel zoom (shared with the Trace view). The
 	// viewBox starts fitted to the content and refits when the content box changes.
@@ -240,7 +282,7 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 					})}
 
 					{/* Interaction arrows */}
-					{interactions.map((ix, i) => {
+					{orderedInteractions.map((ix, i) => {
 						const meta = KIND_META[ix.kind]
 						const y = HEADER_H + i * ROW_H + ROW_H / 2
 						const fromX = colX(ix.fromTaskId)
