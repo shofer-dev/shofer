@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 import { serializeError } from "serialize-error"
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ToolName, ShoferAsk, ToolProgressStatus } from "@shofer/types"
+import type { ToolName, ShoferAsk, ToolProgressStatus, TaskInteractionPayload } from "@shofer/types"
 import { ConsecutiveMistakeError, TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { customToolRegistry } from "@shofer/core"
@@ -663,7 +663,8 @@ export async function presentAssistantMessage(shofer: Task) {
 				// above already returned for repeat calls). `isError` is derived
 				// from the standard `{ status: "error" }` shape produced by
 				// `formatResponse.toolError` and the other error responses.
-				if (!toolSpanRecorded) {
+				// Best-effort: never let viz instrumentation break tool execution.
+				if (!toolSpanRecorded && Array.isArray(shofer._pendingToolSpans)) {
 					toolSpanRecorded = true
 					let toolResultIsError = false
 					try {
@@ -1465,6 +1466,10 @@ export async function presentAssistantMessage(shofer: Task) {
 				}
 			}
 
+			// Task Visualization — record inter-task communication events for the
+			// Sequence view, derived from the inter-task tool dispatch above.
+			await maybeRecordTaskInteraction(shofer, block, toolCallId)
+
 			break
 		}
 	}
@@ -1521,6 +1526,71 @@ export async function presentAssistantMessage(shofer: Task) {
 	// Block is partial, but the read stream may have finished.
 	if (shofer.presentAssistantMessageHasPendingUpdates) {
 		presentAssistantMessage(shofer)
+	}
+}
+
+/**
+ * Records `task_interaction` events for the Sequence view when an inter-task
+ * control-plane tool executes:
+ *
+ *   new_task → spawn │ send_message_to_task → message │ wait_for_task → await
+ *   answer_subtask_question → answer │ cancel_tasks → cancel
+ *
+ * Emitted only when the tool actually produced a result (a tool span was
+ * recorded for this call) — skipped / partial / rejected calls produce no
+ * event, and the span's `isError` is reused so failed interactions render as
+ * red dashed arrows. Tools targeting multiple tasks (wait_for_task,
+ * cancel_tasks) emit one event per target so each gets its own arrow.
+ */
+async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCallId: string): Promise<void> {
+	// Best-effort: never let viz instrumentation break tool execution.
+	if (block.partial || !Array.isArray(shofer._pendingToolSpans)) {
+		return
+	}
+
+	// Reuse the isError computed when the tool span was recorded; absence of a
+	// span means the tool never produced a result (skipped/rejected) → no event.
+	const span = shofer._pendingToolSpans.find((s) => s.toolId === toolCallId)
+	if (!span) {
+		return
+	}
+	const isError = span.isError
+
+	const truncate = (value: string | undefined, max = 80): string => {
+		const text = (value ?? "").replace(/\s+/g, " ").trim()
+		return text.length > max ? `${text.slice(0, max - 1)}…` : text
+	}
+
+	// `task_ids` arrives as a parsed array at runtime even though the shared
+	// param type is `string`; guard with Array.isArray.
+	const toIds = (raw: unknown): string[] =>
+		Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []
+
+	const emit = (kind: TaskInteractionPayload["kind"], toTaskId: string | undefined, label: string) =>
+		shofer.emitTaskInteraction({ fromTaskId: shofer.taskId, toTaskId, kind, label, isError })
+
+	switch (block.name) {
+		case "new_task":
+			await emit("spawn", shofer.childTaskId ?? undefined, truncate(block.params.mode ?? block.params.message))
+			break
+		case "send_message_to_task":
+			await emit("message", block.params.task_id, truncate(block.params.message))
+			break
+		case "answer_subtask_question":
+			await emit("answer", block.params.task_id, truncate(block.params.answer))
+			break
+		case "wait_for_task":
+			for (const id of toIds(block.params.task_ids)) {
+				await emit("await", id, "wait")
+			}
+			break
+		case "cancel_tasks":
+			for (const id of toIds(block.params.task_ids)) {
+				await emit("cancel", id, "cancel")
+			}
+			break
+		default:
+			break
 	}
 }
 

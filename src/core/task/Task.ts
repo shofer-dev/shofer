@@ -7530,9 +7530,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * Emit a `task_interaction` ShoferSay message recording an inter-task
 	 * communication event (spawn, message, await, answer, cancel).
 	 *
-	 * Called from inter-task tool handlers after the tool executes.
+	 * Called from the inter-task tool dispatch in `presentAssistantMessage`
+	 * after the tool executes. `rootOffsetMs` is filled in here from the root
+	 * task's timeline origin — all tasks in the extension host share the same
+	 * `performance.now()` clock, so origins are directly comparable and the
+	 * Sequence view can place every task's events on one shared axis.
 	 */
-	async emitTaskInteraction(payload: TaskInteractionPayload): Promise<void> {
-		await this.say("task_interaction", JSON.stringify(payload))
+	async emitTaskInteraction(payload: Omit<TaskInteractionPayload, "rootOffsetMs">): Promise<void> {
+		const rootOriginMs = (this.rootTask ?? this).timelineOriginMs
+		const fullPayload: TaskInteractionPayload = {
+			...payload,
+			rootOffsetMs: performance.now() - rootOriginMs,
+		}
+		await this.say("task_interaction", JSON.stringify(fullPayload))
 	}
 }
