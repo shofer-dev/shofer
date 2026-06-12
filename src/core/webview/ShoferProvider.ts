@@ -99,7 +99,7 @@ import { Task } from "../task/Task"
 import type { WorkflowTask } from "../workflow/WorkflowTask"
 
 import { webviewMessageHandler } from "./webviewMessageHandler"
-import type { ShoferMessage, TodoItem } from "@shofer/types"
+import type { ShoferMessage, TodoItem, TaskLogLine } from "@shofer/types"
 import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -141,6 +141,12 @@ export class ShoferProvider
 	private static activeInstances: Set<ShoferProvider> = new Set()
 	private disposables: vscode.Disposable[] = []
 	private webviewDisposables: vscode.Disposable[] = []
+	/** Task id whose "Logs" tab the webview is currently watching (set on requestTaskLogs). */
+	private _logsWatchTaskId?: string
+	/** Coalesced log lines awaiting the next flush to the webview "Logs" tab. */
+	private _pendingLogLines: TaskLogLine[] = []
+	/** Debounce timer for flushing _pendingLogLines. */
+	private _logFlushTimer?: ReturnType<typeof setTimeout>
 	private view?: vscode.WebviewView | vscode.WebviewPanel
 	private shoferStack: Task[] = []
 	private codeIndexStatusSubscription?: vscode.Disposable
@@ -345,21 +351,30 @@ export class ShoferProvider
 			})
 		})
 
-		// Stream task-attributed log lines to the webview "Logs" tab. Only the
-		// task the user is currently looking at (focused, or current on the
-		// stack — same dual-check Task.addToShoferMessages uses) is streamed;
-		// other tasks' lines are still buffered and fetched on demand when the
-		// user switches to them. The unsubscribe is disposed with the provider.
+		// Stream task-attributed log lines to the webview "Logs" tab. We stream
+		// only the task the Logs tab is actively watching (set via requestTaskLogs)
+		// — this is the precise signal of what the user is looking at, and unlike
+		// the focused/current heuristic it works for background/orchestrator tasks
+		// too. Lines are coalesced and flushed on a short timer so high-frequency
+		// debug logging can't flood the IPC channel (which would make logs appear
+		// to arrive in one clump at the end instead of live). Other tasks' lines
+		// are still buffered and fetched on demand when the user switches to them.
 		this.disposables.push({
 			dispose: addTaskLogListener((taskId, line) => {
-				if (this.taskManager?.getFocusedTaskId() === taskId || this.getCurrentTask()?.taskId === taskId) {
-					void this.postMessageToWebview({
-						type: "taskLogAppended",
-						taskLogTaskId: taskId,
-						taskLogLine: line,
-					})
+				if (taskId !== this._logsWatchTaskId) return
+				this._pendingLogLines.push(line)
+				if (!this._logFlushTimer) {
+					this._logFlushTimer = setTimeout(() => this.flushPendingLogLines(), 100)
 				}
 			}),
+		})
+		this.disposables.push({
+			dispose: () => {
+				if (this._logFlushTimer) {
+					clearTimeout(this._logFlushTimer)
+					this._logFlushTimer = undefined
+				}
+			},
 		})
 
 		// Start configuration loading (which might trigger indexing) in the background.
@@ -1902,6 +1917,34 @@ export class ShoferProvider
 				`restored (status=${workflowTask.flowState.status})`,
 		)
 		return workflowTask
+	}
+
+	/**
+	 * Record which task's logs the webview "Logs" tab is currently watching.
+	 * Called from the `requestTaskLogs` handler. Switching tasks drops any
+	 * pending lines for the previous task — the new task's snapshot (sent
+	 * immediately after) is authoritative, and live lines resume from there.
+	 */
+	public setLogsWatchTaskId(taskId: string | undefined): void {
+		// Always drop pending lines: every call is paired with a fresh snapshot
+		// sent right after, so any buffered line would otherwise be delivered
+		// twice (once in the snapshot, once in the next live batch).
+		this._pendingLogLines = []
+		this._logsWatchTaskId = taskId
+	}
+
+	/** Flush coalesced log lines to the watched task's "Logs" tab. */
+	private flushPendingLogLines(): void {
+		this._logFlushTimer = undefined
+		const lines = this._pendingLogLines
+		const taskId = this._logsWatchTaskId
+		this._pendingLogLines = []
+		if (lines.length === 0 || !taskId) return
+		void this.postMessageToWebview({
+			type: "taskLogAppended",
+			taskLogTaskId: taskId,
+			taskLogLines: lines,
+		})
 	}
 
 	public async postMessageToWebview(message: ExtensionMessage) {

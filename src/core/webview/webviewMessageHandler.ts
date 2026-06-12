@@ -580,8 +580,12 @@ export const webviewMessageHandler = async (
 			// specific task/workflow id; we return the buffered lines. Live
 			// updates thereafter arrive via the `taskLogAppended` stream.
 			const taskLogTaskId = typeof message.taskId === "string" ? message.taskId : undefined
-			if (!taskLogTaskId) break
+			// Resolve the import BEFORE touching the watch, so setting the watch and
+			// reading the snapshot happen with no await between them. That keeps the
+			// snapshot and the live stream from both delivering the same line.
 			const { getTaskLogs } = await import("../../utils/logging")
+			provider.setLogsWatchTaskId(taskLogTaskId)
+			if (!taskLogTaskId) break
 			await provider.postMessageToWebview({
 				type: "taskLogs",
 				taskLogTaskId,

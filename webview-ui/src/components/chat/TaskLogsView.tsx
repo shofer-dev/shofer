@@ -49,10 +49,15 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 	followRef.current = follow
 
 	// Request a fresh snapshot whenever the selected task changes (and on mount).
+	// On unmount (Logs tab closed / task switch) clear the host-side watch so it
+	// stops streaming live lines to a tab no one is looking at.
 	useEffect(() => {
 		setLogs([])
 		if (taskId) {
 			vscode.postMessage({ type: "requestTaskLogs", taskId })
+		}
+		return () => {
+			vscode.postMessage({ type: "requestTaskLogs" })
 		}
 	}, [taskId])
 
@@ -61,12 +66,9 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 		if (!taskId || message.taskLogTaskId !== taskId) return
 		if (message.type === "taskLogs") {
 			setLogs((message.taskLogs ?? []).slice(-MAX_RENDERED_LINES))
-		} else if (message.type === "taskLogAppended" && message.taskLogLine) {
-			const line = message.taskLogLine
-			setLogs((prev) => {
-				const next = prev.length >= MAX_RENDERED_LINES ? prev.slice(prev.length - MAX_RENDERED_LINES + 1) : prev
-				return [...next, line]
-			})
+		} else if (message.type === "taskLogAppended" && message.taskLogLines?.length) {
+			const incoming = message.taskLogLines
+			setLogs((prev) => [...prev, ...incoming].slice(-MAX_RENDERED_LINES))
 		}
 	})
 

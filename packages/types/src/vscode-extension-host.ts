@@ -252,8 +252,8 @@ export interface ExtensionMessage {
 	shoferMessages?: ShoferMessage[]
 	/** taskLogs: full snapshot of the requested task's log ring buffer. */
 	taskLogs?: TaskLogLine[]
-	/** taskLogAppended: single newly-emitted log line for the focused task. */
-	taskLogLine?: TaskLogLine
+	/** taskLogAppended: newly-emitted log lines for the watched task (coalesced batch). */
+	taskLogLines?: TaskLogLine[]
 	/** taskLogs / taskLogAppended: the task/workflow id these logs belong to. */
 	taskLogTaskId?: string
 	/** §4.3 blob fetch response: sha256 ↔ content (or undefined if missing). */
