@@ -1,6 +1,6 @@
 // npx vitest run services/task-manager/__tests__/TaskManager.persistence.spec.ts
 
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 import type { HistoryItem, TaskState } from "@shofer/types"
 import { IDLE_TASK_STATE } from "@shofer/types"
@@ -205,6 +205,96 @@ describe("TaskManager persistence", () => {
 			await expect(manager.waitForPendingPersist("nonexistent")).resolves.toBeUndefined()
 		})
 	})
+	describe("live activeTimeMs (pure projection)", () => {
+		const BASE = 1_700_000_000_000
+		let nowSpy: ReturnType<typeof vi.spyOn>
+
+		beforeEach(() => {
+			nowSpy = vi.spyOn(Date, "now").mockReturnValue(BASE)
+		})
+
+		afterEach(() => {
+			nowSpy.mockRestore()
+		})
+
+		function seedTimed(
+			manager: TaskManager,
+			id: string,
+			state: TaskState,
+			activeTimeMs: number,
+			runningSince: number,
+		) {
+			;(manager as any).managedTasks.set(id, {
+				id,
+				name: "test",
+				taskId: id,
+				workspace: "",
+				createdAt: 0,
+				lastActiveAt: 0,
+				state,
+				activeTimeMs,
+				_runningSince: runningSince,
+			})
+		}
+
+		it("returns live time for a running task without mutating stored state", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([])
+			seedTimed(manager, "t-run", { lifecycle: "running" }, 1_000, BASE)
+
+			nowSpy.mockReturnValue(BASE + 5_000)
+
+			const snapshot = manager.getManagedTasks().find((t) => t.id === "t-run")!
+			// Live value = stored 1000 + the 5000ms in-progress interval.
+			expect(snapshot.activeTimeMs).toBe(6_000)
+
+			// Purity: getManagedTasks is a query. The stored ManagedTask must be
+			// untouched — the old implementation mutated these in place on every
+			// read, turning an incidental read into a persistence-clock advance.
+			const stored = (manager as any).managedTasks.get("t-run")
+			expect(stored.activeTimeMs).toBe(1_000)
+			expect(stored._runningSince).toBe(BASE)
+		})
+
+		it("is idempotent — repeated reads at the same instant do not compound", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([])
+			seedTimed(manager, "t-run", { lifecycle: "running" }, 0, BASE)
+
+			nowSpy.mockReturnValue(BASE + 3_000)
+			const first = manager.getManagedTasks().find((t) => t.id === "t-run")!.activeTimeMs
+			const second = manager.getManagedTasks().find((t) => t.id === "t-run")!.activeTimeMs
+			expect(first).toBe(3_000)
+			expect(second).toBe(3_000)
+		})
+
+		it("returns stored time verbatim for non-running tasks", async () => {
+			const { manager } = buildManager()
+			await manager.restoreManagedTasks([])
+			seedTimed(manager, "t-done", { lifecycle: "completed", rating: "well" }, 4_200, 0)
+
+			nowSpy.mockReturnValue(BASE + 9_999)
+			const snapshot = manager.getManagedTasks().find((t) => t.id === "t-done")!
+			expect(snapshot.activeTimeMs).toBe(4_200)
+		})
+
+		it("persists the live active time when a running task transitions out", async () => {
+			const initial = makeHistoryItem({ id: "t-persist", taskState: { lifecycle: "running" } })
+			const { manager, store } = buildManager(initial)
+			await manager.restoreManagedTasks([])
+			seedTimed(manager, "t-persist", { lifecycle: "running" }, 1_000, BASE)
+
+			nowSpy.mockReturnValue(BASE + 2_000)
+			manager.setState("t-persist", { lifecycle: "completed", rating: "well" })
+
+			// fire-and-forget persistence promise
+			await new Promise((r) => setImmediate(r))
+
+			// 1000 stored + the 2000ms in-progress interval folded in on leaving running.
+			expect(store.get("t-persist")?.activeTimeMs).toBe(3_000)
+		})
+	})
+
 	it("seeds managedTasks after ensureRestored (restored/seeded flag split)", async () => {
 		const { manager } = buildManager()
 

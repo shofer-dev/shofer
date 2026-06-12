@@ -372,25 +372,37 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	// ────────────────────────────── Queries ──────────────────────────────
 
 	/**
+	 * Live wall-clock active time for a task, in ms: the stored `activeTimeMs`
+	 * plus, when the task is currently `running`, the in-progress interval since
+	 * `_runningSince`. Pure — never mutates timing state.
+	 */
+	private static liveActiveTimeMs(m: ManagedTask, now: number): number {
+		return m.state.lifecycle === "running" && m._runningSince > 0
+			? m.activeTimeMs + (now - m._runningSince)
+			: m.activeTimeMs
+	}
+
+	/**
 	 * Return all managed tasks sorted by most-recently-active first.
 	 *
-	 * For currently-running tasks, the current `_runningSince` interval is
-	 * accumulated into the stored `activeTimeMs` field (mutated in place) so
-	 * that the next persist to `HistoryItem` records the correct wall-clock
-	 * time.  `_runningSince` is then reset to `now` to avoid double-counting
-	 * on subsequent calls.  This ensures crash-resilience: if the extension
-	 * host dies mid-run, the persisted `activeTimeMs` reflects the time up to
-	 * the last `getManagedTasks()` call rather than zero.
+	 * Pure query — it never mutates internal timing state (this used to
+	 * accumulate `activeTimeMs` in place, making every incidental read advance
+	 * the persistence clock). For a currently-running task the returned snapshot
+	 * carries a *live* `activeTimeMs` computed into a shallow copy, so callers
+	 * see up-to-the-millisecond time with no side effects; non-running tasks are
+	 * returned by reference (no allocation). The stored accumulation is advanced
+	 * by `setState` when a task leaves `running`, and `persistState` writes the
+	 * live value so a persist mid-run records the correct wall-clock time.
 	 */
 	getManagedTasks(): ManagedTask[] {
 		const now = Date.now()
-		for (const m of this.managedTasks.values()) {
-			if (m.state.lifecycle === "running" && m._runningSince > 0) {
-				m.activeTimeMs += now - m._runningSince
-				m._runningSince = now
-			}
-		}
-		return Array.from(this.managedTasks.values()).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+		return Array.from(this.managedTasks.values())
+			.map((m) =>
+				m.state.lifecycle === "running" && m._runningSince > 0
+					? { ...m, activeTimeMs: TaskManager.liveActiveTimeMs(m, now) }
+					: m,
+			)
+			.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
 	}
 
 	getActiveManagedTasks(): ManagedTask[] {
@@ -538,7 +550,13 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 				taskLog.debug(
 					`[TaskManager] Persisting state for ${targetTaskId}: v${capturedVersion} ${state.lifecycle}${state.rating ? ":" + state.rating : ""}`,
 				)
-				const activeTimeMs = this.managedTasks.get(targetTaskId)?.activeTimeMs
+				// Persist the live active time (stored accumulation + any in-progress
+				// running interval) so a persist that fires mid-run records correct
+				// wall-clock time. For leave-running transitions `setState` has
+				// already folded the interval into `activeTimeMs` and zeroed
+				// `_runningSince`, so this is identical to the stored value there.
+				const target = this.managedTasks.get(targetTaskId)
+				const activeTimeMs = target ? TaskManager.liveActiveTimeMs(target, Date.now()) : undefined
 				await provider.updateTaskHistory({
 					id: targetTaskId,
 					taskState: state,
