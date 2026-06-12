@@ -252,6 +252,7 @@ export class WorkflowTask extends Task {
 				tokensUsed: 0,
 				status: "running",
 				mailbox: [],
+				mailboxHistory: [],
 				sourcePath: undefined,
 			}
 		}
@@ -1183,7 +1184,23 @@ export class WorkflowTask extends Task {
 				state.retryCount = 0
 				state.output = result
 				if (instr.op.binding) state.bindings.set(instr.op.binding, result)
+				// Enrich the mailbox history entries with per-agent metadata
+				// so the sequence diagram can show tokens, cost, duration, and
+				// mode on hover.
+				const agentCost = historyItem.totalCost || 0
+				const agentDuration = historyItem.activeTimeMs || 0
+				const managed = provider.taskManager.getManagedTask(state.taskId)
+				const agentMode = (managed as { mode?: string } | undefined)?.mode
+				const beforeEnrich = this.flowState.mailboxHistory.length
 				this.routeOutput(name, instr.op, result)
+				// Stamp the newly pushed history entries with metadata.
+				for (let hi = beforeEnrich; hi < this.flowState.mailboxHistory.length; hi++) {
+					const entry = this.flowState.mailboxHistory[hi]!
+					entry.tokensUsed = agentTokens
+					entry.costUsd = agentCost
+					entry.durationMs = agentDuration
+					if (agentMode) entry.mode = agentMode
+				}
 				state.opIndex++
 				state.status = "idle"
 				workflowLog.info(
@@ -1198,7 +1215,14 @@ export class WorkflowTask extends Task {
 
 	/** Deliver a stake's output to all of its recipients (@Agent / @all / @out). */
 	private routeOutput(from: string, op: StakeOp, value: unknown): void {
+		const before = this.flowState.mailbox.length
 		routeOutputPure(this.flowState.mailbox, this.flowState.agents, from, op, value)
+		// Append any newly delivered entries to the persistent history so the
+		// sequence diagram can be reconstructed even after the workflow completes.
+		const added = this.flowState.mailbox.length - before
+		if (added > 0) {
+			this.flowState.mailboxHistory.push(...this.flowState.mailbox.slice(before))
+		}
 	}
 
 	// ── Escalate ──

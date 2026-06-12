@@ -17,7 +17,11 @@ export interface FlowState {
 	round: number
 	tokensUsed: number
 	status: FlowStatus
+	/** In-flight mailbox (cleared each round). For full history, see `mailboxHistory`. */
 	mailbox: MailboxEntry[]
+	/** Accumulated history of all mailbox entries ever produced. Persisted
+	 *  across rounds so the sequence diagram can be reconstructed post-mortem. */
+	mailboxHistory: MailboxEntry[]
 	// Slang source file path
 	sourcePath?: string
 }
@@ -47,6 +51,14 @@ export interface MailboxEntry {
 	value: unknown
 	timestamp: number
 	funcName?: string
+	/** Number of tokens consumed by the agent that produced this stake. */
+	tokensUsed?: number
+	/** USD cost incurred by the agent that produced this stake. */
+	costUsd?: number
+	/** Wall-clock duration of the agent turn that produced this stake (ms). */
+	durationMs?: number
+	/** Agent mode slug for the child task (e.g. "code", "architect"). */
+	mode?: string
 }
 
 // ── Serialization helpers ──
@@ -70,6 +82,7 @@ export function serializeFlowState(state: FlowState): Record<string, unknown> {
 		tokensUsed: state.tokensUsed,
 		status: state.status,
 		mailbox: state.mailbox,
+		mailboxHistory: state.mailboxHistory,
 		sourcePath: state.sourcePath,
 	}
 }
@@ -110,6 +123,7 @@ export function deserializeFlowState(data: Record<string, unknown>): FlowState {
 		tokensUsed: (data.tokensUsed as number) || 0,
 		status: (data.status as FlowStatus) || "running",
 		mailbox: (data.mailbox as MailboxEntry[]) || [],
+		mailboxHistory: (data.mailboxHistory as MailboxEntry[]) || [],
 		sourcePath: data.sourcePath as string | undefined,
 	}
 }

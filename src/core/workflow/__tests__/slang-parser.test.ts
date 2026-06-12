@@ -601,6 +601,7 @@ describe("FlowState serialization", () => {
 					funcName: "do_work",
 				},
 			],
+			mailboxHistory: [],
 			sourcePath: "/test/flow.slang",
 		}
 	}
@@ -640,6 +641,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(data)
 		expect(restored.agents.size).toBe(0)
@@ -664,6 +666,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(serializeFlowState(original))
 		expect(restored.agents.get("A")!.retryCount).toBe(2)
@@ -689,6 +692,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(serializeFlowState(original))
 		const a = restored.agents.get("A")!
@@ -715,6 +719,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(serializeFlowState(original))
 		expect(restored.agents.get("A")!.output).toEqual({ approved: true, issues: "none", nested: { deep: 42 } })
@@ -733,6 +738,7 @@ describe("FlowState serialization", () => {
 				{ from: "B", to: "C", value: "second", timestamp: 2, funcName: "reply" },
 				{ from: "C", to: "out", value: "third", timestamp: 3 },
 			],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(serializeFlowState(original))
 		expect(restored.mailbox).toHaveLength(3)
@@ -748,6 +754,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 			sourcePath: "/home/user/.shofer/workflows/my-flow.slang",
 		}
 		const restored = deserializeFlowState(serializeFlowState(original))
@@ -763,6 +770,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(data)
 		expect(restored.agents.get("A")!.retryCount).toBe(0)
@@ -777,6 +785,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(data)
 		expect(restored.sourcePath).toBeUndefined()
@@ -791,6 +800,7 @@ describe("FlowState serialization", () => {
 			tokensUsed: 0,
 			status: "running",
 			mailbox: [],
+			mailboxHistory: [],
 		}
 		const restored = deserializeFlowState(data)
 		expect(restored.agents.size).toBe(0)

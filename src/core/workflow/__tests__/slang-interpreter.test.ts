@@ -48,6 +48,7 @@ function freshFlowState(overrides?: Partial<FlowState>): FlowState {
 		tokensUsed: 0,
 		status: "running",
 		mailbox: [],
+		mailboxHistory: [],
 		...overrides,
 	}
 }

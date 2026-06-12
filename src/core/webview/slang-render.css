@@ -243,9 +243,38 @@ body {
 		stroke-width 0.15s ease;
 }
 
-.edge-group:hover .edge-path {
+.edge-group:hover .edge-path,
+.edge-group.edge-runtime-active .edge-path {
 	opacity: 1;
 	stroke-width: 3.5;
+}
+
+/* Pulse animation for active stake/await edges during workflow execution */
+.edge-group.edge-runtime-active .edge-path {
+	animation: slang-edge-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes slang-edge-pulse {
+	0%,
+	100% {
+		stroke-width: 3.2;
+	}
+	50% {
+		stroke-width: 5.5;
+	}
+}
+
+/* Swimlane: currently executing operation block highlight */
+.flow-box.flow-executing {
+	fill: var(--z-stake);
+	opacity: 0.18;
+	stroke-width: 2.8;
+}
+.flow-box.flow-executing[data-optype="await"] {
+	fill: var(--z-await);
+}
+.flow-box.flow-executing[data-optype="commit"] {
+	fill: var(--z-agent);
 }
 
 .edge-hit {
@@ -290,6 +319,17 @@ body {
 	stroke-width: 2;
 	stroke-linecap: round;
 	transition: stroke-width 0.1s ease;
+}
+
+/* Dashed style for pending (not yet delivered) sequence messages */
+.sequence-group.sequence-pending .sequence-line {
+	stroke-dasharray: 6 3;
+	opacity: 0.55;
+}
+
+.sequence-group.sequence-pending .sequence-text {
+	opacity: 0.65;
+	font-style: italic;
 }
 
 .sequence-group:hover .sequence-line {

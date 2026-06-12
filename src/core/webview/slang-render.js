@@ -13,6 +13,16 @@ function esc(s) {
 		.replace(/"/g, String.fromCharCode(38) + "quot;")
 }
 
+/** Format milliseconds to a human-readable duration string (e.g. "2m 15s"). */
+function formatMs(ms) {
+	if (!ms || ms < 1000) return (ms || 0) + "ms"
+	var s = Math.floor(ms / 1000)
+	var m = Math.floor(s / 60)
+	s = s % 60
+	if (m > 0) return m + "m " + s + "s"
+	return s + "s"
+}
+
 /** Map user-facing icon keys to emoji. Extend as needed. */
 function iconToEmoji(key) {
 	var map = {
@@ -528,9 +538,22 @@ function renderEdge(e, layout, layers) {
 	var color = e.kind === "stake" ? COLORS.stake : e.kind === "await" ? COLORS.await : COLORS.peer
 	var marker = e.kind === "stake" ? "url(#ah-stake)" : e.kind === "await" ? "url(#ah-await)" : "url(#ah-peer)"
 	var dashAttr = e.kind === "peer" ? ' stroke-dasharray="8 4"' : ""
+	// Runtime highlight: thicken + pulse edges that are active (agent is
+	// sendingTo or waitingFor that target).
+	var rtClass = ""
+	if (e.kind !== "peer" && _runState) {
+		var fromAgent = getAgentRunState(e.from)
+		var toAgent = getAgentRunState(e.to)
+		if ((fromAgent && fromAgent.sendingTo === e.to) || (toAgent && toAgent.waitingFor === e.from)) {
+			rtClass = " edge-runtime-active"
+			dashAttr = e.kind === "stake" ? ' stroke-dasharray="6 2"' : dashAttr
+		}
+	}
 	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx
 	var s =
-		'<g class="edge-group" data-edge="' +
+		'<g class="edge-group' +
+		rtClass +
+		'" data-edge="' +
 		key +
 		'" data-from="' +
 		esc(e.from) +
@@ -650,139 +673,117 @@ function compileSequenceSVG(flow, agentNames) {
 		STEP_H = 50,
 		TOP_PAD = 60
 
-	// Extract all inter-agent events with source-agent context.
-	// Each event carries the layer of its source agent (from dagre topology).
-	var rawEdges = buildGraphEdges(flow)
-	var dagreResult = applyDagreLayout(agentNames, rawEdges)
-	var layers = dagreResult.layers
-
+	// Build timeline events from the runtime mailbox when _runState is
+	// available (showing actual message-passing history). Fall back to
+	// static AST extraction when viewing a file statically.
 	var timelineEvents = []
-	var _globalSeq = 0
 
-	for (var ai = 0; ai < (flow.body || []).length; ai++) {
-		var agent = flow.body[ai]
-		if (agent.type !== "AgentDecl") continue
-		var from = agent.name
+	if (_runState && _runState.mailboxHistory && _runState.mailboxHistory.length > 0) {
+		// Runtime: use historical mailbox entries (sorted by timestamp).
+		for (var mi = 0; mi < _runState.mailboxHistory.length; mi++) {
+			var entry = _runState.mailboxHistory[mi]
+			timelineEvents.push({
+				from: entry.from,
+				to: entry.to === "@out" ? "@Human" : entry.to,
+				label: entry.funcName || "",
+				type: "stake",
+				seq: mi,
+				ts: entry.timestamp || 0,
+			})
+		}
 
-		function extractTimeline(ops, layerFrom, depth) {
-			if (!ops) return
-			depth = depth || 0
-			var maxDepth = 1
-			for (var i = 0; i < ops.length; i++) {
-				var op = ops[i]
-				if (op.type === "StakeOp" && op.recipients) {
-					for (var j = 0; j < op.recipients.length; j++) {
-						var to = op.recipients[j].ref || op.recipients[j]
-						if (agentNames[to])
-							timelineEvents.push({
-								from: from,
-								to: to,
-								label: op.call ? op.call.name : "",
-								type: "stake",
-								layer: layerFrom,
-								seq: _globalSeq++,
-							})
+		// Append pending sends from agents that have sendingTo set but
+		// the message hasn't hit the mailbox yet.
+		if (_runState.agents) {
+			for (var ai = 0; ai < _runState.agents.length; ai++) {
+				var ag = _runState.agents[ai]
+				if (ag[1].sendingTo && ag[1].sendingTo !== "@out") {
+					// Avoid duplicates with mailbox entries
+					var alreadyInMailbox = false
+					for (var mj = timelineEvents.length - 1; mj >= 0; mj--) {
+						if (timelineEvents[mj].from === ag[0]) {
+							alreadyInMailbox = true
+							break
+						}
 					}
-				}
-				if (op.type === "AwaitOp" && op.sources) {
-					for (var k = 0; k < op.sources.length; k++) {
-						var src = op.sources[k].ref || op.sources[k]
-						if (agentNames[src])
-							timelineEvents.push({
-								from: src,
-								to: from,
-								label: op.binding || "",
-								type: "await",
-								layer: layers[src] || 0,
-								seq: _globalSeq++,
-							})
-						if (src === "Human")
-							timelineEvents.push({
-								from: "@Human",
-								to: from,
-								label: "user reply",
-								type: "await",
-								layer: 0,
-							})
+					if (!alreadyInMailbox) {
+						timelineEvents.push({
+							from: ag[0],
+							to: ag[1].sendingTo,
+							label: "sending…",
+							type: "stake",
+							seq: timelineEvents.length,
+							pending: true,
+						})
 					}
-				}
-				if (op.type === "EscalateOp") {
-					timelineEvents.push({
-						from: from,
-						to: "@Human",
-						label: op.reason || "approval",
-						type: "stake",
-						layer: layerFrom,
-					})
-				}
-				if (depth < maxDepth) {
-					if (op.type === "WhenBlock") {
-						extractTimeline(op.body, layerFrom, depth + 1)
-						if (op.elseBlock) extractTimeline(op.elseBlock.body, layerFrom, depth + 1)
-					}
-					if (op.type === "RepeatBlock") extractTimeline(op.body, layerFrom, depth + 1)
 				}
 			}
 		}
-		extractTimeline(agent.operations, layers[from] || 0)
-	}
+	} else {
+		// Static fallback: extract interactions from the flow AST.
+		var rawEdges = buildGraphEdges(flow)
+		var dagreResult = applyDagreLayout(agentNames, rawEdges)
+		var layers = dagreResult.layers
 
-	// ── Merge matched stake/await pairs ────────────────────────────────
-	// A stake S->@T (sender→target) and an await B<-@S (same sender/receiver)
-	// are two sides of the same logical message. Collapse them into one event,
-	// preferring the stake's label (action name) over the await's (binding name).
-	// Escalate-to-Human is handled symmetrically: stake A→@Human + await @Human→A.
-	var merged = []
-	var consumed = {} // index → true for events already pushed to merged
-	for (var si = 0; si < timelineEvents.length; si++) {
-		if (timelineEvents[si].type !== "stake") continue
-		consumed[si] = true // mark this stake as handled
-		var stakeEv = timelineEvents[si]
-		// Look for a matching await: same from/to pair, or escalate symmetry
-		var pairIdx = -1
-		for (var ai = 0; ai < timelineEvents.length; ai++) {
-			if (ai === si || consumed[ai]) continue
-			var awaitEv = timelineEvents[ai]
-			if (awaitEv.type !== "await") continue
-			// Agent-to-agent: stake.from === await.from && stake.to === await.to
-			if (stakeEv.from === awaitEv.from && stakeEv.to === awaitEv.to) {
-				pairIdx = ai
-				break
-			}
-			// Human escalation: stake.from === await.to && stake.to === "@Human" && await.from === "@Human"
-			if (stakeEv.to === "@Human" && awaitEv.from === "@Human" && stakeEv.from === awaitEv.to) {
-				pairIdx = ai
-				break
-			}
+		for (var ai2 = 0; ai2 < (flow.body || []).length; ai2++) {
+			var agent = flow.body[ai2]
+			if (agent.type !== "AgentDecl") continue
+			var from = agent.name
+
+			;(function extractTimeline(ops, layerFrom, depth) {
+				if (!ops) return
+				depth = depth || 0
+				var maxDepth = 1
+				for (var i = 0; i < ops.length; i++) {
+					var op = ops[i]
+					if (op.type === "StakeOp" && op.recipients) {
+						for (var j = 0; j < op.recipients.length; j++) {
+							var to = op.recipients[j].ref || op.recipients[j]
+							if (agentNames[to])
+								timelineEvents.push({
+									from: from,
+									to: to,
+									label: op.call ? op.call.name : "",
+									type: "stake",
+									layer: layerFrom,
+									seq: timelineEvents.length,
+								})
+						}
+					}
+					if (op.type === "AwaitOp" && op.sources) {
+						for (var k = 0; k < op.sources.length; k++) {
+							var src = op.sources[k].ref || op.sources[k]
+							if (agentNames[src])
+								timelineEvents.push({
+									from: src,
+									to: from,
+									label: op.binding || "",
+									type: "await",
+									layer: layers[src] || 0,
+									seq: timelineEvents.length,
+								})
+						}
+					}
+					if (op.type === "EscalateOp") {
+						timelineEvents.push({
+							from: from,
+							to: "@Human",
+							label: op.reason || "approval",
+							type: "stake",
+							layer: layerFrom,
+						})
+					}
+					if (depth < maxDepth) {
+						if (op.type === "WhenBlock") {
+							extractTimeline(op.body, layerFrom, depth + 1)
+							if (op.elseBlock) extractTimeline(op.elseBlock.body, layerFrom, depth + 1)
+						}
+						if (op.type === "RepeatBlock") extractTimeline(op.body, layerFrom, depth + 1)
+					}
+				}
+			})(agent.operations, layers[from] || 0)
 		}
-		if (pairIdx !== -1) {
-			consumed[pairIdx] = true
-		}
-		merged.push({
-			from: stakeEv.from,
-			to: stakeEv.to,
-			label: stakeEv.label || (pairIdx !== -1 ? timelineEvents[pairIdx].label : "") || "",
-			type: stakeEv.type,
-			layer: stakeEv.layer,
-			seq: stakeEv.seq,
-		})
 	}
-	// Push uncovered events (those with no matching pair) — e.g. standalone
-	// await @any, awaits gated behind a when-block where the stake is unreachable.
-	for (var ui = 0; ui < timelineEvents.length; ui++) {
-		if (consumed[ui]) continue
-		merged.push(timelineEvents[ui])
-	}
-
-	// Sort events by their intra-agent sequential position (seq). This groups
-	// agent interactions by dependency order while preserving the line-by-line
-	// ordering of operations within each agent.
-	merged.sort(function (a, b) {
-		if (a.seq !== b.seq) return a.seq - b.seq
-		return 0
-	})
-
-	timelineEvents = merged
 
 	var svgW = Math.max(600, columns.length * COL_W + MARGIN * 2)
 	var svgH = Math.max(400, timelineEvents.length * STEP_H + TOP_PAD + 100)
@@ -831,8 +832,18 @@ function compileSequenceSVG(flow, agentNames) {
 		var y = TOP_PAD + 30 + e * STEP_H
 		var color = ev.type === "stake" ? COLORS.stake : COLORS.await
 		var marker = ev.type === "stake" ? "url(#ah-seq-stake)" : "url(#ah-seq-await)"
+		var dashAttr = ev.pending ? ' stroke-dasharray="6 3" opacity="0.55"' : ""
 
-		s += '<g class="sequence-group">'
+		// Tooltip from mailbox metadata (tokens, cost, duration)
+		var tt = ""
+		if (ev.tokensUsed || ev.costUsd || ev.durationMs) {
+			var tp = []
+			if (ev.tokensUsed) tp.push("\uD83D\uDD22 " + esc(String(ev.tokensUsed)) + " tokens")
+			if (ev.costUsd) tp.push("\uD83D\uDCB0 $" + esc(Number(ev.costUsd).toFixed(4)))
+			if (ev.durationMs) tp.push("\u23F1 " + esc(formatMs(ev.durationMs)))
+			tt = "<title>" + tp.join("  \u2022  ") + "</title>"
+		}
+		s += '<g class="sequence-group' + (ev.pending ? " sequence-pending" : "") + '">' + tt
 		s +=
 			'<line class="sequence-line" x1="' +
 			x1 +
@@ -943,16 +954,25 @@ function compileSwimlaneSVG(flow, agentNames) {
 		defs()
 
 	// Mutable Y cursor shared across recursive calls
-	var _cy = 0
+	var _cy = 0,
+		_opCounter = 0
 
 	// Render a single operation; mutates _cy and returns SVG fragment
-	function renderOp(op, spineX, depth) {
+	function renderOp(op, spineX, depth, agentName, opIdx) {
 		var str = ""
 		var opacity = depth > 0 ? "0.7" : "1"
 
+		// Runtime: is this the currently executing operation?
+		var isExecuting = false
+		if (agentName) {
+			var ars2 = getAgentRunState(agentName)
+			if (ars2 && ars2.opIndex === opIdx) isExecuting = true
+		}
+		var execClass = isExecuting ? " flow-executing" : ""
+		var execAttr = ""
+
 		if (op.type === "StakeOp") {
 			var lbl = "STAKE: " + esc(op.call ? op.call.name : "func") + "()"
-			// Collect recipient names for tooltip
 			var toNames = []
 			if (op.recipients) {
 				for (var sj = 0; sj < op.recipients.length; sj++) {
@@ -961,8 +981,11 @@ function compileSwimlaneSVG(flow, agentNames) {
 				}
 			}
 			var arrowDir = toNames.length > 0 ? " \u2192 " + toNames.join(", ") : ""
+			if (isExecuting) execAttr = ' data-optype="stake"'
 			str +=
-				'<rect class="flow-box" x="' +
+				'<rect class="flow-box' +
+				execClass +
+				'" x="' +
 				(spineX - BLOCK_W / 2) +
 				'" y="' +
 				_cy +
@@ -974,7 +997,9 @@ function compileSwimlaneSVG(flow, agentNames) {
 				COLORS.stake +
 				'" opacity="' +
 				opacity +
-				'" />'
+				'"' +
+				execAttr +
+				" />"
 			str +=
 				'<text class="flow-text" x="' +
 				spineX +
@@ -1001,8 +1026,11 @@ function compileSwimlaneSVG(flow, agentNames) {
 			_cy += SPACING_Y
 		} else if (op.type === "AwaitOp") {
 			var albl = "AWAIT <- " + esc(op.binding || "msg")
+			if (isExecuting) execAttr = ' data-optype="await"'
 			str +=
-				'<rect class="flow-box" x="' +
+				'<rect class="flow-box' +
+				execClass +
+				'" x="' +
 				(spineX - BLOCK_W / 2) +
 				'" y="' +
 				_cy +
@@ -1014,7 +1042,9 @@ function compileSwimlaneSVG(flow, agentNames) {
 				COLORS.await +
 				'" opacity="' +
 				opacity +
-				'" />'
+				'"' +
+				execAttr +
+				" />"
 			str +=
 				'<text class="flow-text" x="' +
 				spineX +
@@ -1159,7 +1189,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 				"</text>"
 			var bodyStartY = _cy - SPACING_Y
 			_cy += SPACING_Y
-			str += renderOpList(op.body, spineX, depth + 1)
+			str += renderOpList(op.body, spineX, depth + 1, agentName)
 			// Bounding box around the WHEN body
 			if (_cy > bodyStartY) {
 				str +=
@@ -1262,7 +1292,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 				"</text>"
 			var repeatStartY = _cy - SPACING_Y
 			_cy += SPACING_Y
-			str += renderOpList(op.body, spineX, depth + 1)
+			str += renderOpList(op.body, spineX, depth + 1, agentName)
 			// Bounding box around the REPEAT body
 			if (_cy > repeatStartY) {
 				str +=
@@ -1277,8 +1307,11 @@ function compileSwimlaneSVG(flow, agentNames) {
 					'" rx="6" />'
 			}
 		} else if (op.type === "CommitOp") {
+			if (isExecuting) execAttr = ' data-optype="commit"'
 			str +=
-				'<rect class="flow-box" x="' +
+				'<rect class="flow-box' +
+				execClass +
+				'" x="' +
 				(spineX - BLOCK_W / 2) +
 				'" y="' +
 				_cy +
@@ -1290,7 +1323,9 @@ function compileSwimlaneSVG(flow, agentNames) {
 				COLORS.agent +
 				'" rx="10" opacity="' +
 				opacity +
-				'" />'
+				'"' +
+				execAttr +
+				" />"
 			str +=
 				'<text class="flow-text" x="' +
 				spineX +
@@ -1354,12 +1389,13 @@ function compileSwimlaneSVG(flow, agentNames) {
 		return str
 	}
 
-	// Render a list of operations recursively
-	function renderOpList(ops, spineX, depth) {
+	// Render a list of operations recursively, tracking op-index for runtime highlight.
+	function renderOpList(ops, spineX, depth, agentName) {
 		if (!ops) return ""
 		var str = ""
 		for (var j = 0; j < ops.length; j++) {
-			str += renderOp(ops[j], spineX, depth)
+			_opCounter++
+			str += renderOp(ops[j], spineX, depth, agentName, _opCounter)
 		}
 		return str
 	}
@@ -1367,6 +1403,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 	// Render each agent lane
 	for (var i = 0; i < agents.length; i++) {
 		var ag = agents[i]
+		_opCounter = 0
 		var lx = MARGIN + i * LANE_W
 		s +=
 			'<rect class="swimlane-bg" x="' +
@@ -1415,7 +1452,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 		s += '<line class="flow-spine" x1="' + midX + '" y1="' + _cy + '" x2="' + midX + '" y2="' + (_cy + 15) + '" />'
 		_cy += 15
 
-		s += renderOpList(ag.operations, midX, 0)
+		s += renderOpList(ag.operations, midX, 0, ag.name)
 		s += '<circle cx="' + midX + '" cy="' + _cy + '" r="5" fill="var(--z-card-border)" />'
 	}
 	return s + "</svg>"
