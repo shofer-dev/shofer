@@ -588,6 +588,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	_pendingGenStartMs: number | null = null
 
 	/**
+	 * True while an API request is in flight and its `api_req_finished` span has
+	 * not yet been emitted. Guards `emitApiReqFinished` against double-emit and
+	 * lets `abortTask` flush the final request (e.g. the attempt_completion turn,
+	 * which disposes the task before the normal post-tools emit point).
+	 */
+	_pendingApiReqNeedsEmit = false
+
+	/**
 	 * 0-based monotonic index assigned to each API request span within
 	 * this task.
 	 */
@@ -3694,6 +3702,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	public async abortTask(isAbandoned = false) {
 		// Aborting task
 
+		// Flush the in-flight API request span before teardown. The terminal
+		// attempt_completion turn disposes the task before the normal post-tools
+		// emit point, so without this its request (and the attempt_completion
+		// tool span) would be missing from the Trace/Stats. Idempotent via the
+		// needs-emit guard, so this is a no-op if the request already emitted.
+		if (this._pendingApiReqNeedsEmit) {
+			const completed = this.didExecuteAttemptCompletion
+			await this.emitApiReqFinished(
+				completed ? "completed" : "cancelled",
+				completed ? undefined : "user_cancelled",
+			)
+		}
+
 		// If this task was blocked awaiting a parent answer (via the
 		// ask_followup_question → parent routing), reject that promise NOW so
 		// the child wakes and unwinds the tool handler instead of hanging.
@@ -4291,6 +4312,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this._pendingToolSpans = []
 			this._pendingTtfbMs = null
 			this._pendingGenStartMs = null
+			this._pendingApiReqNeedsEmit = true
 			this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
 
 			await this.say(
@@ -5947,7 +5969,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					`\n\n====\n\n` +
 						`PEER MESSAGE from task ${pn.senderTaskId} ("${pn.senderTitle}"):\n` +
 						`${pn.message}\n\n` +
-						`You may respond using send_message_to_task(task_id="${pn.senderTaskId}", message=...).\n` +
+						`You may respond using send_message_to_task(task_id="${pn.senderTaskId}", message=...)\n` +
+						`IF the sender's task ID was granted to you via peer_task_ids at spawn time.\n` +
+						`(Receiving this message does NOT auto-grant you permission to reply — check\n` +
+						`your knownPeers scope first. If you cannot reply, notify your parent instead.)\n` +
 						`This is a notification — no response is required. If the message is not urgent,\n` +
 						`you may finish your current work first and respond later.`,
 				)
@@ -7497,6 +7522,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		status: ApiRequestFinishedPayload["status"],
 		cancelReason?: ApiRequestFinishedPayload["cancelReason"],
 	): Promise<void> {
+		// Exactly one span per request: whichever path fires first (normal
+		// post-tools emit, abortStream, or abortTask) wins; the rest are no-ops.
+		if (!this._pendingApiReqNeedsEmit) {
+			return
+		}
+		this._pendingApiReqNeedsEmit = false
+
 		const modelId = getModelId(this.apiConfiguration)
 		const apiProvider = this.apiConfiguration.apiProvider
 		const apiProtocol = getApiProtocol(
