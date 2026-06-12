@@ -116,8 +116,11 @@ group membership. Use this when:
   groups (the two compose with OR).
 
 A mode may declare access purely through `tools_allowed` and omit `groups`
-entirely — this is what project-level read-only modes such as `reviewer` and
-`search` in `.shofer/shofermodes` do.
+entirely (the schema requires _either_ `groups` or `tools_allowed`). This is the
+pattern for a tightly-scoped read-only custom mode — e.g. a `.shofer/shofermodes`
+mode that grants only `read_file`/`grep_search` and nothing else. (Note: the
+built-in `reviewer` mode is **not** such a mode — it uses `groups`; see
+[`built-in-modes.md`](built-in-modes.md).)
 
 ### `tools_denied`
 
@@ -139,11 +142,13 @@ patterns — e.g. grant the `execute` group but deny `execute_command`.
 Result: every tool in any of those five groups is allowed. No
 `tools_allowed` overlay, no denials.
 
-### Example 2: tools_allowed only (read-only project modes)
+### Example 2: tools_allowed only (a hypothetical read-only custom mode)
 
 ```yaml
-- slug: reviewer
-  name: 👀 Reviewer
+# A custom .shofer/shofermodes mode — NOT the built-in `reviewer` (which uses groups).
+- slug: read-only-auditor
+  name: 🔍 Read-Only Auditor
+  roleDefinition: "You audit code; you never modify it."
   tools_allowed: [read_file, grep_search, list_files, lsp_search]
 ```
 
@@ -208,17 +213,15 @@ short-circuits.
 
 ## Known Gaps, Issues & Improvement Areas
 
-### JSON Schema vs Zod Schema discrepancy
+### JSON Schema vs Zod Schema discrepancy — ✅ fixed
 
-The Zod schema in
-[`packages/types/src/mode.ts`](../packages/types/src/mode.ts) allows `tools_allowed`
-without `groups` (the `refine` on the `modeConfigSchema` checks
-`data.groups !== undefined || data.tools_allowed !== undefined`). However, the
-exported JSON schema in
-[`schemas/shofermodes.json`](../schemas/shofermodes.json) (line 120) lists
-`groups` in `required`, which would reject mode definitions that rely solely on
-`tools_allowed`. The JSON schema should be regenerated from the Zod source or
-manually corrected to match.
+Previously the exported JSON schema in
+[`schemas/shofermodes.json`](../schemas/shofermodes.json) listed `groups` in
+`required`, contradicting the Zod `modeConfigSchema` `.refine` (which allows
+`tools_allowed` without `groups`) and rejecting valid tools_allowed-only modes.
+Corrected: the item `required` is now `["slug", "name", "roleDefinition"]` plus an
+`anyOf: [{ required: ["groups"] }, { required: ["tools_allowed"] }]`, matching the
+Zod "either groups or tools_allowed" constraint.
 
 ### Decision rule omits `ALWAYS_AVAILABLE_TOOLS` fast-path
 
