@@ -257,7 +257,12 @@ definitions (role, group assignments, custom instructions) see the source.
   the only mode with all five write/execute/mode/subtasks groups simultaneously.
 - **`architect`** restricts the `write` group to `.md` files only via a
   `fileRegex` tuple — any attempt to write to a non-`.md` file throws a
-  `FileRestrictionError`.
+  `FileRestrictionError`. Note it has **no `mode` group**, so `switch_mode` is
+  not in its catalog (`switch_mode` lives only in `TOOL_GROUPS.mode`, which only
+  `code` carries, and is not in `ALWAYS_AVAILABLE_TOOLS`). Architect therefore
+  hands off by _asking the user_ to switch to an implementation mode (it has the
+  `questions` group) — its `customInstructions` must not instruct it to call
+  `switch_mode`, which it cannot.
 - **`debug`** has near-full access (same as `code` minus `mode`).
 - **`code-search`** has no `write`, no `mode`, and no `subtasks`. **`architect`**
   and **`reviewer`** have `write` restricted to `.md` files and no `write`
