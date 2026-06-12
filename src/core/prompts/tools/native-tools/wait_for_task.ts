@@ -1,6 +1,6 @@
 import type OpenAI from "openai"
 
-const WAIT_FOR_TASK_DESCRIPTION = `Block until one or more background child tasks (started with new_task using is_background=true) complete, then return their results. Use the \`wait\` parameter to control whether to wait for ALL tasks or just ANY one of them. The call is event-driven — it does not poll. Use this after starting background tasks when you need their results before continuing.`
+const WAIT_FOR_TASK_DESCRIPTION = `Block until one or more background child tasks (started with new_task using is_background=true) or peer tasks sharing your root task complete, then return their results. Use the \`wait\` parameter to control whether to wait for ALL tasks or just ANY one of them. The call is event-driven — it does not poll. Use this after starting background tasks when you need their results before continuing.`
 
 const TASK_IDS_PARAMETER_DESCRIPTION = `One or more task IDs returned when the background tasks were started. Accepts a single ID or a list of IDs.`
 
