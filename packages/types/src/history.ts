@@ -116,9 +116,13 @@ export const historyItemSchema = z.object({
 	 * Replaces the legacy flat `taskExecutionState` enum.
 	 */
 	taskState: taskStateSchema.optional(),
-	// Async task fields
+	// Background-task fields
 	backgroundChildIds: z.array(z.string()).optional(),
 	isBackground: z.boolean().optional(),
+	/** Task IDs that this task is allowed to peer-communicate with
+	 *  (check_task_status, wait_for_task, send_message_to_task, list_background_tasks).
+	 *  Populated by peer_task_ids at spawn time.  Survives restarts. */
+	peerIds: z.array(z.string()).optional(),
 	// Skills that have been loaded via skills and should survive rehydration
 	loadedSkills: z.array(z.string()).optional(),
 	// Archive support: soft-remove from the main task listing.

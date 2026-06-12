@@ -149,6 +149,7 @@ import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
 import { taskLog } from "../../utils/logging/subsystems"
+import { runWithLogTaskContext } from "../../utils/logging"
 import { time } from "../../utils/perf"
 import { recordLlmDuration, incLlmCalls, incLlmErrors, classifyLlmError } from "../../metrics/registry"
 
@@ -878,6 +879,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.taskId = historyItem ? historyItem.id : (taskId ?? uuidv7())
 		this.rootTaskId = historyItem ? historyItem.rootTaskId : (rootTask?.rootTaskId ?? rootTask?.taskId)
 		this.parentTaskId = historyItem ? historyItem.parentTaskId : parentTask?.taskId
+
+		// Rehydrate knownPeers from persisted peerIds so peer communication
+		// grants survive extension restarts.
+		if (historyItem?.peerIds && historyItem.peerIds.length > 0) {
+			this.knownPeers = new Set(historyItem.peerIds)
+		}
 		this.childTaskId = undefined
 
 		// Timeline: monotonic origin for all per-task span offsets.
@@ -4205,7 +4212,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * completion before starting a new one.
 	 */
 	private _runTaskLoop(userContent: Anthropic.Messages.ContentBlockParam[]): Promise<void> {
-		const promise = this.initiateTaskLoop(userContent).finally(() => {
+		// Establish the ambient log context so every line emitted during this
+		// task's agent loop (including deep API/MCP/git utility logs reached via
+		// awaits and timers) is attributed to this task for the "Logs" tab.
+		const promise = runWithLogTaskContext({ taskId: this.taskId, rootTaskId: this.rootTaskId }, () =>
+			this.initiateTaskLoop(userContent),
+		).finally(() => {
 			if (this._taskLoopPromise === promise) {
 				this._taskLoopPromise = undefined
 			}

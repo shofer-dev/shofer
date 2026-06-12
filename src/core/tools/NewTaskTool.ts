@@ -282,6 +282,18 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				}
 				child.knownPeers = childPeers
 
+				// Persist peer grants so they survive restarts.
+				try {
+					const { historyItem: childHistory } = await provider.getTaskWithId(child.taskId)
+					await provider.updateTaskHistory({
+						...childHistory,
+						peerIds: Array.from(childPeers),
+					})
+				} catch (err) {
+					// Non-fatal: peer grants will be runtime-only for this session.
+					taskLog.error(`[NewTaskTool] Failed to persist peerIds for child ${child.taskId}: ${err}`)
+				}
+
 				pushToolResult(`Child task started: ${child.taskId}\nStatus: starting`)
 				return
 			} else {
