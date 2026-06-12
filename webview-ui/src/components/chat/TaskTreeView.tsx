@@ -1,7 +1,8 @@
 import React, { useMemo } from "react"
 import type { HistoryItem, TaskState, TaskLifecycle, CompletionRating } from "@shofer/types"
-import { LIFECYCLE_VISUAL, RATING_VISUAL } from "./TaskSelector"
+import { LIFECYCLE_VISUAL, RATING_VISUAL, getTaskDisplayName } from "./TaskSelector"
 import { cn } from "@src/lib/utils"
+import { vscode } from "@src/utils/vscode"
 
 /**
  * A node in the flattened task tree used for rendering.
@@ -138,8 +139,9 @@ function TaskTreeRow({ node }: { node: TaskTreeNode }) {
 
 	return (
 		<div
-			className="flex items-center gap-1.5 py-1 px-2 text-xs hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm select-none"
-			style={{ paddingLeft: `${depth === 0 ? 4 : 0}px` }}>
+			className="flex items-center gap-1.5 py-1 px-2 text-xs hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm select-none cursor-pointer"
+			style={{ paddingLeft: `${depth === 0 ? 4 : 0}px` }}
+			onClick={() => vscode.postMessage({ type: "focusParallelTask", taskId: item.id })}>
 			{/* Tree connectors */}
 			{treeConnectors.length > 0 && (
 				<span className="inline-flex items-center whitespace-pre font-mono text-[10px] leading-none">
@@ -161,9 +163,9 @@ function TaskTreeRow({ node }: { node: TaskTreeNode }) {
 				[{item.number}]
 			</span>
 
-			{/* Task title */}
+			{/* Task title (set_task_title / name, falling back to the prompt) */}
 			<span className="truncate font-medium text-[var(--vscode-foreground)]" title={item.task}>
-				{item.task}
+				{getTaskDisplayName(item)}
 			</span>
 
 			{/* Mode badge */}

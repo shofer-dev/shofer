@@ -2012,7 +2012,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 											tree: "Tree",
 											topology: "Topology",
 											sequence: "Sequence",
-											swimlane: "Swimlane",
+											swimlane: "State",
 										}[tab]
 									}
 								</button>

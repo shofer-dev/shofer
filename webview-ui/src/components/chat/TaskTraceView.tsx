@@ -82,6 +82,15 @@ function formatMs(ms: number): string {
 	return `${(ms / 1000).toFixed(1)}s`
 }
 
+/** Round up to the nearest "nice" axis step (1/2/2.5/5 × 10ⁿ ms). */
+function niceTimeStep(raw: number): number {
+	if (!(raw > 0)) return 1000
+	const pow = Math.pow(10, Math.floor(Math.log10(raw)))
+	const norm = raw / pow
+	const mult = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10
+	return mult * pow
+}
+
 function formatTokens(n: number): string {
 	if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
 	return String(n)
@@ -259,11 +268,15 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 
 	// Axis ticks live on the compressed (running-only) axis and are labelled with
 	// elapsed running time, so 0 → totalActive regardless of wall-clock gaps.
+	// Step is pixel-aware: pick the smallest "nice" step (1/2/2.5/5 × 10ⁿ) that
+	// keeps tick labels at least ~MIN_TICK_PX apart, so they never overlap.
 	const rangeMs = timeline.totalActive
-	const tickStep =
-		rangeMs < 1000 ? 200 : rangeMs < 5000 ? 500 : rangeMs < 20000 ? 1000 : rangeMs < 60000 ? 5000 : 10000
+	const plotW = Math.max(1, viewBox.w - GUTTER_WIDTH - PADDING_X * 2)
+	const MIN_TICK_PX = 76
+	const maxTicks = Math.max(2, Math.floor(plotW / MIN_TICK_PX))
+	const tickStep = niceTimeStep(rangeMs / maxTicks)
 	const ticks: number[] = []
-	for (let t = 0; t <= rangeMs; t += tickStep) {
+	for (let t = 0; t <= rangeMs + 0.5; t += tickStep) {
 		ticks.push(t)
 	}
 
@@ -389,7 +402,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 							<g>
 								<rect x={0} y={y} width={GUTTER_WIDTH} height={ROW_HEIGHT} fill="transparent" />
 								<text x={4} y={y + 14} fill={COLOURS.fg} fontSize={11} fontFamily="monospace">
-									[{row.payload.requestIndex}] {row.payload.model}
+									{row.payload.model}
 								</text>
 								<text x={4} y={y + 28} fill={COLOURS.muted} fontSize={10}>
 									{formatTokens(row.payload.tokensIn)}↑ {formatTokens(row.payload.tokensOut)}↓ · $
@@ -437,11 +450,11 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 										x: e.clientX,
 										y: e.clientY,
 										content: [
-											`${row.payload.model} (${row.payload.apiProtocol})`,
+											`Request #${row.payload.requestIndex} — ${row.payload.model} (${row.payload.apiProtocol})`,
 											`Retry #${row.payload.retryAttempt}`,
 											`TTFB: ${row.payload.ttfbMs != null ? formatMs(row.payload.ttfbMs) : "n/a"}`,
 											`Duration: ${formatMs(row.payload.finishedAtOffsetMs - row.payload.startedAtOffsetMs)}`,
-											`${row.payload.actualModel ? `Actual: ${row.payload.actualModel}` : ""}`,
+											`${row.payload.actualModel ? `Model: ${row.payload.actualModel}` : ""}`,
 											`${row.payload.attempts != null ? `Attempts: ${row.payload.attempts}` : ""}`,
 											`${row.payload.responseError ? `Error: ${row.payload.responseError}` : ""}`,
 											`${row.payload.error ? `Error: ${row.payload.error.message}` : ""}`,
@@ -461,36 +474,47 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 								const toolError = ts.isError
 
 								return (
-									<rect
-										key={ti}
-										className="trace-bar"
-										x={tX}
-										y={toolY + 2}
-										width={tW}
-										height={TOOL_ROW_HEIGHT - 4}
-										rx={2}
-										fill={toolError ? COLOURS.toolBarError : COLOURS.toolBar}
-										opacity={0.8}
-										style={{ cursor: "pointer" }}
-										onMouseEnter={(e) => {
-											const rect = svgRef.current?.getBoundingClientRect()
-											if (!rect) return
-											setHoveredSpan({
-												x: e.clientX,
-												y: e.clientY,
-												content: [
-													ts.toolName,
-													`Duration: ${formatMs(ts.finishedAtOffsetMs - ts.startedAtOffsetMs)}`,
-													`${ts.resultSizeChars != null ? `Result: ${ts.resultSizeChars} chars` : ""}`,
-													`${ts.spawnedTaskId ? `→ ${ts.spawnedTaskId}` : ""}`,
-													`${toolError ? "ERROR" : ""}`,
-												]
-													.filter(Boolean)
-													.join("\n"),
-											})
-										}}
-										onMouseLeave={() => setHoveredSpan(null)}
-									/>
+									<g key={ti}>
+										{/* Tool name in the gutter — the action taken in this lane */}
+										<text
+											x={20}
+											y={toolY + TOOL_ROW_HEIGHT / 2 + 3}
+											fill={toolError ? COLOURS.toolBarError : COLOURS.muted}
+											fontSize={9}
+											fontFamily="monospace">
+											<title>{ts.toolName}</title>
+											{ts.toolName.length > 24 ? `${ts.toolName.slice(0, 23)}…` : ts.toolName}
+										</text>
+										<rect
+											className="trace-bar"
+											x={tX}
+											y={toolY + 2}
+											width={tW}
+											height={TOOL_ROW_HEIGHT - 4}
+											rx={2}
+											fill={toolError ? COLOURS.toolBarError : COLOURS.toolBar}
+											opacity={0.8}
+											style={{ cursor: "pointer" }}
+											onMouseEnter={(e) => {
+												const rect = svgRef.current?.getBoundingClientRect()
+												if (!rect) return
+												setHoveredSpan({
+													x: e.clientX,
+													y: e.clientY,
+													content: [
+														ts.toolName,
+														`Duration: ${formatMs(ts.finishedAtOffsetMs - ts.startedAtOffsetMs)}`,
+														`${ts.resultSizeChars != null ? `Result: ${ts.resultSizeChars} chars` : ""}`,
+														`${ts.spawnedTaskId ? `→ ${ts.spawnedTaskId}` : ""}`,
+														`${toolError ? "ERROR" : ""}`,
+													]
+														.filter(Boolean)
+														.join("\n"),
+												})
+											}}
+											onMouseLeave={() => setHoveredSpan(null)}
+										/>
+									</g>
 								)
 							})}
 
