@@ -594,10 +594,7 @@ export const ChatRowContent = ({
 		}
 	}, [message.text])
 
-	const previousTodos = useMemo(
-		() => getPreviousTodos(shoferMessages, message.ts),
-		[shoferMessages, message.ts],
-	)
+	const previousTodos = useMemo(() => getPreviousTodos(shoferMessages, message.ts), [shoferMessages, message.ts])
 
 	if (tool) {
 		switch (tool.tool as string) {
@@ -1484,12 +1481,13 @@ export const ChatRowContent = ({
 							}}>
 							<div style={{ display: "flex", alignItems: "center", gap: "10px", flexGrow: 1 }}>
 								<ProgressIndicator />
-								<span style={{ color: normalColor }}>
-									Preparing{" "}
-									<span style={{ fontWeight: 500, fontFamily: "var(--vscode-editor-font-family)" }}>
-										{preparingInfo.toolName}
-									</span>
-									…
+								<span
+									style={{
+										color: normalColor,
+										fontWeight: 500,
+										fontFamily: "var(--vscode-editor-font-family)",
+									}}>
+									{t("chat:toolPreparing.preparing", { toolName: preparingInfo.toolName })}
 								</span>
 							</div>
 							<span className="text-xs font-light text-vscode-descriptionForeground">
@@ -1671,7 +1669,9 @@ export const ChatRowContent = ({
 								<ProgressIndicator />
 								<span style={{ color: normalColor }}>{t("chat:apiRequest.rateLimitWait")}</span>
 							</div>
-							<span className="text-xs font-light text-vscode-descriptionForeground">{rateLimitWaitSeconds}s</span>
+							<span className="text-xs font-light text-vscode-descriptionForeground">
+								{rateLimitWaitSeconds}s
+							</span>
 						</div>
 					) : null
 				}

@@ -137,15 +137,14 @@ but leaves the progress row frozen during network stalls.
 when >5s have elapsed since the last visible emission, re-emits the marker
 for any in-progress tool call. Clear on `finishReason`.
 
-### i18n key unused in ChatRow.tsx
+### i18n key in ChatRow.tsx — ✅ fixed
 
-The key `chat.toolPreparing.preparing` was added to
-[`chat.json`](../webview-ui/src/i18n/locales/en/chat.json) (line 361) but
-[`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx) line 1360
-uses the hardcoded string `"Preparing"` instead of
-`t("chat.toolPreparing.preparing", { toolName })`. This violates the i18n
-String Rule in AGENTS.md. Either wire the i18n key or remove the unused
-entry.
+`ChatRow.tsx` has two `tool_preparing` renderers in different switches: a
+compact one in the `switch (type)` block (already used `t("chat:toolPreparing.preparing", …)`)
+and the rich progress row in the `switch (message.say)` block, which hardcoded
+`"Preparing"`. The rich row now uses the same i18n key, satisfying the AGENTS.md
+i18n String Rule. (The key was never truly "unused" — it was wired in the compact
+renderer; only the rich row was inconsistent.)
 
 ### `lastVisibleEmitMs` is dead code
 
