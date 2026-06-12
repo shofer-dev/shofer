@@ -241,23 +241,24 @@ Key globalState keys for modes:
 
 ### 2d. Built-in Modes — Compiled into extension
 
-| Property     | Value                                                         |
-| ------------ | ------------------------------------------------------------- |
-| **Path**     | [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) |
-| **Type**     | Read-only code constant                                       |
-| **Scope**    | Per-extension version                                         |
-| **Priority** | **Lowest** (fallback)                                         |
-| **Purpose**  | Default modes: Architect, Code, Ask, Debug, Orchestrator      |
+| Property     | Value                                                                     |
+| ------------ | ------------------------------------------------------------------------- |
+| **Path**     | [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)             |
+| **Type**     | Read-only code constant                                                   |
+| **Scope**    | Per-extension version                                                     |
+| **Priority** | **Lowest** (fallback)                                                     |
+| **Purpose**  | Built-in modes: Code, Architect, Debug, Code Search, Web Search, Reviewer |
 
-Built-in modes array (in order):
+Built-in modes array (in order — see [`built-in-modes.md`](built-in-modes.md)):
 
 ```typescript
 export const DEFAULT_MODES: readonly ModeConfig[] = [
-  { slug: "architect", ... },  // index 0 = default mode
-  { slug: "code",      ... },
-  { slug: "ask",       ... },
-  { slug: "debug",     ... },
-  { slug: "orchestrator", ... },
+  { slug: "code",        ... },  // index 0 = default mode / ultimate fallback
+  { slug: "architect",   ... },
+  { slug: "debug",       ... },
+  { slug: "code-search", ... },
+  { slug: "web-search",  ... },
+  { slug: "reviewer",    ... },
 ]
 ```
 
@@ -1092,22 +1093,23 @@ via the `shofer.customStoragePath` VS Code setting.
 This section documents deficiencies discovered during verification against the
 live codebase. Each item includes the current state and a suggested remedy.
 
-### 14a. Built-in Mode Count Is Stale
+### 14a. Built-in Mode List — ✅ fixed
 
-§2d lists only five built-in modes (`architect`, `code`, `ask`, `debug`,
-`orchestrator`). The actual [`DEFAULT_MODES`](../packages/types/src/mode.ts:195)
-array defines **nine** built-in modes, adding `reviewer`, `search`, `opinion`,
-and `browser`. The code example and surrounding prose should be updated.
+§2d previously listed bogus modes (`ask`, `orchestrator`) and claimed `architect`
+was the default. The actual [`DEFAULT_MODES`](../packages/types/src/mode.ts) array
+defines **six** built-in modes, in order: `code` (index 0 = default/ultimate
+fallback), `architect`, `debug`, `code-search`, `web-search`, `reviewer`. There is
+no `ask`, `orchestrator`, `search`, `opinion`, or `browser` mode. §2d's table and
+code example were corrected. (Authoritative source: [`built-in-modes.md`](built-in-modes.md).)
 
-### 14b. `custom_modes.yaml` Merge Logic Contains Duplicate Code
+### 14b. `custom_modes.yaml` Merge Logic Duplicate Code — ✅ fixed
 
 [`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManager.ts:364)
-implements the project-vs-global merge **twice** in the same function: once as a
-two-map approach (lines 380–393) and again as a filter-and-spread approach
-(lines 396–401). The first implementation builds `projectModes` and `globalModes`
-maps that are never consumed after being built; only `mergedModes` (from the
-second implementation) is used. The dead maps should be removed or the two
-passages unified.
+previously built two maps (`projectModes`, `globalModes`) and _also_ produced the
+real result via a filter-and-spread (`mergedModes`). `globalModes` was never read
+(dead code). Removed the dead `globalModes` map and its loop; `projectModes` is
+retained because the merge consumes its `.has()` for precedence dedup. Behavior is
+unchanged (68 CustomModesManager tests pass).
 
 ### 14c. No Documentation of `ProviderSettingsManager.SCOPE_PREFIX`
 

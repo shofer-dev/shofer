@@ -377,20 +377,13 @@ export class CustomModesManager {
 		const shofermodesPath = await this.getWorkspaceRoomodes()
 		const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
 
-		// Create maps to store modes by source.
+		// Track project mode slugs so global modes with the same slug are dropped
+		// (project modes take precedence). The Set is the only structure the merge
+		// below consumes — an earlier revision also built a parallel `globalModes`
+		// map that was never read (dead code); it has been removed.
 		const projectModes = new Map<string, ModeConfig>()
-		const globalModes = new Map<string, ModeConfig>()
-
-		// Add project modes (they take precedence).
 		for (const mode of shofermodesModes) {
 			projectModes.set(mode.slug, { ...mode, source: "project" as const })
-		}
-
-		// Add global modes.
-		for (const mode of settingsModes) {
-			if (!projectModes.has(mode.slug)) {
-				globalModes.set(mode.slug, { ...mode, source: "global" as const })
-			}
 		}
 
 		// Combine modes in the correct order: project modes first, then global modes.
