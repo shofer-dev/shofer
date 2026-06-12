@@ -968,8 +968,19 @@ function compileSwimlaneSVG(flow, agentNames) {
 			var ars2 = getAgentRunState(agentName)
 			if (ars2 && ars2.opIndex === opIdx) isExecuting = true
 		}
-		var execClass = isExecuting ? " flow-executing" : ""
+		// The currently-executing op is marked with a left-pointing arrow rather
+		// than a fill colour — far easier to spot where each agent is at than a
+		// subtle background tint. (No more `flow-executing` class / data-optype.)
+		var execClass = ""
 		var execAttr = ""
+		if (isExecuting) {
+			str +=
+				'<text class="flow-exec-arrow" x="' +
+				(spineX - BLOCK_W / 2 - 7) +
+				'" y="' +
+				(_cy + BLOCK_H / 2 + 5) +
+				'" text-anchor="end" fill="var(--z-stake)" font-size="15">▶</text>'
+		}
 
 		if (op.type === "StakeOp") {
 			var lbl = "STAKE: " + esc(op.call ? op.call.name : "func") + "()"
