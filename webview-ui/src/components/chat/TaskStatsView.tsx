@@ -188,43 +188,61 @@ function arcPath(a0: number, a1: number, rOuter: number, rInner: number): string
 	return `M ${x0o} ${y0o} A ${rOuter} ${rOuter} 0 ${large} 1 ${x1o} ${y1o} L ${x1i} ${y1i} A ${rInner} ${rInner} 0 ${large} 0 ${x0i} ${y0i} Z`
 }
 
+/** A slice's display metadata — phase categories plus the "overhead" remainder. */
+type SliceCat = { key: string; label: string; color: string }
+
 interface Slice {
-	cat: CatMeta
+	cat: SliceCat
 	ms: number
 	fraction: number
 	a0: number
 	a1: number
 }
 
+/** The active-but-unmeasured remainder (checkpointing, inter-request processing). */
+const OVERHEAD: SliceCat = { key: "overhead", label: "Overhead", color: "var(--vscode-descriptionForeground)" }
+
 interface TaskStatsViewProps {
 	/** All ShoferMessages for the currently focused task. */
 	messages: ShoferMessage[]
+	/**
+	 * The task's active wall-clock time (ms) — the same value the header shows.
+	 * When provided it is the pie's total: per-phase spans are drawn against it
+	 * and any unmeasured active time (checkpointing, processing between requests)
+	 * becomes an "Overhead" slice, so the pie and the header agree exactly.
+	 */
+	activeMs?: number
 }
 
 /**
  * Donut chart + legend showing where a single task's time went.
  */
-const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
+const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages, activeMs }) => {
 	const breakdown = useMemo(() => computeBreakdown(messages), [messages])
-	const [hovered, setHovered] = useState<CatKey | null>(null)
+	const [hovered, setHovered] = useState<string | null>(null)
 
-	const slices = useMemo<Slice[]>(() => {
-		if (!breakdown) return []
-		const total = breakdown.totalMs
-		if (total <= 0) return []
+	const { slices, total } = useMemo<{ slices: Slice[]; total: number }>(() => {
+		if (!breakdown) return { slices: [], total: 0 }
+		const spanSum = breakdown.totalMs
+		// The header's activeMs is the source of truth for the total. The spans
+		// break it down; the remainder is overhead. Guard the rare case where the
+		// spans slightly exceed activeMs (clock skew) by taking the max.
+		const displayTotal = activeMs != null && activeMs > 0 ? Math.max(activeMs, spanSum) : spanSum
+		if (displayTotal <= 0) return { slices: [], total: 0 }
 		let angle = -Math.PI / 2
 		const out: Slice[] = []
-		for (const cat of CATEGORIES) {
-			const ms = breakdown.totals[cat.key]
-			if (ms <= 0) continue
-			const fraction = ms / total
+		const push = (cat: SliceCat, ms: number) => {
+			if (ms <= 0.5) return
+			const fraction = ms / displayTotal
 			const a0 = angle
 			const a1 = angle + fraction * Math.PI * 2
 			angle = a1
 			out.push({ cat, ms, fraction, a0, a1 })
 		}
-		return out
-	}, [breakdown])
+		for (const cat of CATEGORIES) push(cat, breakdown.totals[cat.key])
+		push(OVERHEAD, displayTotal - spanSum)
+		return { slices: out, total: displayTotal }
+	}, [breakdown, activeMs])
 
 	if (!breakdown || slices.length === 0) {
 		return (
@@ -236,9 +254,9 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 		)
 	}
 
-	const total = breakdown.totalMs
 	const isSingle = slices.length === 1
 	const maxToolMs = breakdown.toolTotals.length > 0 ? breakdown.toolTotals[0].ms : 0
+	const hoveredSlice = hovered ? slices.find((s) => s.cat.key === hovered) : undefined
 
 	return (
 		<div className="h-full w-full overflow-y-auto p-4">
@@ -246,7 +264,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 				<span className="text-xs font-medium text-[var(--vscode-foreground)]">Runtime breakdown</span>
 				<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
 					{breakdown.requestCount} request{breakdown.requestCount === 1 ? "" : "s"} · {formatMs(total)}{" "}
-					running
+					runtime
 				</span>
 			</div>
 
@@ -292,7 +310,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 						fill="var(--vscode-foreground)"
 						fontSize={20}
 						fontWeight={600}>
-						{hovered ? `${Math.round((breakdown.totals[hovered] / total) * 100)}%` : formatMs(total)}
+						{hoveredSlice ? `${Math.round((hoveredSlice.ms / total) * 100)}%` : formatMs(total)}
 					</text>
 					<text
 						x={CENTER}
@@ -300,7 +318,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 						textAnchor="middle"
 						fill="var(--vscode-descriptionForeground)"
 						fontSize={11}>
-						{hovered ? CAT_BY_KEY[hovered].label : "running"}
+						{hoveredSlice ? hoveredSlice.cat.label : "runtime"}
 					</text>
 				</svg>
 
@@ -373,8 +391,9 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 			)}
 
 			<p className="mt-5 text-[10px] leading-relaxed text-[var(--vscode-descriptionForeground)]">
-				Only counts time the task was actively running, summed across every prompt. Idle time between request
-				cycles — tool-approval prompts, checkpointing, and the pauses between re-prompts — is excluded.
+				Total equals the active time shown in the header (running + waiting on tasks) — idle time (tool-approval
+				prompts and the pauses between re-prompts) is excluded. The per-phase spans break that total down;
+				“Overhead” is active time not captured by a span (checkpointing, processing between requests).
 			</p>
 		</div>
 	)

@@ -130,11 +130,12 @@ export const historyItemSchema = z.object({
 	insertions: z.number().optional(),
 	deletions: z.number().optional(),
 	/**
-	 * Accumulated active wall-clock time in milliseconds. Only counts time
-	 * spent in the `running` lifecycle — excludes time waiting for user input
-	 * (`waiting_input`), waiting on external events (`waiting`), manually
-	 * paused (`paused`), and idle. Survives restarts; on resume, new running
-	 * intervals are added to the persisted baseline.
+	 * Accumulated active wall-clock time in milliseconds — time spent `running`
+	 * or `waiting` (blocked on another task: wait_for_task, a blocking new_task,
+	 * or a sync send_message_to_task). Excludes only idle-equivalent states:
+	 * waiting for user input (`waiting_input`), manually paused (`paused`), and
+	 * idle. Matches the Stats "runtime" total. Survives restarts; on resume, new
+	 * active intervals are added to the persisted baseline.
 	 */
 	activeTimeMs: z.number().optional(),
 	// Workflow support — set when this HistoryItem represents a WorkflowTask.

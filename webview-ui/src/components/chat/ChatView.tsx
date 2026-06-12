@@ -2278,7 +2278,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					)}
 					{chatTab === "stats" && (
 						<div className="grow flex relative overflow-hidden">
-							<TaskStatsView messages={messages} />
+							<TaskStatsView
+								messages={messages}
+								activeMs={
+									(currentTaskItem
+										? parallelTasks?.find((p) => p.id === currentTaskItem.id)?.activeTimeMs
+										: undefined) ?? currentTaskItem?.activeTimeMs
+								}
+							/>
 						</div>
 					)}
 				</>

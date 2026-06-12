@@ -43,13 +43,14 @@ export interface ManagedTask {
 	lastActiveAt: number
 	state: TaskState
 	/**
-	 * Accumulated active wall-clock time in milliseconds. Only counts time
-	 * spent in the `running` lifecycle. Incremented each time the task leaves
-	 * the `running` state (to waiting_input, waiting, paused, completed,
-	 * error). Persisted to HistoryItem for survival across restarts.
+	 * Accumulated active wall-clock time in milliseconds — time spent in the
+	 * `running` OR `waiting` (blocked on another task) lifecycle. Excludes only
+	 * idle-equivalent states (idle, waiting_input, paused) and terminal states,
+	 * matching the Stats "runtime" pie. Incremented each time the task leaves an
+	 * active state. Persisted to HistoryItem for survival across restarts.
 	 */
 	activeTimeMs: number
-	/** Epoch ms when the task last entered the `running` state. `0` if not currently running. */
+	/** Epoch ms when the task last entered an active (running/waiting) state. `0` if not currently active. */
 	_runningSince: number
 }
 
@@ -210,7 +211,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		// Fallback only fires for genuinely new tasks (no persisted history).
 		// For rehydrated tasks `existing` was seeded by restoreManagedTasks.
 		const state = existing?.state ?? TaskManager.makeState(task.abandoned || task.abort ? "idle" : "running")
-		const isRunning = state.lifecycle === "running"
+		const isActive = TaskManager.isActive(state.lifecycle)
 
 		const managedTask: ManagedTask = {
 			id: task.taskId,
@@ -222,7 +223,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			lastActiveAt: Date.now(),
 			state,
 			activeTimeMs: existing?.activeTimeMs ?? 0,
-			_runningSince: isRunning ? Date.now() : 0,
+			_runningSince: isActive ? Date.now() : 0,
 		}
 
 		this.managedTasks.set(managedTask.id, managedTask)
@@ -372,12 +373,23 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 	// ────────────────────────────── Queries ──────────────────────────────
 
 	/**
+	 * "Active" = the task is doing work: running its own loop, or blocked waiting
+	 * on another task (wait_for_task / blocking new_task / sync send_message_to_task).
+	 * Idle, waiting_input (waiting on the user), paused, and terminal states are
+	 * NOT active. `activeTimeMs` accumulates active wall-clock time and excludes
+	 * only idle-equivalent time — matching the Stats "runtime" pie.
+	 */
+	private static isActive(lifecycle: TaskState["lifecycle"]): boolean {
+		return lifecycle === "running" || lifecycle === "waiting"
+	}
+
+	/**
 	 * Live wall-clock active time for a task, in ms: the stored `activeTimeMs`
-	 * plus, when the task is currently `running`, the in-progress interval since
-	 * `_runningSince`. Pure — never mutates timing state.
+	 * plus, when the task is currently active (running or waiting), the
+	 * in-progress interval since `_runningSince`. Pure — never mutates timing state.
 	 */
 	private static liveActiveTimeMs(m: ManagedTask, now: number): number {
-		return m.state.lifecycle === "running" && m._runningSince > 0
+		return TaskManager.isActive(m.state.lifecycle) && m._runningSince > 0
 			? m.activeTimeMs + (now - m._runningSince)
 			: m.activeTimeMs
 	}
@@ -398,7 +410,7 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const now = Date.now()
 		return Array.from(this.managedTasks.values())
 			.map((m) =>
-				m.state.lifecycle === "running" && m._runningSince > 0
+				TaskManager.isActive(m.state.lifecycle) && m._runningSince > 0
 					? { ...m, activeTimeMs: TaskManager.liveActiveTimeMs(m, now) }
 					: m,
 			)
@@ -471,16 +483,16 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 		const prevState = managedTask.state
 		if (TaskManager.statesEqual(prevState, state)) return
 
-		// Accumulate wall-clock time spent in `running` when leaving it.
-		if (prevState.lifecycle === "running" && managedTask._runningSince > 0) {
+		// Accumulate wall-clock time spent active (running or waiting) when leaving it.
+		if (TaskManager.isActive(prevState.lifecycle) && managedTask._runningSince > 0) {
 			managedTask.activeTimeMs += Date.now() - managedTask._runningSince
 			managedTask._runningSince = 0
 		}
 
 		managedTask.state = state
 
-		// Start timing when entering `running`.
-		if (state.lifecycle === "running") {
+		// Start timing when entering an active (running or waiting) state.
+		if (TaskManager.isActive(state.lifecycle)) {
 			managedTask._runningSince = Date.now()
 		}
 
