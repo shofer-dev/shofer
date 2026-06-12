@@ -16,11 +16,7 @@ interface TaskEntry {
 }
 
 /** Resolve the best-known lifecycle by preferring the live ManagedTask state. */
-function resolveLifecycle(
-	taskId: string,
-	task: Task,
-	persistedLifecycle: TaskLifecycle,
-): TaskLifecycle {
+function resolveLifecycle(taskId: string, task: Task, persistedLifecycle: TaskLifecycle): TaskLifecycle {
 	const provider = task.providerRef.deref()
 	if (!provider) return persistedLifecycle
 
@@ -59,7 +55,7 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 			for (const managed of provider.taskManager.getManagedTasks()) {
 				if (managed.id === task.taskId) continue
 				if (managed.rootTaskId && managed.rootTaskId !== effectiveRootId) continue
-				if (!task.knownPeers || !task.knownPeers.has(managed.id)) continue
+				if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(managed.id))) continue
 
 				seen.add(managed.id)
 				tasks.push({
@@ -76,7 +72,7 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 				if (item.id === task.taskId) continue
 				if (seen.has(item.id)) continue
 				if (item.rootTaskId && item.rootTaskId !== effectiveRootId) continue
-				if (!task.knownPeers || !task.knownPeers.has(item.id)) continue
+				if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(item.id))) continue
 
 				seen.add(item.id)
 				const lifecycle = resolveLifecycle(item.id, task, item.taskState?.lifecycle ?? "idle")
